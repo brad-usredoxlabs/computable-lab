@@ -14,7 +14,7 @@
  * The model only ever writes the easy YAML. Every well, deck slot, resource,
  * volume, and robot action is owned by the deterministic compiler.
  */
-import { parseScientistIntent } from './parseScientistIntent.js';
+import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
 import { compileScientistIntent, type ScientistIntentCompileDeps } from './compileScientistIntent.js';
 import { liftScientistIntent } from './liftScientistIntent.js';
 import { parse as parseYaml } from 'yaml';
@@ -57,14 +57,24 @@ export const INTENT_COMPILE_SYSTEM_PROMPT = `You translate a scientist's free-te
 
 OUTPUT ONLY YAML. No prose, no code fences.
 
-TOP-LEVEL SHAPE:
+TOP-LEVEL SHAPE (write actions as a list of objects keyed by the verb — each key is the action name, its value is the params map):
 intentId: <short id>
 actions:
-  - action: <verb from the closed set>
-    <parameters>
+  - add_material:
+      material: "Lysis Solution"
+      volumeUl: 550
+  - transfer:
+      source: "block"
+      target: "plate"
+      volumeUl: 200
+  - spin:
+      rpm: 4000
+      duration: "5 min"
 unresolved:
   - label: "<thing you could not commit to>"
     reason: "<why>"
+
+NEVER write a literal 'action:' key. The verb IS the map key. Use 'volumeUl' (not volume_ul).
 
 ALLOWED ACTIONS (never invent another):
 seed | incubate | mix | resuspend | dilute | shake | count | read |
@@ -254,7 +264,7 @@ export async function compileFromSmallLlm(
   let toolArgs = message?.tool_calls?.[0]?.function?.arguments;
   let text = (message?.content ?? '').trim();
 
-  let intent: ScientistIntent;
+  let intent: ScientistIntent | undefined;
   try {
     if (toolArgs) {
       let parsedArgs: unknown;
@@ -266,28 +276,68 @@ export async function compileFromSmallLlm(
       const lifted = liftScientistIntent(parsedArgs);
       intent = parseScientistIntent(JSON.stringify(lifted));
     } else {
-      intent = parseScientistIntent(stripYamlFence(text));
+      // First-attempt plain-text content also needs the lift (key-as-action
+      // shape, verb aliases, snake→camel params), exactly like the retry path.
+      const rawDoc = parseYamlDoc(stripYamlFence(text));
+      const lifted = liftScientistIntent(rawDoc ?? {});
+      intent = parseScientistIntent(JSON.stringify(lifted));
     }
   } catch (toolErr) {
-    // Attempt 2: the tool path produced nothing parseable (empty content, or a
-    // bare echo of the prompt template). Retry as a PLAIN text completion (no
-    // tools) — empirically this is where small models emit clean YAML.
-    if (!toolArgs && !text) {
-      throw toolErr; // nothing to work from; surface the real error
+    // Attempt 2+: the tool path produced nothing parseable, OR the endpoint
+    // returned EMPTY on the forced tool call (small models / llama.cpp builds
+    // without function-calling return NO tool_calls AND NO content when forced
+    // into a tool). Retry as a PLAIN text completion (no tools) — empirically
+    // this is where small models emit YAML. A 2.6B is flaky and sometimes
+    // returns EMPTY on a given attempt, so retry a bounded number of times and
+    // accept the first document that parses to a non-empty intent.
+    const PLAIN_TEXT_ATTEMPTS = 3;
+    let retryError: unknown = toolErr;
+    let gotIntent = false;
+    for (let attempt = 0; attempt < PLAIN_TEXT_ATTEMPTS; attempt += 1) {
+      const retry = await args.llmClient.complete({
+        ...baseRequest,
+      } as never);
+      const retryMessage = retry.choices?.[0]?.message;
+      const retryText = (retryMessage?.content ?? '').trim();
+      if (!retryText) {
+        // Keep retrying — empty is the flaky case.
+        retryError = toolErr;
+        continue;
+      }
+      // Plain-text YAML from a small model still needs the same lift the tool
+      // path applies (verb aliases + flattening nested `parameters` + the
+      // key-as-action shape), so parse to a raw doc, lift it, then validate.
+      const rawDoc = parseYamlDoc(stripYamlFence(retryText));
+      const lifted = liftScientistIntent(rawDoc ?? {});
+      const actions = (lifted.actions as Array<Record<string, unknown>> | undefined) ?? [];
+      if (actions.length === 0) {
+        // Parsed but no usable actions — retry rather than accept an empty macro.
+        retryError = toolErr;
+        continue;
+      }
+      try {
+        intent = parseScientistIntent(JSON.stringify(lifted));
+        gotIntent = true;
+        break;
+      } catch (err) {
+        retryError = err;
+        // Schema-invalid emission — retry; the next draw may be valid.
+        continue;
+      }
     }
-    const retry = await args.llmClient.complete({
-      ...baseRequest,
-    } as never);
-    const retryMessage = retry.choices?.[0]?.message;
-    const retryText = (retryMessage?.content ?? '').trim();
-    // Plain-text YAML from a small model still needs the same lift the tool
-    // path applies (verb aliases + flattening nested `parameters`), so parse
-    // to a raw doc, lift it, then validate the lifted form.
-    const rawDoc = parseYamlDoc(stripYamlFence(retryText));
-    const lifted = liftScientistIntent(rawDoc ?? {});
-    intent = parseScientistIntent(JSON.stringify(lifted));
+    if (!gotIntent) {
+      // If we never got a valid intent, surface the error so the user learns
+      // the model returned nothing usable, not a fabricated parse.
+      throw retryError;
+    }
   }
 
+  if (!intent) {
+    throw new ScientistIntentValidationError(
+      'scientist-intent emission produced no usable intent',
+      [],
+    );
+  }
   const compiled = await compileScientistIntent(intent, args.deps);
   return { intent, compile: compiled };
 }

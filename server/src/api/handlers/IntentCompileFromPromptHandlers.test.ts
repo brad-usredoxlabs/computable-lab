@@ -125,4 +125,28 @@ describe('createIntentCompileFromPromptHandlers', () => {
     expect(actions.some((a: any) => a.action === 'add_material' && a.volumeUl === 600)).toBe(true);
     expect(payload.terminalArtifacts?.events?.length ?? 0).toBeGreaterThan(0);
   });
+
+  it('surfaces labwareAdditions in terminalArtifacts so the one-shot deck is never blank when events ghost', async () => {
+    // The stub emit intent names a target labware ('magstand' block); the
+    // deterministic resolve_labware pass proposes concrete additions the deck
+    // must materialize. These are folded into terminalArtifacts for the run
+    // workspace's Review-deck gate.
+    const handlers = createIntentCompileFromPromptHandlers(ctx, { llmClient: stubLlm() as never });
+    const reply = send();
+    await handlers.compileFromPrompt(
+      mockRequest({ protocolText: 'zymo text', answers: { sample_type: 'bacterial' } }) as never,
+      reply.r as never,
+    );
+    const payload = reply.calls[0].payload as any;
+    expect(payload.terminalArtifacts?.events?.length ?? 0).toBeGreaterThan(0);
+    // Labware plan must be present (additions and/or requirements) — without it
+    // buildPreviewFromDraft computes zero placements and the deck ghosts blank.
+    const hasDeckLabware =
+      Array.isArray(payload.terminalArtifacts?.labwareAdditions) &&
+      payload.terminalArtifacts.labwareAdditions.length > 0;
+    const hasRequirements =
+      Array.isArray(payload.terminalArtifacts?.labwareRequirements) &&
+      payload.terminalArtifacts.labwareRequirements.length > 0;
+    expect(hasDeckLabware || hasRequirements || Array.isArray(payload.terminalArtifacts?.deckLayoutPlan)).toBe(true);
+  });
 });

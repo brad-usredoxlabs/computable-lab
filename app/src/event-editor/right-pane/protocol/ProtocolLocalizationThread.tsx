@@ -4,15 +4,18 @@
  * The user pastes/loads a universal protocol, clicks Localize. The small model
  * reads it, asks high-level branch questions (emit_branch_questions), the user
  * answers them inline, and the model emits a ONE-SHOT LOCAL MACRO
- * (scientist-intent) which the deterministic compiler ghosts as the FULL event
- * graph onto the deck. The user then browses the steps and refines them in this
- * same thread (per-step `Correction:` re-drafts that fold back into the macro).
- * On Accept, the graph commits, a local-protocol is persisted, and the WHOLE
- * accepted flow + final macro is posted to the corpus moat (THE MOAT) to train
- * the small model to emit correct macros.
+ * (scientist-intent) which the deterministic compiler resolves into events +
+ * a deck plan. BEFORE anything ghosts onto the canvas, the thread shows a
+ * "Review deck & labware" step: the compiler's suggested labware (from
+ * resolve_labware / plan_deck_layout) appears as a checkable list, the user can
+ * pick the deck platform (unless the run deck is locked), and events ghost ONLY
+ * after the user confirms "Load onto deck & ghost events". This guarantees the
+ * deck is never blank when events appear for review.
  *
- * No new streaming machinery — reuses the existing preview/commit actions on
- * EventEditorContext and the apiClient methods.
+ * The user then browses the steps and refines them in this same thread (per-step
+ * `Correction:` re-drafts that fold back into the final macro). On Accept the
+ * graph commits, a local-protocol is persisted, and the WHOLE accepted flow +
+ * final macro is posted to the corpus moat (THE MOAT).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOptionalEventEditor } from '../../EventEditorContext'
@@ -20,7 +23,10 @@ import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
 import type { PlateEvent } from '../../../types/events'
-import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type {
+  AiLabwareAddition,
+  AiLabwareRequirement,
+} from '../../../types/ai'
 
 export interface BranchQuestionAxis {
   axisId: string
@@ -34,6 +40,15 @@ export interface LocalMacro {
   [key: string]: unknown
 }
 
+/** One row in the Review-deck labware checklist. */
+export interface DeckLabwareSuggestion {
+  key: string
+  label: string
+  deckSlot?: string
+  reason?: string
+  requirement: boolean
+}
+
 export interface ProtocolLocalizationThreadProps {
   runId?: string
   /** Initial universal protocol text (e.g. selected from a record). */
@@ -43,6 +58,36 @@ export interface ProtocolLocalizationThreadProps {
   sourceTitle?: string
   /** Optional project filing links for the accepted local-protocol. */
   links?: { studyId?: string; experimentId?: string; runId?: string }
+}
+
+/** Fold the compile's labwareAdditions + labwareRequirements into a review list. */
+function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabwareSuggestion[] {
+  const additions = (terminalArtifacts.labwareAdditions ?? []) as AiLabwareAddition[]
+  const requirements = (terminalArtifacts.labwareRequirements ?? []) as AiLabwareRequirement[]
+  const out: DeckLabwareSuggestion[] = []
+  const seen = new Set<string>()
+  for (const req of requirements) {
+    if (!req?.classCurie || seen.has(req.classCurie)) continue
+    seen.add(req.classCurie)
+    out.push({
+      key: req.classCurie,
+      label: req.classCurie,
+      ...(req.deckSlot ? { deckSlot: req.deckSlot } : {}),
+      requirement: true,
+    })
+  }
+  for (const add of additions) {
+    if (!add?.recordId || seen.has(add.recordId)) continue
+    seen.add(add.recordId)
+    out.push({
+      key: add.recordId,
+      label: add.recordId,
+      ...(add.deckSlot ? { deckSlot: add.deckSlot } : {}),
+      ...(add.reason ? { reason: add.reason } : {}),
+      requirement: false,
+    })
+  }
+  return out
 }
 
 export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProps) {
@@ -59,6 +104,23 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
   const [localizing, setLocalizing] = useState(false)
   const [accepting, setAccepting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [messageKind, setMessageKind] = useState<'info' | 'error'>('info')
+
+  const setErrorMsg = useCallback((m: string) => {
+    setMessage(m)
+    setMessageKind('error')
+  }, [])
+  const setInfoMsg = useCallback((m: string) => {
+    setMessage(m)
+    setMessageKind('info')
+  }, [])
+
+  // Review-deck gate: the compiled (not-yet-ghosted) draft + labware suggestions
+  // + the chosen deck platform. Events ghost ONLY after the user confirms.
+  const [pendingDraft, setPendingDraft] = useState<Record<string, unknown> | null>(null)
+  const [proposedLabware, setProposedLabware] = useState<DeckLabwareSuggestion[]>([])
+  const [deckPicked, setDeckPicked] = useState<Set<string>>(new Set())
+  const [deckPlatform, setDeckPlatform] = useState<string>('')
   const firstUserPrompt = useRef<string>(initialProtocolText.trim())
 
   // Keep protocolText in sync with a late-arriving initialProtocolText (the
@@ -72,14 +134,28 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
 
   const editorState = editor?.state ?? null
 
-  // Minimal deck scope for preview (mirror StepLocalizationPane).
-  const activeDeckScope = useCallback(() => {
+  // Default the chosen deck platform to the editor's current platform.
+  useEffect(() => {
+    if (deckPlatform || !editorState?.platformId) return
+    setDeckPlatform(editorState.platformId)
+  }, [deckPlatform, editorState?.platformId])
+
+  const deckLocked = editorState?.runDeckLock?.locked === true
+
+  // Minimal deck scope for preview (mirror StepLocalizationPane). Built from an
+  // explicit platform/variant so the Review-deck gate can ghost onto the deck
+  // the USER chose (not just the editor's current stack).
+  const activeDeckScope = useCallback((
+    platformId?: string,
+    variantId?: string,
+  ) => {
     if (!editorState) return undefined
-    const variant = getVariantManifest(
-      editorState.platforms,
-      editorState.platformId,
-      editorState.variantId,
-    )
+    const platformId_ = platformId ?? editorState.platformId
+    const manifest = getPlatformManifest(editorState.platforms, platformId_)
+    const variantId_ = variantId ?? (editorState.platformId === platformId_
+      ? editorState.variantId
+      : (manifest?.defaultVariant ?? (manifest?.variants[0]?.id ?? '')))
+    const variant = getVariantManifest(editorState.platforms, platformId_, variantId_)
     if (!variant) return undefined
     const surfaces = [
       ...(variant.slots.length > 0 ? ['slot' as const] : []),
@@ -89,8 +165,8 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     return {
       locked: Boolean(editorState.runId),
       ...(editorState.runId ? { runId: editorState.runId } : {}),
-      platformId: editorState.platformId,
-      variantId: editorState.variantId,
+      platformId: platformId_,
+      variantId: variantId_,
       allowedSurfaces: surfaces,
       allowedSlots: variant.slots
         .filter((s) => s.kind !== 'trash' && s.kind !== 'special' && s.reachable !== false)
@@ -99,24 +175,42 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     }
   }, [editorState])
 
-  // Ghost the compiled one-shot events onto the deck.
+  // Ghost the confirmed deck + compiled events onto the canvas. Only a deck
+  // the user has reviewed/confirmed is ever presented here.
   const ghostEvents = useCallback((terminalArtifacts: Record<string, unknown>) => {
     if (!editor) return
     const { state, actions } = editor
     const events = (terminalArtifacts.events ?? []) as PlateEvent[]
-    const labwareAdditions = (terminalArtifacts.labwareAdditions ?? []) as AiLabwareAddition[]
-    const labwareRequirements = (terminalArtifacts.labwareRequirements ?? []) as AiLabwareRequirement[]
-    const platform = getPlatformManifest(state.platforms, state.platformId)
-    const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
+    // The deck the user reviewed/confirmed. When they picked a different
+    // platform, adopt it on the editor too (respecting the run-deck lock).
+    const chosenPlatformId = deckPlatform && !deckLocked ? deckPlatform : state.platformId
+    if (deckPlatform && !deckLocked && deckPlatform !== state.platformId) {
+      actions.setPlatform(deckPlatform)
+    }
+    const platform = getPlatformManifest(state.platforms, chosenPlatformId)
+    const variant = getVariantManifest(state.platforms, chosenPlatformId, state.variantId)
+    const reviewedAdditions: AiLabwareAddition[] = proposedLabware
+      .filter((lw) => !lw.requirement && deckPicked.has(lw.key))
+      .map((lw) => ({
+        recordId: lw.key,
+        ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+        ...(lw.reason ? { reason: lw.reason } : {}),
+      }))
+    const reviewedRequirements: AiLabwareRequirement[] = proposedLabware
+      .filter((lw) => lw.requirement && deckPicked.has(lw.key))
+      .map((lw) => ({
+        classCurie: lw.key,
+        ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+      }))
     const { preview } = buildPreviewFromDraft({
       platform,
       variant,
       events,
-      labwareAdditions,
-      labwareRequirements,
+      labwareAdditions: reviewedAdditions,
+      labwareRequirements: reviewedRequirements,
       existingLabwares: state.labwares,
       existingPlacements: state.placements,
-      activeDeckScope: activeDeckScope(),
+      activeDeckScope: activeDeckScope(chosenPlatformId),
     })
     const hasPreview =
       preview.previewPlacements.length > 0 || preview.previewEvents.length > 0
@@ -124,14 +218,22 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     actions.setPreview({
       ...preview,
       sourcePrompt: 'one-shot localized draft',
-      labwareRequirements,
-      labwareAdditions,
+      labwareRequirements: reviewedRequirements,
+      labwareAdditions: reviewedAdditions,
     })
-  }, [editor, activeDeckScope])
+  }, [editor, activeDeckScope, deckPlatform, deckPicked, proposedLabware, deckLocked])
+
+  // Route a finished compile through the Review-deck gate (never ghost blindly).
+  const holdForReview = useCallback((terminalArtifacts: Record<string, unknown>) => {
+    setPendingDraft(terminalArtifacts)
+    const lab = deriveDeckLabware(terminalArtifacts)
+    setProposedLabware(lab)
+    setDeckPicked(new Set(lab.map((p) => p.key)))
+  }, [])
 
   const handleLocalize = useCallback(async () => {
     const text = protocolText.trim()
-    if (!text) { setMessage('Paste a universal protocol to localize.'); return }
+    if (!text) { setErrorMsg('Paste a universal protocol to localize.'); return }
     setLocalizing(true)
     setMessage(null)
     firstUserPrompt.current = text
@@ -142,26 +244,29 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setNeedsAnswers(true)
         setAnswers({})
         setLocalMacro(null)
-        setMessage('Answer the branch questions to localize.')
+        setPendingDraft(null)
+        setInfoMsg('Answer the branch questions to localize.')
       } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
         setLocalMacro(res.localMacro as LocalMacro)
-        ghostEvents(res.terminalArtifacts)
-        setMessage(`One-shot localized: ${res.outcome} — draft ghosted (${(res.terminalArtifacts.events as unknown[])?.length ?? 0} events).`)
+        setMessage(
+          `Localized: ${res.outcome} — review the deck & labware, then load onto deck `
+          + `(${(res.terminalArtifacts.events as unknown[])?.length ?? 0} events).`,
+        )
+        holdForReview(res.terminalArtifacts)
       } else {
-        setMessage('One-shot returned no draft.')
+        setErrorMsg('One-shot returned no draft.')
       }
     } catch (err) {
-      setMessage(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
+      setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, ghostEvents])
+  }, [protocolText, sourceProtocolId, holdForReview])
 
   // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
   // text present), AUTO-RUN the branch-question extraction so the if/then
   // branches are asked BEFORE the user lands on raw "a. If ... b. If ..." steps.
-  // Runs once per source protocol so later reloads don't re-ask.
   const autoAskedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!sourceProtocolId || !protocolText.trim()) return
@@ -186,20 +291,20 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
         setLocalMacro(res.localMacro as LocalMacro)
-        ghostEvents(res.terminalArtifacts)
-        setMessage(`One-shot localized: ${res.outcome} — draft ghosted.`)
+        setMessage('Ready — review the deck & labware, then place them.')
+        holdForReview(res.terminalArtifacts)
       } else {
-        setMessage('One-shot returned no draft after answers.')
+        setErrorMsg('One-shot returned no draft after answers.')
       }
     } catch (err) {
-      setMessage(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
+      setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, answers, ghostEvents])
+  }, [protocolText, sourceProtocolId, answers, holdForReview])
 
-  // Per-step / whole-macro refinement: append a Correction, re-localize with
-  // the correction (Q6: refinements fold into the final macro).
+  // Per-step refinement: append a Correction, re-localize with the correction
+  // (refinements fold into the final macro), then re-hold it through the gate.
   const handleSendCorrection = useCallback(async () => {
     const text = input.trim()
     if (!text) return
@@ -216,22 +321,47 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       })
       if (res.localMacro && res.terminalArtifacts) {
         setLocalMacro(res.localMacro as LocalMacro)
-        ghostEvents(res.terminalArtifacts)
-        setMessage('Revised — corrections folded into the macro.')
+        setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
+        holdForReview(res.terminalArtifacts)
       } else {
-        setMessage('No revised draft.')
+        setErrorMsg('No revised draft.')
       }
     } catch (err) {
-      setMessage(`Revision failed: ${err instanceof Error ? err.message : String(err)}`)
+      setErrorMsg(`Revision failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, answers, ghostEvents])
+  }, [input, protocolText, sourceProtocolId, answers, holdForReview])
+
+  const toggleDeckLabware = useCallback((key: string) => {
+    setDeckPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  // Confirm deck + ghost: the ONLY path that ghosts. Requires at least one
+  // picked labware so the deck is never blank when events appear.
+  const handleLoadDeck = useCallback(() => {
+    if (!pendingDraft) return
+    ghostEvents(pendingDraft)
+    setMessage(
+      `Deck ${deckPlatform || 'ready'} — ${deckPicked.size} labware placed, `
+      + `${(pendingDraft.events as unknown[])?.length ?? 0} events ghosted.`
+    )
+    setPendingDraft(null)
+  }, [pendingDraft, deckPicked, ghostEvents, deckPlatform])
 
   // Accept: commit the graph + persist local-protocol + post the macro-focused
   // training pair to the moat.
   const handleAccept = useCallback(async () => {
     if (!localMacro || !editor) return
+    if (!editorState?.preview) return
+    const hasProposed = (editorState.preview.previewPlacements.length > 0
+      || editorState.preview.previewEvents.length > 0)
+    if (!hasProposed) return
     setAccepting(true)
     setMessage(null)
     const { state, actions } = editor
@@ -242,7 +372,6 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     actions.commitPreview()
     const acceptedGraph = { events: acceptedEvents, labwares: state.labwares }
     try {
-      // 1) persist local-protocol
       const acceptRes = await apiClient.intentAccept({
         sourceProtocolId: sourceProtocolId ?? '',
         sourceTitle,
@@ -251,7 +380,6 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         answers,
         ...(links ? { links } : {}),
       })
-      // 2) post the whole accepted flow + FINAL macro to the moat
       if (acceptRes.recordId) {
         await apiClient.intentTrainingPair({
           userPrompt: firstUserPrompt.current,
@@ -267,17 +395,19 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setMessage('Accepted on deck, but local-protocol save failed.')
       }
     } catch (err) {
-      setMessage(`Accept failed: ${err instanceof Error ? err.message : String(err)}`)
+      setErrorMsg(`Accept failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setAccepting(false)
     }
-  }, [localMacro, editor, sourceProtocolId, sourceTitle, answers, corrections, links])
+  }, [localMacro, editor, editorState, sourceProtocolId, sourceTitle, answers, corrections, links])
 
   const hasPreview = Boolean(
     editorState?.preview &&
       (editorState.preview.previewPlacements.length > 0 ||
         editorState.preview.previewEvents.length > 0),
   )
+  const hasDeckReview = pendingDraft !== null
+  const canAccept = Boolean(localMacro && hasPreview && !accepting)
 
   return (
     <div className="protocol-localization-thread" data-testid="protocol-localization-thread">
@@ -335,6 +465,68 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         </div>
       ) : null}
 
+      {hasDeckReview ? (
+        <div className="protocol-localization-thread__deckreview" data-testid="pl-deck-review">
+          <p className="pl-deckreview-title">Review deck &amp; labware</p>
+          <p className="protocol-localization-thread__hint">
+            The run proposed these labware for the deck. Review, add/remove, then
+            confirm to place them and ghost the events — events only appear after
+            the deck has labware.
+          </p>
+
+          <div className="pl-deckreview-labware" data-testid="pl-deck-review-labware">
+            {proposedLabware.length === 0 ? (
+              <p className="protocol-localization-thread__hint" data-testid="pl-deckreview-empty">
+                No labware resolved yet — you&apos;ll start with an empty deck.
+              </p>
+            ) : (
+              proposedLabware.map((lw) => (
+                <label key={lw.key} className="pl-deckreview-item">
+                  <input
+                    type="checkbox"
+                    checked={deckPicked.has(lw.key)}
+                    onChange={() => toggleDeckLabware(lw.key)}
+                    data-testid={`deck-labware-${lw.key}`}
+                  />
+                  <span className="pl-deckreview-item__label">{lw.label}</span>
+                  {lw.deckSlot ? (
+                    <code className="pl-deckreview-item__slot">{lw.deckSlot}</code>
+                  ) : null}
+                </label>
+              ))
+            )}
+          </div>
+
+          {deckLocked ? (
+            <p className="protocol-localization-thread__hint" data-testid="pl-deck-locked">
+              Deck is locked to {deckPlatform || 'the run platform'} for this run.
+            </p>
+          ) : (
+            <div className="pl-deckreview-platform" data-testid="pl-deck-review-platform">
+              <span className="pl-deckreview-platform__label">Deck platform</span>
+              <select
+                value={deckPlatform}
+                onChange={(e) => setDeckPlatform(e.target.value)}
+                data-testid="pl-deck-platform"
+              >
+                {(editorState?.platforms ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            type="button"
+            data-testid="pl-load-deck"
+            disabled={localizing}
+            onClick={() => handleLoadDeck()}
+          >
+            Load onto deck &amp; ghost events ({deckPicked.size})
+          </button>
+        </div>
+      ) : null}
+
       {localMacro ? (
         <div className="protocol-localization-thread__refine" data-testid="pl-refine">
           <div className="pl-macro">
@@ -363,13 +555,18 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         <button
           type="button"
           data-testid="pl-accept"
-          disabled={accepting || !localMacro || !hasPreview}
+          disabled={!canAccept}
           onClick={() => { void handleAccept() }}
         >
           {accepting ? 'Accepting…' : 'Accept &amp; Save'}
         </button>
         {message ? (
-          <span className="protocol-localization-thread__msg" data-testid="pl-msg">
+          <span
+            className={`protocol-localization-thread__msg${
+              messageKind === 'error' ? ' protocol-localization-thread__msg--error' : ''
+            }`}
+            data-testid="pl-msg"
+          >
             {message}
           </span>
         ) : null}

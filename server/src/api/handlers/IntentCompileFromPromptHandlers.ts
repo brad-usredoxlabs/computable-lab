@@ -22,6 +22,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
+import { resolveAiProfile } from '../../config/types.js';
 import type { AppContext } from '../../server.js';
 import type { RecordStore } from '../../store/types.js';
 import {
@@ -41,17 +42,28 @@ interface CompileFromPromptDeps {
 }
 
 function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0 } {
-  // The one-shot localization path runs a SMALL dedicated model (lfm2.5-class
-  // 3B / qwen3.6-35b fallback), NOT the main big-model inference endpoint
-  // (config ai.inference = qwen3.8-27b). Prefer an explicit small-model config
-  // if present, else the standard small-model endpoint on this host.
-  const small = (ctx.appConfig?.ai as Record<string, unknown> | undefined)?.['smallModel'] as
+  // The one-shot localization path follows the ACTIVE AI profile (default:
+  // Ornith on appliance-2), so the compiler grounds against the lab's current
+  // model. An explicit `smallModel` config override (or deps baseUrl/model for
+  // tests) wins; otherwise fall back to the active profile's inference config,
+  // then to the historical local small model as a last resort.
+  const ai = ctx.appConfig?.ai as Record<string, unknown> | undefined;
+  const small = ai?.['smallModel'] as
     | { baseUrl?: string; model?: string }
     | undefined;
+  const activeInference = ctx.appConfig?.ai
+    ? resolveAiProfile(ctx.appConfig.ai).inference
+    : undefined;
   return {
     provider: 'openai-compatible',
-    baseUrl: deps.baseUrl ?? small?.baseUrl ?? 'http://127.0.0.1:8899/v1',
-    model: deps.model ?? small?.model ?? 'lfm2.5-2.6b',
+    baseUrl: deps.baseUrl
+      ?? small?.baseUrl
+      ?? activeInference?.baseUrl
+      ?? 'http://127.0.0.1:8899/v1',
+    model: deps.model
+      ?? small?.model
+      ?? activeInference?.model
+      ?? 'lfm2.5-2.6b',
     enableThinking: false,
     temperature: 0,
   };

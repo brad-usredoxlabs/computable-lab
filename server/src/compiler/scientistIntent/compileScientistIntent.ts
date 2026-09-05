@@ -164,6 +164,10 @@ export async function compileScientistIntent(
   const directiveOutput = (result.outputs.get('apply_directives') as { directives?: unknown[] } | undefined)?.directives ?? [];
   const labStateOutput = (result.outputs.get('lab_state') as { events?: unknown[]; snapshotAfter?: LabStateSnapshot } | undefined);
   const deckOutput = (result.outputs.get('plan_deck_layout') as { pinned?: unknown[]; autoFilled?: unknown[]; conflicts?: unknown[] } | undefined);
+  const resolveLabwareOutput = (result.outputs.get('resolve_labware') as {
+    labwareAdditions?: Array<{ recordId: string; reason?: string; deckSlot?: string }>;
+    resolvedLabwares?: Array<{ hint: string; recordId: string; title?: string }>;
+  } | undefined);
   const resourcesOutput = (result.outputs.get('compute_resources') as { resourceManifest?: unknown } | undefined)?.resourceManifest;
   const validateOutput = (result.outputs.get('validate') as { validationReport?: unknown } | undefined)?.validationReport;
   const runFilesOutput = (result.outputs.get('emit_instrument_run_files') as { instrumentRunFiles?: unknown[] } | undefined)?.instrumentRunFiles;
@@ -176,6 +180,9 @@ export async function compileScientistIntent(
     events: (eventOutput ?? []) as TerminalArtifacts['events'],
     directives: (directiveOutput ?? []) as TerminalArtifacts['directives'],
     gaps,
+    ...(resolveLabwareOutput?.labwareAdditions && resolveLabwareOutput.labwareAdditions.length > 0
+      ? { labwareAdditions: resolveLabwareOutput.labwareAdditions }
+      : {}),
     ...(labStateOutput ? {
       labStateDelta: {
         events: (labStateOutput.events ?? []) as TerminalArtifacts['events'],

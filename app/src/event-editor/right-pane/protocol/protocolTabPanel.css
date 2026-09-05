@@ -401,3 +401,111 @@
   color: var(--cl-text-dim);
 }
 
+.protocol-localization-thread__msg--error {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-danger, #e03131);
+  background: color-mix(in srgb, var(--cl-danger, #e03131) 12%, var(--cl-bg));
+  border: 1px solid var(--cl-danger, #e03131);
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: block;
+  margin-top: 2px;
+}
+
+
+
+/* --- Review deck & labware (one-shot localization gate) --- */
+.protocol-localization-thread__deckreview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+}
+
+.pl-deckreview-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.protocol-localization-thread__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.pl-deckreview-labware {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.pl-deckreview-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.pl-deckreview-item__label {
+  flex: 1 1 auto;
+}
+
+.pl-deckreview-item__slot {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.pl-deckreview-platform {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pl-deckreview-platform__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+}
+
+[data-testid="pl-deck-platform"] {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+[data-testid="pl-load-deck"] {
+  align-self: flex-start;
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-testid="pl-load-deck"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

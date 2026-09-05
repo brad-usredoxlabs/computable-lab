@@ -293,6 +293,50 @@ describe('liftScientistIntent (verb-synonym lift)', () => {
     expect(coerceNumeric('550')).toBe(550);
     expect(coerceNumeric('10 min')).toBe('10 min');
   });
+
+  it('lifts the key-as-action YAML shape a tiny model emits (verb as map key, snake params)', () => {
+    // Live 2.6B output shape: `- add_material:\n    material: "ZymoBIOMICS™ Lysis
+    // Solution"\n    volume_ul: "550"` — no `action:` field, snake-case volume.
+    const lifted = liftScientistIntent({
+      intentId: 'zymo',
+      actions: [
+        { add_material: { material: 'ZymoBIOMICS™ Lysis Solution', volume_ul: '550' } },
+        { transfer: { source: 'block', target: 'magstand', volume_ul: '200' } },
+        { centrifuge: { rpm_value: '4000', time_min: '5' } },
+      ],
+    });
+    const acts = (lifted.actions as Array<Record<string, unknown>>);
+    expect(acts[0]).toMatchObject({ action: 'add_material', material: 'ZymoBIOMICS™ Lysis Solution', volumeUl: 550 });
+    expect(acts[1]).toMatchObject({ action: 'transfer', source: 'block', target: 'magstand', volumeUl: 200 });
+    expect(acts[2]).toMatchObject({ action: 'spin', rpm: 4000, duration: '5' });
+    // No unknown / no dropped action, no stray snake keys.
+    expect(acts.every((a) => a.action !== 'unknown')).toBe(true);
+    expect(acts[0]).not.toHaveProperty('volume_ul');
+  });
+
+  it('lifts the verb-keyed MAP actions shape a tiny model emits with the strengthened prompt', () => {
+    // Live shape after prompt update: `actions` is a MAP keyed by verb, each
+    // value a params object OR an array of params (one per emitted instance).
+    const lifted = liftScientistIntent({
+      intentId: 'bashing_bead_lysis',
+      actions: {
+        add_material: [
+          { material: 'ZymoBIOMICS Lysis Solution', volumeUl: 550 },
+          { material: 'ZymoBIOMICS Lysis Solution', volumeUl: 750 },
+        ],
+        transfer: { source: 'BashingBead Module', target: 'plate', volumeUl: 200 },
+        spin: [ { rpm_value: '4000', time_min: '5' }, { rpm_value: '10000', time_min: '1' } ],
+      },
+    });
+    const acts = (lifted.actions as Array<Record<string, unknown>>);
+    expect(acts).toHaveLength(5);
+    expect(acts[0]).toMatchObject({ action: 'add_material', material: 'ZymoBIOMICS Lysis Solution', volumeUl: 550 });
+    expect(acts[1]).toMatchObject({ action: 'add_material', material: 'ZymoBIOMICS Lysis Solution', volumeUl: 750 });
+    expect(acts[2]).toMatchObject({ action: 'transfer', source: 'BashingBead Module', target: 'plate', volumeUl: 200 });
+    expect(acts[3]).toMatchObject({ action: 'spin', rpm: 4000, duration: '5' });
+    expect(acts[4]).toMatchObject({ action: 'spin', rpm: 10000, duration: '1' });
+    expect(acts.every((a) => a.action !== 'unknown')).toBe(true);
+  });
 });
 
 describe('extractBranchQuestionsFromSmallLlm (localization preamble)', () => {

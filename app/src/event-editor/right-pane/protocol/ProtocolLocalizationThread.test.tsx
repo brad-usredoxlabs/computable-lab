@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { apiClient } from '../../../shared/api/client'
@@ -33,6 +33,12 @@ const COMPILED_RES = {
       { eventId: 'e1', event_type: 'transfer', details: {} },
       { eventId: 'e2', event_type: 'mix', details: {} },
     ],
+    // The one-shot now surfaces the deck labware so the Review-deck gate has
+    // something to place before it ghosts events.
+    labwareAdditions: [
+      { recordId: 'lbw-def-generic-96-well-plate', reason: 'primary sample plate', deckSlot: 'B2' },
+      { recordId: 'lbw-def-tube-block', reason: 'elution rack', deckSlot: 'B5' },
+    ],
   },
   localMacro: {
     intentId: 'zymo-local',
@@ -47,10 +53,11 @@ const CORPUS_RES = { ok: true, entryId: 'CRM-1' }
 vi.mock('../../EventEditorContext', () => ({
   useOptionalEventEditor: () => ({
     state: {
-      platforms: [],
+      platforms: [{ id: 'integra_assist', label: 'Integra Assist', variants: [{ id: 'default', title: 'Default', slots: [{ id: 'B2', kind: 'standard' }, { id: 'B5', kind: 'standard' }] }] }],
       platformId: 'integra_assist',
       variantId: 'default',
       runId: 'RUN-1',
+      runDeckLock: null,
       labwares: {},
       placements: [],
       events: [],
@@ -61,19 +68,22 @@ vi.mock('../../EventEditorContext', () => ({
       setPreview: vi.fn(),
       commitPreview: vi.fn(),
       clearPreview: vi.fn(),
+      setPlatform: vi.fn(),
     },
   }),
 }))
 
 describe('ProtocolLocalizationThread', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('auto-runs branch questions on mount when a source universal protocol is provided (Point 3)', async () => {
     mockClient.intentCompileFromPrompt
       .mockResolvedValueOnce(BRANCH_RES)
 
     render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
 
-    // No manual "Localize" click needed — the branch questions appear
-    // automatically because a source universal protocol is attached.
     await waitFor(() => expect(screen.getByTestId('pl-clarify')).toBeTruthy())
     expect(screen.getByText('What sample?')).toBeTruthy()
     expect(mockClient.intentCompileFromPrompt).toHaveBeenCalledWith(
@@ -81,25 +91,31 @@ describe('ProtocolLocalizationThread', () => {
     )
   })
 
-  it('localizes one-shot: branch-ask → answer → compile → ghost + hold macro', async () => {
+  it('gates event ghosting behind the Review-deck step: branch Q&A → review deck → confirm loads deck, THEN events ghost', async () => {
     mockClient.intentCompileFromPrompt
       .mockResolvedValueOnce(BRANCH_RES)
       .mockResolvedValueOnce(COMPILED_RES)
 
     render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
 
-    // branch questions appear automatically (auto-run)
     await waitFor(() => expect(screen.getByTestId('pl-clarify')).toBeTruthy())
 
     // choose Bacterial, submit answers → compiled result
     fireEvent.click(screen.getByLabelText('Bacteria'))
     fireEvent.click(screen.getByTestId('pl-submit-answers'))
 
-    await waitFor(() => expect(screen.getByTestId('pl-refine')).toBeTruthy())
-    // macro is held
+    // The Review-deck step appears BEFORE any ghosting — and the macro is held.
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
     expect(screen.getByTestId('pl-macro-view').textContent).toContain('1 actions')
-    // ghost called
-    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toContain('draft ghosted'))
+
+    // The suggested labware is present and pre-checked.
+    const plateCheckbox = screen.getByTestId('deck-labware-lbw-def-generic-96-well-plate') as HTMLInputElement
+    expect(plateCheckbox.checked).toBe(true)
+
+    // Confirm the deck → the draft is ghosted (preview events populate).
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toContain('events ghosted'))
+    expect(screen.queryByTestId('pl-deck-review')).toBeNull()
   })
 
   it('accept posts the macro-focused training pair and saves local-protocol', async () => {
@@ -108,7 +124,10 @@ describe('ProtocolLocalizationThread', () => {
     mockClient.intentTrainingPair.mockResolvedValueOnce(CORPUS_RES)
 
     render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
-    // auto-run compiles immediately (no branches), macro held
+    // auto-run compiles immediately → Review-deck gate
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    // confirm deck → ghost
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
     await waitFor(() => expect(screen.getByTestId('pl-refine')).toBeTruthy())
 
     fireEvent.click(screen.getByTestId('pl-accept'))
@@ -123,8 +142,8 @@ describe('ProtocolLocalizationThread', () => {
         localMacro: expect.objectContaining({ intentId: 'zymo-local' }),
       }),
     )
-    // the FINAL macro is the target output the corpus trains on
     const tpCall = mockClient.intentTrainingPair.mock.calls[0]![0] as Record<string, unknown>
     expect(tpCall.localMacro).toMatchObject({ intentId: 'zymo-local' })
   })
 })
+

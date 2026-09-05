@@ -313,6 +313,26 @@ export interface TerminalArtifacts {
   instrumentExecutionReadiness?: InstrumentExecutionReadiness[];
   /** Future compile targets declared by the user. Spec-039. */
   downstreamQueue?: DownstreamCompileJob[];
+  /**
+   * Labware the run's deck must materialize for the compiled events to bind.
+   * Produced by the resolve_labware + plan_deck_layout passes. The run
+   * workspace ghosts these onto the deck BEFORE showing events for review, so
+   * the events never appear on a blank canvas.
+   */
+  labwareAdditions?: Array<{
+    recordId: string;
+    reason?: string;
+    deckSlot?: string;
+  }>;
+  /**
+   * Class-level labware requirements (symbolic, e.g. a 96-well deepwell plate)
+   * the run needs even when no concrete inventory record is bound yet.
+   */
+  labwareRequirements?: Array<{
+    classCurie: string;
+    deckSlot?: string;
+    constraints?: string[];
+  }>;
   /** Aggregated validation findings. Spec-034. */
   validationReport?: ValidationReport;
   /** Lifecycle/admissibility decisions attached to records proposed during compile. */
