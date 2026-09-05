@@ -97,10 +97,14 @@ test.describe('Find (graph search) UI', () => {
         active: expect.objectContaining({ objectType: 'collection' }),
       }),
     )
-    const selection = (ctx as { selection: Array<{ ref: { type: string; id: string } }> }).selection
+    const selection = (ctx as { selection: Array<{ ref: { type: string; id: string }; data?: Record<string, unknown> }> }).selection
     expect(selection).toHaveLength(2)
     expect(selection[0]!.ref.type).toBe('well')
     expect(selection[0]!.ref.id).toContain('well:')
+    // The selected well's resolved data is carried in (not just the id).
+    const data = selection[0]!.data
+    expect(data).toBeDefined()
+    expect(Object.keys(data ?? {}).length).toBeGreaterThan(0)
     // goal round-trips through the editable prompt input.
     expect((ctx as { prompt: string }).prompt).toBe('compute mean ROS')
   })
