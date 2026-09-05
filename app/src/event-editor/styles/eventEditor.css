@@ -5607,3 +5607,161 @@
   }
 }
 
+
+
+/* ---- Ontology term review (sign-off surface) ---- */
+.event-editor .proposed-graph__section + .proposed-graph__section {
+  border-top: 1px solid var(--cl-border);
+  padding-top: 12px;
+}
+
+.event-editor .proposed-graph__review-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.event-editor .proposed-graph__review-progress {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  margin-left: auto;
+}
+
+.event-editor .proposed-graph__terms {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-editor .proposed-graph__term {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--cl-bg-elev-1);
+}
+
+.event-editor .proposed-graph__term--pending {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .proposed-graph__term-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.event-editor .proposed-graph__term-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cl-text);
+}
+
+.event-editor .proposed-graph__term-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text-dim);
+}
+
+.event-editor .proposed-graph__term--pending .proposed-graph__term-badge {
+  border-color: var(--cl-accent);
+  color: var(--cl-accent);
+}
+
+.event-editor .proposed-graph__term--approved .proposed-graph__term-badge {
+  border-color: #2f9e44;
+  color: #2f9e44;
+}
+
+.event-editor .proposed-graph__term-badge--ok {
+  border-color: var(--cl-border);
+  color: var(--cl-text-dim);
+}
+
+.event-editor .proposed-graph__term-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.event-editor .proposed-graph__term-replace {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-editor .proposed-graph__term-replace-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+.event-editor .proposed-graph__term-replace-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-editor .proposed-graph__term-result {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-editor .proposed-graph__term-result:hover {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .proposed-graph__term-result-label {
+  font-weight: 600;
+}
+
+.event-editor .proposed-graph__term-replace-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.event-editor .proposed-graph__btn {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.event-editor .proposed-graph__btn--ghost {
+  border-color: var(--cl-border);
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+}

@@ -6,6 +6,7 @@ import type { PlateEvent } from '../../types/events'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
 import { EMPTY_HISTORY } from '../editorHistory'
 import { PreviewActionBar } from './PreviewActionBar'
+import type { TermDecision } from './acceptedOntologyBindings'
 
 const mocks = vi.hoisted(() => ({
   commitPreview: vi.fn(),
@@ -72,6 +73,10 @@ const preview: EventEditorPreview = {
     via: 'class-ref',
     draftOnly: true,
   }],
+}
+
+const approvedDecisions: Record<string, TermDecision> = {
+  'CHEBI:5001': { status: 'approved' },
 }
 
 function LocationProbe() {
@@ -148,9 +153,18 @@ beforeEach(() => {
 })
 
 describe('PreviewActionBar Accept persistence', () => {
+  // The fixture has a draftOnly binding → Accept is gated until the user
+  // signs off. Opening the modal and approving all satisfies the gate.
+  function approveTerms() {
+    fireEvent.click(screen.getByRole('button', { name: /view changes/i }))
+    fireEvent.click(screen.getByTestId('term-approve-all'))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  }
+
   it('materializes draft bindings, saves the full graph, commits rewritten events, and replaces the URL', async () => {
     renderBar()
 
+    approveTerms()
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
 
     await waitFor(() => expect(mocks.commitPreview).toHaveBeenCalledWith([acceptedEvent], 'EVG-001', {
@@ -158,7 +172,11 @@ describe('PreviewActionBar Accept persistence', () => {
       message: 'Create EVG-001',
       timestamp: '2026-05-31T12:00:00Z',
     }))
-    expect(mocks.materializeAcceptedOntologyBindings).toHaveBeenCalledWith(preview.ontologyBindings)
+    expect(mocks.materializeAcceptedOntologyBindings).toHaveBeenCalledWith(
+      preview.ontologyBindings,
+      undefined,
+      approvedDecisions,
+    )
     expect(mocks.rewriteAcceptedOntologyRefs).toHaveBeenCalledWith([previewEvent], [{
       curie: 'CHEBI:5001',
       recordId: 'MAT-CHEBI-5001',
@@ -178,6 +196,7 @@ describe('PreviewActionBar Accept persistence', () => {
     mocks.state = makeState({ runId: 'RUN-001' })
     renderBar('/runs/RUN-001/event-editor')
 
+    approveTerms()
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
 
     await waitFor(() => expect(mocks.commitPreview).toHaveBeenCalledWith([acceptedEvent], 'EVG-001', {
@@ -193,6 +212,7 @@ describe('PreviewActionBar Accept persistence', () => {
     mocks.persistAcceptedEventGraph.mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
     renderBar()
 
+    approveTerms()
     const accept = screen.getByRole('button', { name: 'Accept' })
     fireEvent.click(accept)
     fireEvent.click(accept)
@@ -206,6 +226,7 @@ describe('PreviewActionBar Accept persistence', () => {
     mocks.persistAcceptedEventGraph.mockRejectedValue(new Error('Event graph validation failed: /events/0/details: missing labwareId'))
     renderBar()
 
+    approveTerms()
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
 
     const alert = await screen.findByRole('alert')
@@ -213,5 +234,22 @@ describe('PreviewActionBar Accept persistence', () => {
     expect(alert.textContent).toContain('missing labwareId')
     expect(alert.getAttribute('title')).toBe('Event graph validation failed: /events/0/details: missing labwareId')
     expect(mocks.commitPreview).not.toHaveBeenCalled()
+  })
+
+  it('blocks Accept and opens the review modal until pending ontology terms are decided', async () => {
+    renderBar()
+
+    // Accept is hard-blocked until the term is signed off — clicking it opens
+    // the review modal instead of persisting anything.
+    fireEvent.click(screen.getByRole('button', { name: /review terms to accept/i }))
+    expect(screen.getByTestId('term-review-section')).toBeTruthy()
+    expect(mocks.persistAcceptedEventGraph).not.toHaveBeenCalled()
+
+    // Sign off the term (approve), close, then Accept persists normally.
+    fireEvent.click(screen.getByTestId('term-approve-all'))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    await waitFor(() => expect(mocks.persistAcceptedEventGraph).toHaveBeenCalled())
   })
 })

@@ -10,6 +10,16 @@ export interface MaterializedOntologyBinding {
   label: string
 }
 
+/**
+ * A user sign-off decision for one AI-proposed ontology term.
+ * - `approved`: keep the AI's CURIE exactly as proposed (materialize under it).
+ * - `replaced`: the user chose a different term; materialize under that CURIE /
+ *   label instead of the AI's best-guess.
+ */
+export type TermDecision =
+  | { status: 'approved' }
+  | { status: 'replaced'; curie: string; label: string; recordId?: string }
+
 type CreateRecordFn = (schemaId: string, payload: Record<string, unknown>) => Promise<unknown>
 
 export function inferDomainFromCurie(curie: string): string {
@@ -47,20 +57,45 @@ function draftOnlyBindings(bindings: DraftOntologyBinding[] | undefined): DraftO
   return [...unique.values()]
 }
 
+/** Resolve the effective CURIE/label to materialize a binding under, honoring
+ *  the user's sign-off decision (approved → as-proposed; replaced → the choice). */
+function effectiveTarget(
+  binding: DraftOntologyBinding,
+  decisions: Record<string, TermDecision> | undefined,
+): { curie: string; label: string; recordId?: string } {
+  const decision = decisions?.[binding.curie]
+  if (decision && decision.status === 'replaced') {
+    return { curie: decision.curie, label: decision.label, recordId: decision.recordId }
+  }
+  return { curie: binding.curie, label: binding.label || binding.curie, recordId: binding.recordId }
+}
+
 export async function materializeAcceptedOntologyBindings(
   bindings: DraftOntologyBinding[] | undefined,
   createRecord: CreateRecordFn = apiClient.createRecord,
+  decisions?: Record<string, TermDecision>,
 ): Promise<MaterializedOntologyBinding[]> {
   const materialized: MaterializedOntologyBinding[] = []
+  const seen = new Set<string>()
   for (const binding of draftOnlyBindings(bindings)) {
-    const curie = binding.curie
+    const { curie, label, recordId } = effectiveTarget(binding, decisions)
     const namespace = curie.split(':')[0] ?? ''
-    const recordId = localMaterialIdForCurie(curie)
-    const label = binding.label || curie
+    // When the user replaced a term with an EXISTING local record (resolver
+    // matched tier-0/tier-1), reuse it — no material mint needed.
+    if (recordId && !/^[A-Z][A-Z0-9_]*:/.test(recordId)) {
+      if (!seen.has(recordId)) {
+        materialized.push({ curie, recordId, label })
+        seen.add(recordId)
+      }
+      continue
+    }
+    const targetRecordId = localMaterialIdForCurie(curie)
+    if (seen.has(targetRecordId)) continue
+    seen.add(targetRecordId)
     try {
       await createRecord(MATERIAL_SCHEMA_ID, {
         kind: 'material',
-        id: recordId,
+        id: targetRecordId,
         name: label,
         domain: inferDomainFromCurie(curie),
         status: 'proposed',
@@ -78,7 +113,7 @@ export async function materializeAcceptedOntologyBindings(
     } catch (error) {
       if (!(ApiError.isApiError(error) && error.status === 409)) throw error
     }
-    materialized.push({ curie, recordId, label })
+    materialized.push({ curie, recordId: targetRecordId, label })
   }
   return materialized
 }

@@ -77,4 +77,34 @@ describe('accepted ontology bindings', () => {
       },
     })
   })
+
+  it('materializes a replaced binding under the user-chosen CURIE, not the AI pick', async () => {
+    const createRecord = vi.fn().mockResolvedValue({ success: true })
+    const out = await materializeAcceptedOntologyBindings(
+      [binding('CHEBI:5001', 'fenofibrate')],
+      createRecord,
+      { 'CHEBI:5001': { status: 'replaced', curie: 'CHEBI:6001', label: 'clofibrate' } },
+    )
+
+    expect(out).toEqual([{ curie: 'CHEBI:6001', recordId: 'MAT-CHEBI-6001', label: 'clofibrate' }])
+    expect(createRecord).toHaveBeenCalledTimes(1)
+    const [, payload] = createRecord.mock.calls[0]!
+    expect(payload).toMatchObject({
+      id: 'MAT-CHEBI-6001',
+      name: 'clofibrate',
+      class: [{ kind: 'ontology', id: 'CHEBI:6001', namespace: 'CHEBI', label: 'clofibrate' }],
+    })
+  })
+
+  it('reuses an existing local record when the replacement resolves to one (no mint)', async () => {
+    const createRecord = vi.fn()
+    const out = await materializeAcceptedOntologyBindings(
+      [binding('CHEBI:5001', 'fenofibrate')],
+      createRecord,
+      { 'CHEBI:5001': { status: 'replaced', curie: 'MAT-LOCAL-FENO', label: 'fenofibrate', recordId: 'MAT-LOCAL-FENO' } },
+    )
+
+    expect(out).toEqual([{ curie: 'MAT-LOCAL-FENO', recordId: 'MAT-LOCAL-FENO', label: 'fenofibrate' }])
+    expect(createRecord).not.toHaveBeenCalled()
+  })
 })

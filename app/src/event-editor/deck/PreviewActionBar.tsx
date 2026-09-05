@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEventEditor } from '../EventEditorContext'
 import { useOptionalWorkspace } from '../workspace/WorkspaceContext'
@@ -8,7 +8,13 @@ import { ProposedGraphModal } from './ProposedGraphModal'
 import {
   materializeAcceptedOntologyBindings,
   rewriteAcceptedOntologyRefs,
+  type TermDecision,
 } from './acceptedOntologyBindings'
+
+/** A proposed ontology term that requires the scientist's sign-off (gate on Accept). */
+function bindingNeedsDecision(b: { minted?: boolean; requiresReview?: boolean; draftOnly?: boolean }): boolean {
+  return Boolean(b.minted || b.requiresReview || b.draftOnly)
+}
 
 /**
  * Floating control that appears over the deck stage whenever an AI preview
@@ -26,10 +32,20 @@ export function PreviewActionBar() {
   const [accepting, setAccepting] = useState(false)
   const [acceptError, setAcceptError] = useState<string | null>(null)
   const [showChanges, setShowChanges] = useState(false)
+  const [termDecisions, setTermDecisions] = useState<Record<string, TermDecision>>({})
   const acceptingRef = useRef(false)
   const preview = state.preview
   if (!preview) return null
   const activePreview = preview
+
+  // Terms that need an explicit sign-off decision. Accept is hard-blocked until
+  // every one is approved or replaced.
+  const decisionNeeded = useMemo(
+    () => (activePreview.ontologyBindings ?? []).filter(bindingNeedsDecision),
+    [activePreview.ontologyBindings],
+  )
+  const pendingDecisions = decisionNeeded.filter((b) => !termDecisions[b.curie])
+  const acceptBlocked = pendingDecisions.length > 0
 
   const labwareCount = activePreview.previewPlacements.length
   const eventCount = activePreview.previewEvents.length
@@ -39,6 +55,9 @@ export function PreviewActionBar() {
       ? `${labwareCount} new labware${labwareCount === 1 ? '' : 's'}`
       : null,
     eventCount > 0 ? `${eventCount} event${eventCount === 1 ? '' : 's'}` : null,
+    pendingDecisions.length > 0
+      ? `${pendingDecisions.length} ontology term${pendingDecisions.length === 1 ? '' : 's'} to review`
+      : null,
   ]
     .filter(Boolean)
     .join(', ') || 'preview ready'
@@ -49,11 +68,21 @@ export function PreviewActionBar() {
 
   async function handleAccept() {
     if (acceptingRef.current) return
+    // Hard gate: every minted/requiresReview/draftOnly ontology term must be
+    // signed off before we materialize the graph.
+    if (acceptBlocked) {
+      setShowChanges(true)
+      return
+    }
     acceptingRef.current = true
     setAcceptError(null)
     setAccepting(true)
     try {
-      const materialized = await materializeAcceptedOntologyBindings(activePreview.ontologyBindings)
+      const materialized = await materializeAcceptedOntologyBindings(
+        activePreview.ontologyBindings,
+        undefined,
+        termDecisions,
+      )
       const acceptedEvents = rewriteAcceptedOntologyRefs(activePreview.previewEvents, materialized)
       const persisted = await persistAcceptedEventGraph({
         eventGraphId: state.eventGraphId,
@@ -118,10 +147,19 @@ export function PreviewActionBar() {
         className="preview-bar__btn preview-bar__btn--primary"
         onClick={() => { void handleAccept() }}
         disabled={accepting}
-        title="Commit the preview to the deck and event graph"
-      >{accepting ? 'Accepting...' : 'Accept'}</button>
+        title={
+          acceptBlocked
+            ? `${pendingDecisions.length} ontology term${pendingDecisions.length === 1 ? '' : 's'} need decision — review & sign off first`
+            : 'Commit the preview to the deck and event graph'
+        }
+      >{accepting ? 'Accepting...' : acceptBlocked ? 'Review terms to accept' : 'Accept'}</button>
       {showChanges ? (
-        <ProposedGraphModal preview={activePreview} onClose={() => setShowChanges(false)} />
+        <ProposedGraphModal
+          preview={activePreview}
+          onClose={() => setShowChanges(false)}
+          termDecisions={termDecisions}
+          onDecisionsChange={setTermDecisions}
+        />
       ) : null}
     </div>
   )
