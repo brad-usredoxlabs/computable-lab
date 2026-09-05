@@ -63,6 +63,7 @@ const DeckHostPage = lazy(async () => import('./shared/shell/DeckHostPage').then
 const ExtractionDraftsListPage = lazy(async () => import('./extraction/ExtractionDraftsListPage').then((m) => ({ default: m.ExtractionDraftsListPage })))
 const ExtractionReviewPage = lazy(async () => import('./extraction/ExtractionReviewPage').then((m) => ({ default: m.ExtractionReviewPage })))
 const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage').then((m) => ({ default: m.GraphSearchPage })))
+const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -170,6 +171,7 @@ export function App() {
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}
               <Route path="/find" element={<DeferredRoute><GraphSearchPage /></DeferredRoute>} />
+              <Route path="/analysis" element={<DeferredRoute><AnalysisPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />

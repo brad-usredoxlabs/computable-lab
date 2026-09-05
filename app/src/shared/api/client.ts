@@ -2623,6 +2623,60 @@ export const apiClient = {
     })
   },
 
+  // ---- Analysis records ----
+
+  async listAnalysisRevisions(): Promise<{ revisions: unknown[]; total: number }> {
+    return request('/analysis-revisions')
+  },
+
+  async createAnalysisRevision(body: {
+    title: string
+    entryScript: string
+    sdkVersion: string
+    methodNotes?: string
+    inputs?: Array<{ name: string; description?: string; dataKind?: string; required?: boolean }>
+  }): Promise<{ success: boolean; recordId: string; revision: unknown }> {
+    return request('/analysis-revisions', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async getAnalysisRevision(id: string): Promise<{ record: { recordId: string; payload: Record<string, unknown> } }> {
+    return request(`/analysis-revisions/${encodeURIComponent(id)}`)
+  },
+
+  async listAnalysisRuns(): Promise<{ runs: Array<{ recordId: string; payload: { id: string; title: string; status: string } }>; total: number }> {
+    return request('/analysis-runs')
+  },
+
+  async createAnalysisRun(body: {
+    title: string
+    revisionRef: { kind: 'record'; id: string; type: 'analysis-revision' }
+    inputs: Record<string, { kind: 'record'; id: string; type: string }>
+    parameters?: Record<string, unknown>
+  }): Promise<{ success: boolean; recordId: string; run: Record<string, unknown> }> {
+    return request('/analysis-runs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async getAnalysisRun(id: string): Promise<{ record: { recordId: string; payload: Record<string, unknown> } }> {
+    return request(`/analysis-runs/${encodeURIComponent(id)}`)
+  },
+
+  async executeAnalysisRun(id: string): Promise<{
+    success: boolean
+    recordId: string
+    status: string
+    manifest: { artifacts: unknown[]; views: unknown[]; metrics: unknown[] }
+  }> {
+    return request(`/analysis-runs/${encodeURIComponent(id)}/execute`, {
+      method: 'POST',
+    })
+  },
+
   async executeInstrumentApplianceJob(
     job: InstrumentApplianceJob,
     options?: { confirmLiveExecution?: boolean },
