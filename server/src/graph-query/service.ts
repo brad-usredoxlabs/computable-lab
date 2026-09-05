@@ -98,9 +98,14 @@ async function buildIndexFromContext(index: GraphEdgeIndex, ctx: GraphQueryConte
         relationshipEdges.push({ sourceId, targetId, verb });
       }
     } else if (kind === 'event-graph' && payload) {
+      const projectableLabwares = Array.isArray(payload.labwares)
+        ? (payload.labwares as Array<{ labwareId?: string; name?: string; labwareType?: string }>)
+            .filter((lw): lw is { labwareId: string; name?: string; labwareType?: string } => typeof lw.labwareId === 'string' && lw.labwareId.length > 0)
+        : [];
       const projected = projector.project({
         recordId,
         events: (payload.events as ProjectableEventArg[]) ?? [],
+        ...(projectableLabwares.length > 0 ? { labwares: projectableLabwares } : {}),
       });
       eventGraphRecords.push({ recordId, projected });
     }
