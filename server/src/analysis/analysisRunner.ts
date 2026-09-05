@@ -13,20 +13,41 @@
  * 5. Transition the run to succeeded/failed.
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { AnalysisService, AnalysisServiceError } from './analysisService.js';
 import type { AppContext } from '../server.js';
 
 const DEFAULT_PYTHON = '/usr/bin/python3';
 
-/** Resolve the computable_lab_analysis SDK package dir for PYTHONPATH. */
+/** Resolve the computable_lab_analysis SDK package dir for PYTHONPATH.
+ *  Preference: CLA_ANALYSIS_SDK_DIR env → module-relative (deterministic,
+ *  works regardless of workspaceRoot/embedded-git worktree) → repo-root probes. */
 export function analysisSdkDir(cwd: string = process.cwd()): string {
   if (process.env.CLA_ANALYSIS_SDK_DIR) return process.env.CLA_ANALYSIS_SDK_DIR;
-  // monorepo layout: <root>/server/python-executor-service/src
-  return resolvePath(cwd, 'python-executor-service', 'src');
+  // This module lives at <root>/server/src/analysis/analysisRunner.ts → the SDK is
+  // <root>/server/python-executor-service/src (deterministic, workspace-agnostic).
+  const moduleRelative = resolvePath(
+    dirname(fileURLToPath(import.meta.url)),
+    '..', '..',
+    'python-executor-service', 'src',
+  );
+  if (existsSync(resolvePath(moduleRelative, 'computable_lab_analysis', '__init__.py'))) {
+    return moduleRelative;
+  }
+  // Fallbacks for other layouts (cwd may be repo root or server dir).
+  for (const candidate of [
+    resolvePath(cwd, 'server', 'python-executor-service', 'src'),
+    resolvePath(cwd, 'python-executor-service', 'src'),
+  ]) {
+    const init = resolvePath(candidate, 'computable_lab_analysis', '__init__.py');
+    if (existsSync(init)) return candidate;
+  }
+  return moduleRelative;
 }
 
 interface InputSpec {
@@ -154,23 +175,22 @@ export class AnalysisRunner {
     });
   }
 
-  /** Write a manifest artifact as an analysis-output-artifact record. */
+  /** Write a manifest artifact as an analysis-output-artifact record (idempotent). */
   private async persistArtifactRecord(
     runId: string,
     page: ManifestArtifact,
     viewSpecs: Array<{ name: string; renderer: string; artifact: string }>,
   ): Promise<void> {
-    // mint an artifact id via a deterministic-ish scan; reuse the pattern
-    const existing = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
-    let max = 0;
-    for (const e of existing) {
-      const m = /^AOUT-(\d+)$/.exec(e.recordId);
-      if (m) {
-        const n = Number.parseInt(m[1] ?? '0', 10);
-        if (n > max) max = n;
-      }
-    }
-    const artifactId = `AOUT-${String(max + 1).padStart(6, '0')}`;
+    // Dedupe: if this run already produced this artifact (re-run), reuse it.
+    const existingForRun = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
+    const prior = existingForRun.find((e) => {
+      const p = e.payload as { runRef?: { id?: string }; name?: string };
+      return p.runRef?.id === runId && p.name === page.name;
+    });
+    const artifactId = prior
+      ? prior.recordId
+      : await this.nextArtifactId();
+
     const isSmall =
       typeof page.value === 'string'
         ? page.value.length < 50_000
@@ -187,22 +207,29 @@ export class AnalysisRunner {
       dataKind: page.dataKind,
       ...(page.units ? { units: page.units } : {}),
       ...(page.schema ? { schema: page.schema } : {}),
-      // small artifacts inlined; large ones would go to a storage device (TODO 4.6)
+      // small artifacts inlined
       ...(isSmall ? { inlineValue: page.value } : { inlineValue: page.value }),
     };
-    const result = await this.ctx.store.create({
-      envelope: {
-        recordId: artifactId,
-        schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-output-artifact.schema.yaml',
-        payload: artifactPayload,
-      },
-      message: `Create analysis output artifact ${artifactId}`,
-    });
-    if (!result.success) throw new AnalysisServiceError('ARTIFACT_FAILED', result.error ?? 'failed', 400);
+    if (!prior) {
+      const result = await this.ctx.store.create({
+        envelope: {
+          recordId: artifactId,
+          schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-output-artifact.schema.yaml',
+          payload: artifactPayload,
+        },
+        message: `Create analysis output artifact ${artifactId}`,
+      });
+      if (!result.success) throw new AnalysisServiceError('ARTIFACT_FAILED', result.error ?? 'failed', 400);
+    }
 
-    // persist view-spec records for each view that targets this artifact
+    // persist view-spec records for each view that targets this artifact (dedupe by run+name)
     for (const v of viewSpecs.filter((v) => v.artifact === page.name)) {
       const existingViews = await this.ctx.store.list({ kind: 'view-spec', limit: 5000 });
+      const priorView = existingViews.find((e) => {
+        const p = e.payload as { artifactRef?: { id?: string }; title?: string };
+        return p.artifactRef?.id === artifactId && p.title === v.name;
+      });
+      if (priorView) continue; // already have this view
       let vmax = 0;
       for (const e of existingViews) {
         const m = /^VSPEC-(\d+)$/.exec(e.recordId);
@@ -227,6 +254,19 @@ export class AnalysisRunner {
         message: `Create view spec ${viewId}`,
       });
     }
+  }
+
+  private async nextArtifactId(): Promise<string> {
+    const existing = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
+    let max = 0;
+    for (const e of existing) {
+      const m = /^AOUT-(\d+)$/.exec(e.recordId);
+      if (m) {
+        const n = Number.parseInt(m[1] ?? '0', 10);
+        if (n > max) max = n;
+      }
+    }
+    return `AOUT-${String(max + 1).padStart(6, '0')}`;
   }
 
   /** Execute a run (assumes queued). Transitions status + persists outputs. */
