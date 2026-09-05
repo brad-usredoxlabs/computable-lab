@@ -25,3 +25,11 @@
 .splash-search__type--claim { background: var(--cl-type-claim-soft, #fff8e1); color: var(--cl-type-claim, #f57f17); }
 .splash-search__type--lab { background: var(--cl-type-lab-soft, #f3e5f5); color: var(--cl-type-lab, #7b1fa2); }
 .splash-search__title { font-size: 14px; color: var(--cl-text, #333); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.splash-search__footer { padding: 6px 10px 10px; border-top: 1px solid var(--cl-border, #eee); }
+.splash-search__all {
+  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  color: var(--cl-accent, #2563eb); font-size: 13px; font-weight: 600; padding: 6px 4px;
+}
+.splash-search__all:hover { text-decoration: underline; }
+.splash-search form { margin: 0; }

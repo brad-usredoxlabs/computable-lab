@@ -1,17 +1,20 @@
 /**
- * Find UI — the graph search engine's human surface (spec §9, §10).
+ * Find (graph search) — the master search endpoint.
  *
- * Single-pane page: a query box at top, then result views. When results contain
- * `well` nodes they render on a plate grid (highlighted wells); all results list
- * as a table with editable selection. Rows can be selected into a `selection:`
- * handle for a follow-on AI action (spec §7 find→inspect→select→act).
+ * A proper computable-lab workspace page: normal top bar (GlobalNavbar +
+ * tab strip) and a right pane. The left pane is the scrollable search surface
+ * (natural-language query → plate/table results selectable for follow-on AI
+ * actions); the right pane hosts selection/AI + vessel-context detail.
  *
- * Views scoped to the active result type (spec §10): table is the default;
- * plate appears when wells are present.
+ * Supports the master-search flow: both the GlobalSearchBar (top bar) and the
+ * SplashSearch route their query here as `?q=<text>`, and this page runs it on
+ * mount (in addition to the local input).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import {
   graphSearch,
   graphPlanSearch,
@@ -28,6 +31,7 @@ import { groupByPlate } from './wellNodes'
 import './GraphSearchPage.css'
 
 export function GraphSearchPage() {
+  const [searchParams] = useSearchParams()
   const [queryText, setQueryText] = useState('')
   const [result, setResult] = useState<GraphResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -95,7 +99,7 @@ export function GraphSearchPage() {
   const [vesselContext, setVesselContext] = useState<VesselContextResult | null>(null)
   const [vesselError, setVesselError] = useState<string | null>(null)
 
-  const distinctMaterials = result ? [...new Set(result.objects
+  const distinctMaterials = useMemo(() => result ? [...new Set(result.objects
     .flatMap((o) => {
       // treatment/measurement nodes carry materialRef; well nodes carry
       // materialRefs[] (enriched from their treated_with edges).
@@ -108,11 +112,9 @@ export function GraphSearchPage() {
       return refs
     })
     .filter((r): r is string => typeof r === 'string' && r.length > 0))]
-    : []
+    : [], [result])
 
   // Auto-surface vessel contexts for ALL distinct materials in the results.
-  // Aggregates so a mixed result (e.g. clofibrate wells + a clofibrate stock)
-  // surfaces every tube/stock context, not just the first material's.
   useEffect(() => {
     if (distinctMaterials.length === 0) {
       setVesselContext(null)
@@ -144,6 +146,16 @@ export function GraphSearchPage() {
     return () => { cancelled = true }
   }, [distinctMaterials, result])
 
+  // Master-search flow: a `?q=` query param (from the GlobalSearchBar or
+  // SplashSearch) auto-runs the search on mount.
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q && q.trim().length > 0) {
+      setQueryText(q)
+      void runNaturalLanguage(q.trim())
+    }
+  }, [searchParams, runNaturalLanguage])
+
   const sendSelectionToAi = useCallback(async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -159,112 +171,131 @@ export function GraphSearchPage() {
     }
   }, [selectedIds])
 
-  const plates = result ? groupByPlate(result.objects) : []
+  const plates = useMemo(() => (result ? groupByPlate(result.objects) : []), [result])
+
+  // ---- Right pane (selection & AI + vessel context detail) ----
+  const rightPane = (
+    <div className="graph-search__right" data-testid="graph-search-right">
+      <div className="graph-search__right-title">Selection</div>
+      {selectedIds.size > 0 ? (
+        <>
+          <div className="graph-search__right-count">{selectedIds.size} selected</div>
+          <div className="graph-search__ai">
+            <button
+              onClick={() => void sendSelectionToAi()}
+              data-testid="graph-search-send-ai"
+              disabled={loading}
+            >
+              Send {selectedIds.size} to AI
+            </button>
+          </div>
+          {aiContext ? <div className="graph-search__ai-ctx" data-testid="graph-search-ai-context">{aiContext}</div> : null}
+        </>
+      ) : (
+        <div className="graph-search__right-empty">Select wells/cells in the results to act on them.</div>
+      )}
+
+      {vesselContext && vesselContext.count > 0 && (
+        <div className="graph-search__vessels" data-testid="graph-search-vessels">
+          <div className="graph-search__vessels-title">Also in tubes/stocks</div>
+          {vesselContext.instances.map((inst) => {
+            const storage = (inst.properties?.storage ?? {}) as { location?: string; temperature_C?: number }
+            const status = typeof inst.properties?.status === 'string' ? inst.properties.status : undefined
+            return (
+              <div key={inst.id} className="graph-search__vessel" data-testid="graph-vessel-instance">
+                <span className="graph-search__vessel-name">{inst.label}</span>
+                <span className="graph-search__vessel-meta">
+                  {storage.location ? ` at ${storage.location}` : ''}
+                  {typeof storage.temperature_C === 'number' ? ` (${storage.temperature_C}°C)` : ''}
+                  {status ? ` · ${status}` : ''}
+                </span>
+              </div>
+            )
+          })}
+          {vesselContext.aliquots.map((a) => (
+            <div key={a.id} className="graph-search__vessel" data-testid="graph-vessel-aliquot">
+              <span className="graph-search__vessel-name">{a.label}</span>
+              <span className="graph-search__vessel-meta">aliquot</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {vesselError && <div className="graph-search__error">{vesselError}</div>}
+
+      <div className="graph-search__right-title">Details</div>
+      {result?.explain ? (
+        <div className="graph-search__right-explain" data-testid="graph-search-summary">{result.summary.count} objects — {result.explain}</div>
+      ) : (
+        <div className="graph-search__right-empty">Run a search to see an interpretation.</div>
+      )}
+    </div>
+  )
+
+  // ---- Left pane (query + results, scrollable) ----
+  const leftPane = (
+    <div className="graph-search" data-testid="graph-search-page">
+      <header className="graph-search__header">
+        <h1>Find</h1>
+        <p className="graph-search__hint">Search the lab graph — wells, measurements, materials, stocks. Natural language or structured.</p>
+      </header>
+
+      <div className="graph-search__query">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void runNaturalLanguage(queryText.trim())
+          }}
+          data-testid="graph-search-form"
+        >
+          <input
+            className="graph-search__input"
+            value={queryText}
+            onChange={(e) => setQueryText(e.target.value)}
+            placeholder='e.g. wells treated with rotenone'
+            data-testid="graph-search-input"
+          />
+          <button type="submit" data-testid="graph-search-submit" disabled={loading || queryText.trim().length === 0}>
+            Search
+          </button>
+        </form>
+        <div className="graph-search__examples">
+          <button onClick={() => runPlaceholder('rotenone')}>wells + rotenone</button>
+          <button onClick={() => runPlaceholder('clofibrate')}>wells + clofibrate</button>
+        </div>
+      </div>
+
+      {loading && <div className="graph-search__status">Searching…</div>}
+      {error && !result && <div className="graph-search__error" data-testid="graph-search-error">{error}</div>}
+
+      {result && (
+        <div className="graph-search__results">
+          {plates.length > 0 && (
+            <div className="graph-search__grid-wrap">
+              <GraphSearchPlateView
+                plates={plates}
+                selectedIds={selectedIds}
+                onToggle={toggleSelect}
+              />
+            </div>
+          )}
+
+          <GraphSearchTable
+            nodes={result.objects}
+            selectedIds={selectedIds}
+            onToggle={toggleSelect}
+          />
+        </div>
+      )}
+    </div>
+  )
 
   return (
-    <AppShell brand={<span className="graph-search__brand">Find</span>}>
-      <div className="graph-search" data-testid="graph-search-page">
-        <header className="graph-search__header">
-          <h1>Find</h1>
-          <p className="graph-search__hint">Search the lab graph. Wells/measurements come from event graphs; records come from the library.</p>
-        </header>
-
-        <div className="graph-search__query">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              void runNaturalLanguage(queryText.trim())
-            }}
-            data-testid="graph-search-form"
-          >
-            <input
-              className="graph-search__input"
-              value={queryText}
-              onChange={(e) => setQueryText(e.target.value)}
-              placeholder='e.g. wells treated with rotenone'
-              data-testid="graph-search-input"
-            />
-            <button type="submit" data-testid="graph-search-submit" disabled={loading || queryText.trim().length === 0}>
-              Search
-            </button>
-          </form>
-          <div className="graph-search__examples">
-            <button onClick={() => runPlaceholder('rotenone')}>wells + rotenone</button>
-            <button onClick={() => runPlaceholder('oligomycin')}>wells + oligomycin</button>
-          </div>
-        </div>
-
-        {loading && <div className="graph-search__status">Searching…</div>}
-        {error && !result && <div className="graph-search__error" data-testid="graph-search-error">{error}</div>}
-
-        {result && (
-          <>
-            <div className="graph-search__summary" data-testid="graph-search-summary">
-              {result.summary.count} objects
-              {result.explain ? <span className="graph-search__explain"> — {result.explain}</span> : null}
-              {selectedIds.size > 0 ? <span className="graph-search__selection"> — {selectedIds.size} selected</span> : null}
-            </div>
-
-            {selectedIds.size > 0 && (
-              <div className="graph-search__ai">
-                <button
-                  onClick={() => void sendSelectionToAi()}
-                  data-testid="graph-search-send-ai"
-                  disabled={loading}
-                >
-                  Send {selectedIds.size} selected to AI
-                </button>
-                {aiContext ? <span className="graph-search__ai-ctx" data-testid="graph-search-ai-context">{aiContext}</span> : null}
-              </div>
-            )}
-
-            {plates.length > 0 && (
-              <div className="graph-search__grid-wrap">
-                <GraphSearchPlateView
-                  plates={plates}
-                  selectedIds={selectedIds}
-                  onToggle={toggleSelect}
-                />
-              </div>
-            )}
-
-            {vesselContext && vesselContext.count > 0 && (
-              <div className="graph-search__vessels" data-testid="graph-search-vessels">
-                <div className="graph-search__vessels-title">
-                  Also in tubes/stocks
-                </div>
-                {vesselContext.instances.map((inst) => {
-                  const storage = (inst.properties?.storage ?? {}) as { location?: string; temperature_C?: number }
-                  const status = typeof inst.properties?.status === 'string' ? inst.properties.status : undefined
-                  return (
-                    <div key={inst.id} className="graph-search__vessel" data-testid="graph-vessel-instance">
-                      <span className="graph-search__vessel-name">{inst.label}</span>
-                      <span className="graph-search__vessel-meta">
-                        {storage.location ? ` at ${storage.location}` : ''}
-                        {typeof storage.temperature_C === 'number' ? ` (${storage.temperature_C}°C)` : ''}
-                        {status ? ` · ${status}` : ''}
-                      </span>
-                    </div>
-                  )
-                })}
-                {vesselContext.aliquots.map((a) => (
-                  <div key={a.id} className="graph-search__vessel" data-testid="graph-vessel-aliquot">
-                    <span className="graph-search__vessel-name">{a.label}</span>
-                    <span className="graph-search__vessel-meta">aliquot</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {vesselError && <div className="graph-search__error">{vesselError}</div>}
-
-            <GraphSearchTable
-              nodes={result.objects}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-            />
-          </>
-        )}
-      </div>
-    </AppShell>
+    <AppShell
+      brand="Find"
+      topbarTabs={<WorkspaceTabStrip />}
+      layout="workspace"
+      leftPane={leftPane}
+      rightPane={rightPane}
+    />
   )
 }
