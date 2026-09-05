@@ -280,6 +280,8 @@ interface FieldProps {
   targetLabwareId?: string
   targetLabwareRows?: number
   targetLabwareCols?: number
+  /** D3 "verify plating" seam: add-follow-up-read staging for a biological seed. */
+  onVerifyPlating?: (event: PlateEvent) => void
 }
 
 interface ContextOption {
@@ -287,7 +289,7 @@ interface ContextOption {
   label: string
 }
 
-function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceWells, sourceLabwareId }: FieldProps) {
+function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceWells, sourceLabwareId, onVerifyPlating }: FieldProps) {
   const navigate = useNavigate()
   const [pendingFormulationRef, setPendingFormulationRef] = useState<Ref | null>(null)
   const [selectedFormulationSummary, setSelectedFormulationSummary] = useState<Awaited<ReturnType<typeof apiClient.getFormulationsSummary>>[number] | null>(null)
@@ -498,6 +500,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
             details={bioDetails}
             rule={biological.rule!}
             showConditionSelect={false}
+            onVerifyPlating={onVerifyPlating}
             onChange={(next) => onChange({ ...next, ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}) } as DetailsRecord)}
           />
           <AdvancedSection
@@ -1824,6 +1827,7 @@ export function EventRibbon({
       eventType: currentType,
       onEventTypeChange: handleUnderlyingEventTypeChange,
       onSaveTransferProgram: handleSaveTransferProgram,
+      onVerifyPlating: onAddEvent,
       sourceSelectionCount,
       targetSelectionCount,
       getSourceWells,

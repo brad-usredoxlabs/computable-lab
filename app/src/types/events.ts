@@ -262,6 +262,12 @@ export interface ReadDetails extends BaseEventDetails {
   assay_ref?: string
   instrument?: string
   parameters?: Record<string, unknown>
+  /** Read modality (fluorescence/absorbance/microscopy/luminescence/ms/qpcr/other). */
+  modality?: string
+  /** Optional channel labels (e.g. the verification mechanism: Hoechst, total protein). */
+  channels?: string[]
+  /** Optional free-form note (e.g. which seed estimate this read verifies). */
+  notes?: string
 }
 
 /**

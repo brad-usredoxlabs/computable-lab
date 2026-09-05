@@ -12,10 +12,11 @@
  *     ORTHOGONAL to type
  */
 import { useMemo } from 'react'
-import type { AddMaterialDetails, CountMeasuredBy } from '../../../types/events'
+import type { AddMaterialDetails, CountMeasuredBy, PlateEvent } from '../../../types/events'
 import { computePlating } from './plating'
 import { BIOLOGICAL_CONDITIONS, type BiologicalTypeRule } from '../../../shared/bioTypes'
 import type { Ref } from '../../../shared/ref'
+import { buildVerifyPlatingReadEvent } from './verifyPlating'
 
 const MEASURED_BY_LABELS: Record<CountMeasuredBy, string> = {
   cell_counter: 'Automated cell counter',
@@ -31,13 +32,17 @@ interface Props {
   rule: BiologicalTypeRule
   onChange: (details: AddMaterialDetails) => void
   showConditionSelect?: boolean
+  /** When provided, renders a "Verify plating" seam (D3): a follow-up read event
+   *  whose modality comes from the type's verification rule, supports/refutes the
+   *  seed estimate. */
+  onVerifyPlating?: (event: PlateEvent) => void
 }
 
 export function conditionRefsOf(details: AddMaterialDetails): Ref[] {
   return Array.isArray(details.condition_refs) ? details.condition_refs : []
 }
 
-export function BiologicalPlatingFields({ details, rule, onChange, showConditionSelect = true }: Props) {
+export function BiologicalPlatingFields({ details, rule, onChange, showConditionSelect = true, onVerifyPlating }: Props) {
   const countField = rule.fields.find((f) => f.key === 'count')
   const volumeField = rule.fields.find((f) => f.key === 'volume')
   const densityField = rule.fields.find((f) => f.key === 'counterDensity')
@@ -196,6 +201,23 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
         </p>
       </div>
 
+      {onVerifyPlating && rule.verification && (
+        <button
+          type="button"
+          data-testid="bio-verify-plating"
+          className="bio-verify-plating"
+          onClick={() => {
+            const materialLabel = typeof details.biological_type === 'object' && details.biological_type
+              ? (details.biological_type as { label?: string }).label
+              : undefined
+            const evt = buildVerifyPlatingReadEvent({ details, rule, materialLabel })
+            onVerifyPlating(evt)
+          }}
+        >
+          ⚗ Verify plating (add follow-up read · {rule.verification.readModality ?? 'read'})
+        </button>
+      )}
+
       {showConditionSelect && (
         <div className="form-field">
           <label>Culture conditions <span className="form-hint" style={{ display: 'inline' }}>(orthogonal to type)</span></label>
@@ -228,6 +250,12 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
           font-weight: 600; cursor: pointer;
         }
         .bio-condition-chip--selected { background: #e0f2fe; border-color: #38bdf8; color: #0369a1; }
+        .bio-verify-plating {
+          align-self: flex-start; border: 1px solid #cbd5e1; background: #fff;
+          color: #334155; border-radius: 8px; padding: 0.4rem 0.8rem;
+          font-size: 0.75rem; font-weight: 600; cursor: pointer;
+        }
+        .bio-verify-plating:hover { border-color: #94a3b8; background: #f8fafc; }
         .bio-plating-derived { color: #475569; }
       `}</style>
     </div>

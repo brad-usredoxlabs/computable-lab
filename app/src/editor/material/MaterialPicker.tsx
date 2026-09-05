@@ -108,6 +108,7 @@ function kindBadgeLabel(kind?: string): string {
   if (kind === 'material-instance') return 'Prepared Tube/Plate'
   if (kind === 'aliquot') return 'Prepared Tube/Plate'
   if (kind === 'material') return 'Ontology'
+  if (kind === 'term') return 'Term'
   return kind || 'Record'
 }
 
