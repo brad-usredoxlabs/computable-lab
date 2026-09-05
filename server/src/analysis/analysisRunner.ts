@@ -96,7 +96,9 @@ export class AnalysisRunner {
     return this.sdkDirOverride ?? analysisSdkDir(this.ctx.workspaceRoot);
   }
 
-  /** Provision a run's inputs into a temp dir (streaming from storage; never git). */
+  /** Provision a run's inputs into a temp dir (streaming from storage; never git).
+ *  Inputs may reference a `data-reference` directly OR an `analysis-output-artifact`
+ *  (chaining: a downstream run consumes a prior run's output). */
   private async provisionInputs(
     runInputs: RunInputs | undefined,
     inputDir: string,
@@ -105,26 +107,68 @@ export class AnalysisRunner {
     if (!runInputs) return specs;
 
     for (const [name, ref] of Object.entries(runInputs)) {
-      if (ref.kind !== 'record' || ref.type !== 'data-reference') {
-        throw new AnalysisServiceError('BAD_INPUT', `input ${name} must reference a data-reference`, 400);
+      if (ref.kind !== 'record') {
+        throw new AnalysisServiceError('BAD_INPUT', `input ${name} must be a record ref`, 400);
       }
-      const env = await this.ctx.store.get(ref.id);
-      if (!env) {
-        throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference not found: ${ref.id}`, 404);
+      let deviceId: string;
+      let path: string;
+      let dataKind: string | undefined = ref.dataKind;
+
+      if (ref.type === 'analysis-output-artifact') {
+        // Resolve the artifact → its data-reference (or inline) for provisioning.
+        const artEnv = await this.ctx.store.get(ref.id);
+        if (!artEnv) {
+          throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact not found: ${ref.id}`, 404);
+        }
+        const art = artEnv.payload as { dataReferenceRef?: { id?: string }; inlineValue?: unknown; dataKind?: string };
+        dataKind = dataKind ?? art.dataKind;
+        if (art.dataReferenceRef?.id) {
+          const refId = art.dataReferenceRef.id;
+          const drefEnv = await this.ctx.store.get(refId);
+          if (!drefEnv) {
+            throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact dref not found: ${refId}`, 404);
+          }
+          const dp = drefEnv.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
+          if (!dp.storageDeviceId || !dp.path) {
+            throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact dref has no device/path`, 400);
+          }
+          deviceId = dp.storageDeviceId;
+          path = dp.path;
+          dataKind = dataKind ?? dp.dataKind;
+        } else if (art.inlineValue !== undefined) {
+          // inline artifact (small table/metric) → write as JSON file for read_rows
+          const outPath = join(inputDir, `${name}.json`);
+          await writeFile(outPath, JSON.stringify(art.inlineValue));
+          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: outPath };
+          continue;
+        } else {
+          throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact has no dataReferenceRef or inlineValue`, 400);
+        }
+      } else if (ref.type === 'data-reference') {
+        const env = await this.ctx.store.get(ref.id);
+        if (!env) {
+          throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference not found: ${ref.id}`, 404);
+        }
+        const payload = env.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
+        if (!payload.storageDeviceId || !payload.path) {
+          throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference has no device/path`, 400);
+        }
+        deviceId = payload.storageDeviceId;
+        path = payload.path;
+        dataKind = dataKind ?? payload.dataKind;
+      } else {
+        throw new AnalysisServiceError('BAD_INPUT', `input ${name} must be a data-reference or analysis-output-artifact`, 400);
       }
-      const payload = env.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
-      if (!payload.storageDeviceId || !payload.path) {
-        throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference has no device/path`, 400);
-      }
-      const provider = this.ctx.storageService.getProvider(payload.storageDeviceId);
-      const stream = await provider.read(payload.path);
+
+      const provider = this.ctx.storageService.getProvider(deviceId);
+      const stream = await provider.read(path);
       // write streamed bytes to a local temp file (provisioned, not persisted to git)
       const outPath = join(inputDir, `${name}.bin`);
       const chunks: Buffer[] = [];
       for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
       await writeFile(outPath, Buffer.concat(chunks));
       specs[name] = {
-        dataKind: payload.dataKind ?? ref.dataKind ?? 'table',
+        dataKind: dataKind ?? 'table',
         path: outPath,
       };
     }

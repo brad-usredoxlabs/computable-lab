@@ -186,4 +186,49 @@ describe('AnalysisRunner (integration)', () => {
       expect(content.includes('coef')).toBe(false); // pickle bytes must not be in git
     }
   }, 30000);
+
+  it('chains: a downstream run consumes a prior run\'s model artifact as input', async () => {
+    // Run A: emit a model file
+    const trainScript = [
+      'import pickle',
+      "def run(ctx):",
+      "    with open('model.pkl','wb') as f:",
+      "        f.write(pickle.dumps({'coef': 2.0, 'intercept': 1.0}))",
+      "    ctx.publish_file('model', 'model.pkl', kind='model', format='pkl')",
+    ].join('\n');
+    const { recordId: trainRev } = await service.createRevision({ title: 'train', entryScript: trainScript, sdkVersion: '0.1.0' });
+    const { recordId: trainRun } = await service.createRun({
+      title: 'run-train',
+      revisionRef: { kind: 'record', id: trainRev, type: 'analysis-revision' },
+      inputs: {},
+    });
+    await runner.executeRun(trainRun);
+
+    // find the model artifact id from run A
+    const artifacts = await ctx.store.list({ kind: 'analysis-output-artifact' });
+    const aofA = artifacts.find((a) => (a.payload as { name?: string; runRef?: { id?: string } }).name === 'model'
+      && (a.payload as { runRef?: { id?: string } }).runRef?.id === trainRun);
+    expect(aofA).toBeDefined();
+
+    // Run B: load the model artifact and predict
+    const predictScript = [
+      'import pickle',
+      "def run(ctx):",
+      "    import json",
+      "    model = pickle.loads(ctx.input('model').file_bytes())",
+      "    preds = [{'x': i, 'y': model['coef']*i + model['intercept']} for i in [0,1,2]]",
+      "    ctx.publish('predictions', preds, kind='table')",
+    ].join('\n');
+    const { recordId: predictRev } = await service.createRevision({ title: 'predict', entryScript: predictScript, sdkVersion: '0.1.0' });
+    const { recordId: predictRun } = await service.createRun({
+      title: 'run-predict',
+      revisionRef: { kind: 'record', id: predictRev, type: 'analysis-revision' },
+      inputs: { model: { kind: 'record', id: aofA!.recordId, type: 'analysis-output-artifact' } },
+    });
+    const res = await runner.executeRun(predictRun);
+    expect(res.status).toBe('succeeded');
+    expect(res.manifest.artifacts[0].value).toEqual([
+      { x: 0, y: 1 }, { x: 1, y: 3 }, { x: 2, y: 5 },
+    ]);
+  }, 30000);
 });
