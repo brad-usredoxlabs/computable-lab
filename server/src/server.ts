@@ -1316,6 +1316,12 @@ export async function createServer(
       registerBiologicalTypesRoutes(instance, ctx);
     }
 
+    // Lab Profile Routes (declarative lab identity — phase 1.2)
+    {
+      const { registerLabProfileRoutes } = await import('./api/routes/lab-profile.js');
+      registerLabProfileRoutes(instance, ctx);
+    }
+
     // Protocol Evolution Routes (need ctx access)
     instance.get('/protocols/:id/evolution-suggestions', async (request, reply) => {
       try {
