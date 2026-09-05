@@ -5,10 +5,14 @@ const mocks = vi.hoisted(() => ({
   resolveCorpusConfig: vi.fn(() => ({ enabled: true, serviceBaseUrl: 'http://corpus:8790' })),
 }));
 
-vi.mock('../../corpus/CorpusClient.js', () => ({
-  postCorpusEntry: mocks.postCorpusEntry,
-  resolveCorpusConfig: mocks.resolveCorpusConfig,
-}));
+vi.mock('../../corpus/CorpusClient.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../corpus/CorpusClient.js')>();
+  return {
+    ...actual,
+    postCorpusEntry: mocks.postCorpusEntry,
+    resolveCorpusConfig: mocks.resolveCorpusConfig,
+  };
+});
 
 import { createIntentTrainingPairHandlers } from './IntentTrainingPairHandlers.js';
 
@@ -85,5 +89,30 @@ describe('createIntentTrainingPairHandlers', () => {
       reply.r as never,
     );
     expect(reply.calls[0].payload).toMatchObject({ ok: false, error: 'http_500' });
+  });
+
+  it('posts a Surface-context pair when a surfaceContext is supplied (phase 5.2)', async () => {
+    const h = createIntentTrainingPairHandlers(ctx);
+    const reply = send();
+    await h.saveTrainingPair(
+      mockRequest({
+        userPrompt: 'Analyze these wells',
+        surfaceContext: {
+          surface: 'find',
+          active: { objectType: 'collection', objectId: 'selection:q_1', label: 'Find selection' },
+          selection: [{ ref: { kind: 'record', id: 'well:1', type: 'well', label: 'A1' } }],
+          prompt: 'Analyze these wells',
+        },
+        acceptedGraph: { events: [{ eventId: 'e1' }] },
+      }) as never,
+      reply.r as never,
+    );
+    expect(postCorpusEntry).toHaveBeenCalledTimes(1);
+    const entry = (postCorpusEntry.mock.calls[0] as unknown[])[0] as any;
+    expect(entry.source).toBe('Surface-context');
+    expect(entry.prompt.surfaceContext).toBeDefined();
+    // anonymized: well:1 → well:###
+    expect(entry.prompt.surfaceContext.selection[0].ref.id).toBe('well:###');
+    expect(entry.acceptedGraph).toMatchObject({ events: [{ eventId: 'e1' }] });
   });
 });

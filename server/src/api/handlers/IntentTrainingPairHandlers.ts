@@ -21,6 +21,8 @@ import {
   resolveCorpusConfig,
   type CorpusEntryInput,
 } from '../../corpus/CorpusClient.js';
+import { buildSurfaceContextCorpusEntry } from '../../corpus/surfaceContextCorpus.js';
+import type { SurfaceContext } from '../../surfaceContext/SurfaceContext.js';
 import type { ScientistIntentActionValue } from '../../compiler/scientistIntent/types.js';
 
 /** The gold model that re-verifies canonical pairs (Q4: deepseek-v4-flash-0731). */
@@ -39,6 +41,12 @@ interface TrainingPairBody {
   /** Compiled event graph of the accepted protocol (already-accepted events). */
   acceptedGraph?: Record<string, unknown>;
   confirmedAt?: string;
+  /**
+   * Optional SurfaceContext ("where am I" payload) captured from the surface
+   * that led to this accepted action. When present, the entry is posted as a
+   * 'Surface-context' pair (phase 5.2).
+   */
+  surfaceContext?: SurfaceContext;
 }
 
 export function createIntentTrainingPairHandlers(ctx: AppContext) {
@@ -68,25 +76,35 @@ export function createIntentTrainingPairHandlers(ctx: AppContext) {
         macroJson,
       ].join('\n');
 
-      const entry: CorpusEntryInput = {
-        source: 'protocol-loop',
-        sourceType: 'app',
-        prompt: {
-          user,
-          step_context: {
-            sourceProtocolId: body?.sourceProtocolId,
-            acceptedProtocolId: body?.acceptedProtocolId,
-            acceptedProtocolResult: body?.acceptedProtocolResult ?? null,
-            localMacro: body?.localMacro,
-          },
-        },
-        acceptedGraph: body?.acceptedGraph ?? {},
-        confirmedBy: 'user',
-        ...(body?.confirmedAt ? { confirmedAt: body.confirmedAt } : {}),
-        // The gold model re-verifies canonical quality (Q4). The corpus trains
-        // to macros; the interactive loop stays on the 2.6B.
-        goldModel: GOLD_MODEL,
-      };
+      const entry: CorpusEntryInput =
+        body?.surfaceContext
+          ? // Surface-context accept seam: reuse the pure corpus helper so the
+            // pair = { SurfaceContext → accepted next-surface/action }.
+            (buildSurfaceContextCorpusEntry({
+              surfaceContext: body.surfaceContext,
+              ...(body.userPrompt ? { goal: body.userPrompt } : {}),
+              acceptedGraph: body?.acceptedGraph ?? {},
+              confirmedBy: 'accepted-EVG',
+            }) as unknown as CorpusEntryInput)
+          : {
+              source: 'protocol-loop',
+              sourceType: 'app',
+              prompt: {
+                user,
+                step_context: {
+                  sourceProtocolId: body?.sourceProtocolId,
+                  acceptedProtocolId: body?.acceptedProtocolId,
+                  acceptedProtocolResult: body?.acceptedProtocolResult ?? null,
+                  localMacro: body?.localMacro,
+                },
+              },
+              acceptedGraph: body?.acceptedGraph ?? {},
+              confirmedBy: 'user',
+              ...(body?.confirmedAt ? { confirmedAt: body.confirmedAt } : {}),
+              // The gold model re-verifies canonical quality (Q4). The corpus trains
+              // to macros; the interactive loop stays on the 2.6B.
+              goldModel: GOLD_MODEL,
+            };
 
       // Best-effort; never throw to the client (corpus may be disabled/off-box).
       try {

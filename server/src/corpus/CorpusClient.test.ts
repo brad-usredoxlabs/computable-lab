@@ -10,6 +10,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   anonymizeGraph,
+  anonymizeSurfaceContext,
   buildCorpusEntry,
   eventEditorCorpusEntry,
   postCorpusEntry,
@@ -119,5 +120,43 @@ describe('eventEditorCorpusEntry', () => {
     // eventEditorCorpusEntry returns the graph as-is; buildCorpusEntry/postCorpusEntry
     // anonymize it on the wire.
     expect((entry.acceptedGraph as { events: Array<{ eventGraphId: string }> }).events[0]!.eventGraphId).toBe('EVG-0002');
+  });
+});
+
+describe('SurfaceContext corpus capture (phase 5)', () => {
+  it('buildCorpusEntry carries surfaceContext through and anonymizes selection ref ids', () => {
+    const entry = buildCorpusEntry({
+      source: 'Surface-context',
+      sourceType: 'app',
+      prompt: {
+        user: 'Analyze these wells',
+        surfaceContext: {
+          surface: 'find',
+          active: { objectType: 'collection', objectId: 'selection:q_1', label: 'Find selection' },
+          selection: [
+            { ref: { kind: 'record', id: 'well:1', type: 'well', label: 'A1' } },
+            { ref: { kind: 'record', id: 'MAT-7', type: 'material' } },
+          ],
+        },
+      },
+      acceptedGraph: { events: [{ eventGraphId: 'EVG-0002' }] },
+      confirmedBy: 'accepted-EVG',
+    });
+    const sc = (entry.prompt as { surfaceContext: { selection: Array<{ ref: { id: string } }> } }).surfaceContext;
+    expect(sc.selection[0]!.ref.id).toBe('well:###');
+    expect(sc.selection[1]!.ref.id).toBe('MAT-###');
+  });
+
+  it('anonymizeSurfaceContext strips well/cell ids and internal record ids', () => {
+    const out = anonymizeSurfaceContext({
+      surface: 'find',
+      selection: [
+        { ref: { kind: 'record', id: 'well:42', type: 'well' } },
+        { ref: { kind: 'record', id: 'cell:9', type: 'cell' } },
+        { ref: { kind: 'record', id: 'EVG-3', type: 'event' } },
+      ],
+    });
+    const ids = (out.selection as Array<{ ref: { id: string } }>).map((s) => s.ref.id);
+    expect(ids).toEqual(['well:###', 'cell:###', 'EVG-###']);
   });
 });

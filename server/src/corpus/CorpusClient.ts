@@ -24,10 +24,16 @@ export interface CorpusPrompt {
   deck?: string;
   bindings?: string[];
   step_context?: Record<string, unknown>;
+  /**
+   * A SurfaceContext (surface × selection × prompt) — the deterministic
+   * "where am I" payload (phase 5). Carried as a JSON object, anonymized on
+   * the wire by buildCorpusEntry (internal record/selected-well ids stripped).
+   */
+  surfaceContext?: Record<string, unknown>;
 }
 
 export interface CorpusEntryInput {
-  source: 'protocol-loop' | 'event-editor' | 'benchmark' | 'ingestion';
+  source: 'protocol-loop' | 'event-editor' | 'benchmark' | 'ingestion' | 'Surface-context';
   sourceType: 'app' | 'harness';
   prompt: CorpusPrompt;
   acceptedGraph: Record<string, unknown>;
@@ -87,15 +93,47 @@ export function anonymizeGraph(graph: unknown): unknown {
 }
 
 /**
+ * Anonymize the SurfaceContext "where am I" payload: strip internal record
+ * ids, selected well/cell ids, and random UUIDs so the moat store carries a
+ * de-identified surface×selection description. Reuses anonymizeGraph for the
+ * general body, then specifically scrubs selection ref ids (well:/cell:/*-###).
+ */
+export function anonymizeSurfaceContext(sc: Record<string, unknown>): Record<string, unknown> {
+  const out = anonymizeGraph(sc) as Record<string, unknown>;
+  const selection = out.selection;
+  if (!Array.isArray(selection)) return out;
+  const scrubbed = selection.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const entry = item as Record<string, unknown>;
+    const ref = entry.ref as Record<string, unknown> | undefined;
+    if (!ref || typeof ref.id !== 'string') return entry;
+    const id = ref.id
+      .replace(/^(well|cell|plate):?.{1,18}$/i, '$1:###')
+      .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-\d+\b/g, '$1-###');
+    return { ...entry, ref: { ...ref, id } };
+  });
+  return { ...out, selection: scrubbed };
+}
+
+/**
  * Build a self-attesting, dedupe-friendly entry body.
  * `promptKey` is used by the service's content-addressed dedup — include the
  * user prompt text so identical prompts collapse into one entry.
  */
 export function buildCorpusEntry(input: CorpusEntryInput): Record<string, unknown> {
+  const prompt =
+    input.prompt.surfaceContext !== undefined
+      ? {
+          ...input.prompt,
+          // Anonymize the surface selection too: strip internal record ids +
+          // selected well/cell ids from the "where am I" payload.
+          surfaceContext: anonymizeSurfaceContext(input.prompt.surfaceContext),
+        }
+      : input.prompt;
   return {
     source: input.source,
     sourceType: input.sourceType,
-    prompt: input.prompt,
+    prompt,
     acceptedGraph: anonymizeGraph(input.acceptedGraph),
     confirmedBy: input.confirmedBy,
     ...(input.confirmedAt ? { confirmedAt: input.confirmedAt } : {}),
