@@ -53,6 +53,8 @@ export function analysisSdkDir(cwd: string = process.cwd()): string {
 interface InputSpec {
   dataKind: string;
   path: string;
+  /** Inline data handed directly to the SDK (small inline artifact/table). */
+  inline?: unknown;
 }
 
 export interface RunInputs {
@@ -136,10 +138,8 @@ export class AnalysisRunner {
           path = dp.path;
           dataKind = dataKind ?? dp.dataKind;
         } else if (art.inlineValue !== undefined) {
-          // inline artifact (small table/metric) → write as JSON file for read_rows
-          const outPath = join(inputDir, `${name}.json`);
-          await writeFile(outPath, JSON.stringify(art.inlineValue));
-          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: outPath };
+          // inline artifact (small table/metric) → hand to the SDK as inline data
+          specs[name] = { dataKind: dataKind ?? art.dataKind ?? 'table', path: `${inputDir}/${name}.inline`, inline: art.inlineValue };
           continue;
         } else {
           throw new AnalysisServiceError('BAD_INPUT', `input ${name} artifact has no dataReferenceRef or inlineValue`, 400);
