@@ -1,0 +1,106 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml"
+title: "Data Reference"
+description: >
+  A pointer to a large raw data artifact that lives on an EXTERNAL storage
+  device (S3 bucket / NAS / USB), NEVER in git. The record stores metadata
+  about the data (where it lives, its content hash, size, kind, format) plus
+  provenance links — not the bytes themselves. Acquisition streams the file,
+  hashes it (sha256), and records this pointer; the raw bytes stay on the
+  device. This is the data-plane/control-plane boundary: git holds the
+  reference, the device holds the data.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+properties:
+  kind:
+    const: "data-reference"
+
+  id:
+    type: string
+    description: "Stable data-reference identifier (e.g. DREF-000123)."
+
+  title:
+    type: string
+    description: "Human-readable name for this data artifact."
+
+  storageDeviceId:
+    type: string
+    description: "Id of the storage device (config.storageDevices[].id) this data lives on."
+
+  path:
+    type: string
+    description: >
+      Key/path of the file RELATIVE to the device root (e.g. "reads/plate1.csv"
+      or "instruments/qs5/run42.fcs"). Join with the device root to locate the bytes.
+
+  contentHash:
+    type: string
+    pattern: "^[a-f0-9]{64}$"
+    description: "sha256 hex digest of the file content — the integrity anchor shared between git and the device."
+
+  sizeBytes:
+    type: integer
+    minimum: 0
+    description: "Size of the referenced file in bytes."
+
+  dataKind:
+    type: string
+    enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+    description: "High-level semantic kind of the data (maps to analysis dataset handling)."
+
+  format:
+    type: string
+    description: "File format (csv, fcs, xlsx, txt, ndjson, png, tiff, ...) as-read from the file."
+
+  readerVersion:
+    type: string
+    description: "Which reader/parser version produced this reference (for reproducibility)."
+
+  acquisitionContext:
+    type: object
+    description: "Context captured at acquire time (instrument, plate, run metadata)."
+    additionalProperties: true
+    properties:
+      instrument:
+        type: string
+      revision:
+        type: string
+      note:
+        type: string
+
+  sourceRunRef:
+    type: object
+    additionalProperties: true
+    properties:
+      kind:
+        const: "record"
+      id:
+        type: string
+      type:
+        type: string
+      label:
+        type: string
+
+  acquiredAt:
+    type: string
+    format: date-time
+    description: "ISO timestamp of when this reference was recorded (acquire time)."
+
+  # FAIRCommon provenance fields (explicitly allowed for Ajv unevaluatedProperties)
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+  createdBy:
+    type: string
+    readOnly: true
+
+required: [ kind, id, title, storageDeviceId, path, contentHash, sizeBytes, dataKind ]
