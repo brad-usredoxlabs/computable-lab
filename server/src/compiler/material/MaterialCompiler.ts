@@ -106,7 +106,7 @@ function canonicalName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-export function slugify(value: string): string {
+export function slugifyRecordLabel(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -634,7 +634,7 @@ export class MaterialCompilerService {
       return undefined;
     }
 
-    const baseId = `MAT-${slugify(args.name)}`;
+    const baseId = `MAT-${slugifyRecordLabel(args.name)}`;
     const recordId = await ensureUniqueId(this.store, baseId);
     const payload = {
       kind: 'material',
@@ -789,7 +789,7 @@ export class MaterialCompilerService {
 
     const recordId = await ensureUniqueId(
       this.store,
-      `MSP-${slugify(args.solventRef
+      `MSP-${slugifyRecordLabel(args.solventRef
         ? `${formatConcentration(args.concentration) ?? 'FORMULATION'}-${args.analyteRef.label ?? args.analyteRef.id}-IN-${args.solventRef.label ?? args.solventRef.id}`
         : `${formatConcentration(args.concentration) ?? 'FORMULATION'}-${args.analyteRef.label ?? args.analyteRef.id}-VEHICLE-UNRESOLVED`)}`,
     );
@@ -943,7 +943,7 @@ export class MaterialCompilerService {
       return undefined;
     }
 
-    const placeholderId = `PH-${slugify(args.formulationRef?.id ?? args.analyteRef.id)}`;
+    const placeholderId = `PH-${slugifyRecordLabel(args.formulationRef?.id ?? args.analyteRef.id)}`;
     args.candidateBindings.push(bindingFromMatch('material-source', {
       recordId: placeholderId,
       recordType: 'placeholder',

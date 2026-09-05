@@ -62,6 +62,7 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
+import type { GraphSearchHandlers } from './handlers/GraphSearchHandlers.js';
 import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
 import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
@@ -132,6 +133,7 @@ export interface RouteOptions {
   foundryJobHandlers?: FoundryJobHandlers;
   aiThreadHandlers?: AiThreadHandlers;
   jsonLdSearchHandlers?: JsonLdSearchHandlers;
+  graphSearchHandlers?: GraphSearchHandlers;
   workspaceHandlers?: WorkspaceHandlers;
   artifactBlobHandlers?: ArtifactBlobHandlers;
   predicatesHandlers?: PredicatesHandlers;
@@ -625,6 +627,18 @@ export function registerRoutes(
     fastify.post('/search/jsonld', jsonLdSearchHandlers.search.bind(jsonLdSearchHandlers));
     fastify.post('/search/jsonld/reindex', jsonLdSearchHandlers.reindex.bind(jsonLdSearchHandlers));
     fastify.post('/search/projects', jsonLdSearchHandlers.searchProjects.bind(jsonLdSearchHandlers));
+  }
+
+  // Graph Search Engine — single read-oriented query layer over the lab
+  // graph (spec: specs/graph-search.md). Same engine backs the Find UI and the
+  // lab.* MCP tools (§1.1).
+  const { graphSearchHandlers } = options;
+  if (graphSearchHandlers) {
+    fastify.post('/search/graph', graphSearchHandlers.search.bind(graphSearchHandlers));
+    fastify.post('/search/graph/plan', graphSearchHandlers.plan.bind(graphSearchHandlers));
+    fastify.post('/search/graph/collections', graphSearchHandlers.createCollection.bind(graphSearchHandlers));
+    fastify.post('/search/graph/selections', graphSearchHandlers.createSelection.bind(graphSearchHandlers));
+    fastify.post('/search/graph/ai-context', graphSearchHandlers.aiContext.bind(graphSearchHandlers));
   }
 
   // Labware-definition search — backs the slash menu /l so a fresh

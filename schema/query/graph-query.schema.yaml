@@ -1,0 +1,399 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/graph-query.schema.yaml"
+title: "GraphQuery"
+description: >
+  The canonical, structured, domain-oriented query representation for the
+  Computable Lab Graph Search Engine. A GraphQuery is the output of the
+  natural-language query planner and the input to the deterministic
+  GraphQueryEngine. Both the human Find UI and the lab.* MCP tools issue
+  queries in this same representation, so a query via the UI and an equivalent
+  query by an agent produce equivalent result sets (spec §1.1).
+
+  The engine is read-oriented. No query in this schema mutates laboratory
+  state; all mutations flow through the existing event-graph/compiler pathway
+  (§22 Mutation Boundary).
+type: object
+additionalProperties: false
+oneOf:
+- $ref: "#/$defs/ResolveQuery"
+- $ref: "#/$defs/GetQuery"
+- $ref: "#/$defs/FindQuery"
+- $ref: "#/$defs/TraverseQuery"
+- $ref: "#/$defs/PathQuery"
+- $ref: "#/$defs/NeighborhoodQuery"
+- $ref: "#/$defs/LineageQuery"
+- $ref: "#/$defs/AggregateQuery"
+- $ref: "#/$defs/ExistsQuery"
+
+$defs:
+  # ------------------------------------------------------------------
+  # Common building blocks
+  # ------------------------------------------------------------------
+
+  Scope:
+    type: object
+    description: >
+      Explicit query scope (§8). Restricts the search to a container object
+      (optionally plus a time interval). UI actions automatically establish
+      scope from the object currently being viewed.
+    additionalProperties: false
+    required:
+    - type
+    - id
+    properties:
+      type:
+        type: string
+        enum:
+        - Study
+        - Experiment
+        - Run
+        - Plate
+        - Well
+        - Project
+        - Collection
+        - Selection
+      id:
+        type: string
+        minLength: 1
+      from:
+        type: string
+        format: date-time
+        description: Optional inclusive start of the time interval.
+      to:
+        type: string
+        format: date-time
+        description: Optional inclusive end of the time interval.
+
+  Condition:
+    type: object
+    description: >
+      A filter condition on an object property. `field` may be a dotted path
+      into projected nodes (e.g. "treatment.name", "measurement.channel"). The
+      engine resolves the relationship implicit in the dotted path when the
+      field crosses a graph edge (§11 relationship expansion).
+    additionalProperties: false
+    required:
+    - field
+    - operator
+    - value
+    properties:
+      field:
+        type: string
+        minLength: 1
+      operator:
+        type: string
+        enum:
+        - "="
+        - "!="
+        - ">"
+        - ">="
+        - "<"
+        - "<="
+        - contains
+        - in
+        - not_in
+      value:
+        description: "Scalar, array (for in/not_in), or string (for contains)."
+
+  Measure:
+    type: object
+    description: >
+      An aggregation measure applied over a query result (§5.9).
+    additionalProperties: false
+    required:
+    - name
+    - field
+    properties:
+      name:
+        type: string
+        minLength: 1
+        description: "Output alias for this measure."
+      field:
+        type: string
+        minLength: 1
+      op:
+        type: string
+        enum:
+        - count
+        - sum
+        - mean
+        - median
+        - min
+        - max
+        - stddev
+        - first
+        - last
+        - distinct_count
+
+  # ------------------------------------------------------------------
+  # Query kinds
+  # ------------------------------------------------------------------
+
+  ResolveQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - term
+    properties:
+      op:
+        const: resolve
+      term:
+        type: string
+        minLength: 1
+        description: >
+          Human/domain identifier (e.g. "plate 421", "rotenone", "MagPix",
+          "well A7"). Deferred to the existing resolve() spine.
+      type:
+        type: string
+        description: "Optional hint restricting the type of resolved objects (e.g. 'Instrument', 'Material')."
+      scope:
+        $ref: "#/$defs/Scope"
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 500
+      explain:
+        type: boolean
+        default: false
+        description: Return a human-readable interpretation (§18).
+
+  GetQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - objectId
+    properties:
+      op:
+        const: get
+      objectId:
+        type: string
+        minLength: 1
+      fields:
+        type: array
+        items:
+          type: string
+        description: Optional property subset to return.
+      includeProvenance:
+        type: boolean
+        default: true
+      explain:
+        type: boolean
+        default: false
+
+  FindQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - type
+    properties:
+      op:
+        const: find
+      type:
+        type: string
+        minLength: 1
+        description: >
+          Graph object type to return. Either a record kind (material,
+          instrument, run, plate-snapshot, claim, evidence, ...) or a
+          projected node type (well, measurement, treatment).
+      where:
+        type: array
+        items:
+          $ref: "#/$defs/Condition"
+      scope:
+        $ref: "#/$defs/Scope"
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 500
+      order:
+        type: object
+        additionalProperties: false
+        required:
+        - field
+        properties:
+          field:
+            type: string
+          direction:
+            type: string
+            enum:
+            - asc
+            - desc
+      explain:
+        type: boolean
+        default: false
+
+  TraverseQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - start
+    - relationship
+    properties:
+      op:
+        const: traverse
+      start:
+        oneOf:
+        - type: string
+        - type: array
+          items:
+            type: string
+      relationship:
+        type: string
+        description: >
+          Typed relationship verb (e.g. "derived_from", "contains",
+          "performed_by", "calibrated_by"). Drawn from the relationship
+          vocabulary and the projected edge verbs.
+      direction:
+        type: string
+        enum:
+        - out
+        - in
+        default: out
+      depth:
+        type: integer
+        minimum: 1
+        maximum: 10
+        default: 1
+      targetType:
+        type: string
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 500
+
+  PathQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - from
+    - to
+    properties:
+      op:
+        const: path
+      from:
+        type: string
+        minLength: 1
+      to:
+        type: string
+        minLength: 1
+      relationshipTypes:
+        type: array
+        items:
+          type: string
+      maxDepth:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+      includeProvenance:
+        type: boolean
+        default: true
+
+  NeighborhoodQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - objects
+    - depth
+    properties:
+      op:
+        const: neighborhood
+      objects:
+        type: array
+        minItems: 1
+        items:
+          type: string
+      depth:
+        type: integer
+        minimum: 1
+        maximum: 10
+      relationshipTypes:
+        type: array
+        items:
+          type: string
+      objectTypes:
+        type: array
+        items:
+          type: string
+      limits:
+        type: object
+        additionalProperties:
+          type: integer
+          minimum: 1
+      includeProvenance:
+        type: boolean
+        default: true
+
+  LineageQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - object
+    - direction
+    properties:
+      op:
+        const: lineage
+      object:
+        type: string
+        minLength: 1
+      direction:
+        type: string
+        enum:
+        - up
+        - down
+      depth:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+      includeOperations:
+        type: boolean
+        default: true
+      includeProvenance:
+        type: boolean
+        default: true
+
+  AggregateQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - query
+    - measures
+    properties:
+      op:
+        const: aggregate
+      query:
+        $ref: "#/$defs/FindQuery"
+      groupBy:
+        type: string
+      measures:
+        type: array
+        minItems: 1
+        items:
+          $ref: "#/$defs/Measure"
+      explain:
+        type: boolean
+        default: false
+
+  ExistsQuery:
+    type: object
+    additionalProperties: false
+    required:
+    - op
+    - query
+    properties:
+      op:
+        const: exists
+      query:
+        $ref: "#/$defs/FindQuery"
+      explain:
+        type: boolean
+        default: false

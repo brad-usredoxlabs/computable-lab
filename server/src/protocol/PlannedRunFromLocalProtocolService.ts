@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
-import { slugify } from '../compiler/material/MaterialCompiler.js';
+import { slugifyRecordLabel } from '../compiler/material/MaterialCompiler.js';
 
 /**
  * Options for creating a planned-run from a local-protocol.
@@ -74,7 +74,7 @@ export class PlannedRunFromLocalProtocolService {
     // Generate recordId
     const prefix = options.recordIdPrefix ?? 'PLR-';
     const shortId = randomUUID().replace(/-/g, '').slice(0, 8);
-    const recordId = `${prefix}${slugify(title)}-${shortId}`;
+    const recordId = `${prefix}${slugifyRecordLabel(title)}-${shortId}`;
 
     const sourceLinks = payload.links && typeof payload.links === 'object'
       ? payload.links as { studyId?: string; experimentId?: string; runId?: string }
