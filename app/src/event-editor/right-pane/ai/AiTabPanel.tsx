@@ -31,6 +31,7 @@ import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
 import { InterpretationPanel } from './InterpretationPanel'
 import { ChangesPanel } from './ChangesPanel'
+import { ModelSwitcher } from './ModelSwitcher'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -551,6 +552,7 @@ export function AiTabPanel() {
           {headerLabel(sidebar)}
         </span>
         {warm ? <WarmIndicator status={warm.status} /> : null}
+        <ModelSwitcher />
       </section>
 
       <section className="ai-tab__section ai-tab__section--sources">

@@ -65,6 +65,47 @@
   color: var(--cl-accent);
 }
 
+/* Model/profile switcher — compact select in the ai-tab header. */
+.ai-tab__model-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.ai-tab__model-switch-select {
+  appearance: none;
+  max-width: 130px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 18px 2px 6px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path fill='%23888' d='M1 3l3 3 3-3z'/></svg>")
+    no-repeat right 4px center;
+  color: var(--cl-text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-tab__model-switch-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ai-tab__model-switch-status {
+  font-size: 10px;
+  color: var(--cl-text-dim);
+  white-space: nowrap;
+}
+
+.ai-tab__model-switch-status--error {
+  color: var(--cl-danger);
+}
+
 .ai-tab__section--sources {
   border-bottom: 1px solid var(--cl-border);
   padding: 8px 12px;

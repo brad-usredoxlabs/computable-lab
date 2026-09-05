@@ -142,6 +142,30 @@ repositories:
 # AI inference + background prompt warming
 # -----------------------------------------------------------------------------
 # ai:
+#   # Named model endpoints (switchable at runtime via the chatbox switcher /
+#   # POST /api/config/ai/profiles/:name/activate — hot-reloads the orchestrator).
+#   activeProfile: ornith
+#   profiles:
+#     ornith:
+#       inference:
+#         provider: openai-compatible
+#         baseUrl: http://appliance-2:11434/v1
+#         model: ornith-1.5-35b-a3b
+#         temperature: 0.1
+#         enableThinking: false
+#       agent:
+#         maxTurns: 15
+#         historyTurns: 4
+#     lfm2.5:
+#       inference:
+#         provider: openai-compatible
+#         baseUrl: http://127.0.0.1:8899/v1
+#         model: /home/brad/models/lfm2.5/LFM2.5-2.6B-Q4_K_M.gguf
+#         temperature: 0.1
+#         enableThinking: false
+#       agent:
+#         maxTurns: 15
+#         historyTurns: 4
 #   inference:
 #     provider: openai-compatible
 #     baseUrl: http://appliance-2:8000/v1
