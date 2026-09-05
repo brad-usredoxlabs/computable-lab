@@ -44,6 +44,7 @@ import type {
 } from '../../types/componentGraph'
 import type { CompositionEntryValue, ConcentrationValue } from '../../types/material'
 import type { LabProfile } from '../../types/labProfile'
+import type { SurfaceSpec } from '../../shared/surfaces'
 import type {
   InstrumentApplianceJob,
   InstrumentApplianceJobExecutionResult,
@@ -1944,6 +1945,11 @@ export const apiClient = {
   /** GET /api/lab-profile — declarative lab identity ("THIS lab"). */
   async getLabProfile(): Promise<{ profile: LabProfile }> {
     return request(`/lab-profile`)
+  },
+
+  /** GET /api/surfaces — declarative work-surface registry ("where am I"). */
+  async getSurfaces(): Promise<{ surfaces: SurfaceSpec[] }> {
+    return request(`/surfaces`)
   },
 
   /** GET /api/storage/devices — external storage devices (S3/NAS/USB). */

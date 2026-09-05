@@ -1353,6 +1353,12 @@ export async function createServer(
       registerLabProfileRoutes(instance, ctx);
     }
 
+    // Surfaces Routes (declarative work-surface registry — phase 2.2)
+    {
+      const { registerSurfacesRoutes } = await import('./api/routes/surfaces.js');
+      registerSurfacesRoutes(instance, ctx);
+    }
+
     // Protocol Evolution Routes (need ctx access)
     instance.get('/protocols/:id/evolution-suggestions', async (request, reply) => {
       try {

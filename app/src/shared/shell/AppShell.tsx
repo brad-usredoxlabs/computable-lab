@@ -5,6 +5,7 @@ import { useViewport } from './useViewport'
 import { BrandMenu } from './BrandMenu'
 import { GlobalNavbar } from './GlobalNavbar'
 import { WorkspaceTabStrip } from './WorkspaceTabStrip'
+import { SurfaceIndicator } from './SurfaceIndicator'
 import './AppShell.css'
 
 /**
@@ -118,6 +119,10 @@ export function AppShell({
         <header className="topbar topbar--workspace">
           <GlobalNavbar />
           <div className="topbar__tabs">{topbarTabs ?? <WorkspaceTabStrip />}</div>
+          {/* Persistent "where am I" surface chip, visible on every workspace route. */}
+          <div className="topbar__surface">
+            <SurfaceIndicator />
+          </div>
         </header>
       ) : (
         <AppShellTopBar

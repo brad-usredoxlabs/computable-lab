@@ -115,9 +115,18 @@
   align-items: stretch;
   height: auto;
   padding: 0;
+  position: relative;
   background: var(--cl-bg-elev);
   border-bottom: 1px solid var(--cl-border);
   min-height: var(--cl-topbar-height);
+}
+
+.cl-app .topbar--workspace > .topbar__surface {
+  /* "where am I" chip pinned to the right edge of the workspace tab row. */
+  position: absolute;
+  top: var(--cl-topbar-height);
+  right: 0.75rem;
+  z-index: 5;
 }
 
 .cl-app .topbar--workspace > .topbar__tabs,
