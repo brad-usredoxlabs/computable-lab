@@ -95,15 +95,6 @@ export function GraphSearchPage() {
   const [vesselContext, setVesselContext] = useState<VesselContextResult | null>(null)
   const [vesselError, setVesselError] = useState<string | null>(null)
 
-  const runVesselContext = useCallback(async (materialRef: string) => {
-    setVesselError(null)
-    try {
-      const ctx = await graphContext(materialRef)
-      setVesselContext(ctx.count > 0 ? ctx : null)
-    } catch (err) {
-      setVesselError(err instanceof Error ? err.message : String(err))
-    }
-  }, [])
   const distinctMaterials = result ? [...new Set(result.objects
     .flatMap((o) => {
       // treatment/measurement nodes carry materialRef; well nodes carry
@@ -118,19 +109,40 @@ export function GraphSearchPage() {
     })
     .filter((r): r is string => typeof r === 'string' && r.length > 0))]
     : []
-  const primaryMaterial = distinctMaterials[0]
 
-  // Auto-surface vessel contexts (tube/stock/aliquot) for the results' primary
-  // material. Clears on new results; no-op when there's no material or none
-  // found (vesselContext stays null → nothing renders).
+  // Auto-surface vessel contexts for ALL distinct materials in the results.
+  // Aggregates so a mixed result (e.g. clofibrate wells + a clofibrate stock)
+  // surfaces every tube/stock context, not just the first material's.
   useEffect(() => {
-    if (!primaryMaterial) {
+    if (distinctMaterials.length === 0) {
       setVesselContext(null)
       setVesselError(null)
       return
     }
-    void runVesselContext(primaryMaterial)
-  }, [primaryMaterial, runVesselContext])
+    let cancelled = false
+    const results: VesselContextResult[] = []
+    const fetchAll = async () => {
+      setVesselError(null)
+      try {
+        for (const ref of distinctMaterials) {
+          const ctx = await graphContext(ref)
+          if (cancelled) return
+          if (ctx.count > 0) results.push(ctx)
+        }
+        if (!cancelled) setVesselContext(results.length > 0
+          ? {
+              instances: results.flatMap((r) => r.instances),
+              aliquots: results.flatMap((r) => r.aliquots),
+              count: results.reduce((n, r) => n + r.count, 0),
+            }
+          : null)
+      } catch (err) {
+        if (!cancelled) setVesselError(err instanceof Error ? err.message : String(err))
+      }
+    }
+    void fetchAll()
+    return () => { cancelled = true }
+  }, [distinctMaterials, result])
 
   const sendSelectionToAi = useCallback(async () => {
     const ids = [...selectedIds]
@@ -219,7 +231,7 @@ export function GraphSearchPage() {
             {vesselContext && vesselContext.count > 0 && (
               <div className="graph-search__vessels" data-testid="graph-search-vessels">
                 <div className="graph-search__vessels-title">
-                  Also in tubes/stocks{primaryMaterial ? ` for ${primaryMaterial}` : ''}
+                  Also in tubes/stocks
                 </div>
                 {vesselContext.instances.map((inst) => {
                   const storage = (inst.properties?.storage ?? {}) as { location?: string; temperature_C?: number }

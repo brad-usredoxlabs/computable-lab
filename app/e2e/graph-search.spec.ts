@@ -57,6 +57,25 @@ test.describe('Find (graph search) UI', () => {
     await expect(b2).toHaveAttribute('data-selected', 'true', { timeout: 10_000 })
   })
 
+  test('searches clofibrate (mixed case) and finds wells + the stock context', async ({ page }) => {
+    await page.goto(`${BASE}/find`)
+    const input = page.getByTestId('graph-search-input')
+    await expect(input).toBeVisible({ timeout: 15_000 })
+
+    // lowercase query against a Title-Case material name must match (case-insensitive).
+    await input.fill('clofibrate')
+    await page.getByTestId('graph-search-submit').click()
+
+    const summary = page.getByTestId('graph-search-summary')
+    await expect(summary).toContainText('7 objects', { timeout: 15_000 })
+
+    // Vessel context block: clofibrate also exists as a tube/stock.
+    const vessels = page.getByTestId('graph-search-vessels')
+    await expect(vessels).toBeVisible({ timeout: 10_000 })
+    await expect(vessels).toContainText('Also in tubes/stocks', { timeout: 10_000 })
+    await expect(page.getByTestId('graph-vessel-instance').first()).toContainText('Clofibrate', { timeout: 10_000 })
+  })
+
   test('plans natural language, then sends a selection to AI (§7 end-to-end)', async ({ page }) => {
     await page.goto(`${BASE}/find`)
     const input = page.getByTestId('graph-search-input')

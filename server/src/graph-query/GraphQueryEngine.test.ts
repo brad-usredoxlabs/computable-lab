@@ -115,6 +115,23 @@ describe('GraphQueryEngine', () => {
     expect(ids).toContain('well:EVG-ros-001:plate1:A2');
   });
 
+  it('find: contains and = are case-insensitive (Rotenone vs rotenone)', async () => {
+    // treatment node label is "MAT-rotenone" (id); but the store material is
+    // 'Rotenone'. Here we assert case-insensitive '=' on the denormalized value.
+    const res = await run(f.engine, {
+      op: 'find',
+      type: 'well',
+      where: [{ field: 'treatment.name', operator: '=', value: 'ROTENONE' }],
+    });
+    expect(res.summary.count).toBe(2);
+    const resContains = await run(f.engine, {
+      op: 'find',
+      type: 'well',
+      where: [{ field: 'treatment.name', operator: 'contains', value: 'ROTEN' }],
+    });
+    expect(resContains.summary.count).toBe(2);
+  });
+
   it('find: enriches well results with materialRefs from treated_with edges', async () => {
     const res = await run(f.engine, {
       op: 'find',
