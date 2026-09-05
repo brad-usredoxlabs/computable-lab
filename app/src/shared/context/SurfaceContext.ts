@@ -46,3 +46,26 @@ export interface SurfaceContext {
   /** ISO timestamp. */
   asOf?: string
 }
+
+/**
+ * Window event a surface dispatches when the user asks the AI to act on the
+ * current selection. AiTabPanel listens (mirroring pdf-text-selection /
+ * protocol-step-selection) and routes the SurfaceContext into the AI chat.
+ * Shared so the dispatcher and listener never drift. Detail: { ctx }.
+ */
+export const SURFACE_AI_REQUEST_EVENT = 'surface-ai-request'
+
+/**
+ * Build the AI message preamble for a dispatched SurfaceContext — the
+ * deterministic "from surface, selected N, goal" that grounds the model.
+ */
+export function surfaceAiPrompt(ctx: SurfaceContext): string {
+  const labels = ctx.selection
+    .map((s) => (s.ref.label ?? s.ref.id ?? s.label ?? '').trim())
+    .filter((s) => s.length > 0)
+  return [
+    `From the ${ctx.surface} surface, ${ctx.selection.length} selected`,
+    ...(labels.length > 0 ? [`( ${labels.join(', ')} )`] : []),
+    `Goal: ${ctx.prompt}`,
+  ].join(' ')
+}

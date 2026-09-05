@@ -18,7 +18,6 @@ import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import {
   graphSearch,
   graphPlanSearch,
-  graphAiContext,
   graphContext,
   createGraphCollection,
   createGraphSelection,
@@ -28,7 +27,15 @@ import {
 import { GraphSearchTable } from './GraphSearchTable'
 import { GraphSearchPlateView } from './GraphSearchPlateView'
 import { groupByPlate } from './wellNodes'
+import { selectionToSurfaceContext } from './selectionToSurfaceContext'
+import type { SurfaceContext } from '../shared/context/SurfaceContext'
+import { SURFACE_AI_REQUEST_EVENT } from '../shared/context/SurfaceContext'
 import './GraphSearchPage.css'
+
+/** Display string for the status line: keep it terse, includes well count. */
+export function surfaceAiStatus(ctx: SurfaceContext): string {
+  return `surface=${ctx.surface} — ${ctx.selection.length} selected → ${ctx.prompt}`
+}
 
 export function GraphSearchPage() {
   const [searchParams] = useSearchParams()
@@ -96,6 +103,7 @@ export function GraphSearchPage() {
   }, [])
 
   const [aiContext, setAiContext] = useState<string | null>(null)
+  const [aiPrompt, setAiPrompt] = useState('Analyze these wells')
   const [vesselContext, setVesselContext] = useState<VesselContextResult | null>(null)
   const [vesselError, setVesselError] = useState<string | null>(null)
 
@@ -161,15 +169,23 @@ export function GraphSearchPage() {
     if (ids.length === 0) return
     setAiContext(null)
     try {
-      // find → collection → selection → AI context (spec §7 end-to-end loop).
+      // find → collection → selection (spec §7 end-to-end loop).
       const { handle: collection } = await createGraphCollection(ids)
-      const { handle: selection } = await createGraphSelection(collection, ids)
-      const ctx = await graphAiContext(selection, 'Analyze these wells')
-      setAiContext(`selection:${selection} — ${ctx.nodeIds.length} wells ready for AI (${ctx.prompt})`)
+      await createGraphSelection(collection, ids)
+      // Build a real SurfaceContext from the selection (the bindist:
+      // surface × selection × prompt) and dispatch it into the AI chat.
+      const sc: SurfaceContext = selectionToSurfaceContext({
+        ids,
+        prompt: aiPrompt.trim() || 'Analyze these wells',
+        asOf: new Date().toISOString(),
+        label: 'Find selection',
+      })
+      setAiContext(surfaceAiStatus(sc))
+      window.dispatchEvent(new CustomEvent(SURFACE_AI_REQUEST_EVENT, { detail: { ctx: sc } }))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [selectedIds])
+  }, [selectedIds, aiPrompt])
 
   const plates = useMemo(() => (result ? groupByPlate(result.objects) : []), [result])
 
@@ -181,6 +197,14 @@ export function GraphSearchPage() {
         <>
           <div className="graph-search__right-count">{selectedIds.size} selected</div>
           <div className="graph-search__ai">
+            <input
+              className="graph-search__ai-prompt"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="What should the AI do with these?"
+              aria-label="AI goal for the selected wells"
+              data-testid="graph-search-ai-prompt"
+            />
             <button
               onClick={() => void sendSelectionToAi()}
               data-testid="graph-search-send-ai"

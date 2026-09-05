@@ -22,6 +22,7 @@ import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
+import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
 import type { AiClarificationAnswer, AiClarificationRequest, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
@@ -531,6 +532,22 @@ export function AiTabPanel() {
     }
     window.addEventListener('protocol-step-selection', handleStepSelection)
     return () => window.removeEventListener('protocol-step-selection', handleStepSelection)
+  }, [chat])
+
+  // Listen for `surface-ai-request` (surface × selection × prompt) dispatched
+  // by any surface (e.g. the Find search page: "Send N to AI"). Mirroring the
+  // pdf/protocol step seams above, this routes the SurfaceContext into the AI
+  // chat so the answer is scoped to the CURRENT surface (Model A).
+  useEffect(() => {
+    const handleSurfaceRequest = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { ctx?: SurfaceContext }
+      if (!detail?.ctx) return
+      void chat.send(surfaceAiPrompt(detail.ctx), {
+        enableThinking: false,
+      })
+    }
+    window.addEventListener(SURFACE_AI_REQUEST_EVENT, handleSurfaceRequest)
+    return () => window.removeEventListener(SURFACE_AI_REQUEST_EVENT, handleSurfaceRequest)
   }, [chat])
 
   // A ghost preview is on the deck → the next prompt revises it (the context

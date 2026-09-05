@@ -43,11 +43,12 @@ vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.mjs
 
 // Mock useChatThread so the panel renders without triggering an SSE fetch.
 // The reducer/client have their own focused tests.
+const chatSend = vi.fn()
 vi.mock('./useChatThread', () => ({
   useChatThread: () => ({
     state: { messages: [], pending: null, status: null, error: null },
     isStreaming: false,
-    send: vi.fn(),
+    send: chatSend,
     stop: vi.fn(),
     reset: vi.fn(),
     clearProtocolCandidate: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('./useChatThread', () => ({
 import { AiTabPanel, WarmIndicator, clarificationAnswerPrompt } from './AiTabPanel'
 import { mentionTokenForOption } from './MessageLog'
 import { systemPromptForViewer } from './systemPromptForViewer'
+import { SURFACE_AI_REQUEST_EVENT } from '../../../shared/context/SurfaceContext'
 
 afterEach(() => cleanup())
 
@@ -175,6 +177,40 @@ describe('AiTabPanel', () => {
       activeTabId: 't1',
     })
     expect(await screen.findByTestId('run-in-event-editor')).toBeTruthy()
+  })
+
+  it('dispatches surface-ai-request into the AI chat with surface id + well count', async () => {
+    renderWithTab()
+    await screen.findByTestId('ai-tab-system-prompt')
+    chatSend.mockClear()
+    window.dispatchEvent(
+      new CustomEvent(SURFACE_AI_REQUEST_EVENT, {
+        detail: {
+          ctx: {
+            surface: 'find',
+            active: { objectType: 'collection', objectId: 'selection:a', label: 'Find selection' },
+            selection: [
+              { ref: { kind: 'record', id: 'well:1', type: 'well', label: 'A1' } },
+              { ref: { kind: 'record', id: 'well:2', type: 'well', label: 'B2' } },
+            ],
+            prompt: 'compute mean ROS',
+          },
+        },
+      }),
+    )
+    expect(chatSend).toHaveBeenCalledTimes(1)
+    const prompt = chatSend.mock.calls[0][0] as string
+    expect(prompt).toContain('find surface')
+    expect(prompt).toContain('2 selected')
+    expect(prompt).toContain('compute mean ROS')
+  })
+
+  it('ignores a malformed surface-ai-request (no ctx)', async () => {
+    renderWithTab()
+    await screen.findByTestId('ai-tab-system-prompt')
+    chatSend.mockClear()
+    window.dispatchEvent(new CustomEvent(SURFACE_AI_REQUEST_EVENT, { detail: {} }))
+    expect(chatSend).not.toHaveBeenCalled()
   })
 })
 
