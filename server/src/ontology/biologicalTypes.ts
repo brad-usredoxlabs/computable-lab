@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
+import { localTermIdForLabel } from '../materials/termId.js';
 
 export type BiologicalMeasureKey = 'count' | 'volume' | 'counterDensity' | 'od600' | 'cfu';
 export type BiologicalMeasurePrimary = 'count' | 'cfu' | 'od600' | 'mass';
@@ -42,6 +43,31 @@ export interface BiologicalTypeVerification {
   readModality?: string;
 }
 
+/** A declared organism or cell-line (identity vocabulary). */
+export interface BiologicalOrganismSeed {
+  label: string;
+  id: string; // deterministic TERM-<slug>-<hash>
+  aliases: string[];
+  curie?: string;
+  domain?: string;
+}
+
+/** A declared organism strain (species→strain spine). */
+export interface BiologicalStrainSeed {
+  label: string;
+  id: string;
+  strain: string;
+  species: string; // organism seed label
+  aliases: string[];
+}
+
+/** A declared culture condition (kind: condition). */
+export interface BiologicalConditionSeed {
+  label: string;
+  id: string;
+  aliases: string[];
+}
+
 export interface BiologicalTypeMatch {
   labels: string[];
   curies: string[];
@@ -64,6 +90,9 @@ export interface BiologicalTypesRegistryDocument {
   description?: string;
   default: BiologicalTypeRule;
   types: Record<string, BiologicalTypeRule>;
+  organisms: BiologicalOrganismSeed[];
+  strains: BiologicalStrainSeed[];
+  conditions: BiologicalConditionSeed[];
 }
 
 export interface BiologicalTypeLookupInput {
@@ -140,10 +169,54 @@ function normalizeVerification(raw: unknown): BiologicalTypeVerification | undef
   const obj = asObject(raw, 'verification');
   const method = optionalString(obj.method, 'verification.method');
   const readModality = optionalString(obj.readModality, 'verification.readModality');
+  // Declarative honesty: a verification mechanism is only as good as HOW it is
+  // read. If a type declares a verification, it MUST declare the read modality
+  // (data, not a TS guess). Fail loudly rather than silently default.
+  if (method && !readModality) {
+    throw new Error('verification.method declared without verification.readModality (declare it in the registry)');
+  }
   const out: BiologicalTypeVerification = {};
   if (method) out.method = method;
   if (readModality) out.readModality = readModality;
   return out;
+}
+
+function normalizeSeedVocab<T extends { label: string; id: string; aliases: string[] }>(
+  rawArr: unknown,
+  key: string,
+  map: (obj: Record<string, unknown>, label: string) => Record<string, unknown>,
+): T[] {
+  if (rawArr === undefined) return [];
+  if (!Array.isArray(rawArr)) throw new Error(`biological types registry ${key} must be an array`);
+  return rawArr.map((raw, i) => {
+    const obj = asObject(raw, `${key}[${i}]`);
+    const label = requiredString(obj.label, `${key}[${i}].label`);
+    const id = localTermIdForLabel(label);
+    const aliases = stringArray(obj.aliases, `${key}[${i}].aliases`);
+    return { label, id, aliases, ...map(obj, label) } as T;
+  });
+}
+
+function normalizeOrganisms(raw: unknown): BiologicalOrganismSeed[] {
+  return normalizeSeedVocab<BiologicalOrganismSeed>(raw, 'organisms', (obj, label) => {
+    const curie = optionalString(obj.curie, `organisms (${label}).curie`);
+    const domain = optionalString(obj.domain, `organisms (${label}).domain`);
+    return {
+      ...(curie ? { curie } : {}),
+      ...(domain ? { domain } : {}),
+    };
+  });
+}
+
+function normalizeStrains(raw: unknown): BiologicalStrainSeed[] {
+  return normalizeSeedVocab<BiologicalStrainSeed>(raw, 'strains', (obj, label) => ({
+    strain: requiredString(obj.strain, `strains (${label}).strain`),
+    species: requiredString(obj.species, `strains (${label}).species`),
+  }));
+}
+
+function normalizeConditions(raw: unknown): BiologicalConditionSeed[] {
+  return normalizeSeedVocab<BiologicalConditionSeed>(raw, 'conditions', () => ({}));
 }
 
 function normalizeType(id: string, raw: unknown, isDefault: boolean): BiologicalTypeRule {
@@ -204,6 +277,9 @@ function normalize(v: unknown): BiologicalTypesRegistryDocument {
     ...(typeof obj.description === 'string' ? { description: obj.description } : {}),
     default: defaultRule,
     types,
+    organisms: normalizeOrganisms(obj.organisms),
+    strains: normalizeStrains(obj.strains),
+    conditions: normalizeConditions(obj.conditions),
   };
 }
 
@@ -225,6 +301,18 @@ export class BiologicalTypesRegistry {
 
   defaultRule(): BiologicalTypeRule {
     return structuredClone(this.doc.default);
+  }
+
+  organisms(): BiologicalOrganismSeed[] {
+    return structuredClone(this.doc.organisms);
+  }
+
+  strains(): BiologicalStrainSeed[] {
+    return structuredClone(this.doc.strains);
+  }
+
+  conditions(): BiologicalConditionSeed[] {
+    return structuredClone(this.doc.conditions);
   }
 
   /**

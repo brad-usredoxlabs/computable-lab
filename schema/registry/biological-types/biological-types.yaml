@@ -186,3 +186,82 @@ types:
       - key: counterDensity
         label: "Source density (per µL)"
         required: false
+
+# ---------------------------------------------------------------------------
+# Identity vocabulary — the lab's organism / strain / culture-condition terms.
+# Here as DATA so the identity spine seeding AND the add-material form's
+# condition multiselect both read the SAME declared vocabulary (no TS arrays).
+# Each entry materializes as a canonical `term` record (kind organism|condition)
+# with a deterministic TERM-<slug>-<hash> id (localTermIdForLabel).
+# ---------------------------------------------------------------------------
+organisms:
+  - label: "Caenorhabditis elegans"
+    aliases: ["C. elegans", "C elegans"]
+    curie: NCBITaxon:6239
+  - label: "Mus musculus"
+    aliases: ["mouse", "house mouse"]
+    curie: NCBITaxon:10090
+  - label: "Saccharomyces cerevisiae"
+    aliases: ["yeast", "S. cerevisiae", "baker's yeast"]
+    curie: NCBITaxon:4932
+  - label: "Escherichia coli"
+    aliases: ["E. coli", "E coli"]
+    curie: NCBITaxon:562
+  # Cell lines are organisms too (domain: cell_line), so the biological gate
+  # and the cell-line measure rule both match.
+  - label: "HepaRG"
+    aliases: ["HepaRG cell", "HepaRG cells"]
+    curie: CLO:0020273
+    domain: cell_line
+
+strains:
+  - label: "C. elegans N2"
+    strain: "N2"
+    species: "Caenorhabditis elegans"
+    aliases: ["N2", "wild-type N2"]
+  - label: "C57BL/6J"
+    strain: "C57BL/6J"
+    species: "Mus musculus"
+    aliases: ["C57BL/6J mouse", "B6"]
+  - label: "BALB/c"
+    strain: "BALB/c"
+    species: "Mus musculus"
+    aliases: ["BALB/c mouse"]
+  - label: "NOD"
+    strain: "NOD"
+    species: "Mus musculus"
+    aliases: ["NOD mouse", "NOD/ShiLtJ"]
+  - label: "E. coli K-12"
+    strain: "K-12"
+    species: "Escherichia coli"
+    aliases: ["K-12", "E. coli K12"]
+  - label: "E. coli BL21"
+    strain: "BL21"
+    species: "Escherichia coli"
+    aliases: ["BL21", "BL21(DE3)"]
+
+conditions:
+  - label: "anoxic"
+    aliases: ["anoxia", "anaerobic"]
+  - label: "hypoxic"
+    aliases: ["hypoxia", "low-oxygen"]
+  - label: "hyperoxic"
+    aliases: ["hyperoxia", "high-oxygen"]
+  - label: "tissue-culture-in-a-tube"
+    aliases: ["tube culture", "TC in a tube"]
+  - label: "organ-on-a-chip"
+    aliases: ["OoC", "organ chip", "microfluidic tissue culture"]
+  - label: "2D-plate"
+    aliases: ["2D culture", "monolayer plate", "standard culture"]
+  - label: "spheroid"
+    aliases: ["3D spheroid", "spheroid culture"]
+  - label: "low-saline"
+    aliases: ["hypotonic", "low salt"]
+  - label: "high-saline"
+    aliases: ["hypertonic", "high salt"]
+  - label: "low-temp"
+    aliases: ["cold", "refrigerated culture"]
+  - label: "high-temp"
+    aliases: ["heat stress", "elevated temperature"]
+  - label: "high-microplastics"
+    aliases: ["microplastic exposure", "microplastics stressor"]

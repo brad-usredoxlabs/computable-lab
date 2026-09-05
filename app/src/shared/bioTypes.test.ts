@@ -45,6 +45,9 @@ const REGISTRY: BiologicalTypesRegistry = {
       ],
     },
   },
+  organisms: [],
+  strains: [],
+  conditions: [],
 };
 
 describe('bioTypes (frontend registry mirror)', () => {

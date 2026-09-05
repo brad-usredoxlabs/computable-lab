@@ -214,7 +214,12 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
       </div>
 
       {isBiologicalForm ? (
-        <BiologicalPlatingFields details={d} rule={biological.rule!} onChange={onChange} />
+        <BiologicalPlatingFields
+          details={d}
+          rule={biological.rule!}
+          conditions={biological.registry?.conditions ?? []}
+          onChange={onChange}
+        />
       ) : (
         <>
         <VolumeInput

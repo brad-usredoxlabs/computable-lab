@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { loadBiologicalTypesRegistry, isBiologicalDomain } from './biologicalTypes.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REGISTRY_PATH = resolve(__dirname, '../../../schema/registry/biological-types/biological-types.yaml');
@@ -53,5 +55,43 @@ describe('BiologicalTypesRegistry', () => {
     expect(isBiologicalDomain('chemical')).toBe(false);
     expect(isBiologicalDomain('media')).toBe(false);
     expect(isBiologicalDomain(undefined)).toBe(false);
+  });
+
+  it('loads the declarative identity vocabulary (organisms/strains/conditions) with deterministic ids', () => {
+    const registry = loadBiologicalTypesRegistry(REGISTRY_PATH);
+    const organisms = registry.organisms();
+    const strains = registry.strains();
+    const conditions = registry.conditions();
+    expect(organisms.length).toBeGreaterThanOrEqual(5);
+    expect(strains.length).toBeGreaterThanOrEqual(3);
+    expect(conditions.length).toBeGreaterThanOrEqual(10);
+
+    // HepaRG is declared as a cell-line organism (domain drives the measure gate).
+    const heparg = organisms.find((o) => o.label === 'HepaRG');
+    expect(heparg?.domain).toBe('cell_line');
+    // Every entry carries a deterministic TERM-<slug>-<hash> id.
+    for (const [kind, list] of [['organism', organisms], ['strain', strains], ['condition', conditions]] as const) {
+      for (const entry of list) {
+        expect(entry.id, `${kind} ${entry.label} id`).toMatch(/^TERM-[A-Za-z0-9-]+-[0-9a-z]{4}$/);
+      }
+    }
+    // Strains declare their species for the strain_of spine.
+    expect(strains.find((s) => s.label === 'C57BL/6J')?.species).toBe('Mus musculus');
+  });
+
+  it('refuses a registry entry that declares a verification WITHOUT a read modality (fail loudly, no TS guess)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bio-types-'));
+    const file = join(dir, 'registry.yaml');
+    writeFileSync(file, `version: 1
+default:
+  label: Bio
+  measures: { primary: count, units: [count-per-well], concentrationBasis: count_per_volume }
+  verification: { method: manual }
+  fields:
+    - { key: count, label: Count per well, required: true }
+    - { key: volume, label: Final volume, required: true }
+types: {}
+`);
+    expect(() => loadBiologicalTypesRegistry(file)).toThrow(/readModality/);
   });
 });

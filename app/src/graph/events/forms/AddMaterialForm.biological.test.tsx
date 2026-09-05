@@ -43,6 +43,12 @@ const REGISTRY: BiologicalTypesRegistry = {
       ],
     },
   },
+  organisms: [],
+  strains: [],
+  conditions: [
+    { label: 'anoxic', id: 'TERM-anoxic-1v6v', aliases: ['anoxia'] },
+    { label: 'organ-on-a-chip', id: 'TERM-organ-on-a-chip-a1b2', aliases: ['OoC'] },
+  ],
 }
 
 const api = vi.hoisted(() => ({
@@ -104,7 +110,7 @@ describe('AddMaterialForm biological-vs-chemical gating (D4)', () => {
     expect(screen.getByTestId('bio-volume')).toBeTruthy()
     expect(screen.getByTestId('bio-density')).toBeTruthy()
     expect(screen.getByTestId('bio-measuredby')).toBeTruthy()
-    expect(screen.getByTestId('bio-condition-anoxic')).toBeTruthy()
+    expect(screen.getByTestId('bio-condition-TERM-anoxic-1v6v')).toBeTruthy()
     // biological_type was persisted (onChange called at least once by WellsSelector/effect)
     expect(onChange.mock.calls.length).toBeGreaterThan(0)
   })
@@ -115,6 +121,6 @@ describe('AddMaterialForm biological-vs-chemical gating (D4)', () => {
     // no biological count-first fields
     expect(screen.queryByTestId('bio-count')).toBeNull()
     expect(screen.queryByTestId('bio-volume')).toBeNull()
-    expect(screen.queryByTestId('bio-condition-anoxic')).toBeNull()
+    expect(screen.queryByTestId('bio-condition-TERM-anoxic-1v6v')).toBeNull()
   })
 })

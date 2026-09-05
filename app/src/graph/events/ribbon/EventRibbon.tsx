@@ -499,6 +499,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
           <BiologicalPlatingFields
             details={bioDetails}
             rule={biological.rule!}
+            conditions={biological.registry?.conditions ?? []}
             showConditionSelect={false}
             onVerifyPlating={onVerifyPlating}
             onChange={(next) => onChange({ ...next, ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}) } as DetailsRecord)}

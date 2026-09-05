@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVerifyPlatingReadEvent, verifyReadModality } from './verifyPlating.js';
+import { buildVerifyPlatingReadEvent } from './verifyPlating.js';
 import type { AddMaterialDetails } from '../../../types/events.js';
 import type { BiologicalTypeRule } from '../../../shared/bioTypes.js';
 
@@ -41,11 +41,11 @@ describe('verifyPlating (D3 verification-read seam)', () => {
     expect(notes.toLowerCase()).toContain('hemocytometer');
   });
 
-  it('verifyReadModality maps mechanisms to schema modalities', () => {
-    expect(verifyReadModality('hoechst_nuclei')).toBe('microscopy');
-    expect(verifyReadModality('total_protein')).toBe('absorbance');
-    expect(verifyReadModality('od600')).toBe('absorbance');
-    expect(verifyReadModality('cfu')).toBe('absorbance');
-    expect(verifyReadModality(undefined)).toBe('other');
+  it('refuses to build the read when the rule declares no read modality (fails loudly, no TS guess)', () => {
+    const noModality: BiologicalTypeRule = {
+      ...CELL_LINE_RULE,
+      verification: { method: 'hoechst_nuclei' },
+    };
+    expect(() => buildVerifyPlatingReadEvent({ details, rule: noModality, materialLabel: 'HepaRG' })).toThrow(/readModality/);
   });
 });

@@ -36,6 +36,28 @@ export interface BiologicalTypeMatch {
   curies: string[]
 }
 
+export interface BiologicalOrganismSeed {
+  label: string
+  id: string
+  aliases: string[]
+  curie?: string
+  domain?: string
+}
+
+export interface BiologicalStrainSeed {
+  label: string
+  id: string
+  strain: string
+  species: string
+  aliases: string[]
+}
+
+export interface BiologicalConditionSeed {
+  label: string
+  id: string
+  aliases: string[]
+}
+
 export interface BiologicalTypeRule {
   id: string
   label: string
@@ -53,6 +75,9 @@ export interface BiologicalTypesRegistry {
   description?: string
   default: BiologicalTypeRule
   types: Record<string, BiologicalTypeRule>
+  organisms: BiologicalOrganismSeed[]
+  strains: BiologicalStrainSeed[]
+  conditions: BiologicalConditionSeed[]
 }
 
 export interface BiologicalTypeLookupInput {
@@ -98,22 +123,14 @@ export function isBiologicalDomain(domain: string | undefined): boolean {
   return domain === 'cell_line' || domain === 'organism'
 }
 
-/** Available condition terms are NOT local here — they are seeded terms. Kept
- *  as a small vocabulary so the form can label the condition multiselect. */
-export const BIOLOGICAL_CONDITIONS: readonly { id: string; label: string }[] = [
-  { id: 'anoxic', label: 'Anoxic' },
-  { id: 'hypoxic', label: 'Hypoxic' },
-  { id: 'hyperoxic', label: 'Hyperoxic' },
-  { id: 'tissue-culture-in-a-tube', label: 'TC in a tube' },
-  { id: 'organ-on-a-chip', label: 'Organ-on-a-chip' },
-  { id: '2D-plate', label: '2D plate' },
-  { id: 'spheroid', label: 'Spheroid' },
-  { id: 'low-saline', label: 'Low saline' },
-  { id: 'high-saline', label: 'High saline' },
-  { id: 'low-temp', label: 'Low temp' },
-  { id: 'high-temp', label: 'High temp' },
-  { id: 'high-microplastics', label: 'High microplastics' },
-] as const
+/** Culture conditions come from the DECLARATIVE registry (data), never a TS
+ *  constant. The registry's `conditions` are the lab's declared condition terms
+ *  (kind: condition), each with a deterministic TERM id. */
+export function registryConditions(
+  registry: BiologicalTypesRegistry | null | undefined,
+): BiologicalConditionSeed[] {
+  return registry?.conditions ?? []
+}
 
 /**
  * Infer a material domain from a selected material Ref for gating biological-vs-

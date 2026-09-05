@@ -508,7 +508,7 @@ export async function initializeApp(
   // Idempotent; re-running reuses existing terms. Non-fatal: a seed failure must
   // not prevent the app from serving.
   try {
-    const seeded = await seedBiologicalTerms(store);
+    const seeded = await seedBiologicalTerms(store, schemaDir);
     console.log(
       `Seeded biology terms: ${seeded.terms} species/cell-lines, ${seeded.strains} strains, ${seeded.conditions} conditions`,
     );

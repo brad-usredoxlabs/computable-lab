@@ -19,31 +19,18 @@ export interface VerifyPlatingInput {
   materialLabel?: string
 }
 
-/** Suggest a read modality for a verification mechanism. */
-export function verifyReadModality(method: string | undefined): string {
-  switch (method) {
-    case 'hoechst_nuclei':
-    case 'cell_counter':
-    case 'hemocytometer':
-    case 'manual':
-      return 'microscopy'
-    case 'total_protein':
-    case 'od600':
-      return 'absorbance'
-    case 'cfu':
-      return 'absorbance'
-    default:
-      return 'other'
-  }
-}
-
 export function buildVerifyPlatingReadEvent(input: VerifyPlatingInput): PlateEvent {
   const { details, rule } = input
   const wells = Array.isArray(details.wells) ? details.wells : []
   const method = rule.verification?.method
-  const ruleModality = rule.verification?.readModality
-  const modality = ruleModality ?? verifyReadModality(method)
-  const safeModality = READ_MODALITIES.has(modality) ? modality : 'other'
+  // The read modality is DECLARED in the registry (data). The loader enforces
+  // it is present whenever a verification is declared — TS never guesses here.
+  if (!rule.verification?.readModality) {
+    throw new Error('Cannot build verify-plating read: registry rule has no verification.readModality')
+  }
+  const modality = READ_MODALITIES.has(rule.verification.readModality)
+    ? rule.verification.readModality
+    : 'other'
   const materialLabel = input.materialLabel ?? (typeof details.biological_type === 'object' && details.biological_type ? (details.biological_type as { label?: string }).label : undefined)
 
   const notes = [
@@ -54,7 +41,7 @@ export function buildVerifyPlatingReadEvent(input: VerifyPlatingInput): PlateEve
 
   const detailsOut: ReadDetails = {
     wells,
-    modality: safeModality,
+    modality,
     ...(method ? { channels: [method] } : {}),
     notes,
   }

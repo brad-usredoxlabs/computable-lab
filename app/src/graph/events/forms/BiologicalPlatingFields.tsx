@@ -14,7 +14,7 @@
 import { useMemo } from 'react'
 import type { AddMaterialDetails, CountMeasuredBy, PlateEvent } from '../../../types/events'
 import { computePlating } from './plating'
-import { BIOLOGICAL_CONDITIONS, type BiologicalTypeRule } from '../../../shared/bioTypes'
+import { type BiologicalConditionSeed, type BiologicalTypeRule } from '../../../shared/bioTypes'
 import type { Ref } from '../../../shared/ref'
 import { buildVerifyPlatingReadEvent } from './verifyPlating'
 
@@ -32,6 +32,9 @@ interface Props {
   rule: BiologicalTypeRule
   onChange: (details: AddMaterialDetails) => void
   showConditionSelect?: boolean
+  /** Culture conditions (term.kind: condition) from the DECLARATIVE registry —
+   *  the lab's declared vocabulary, never a hardcoded TS array. */
+  conditions?: BiologicalConditionSeed[]
   /** When provided, renders a "Verify plating" seam (D3): a follow-up read event
    *  whose modality comes from the type's verification rule, supports/refutes the
    *  seed estimate. */
@@ -42,7 +45,7 @@ export function conditionRefsOf(details: AddMaterialDetails): Ref[] {
   return Array.isArray(details.condition_refs) ? details.condition_refs : []
 }
 
-export function BiologicalPlatingFields({ details, rule, onChange, showConditionSelect = true, onVerifyPlating }: Props) {
+export function BiologicalPlatingFields({ details, rule, onChange, showConditionSelect = true, conditions = [], onVerifyPlating }: Props) {
   const countField = rule.fields.find((f) => f.key === 'count')
   const volumeField = rule.fields.find((f) => f.key === 'volume')
   const densityField = rule.fields.find((f) => f.key === 'counterDensity')
@@ -93,12 +96,12 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
     })
   }
 
-  const toggleCondition = (slug: string, label: string) => {
+  const toggleCondition = (seed: BiologicalConditionSeed) => {
     const current = conditionRefsOf(details)
-    const exists = current.some((r) => r.id === slug)
+    const exists = current.some((r) => r.id === seed.id)
     const next = exists
-      ? current.filter((r) => r.id !== slug)
-      : [...current, { kind: 'record' as const, type: 'term' as const, id: slug, label }]
+      ? current.filter((r) => r.id !== seed.id)
+      : [...current, { kind: 'record' as const, type: 'term' as const, id: seed.id, label: seed.label }]
     onChange({ ...details, condition_refs: next.length ? next : undefined })
   }
 
@@ -222,7 +225,7 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
         <div className="form-field">
           <label>Culture conditions <span className="form-hint" style={{ display: 'inline' }}>(orthogonal to type)</span></label>
           <div className="bio-condition-chips">
-            {BIOLOGICAL_CONDITIONS.map((c) => {
+            {conditions.map((c) => {
               const selected = conditionRefs.some((r) => r.id === c.id)
               return (
                 <button
@@ -231,7 +234,7 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
                   data-testid={`bio-condition-${c.id}`}
                   className={`bio-condition-chip${selected ? ' bio-condition-chip--selected' : ''}`}
                   aria-pressed={selected}
-                  onClick={() => toggleCondition(c.id, c.label)}
+                  onClick={() => toggleCondition(c)}
                 >
                   {c.label}
                 </button>

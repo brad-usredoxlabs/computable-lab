@@ -6,10 +6,19 @@
  * term provider of the resolve spine.
  */
 import { describe, expect, it } from 'vitest';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { RecordEnvelope, RecordStore, RecordFilter, StoreResult } from '../store/types.js';
-import { seedBiologicalTerms } from './seedBiologicalTerms.js';
+import { seedBiologicalTermsFromRegistry } from './seedBiologicalTerms.js';
+import { loadDefaultBiologicalTypesRegistry } from '../ontology/biologicalTypes.js';
 import { TERM_SCHEMA_ID } from './EnsureTerm.js';
 import { createTermProvider } from '../resolve/providers/terms.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCHEMA_DIR = resolve(__dirname, '../../../schema');
+
+/** The real declarative registry — the test seeds from actual YAML data. */
+const registry = loadDefaultBiologicalTypesRegistry(SCHEMA_DIR);
 
 /** In-memory store minimal fake (mirrors EnsureTerm.test). */
 class FakeStore implements RecordStore {
@@ -62,7 +71,7 @@ const TERMS = {
 describe('seedBiologicalTerms (inclusive identity spine)', () => {
   it('seeds species, strains, cell lines, and conditions', async () => {
     const store = new FakeStore();
-    const res = await seedBiologicalTerms(store);
+    const res = await seedBiologicalTermsFromRegistry(store, registry);
 
     expect(res.terms).toBeGreaterThanOrEqual(5);
     expect(res.strains).toBeGreaterThanOrEqual(3);
@@ -91,11 +100,11 @@ describe('seedBiologicalTerms (inclusive identity spine)', () => {
 
   it('is idempotent — re-running reuses the same terms', async () => {
     const store = new FakeStore();
-    await seedBiologicalTerms(store);
+    await seedBiologicalTermsFromRegistry(store, registry);
     const before = await store.list({ schemaId: TERM_SCHEMA_ID });
     const beforeIds = before.map((r) => r.recordId).sort();
 
-    await seedBiologicalTerms(store);
+    await seedBiologicalTermsFromRegistry(store, registry);
     const after = await store.list({ schemaId: TERM_SCHEMA_ID });
     const afterIds = after.map((r) => r.recordId).sort();
 
@@ -104,7 +113,7 @@ describe('seedBiologicalTerms (inclusive identity spine)', () => {
 
   it('each organism/condition resolves through the tier-0 term provider', async () => {
     const store = new FakeStore();
-    await seedBiologicalTerms(store);
+    await seedBiologicalTermsFromRegistry(store, registry);
     const provider = createTermProvider(store);
 
     const check = async (q: string) => {
