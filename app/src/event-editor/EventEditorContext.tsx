@@ -1062,11 +1062,19 @@ export interface EventEditorActions {
     compositionSnapshot?: AddMaterialDetails['composition_snapshot']
     /**
      * Cell-count payload (cells/well). Set when the picked material has
-     * a `cells` composition role; rides alongside `volume_uL` so the
-     * event graph captures both the liquid and the cell-level metric
-     * for replay (`AddMaterialDetails.count` in `types/events.ts`).
+     * a `cells` composition role or is a count-first biological type; rides
+     * alongside `volume_uL` so the event graph captures both the liquid and the
+     * cell-level metric for replay (`AddMaterialDetails.count`).
      */
     count?: number
+    /** Resolved biological-type ref (what was plated) for count-first types. */
+    biological_type?: AddMaterialDetails['biological_type']
+    /** Honesty layer over the seed count (mechanism + isEstimate). */
+    count_estimate?: AddMaterialDetails['count_estimate']
+    /** Culture-condition term refs (term.kind: condition). */
+    condition_refs?: AddMaterialDetails['condition_refs']
+    /** Source/counter density (count_per_volume) for derived volume math. */
+    counter_density?: AddMaterialDetails['counter_density']
   }) => void
   applyAspirate: (input: {
     labwareId: string
@@ -1302,7 +1310,7 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       setSelection: (selection) => dispatch({ type: 'set_selection', selection }),
       clearSelection: () => dispatch({ type: 'set_selection', selection: null }),
       appendEvent: (event) => dispatch({ type: 'append_event', event }),
-      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, role, concentration, compositionSnapshot, count }) => {
+      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, role, concentration, compositionSnapshot, count, biological_type, count_estimate, condition_refs, counter_density }) => {
         const emit = (ref: Ref) => dispatch({
           type: 'append_event',
           event: {
@@ -1317,6 +1325,10 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
               ...(concentration ? { concentration } : {}),
               ...(compositionSnapshot ? { composition_snapshot: compositionSnapshot } : {}),
               ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
+              ...(biological_type ? { biological_type } : {}),
+              ...(count_estimate ? { count_estimate } : {}),
+              ...(condition_refs && condition_refs.length > 0 ? { condition_refs } : {}),
+              ...(counter_density ? { counter_density } : {}),
             },
           },
         })

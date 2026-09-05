@@ -38,6 +38,12 @@ type MaterialSearchItem = {
   title: string;
   category: MaterialSearchCategory;
   subtitle?: string;
+  /** Biological signal for canonical term nodes: term.kind (organism/condition/...). */
+  termKind?: string;
+  /** material.domain hint (e.g. cell_line) — drives the measure-rule gate. */
+  domain?: string;
+  /** ontology CURIE of the term (NCBITaxon:10090, CLO:0020273) — picks the rule. */
+  curie?: string;
 };
 
 type MaterialLineageResponse = {
@@ -165,6 +171,18 @@ function refValue(value: unknown): RefShape | undefined {
   };
 }
 
+/** First ontology CURIE on a term's linkouts (NCBITaxon/CLO/EFO/...), for rule matching. */
+function firstOntologyCurie(payload: Record<string, unknown>): string | undefined {
+  const linkouts = Array.isArray(payload.linkouts) ? payload.linkouts : [];
+  for (const lo of linkouts) {
+    if (!isObject(lo)) continue;
+    if (lo.kind !== 'ontology') continue;
+    const curie = stringValue(lo.curie);
+    if (curie) return curie;
+  }
+  return undefined;
+}
+
 function toRef(id: string, type: string, label?: string): RefShape {
   return { kind: 'record', id, type, ...(label ? { label } : {}) };
 }
@@ -213,6 +231,9 @@ function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | 
       title,
       category: 'concept-only',
       subtitle: [termKind ? `${termKind.charAt(0).toUpperCase()}${termKind.slice(1)}` : '', domain ? ` · ${domain}` : ''].join(''),
+      ...(termKind ? { termKind } : {}),
+      ...(domain ? { domain } : {}),
+      ...(firstOntologyCurie(payload) ? { curie: firstOntologyCurie(payload)! } : {}),
     };
   }
   const kind = stringValue(payload.kind) ?? '';

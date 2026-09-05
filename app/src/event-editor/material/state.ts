@@ -3,6 +3,7 @@ import type {
   ConcentrationValue,
 } from '../../types/material'
 import type { Ref } from '../../types/ref'
+import type { CountEstimate } from '../../types/events'
 import type { ResolveRef as OLSResultRef } from '../../shared/api/resolveUtil'
 
 /**
@@ -45,13 +46,38 @@ export interface PickedMaterial {
   concentration?: ConcentrationValue
   /** Composition snapshot to ship with the event (mixtures / cells). */
   compositionSnapshot?: CompositionEntryValue[]
+  /**
+   * Biological signal from a canonical term node (domain: cell_line) or an
+   * organism (termKind: organism). When set, the configure view goes
+   * count-first (BiologicalPlatingFields) instead of volume-first.
+   */
+  domain?: string
+  /** term.kind of a canonical term pick (organism/condition/...). */
+  termKind?: string
+  /** ontology CURIE of the biological type (NCBITaxon:10090, CLO:0020273). */
+  curie?: string
+  /**
+   * The resolved biological-type ref persisted on the add-material event
+   * (what was plated), for provenance + the measure-rule gate.
+   */
+  biologicalType?: Ref
 }
 
 export type AddMaterialState =
   /** Initial state. Search results + on-demand OLS. */
   | { phase: 'search' }
   /** A material is chosen; user enters volume / count then confirms. */
-  | { phase: 'configure'; picked: PickedMaterial; volume_uL: string; count: string; role: string }
+  | {
+      phase: 'configure'
+      picked: PickedMaterial
+      volume_uL: string
+      count: string
+      role: string
+      /** Biological fields (cell_line/organism material) — count-first. */
+      countEstimate?: CountEstimate
+      conditionRefs?: Ref[]
+      counterDensity?: ConcentrationValue
+    }
   /**
    * Creating a new material via the shared MaterialIntentSurface (type
    * selection + per-type builder). An optional ontology seed jumps straight to
@@ -70,6 +96,9 @@ export type AddMaterialAction =
   | { type: 'set-volume'; value: string }
   | { type: 'set-count'; value: string }
   | { type: 'set-role'; value: string }
+  | { type: 'set-count-estimate'; value?: CountEstimate }
+  | { type: 'set-condition-refs'; value?: Ref[] }
+  | { type: 'set-counter-density'; value?: ConcentrationValue }
   | { type: 'submitting' }
   | { type: 'fail'; message: string }
   | { type: 'reset' }
@@ -87,7 +116,7 @@ export function reducer(state: AddMaterialState, action: AddMaterialAction): Add
         picked: material,
         volume_uL: '100',
         count: material.hasCellComposition ? '100000' : '',
-        role: '',
+        role: material.domain === 'cell_line' ? 'cells' : '',
       }
     }
     case 'open-intent':
@@ -106,6 +135,15 @@ export function reducer(state: AddMaterialState, action: AddMaterialAction): Add
     case 'set-role':
       if (state.phase !== 'configure') return state
       return { ...state, role: action.value }
+    case 'set-count-estimate':
+      if (state.phase !== 'configure') return state
+      return { ...state, countEstimate: action.value }
+    case 'set-condition-refs':
+      if (state.phase !== 'configure') return state
+      return { ...state, conditionRefs: action.value }
+    case 'set-counter-density':
+      if (state.phase !== 'configure') return state
+      return { ...state, counterDensity: action.value }
     case 'submitting':
       return { phase: 'creating' }
     case 'fail':
@@ -128,18 +166,29 @@ export function pickedFromSearchItem(item: {
   recordId: string
   kind?: string
   title: string
+  termKind?: string
+  domain?: string
+  curie?: string
 }): PickedMaterial {
   const type = item.kind || 'material'
+  const domain = item.domain
+  const termKind = item.termKind
+  const isBiological = domain === 'cell_line' || domain === 'organism' || termKind === 'organism'
+  const ref: Ref = {
+    kind: 'record',
+    id: item.recordId,
+    type,
+    label: item.title,
+  }
   return {
     recordId: item.recordId,
-    ref: {
-      kind: 'record',
-      id: item.recordId,
-      type,
-      label: item.title,
-    },
+    ref,
     label: item.title,
     hasCellComposition: false,
+    ...(domain ? { domain } : {}),
+    ...(termKind ? { termKind } : {}),
+    ...(item.curie ? { curie: item.curie } : {}),
+    ...(isBiological ? { biologicalType: { kind: 'record', id: item.recordId, type: 'term', label: item.title } } : {}),
   }
 }
 

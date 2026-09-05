@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddMaterialModal, inferMaterialProfileIdForOntologyCandidate } from './AddMaterialModal'
 import { toPickerProfileId } from './profileBuilderRegistry'
@@ -10,13 +10,21 @@ const setQuery = vi.fn()
 const materialSearchMock = vi.hoisted(() => ({
   value: {
     query: '',
-    localResults: [] as Array<{ recordId: string; kind: string; title: string; category: string; subtitle?: string }>,
+    localResults: [] as Array<{ recordId: string; kind: string; title: string; category: string; subtitle?: string; termKind?: string; domain?: string; curie?: string }>,
     formulations: [],
     ontologyResults: [],
     loadingLocal: false,
     loadingOntology: false,
     error: null as string | null,
   },
+}))
+
+const api = vi.hoisted(() => ({
+  getBiologicalTypesRegistry: vi.fn(),
+}))
+
+vi.mock('../../shared/api/client', () => ({
+  apiClient: { getBiologicalTypesRegistry: api.getBiologicalTypesRegistry },
 }))
 
 vi.mock('../EventEditorContext', () => ({
@@ -52,6 +60,32 @@ const labware = {
   labwareType: 'plate_96',
   name: 'Plate 1',
 } as Labware
+
+/** Shared biological registry fixture (HepaRG → cell-line, anoxic condition). */
+const REGISTRY = {
+  version: 1,
+  default: {
+    id: 'default', label: 'Bio (generic)', domains: [], termKinds: [],
+    match: { labels: [], curies: [] },
+    measures: { primary: 'count', units: ['count-per-well'], concentrationBasis: 'count_per_volume' },
+    fields: [{ key: 'count', label: 'Count per well', required: true }, { key: 'volume', label: 'Final volume (µL)', required: true }],
+  },
+  types: {
+    'cell-line': {
+      id: 'cell-line', label: 'Cell Line', domains: ['cell_line'], termKinds: ['organism'],
+      match: { labels: ['HepaRG'], curies: [] },
+      measures: { primary: 'count', units: ['cells-per-well'], concentrationBasis: 'count_per_volume' },
+      verification: { method: 'hoechst_nuclei', readModality: 'microscopy' },
+      fields: [
+        { key: 'count', label: 'Cells per well', required: true },
+        { key: 'volume', label: 'Final volume (µL)', required: true },
+      ],
+    },
+  },
+  organisms: [],
+  strains: [],
+  conditions: [{ label: 'anoxic', id: 'TERM-anoxic-1v6v', aliases: ['anoxia'] }],
+}
 
 describe('ontology candidate → material profile routing', () => {
   it('routes cell-like ontology terms to the cell_line profile (cells builder)', () => {
@@ -92,6 +126,7 @@ describe('AddMaterialModal', () => {
   beforeEach(() => {
     applyAddMaterial.mockReset()
     setQuery.mockReset()
+    api.getBiologicalTypesRegistry.mockResolvedValue({ registry: REGISTRY })
     materialSearchMock.value = {
       query: '',
       localResults: [],
@@ -188,5 +223,73 @@ describe('AddMaterialModal', () => {
 
     fireEvent.pointerDown(document.querySelector('.add-material-scrim') as HTMLElement)
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces biological type terms and opens the count-first configure view', async () => {
+    materialSearchMock.value = {
+      query: 'HepaRG',
+      localResults: [{
+        recordId: 'TERM-heparg-ii79',
+        kind: 'term',
+        title: 'HepaRG',
+        category: 'concept-only',
+        subtitle: 'Organism · cell_line',
+        termKind: 'organism',
+        domain: 'cell_line',
+        curie: 'CLO:0020273',
+      }],
+      formulations: [],
+      ontologyResults: [],
+      loadingLocal: false,
+      loadingOntology: false,
+      error: null,
+    }
+    render(<AddMaterialModal isOpen labware={labware} wells={['A1']} onClose={() => {}} />)
+
+    // The seeded biological term is now ADDABLE (unlike a bare chemical concept).
+    fireEvent.click(screen.getByRole('button', { name: /HepaRG/i }))
+    // Count-first configure view renders (NOT plain volume) once the registry resolves.
+    await waitFor(() => expect(screen.getByTestId('bio-count')).toBeTruthy())
+    expect(screen.getByTestId('bio-volume')).toBeTruthy()
+    expect(screen.getByTestId('bio-measuredby')).toBeTruthy()
+    expect(screen.getByTestId('bio-condition-TERM-anoxic-1v6v')).toBeTruthy()
+  })
+
+  it('applies a biological seed as a count-first add_material with biological fields', async () => {
+    materialSearchMock.value = {
+      query: 'HepaRG',
+      localResults: [{
+        recordId: 'TERM-heparg-ii79',
+        kind: 'term',
+        title: 'HepaRG',
+        category: 'concept-only',
+        subtitle: 'Organism · cell_line',
+        termKind: 'organism',
+        domain: 'cell_line',
+        curie: 'CLO:0020273',
+      }],
+      formulations: [],
+      ontologyResults: [],
+      loadingLocal: false,
+      loadingOntology: false,
+      error: null,
+    }
+    render(<AddMaterialModal isOpen labware={labware} wells={['A1']} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /HepaRG/i }))
+    await waitFor(() => expect(screen.getByTestId('bio-count')).toBeTruthy())
+
+    // Fill count + final volume (required), pick a condition, confirm.
+    fireEvent.change(screen.getByTestId('bio-count'), { target: { value: '50000' } })
+    fireEvent.change(screen.getByTestId('bio-volume'), { target: { value: '100' } })
+    fireEvent.click(screen.getByTestId('bio-condition-TERM-anoxic-1v6v'))
+    await waitFor(() => expect((screen.getByRole('button', { name: /Add to well/i }) as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: /Add to well/i }))
+
+    const call = applyAddMaterial.mock.calls[0][0]
+    expect(call.materialRef.id).toBe('TERM-heparg-ii79')
+    expect(call.biological_type?.id).toBe('TERM-heparg-ii79')
+    expect(call.count).toBe(50000)
+    expect(call.volume_uL).toBe(100)
+    expect(call.condition_refs?.map((r: { id: string }) => r.id)).toContain('TERM-anoxic-1v6v')
   })
 })

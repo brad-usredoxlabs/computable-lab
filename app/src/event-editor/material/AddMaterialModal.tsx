@@ -19,6 +19,12 @@ import type { SlashSuggestionDetail } from '../../shared/taptab/slashMenu/types'
 import { MaterialIntentSurface } from '../../shared/material-intent/MaterialIntentSurface'
 import { useMaterialProfiles } from '../../shared/material-intent/useMaterialProfiles'
 import { materialIntentOptions, toPickerProfileId } from './profileBuilderRegistry'
+import { useBiologicalRuleLookup, type BiologicalRuleContext } from '../../graph/events/forms/useBiologicalContext'
+import { BiologicalPlatingFields } from '../../graph/events/forms/BiologicalPlatingFields'
+import { isBiologicalDomain } from '../../shared/bioTypes'
+import type { CountEstimate, AddMaterialDetails } from '../../types/events'
+import type { Ref } from '../../types/ref'
+import type { ConcentrationValue } from '../../types/material'
 
 /**
  * Replaces the two `window.prompt()` calls that the well-context-menu
@@ -106,14 +112,14 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
     if (state.phase !== 'configure') return
     const volume_uL = Number(state.volume_uL)
     // Cells often go in at essentially zero volume; allow 0 when the
-    // material carries a cell-composition role so the user can ship a
-    // pure-cell event (count without volume).
-    const allowZeroVolume = state.picked.hasCellComposition
+    // material carries a cell-composition role OR is a count-first biological
+    // type (pure-cells event).
+    const allowZeroVolume = state.picked.hasCellComposition || isBiologicalDomain(state.picked.domain)
     if (!Number.isFinite(volume_uL) || volume_uL < 0) return
     if (!allowZeroVolume && volume_uL <= 0) return
 
     let count: number | undefined
-    if (state.picked.hasCellComposition && state.count.trim().length > 0) {
+    if ((state.picked.hasCellComposition || isBiologicalDomain(state.picked.domain)) && state.count.trim().length > 0) {
       const parsed = Number(state.count)
       if (Number.isFinite(parsed) && parsed >= 0) count = parsed
     }
@@ -121,15 +127,26 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
     actions.applyAddMaterial({
       labwareId: labware.labwareId,
       wells,
-      materialRef: state.picked.ref,
+      materialRef: state.picked.biologicalType ?? state.picked.ref,
       volume_uL,
       role: state.role.trim() || undefined,
       ...(state.picked.concentration ? { concentration: state.picked.concentration } : {}),
       ...(state.picked.compositionSnapshot ? { compositionSnapshot: state.picked.compositionSnapshot } : {}),
       ...(count !== undefined ? { count } : {}),
+      ...(state.picked.biologicalType ? { biological_type: state.picked.biologicalType } : {}),
+      ...(state.countEstimate ? { count_estimate: state.countEstimate } : {}),
+      ...(state.conditionRefs && state.conditionRefs.length > 0 ? { condition_refs: state.conditionRefs } : {}),
+      ...(state.counterDensity ? { counter_density: state.counterDensity } : {}),
     })
     onClose()
   }, [actions, labware, onClose, state, wells])
+
+  const isConfigure = state.phase === 'configure'
+  const bioLookup = useBiologicalRuleLookup({
+    domain: isConfigure ? state.picked.domain : undefined,
+    label: isConfigure ? state.picked.label : undefined,
+    curie: isConfigure ? state.picked.curie : undefined,
+  })
 
   if (!isOpen) return null
 
@@ -204,9 +221,16 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
             volumeValue={state.volume_uL}
             countValue={state.count}
             roleValue={state.role}
+            countEstimate={state.countEstimate}
+            conditionRefs={state.conditionRefs}
+            counterDensity={state.counterDensity}
+            bioLookup={bioLookup}
             onVolumeChange={(value) => dispatch({ type: 'set-volume', value })}
             onCountChange={(value) => dispatch({ type: 'set-count', value })}
             onRoleChange={(value) => dispatch({ type: 'set-role', value })}
+            onCountEstimateChange={(value) => dispatch({ type: 'set-count-estimate', value })}
+            onConditionRefsChange={(value) => dispatch({ type: 'set-condition-refs', value })}
+            onCounterDensityChange={(value) => dispatch({ type: 'set-counter-density', value })}
             onBack={() => dispatch({ type: 'reset' })}
             onConfirm={handleApply}
           />
@@ -290,11 +314,16 @@ function SearchView({
   const hasOntologyHits = ontologyResults.length > 0
 
   // You add a FORMULATION or an INSTANCE to a well — not a bare ontology
-  // concept. Hide concept-only records from the addable list; the user reaches
-  // those terms through the ontology hits below (which route into a builder that
-  // creates a formulation/instance). This also stops accidental reuse of the
-  // stray bare concepts the AI mint path used to leave behind.
-  const addableLocalResults = localResults.filter((item) => item.category !== 'concept-only')
+  // concept. Hide concept-only records UNLESS they are biological type terms
+  // (seeded organisms/cell lines: termKind organism or domain cell_line), which
+  // the user plates directly with a count. This stops accidental reuse of the
+  // stray bare chemicals the AI mint path used to leave behind.
+  const addableLocalResults = localResults.filter((item) =>
+    item.category !== 'concept-only'
+    || item.termKind === 'organism'
+    || item.domain === 'cell_line'
+    || item.domain === 'organism',
+  )
 
   // Definition hover card — reuses the AI route's DetailTooltip so a moused-over
   // ontology hit shows its definition + provenance, docked beside the list.
@@ -456,9 +485,16 @@ interface ConfigureViewProps {
   volumeValue: string
   countValue: string
   roleValue: string
+  countEstimate?: CountEstimate
+  conditionRefs?: Ref[]
+  counterDensity?: ConcentrationValue
+  bioLookup: BiologicalRuleContext
   onVolumeChange: (value: string) => void
   onCountChange: (value: string) => void
   onRoleChange: (value: string) => void
+  onCountEstimateChange: (value?: CountEstimate) => void
+  onConditionRefsChange: (value?: Ref[]) => void
+  onCounterDensityChange: (value?: ConcentrationValue) => void
   onBack: () => void
   onConfirm: () => void
 }
@@ -468,14 +504,34 @@ function ConfigureView({
   volumeValue,
   countValue,
   roleValue,
+  countEstimate,
+  conditionRefs,
+  counterDensity,
+  bioLookup,
   onVolumeChange,
   onCountChange,
   onRoleChange,
+  onCountEstimateChange,
+  onConditionRefsChange,
+  onCounterDensityChange,
   onBack,
   onConfirm,
 }: ConfigureViewProps) {
   const showCount = picked.hasCellComposition
+  // A biological type (cell_line / organism term) goes count-first.
+  const biological = bioLookup.isBiological && Boolean(bioLookup.rule) && Boolean(picked.biologicalType)
+  const biologicalFields = biological && bioLookup.rule
+
+  // For non-biological: volume-first with optional count when cells composition.
   const canConfirm = (() => {
+    if (biologicalFields) {
+      // Count + final volume required; density optional (derives volumes).
+      const c = Number(countValue)
+      const v = Number(volumeValue)
+      if (!Number.isFinite(c) || c <= 0) return false
+      if (!Number.isFinite(v) || v <= 0) return false
+      return true
+    }
     const v = Number(volumeValue)
     if (!Number.isFinite(v) || v < 0) return false
     // For cell materials, allow volume = 0 (pure-cells events). For
@@ -487,6 +543,26 @@ function ConfigureView({
     }
     return true
   })()
+
+  // Adapt the modal's string volume/count + biological fields into the
+  // AddMaterialDetails shape that BiologicalPlatingFields consumes.
+  const bioDetails: AddMaterialDetails = {
+    wells: [],
+    ...(picked.biologicalType ? { biological_type: picked.biologicalType } : {}),
+    ...(countValue ? { count: Number(countValue) } : {}),
+    ...(volumeValue ? { volume: { value: Number(volumeValue), unit: 'uL' } } : {}),
+    ...(countEstimate ? { count_estimate: countEstimate } : {}),
+    ...(conditionRefs && conditionRefs.length > 0 ? { condition_refs: conditionRefs } : {}),
+    ...(counterDensity ? { counter_density: counterDensity } : {}),
+  }
+
+  const onBioChange = (next: AddMaterialDetails) => {
+    onCountChange(typeof next.count === 'number' ? String(next.count) : '')
+    onVolumeChange(next.volume ? String(next.volume.value) : '')
+    onCountEstimateChange(next.count_estimate)
+    onConditionRefsChange(next.condition_refs)
+    onCounterDensityChange(next.counter_density)
+  }
 
   return (
     <form
@@ -505,39 +581,55 @@ function ConfigureView({
             Carries concentration: {picked.concentration.value} {picked.concentration.unit}
           </div>
         ) : null}
+        {biological && biologicalFields ? (
+          <div className="add-material-picked-meta">
+            {biologicalFields.label} · count-first
+          </div>
+        ) : null}
       </div>
 
-      <label className="add-material-field">
-        <span className="add-material-field-label">Volume (µL)</span>
-        <input
-          type="number"
-          className="add-material-input"
-          value={volumeValue}
-          min="0"
-          step="any"
-          onChange={(e) => onVolumeChange(e.target.value)}
-          autoFocus
+      {biological && biologicalFields ? (
+        <BiologicalPlatingFields
+          details={bioDetails}
+          rule={biologicalFields}
+          conditions={bioLookup.registry?.conditions ?? []}
+          onChange={onBioChange}
         />
-      </label>
+      ) : (
+        <>
+          <label className="add-material-field">
+            <span className="add-material-field-label">Volume (µL)</span>
+            <input
+              type="number"
+              className="add-material-input"
+              value={volumeValue}
+              min="0"
+              step="any"
+              onChange={(e) => onVolumeChange(e.target.value)}
+              autoFocus
+            />
+          </label>
 
-      {showCount ? (
-        <label className="add-material-field">
-          <span className="add-material-field-label">Cell count</span>
-          <input
-            type="number"
-            className="add-material-input"
-            value={countValue}
-            min="0"
-            step="1"
-            onChange={(e) => onCountChange(e.target.value)}
-          />
-          <span className="add-material-field-hint">
-            The selected material has a cells component, so a count makes the
-            event-graph replayable for cell-level tracking. Optional — leave
-            blank if you only care about volume.
-          </span>
-        </label>
-      ) : null}
+          {showCount ? (
+            <label className="add-material-field">
+              <span className="add-material-field-label">Cell count</span>
+              <input
+                type="number"
+                className="add-material-input"
+                value={countValue}
+                min="0"
+                step="1"
+                onChange={(e) => onCountChange(e.target.value)}
+              />
+              <span className="add-material-field-hint">
+                The selected material has a cells component, so a count makes the
+                event-graph replayable for cell-level tracking. Optional — leave
+                blank if you only care about volume.
+              </span>
+            </label>
+          ) : null}
+        </>
+      )}
 
       <label className="add-material-field">
         <span className="add-material-field-label">Role</span>
@@ -546,7 +638,7 @@ function ConfigureView({
           className="add-material-input"
           value={roleValue}
           list="add-material-role-options"
-          placeholder={showCount ? 'cells' : 'treatment'}
+          placeholder={biological ? 'cells' : showCount ? 'cells' : 'treatment'}
           onChange={(e) => onRoleChange(e.target.value)}
         />
         <datalist id="add-material-role-options">

@@ -90,6 +90,41 @@ function hasInlineDomain(ref: Ref | null | undefined): boolean {
   return ref.kind === 'ontology' && Boolean(refMaterialDomain(ref))
 }
 
+export interface BiologicalRuleContext {
+  registry: BiologicalTypesRegistry | null
+  isBiological: boolean
+  rule: BiologicalTypeRule | null
+}
+
+/**
+ * Resolve a biological measure rule from an explicit domain/label/curie (no
+ * material ref needed) — used by surfaces that already know the biological
+ * type (e.g. the well AddMaterialModal, where domain flows via the picked item).
+ */
+export function useBiologicalRuleLookup(input: {
+  domain?: string
+  label?: string
+  curie?: string
+}): BiologicalRuleContext {
+  const [registry, setRegistry] = useState<BiologicalTypesRegistry | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void ensureRegistry().then((reg) => {
+      if (!cancelled) setRegistry(reg)
+    })
+    return () => { cancelled = true }
+  }, [])
+  const isBiological = isBiologicalDomain(input.domain)
+  const rule = registry
+    ? resolveBiologicalRule(registry, {
+        ...(input.domain ? { domain: input.domain } : {}),
+        ...(input.label ? { label: input.label } : {}),
+        ...(input.curie ? { curie: input.curie } : {}),
+      })
+    : null
+  return { registry, isBiological, rule }
+}
+
 export function useBiologicalContext(materialRef: Ref | null | undefined): BiologicalContext {
   const [registry, setRegistry] = useState<BiologicalTypesRegistry | null>(null)
   const [domain, setDomain] = useState<string | undefined>(undefined)

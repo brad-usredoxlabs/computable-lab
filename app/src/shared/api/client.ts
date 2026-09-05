@@ -193,6 +193,12 @@ export interface MaterialSearchItem {
   title: string
   category: 'saved-stock' | 'vendor-reagent' | 'prepared-material' | 'biological-derived' | 'concept-only'
   subtitle?: string
+  /** Biological signal for canonical term nodes: term.kind (organism/condition/...). */
+  termKind?: string
+  /** material.domain hint (e.g. cell_line) — drives the measure-rule gate. */
+  domain?: string
+  /** ontology CURIE of the term (NCBITaxon:10090, CLO:0020273) — picks the rule. */
+  curie?: string
 }
 
 /**
