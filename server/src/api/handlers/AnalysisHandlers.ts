@@ -11,6 +11,7 @@ import {
 } from '../../analysis/analysisService.js';
 import { AnalysisRunner } from '../../analysis/analysisRunner.js';
 import { AnalysisAuthoringService, AnalysisAuthoringError } from '../../analysis/analysisAuthoring.js';
+import { promoteArtifact } from '../../analysis/artifactPromotion.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { resolveAiProfile } from '../../config/types.js';
 
@@ -172,6 +173,23 @@ export function createAnalysisHandlers(ctx: AppContext) {
       const runner = new AnalysisRunner(ctx);
       try {
         const result = await runner.executeRun(request.params.id);
+        return { success: true, ...result };
+      } catch (err) {
+        if (err instanceof AnalysisServiceError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    async promoteArtifactHandler(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        const result = await promoteArtifact(ctx, request.params.id);
         return { success: true, ...result };
       } catch (err) {
         if (err instanceof AnalysisServiceError) {

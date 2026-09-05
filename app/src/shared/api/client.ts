@@ -2700,6 +2700,14 @@ export const apiClient = {
     })
   },
 
+  async promoteAnalysisArtifact(
+    id: string,
+  ): Promise<{ success: boolean; artifactId: string; dataReferenceId: string; created: boolean }> {
+    return request(`/analysis-artifacts/${encodeURIComponent(id)}/promote`, {
+      method: 'POST',
+    })
+  },
+
   async executeInstrumentApplianceJob(
     job: InstrumentApplianceJob,
     options?: { confirmLiveExecution?: boolean },
