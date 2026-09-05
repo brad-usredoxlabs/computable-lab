@@ -39,7 +39,7 @@ export interface GraphValidationDeps {
   /** Whether a field path is resolvable from a candidate node type. */
   fieldResolvable?: (type: string, field: string) => boolean;
   /** Whether a scope container exists. */
-  scopeExists?: (scope: { type: string; id: string }) => boolean;
+  scopeExists?: (scope: { type: string; id: string }) => boolean | Promise<boolean>;
 }
 
 const NUMERIC_OPERATORS = ['>', '>=', '<', '<='];
@@ -47,7 +47,7 @@ const NUMERIC_OPERATORS = ['>', '>=', '<', '<='];
 export class GraphValidation {
   constructor(private readonly deps: GraphValidationDeps = {}) {}
 
-  validate(query: GraphQuery): GraphValidationResult {
+  async validate(query: GraphQuery): Promise<GraphValidationResult> {
     const issues: GraphValidationIssue[] = [];
     const knownVerbs = this.deps.knownVerbs?.() ?? [];
 
@@ -105,7 +105,7 @@ export class GraphValidation {
     }
 
     if ((query.op === 'find' || query.op === 'resolve') && query.scope && this.deps.scopeExists) {
-      if (!this.deps.scopeExists(query.scope)) {
+      if (!(await this.deps.scopeExists(query.scope))) {
         issues.push({
           code: 'invalid_scope',
           path: `${query.scope.type}:${query.scope.id}`,

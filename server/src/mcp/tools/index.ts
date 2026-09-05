@@ -36,6 +36,7 @@ import { registerRunWorkspaceAiTools } from './runWorkspaceAiTools.js';
 import { registerIngestionAiTools } from './ingestionAiTools.js';
 import { registerMaterialsAiTools } from './materialsAiTools.js';
 import { registerEvidencePipelineTools } from './evidencePipelineTools.js';
+import { registerGraphTools } from './graphTools.js';
 
 export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   registerRecordTools(server, ctx, registry);
@@ -73,4 +74,5 @@ export function registerAllTools(server: McpServer, ctx: AppContext, registry?: 
   registerIngestionAiTools(server, ctx, registry);
   registerMaterialsAiTools(server, ctx, registry);
   registerEvidencePipelineTools(server, ctx, registry);
+  registerGraphTools(server, ctx, registry);
 }

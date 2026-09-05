@@ -88,6 +88,8 @@ import { AiThreadStore } from './ai-threads/index.js';
 import { JsonLdIndex } from './jsonld-index/index.js';
 import { JsonLdProjector } from './jsonld/JsonLdProjector.js';
 import { createJsonLdSearchHandlers } from './api/handlers/JsonLdSearchHandlers.js';
+import { createGraphSearchHandlers } from './api/handlers/GraphSearchHandlers.js';
+import { createGraphQueryService, type GraphQueryService } from './graph-query/service.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -219,6 +221,7 @@ export interface AppContext {
   materialProfileRegistry: MaterialProfileRegistry;
   jsonLdIndex: JsonLdIndex;
   jsonLdProjector: JsonLdProjector;
+  graphQueryService?: GraphQueryService;
   extractionRunner?: ExtractionRunnerService;
 }
 
@@ -488,6 +491,18 @@ export async function initializeApp(
     console.log(`JSON-LD index already populated (${jsonLdIndex.size()} records)`);
   }
 
+  // Graph Search Engine — one read-oriented query layer over the lab graph,
+  // sharing a single engine between the Find UI and the lab.* MCP tools (§1.1).
+  // Built here (not in createServer) so the MCP stdio entry point (which only
+  // calls initializeApp) also gets the service.
+  const graphScopeCtx = {
+    store,
+    jsonLdIndex,
+    appConfig,
+  };
+  const graphQueryService = await createGraphQueryService(graphScopeCtx);
+  graphQueryService.rebuild = graphQueryService.rebuild.bind(graphQueryService);
+
   console.log(`App initialized`);
 
   return {
@@ -515,6 +530,7 @@ export async function initializeApp(
     materialProfileRegistry,
     jsonLdIndex,
     jsonLdProjector,
+    ...(graphQueryService ? { graphQueryService } : {}),
   };
 }
 
@@ -666,6 +682,13 @@ export async function createServer(
     ctx.jsonLdProjector,
     ctx.store,
   );
+
+  // Graph Search Engine — the service is built in initializeApp (so the MCP
+  // stdio entry point, which only calls initializeApp, also gets it). Here we
+  // just bind the HTTP handlers to it.
+  const graphQueryService = ctx.graphQueryService ?? await createGraphQueryService(ctx);
+  const graphSearchHandlers = createGraphSearchHandlers(graphQueryService);
+  ctx.graphQueryService = graphQueryService;
 
   // Build extraction infrastructure: extractor factory, populator, runner
   const extractorProfile = ctx.appConfig?.ai?.extractor;
@@ -1184,6 +1207,7 @@ export async function createServer(
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.aiThreadHandlers = aiThreadHandlers;
     routeOpts.jsonLdSearchHandlers = jsonLdSearchHandlers;
+    routeOpts.graphSearchHandlers = graphSearchHandlers;
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
     // previews the user thinks are wrong. Always mounted — config (worker
     // base URL / model) is read per-request from env, so this works without
