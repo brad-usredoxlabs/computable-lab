@@ -49,7 +49,7 @@ properties:
 
   dataKind:
     type: string
-    enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+    enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric ]
     description: "High-level semantic kind of the data (maps to analysis dataset handling)."
 
   format:

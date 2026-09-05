@@ -49,6 +49,22 @@ export class StorageService {
     return this.providers.has(id);
   }
 
+  /** The device that large/emitted artifacts are written to by default. */
+  defaultDeviceId(): string {
+    const def = this.devices.find((d) => d.default === true);
+    const fallback = this.devices[0];
+    const id = def?.id ?? fallback?.id;
+    if (!id) {
+      throw new StorageError('MISSING_CONFIG', 'no storage device configured for analysis artifact persistence');
+    }
+    return id;
+  }
+
+  /** Full device configs (for writing artifacts to a device). */
+  allDeviceConfigs(): StorageDeviceConfig[] {
+    return this.devices;
+  }
+
   getProvider(id: string): StorageProvider {
     const provider = this.providers.get(id);
     if (!provider) {

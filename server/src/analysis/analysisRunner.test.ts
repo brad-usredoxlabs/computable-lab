@@ -130,4 +130,60 @@ describe('AnalysisRunner (integration)', () => {
     const runEnv = await service.getRun(runId);
     expect((runEnv!.payload as { status: string }).status).toBe('failed');
   }, 30000);
+
+  it('persists an emitted model file to storage as a data-reference (not git)', async () => {
+    // Script writes a small "model" file and emits it via publish_file.
+    const entryScript = [
+      'import pickle, os',
+      "def run(ctx):",
+      "    with open('model.pkl','wb') as f:",
+      "        f.write(pickle.dumps({'coef': 2.0, 'intercept': 1.0}))",
+      "    ctx.publish_file('model', 'model.pkl', kind='model', format='pkl')",
+    ].join('\n');
+    const { recordId: revId } = await service.createRevision({
+      title: 'train model',
+      entryScript,
+      sdkVersion: '0.1.0',
+    });
+    const { recordId: runId } = await service.createRun({
+      title: 'run-train',
+      revisionRef: { kind: 'record', id: revId, type: 'analysis-revision' },
+      inputs: {},
+    });
+    const res = await runner.executeRun(runId);
+    expect(res.status).toBe('succeeded');
+    expect(res.manifest.artifacts[0].dataKind).toBe('model');
+
+    // artifact record has a dataReferenceRef
+    const artifacts = await ctx.store.list({ kind: 'analysis-output-artifact' });
+    const modelArt = artifacts.find((a) => (a.payload as { name?: string }).name === 'model');
+    expect(modelArt).toBeDefined();
+    const modelPayload = modelArt!.payload as { dataReferenceRef?: { id?: string }; dataKind?: string };
+    expect(modelPayload.dataKind).toBe('model');
+    expect(modelPayload.dataReferenceRef?.id).toMatch(/^DREF-/);
+
+    // a data-reference record exists pointing at the storage device
+    const drefs = await ctx.store.list({ kind: 'data-reference' });
+    const dref = drefs.find((d) => d.recordId === modelPayload.dataReferenceRef?.id);
+    expect(dref).toBeDefined();
+
+    // model bytes are NOT in the git records tree (only a pointer is)
+    const { readdir, readFile } = await import('node:fs/promises');
+    const walk = async (dir: string): Promise<string[]> => {
+      let out: string[] = [];
+      try {
+        for (const e of await readdir(dir, { withFileTypes: true })) {
+          const full = join(dir, e.name);
+          if (e.isDirectory()) out.push(...(await walk(full)));
+          else out.push(full);
+        }
+      } catch { return []; }
+      return out;
+    };
+    const files = await walk(join(wsDir, 'records'));
+    for (const f of files) {
+      const content = await readFile(f, 'utf8').catch(() => '');
+      expect(content.includes('coef')).toBe(false); // pickle bytes must not be in git
+    }
+  }, 30000);
 });

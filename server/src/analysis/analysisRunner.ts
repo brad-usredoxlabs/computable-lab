@@ -65,6 +65,8 @@ export interface ManifestArtifact {
   value: unknown;
   units?: Record<string, unknown>;
   schema?: Record<string, unknown>;
+  /** File-emission: when present, stream blob.path to storage + record a dref. */
+  blob?: { path: string; sha256?: string; sizeBytes?: number; format?: string };
 }
 
 export interface ManifestView {
@@ -175,6 +177,77 @@ export class AnalysisRunner {
     });
   }
 
+  /**
+   * Stream an emitted file (`page.blob.path`) OR large JSON bytes to the default
+   * storage device, and mint a data-reference record. Returns the dref ref.
+   * Bytes NEVER enter git.
+   */
+  private async persistToStorage(
+    runId: string,
+    page: ManifestArtifact,
+  ): Promise<{ dataReferenceRef: { kind: 'record'; id: string; type: 'data-reference' }; storagePath: string }> {
+    const deviceId = this.ctx.storageService.defaultDeviceId();
+    const provider = this.ctx.storageService.getProvider(deviceId);
+    const ext = page.blob?.format ? `.${page.blob.format}` : '';
+    const storagePath = `analysis-artifacts/${runId}/${page.name}${ext}`;
+
+    let bytes: Buffer;
+    let sha256: string;
+    let sizeBytes: number;
+    if (page.blob?.path) {
+      const { readFile } = await import('node:fs/promises');
+      bytes = await readFile(page.blob.path);
+    } else {
+      bytes = Buffer.from(typeof page.value === 'string' ? page.value : JSON.stringify(page.value));
+    }
+    const { createHash } = await import('node:crypto');
+    sha256 = createHash('sha256').update(bytes).digest('hex');
+    sizeBytes = bytes.byteLength;
+
+    // write to the device (root-relative path under a top-level bucket dir)
+    const { Readable } = await import('node:stream');
+    await provider.write(storagePath, Readable.from(bytes));
+
+    // mint a data-reference record with the same payload shape as acquisition
+    const drefId = await this.nextDataReferenceId();
+    const payload: Record<string, unknown> = {
+      kind: 'data-reference',
+      id: drefId,
+      title: page.name,
+      storageDeviceId: deviceId,
+      path: storagePath,
+      contentHash: sha256,
+      sizeBytes,
+      dataKind: page.dataKind,
+      ...(page.blob?.format ? { format: page.blob.format } : {}),
+      acquiredAt: new Date().toISOString(),
+    };
+    const result = await this.ctx.store.create({
+      envelope: {
+        recordId: drefId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml',
+        payload,
+      },
+      message: `Persist analysis artifact ${page.name} → ${drefId}`,
+    });
+    if (!result.success) throw new AnalysisServiceError('ARTIFACT_PERSIST_FAILED', result.error ?? 'failed', 500);
+
+    return { dataReferenceRef: { kind: 'record', id: drefId, type: 'data-reference' }, storagePath };
+  }
+
+  private async nextDataReferenceId(): Promise<string> {
+    const existing = await this.ctx.store.list({ kind: 'data-reference', limit: 5000 });
+    let max = 0;
+    for (const e of existing) {
+      const m = /^DREF-(\d+)$/.exec(e.recordId);
+      if (m) {
+        const n = Number.parseInt(m[1] ?? '0', 10);
+        if (n > max) max = n;
+      }
+    }
+    return `DREF-${String(max + 1).padStart(6, '0')}`;
+  }
+
   /** Write a manifest artifact as an analysis-output-artifact record (idempotent). */
   private async persistArtifactRecord(
     runId: string,
@@ -191,12 +264,20 @@ export class AnalysisRunner {
       ? prior.recordId
       : await this.nextArtifactId();
 
-    const isSmall =
+    // A `blob` (emitted file) ALWAYS goes to storage. Otherwise small JSON
+    // values stay inline; large ones go to storage.
+    const isLarge =
       typeof page.value === 'string'
-        ? page.value.length < 50_000
-        : page.value === null || page.value === undefined || typeof page.value !== 'object'
-          ? true
-          : JSON.stringify(page.value).length < 50_000;
+        ? page.value.length >= 50_000
+        : page.value !== null && page.value !== undefined && typeof page.value === 'object'
+          ? JSON.stringify(page.value).length >= 50_000
+          : false;
+
+    let dataReferenceRef: { kind: 'record'; id: string; type: 'data-reference' } | undefined;
+    if (page.blob || isLarge) {
+      const persisted = await this.persistToStorage(runId, page);
+      dataReferenceRef = persisted.dataReferenceRef;
+    }
 
     const artifactPayload: Record<string, unknown> = {
       kind: 'analysis-output-artifact',
@@ -207,8 +288,10 @@ export class AnalysisRunner {
       dataKind: page.dataKind,
       ...(page.units ? { units: page.units } : {}),
       ...(page.schema ? { schema: page.schema } : {}),
-      // small artifacts inlined
-      ...(isSmall ? { inlineValue: page.value } : { inlineValue: page.value }),
+      // blob/large artifacts → data-reference pointer; small → inline
+      ...(dataReferenceRef ? { dataReferenceRef } : isLarge ? {} : { inlineValue: page.value }),
+      // log the emitted format for display when it's a file
+      ...(page.blob?.format ? { format: page.blob.format } : {}),
     };
     if (!prior) {
       const result = await this.ctx.store.create({
