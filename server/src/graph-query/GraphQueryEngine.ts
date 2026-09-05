@@ -214,7 +214,7 @@ export class GraphQueryEngine {
     const objects: GraphNode[] = [];
     for (const id of candidates) {
       const node = this.index.node(id) ?? (await this.materializeRecordNode(id));
-      if (node) objects.push(node);
+      if (node) objects.push(this.enrichWithMaterialRefs(node));
     }
 
     return {
@@ -534,6 +534,17 @@ export class GraphQueryEngine {
       return [node.properties[prop]];
     }
     if (prop === 'name' || prop === 'label') {
+      // For treatment nodes, resolve the material's real name (the node label
+      // is the materialRef id, e.g. MAT-PR9-TEST-CLO, not "Clofibrate").
+      if (node?.type === 'treatment') {
+        const materialRef = node.properties?.materialRef
+        if (typeof materialRef === 'string' && materialRef.length > 0) {
+          const mat = await this.materializeRecordNode(materialRef)
+          const recordName = mat?.properties?.name
+          if (typeof recordName === 'string' && recordName.length > 0) return [recordName]
+          if (mat?.label) return [mat.label]
+        }
+      }
       if (node?.label) return [node.label];
       const rec = await this.materializeRecordNode(id);
       if (rec?.label) return [rec.label];
@@ -558,9 +569,16 @@ export class GraphQueryEngine {
     const v = cond.value;
     switch (cond.operator) {
       case '=':
-        return values.some((x) => x === v);
+        // Case-insensitive string equality (natural for search); exact for non-strings.
+        return values.some((x) => {
+          if (typeof x === 'string' && typeof v === 'string') return x.toLowerCase() === v.toLowerCase();
+          return x === v;
+        });
       case '!=':
-        return values.length === 0 || !values.some((x) => x === v);
+        return values.length === 0 || !values.some((x) => {
+          if (typeof x === 'string' && typeof v === 'string') return x.toLowerCase() === v.toLowerCase();
+          return x === v;
+        });
       case '>':
         return values.some((x) => typeof x === 'number' && typeof v === 'number' && x > v);
       case '>=':
@@ -570,11 +588,18 @@ export class GraphQueryEngine {
       case '<=':
         return values.some((x) => typeof x === 'number' && typeof v === 'number' && x <= v);
       case 'contains':
-        return values.some((x) => typeof x === 'string' && typeof v === 'string' && x.includes(v));
+        // Case-insensitive substring match (users search lowercase; labels are Title Case).
+        return values.some((x) => typeof x === 'string' && typeof v === 'string' && x.toLowerCase().includes(v.toLowerCase()));
       case 'in':
-        return Array.isArray(v) && values.some((x) => v.includes(x));
+        return Array.isArray(v) && values.some((x) => {
+          if (typeof x === 'string') return v.some((c) => typeof c === 'string' && c.toLowerCase() === x.toLowerCase());
+          return v.includes(x);
+        });
       case 'not_in':
-        return Array.isArray(v) && values.length > 0 && !values.some((x) => v.includes(x));
+        return Array.isArray(v) && values.length > 0 && !values.some((x) => {
+          if (typeof x === 'string') return v.some((c) => typeof c === 'string' && c.toLowerCase() === x.toLowerCase());
+          return v.includes(x);
+        });
       default:
         return false;
     }
@@ -635,6 +660,28 @@ export class GraphQueryEngine {
       default:
         return null;
     }
+  }
+
+  /**
+   * For well nodes, attach the materialRef(s) of the treatment(s) targeting
+   * them (via treated_with edges) so consumers can resolve what a well holds
+   * without a separate lookup.
+   */
+  private enrichWithMaterialRefs(node: GraphNode): GraphNode {
+    if (node.type !== 'well') return node;
+    const refs: string[] = [];
+    for (const edge of this.index.out(node.id, { verb: 'treated_with' })) {
+      const target = this.index.node(edge.target);
+      if (target?.properties && typeof target.properties.materialRef === 'string') {
+        refs.push(target.properties.materialRef);
+      }
+    }
+    if (refs.length === 0) return node;
+    const props = { ...(node.properties ?? {}) };
+    props.materialRefs = refs;
+    const out: GraphNode = { ...node };
+    out.properties = props;
+    return out;
   }
 
   private async findByLabel(term: string, type?: string, limit = 20): Promise<GraphNode[]> {

@@ -125,6 +125,21 @@ describe('JsonLdProjector', () => {
     expect(exp?.kind).toBe('experiment');
   });
 
+  it('extracts refs from computable-lab {kind:record, id} Ref objects', () => {
+    const projector = new JsonLdProjector();
+    const doc = projector.project(
+      makeEnvelope({
+        payload: {
+          kind: 'material-instance',
+          name: 'stock',
+          material_ref: { kind: 'record', id: 'MAT-PR9-TEST-CLO', type: 'material', label: 'Clofibrate' },
+        },
+      }),
+    );
+    const ids = doc.refs.map((r) => r.recordId);
+    expect(ids).toEqual(expect.arrayContaining(['MAT-PR9-TEST-CLO']));
+  });
+
   it('ignores non-scalar facet values', () => {
     const spec: UISpec = {
       uiVersion: 1,

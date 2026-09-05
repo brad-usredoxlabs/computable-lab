@@ -84,6 +84,21 @@ export class GraphSearchHandlers {
     }
   }
 
+  async context(request: FastifyRequest, reply: FastifyReply) {
+    const body = request.body as { material?: string } | null;
+    const materialId = body?.material?.trim();
+    if (!materialId) {
+      return reply.status(400).send({ error: 'Body must be { material: string }' });
+    }
+    try {
+      const result = this.svc.vessels.resolveVesselContexts(materialId);
+      return reply.send(result);
+    } catch (err) {
+      request.log.error({ err, materialId }, 'Vessel context resolution failed');
+      return reply.status(500).send({ error: 'Vessel context resolution failed' });
+    }
+  }
+
   async aiContext(request: FastifyRequest, reply: FastifyReply) {
     const body = request.body as { selection?: string; prompt?: string } | null;
     if (!body || typeof body.selection !== 'string') {

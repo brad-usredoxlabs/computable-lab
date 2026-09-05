@@ -142,15 +142,35 @@ export function GlobalSearchBar() {
 
   return (
     <div className="global-search-bar" ref={containerRef}>
-      <input
-        className="global-search-bar__input"
-        data-testid="global-search-bar"
-        placeholder="Find anything…"
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => results.length > 0 && setOpen(true)}
-      />
+      <form
+        role="search"
+        data-testid="global-search-form"
+        className="global-search-bar__form"
+        onSubmit={(e) => {
+          // Master search: a full query without a picked result lands on the
+          // /find graph-search endpoint which runs the semantic search.
+          e.preventDefault()
+          const q = query.trim()
+          if (q.length === 0) return
+          setOpen(false)
+          if (results.length === 1) {
+            // Single clear record match → open it directly.
+            void handleSelect(results[0]!)
+            return
+          }
+          navigate(`/find?q=${encodeURIComponent(q)}`)
+        }}
+      >
+        <input
+          className="global-search-bar__input"
+          data-testid="global-search-bar"
+          placeholder="Find anything…"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+        />
+      </form>
       {open && results.length > 0 ? (
         <div className="global-search-bar__results" role="listbox">
           {results.map((r) => (

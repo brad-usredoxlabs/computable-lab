@@ -139,14 +139,26 @@ export function SplashSearch() {
 
   return (
     <div className="splash-search">
-      <input
-        className="splash-page__search"
-        data-testid="splash-search"
-        placeholder="Search everything…"
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <form
+        role="search"
+        data-testid="splash-search-form"
+        onSubmit={(e) => {
+          // Master search: on submit, run the full graph search on /find.
+          e.preventDefault()
+          const q = query.trim()
+          if (q.length === 0) return
+          navigate(`/find?q=${encodeURIComponent(q)}`)
+        }}
+      >
+        <input
+          className="splash-page__search"
+          data-testid="splash-search"
+          placeholder="Search everything…"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </form>
       {query.trim().length >= 2 ? (
         <div className="splash-search__panel" data-testid="splash-search-panel">
           <div className="splash-search__filters">
@@ -195,6 +207,16 @@ export function SplashSearch() {
               ))}
             </ul>
           )}
+          <div className="splash-search__footer">
+            <button
+              type="button"
+              className="splash-search__all"
+              data-testid="splash-search-all"
+              onClick={() => navigate(`/find?q=${encodeURIComponent(query.trim())}`)}
+            >
+              Full graph search on /find →
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

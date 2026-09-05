@@ -152,6 +152,17 @@ export class JsonLdProjector {
         if (typeof obj.recordId === 'string') {
           push(obj.recordId, typeof obj.kind === 'string' ? obj.kind : undefined);
         }
+        // computable-lab Ref shape: { kind: 'record'|'ontology', id, type?, ... }
+        // (server/src/types/ref.ts RecordRef/OntologyRef). The previous branch
+        // only captured `recordId`-keyed refs; `id`-keyed refs under a
+        // *Ref/*ref property (or declaring a ref `kind`) are record refs too.
+        const refKey = key !== undefined && REF_PROPERTY_PATTERNS.some((p) => p.test(key));
+        const refKind = obj.kind === 'record' || obj.kind === 'ontology';
+        if (refKey && typeof obj.id === 'string') {
+          push(obj.id, typeof obj.kind === 'string' ? obj.kind : undefined);
+        } else if (refKind && typeof obj.id === 'string') {
+          push(obj.id);
+        }
         for (const [k, v] of Object.entries(obj)) {
           if (EXCLUDED_PROPERTIES.has(k)) continue;
           visit(v, k);

@@ -11,6 +11,10 @@ function wellNode(id: string, label: string): GraphNode {
   return { id, type: 'well', label }
 }
 
+function typedWellNode(id: string, label: string, labwareType: string): GraphNode {
+  return { id, type: 'well', label, properties: { labwareType } }
+}
+
 describe('wellNodes', () => {
   it('groups wells by owning record+labware', () => {
     const nodes = [
@@ -39,6 +43,34 @@ describe('wellNodes', () => {
     expect(parseWellLabel('A1')).toEqual({ row: 'A', col: 1 })
     expect(parseWellLabel('H12')).toEqual({ row: 'H', col: 12 })
     expect(parseWellLabel('junk')).toEqual({ row: null, col: null })
+  })
+
+  it('uses the full declared plate_96 frame (8 rows x 12 cols), not just matched labels', () => {
+    const nodes = [
+      typedWellNode('well:EVG-1:plate1:A1', 'A1', 'plate_96'),
+      typedWellNode('well:EVG-1:plate1:A2', 'A2', 'plate_96'),
+      typedWellNode('well:EVG-1:plate1:C3', 'C3', 'plate_96'),
+    ]
+    const [plate] = groupByPlate(nodes)
+    expect(plate.labwareType).toBe('plate_96')
+    expect(plate.rows).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'])
+    expect(plate.cols).toEqual(Array.from({ length: 12 }, (_, i) => i + 1))
+    // still maps the matched wells
+    expect(plate.wells['A1']).toBe('well:EVG-1:plate1:A1')
+    expect(plate.wells['C3']).toBe('well:EVG-1:plate1:C3')
+  })
+
+  it('uses a linear frame (single strip) for reservoir/tube labware', () => {
+    const nodes = [
+      typedWellNode('well:EVG-1:res1:1', '1', 'reservoir_12'),
+      typedWellNode('well:EVG-1:res1:5', '5', 'reservoir_12'),
+    ]
+    const [plate] = groupByPlate(nodes)
+    expect(plate.linearLabels).toEqual(
+      Array.from({ length: 12 }, (_, i) => String(i + 1)),
+    )
+    expect(plate.rows).toEqual([])
+    expect(plate.cols).toEqual([])
   })
 })
 

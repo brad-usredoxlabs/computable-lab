@@ -51,6 +51,13 @@ export class GraphProjector {
     const edges: GraphEdge[] = [];
     const wellNodeIds = new Set<string>();
 
+    // Map labwareId → labwareType so projected nodes can carry the real
+    // vessel format (plate_96 / plate_384 / tube / ...).
+    const labwareTypeById = new Map<string, string>();
+    for (const lw of evg.labwares ?? []) {
+      if (lw.labwareId && lw.labwareType) labwareTypeById.set(lw.labwareId, lw.labwareType);
+    }
+
     const addNode = (cursor: NodeCursor): string => {
       const node: GraphNode = {
         id: cursor.id,
@@ -67,6 +74,8 @@ export class GraphProjector {
       edges.push({ source, verb, target, direction: 'out' });
     };
 
+    const labwareType = (labwareId: string): string | undefined => labwareTypeById.get(labwareId);
+
     for (const event of evg.events) {
       const details = event.details ?? {};
       // Resolve the target well set + labware from the event (multiple real shapes).
@@ -79,7 +88,7 @@ export class GraphProjector {
           id,
           type: 'well',
           label: well,
-          properties: { labwareId },
+          properties: { labwareId, ...(labwareType(labwareId) ? { labwareType: labwareType(labwareId) } : {}) },
           source: this.source(evg.recordId, event),
         });
         wellNodeIds.add(id);
@@ -94,7 +103,7 @@ export class GraphProjector {
             id: treatmentId,
             type: 'treatment',
             label: materialRef,
-            properties: { materialRef },
+            properties: { materialRef, ...(labwareType(labwareId) ? { labwareType: labwareType(labwareId) } : {}) },
             source: this.source(evg.recordId, event),
           });
           for (const wid of wellIds) addEdge(wid, 'treated_with', treatmentId);
@@ -109,6 +118,8 @@ export class GraphProjector {
         if (readout !== undefined) props.readout = readout;
         if (value !== undefined) props.value = value;
         if (typeof details.modality === 'string') props.modality = details.modality;
+        const lt = labwareType(labwareId);
+        if (lt !== undefined) props.labwareType = lt;
         addNode({
           id: measurementId,
           type: 'measurement',

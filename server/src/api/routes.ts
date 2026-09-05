@@ -638,6 +638,7 @@ export function registerRoutes(
     fastify.post('/search/graph/plan', graphSearchHandlers.plan.bind(graphSearchHandlers));
     fastify.post('/search/graph/collections', graphSearchHandlers.createCollection.bind(graphSearchHandlers));
     fastify.post('/search/graph/selections', graphSearchHandlers.createSelection.bind(graphSearchHandlers));
+    fastify.post('/search/graph/context', graphSearchHandlers.context.bind(graphSearchHandlers));
     fastify.post('/search/graph/ai-context', graphSearchHandlers.aiContext.bind(graphSearchHandlers));
   }
 

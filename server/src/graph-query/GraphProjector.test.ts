@@ -63,6 +63,17 @@ describe('GraphProjector', () => {
     expect(measurements[0]?.source?.eventId).toBe('evt-read-fitc');
   });
 
+  it('carries labwareType onto well / treatment / measurement nodes', () => {
+    const result = new GraphProjector().project(fixtureEventGraph());
+    for (const node of result.nodes) {
+      expect(node.properties?.labwareType, `node ${node.id} should carry labwareType`).toBe('plate_96');
+    }
+    // a matching well node specifically
+    const well = result.nodes.find((n) => n.type === 'well' && n.id === 'well:EVG-ros-001:plate1:A1')!;
+    expect(well.properties?.labwareId).toBe('plate1');
+    expect(well.properties?.labwareType).toBe('plate_96');
+  });
+
   it('emits edges: well --treated_with--> treatment and well --measured_at--> measurement', () => {
     const result = new GraphProjector().project(fixtureEventGraph());
     const wellId = 'well:EVG-ros-001:plate1:A1';
