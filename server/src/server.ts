@@ -90,6 +90,7 @@ import { JsonLdProjector } from './jsonld/JsonLdProjector.js';
 import { createJsonLdSearchHandlers } from './api/handlers/JsonLdSearchHandlers.js';
 import { createGraphSearchHandlers } from './api/handlers/GraphSearchHandlers.js';
 import { createGraphQueryService, type GraphQueryService } from './graph-query/service.js';
+import { seedBiologicalTerms } from './terms/seedBiologicalTerms.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -502,6 +503,18 @@ export async function initializeApp(
   };
   const graphQueryService = await createGraphQueryService(graphScopeCtx);
   graphQueryService.rebuild = graphQueryService.rebuild.bind(graphQueryService);
+
+  // Phase A1 — inclusive biology identity spine (organisms, strains, conditions).
+  // Idempotent; re-running reuses existing terms. Non-fatal: a seed failure must
+  // not prevent the app from serving.
+  try {
+    const seeded = await seedBiologicalTerms(store);
+    console.log(
+      `Seeded biology terms: ${seeded.terms} species/cell-lines, ${seeded.strains} strains, ${seeded.conditions} conditions`,
+    );
+  } catch (err) {
+    console.warn('Biology term seeding failed (non-fatal):', err);
+  }
 
   console.log(`App initialized`);
 

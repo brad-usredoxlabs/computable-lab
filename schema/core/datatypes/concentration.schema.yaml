@@ -28,6 +28,12 @@ properties:
     - U/uL
     - cells/mL
     - cells/uL
+    - CFU/mL
+    - CFU/uL
+    - organisms/mL
+    - organisms/uL
+    - worms/mL
+    - worms/uL
     - "% v/v"
     - "% w/v"
   basis:

@@ -52,6 +52,13 @@ export interface EnsureTermOptions {
   aliases?: string[];
   linkouts?: TermLinkout[];
   domain?: string;
+  /** Optional strain label for an organism term (e.g. 'N2'). */
+  strain?: string;
+  /**
+   * Optional parent species term REF (species→strain→substrain spine). A strain
+   * term (kind organism) points at its species term via this ref.
+   */
+  strain_of?: { kind: 'record' | 'ontology'; id: string; type?: string; label?: string };
 }
 
 function asPayload(env: RecordEnvelope | null): Record<string, unknown> | null {
@@ -125,6 +132,8 @@ export async function ensureTermForLabel(
     lifecycleId: 'lab-vocabulary-control',
   };
   if (options.domain) payload.domain = options.domain;
+  if (options.strain) payload.strain = options.strain;
+  if (options.strain_of) payload.strain_of = options.strain_of;
   if (options.linkouts && options.linkouts.length > 0) payload.linkouts = options.linkouts;
 
   const created = await store.create({

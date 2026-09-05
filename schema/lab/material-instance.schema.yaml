@@ -111,6 +111,14 @@ properties:
         type: string
       confluence:
         type: string
+      strain_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Organism strain term ref (species→strain spine) when the biological state is a specific strain."
+      conditions:
+        type: array
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+        description: "Culture-system/condition term refs (term.kind: condition) — anoxic, organ-on-a-chip, low-saline, ... Orthogonal to type; provenance of the culture context."
       freeze_thaw_count:
         type: integer
       qc_note:

@@ -122,6 +122,42 @@ properties:
     exclusiveMinimum: 0
     description: "Optional count-based addition, e.g. cells."
 
+  biological_type:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Resolved biological-type term ref (organism/cell-line type or strain). Determines which measure the add-material form asks for (cells/well vs worms/well vs CFU/mL vs OD600)."
+
+  strain_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Optional organism strain term ref (species→strain spine). Material instances record the strain."
+
+  count_estimate:
+    type: object
+    additionalProperties: false
+    description: "Honesty layer over a seed count: how the number was arrived at (mechanism) and that it is an estimate, not a verified fact. A later read event verifies/supports/refutes it."
+    properties:
+      measuredBy:
+        type: string
+        enum: [cell_counter, hemocytometer, od600, total_protein, hoechst_nuclei, manual]
+        description: "Mechanism that produced the estimate."
+      isEstimate:
+        type: boolean
+        default: true
+        description: "A biological seed count is a best guess, not a hard fact."
+      tolerancePct:
+        type: number
+        exclusiveMinimum: 0
+        description: "Optional ± tolerance on the estimate (percent)."
+
+  condition_refs:
+    type: array
+    items:
+      $ref: "../../datatypes/ref.schema.yaml"
+    description: "Culture-system/condition term refs (term.kind: condition) defining the material's culture context (anoxic, organ-on-a-chip, low-saline, ...). Orthogonal to biological type. Persisted to the material instance/derivation for provenance."
+
+  counter_density:
+    $ref: "../../datatypes/concentration.schema.yaml"
+    description: "Optional source/counter density (count_per_volume, e.g. cells/uL) used to derive suspension volume = count / density and top-up = final − suspension."
+
   note:
     type: string
 

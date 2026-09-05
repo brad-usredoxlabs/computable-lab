@@ -65,6 +65,14 @@ properties:
     type: string
     description: "Optional material/physical-domain hint (chemical, cell_line, media, …)."
 
+  strain:
+    type: string
+    description: "Optional strain label for an organism term (e.g. 'C57BL/6J')."
+
+  strain_of:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional parent species term ref (species→strain→substrain organism spine). A species term has kind organism and NO strain_of; a strain term has kind organism with strain_of → its species term. A strain resolves as its own referenceable TERM."
+
   linkouts:
     type: array
     description: "Heterogeneous identifier basket — ontology CURIEs, vendor products, action verbs, external URLs. The same term carries ALL of them; none is 'the' id."
