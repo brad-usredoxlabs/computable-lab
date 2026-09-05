@@ -91,6 +91,7 @@ import { createJsonLdSearchHandlers } from './api/handlers/JsonLdSearchHandlers.
 import { createGraphSearchHandlers } from './api/handlers/GraphSearchHandlers.js';
 import { createGraphQueryService, type GraphQueryService } from './graph-query/service.js';
 import { seedBiologicalTerms } from './terms/seedBiologicalTerms.js';
+import { ensureSeedProtocols } from './protocols/seedProtocols.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -521,6 +522,22 @@ export async function initializeApp(
     }
   } catch (err) {
     console.warn('Biology term seeding failed (non-fatal):', err);
+  }
+
+  // Phase F — materialize the reused universal protocols (e.g. Biological Material
+  // Transfer) into the lab store so they are SELECTABLE in the Protocol tab (the
+  // plural records/seed/protocols dir is not auto-merged). Idempotent.
+  try {
+    // Seed fixtures live relative to the CODEBASE records/seed, not the data
+    // worktree (workspaceRoot). resolveSeedRecordsDir() walks up to find it.
+    const seedDir = resolveSeedRecordsDir();
+    const seedProtocolsDir = resolve(seedDir ?? '', 'protocols');
+    const proto = await ensureSeedProtocols(store, seedProtocolsDir);
+    if (proto.created.length > 0 || proto.reused.length > 0) {
+      console.log(`Seed protocols: created [${proto.created.join(', ')}], reused [${proto.reused.join(', ')}]`);
+    }
+  } catch (err) {
+    console.warn('Seed protocol materialization failed (non-fatal):', err);
   }
 
   console.log(`App initialized`);

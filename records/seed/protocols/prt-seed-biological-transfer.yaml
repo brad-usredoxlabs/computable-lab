@@ -45,6 +45,7 @@ phases:
     templateRef: PHASE-TREATMENT
 steps:
   - stepId: step-1
+    ordinal: 1
     phaseId: transfer
     kind: add_material
     label: Release biological material from source (harvest/resuspend)
@@ -58,6 +59,7 @@ steps:
       materialRole: biological
     volume_uL: 1000
   - stepId: step-2
+    ordinal: 2
     phaseId: transfer
     kind: add_material
     label: Plate ~50,000 units per well (count-per-volume seed density)
@@ -77,6 +79,7 @@ steps:
       unit: cells/mL
       basis: count_per_volume
   - stepId: step-3
+    ordinal: 3
     phaseId: transfer
     kind: add_material
     label: Top up each well to 200 µL final volume with medium
@@ -93,6 +96,7 @@ steps:
       materialRole: topping_medium
     volume_uL: 200
   - stepId: step-4
+    ordinal: 4
     phaseId: transfer
     kind: mix
     label: Gently mix seeded wells
