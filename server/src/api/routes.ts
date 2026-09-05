@@ -69,6 +69,7 @@ import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegis
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
 import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
+import type { StorageHandlers } from './handlers/StorageHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -109,6 +110,7 @@ export interface RouteOptions {
   protocolBuilderHandlers?: ProtocolBuilderHandlers;
   protocolPromotionHandlers?: ProtocolPromotionHandlers;
   corpusHandlers?: CorpusHandlers;
+  storageHandlers?: StorageHandlers;
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
@@ -1115,5 +1117,15 @@ export function registerRoutes(
   const { corpusHandlers } = options;
   if (corpusHandlers) {
     fastify.post('/corpus/entries', corpusHandlers.saveCorpusEntry.bind(corpusHandlers));
+  }
+
+  // ============================================================================
+  // Storage device routes (optional - requires storageHandlers)
+  // Browse only touches storage metadata; it never pulls bytes into git.
+  // ============================================================================
+  const { storageHandlers } = options;
+  if (storageHandlers) {
+    fastify.get('/storage/devices', storageHandlers.listDevices.bind(storageHandlers));
+    fastify.get('/storage/devices/:id/browse', storageHandlers.browse.bind(storageHandlers));
   }
 }

@@ -1946,6 +1946,34 @@ export const apiClient = {
     return request(`/lab-profile`)
   },
 
+  /** GET /api/storage/devices — external storage devices (S3/NAS/USB). */
+  async listStorageDevices(): Promise<{
+    devices: Array<{ id: string; label: string; kind: string; default: boolean }>;
+  }> {
+    return request(`/storage/devices`)
+  },
+
+  /** GET /api/storage/devices/:id/browse — browse a device path (metadata only). */
+  async browseStorage(
+    deviceId: string,
+    path: string,
+  ): Promise<{
+    success: boolean;
+    deviceId: string;
+    path: string;
+    entries: Array<{
+      name: string;
+      path: string;
+      isDirectory: boolean;
+      sizeBytes?: number;
+      modifiedAt?: string;
+    }>;
+  }> {
+    return request(
+      `/storage/devices/${encodeURIComponent(deviceId)}/browse?path=${encodeURIComponent(path)}`,
+    )
+  },
+
   /**
    * D3 — record a verification read as an EVIDENCE bundle supporting/refuting
    * the seed-count estimate. Content-addressed + idempotent server-side.
