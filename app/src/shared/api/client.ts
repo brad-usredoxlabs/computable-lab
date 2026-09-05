@@ -1941,6 +1941,25 @@ export const apiClient = {
   },
 
   /**
+   * D3 — record a verification read as an EVIDENCE bundle supporting/refuting
+   * the seed-count estimate. Content-addressed + idempotent server-side.
+   */
+  async createVerifyPlatingEvidence(descriptor: {
+    eventId: string
+    materialLabel: string
+    biologicalTypeRef?: { kind: 'record'; id: string; type: string; label?: string }
+    count: number
+    measuredBy: string
+    readModality: string
+    wells: string[]
+  }): Promise<{ assertionId: string; evidenceId: string; created: boolean }> {
+    return request('/biological-types/verify-plating', {
+      method: 'POST',
+      body: JSON.stringify(descriptor),
+    })
+  },
+
+  /**
    * Create a new record.
    * Payload must include an 'id' or 'recordId' field.
    */

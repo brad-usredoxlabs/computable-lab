@@ -54,3 +54,39 @@ export function buildVerifyPlatingReadEvent(input: VerifyPlatingInput): PlateEve
     details: detailsOut,
   }
 }
+
+/**
+ * The evidence descriptor for a verification read — consumed by the backend
+ * `/biological-types/verify-plating` endpoint to create the assertion + evidence
+ * bundle that "supports/refutes that the plate actually has ~N units/well".
+ */
+export function buildVerifyPlatingEvidenceDescriptor(
+  details: AddMaterialDetails,
+  rule: BiologicalTypeRule,
+  eventId: string,
+): {
+  eventId: string
+  materialLabel: string
+  biologicalTypeRef?: { kind: 'record'; id: string; type: string; label?: string }
+  count: number
+  measuredBy: string
+  readModality: string
+  wells: string[]
+} {
+  const materialLabel =
+    (typeof details.biological_type === 'object' && details.biological_type
+      ? (details.biological_type as { label?: string }).label
+      : undefined) ?? 'biological material'
+  const bioType = typeof details.biological_type === 'object' && details.biological_type
+    ? details.biological_type as { kind: 'record'; id: string; type: string; label?: string }
+    : undefined
+  return {
+    eventId,
+    materialLabel,
+    ...(bioType?.id ? { biologicalTypeRef: bioType } : {}),
+    count: typeof details.count === 'number' ? details.count : 0,
+    measuredBy: details.count_estimate?.measuredBy ?? rule.verification?.method ?? 'manual',
+    readModality: rule.verification?.readModality ?? 'other',
+    wells: Array.isArray(details.wells) ? details.wells : [],
+  }
+}

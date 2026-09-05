@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVerifyPlatingReadEvent } from './verifyPlating.js';
+import { buildVerifyPlatingReadEvent, buildVerifyPlatingEvidenceDescriptor } from './verifyPlating.js';
 import type { AddMaterialDetails } from '../../../types/events.js';
 import type { BiologicalTypeRule } from '../../../shared/bioTypes.js';
 
@@ -47,5 +47,17 @@ describe('verifyPlating (D3 verification-read seam)', () => {
       verification: { method: 'hoechst_nuclei' },
     };
     expect(() => buildVerifyPlatingReadEvent({ details, rule: noModality, materialLabel: 'HepaRG' })).toThrow(/readModality/);
+  });
+
+  it('builds an evidence descriptor linking the read event to the seed estimate', () => {
+    const evt = buildVerifyPlatingReadEvent({ details, rule: CELL_LINE_RULE, materialLabel: 'HepaRG' });
+    const desc = buildVerifyPlatingEvidenceDescriptor(details, CELL_LINE_RULE, evt.eventId);
+    expect(desc.eventId).toBe(evt.eventId);
+    expect(desc.materialLabel).toBe('HepaRG');
+    expect(desc.biologicalTypeRef?.id).toBe(details.biological_type?.id);
+    expect(desc.count).toBe(50000);
+    expect(desc.measuredBy).toBe('hemocytometer');
+    expect(desc.readModality).toBe('microscopy');
+    expect(desc.wells).toEqual(['A1', 'B1']);
   });
 });

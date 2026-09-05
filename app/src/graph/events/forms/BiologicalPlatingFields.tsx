@@ -15,8 +15,9 @@ import { useMemo } from 'react'
 import type { AddMaterialDetails, CountMeasuredBy, PlateEvent } from '../../../types/events'
 import { computePlating } from './plating'
 import { type BiologicalConditionSeed, type BiologicalTypeRule } from '../../../shared/bioTypes'
+import { apiClient } from '../../../shared/api/client'
 import type { Ref } from '../../../shared/ref'
-import { buildVerifyPlatingReadEvent } from './verifyPlating'
+import { buildVerifyPlatingReadEvent, buildVerifyPlatingEvidenceDescriptor } from './verifyPlating'
 
 const MEASURED_BY_LABELS: Record<CountMeasuredBy, string> = {
   cell_counter: 'Automated cell counter',
@@ -215,6 +216,10 @@ export function BiologicalPlatingFields({ details, rule, onChange, showCondition
               : undefined
             const evt = buildVerifyPlatingReadEvent({ details, rule, materialLabel })
             onVerifyPlating(evt)
+            // Record the read as EVIDENCE supporting/refuting the seed estimate.
+            void apiClient.createVerifyPlatingEvidence(
+              buildVerifyPlatingEvidenceDescriptor(details, rule, evt.eventId),
+            ).catch(() => { /* best-effort; the read event is already staged */ })
           }}
         >
           ⚗ Verify plating (add follow-up read · {rule.verification.readModality ?? 'read'})
