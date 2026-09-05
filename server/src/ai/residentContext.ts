@@ -18,6 +18,7 @@
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
 import type { RecordStore } from '../store/types.js';
 import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
+import type { LabProfile } from '../labProfile/labProfile.js';
 
 const WORLD_NARRATIVE = [
   'How the lab fits together:',
@@ -102,13 +103,45 @@ export async function buildInUseVocab(store: RecordStore, limit = 40): Promise<s
 }
 
 /**
+ * Build the "THIS LAB" preamble from the declarative lab identity profile.
+ * Returns '' when the profile is absent so callers get back-compat (no change).
+ * Kept lean (~1.5KB): label, namespace, ontology prefix, and one line each for
+ * instruments / protocols / reagents (labels only, refs omitted for space).
+ */
+export function buildLabPreamble(profile?: LabProfile): string {
+  if (!profile) return '';
+  const p = profile.profile;
+  const lines: string[] = [];
+  lines.push(`THIS LAB — ${p.label}`);
+  lines.push(`- Namespace: ${p.namespace.prefix} (${p.namespace.baseUri})`);
+  if (p.ontologyNamespace) lines.push(`- Ontology CURIEs use local prefix: ${p.ontologyNamespace}:`);
+  const maybe = (title: string, entries: Array<{ label: string }>) =>
+    entries.length > 0 ? `- ${title}: ${entries.map((e) => e.label).join(', ')}` : '';
+  const instruments = maybe('Instruments', p.instruments);
+  const protocols = maybe('Protocols', p.protocols);
+  const reagents = maybe('Reagents', p.reagents);
+  if (instruments || protocols || reagents) {
+    const detail = [instruments, protocols, reagents].filter((s) => s.length > 0).join('\n');
+    lines.push('Lab inventory:');
+    lines.push(detail);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Combine the world map and noun vocab into one resident block, injected into
  * the agent's system message on tool-bearing turns. Prefers the workspace's
  * in-use CURIEs (when a store is given and any material is grounded); otherwise
  * falls back to the pinned vocabulary.
  */
-export async function buildResidentContext(registry: SchemaRegistry, store?: RecordStore): Promise<string> {
+export async function buildResidentContext(
+  registry: SchemaRegistry,
+  store?: RecordStore,
+  labProfile?: LabProfile,
+): Promise<string> {
+  const preamble = buildLabPreamble(labProfile);
   const inUse = store ? await buildInUseVocab(store) : '';
   const vocab = inUse || buildPinnedVocab();
-  return [buildWorldMap(registry), vocab].filter((s) => s.length > 0).join('\n\n---\n\n');
+  const body = [buildWorldMap(registry), vocab].filter((s) => s.length > 0).join('\n\n---\n\n');
+  return preamble ? `${preamble}\n\n---\n\n${body}` : body;
 }

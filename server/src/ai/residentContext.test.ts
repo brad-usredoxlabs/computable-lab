@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
 import type { RecordStore } from '../store/types.js';
-import { buildWorldMap, buildPinnedVocab, buildInUseVocab, buildResidentContext } from './residentContext.js';
+import { buildWorldMap, buildPinnedVocab, buildInUseVocab, buildResidentContext, buildLabPreamble } from './residentContext.js';
 
 /** Minimal store stub — buildInUseVocab only calls store.list({kind:'material'}). */
 function stubStore(materialPayloads: Array<Record<string, unknown>>): RecordStore {
@@ -96,5 +96,50 @@ describe('buildResidentContext', () => {
     const ctx = await buildResidentContext(REGISTRY, store);
     expect(ctx).toContain('LAB WORLD MAP');
     expect(ctx).toContain('ONTOLOGY TERMS IN USE');
+  });
+});
+
+const STUB_PROFILE = {
+  version: 1,
+  profile: {
+    label: "Brad's bead-basher microbiome lab",
+    namespace: { baseUri: 'https://example.org/records/', prefix: 'example' },
+    ontologyNamespace: 'cf',
+    instruments: [{ label: 'Generic qPCR Instrument', ref: { kind: 'record', id: 'INSTDEF-GENERIC-QPCR', type: 'instrument-definition' } }],
+    protocols: [],
+    reagents: [],
+  },
+} as never;
+
+describe('buildLabPreamble', () => {
+  it('returns "" when no profile is given (back-compat)', () => {
+    expect(buildLabPreamble(undefined)).toBe('');
+  });
+
+  it('contains the lab label and ontology prefix from a stub profile', () => {
+    const preamble = buildLabPreamble(STUB_PROFILE);
+    expect(preamble).toContain("Brad's bead-basher microbiome lab");
+    expect(preamble).toContain('cf:');
+  });
+
+  it('does not include the empty protocols/reagents inventory lines', () => {
+    const preamble = buildLabPreamble(STUB_PROFILE);
+    expect(preamble).not.toContain('Protocols:');
+    expect(preamble).not.toContain('Reagents:');
+    expect(preamble).toContain('Instruments: Generic qPCR Instrument');
+  });
+});
+
+describe('buildResidentContext with labProfile', () => {
+  it('prepends the THIS LAB preamble when a profile is given', async () => {
+    const ctx = await buildResidentContext(REGISTRY, undefined, STUB_PROFILE);
+    expect(ctx.startsWith('THIS LAB —')).toBe(true);
+    expect(ctx).toContain("Brad's bead-basher microbiome lab");
+    expect(ctx).toContain('LAB WORLD MAP');
+  });
+
+  it('is unchanged (back-compat) when no profile is given', async () => {
+    const plain = await buildResidentContext(REGISTRY);
+    expect(plain.startsWith('THIS LAB')).toBe(false);
   });
 });

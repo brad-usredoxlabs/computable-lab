@@ -140,6 +140,7 @@ import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
+import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
 
 /**
@@ -193,6 +194,23 @@ function isTmpPath(path: string): boolean {
 
 function resolveRepositoryMode(repoConfig: RepositoryConfig): RepositoryConfig['mode'] {
   return repoConfig.mode ?? (repoConfig.git?.url?.trim() ? 'remote-git' : 'embedded-git');
+}
+
+/**
+ * Load the declarative lab identity profile, overriding its namespace with the
+ * live repo config (config wins, deterministically — phase 1.4). Returns
+ * undefined when the registry file is absent so callers keep back-compat.
+ */
+function labProfileFor(ctx: AppContext, appConfig?: AppConfig): LabProfile | undefined {
+  const schemaDir = ctx.schemaDir;
+  let profile: LabProfile;
+  try {
+    profile = loadDefaultLabProfile(schemaDir);
+  } catch {
+    return undefined;
+  }
+  const repo = appConfig ? getDefaultRepository(appConfig) : null;
+  return mergeNamespace(profile, repo?.namespace ?? null);
 }
 
 /**
@@ -925,7 +943,7 @@ export async function createServer(
         llmClient: inferenceClient,
         ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
         ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
-        residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store),
+        residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store, labProfileFor(ctx, appConfig)),
         store: ctx.store,
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
