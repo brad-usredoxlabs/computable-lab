@@ -39,6 +39,9 @@ importers:
       '@rjsf/core':
         specifier: ^6.3.1
         version: 6.5.2(@rjsf/utils@6.5.2(react@18.3.1))(react@18.3.1)
+      '@rjsf/utils':
+        specifier: ^6.3.1
+        version: 6.5.2(react@18.3.1)
       '@rjsf/validator-ajv8':
         specifier: ^6.3.1
         version: 6.5.2(@rjsf/utils@6.5.2(react@18.3.1))
@@ -160,6 +163,9 @@ importers:
       fastify:
         specifier: ^5.7.2
         version: 5.8.5
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5

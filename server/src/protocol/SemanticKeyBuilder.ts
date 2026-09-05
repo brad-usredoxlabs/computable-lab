@@ -1,5 +1,5 @@
 import type { Derivation } from './derivations/types.js';
-import { slugify } from '../compiler/material/MaterialCompiler.js';
+import { slugifyRecordLabel } from '../compiler/material/MaterialCompiler.js';
 
 export interface SemanticInputDecl {
   name: string;
@@ -73,7 +73,7 @@ export function buildSemanticKey(args: BuildSemanticKeyArgs): BuildResult {
     args.phaseId,
     String(args.ordinal),
   ].join('-');
-  const semanticKey = 'EVT-' + slugify(rawSlug);
+  const semanticKey = 'EVT-' + slugifyRecordLabel(rawSlug);
 
   return {
     ok: true,

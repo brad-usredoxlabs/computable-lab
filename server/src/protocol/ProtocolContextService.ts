@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
-import { slugify } from '../compiler/material/MaterialCompiler.js';
+import { slugifyRecordLabel } from '../compiler/material/MaterialCompiler.js';
 import { buildSetupSections, type InheritedRoles } from '../compiler/protocol/LocalProtocolBuilder.js';
 
 const LOCAL_PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
@@ -105,7 +105,7 @@ function uniqueById(records: RecordEnvelope[]): RecordEnvelope[] {
 }
 
 function makeId(prefix: string, title: string): string {
-  return `${prefix}${slugify(title).slice(0, 48)}-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+  return `${prefix}${slugifyRecordLabel(title).slice(0, 48)}-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
 export class ProtocolContextService {
