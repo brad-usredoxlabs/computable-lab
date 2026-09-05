@@ -1,0 +1,159 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/graph-result.schema.yaml"
+title: "GraphResult"
+description: >
+  The canonical result envelope returned by every GraphQueryEngine query.
+  A result may represent an object, a collection, a subgraph, a path, an
+  aggregate, a scalar, or a boolean — `result_type` discriminates. Every object
+  node and edge carries provenance back to the source record (and, for
+  projected wells/measurements/treatments, the owning event-graph and event),
+  so the answer and the evidence path supporting it travel together (§1.3,
+  §19). Collections and selections are addressable via their `collection:` /
+  `selection:` handle in the summary.
+type: object
+additionalProperties: false
+required:
+- query_id
+- result_type
+- objects
+- relationships
+- summary
+
+properties:
+  query_id:
+    type: string
+    description: "Opaque query identifier, e.g. 'qry_018329'."
+  result_type:
+    type: string
+    enum:
+    - object
+    - collection
+    - subgraph
+    - path
+    - aggregate
+    - scalar
+    - boolean
+  objects:
+    type: array
+    description: "Distinct graph nodes referenced by the result."
+    items:
+      $ref: "#/$defs/GraphNode"
+  relationships:
+    type: array
+    description: "Distinct typed edges between the nodes."
+    items:
+      $ref: "#/$defs/GraphEdge"
+  provenance:
+    type: array
+    description: >
+      Provenance chains for the returned facts (each entry is a compact
+      path of node ids from a supporting source to a returned fact).
+    items:
+      type: array
+      items:
+        type: string
+  summary:
+    $ref: "#/$defs/Summary"
+  explain:
+    type: string
+    description: "Human-readable interpretation of the executed query (§18)."
+
+$defs:
+  GraphNode:
+    type: object
+    description: >
+      An addressable graph object: a first-class record OR a projected
+      well/measurement/treatment node derived from an event-graph or
+      plate-snapshot.
+    additionalProperties: false
+    required:
+    - id
+    - type
+    - label
+    properties:
+      id:
+        type: string
+        description: >
+          Stable canonical id. For records this is the recordId (e.g.
+          "MAT-000123"); for projected nodes it is a synthetic id rooted at the
+          owning record (e.g. "well:EVG-abcd:plate1:W-A1").
+      type:
+        type: string
+        description: "Record kind or projected kind (well, measurement, treatment)."
+      label:
+        type: string
+      properties:
+        type: object
+        description: "Selected properties as field → value."
+        additionalProperties: true
+      source:
+        type: object
+        description: "Provenance pointer back to the record this node came from."
+        additionalProperties: false
+        properties:
+          recordId:
+            type: string
+          path:
+            type: string
+          eventId:
+            type: string
+
+  GraphEdge:
+    type: object
+    additionalProperties: false
+    required:
+    - source
+    - verb
+    - target
+    properties:
+      source:
+        type: string
+        description: "Source node id."
+      verb:
+        type: string
+        description: "Typed relationship verb or projected edge verb."
+      target:
+        type: string
+        description: "Target node id."
+      direction:
+        type: string
+        enum:
+        - out
+        - in
+        default: out
+      sourceType:
+        type: string
+      targetType:
+        type: string
+      provenance:
+        type: object
+        additionalProperties: false
+        properties:
+          recordId:
+            type: string
+          eventId:
+            type: string
+
+  Summary:
+    type: object
+    additionalProperties: false
+    required:
+    - count
+    properties:
+      count:
+        type: integer
+        minimum: 0
+      groups:
+        type: object
+        description: "Aggregate groups: group value → {count, <measureName>: value}."
+        additionalProperties:
+          type: object
+      collection:
+        type: string
+        description: "Collection handle ('collection:q_xxx') when the result is addressable."
+      selection:
+        type: string
+        description: "Selection handle ('selection:yyy') when a subset was selected."
+      nextCursor:
+        type: string
+        description: "Opaque pagination cursor; absent when no more results."
