@@ -14,13 +14,15 @@ export interface RenderableArtifact {
   inlineValue?: unknown
   units?: Record<string, string>
   schema?: Record<string, unknown>
+  format?: string
+  dataReferenceRef?: { id: string }
 }
 
 export interface RenderableView {
   id: string
   title: string
   artifact: string
-  renderer: 'table' | 'signal' | 'metric' | 'static-figure'
+  renderer: 'table' | 'signal' | 'metric' | 'static-figure' | 'model' | 'binary'
   bindings?: Record<string, unknown>
   options?: Record<string, unknown>
 }
@@ -105,6 +107,19 @@ function StaticFigureView({ artifact }: { artifact: RenderableArtifact }) {
   return <img className="view-spec__figure" src={src} alt={artifact.name} data-testid="view-spec-image" />
 }
 
+/** Model / binary artifact — show format + whether it's storage-backed. */
+function ModelView({ artifact }: { artifact: RenderableArtifact }) {
+  return (
+    <div className="view-spec__model" data-testid="view-spec-model">
+      <span className="view-spec__model-kind">{artifact.dataKind}</span>
+      {artifact.format ? <span className="view-spec__model-format">{artifact.format}</span> : null}
+      {artifact.dataReferenceRef?.id
+        ? <span className="view-spec__model-dref" title="data-reference">DREF {artifact.dataReferenceRef.id}</span>
+        : <span className="view-spec__model-dref view-spec__model-dref--inline">inline (promote to use downstream)</span>}
+    </div>
+  )
+}
+
 export function ViewRenderer({ view, artifact }: { view: RenderableView; artifact: RenderableArtifact }) {
   switch (view.renderer) {
     case 'table':
@@ -115,6 +130,9 @@ export function ViewRenderer({ view, artifact }: { view: RenderableView; artifac
       return <MetricView artifact={artifact} />
     case 'static-figure':
       return <StaticFigureView artifact={artifact} />
+    case 'model':
+    case 'binary':
+      return <ModelView artifact={artifact} />
     default:
       return (
         <div className="view-spec__error" data-testid="view-spec-error">

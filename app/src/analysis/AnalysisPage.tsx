@@ -51,6 +51,7 @@ export function AnalysisPage() {
   const [activeRunId, setActiveRunId] = useState('')
   const [activeRun, setActiveRun] = useState<{ recordId: string; payload: RunPayload } | null>(null)
   const [manifest, setManifest] = useState<{ artifacts: unknown[]; views: unknown[]; metrics: unknown[] } | null>(null)
+  const [artifactRefs, setArtifactRefs] = useState<Record<string, { artifactRecordId: string; dataReferenceId?: string }>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
@@ -109,6 +110,21 @@ export function AnalysisPage() {
     }
   }, [aiPrompt, refresh])
 
+  const [promoteResult, setPromoteResult] = useState<string | null>(null)
+
+  const useResult = useCallback(async (name: string) => {
+    const ref = artifactRefs[name]
+    if (!ref) return
+    setError(null)
+    setPromoteResult(null)
+    try {
+      const res = await apiClient.promoteAnalysisArtifact(ref.artifactRecordId)
+      setPromoteResult(`Artifact "${name}" is ready downstream — reference DREF ${res.dataReferenceId} in a new run's inputs.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [artifactRefs])
+
   const createRun = useCallback(async () => {
     if (!selectedRevId) return
     setBusy(true)
@@ -138,6 +154,7 @@ export function AnalysisPage() {
       const res = await apiClient.executeAnalysisRun(runId)
       setActiveRunId(runId)
       setManifest(res.manifest)
+      setArtifactRefs(res.artifactRefs ?? {})
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -161,24 +178,42 @@ export function AnalysisPage() {
   const rendered = useMemo(() => {
     if (!manifest) return []
     const artifacts: RenderableArtifact[] = (manifest.artifacts ?? []).map((a, i) => {
-      const aa = a as { name?: string; dataKind?: string; value?: unknown; units?: Record<string, string> }
-      return toRenderable(aa.name ?? `artifact-${i}`, aa.dataKind ?? 'table', aa.value, aa.units)
+      const aa = a as { name?: string; dataKind?: string; value?: unknown; units?: Record<string, string>; format?: string; dataReferenceRef?: unknown }
+      const ref = artifactRefs[aa.name ?? '']
+      return toRenderable(
+        aa.name ?? `artifact-${i}`,
+        aa.dataKind ?? 'table',
+        aa.value,
+        aa.units,
+        aa.format,
+        ref?.artifactRecordId ? { id: ref.artifactRecordId } : undefined,
+        ref?.dataReferenceId ? { id: ref.dataReferenceId } : undefined,
+      )
     })
-    const views: RenderableView[] = (manifest.views ?? []).map((v, i) => {
-      const vv = v as { name?: string; renderer?: string; artifact?: string; bindings?: Record<string, unknown>; options?: Record<string, unknown> }
-      return {
-        id: `v-${i}`,
-        title: vv.name ?? `view-${i}`,
-        artifact: vv.artifact ?? '',
-        renderer: (['table', 'signal', 'metric', 'static-figure'] as const).includes(vv.renderer as 'table')
-          ? (vv.renderer as 'table' | 'signal' | 'metric' | 'static-figure')
-          : 'table',
-        bindings: vv.bindings,
-        options: vv.options,
-      }
-    })
+    const views: RenderableView[] = [
+      ...((manifest.views ?? []).map((v, i) => {
+        const vv = v as { name?: string; renderer?: string; artifact?: string; bindings?: Record<string, unknown>; options?: Record<string, unknown> }
+        return {
+          id: `v-${i}`,
+          title: vv.name ?? `view-${i}`,
+          artifact: vv.artifact ?? '',
+          renderer: (['table', 'signal', 'metric', 'static-figure'] as const).includes(vv.renderer as 'table')
+            ? (vv.renderer as 'table' | 'signal' | 'metric' | 'static-figure')
+            : 'table',
+          bindings: vv.bindings,
+          options: vv.options,
+        }
+      })),
+      // standalone model/binary artifacts: render a model card even without a view
+      ...artifacts.filter((a) => a.dataKind === 'model' || a.dataKind === 'binary').map((a) => ({
+        id: `modelcard-${a.name}`,
+        title: a.name,
+        artifact: a.name,
+        renderer: (a.dataKind === 'model' ? 'model' : 'binary') as 'model' | 'binary',
+      })),
+    ]
     return renderViews(views, artifacts)
-  }, [manifest])
+  }, [manifest, artifactRefs])
 
   const activeStatus = activeRun?.payload.status ?? (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '')
   const activeProcessed = manifest && (runs.find((r) => r.recordId === activeRunId)?.payload.status ?? '') === 'succeeded'
@@ -261,6 +296,21 @@ export function AnalysisPage() {
       ) : (
         <div className="analysis__empty">Execute a run to see its output.</div>
       )}
+      {/* Use-result-in-new-analysis: promote model/binary artifacts for downstream chaining */}
+      {activeProcessed && artifactRefs && Object.keys(artifactRefs).length > 0 && (
+        <div className="analysis-right__promote" data-testid="analysis-promote">
+          <div className="analysis-right__title">Use result downstream</div>
+          {Object.entries(artifactRefs).map(([name, ref]) => (
+            <div key={name} className="analysis__run">
+              <span>{name}</span>
+              <button onClick={() => void useResult(name)} data-testid={`analysis-promote-${name}`}>
+                {ref.dataReferenceId ? `DREF ${ref.dataReferenceId}` : 'Use in New Analysis'}
+              </button>
+            </div>
+          ))}
+          {promoteResult && <div className="analysis__promote-result" data-testid="analysis-promote-result">{promoteResult}</div>}
+        </div>
+      )}
     </div>
   )
 
@@ -275,6 +325,22 @@ export function AnalysisPage() {
   )
 }
 
-function toRenderable(name: string, dataKind: string, value: unknown, units?: Record<string, string>): RenderableArtifact {
-  return { id: '', name, dataKind, ...(value !== undefined ? { inlineValue: value } : {}), ...(units ? { units } : {}) }
+function toRenderable(
+  name: string,
+  dataKind: string,
+  value: unknown,
+  units?: Record<string, string>,
+  format?: string,
+  artifactId?: { id: string },
+  drefId?: { id: string },
+): RenderableArtifact {
+  return {
+    id: artifactId?.id ?? '',
+    name,
+    dataKind,
+    ...(value !== undefined ? { inlineValue: value } : {}),
+    ...(units ? { units } : {}),
+    ...(format ? { format } : {}),
+    ...(drefId?.id ? { dataReferenceRef: { id: drefId.id } } : {}),
+  }
 }

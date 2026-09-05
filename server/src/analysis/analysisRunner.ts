@@ -297,7 +297,7 @@ export class AnalysisRunner {
     runId: string,
     page: ManifestArtifact,
     viewSpecs: Array<{ name: string; renderer: string; artifact: string }>,
-  ): Promise<void> {
+  ): Promise<{ artifactRecordId: string; dataReferenceId?: string }> {
     // Dedupe: if this run already produced this artifact (re-run), reuse it.
     const existingForRun = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
     const prior = existingForRun.find((e) => {
@@ -381,6 +381,11 @@ export class AnalysisRunner {
         message: `Create view spec ${viewId}`,
       });
     }
+
+    return {
+      artifactRecordId: artifactId,
+      ...(dataReferenceRef?.id ? { dataReferenceId: dataReferenceRef.id } : {}),
+    };
   }
 
   private async nextArtifactId(): Promise<string> {
@@ -397,7 +402,12 @@ export class AnalysisRunner {
   }
 
   /** Execute a run (assumes queued). Transitions status + persists outputs. */
-  async executeRun(runId: string): Promise<{ recordId: string; status: string; manifest: OutputManifest }> {
+  async executeRun(runId: string): Promise<{
+    recordId: string;
+    status: string;
+    manifest: OutputManifest;
+    artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }>;
+  }> {
     const service = new AnalysisService(this.ctx);
     const runEnv = await service.getRun(runId);
     if (!runEnv) throw new AnalysisServiceError('NOT_FOUND', `analysis-run not found: ${runId}`, 404);
@@ -434,8 +444,10 @@ export class AnalysisRunner {
       }
 
       // Persist each artifact + its views
+      const artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }> = {};
       for (const artifact of manifest.artifacts) {
-        await this.persistArtifactRecord(runId, artifact, manifest.views);
+        const ref = await this.persistArtifactRecord(runId, artifact, manifest.views);
+        artifactRefs[artifact.name] = ref;
       }
 
       await service.setRunStatus(runId, 'succeeded');
@@ -455,7 +467,7 @@ export class AnalysisRunner {
         // corpus capture is best-effort; ignore failures here
       }
 
-      return { recordId: runId, status: 'succeeded', manifest };
+      return { recordId: runId, status: 'succeeded', manifest, artifactRefs };
     } finally {
       await rm(inputDir, { recursive: true, force: true });
     }

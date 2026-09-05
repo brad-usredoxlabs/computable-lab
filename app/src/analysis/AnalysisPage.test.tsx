@@ -7,7 +7,7 @@ import { apiClient } from '../shared/api/client'
 import { AnalysisPage } from './AnalysisPage'
 
 // Mock the API client so the page renders deterministically without a backend.
-vi.mock('../shared/api/client', () => ({ apiClient: { listAnalysisRevisions: vi.fn(), listAnalysisRuns: vi.fn(), createAnalysisRevision: vi.fn(), createAnalysisRun: vi.fn(), executeAnalysisRun: vi.fn(), getAnalysisRun: vi.fn(), getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }), draftAnalysisRevision: vi.fn() } }))
+vi.mock('../shared/api/client', () => ({ apiClient: { listAnalysisRevisions: vi.fn(), listAnalysisRuns: vi.fn(), createAnalysisRevision: vi.fn(), createAnalysisRun: vi.fn(), executeAnalysisRun: vi.fn().mockResolvedValue({ success: true, recordId: 'ANR-1', status: 'succeeded', manifest: { artifacts: [], views: [], metrics: [] }, artifactRefs: {} }), getAnalysisRun: vi.fn(), getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }), draftAnalysisRevision: vi.fn(), promoteAnalysisArtifact: vi.fn() } }))
 
 describe('AnalysisPage', () => {
   beforeEach(() => {

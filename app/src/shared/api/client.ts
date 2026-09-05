@@ -2694,6 +2694,7 @@ export const apiClient = {
     recordId: string
     status: string
     manifest: { artifacts: unknown[]; views: unknown[]; metrics: unknown[] }
+    artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }>
   }> {
     return request(`/analysis-runs/${encodeURIComponent(id)}/execute`, {
       method: 'POST',

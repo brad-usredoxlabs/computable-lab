@@ -44,6 +44,20 @@ describe('ViewRenderer', () => {
     )
     expect(screen.getByTestId('view-spec-error')).toHaveTextContent('quantum')
   })
+
+  it('renders a model artifact card with format + data-reference', () => {
+    const artifact = { id: 'AOUT-1', name: 'model', dataKind: 'model', format: 'pkl', dataReferenceRef: { id: 'DREF-000001' } }
+    render(
+      <ViewRenderer
+        view={{ id: 'v', title: 'model', artifact: 'model', renderer: 'model' }}
+        artifact={artifact}
+      />,
+    )
+    const card = screen.getByTestId('view-spec-model')
+    expect(card).toHaveTextContent('model')
+    expect(card).toHaveTextContent('pkl')
+    expect(card).toHaveTextContent('DREF-000001')
+  })
 })
 
 describe('renderViews', () => {
