@@ -1,0 +1,33 @@
+version: 1
+title: "Lab Identity Profile"
+description: >
+  THIS lab — the declarative identity the AI resident context and corpus training
+  ground on. Namespace is edited in Settings (live repo config wins via
+  mergeNamespace); instruments/protocols/reagents are refs into the existing
+  registries; ontologyNamespace is the local CURIE prefix.
+
+profile:
+  label: "Redox Labs — bead-basher microbiome unit"
+  namespace:
+    baseUri: "https://example.org/records/"
+    prefix: "example"
+  ontologyNamespace: "cf"          # local CURIE prefix (cf:ROS, cf:PPARalpha …)
+  instruments:
+    - label: "Generic qPCR Instrument"
+      ref: { kind: record, id: INSTDEF-GENERIC-QPCR, type: instrument-definition }
+    - label: "Generic Plate Reader"
+      ref: { kind: record, id: INSTDEF-GENERIC-PLATE_READER, type: instrument-definition }
+    - label: "Generic GC-MS"
+      ref: { kind: record, id: INSTDEF-GENERIC-GCMS, type: instrument-definition }
+  protocols:
+    - label: "Biological Material Transfer"
+      ref: { kind: record, id: prt-seed-biological-transfer, type: protocol }
+    - label: "PBS Wash"
+      ref: { kind: record, id: prt-seed-pbs-wash, type: protocol }
+  reagents:
+    - label: "PBS pH 7.4"
+      ref: { kind: record, id: mat-seed-pbs-ph74, type: material }
+    - label: "Absolute ethanol"
+      ref: { kind: record, id: mat-seed-ethanol-absolute, type: material }
+    - label: "DMSO (anhydrous)"
+      ref: { kind: record, id: mat-seed-dmso-anhydrous, type: material }
