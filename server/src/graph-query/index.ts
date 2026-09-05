@@ -16,3 +16,5 @@ export { GraphValidation } from './GraphValidation.js';
 export type { GraphValidationIssue, GraphValidationResult } from './GraphValidation.js';
 export { CollectionService } from './CollectionService.js';
 export type { CollectionMetadata } from './CollectionService.js';
+export { NLPlanner } from './NLPlanner.js';
+export type { PlanResult, PlanDeps } from './NLPlanner.js';

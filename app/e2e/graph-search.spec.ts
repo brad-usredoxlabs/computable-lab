@@ -46,4 +46,31 @@ test.describe('Find (graph search) UI', () => {
     await b2.click()
     await expect(b2).toHaveAttribute('data-selected', 'true', { timeout: 10_000 })
   })
+
+  test('plans natural language, then sends a selection to AI (§7 end-to-end)', async ({ page }) => {
+    await page.goto(`${BASE}/find`)
+    const input = page.getByTestId('graph-search-input')
+    await expect(input).toBeVisible({ timeout: 15_000 })
+
+    // Natural-language planning: submit a phrase, not a structured query.
+    await input.fill('wells treated with rotenone')
+    await page.getByTestId('graph-search-submit').click()
+
+    // The planner-derived explain shows; the 6 wells surface.
+    const summary = page.getByTestId('graph-search-summary')
+    await expect(summary).toContainText('6 objects', { timeout: 15_000 })
+    await expect(summary).toContainText('rotenone', { timeout: 10_000 })
+
+    // Select two wells via checkboxes, then send to AI.
+    const checkboxes = page.getByTestId('row-select-well')
+    await checkboxes.nth(0).check()
+    await checkboxes.nth(1).check()
+    await expect(page.getByTestId('graph-search-send-ai')).toBeVisible()
+
+    await page.getByTestId('graph-search-send-ai').click()
+    const ctx = page.getByTestId('graph-search-ai-context')
+    await expect(ctx).toBeVisible({ timeout: 10_000 })
+    await expect(ctx).toContainText('selection:', { timeout: 10_000 })
+    await expect(ctx).toContainText('wells ready for AI', { timeout: 10_000 })
+  })
 })

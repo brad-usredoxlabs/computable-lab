@@ -14,6 +14,7 @@ import { GraphProjector } from './GraphProjector.js';
 import { GraphQueryEngine } from './GraphQueryEngine.js';
 import { CollectionService } from './CollectionService.js';
 import { GraphValidation } from './GraphValidation.js';
+import { NLPlanner } from './NLPlanner.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import type { ResolveSpineLike } from './GraphQueryEngine.js';
 import type { JsonLdIndex } from '../jsonld-index/index.js';
@@ -32,6 +33,7 @@ export interface GraphQueryService {
   engine: GraphQueryEngine;
   collections: CollectionService;
   validation: GraphValidation;
+  planner: NLPlanner;
   /** Rebuild the underlying graph index from the current store state. */
   rebuild(): Promise<void>;
   stats(): { nodes: number; edges: number };
@@ -45,6 +47,7 @@ export async function createGraphQueryService(ctx: GraphQueryContext): Promise<G
     ...buildResolveSpine(ctx),
   });
   const collections = new CollectionService();
+  const planner = new NLPlanner();
 
   const rebuild = async (): Promise<void> => {
     await buildIndexFromContext(index, ctx);
@@ -63,7 +66,7 @@ export async function createGraphQueryService(ctx: GraphQueryContext): Promise<G
   });
 
   await rebuild();
-  return { engine, collections, validation, rebuild, stats: () => index.stats() };
+  return { engine, collections, validation, planner, rebuild, stats: () => index.stats() };
 }
 
 async function buildIndexFromContext(index: GraphEdgeIndex, ctx: GraphQueryContext): Promise<void> {

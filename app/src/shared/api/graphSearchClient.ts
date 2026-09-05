@@ -101,6 +101,26 @@ export async function graphSearch(query: GraphQuery): Promise<GraphResult> {
   return (await res.json()) as GraphResult
 }
 
+export interface PlanResult {
+  query: GraphQuery
+  explain: string
+  deterministic: boolean
+}
+
+/** Plan a natural-language request into a structured query (spec §16). */
+export async function graphPlanSearch(text: string): Promise<PlanResult> {
+  const res = await fetch(`${API_BASE}/search/graph/plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const detail = await safeJson(res)
+    throw new Error(detail?.error ?? `graph plan failed: ${res.status}`)
+  }
+  return (await res.json()) as PlanResult
+}
+
 export async function createGraphCollection(nodeIds: string[]): Promise<{ handle: string }> {
   const res = await fetch(`${API_BASE}/search/graph/collections`, {
     method: 'POST',

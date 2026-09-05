@@ -69,6 +69,21 @@ export class GraphSearchHandlers {
     }
   }
 
+  async plan(request: FastifyRequest, reply: FastifyReply) {
+    const body = request.body as { text?: string } | null;
+    const text = body?.text?.trim();
+    if (!text) {
+      return reply.status(400).send({ error: 'Body must be { text: string }' });
+    }
+    try {
+      const plan = await this.svc.planner.plan(text);
+      return reply.send(plan);
+    } catch (err) {
+      request.log.error({ err, text }, 'Graph query planning failed');
+      return reply.status(500).send({ error: 'Graph query planning failed' });
+    }
+  }
+
   async aiContext(request: FastifyRequest, reply: FastifyReply) {
     const body = request.body as { selection?: string; prompt?: string } | null;
     if (!body || typeof body.selection !== 'string') {

@@ -180,6 +180,19 @@ export function registerGraphTools(server: McpServer, ctx: AppContext, registry?
     { query: z.any() },
     async (args) => runEngine(ctx, { op: 'exists', query: args.query }));
 
+  dualRegister(server, registry, 'lab.plan',
+    'Plan a natural-language search request into a canonical GraphQuery you can execute (spec §16). Returns the structured query + a human explanation.',
+    { text: z.string() },
+    async (args) => {
+      const svc = svcOf(ctx);
+      try {
+        const plan = await svc.planner.plan(args.text);
+        return jsonResult(plan);
+      } catch (err) {
+        return errorResult(`Tool error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+
   dualRegister(server, registry, 'lab.get_collection',
     'Resolve an ephemeral collection:q_xxx or selection:q_yyy handle to its node ids (§7).',
     { handle: z.string() },

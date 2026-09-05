@@ -168,3 +168,25 @@
   color: var(--cl-text-muted, #6b7280);
   padding: 0.75rem 0;
 }
+
+.graph-search__ai {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.graph-search__ai button {
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.graph-search__ai-ctx {
+  color: var(--cl-text-muted, #6b7280);
+  font-size: 0.8rem;
+}
