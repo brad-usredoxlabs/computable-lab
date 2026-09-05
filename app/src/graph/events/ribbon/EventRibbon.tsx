@@ -35,6 +35,8 @@ import {
   CompactInputStyles,
 } from './compact/CompactInputs'
 import { SerialDilutionForm } from '../forms/SerialDilutionForm'
+import { useBiologicalContext } from '../forms/useBiologicalContext'
+import { BiologicalPlatingFields } from '../forms/BiologicalPlatingFields'
 import { normalizeSerialDilutionParams } from '../../../editor/lib/serialDilutionPlan'
 import { QuadrantReplicateForm } from '../forms/QuadrantReplicateForm'
 import { SpacingTransitionTransferForm } from '../forms/SpacingTransitionTransferForm'
@@ -305,6 +307,18 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
   const materialRef = parseMaterialLikeRef(getAddMaterialRef(details as AddMaterialDetails))
   const countValue = typeof details.count === 'number' ? details.count : ''
   const noteValue = typeof details.note === 'string' ? details.note : ''
+  const bioDetails = details as AddMaterialDetails
+  const biological = useBiologicalContext(materialRef)
+  const isBiologicalForm = biological.isBiological && Boolean(biological.rule) && Boolean(materialRef)
+
+  // Persist the resolved biological type on the event so the deck/provenance
+  // knows what was plated.
+  useEffect(() => {
+    if (isBiologicalForm && materialRef && !bioDetails.biological_type) {
+      onChange({ ...details, biological_type: materialRef })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBiologicalForm, materialRef, bioDetails.biological_type])
 
   const handleMaterialSelection = useCallback((ref: Ref | null) => {
     if (!ref) {
@@ -458,7 +472,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
           allowCreateLocal
           placeholder="Search saved stocks, prepared tubes, or concepts..."
           minQueryLength={2}
-          localKinds={['material', 'material-spec', 'vendor-product', 'material-instance', 'aliquot']}
+          localKinds={['material', 'material-spec', 'vendor-product', 'material-instance', 'aliquot', 'term']}
           primaryKinds={['material-spec', 'vendor-product']}
           preparedKinds={['material-instance', 'aliquot']}
           secondaryKinds={['material']}
@@ -478,6 +492,34 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
           </div>
         )}
       </div>
+      {isBiologicalForm ? (
+        <>
+          <BiologicalPlatingFields
+            details={bioDetails}
+            rule={biological.rule!}
+            showConditionSelect={false}
+            onChange={(next) => onChange({ ...next, ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}) } as DetailsRecord)}
+          />
+          <AdvancedSection
+            title="Overrides & Notes"
+            open={showAdvanced}
+            onToggle={() => setShowAdvanced((prev) => !prev)}
+          >
+            <div className="compact-field">
+              <span className="compact-field__label">Note</span>
+              <div className="compact-input compact-input--note">
+                <input
+                  type="text"
+                  value={noteValue}
+                  placeholder="optional"
+                  onChange={(e) => onChange({ ...details, note: e.target.value || undefined, ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}) })}
+                />
+              </div>
+            </div>
+          </AdvancedSection>
+        </>
+      ) : (
+        <>
       <CompactVolumeInput value={volume} onChange={(v) => onChange({ ...details, volume: v, ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}) })} />
       <AdvancedSection
         title="Overrides & Notes"
@@ -513,6 +555,8 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
           </div>
         </div>
       </AdvancedSection>
+        </>
+      )}
       <FormulationUsageModal
         isOpen={Boolean(pendingFormulationRef)}
         formulationRef={pendingFormulationRef}

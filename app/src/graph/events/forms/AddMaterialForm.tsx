@@ -17,6 +17,8 @@ import { useLabSettings } from '../../hooks/useLabSettings'
 import { apiClient } from '../../../shared/api/client'
 import { resolveAddMaterialSourceDefaults } from '../../../editor/lib/materialComposition'
 import { CONCENTRATION_UNITS, formatCompositionSummary, formatConcentration, withInferredConcentrationBasis } from '../../../types/material'
+import { useBiologicalContext } from './useBiologicalContext'
+import { BiologicalPlatingFields } from './BiologicalPlatingFields'
 
 interface FormProps {
   details: EventDetails
@@ -37,6 +39,18 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
   const hasCellComposition = compositionSnapshot.some((entry) => entry?.role === 'cells')
   const countLabel = hasCellComposition ? 'Cell Count' : 'Count'
   const sourceSummary = compositionSummary || formatConcentration(d.concentration)
+
+  const biological = useBiologicalContext(materialRef)
+  const isBiologicalForm = biological.isBiological && Boolean(biological.rule) && Boolean(materialRef)
+
+  // Persist the resolved biological type on the event so the deck/provenance
+  // knows what was plated (and which measure rule applied).
+  useEffect(() => {
+    if (isBiologicalForm && materialRef && !d.biological_type) {
+      onChange({ ...d, biological_type: materialRef })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBiologicalForm, materialRef, d.biological_type])
 
   const handleMaterialSelection = useCallback((ref: Ref | null) => {
     if (!ref) {
@@ -174,7 +188,7 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
           allowCreateLocal
           placeholder="Search saved stocks, prepared tubes, or concepts..."
           minQueryLength={2}
-          localKinds={['material', 'material-spec', 'vendor-product', 'material-instance', 'aliquot']}
+          localKinds={['material', 'material-spec', 'vendor-product', 'material-instance', 'aliquot', 'term']}
           primaryKinds={['material-spec', 'vendor-product']}
           preparedKinds={['material-instance', 'aliquot']}
           secondaryKinds={['material']}
@@ -199,89 +213,95 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
         )}
       </div>
 
-      <VolumeInput
-        value={d.volume}
-        onChange={(volume) => onChange({ ...d, volume })}
-      />
+      {isBiologicalForm ? (
+        <BiologicalPlatingFields details={d} rule={biological.rule!} onChange={onChange} />
+      ) : (
+        <>
+        <VolumeInput
+          value={d.volume}
+          onChange={(volume) => onChange({ ...d, volume })}
+        />
 
-      <div className="form-advanced">
-        <button
-          className="form-advanced__toggle"
-          type="button"
-          onClick={() => setShowAdvanced((prev) => !prev)}
-        >
-          {showAdvanced ? 'Hide Overrides' : 'Overrides & Notes'}
-        </button>
-        {showAdvanced && (
-          <div className="form-advanced__content">
-            <div className="form-row">
-              <div className="form-field">
-                <label>Concentration Override</label>
-                <input
-                  type="number"
-                  value={d.concentration?.value ?? ''}
-                  onChange={(e) => {
-                    const num = parseFloat(e.target.value)
-                    if (!isNaN(num)) {
-                      onChange({ ...d, concentration: withInferredConcentrationBasis({ value: num, unit: d.concentration?.unit || 'uM' }) })
-                    } else if (e.target.value === '') {
-                      onChange({ ...d, concentration: undefined })
-                    }
-                  }}
-                  placeholder="Optional"
-                  min="0"
-                  step="any"
-                />
+        <div className="form-advanced">
+          <button
+            className="form-advanced__toggle"
+            type="button"
+            onClick={() => setShowAdvanced((prev) => !prev)}
+          >
+            {showAdvanced ? 'Hide Overrides' : 'Overrides & Notes'}
+          </button>
+          {showAdvanced && (
+            <div className="form-advanced__content">
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Concentration Override</label>
+                  <input
+                    type="number"
+                    value={d.concentration?.value ?? ''}
+                    onChange={(e) => {
+                      const num = parseFloat(e.target.value)
+                      if (!isNaN(num)) {
+                        onChange({ ...d, concentration: withInferredConcentrationBasis({ value: num, unit: d.concentration?.unit || 'uM' }) })
+                      } else if (e.target.value === '') {
+                        onChange({ ...d, concentration: undefined })
+                      }
+                    }}
+                    placeholder="Optional"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Unit</label>
+                  <select
+                    value={d.concentration?.unit || 'uM'}
+                    onChange={(e) => {
+                      if (d.concentration) {
+                        onChange({ ...d, concentration: withInferredConcentrationBasis({ ...d.concentration, unit: e.target.value }) })
+                      }
+                    }}
+                  >
+                    {CONCENTRATION_UNITS.map((unit) => (
+                      <option key={unit.value} value={unit.value}>{unit.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="form-field">
-                <label>Unit</label>
-                <select
-                  value={d.concentration?.unit || 'uM'}
-                  onChange={(e) => {
-                    if (d.concentration) {
-                      onChange({ ...d, concentration: withInferredConcentrationBasis({ ...d.concentration, unit: e.target.value }) })
-                    }
-                  }}
-                >
-                  {CONCENTRATION_UNITS.map((unit) => (
-                    <option key={unit.value} value={unit.value}>{unit.label}</option>
-                  ))}
-                </select>
+
+              <div className="form-row">
+                <div className="form-field">
+                  <label>{countLabel}</label>
+                  <input
+                    type="number"
+                    value={typeof d.count === 'number' ? d.count : ''}
+                    onChange={(e) => {
+                      const num = parseFloat(e.target.value)
+                      if (!isNaN(num)) {
+                        onChange({ ...d, count: num })
+                      } else if (e.target.value === '') {
+                        onChange({ ...d, count: undefined })
+                      }
+                    }}
+                    placeholder={hasCellComposition ? 'Optional cell count' : 'Optional'}
+                    min="0"
+                    step="any"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Note</label>
+                  <input
+                    type="text"
+                    value={d.note || ''}
+                    onChange={(e) => onChange({ ...d, note: e.target.value || undefined })}
+                    placeholder="Optional note"
+                  />
+                </div>
               </div>
             </div>
-
-            <div className="form-row">
-              <div className="form-field">
-                <label>{countLabel}</label>
-                <input
-                  type="number"
-                  value={typeof d.count === 'number' ? d.count : ''}
-                  onChange={(e) => {
-                    const num = parseFloat(e.target.value)
-                    if (!isNaN(num)) {
-                      onChange({ ...d, count: num })
-                    } else if (e.target.value === '') {
-                      onChange({ ...d, count: undefined })
-                    }
-                  }}
-                  placeholder={hasCellComposition ? 'Optional cell count' : 'Optional'}
-                  min="0"
-                  step="any"
-                />
-              </div>
-              <div className="form-field">
-                <label>Note</label>
-                <input
-                  type="text"
-                  value={d.note || ''}
-                  onChange={(e) => onChange({ ...d, note: e.target.value || undefined })}
-                  placeholder="Optional note"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+        </>
+      )}
 
       <style>{`
         .form-row {

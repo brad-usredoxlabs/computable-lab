@@ -118,14 +118,15 @@ export const BIOLOGICAL_CONDITIONS: readonly { id: string; label: string }[] = [
 /**
  * Infer a material domain from a selected material Ref for gating biological-vs-
  * chemical. Ontology/local-term refs carry `domain` (or namespace); record refs
- * need a fetch (handled by the form hook via apiClient.getRecord).
+ * need a fetch (handled by the form hook via apiClient.getRecord). Accepts the
+ * wider ResolveRef shape (which adds `domain`/`termKind`) as well as the core
+ * Ref union.
  */
-export function refMaterialDomain(ref: Ref | null | undefined): string | undefined {
+export function refMaterialDomain(ref: { kind?: string; domain?: string; namespace?: string; label?: string; id?: string } | null | undefined): string | undefined {
   if (!ref) return undefined
   if (ref.kind === 'ontology') {
-    const domain = (ref as { domain?: string }).domain
-    if (domain) return domain
-    return inferDomainFromNamespace((ref as { namespace?: string }).namespace ?? '')
+    if (ref.domain) return ref.domain
+    return inferDomainFromNamespace(ref.namespace ?? '')
   }
   return undefined
 }

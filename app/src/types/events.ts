@@ -700,8 +700,13 @@ export function getEventSummary(event: PlateEvent): string {
       const vol = d.volume ? `${d.volume.value} ${d.volume.unit}` : ''
       const count = typeof d.count === 'number' && Number.isFinite(d.count) ? `${d.count}` : ''
       const materialLabel = getRefLabel(getAddMaterialRef(d) as string | { label?: string; id?: string } | undefined)
-      const amount = vol || count
-      return `Add ${materialLabel || 'material'} ${amount} ${wellStr}`.trim()
+      const amount = [count, vol].filter(Boolean).join(' · ')
+      const condLabels = Array.isArray(d.condition_refs)
+        ? d.condition_refs.map((r) => (typeof r === 'object' && r && 'label' in r ? (r as { label?: string }).label : undefined)).filter((l): l is string => Boolean(l))
+        : []
+      const estimate = d.count_estimate?.measuredBy ? ` · est. via ${d.count_estimate.measuredBy}` : ''
+      const condStr = condLabels.length > 0 ? ` · ${condLabels.join(', ')}` : ''
+      return `Add ${materialLabel || 'material'} ${amount} ${wellStr}${estimate}${condStr}`.trim()
     }
     case 'transfer': {
       const d = event.details as TransferDetails
