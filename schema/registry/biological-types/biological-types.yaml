@@ -1,0 +1,188 @@
+version: 1
+title: "Biological Types & Culture Systems Registry"
+description: >
+  Declarative measure table for biological materials (phase B). Given a coarse
+  material.domain (cell_line | organism → "biological" vs chemical/volume-first),
+  and the resolved specific organism/type term, this registry decides WHICH
+  invariant the form records (cells/well, worms/well, CFU/mL, OD600, ...) and
+  what fields to ask. An unknown biological type falls back to `default`
+  (generic count + final volume). Data, not code — the loader (and only the
+  loader) interprets it; no hardcoded TS rules.
+
+default:
+  label: "Biological material (generic)"
+  measures:
+    primary: count
+    units: [count-per-well]
+    concentrationBasis: count_per_volume
+  verification:
+    method: manual
+    readModality: microscopy
+  fields:
+    - key: count
+      label: "Count per well"
+      required: true
+    - key: volume
+      label: "Final volume (µL)"
+      required: true
+    - key: counterDensity
+      label: "Source density (per µL)"
+      required: false
+
+types:
+  cell-line:
+    label: "Cell Line"
+    domains: [cell_line]
+    termKinds: [organism]
+    match:
+      labels: [HepaRG, "HepaRG cell", "HepaRG cell line"]
+      curies: [CLO:0020273]
+    measures:
+      primary: count
+      units: [cells-per-well]
+      concentrationBasis: count_per_volume
+    verification:
+      method: hoechst_nuclei
+      readModality: microscopy
+    fields:
+      - key: count
+        label: "Cells per well"
+        required: true
+      - key: volume
+        label: "Final volume (µL)"
+        required: true
+      - key: counterDensity
+        label: "Counter density (cells/µL)"
+        required: false
+
+  c-elegans:
+    label: "C. elegans"
+    domains: [organism]
+    termKinds: [organism]
+    match:
+      labels: ["C. elegans", "Caenorhabditis elegans", "C elegans"]
+      curies: [NCBITaxon:6239]
+    measures:
+      primary: count
+      units: [worms-per-well]
+      concentrationBasis: count_per_volume
+    verification:
+      method: manual
+      readModality: microscopy
+    fields:
+      - key: count
+        label: "Worms per well (L4)"
+        required: true
+      - key: volume
+        label: "Final volume (µL)"
+        required: true
+      - key: counterDensity
+        label: "Worm density (worms/µL)"
+        required: false
+
+  yeast:
+    label: "Yeast (S. cerevisiae)"
+    domains: [organism]
+    termKinds: [organism]
+    match:
+      labels: ["yeast", "Saccharomyces cerevisiae", "S. cerevisiae", "baker's yeast"]
+      curies: [NCBITaxon:4932]
+    measures:
+      primary: count
+      alternative: [od600, cfu]
+      units: [cells-per-ml, od600, cfu-per-ml]
+      concentrationBasis: count_per_volume
+    verification:
+      method: od600
+      readModality: absorbance
+    fields:
+      - key: count
+        label: "Cells/mL"
+        required: false
+      - key: od600
+        label: "OD600"
+        required: false
+      - key: cfu
+        label: "CFU/mL"
+        required: false
+      - key: volume
+        label: "Volume (µL)"
+        required: true
+
+  e-coli:
+    label: "E. coli"
+    domains: [organism]
+    termKinds: [organism]
+    match:
+      labels: ["E. coli", "Escherichia coli", "E coli"]
+      curies: [NCBITaxon:562]
+    measures:
+      primary: cfu
+      alternative: [od600, count]
+      units: [cfu-per-ml, od600, cells-per-ml]
+      concentrationBasis: count_per_volume
+    verification:
+      method: cfu
+      readModality: absorbance
+    fields:
+      - key: cfu
+        label: "CFU/mL"
+        required: false
+      - key: od600
+        label: "OD600"
+        required: false
+      - key: count
+        label: "Cells/mL"
+        required: false
+      - key: volume
+        label: "Volume (µL)"
+        required: true
+
+  mouse:
+    label: "Mouse"
+    domains: [organism]
+    termKinds: [organism]
+    match:
+      labels: ["Mus musculus", "mouse", "house mouse", "C57BL/6J", "BALB/c", "NOD"]
+      curies: [NCBITaxon:10090]
+    measures:
+      primary: count
+      units: [organisms-per-well]
+      concentrationBasis: count_per_volume
+    verification:
+      method: manual
+      readModality: microscopy
+    fields:
+      - key: count
+        label: "Organisms / cells per well"
+        required: true
+      - key: volume
+        label: "Final volume (µL)"
+        required: true
+      - key: counterDensity
+        label: "Source density (per µL)"
+        required: false
+
+  organoid:
+    label: "Organoid"
+    domains: [organism]
+    termKinds: [organism]
+    match:
+      labels: ["organoid", "intestinal organoid", "cerebral organoid"]
+    measures:
+      primary: count
+      units: [organoids-per-well]
+      concentrationBasis: count_per_volume
+    verification:
+      method: manual
+      readModality: microscopy
+    fields:
+      - key: count
+        label: "Organoids per well"
+        required: true
+      - key: volume
+        label: "Final volume (µL)"
+        required: true
+      - key: counterDensity
+        label: "Source density (per µL)"
+        required: false

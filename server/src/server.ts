@@ -1286,6 +1286,12 @@ export async function createServer(
       registerRunExecutionRoutes(instance, ctx);
     }
 
+    // Biological Types Routes (declarative measure registry — phase B)
+    {
+      const { registerBiologicalTypesRoutes } = await import('./api/routes/biological-types.js');
+      registerBiologicalTypesRoutes(instance, ctx);
+    }
+
     // Protocol Evolution Routes (need ctx access)
     instance.get('/protocols/:id/evolution-suggestions', async (request, reply) => {
       try {
