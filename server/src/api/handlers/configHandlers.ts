@@ -7,6 +7,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppConfig, AIConfig, RepositoryConfig, IntegrationsConfig, AIProfile } from '../../config/types.js';
+import type { StorageDeviceConfig } from '../../storage/types.js';
 import { DEFAULT_REPO_CONFIG } from '../../config/types.js';
 import { validateConfig, ConfigValidationError } from '../../config/loader.js';
 import { writeFile, rename, mkdir } from 'node:fs/promises';
@@ -137,6 +138,7 @@ function buildConfigResponse(config: AppConfig) {
 
   return {
     repositories: redactSecrets(config.repositories),
+    storageDevices: redactSecrets(config.storageDevices ?? []),
     ai: ai ? redactSecrets(ai) : null,
     aiProfiles: profileNames,
     aiActiveProfile: activeProfile ?? null,
@@ -159,6 +161,7 @@ interface AiStatusSnapshot {
 
 interface ConfigPatchBody {
   repositories?: Array<Record<string, unknown> & { id: string }>;
+  storageDevices?: Array<Record<string, unknown> & { id: string }>;
   ai?: Record<string, unknown>;
   lab?: Record<string, unknown>;
   integrations?: Record<string, unknown>;
@@ -248,6 +251,44 @@ export class ConfigHandlers {
       }
 
       updated.repositories = updatedRepos;
+    }
+
+    // -- Merge storage devices (matched by id) -------------------------------
+    if (patch.storageDevices && Array.isArray(patch.storageDevices)) {
+      const updatedDevices = [...(updated.storageDevices ?? [])];
+
+      for (const patchDevice of patch.storageDevices) {
+        if (!patchDevice.id || typeof patchDevice.id !== 'string') {
+          return reply.status(400).send({
+            success: false,
+            error: 'Validation failed',
+            details: [
+              {
+                path: 'storageDevices[].id',
+                message: 'id is required for each storage device',
+              },
+            ],
+          });
+        }
+        const idx = updatedDevices.findIndex((d) => d.id === patchDevice.id);
+        const merged = mergeConfigPatch(
+          idx === -1
+            ? { id: patchDevice.id }
+            : (updatedDevices[idx] as unknown as Record<string, unknown>),
+          patchDevice,
+        ) as unknown as StorageDeviceConfig;
+        const normalized: StorageDeviceConfig = {
+          ...merged,
+          default: merged.default === true,
+        };
+        if (idx === -1) {
+          updatedDevices.push(normalized);
+        } else {
+          updatedDevices[idx] = normalized;
+        }
+      }
+
+      updated.storageDevices = updatedDevices;
     }
 
     // -- Merge AI config ----------------------------------------------------

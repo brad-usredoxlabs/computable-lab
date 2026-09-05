@@ -30,7 +30,7 @@ export interface StorageDeviceConfig {
   // ---- s3 ----
   entrypoint?: string;
   region?: string;
-  bucket: string;
+  bucket?: string;
   pathPrefix?: string;
   /** Env var NAME holding the access key (never a literal). */
   accessKeyEnv?: string;

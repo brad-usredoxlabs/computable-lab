@@ -101,6 +101,76 @@ describe('config loader', () => {
     expect(config.repositories[0]?.sync.autoPush).toBe(false);
   });
 
+  it('loads storage devices (local-mount + s3)', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+    const configPath = join(tempDir, 'config.yaml');
+    await writeFile(
+      configPath,
+      [
+        'server:',
+        '  port: 3001',
+        '  host: 0.0.0.0',
+        '  logLevel: info',
+        '  workspaceDir: /tmp/cl-workspaces',
+        '  cors:',
+        '    enabled: true',
+        '    origins: ["*"]',
+        'schemas:',
+        '  source: bundled',
+        '  bundledDir: ./schema',
+        'repositories: []',
+        'storageDevices:',
+        '  - id: usb0',
+        '    label: USB stick',
+        '    kind: local-mount',
+        '    mountPath: /mnt/usb0',
+        '  - id: labnas',
+        '    label: Lab NAS',
+        '    kind: s3',
+        '    bucket: lab-data',
+        '    endpoint: http://nas.example:9000',
+        "    accessKeyEnv: 'NAS_ACCESS_KEY'",
+        "    secretKeyEnv: 'NAS_SECRET_KEY'",
+      ].join('\n'),
+      'utf8',
+    );
+
+    const config = await loadConfig({ configPath });
+    expect(config.storageDevices?.map((d) => d.id)).toEqual(['usb0', 'labnas']);
+    const labnas = config.storageDevices?.find((d) => d.id === 'labnas');
+    expect(labnas?.bucket).toBe('lab-data');
+    expect(labnas?.secretKeyEnv).toBe('NAS_SECRET_KEY');
+  });
+
+  it('rejects a local-mount storage device without a mountPath', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+    const configPath = join(tempDir, 'config.yaml');
+    await writeFile(
+      configPath,
+      [
+        'server:',
+        '  port: 3001',
+        '  host: 0.0.0.0',
+        '  logLevel: info',
+        '  workspaceDir: /tmp/cl-workspaces',
+        '  cors:',
+        '    enabled: true',
+        '    origins: ["*"]',
+        'schemas:',
+        '  source: bundled',
+        '  bundledDir: ./schema',
+        'repositories: []',
+        'storageDevices:',
+        '  - id: bad',
+        '    label: Bad',
+        '    kind: local-mount',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(loadConfig({ configPath })).rejects.toThrow(/mountPath is required/);
+  });
+
   describe('extractor profile defaults', () => {
     it('applies defaults when extractor is absent', async () => {
       tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));

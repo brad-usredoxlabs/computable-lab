@@ -24,6 +24,7 @@ import {
   WebSearchSettingsSection,
   GroupMembershipSection,
   LabProfileSection,
+  StorageDevicesSection,
 } from './settings'
 import { Slot } from '../extensions'
 import type { SectionId } from './settings/EditableSection'
@@ -177,6 +178,15 @@ export function SettingsPage() {
 
         {/* ---- Read-only: Lab Profile (THIS lab) ---- */}
         <LabProfileSection />
+
+        {/* ---- Editable: Storage Devices (S3 / NAS / USB) ---- */}
+        <StorageDevicesSection
+          devices={config?.storageDevices ?? []}
+          editingSection={editingSection}
+          onEditChange={setEditingSection}
+          onSave={handleSave}
+          saving={saving}
+        />
 
         {/* ---- Editable: Sync ---- */}
         {repo && (

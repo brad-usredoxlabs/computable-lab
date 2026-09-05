@@ -142,12 +142,35 @@ export interface IntegrationsConfig {
 export type MaterialTrackingMode = LabConfig['materialTracking']['mode']
 
 // ---------------------------------------------------------------------------
+// Storage devices (S3 / NAS / USB)
+// ---------------------------------------------------------------------------
+
+export type StorageDeviceKind = 's3' | 'local-mount'
+
+export interface StorageDeviceConfig {
+  id: string
+  label: string
+  kind: StorageDeviceKind
+  default?: boolean
+  // s3
+  entrypoint?: string
+  region?: string
+  bucket?: string
+  pathPrefix?: string
+  accessKeyEnv?: string
+  secretKeyEnv?: string
+  // local-mount
+  mountPath?: string
+}
+
+// ---------------------------------------------------------------------------
 // API response shapes
 // ---------------------------------------------------------------------------
 
 /** GET /api/config response body. */
 export interface ConfigResponse {
   repositories: RepositoryConfig[]
+  storageDevices?: StorageDeviceConfig[]
   ai: AIConfig | null
   lab?: LabConfig | null
   integrations?: IntegrationsConfig | null
