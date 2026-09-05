@@ -23,6 +23,7 @@ import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/pla
 import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
+import { pdfSelectionToSurfaceContext, stepSelectionToSurfaceContext } from './toSurfaceContext'
 import type { AiClarificationAnswer, AiClarificationRequest, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
@@ -327,6 +328,19 @@ export function AiTabPanel() {
     onDraftResult,
   })
 
+  // Send a well-formed SurfaceContext into the AI chat with the deterministic
+  // "from surface, selected N, goal" preamble so every selection→AI seam is
+  // corpus-capturable. Accepts extra chat.send options (e.g. protocolStepContext).
+  const sendSurfaceContext = useCallback(
+    (sc: SurfaceContext, extra?: Parameters<typeof chat.send>[1]) => {
+      void chat.send(surfaceAiPrompt(sc), {
+        enableThinking: false,
+        ...(extra ?? {}),
+      })
+    },
+    [chat],
+  )
+
   // Pre-warm the KV cache while the user reads/types: whenever the deck
   // context changes (tab opened, graph loaded, draft accepted, labware
   // edited) or a turn completes, ship the exact context + history the next
@@ -492,14 +506,13 @@ export function AiTabPanel() {
     const handlePdfSelection = (e: Event) => {
       const detail = (e as CustomEvent).detail as { text: string; pageNumber: number }
       if (!detail || !detail.text) return
-      // Send the selected text as a prompt to the AI chat
-      void chat.send(`Here is a protocol section from the PDF (page ${detail.pageNumber}):\n\n${detail.text}`, {
-        enableThinking: false,
-      })
+      // Build a well-formed SurfaceContext, then send the prompt it carries.
+      const sc = pdfSelectionToSurfaceContext({ text: detail.text, pageNumber: detail.pageNumber })
+      void sendSurfaceContext(sc)
     }
     window.addEventListener('pdf-text-selection', handlePdfSelection)
     return () => window.removeEventListener('pdf-text-selection', handlePdfSelection)
-  }, [chat])
+  }, [sendSurfaceContext])
 
   // Listen for protocol-step selections from the protocol-planning surface.
   // StepDetailPane dispatches `protocol-step-selection` when the user selects a
@@ -515,24 +528,24 @@ export function AiTabPanel() {
         surface?: string
       }
       if (!detail || !detail.stepId || !detail.highlightedSection) return
-      void chat.send(
-        `Here is the current protocol step adapt request:\n\n` +
-          `Adapt step "${detail.stepLabel}" (${detail.stepId}) to this lab. ` +
-          `Ghost the events for this step onto the editor.`,
-        {
-          enableThinking: false,
-          protocolStepContext: {
-            stepId: detail.stepId,
-            stepLabel: detail.stepLabel,
-            highlightedSection: detail.highlightedSection,
-            selectedText: detail.highlightedSection,
-          },
+      const sc = stepSelectionToSurfaceContext({
+        runId: detail.runId,
+        stepId: detail.stepId,
+        stepLabel: detail.stepLabel,
+        highlightedSection: detail.highlightedSection,
+      })
+      void sendSurfaceContext(sc, {
+        protocolStepContext: {
+          stepId: detail.stepId,
+          stepLabel: detail.stepLabel,
+          highlightedSection: detail.highlightedSection,
+          selectedText: detail.highlightedSection,
         },
-      )
+      })
     }
     window.addEventListener('protocol-step-selection', handleStepSelection)
     return () => window.removeEventListener('protocol-step-selection', handleStepSelection)
-  }, [chat])
+  }, [sendSurfaceContext])
 
   // Listen for `surface-ai-request` (surface × selection × prompt) dispatched
   // by any surface (e.g. the Find search page: "Send N to AI"). Mirroring the
@@ -542,13 +555,11 @@ export function AiTabPanel() {
     const handleSurfaceRequest = (e: Event) => {
       const detail = (e as CustomEvent).detail as { ctx?: SurfaceContext }
       if (!detail?.ctx) return
-      void chat.send(surfaceAiPrompt(detail.ctx), {
-        enableThinking: false,
-      })
+      void sendSurfaceContext(detail.ctx)
     }
     window.addEventListener(SURFACE_AI_REQUEST_EVENT, handleSurfaceRequest)
     return () => window.removeEventListener(SURFACE_AI_REQUEST_EVENT, handleSurfaceRequest)
-  }, [chat])
+  }, [sendSurfaceContext])
 
   // A ghost preview is on the deck → the next prompt revises it (the context
   // builder attaches draftRevision). Surface that explicitly in the input.
