@@ -16,6 +16,7 @@ export const SCHEMA_IDS = {
   aliquot: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
   materialDerivation: 'https://computable-lab.com/schema/computable-lab/material-derivation.schema.yaml',
   context: 'computable-lab/context',
+  term: 'https://computable-lab.com/schema/computable-lab/term.schema.yaml',
 } as const;
 
 type RefShape = {
@@ -198,6 +199,22 @@ export async function createRecord(store: RecordStore, recordId: string, schemaI
 function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | null {
   const payload = asPayload(envelope);
   if (!payload) return null;
+  // Canonical term nodes (the identity spine): payload.kind is the TermKind
+  // (organism/condition/material/...), NOT the record kind 'term', so discriminate
+  // by schema. Surface organisms/cell lines/conditions as concept-only picks so
+  // the add-material form can GATE on term.kind/domain.
+  if (envelope.schemaId === SCHEMA_IDS.term) {
+    const termKind = stringValue(payload.kind) ?? '';
+    const domain = stringValue(payload.domain);
+    const title = stringValue(payload.preferredLabel) ?? stringValue(payload.name) ?? envelope.recordId;
+    return {
+      recordId: envelope.recordId,
+      kind: 'term',
+      title,
+      category: 'concept-only',
+      subtitle: [termKind ? `${termKind.charAt(0).toUpperCase()}${termKind.slice(1)}` : '', domain ? ` · ${domain}` : ''].join(''),
+    };
+  }
   const kind = stringValue(payload.kind) ?? '';
   const title = stringValue(payload.name) ?? stringValue(payload.title) ?? envelope.recordId;
   if (!kind) return null;
@@ -256,20 +273,6 @@ function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | 
       title,
       category: 'concept-only',
       subtitle: 'Bare concept record',
-    };
-  }
-  if (kind === 'term') {
-    // Canonical term node (the identity spine). Surface organisms, conditions,
-    // cell lines etc. as concept-only picks so the add-material form GATES on
-    // term.kind/domain (organism/cell_line → count-first; condition → ...).
-    const termKind = stringValue(payload.kind) ?? '';
-    const domain = stringValue(payload.domain);
-    return {
-      recordId: envelope.recordId,
-      kind,
-      title,
-      category: 'concept-only',
-      subtitle: [termKind ? `${termKind.charAt(0).toUpperCase()}${termKind.slice(1)}` : '', domain ? ` · ${domain}` : ''].join(''),
     };
   }
   return null;

@@ -512,6 +512,13 @@ export async function initializeApp(
     console.log(
       `Seeded biology terms: ${seeded.terms} species/cell-lines, ${seeded.strains} strains, ${seeded.conditions} conditions`,
     );
+    // Seeded terms are created AFTER the boot-time index rebuild, so surface them
+    // to material-search / resolve tier-0 by rebuilding the lightweight index.
+    try {
+      await indexManager.rebuild();
+    } catch (reindexErr) {
+      console.warn('Index rebuild after biology seeding failed (non-fatal):', reindexErr);
+    }
   } catch (err) {
     console.warn('Biology term seeding failed (non-fatal):', err);
   }
