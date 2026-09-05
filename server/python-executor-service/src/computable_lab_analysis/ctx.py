@@ -56,7 +56,7 @@ class DatasetHandle:
             return [dict(r) for r in self.inline]
         if self.path:
             text = Path(self.path).read_text(encoding="utf-8")
-            return _csv_rows(text)
+            return _parse_rows(text)
         return []
 
     def file_bytes(self) -> bytes:
@@ -70,6 +70,27 @@ class DatasetHandle:
     @property
     def source_path(self) -> Optional[str]:
         return self.path
+
+
+def _parse_rows(text: str) -> List[Dict[str, Any]]:
+    """Parse rows from either a JSON array/object or a CSV string (auto-detect)."""
+    stripped = text.lstrip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            return _csv_rows(text)
+        if isinstance(data, list):
+            return [dict(r) for r in data if isinstance(r, dict)]
+        if isinstance(data, dict):
+            # maybe {"rows": [...]} or a columnar object
+            for key in ("rows", "data", "values"):
+                val = data.get(key)
+                if isinstance(val, list) and val and isinstance(val[0], dict):
+                    return [dict(r) for r in val]
+            return [data]
+        return []
+    return _csv_rows(text)
 
 
 def _csv_rows(text: str) -> List[Dict[str, Any]]:

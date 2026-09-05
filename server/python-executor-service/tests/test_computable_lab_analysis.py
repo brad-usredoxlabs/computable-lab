@@ -46,6 +46,12 @@ class ContextTests(unittest.TestCase):
         ctx = Context(inputs={"model": {"dataKind": "model", "path": str(self._csv)}})
         self.assertEqual(ctx.input("model").file_bytes(), self._csv.read_bytes())
 
+    def test_read_rows_parses_json_array_input(self) -> None:
+        js = self._dir / "preds.json"
+        js.write_text('[{"x": 20, "pred": 41}, {"x": 30, "pred": 61}]', encoding="utf-8")
+        ctx = Context(inputs={"predictions": {"dataKind": "table", "path": str(js)}})
+        self.assertEqual(ctx.input("predictions").read_rows(), [{"x": 20, "pred": 41}, {"x": 30, "pred": 61}])
+
     def test_parameters_are_immutable_snapshot(self) -> None:
         ctx = Context(parameters={"window": [0.1, 0.5], "n": 3})
         params = ctx.parameters
