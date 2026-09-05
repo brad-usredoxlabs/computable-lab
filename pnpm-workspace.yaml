@@ -1,3 +1,9 @@
 packages:
   - 'server'
   - 'app'
+
+# App relies on implicit transitive deps (e.g. @tiptap/pm's prosemirror-* peers)
+# that Vite/tsc resolve from the workspace root. Hoist everything to the root
+# node_modules (like npm/main's legacy layout) so a clean install works.
+publicHoistPattern:
+  - '*'
