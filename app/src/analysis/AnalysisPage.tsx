@@ -53,6 +53,8 @@ export function AnalysisPage() {
   const [manifest, setManifest] = useState<{ artifacts: unknown[]; views: unknown[]; metrics: unknown[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -84,6 +86,28 @@ export function AnalysisPage() {
       setBusy(false)
     }
   }, [title, entry, refresh])
+
+  const aiAuthor = useCallback(async () => {
+    if (!aiPrompt.trim()) return
+    setAiBusy(true)
+    setError(null)
+    try {
+      const res = await apiClient.draftAnalysisRevision({
+        prompt: aiPrompt.trim(),
+        createRevision: true,
+      })
+      if (res.draft) {
+        setTitle(res.draft.title)
+        setEntry(res.draft.entryScript)
+        if (res.recordId) setSelectedRevId(res.recordId)
+      }
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAiBusy(false)
+    }
+  }, [aiPrompt, refresh])
 
   const createRun = useCallback(async () => {
     if (!selectedRevId) return
@@ -165,6 +189,21 @@ export function AnalysisPage() {
         <h1>Analysis</h1>
         <p>Define a method (Python), run it against storage-referenced data, and render the outputs.</p>
       </header>
+
+      <div className="analysis__section" data-testid="analysis-ai-author">
+        <h2>AI-author a method</h2>
+        <p className="analysis__hint">Describe an analysis; a local model drafts a validated method, notes, and controls.</p>
+        <textarea
+          data-testid="analysis-ai-prompt"
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          placeholder="e.g. integrate a GC trace under a user-specified window and report the peak area as a table + metric"
+          rows={3}
+        />
+        <button onClick={() => void aiAuthor()} disabled={aiBusy || aiPrompt.trim().length === 0} data-testid="analysis-ai-author-btn">
+          {aiBusy ? 'Authoring…' : 'Author method'}
+        </button>
+      </div>
 
       <div className="analysis__section" data-testid="analysis-rev-create">
         <h2>New method</h2>

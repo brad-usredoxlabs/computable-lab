@@ -10,6 +10,9 @@ import {
   type CreateRunInput,
 } from '../../analysis/analysisService.js';
 import { AnalysisRunner } from '../../analysis/analysisRunner.js';
+import { AnalysisAuthoringService, AnalysisAuthoringError } from '../../analysis/analysisAuthoring.js';
+import { createInferenceClient } from '../../ai/InferenceClient.js';
+import { resolveAiProfile } from '../../config/types.js';
 
 export function createAnalysisHandlers(ctx: AppContext) {
   const service = new AnalysisService(ctx);
@@ -82,6 +85,84 @@ export function createAnalysisHandlers(ctx: AppContext) {
     async listRuns(_req: FastifyRequest): Promise<{ runs: import('../../types/RecordEnvelope.js').RecordEnvelope[]; total: number }> {
       const runs = await service.list('analysis-run');
       return { runs, total: runs.length };
+    },
+
+    async draftRevision(
+      request: FastifyRequest<{
+        Body: {
+          prompt: string;
+          inputs?: Array<{ name: string; dataKind: string; label?: string }>;
+          createRevision?: boolean;
+        };
+      }>,
+      reply: FastifyReply,
+    ) {
+      const body = request.body;
+      const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
+      if (!prompt) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'prompt is required' };
+      }
+      // Build the inference client from the active AI config (reuse the
+      // ProtocolHandlers pattern). No AI configured → 409.
+      const ai = ctx.appConfig?.ai;
+      if (!ai) {
+        reply.status(409);
+        return { error: 'AI_UNCONFIGURED', message: 'No AI config available for method authoring.' };
+      }
+      const profile = resolveAiProfile(ai);
+      if (!profile?.inference?.baseUrl || !profile?.inference?.model) {
+        reply.status(409);
+        return { error: 'AI_UNCONFIGURED', message: 'AI inference baseUrl/model not configured.' };
+      }
+      const authoring = new AnalysisAuthoringService({
+        inferenceClient: createInferenceClient(profile.inference),
+        inferenceConfig: profile.inference,
+      });
+      try {
+        const result = await authoring.draftMethod({
+          prompt,
+          inputs: body?.inputs ?? [],
+        });
+        if (!result.ok || !result.draft) {
+          reply.status(422);
+          return {
+            error: 'DRAFT_FAILED',
+            message: `Could not produce a valid method after ${result.attempts} attempts.`,
+            details: result.errors,
+          };
+        }
+        // Optionally persist the draft as a real revision.
+        let revision: { recordId: string; payload: Record<string, unknown> } | undefined;
+        if (body?.createRevision === true) {
+          revision = await service.createRevision({
+            title: result.draft.title,
+            entryScript: result.draft.entryScript,
+            sdkVersion: '0.1.0',
+            ...(result.draft.methodNotes ? { methodNotes: result.draft.methodNotes } : {}),
+            ...(result.draft.inputs.length > 0 ? { inputs: result.draft.inputs } : {}),
+            ...(result.draft.parameterSchema ? { parameterSchema: result.draft.parameterSchema } : {}),
+          });
+        }
+        reply.status(revision ? 201 : 200);
+        return {
+          success: true,
+          attempts: result.attempts,
+          draft: result.draft,
+          ...(revision ? { recordId: revision.recordId, revision: revision.payload } : {}),
+        };
+      } catch (err) {
+        if (err instanceof AnalysisServiceError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        if (err instanceof AnalysisAuthoringError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
     },
 
     async executeRun(

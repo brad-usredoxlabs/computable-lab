@@ -1140,6 +1140,7 @@ export function registerRoutes(
   if (analysisHandlers) {
     fastify.get('/analysis-revisions', analysisHandlers.listRevisions.bind(analysisHandlers));
     fastify.post('/analysis-revisions', analysisHandlers.createRevision.bind(analysisHandlers));
+    fastify.post('/analysis-revisions/draft', analysisHandlers.draftRevision.bind(analysisHandlers));
     fastify.get('/analysis-revisions/:id', analysisHandlers.getRevision.bind(analysisHandlers));
     fastify.get('/analysis-runs', analysisHandlers.listRuns.bind(analysisHandlers));
     fastify.post('/analysis-runs', analysisHandlers.createRun.bind(analysisHandlers));

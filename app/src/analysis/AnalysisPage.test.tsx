@@ -7,7 +7,7 @@ import { apiClient } from '../shared/api/client'
 import { AnalysisPage } from './AnalysisPage'
 
 // Mock the API client so the page renders deterministically without a backend.
-vi.mock('../shared/api/client', () => ({ apiClient: { listAnalysisRevisions: vi.fn(), listAnalysisRuns: vi.fn(), createAnalysisRevision: vi.fn(), createAnalysisRun: vi.fn(), executeAnalysisRun: vi.fn(), getAnalysisRun: vi.fn(), getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }) } }))
+vi.mock('../shared/api/client', () => ({ apiClient: { listAnalysisRevisions: vi.fn(), listAnalysisRuns: vi.fn(), createAnalysisRevision: vi.fn(), createAnalysisRun: vi.fn(), executeAnalysisRun: vi.fn(), getAnalysisRun: vi.fn(), getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }), draftAnalysisRevision: vi.fn() } }))
 
 describe('AnalysisPage', () => {
   beforeEach(() => {
@@ -22,6 +22,7 @@ describe('AnalysisPage', () => {
   it('renders the analysis surface with create + run sections', async () => {
     render(wrap(<AnalysisPage />))
     expect(await screen.findByTestId('analysis-page')).toBeDefined()
+    expect(screen.getByTestId('analysis-ai-author')).toBeDefined()
     expect(screen.getByTestId('analysis-rev-create')).toBeDefined()
     expect(screen.getByTestId('analysis-run-create')).toBeDefined()
     expect(screen.getByTestId('analysis-run-list')).toBeDefined()

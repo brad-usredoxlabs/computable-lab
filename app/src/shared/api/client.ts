@@ -2642,6 +2642,29 @@ export const apiClient = {
     })
   },
 
+  async draftAnalysisRevision(body: {
+    prompt: string
+    inputs?: Array<{ name: string; dataKind: string; label?: string }>
+    createRevision?: boolean
+  }): Promise<{
+    success: boolean
+    attempts: number
+    draft: {
+      title: string
+      entryScript: string
+      methodNotes?: string
+      inputs: Array<{ name: string; dataKind: string; description?: string; required?: boolean }>
+      parameterSchema: Record<string, unknown>
+    }
+    recordId?: string
+    revision?: unknown
+  }> {
+    return request('/analysis-revisions/draft', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   async getAnalysisRevision(id: string): Promise<{ record: { recordId: string; payload: Record<string, unknown> } }> {
     return request(`/analysis-revisions/${encodeURIComponent(id)}`)
   },
