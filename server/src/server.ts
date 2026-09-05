@@ -85,6 +85,7 @@ import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
 import { createCorpusHandlers } from './api/handlers/CorpusHandlers.js';
 import { createStorageHandlers } from './api/handlers/StorageHandlers.js';
+import { createAnalysisHandlers } from './api/handlers/AnalysisHandlers.js';
 import { AiThreadStore } from './ai-threads/index.js';
 import { JsonLdIndex } from './jsonld-index/index.js';
 import { JsonLdProjector } from './jsonld/JsonLdProjector.js';
@@ -1197,6 +1198,9 @@ export async function createServer(
   // External storage devices (S3 / NAS / USB) — browse, later acquire.
   const storageHandlers = createStorageHandlers(ctx);
 
+  // Analysis record CRUD.
+  const analysisHandlers = createAnalysisHandlers(ctx);
+
   // Per-study workspace state — sidecar YAML at
   // records/studies/<id>/workspace.yaml. Carries UI shape (open tabs,
   // pane widths, right-pane mode), not scientific data.
@@ -1263,6 +1267,7 @@ export async function createServer(
       artifactBlobHandlers,
       corpusHandlers,
       storageHandlers,
+      analysisHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

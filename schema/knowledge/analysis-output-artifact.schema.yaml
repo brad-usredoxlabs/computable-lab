@@ -1,0 +1,83 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/analysis-output-artifact.schema.yaml"
+title: "Analysis Output Artifact"
+description: >
+  A named output produced by an analysis-run. The artifact is DATA (a table,
+  signal, image, metric value). Large payloads live on a storage device and are
+  referenced (never in git); small ones can be inlined. A view-spec describes
+  how to render it. Every artifact resolves to its producing run + name, so
+  "latest result" always means an immutable artifact, never a moving target.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+properties:
+  kind:
+    const: "analysis-output-artifact"
+
+  id:
+    type: string
+    description: "Stable artifact id (e.g. AOUT-000123)."
+
+  title:
+    type: string
+
+  runRef:
+    type: object
+    additionalProperties: true
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "analysis-run" }
+      label: { type: string }
+
+  name:
+    type: string
+    description: "Stable output name within the run (e.g. 'peak_results')."
+
+  dataKind:
+    type: string
+    enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+
+  format:
+    type: string
+    description: "Serialized format of the payload (json, ndjson, csv, png, ...)."
+
+  # Where the payload lives. Either inlineValue (small) or a data-reference
+  # into a storage device (large). Never git.
+  inlineValue:
+    description: "Small payload inlined directly (scalars / compact arrays)."
+  dataReferenceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  schema:
+    type: object
+    additionalProperties: true
+    description: "Column/field schema of a table or signal artifact."
+
+  units:
+    type: object
+    additionalProperties: true
+    description: "Per-field/axis units."
+
+  sourceRelations:
+    description: "Lineage links back to inputs / prior artifacts."
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  createdBy:
+    type: string
+    readOnly: true
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+required: [ kind, id, title, runRef, name, dataKind ]

@@ -70,6 +70,7 @@ import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
 import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
 import type { StorageHandlers } from './handlers/StorageHandlers.js';
+import type { AnalysisHandlers } from './handlers/AnalysisHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -111,6 +112,7 @@ export interface RouteOptions {
   protocolPromotionHandlers?: ProtocolPromotionHandlers;
   corpusHandlers?: CorpusHandlers;
   storageHandlers?: StorageHandlers;
+  analysisHandlers?: AnalysisHandlers;
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
@@ -1129,5 +1131,18 @@ export function registerRoutes(
     fastify.get('/storage/devices', storageHandlers.listDevices.bind(storageHandlers));
     fastify.get('/storage/devices/:id/browse', storageHandlers.browse.bind(storageHandlers));
     fastify.post('/storage/acquire', storageHandlers.acquire.bind(storageHandlers));
+  }
+
+  // ============================================================================
+  // Analysis record routes (optional - requires analysisHandlers)
+  // ============================================================================
+  const { analysisHandlers } = options;
+  if (analysisHandlers) {
+    fastify.get('/analysis-revisions', analysisHandlers.listRevisions.bind(analysisHandlers));
+    fastify.post('/analysis-revisions', analysisHandlers.createRevision.bind(analysisHandlers));
+    fastify.get('/analysis-revisions/:id', analysisHandlers.getRevision.bind(analysisHandlers));
+    fastify.get('/analysis-runs', analysisHandlers.listRuns.bind(analysisHandlers));
+    fastify.post('/analysis-runs', analysisHandlers.createRun.bind(analysisHandlers));
+    fastify.get('/analysis-runs/:id', analysisHandlers.getRun.bind(analysisHandlers));
   }
 }

@@ -1,0 +1,55 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/view-spec.schema.yaml"
+title: "View Spec"
+description: >
+  A validated, discriminated description of HOW to render an analysis output
+  artifact. Renderer type is the discriminator. Only SHIPPED React renderers
+  execute; a static-figure fallback renders Python visualizations without a new
+  component. No arbitrary JS/HTML in payloads — the manifest is data only.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+properties:
+  kind:
+    const: "view-spec"
+
+  id:
+    type: string
+    description: "Stable view-spec id (e.g. VSPEC-000123)."
+
+  title:
+    type: string
+
+  artifactRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  renderer:
+    type: string
+    enum: [ table, signal, metric, static-figure ]
+
+  # Field/axis bindings onto the artifact payload (e.g. { x: 'time', y: 'intensity' }).
+  bindings:
+    type: object
+    additionalProperties: true
+
+  options:
+    type: object
+    additionalProperties: true
+    description: "Presentation options (labels, units, thresholds, colors)."
+
+  createdBy:
+    type: string
+    readOnly: true
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+required: [ kind, id, title, artifactRef, renderer ]

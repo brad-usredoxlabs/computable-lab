@@ -1,0 +1,95 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/analysis-run.schema.yaml"
+title: "Analysis Run"
+description: >
+  One frozen execution of an analysis-revision: resolves named inputs (to
+  data-reference records on storage devices), binds the parameter values, and
+  tracks status. A run is immutable once created — it never points at "latest
+  result"; inputs + parameters are frozen at submit time. Outputs resolve
+  through output artifacts produced by the run.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+properties:
+  kind:
+    const: "analysis-run"
+
+  id:
+    type: string
+    description: "Stable run id (e.g. ANR-000123)."
+
+  title:
+    type: string
+
+  description:
+    type: string
+
+  revisionRef:
+    type: object
+    additionalProperties: true
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "analysis-revision" }
+      label: { type: string }
+
+  status:
+    type: string
+    enum: [ queued, running, succeeded, failed, cancelled ]
+    description: "Immutable lifecycle; transitions are recorded in events."
+
+  inputs:
+    type: object
+    description: "name → data-reference record ref (frozen at submit)."
+    additionalProperties:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  parameters:
+    type: object
+    description: "Validated parameter values for this run (per revision.parameterSchema)."
+    additionalProperties: true
+
+  outputArtifactRefs:
+    type: array
+    description: "Refs to analysis-output-artifact records produced by this run."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  outputManifest:
+    type: object
+    additionalProperties: true
+    description: "Validated output manifest describing artifacts + views (for UI rendering)."
+
+  startedAt:
+    type: string
+    format: date-time
+  completedAt:
+    type: string
+    format: date-time
+
+  initiator:
+    type: string
+    description: "User or agent id that submitted the run."
+
+  logs:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+
+  createdBy:
+    type: string
+    readOnly: true
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+required: [ kind, id, title, revisionRef, status ]

@@ -1,0 +1,84 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml"
+title: "Analysis Revision"
+description: >
+  An immutable definition of one ANALYSIS METHOD: the Python entry script that
+  computes a result from named inputs, the admissible input contract, and the
+  parameter schema the UI renders as controls. A revision is immutable — editing
+  creates a NEW revision (with a parentRevisionRef). This lets a run freeze an
+  exact method + inputs.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+properties:
+  kind:
+    const: "analysis-revision"
+
+  id:
+    type: string
+    description: "Stable revision id (e.g. ANREV-000123)."
+
+  title:
+    type: string
+
+  description:
+    type: string
+
+  parentRevisionRef:
+    type: object
+    additionalProperties: true
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "analysis-revision" }
+      label: { type: string }
+
+  entryScript:
+    type: string
+    description: "The Python analysis entry script (exports run(ctx))."
+
+  sdkVersion:
+    type: string
+    description: "Version of computable_lab_analysis the script targets."
+
+  methodNotes:
+    type: string
+    description: "Algorithm, preprocessing, parameter meaning, assumptions, exclusions."
+
+  inputs:
+    type: array
+    description: "Admissible named inputs the script consumes."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ name ]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        dataKind:
+          type: string
+          enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+        required: { type: boolean }
+
+  # A JSON-Schema fragment that constrains `parameters` for a run of this
+  # revision. The UI renders controls from it without executing Python.
+  parameterSchema:
+    type: object
+    additionalProperties: true
+
+  createdBy:
+    type: string
+    readOnly: true
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+required: [ kind, id, title, entryScript, sdkVersion ]
