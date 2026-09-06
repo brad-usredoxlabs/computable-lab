@@ -41,6 +41,11 @@ creates effects. A positive control is not a chemical — it is a complete
 biological system in a specific state. The knowledge layer captures WHY
 things work, not WHERE they sit.
 
+**The point is "what happened in the lab today?"** There is no prewritten
+script; experiments are made up as we go, testing truth-for-the-day. Record
+each day faithfully in a way that is stimulating, not penalizing — and days
+become weeks, months, years, compounding into real knowledge.
+
 **Two-pane layout is preferred.** The user explicitly rejects three-pane
 layouts. The existing two-pane layout with a tabbed right pane is the pattern
 to extend. Add tabs to the right pane, not new panels. Add surfaces to the
@@ -84,6 +89,14 @@ center, not new columns. Never add a left sidebar or third pane.
 10. **When code and docs disagree, follow the code.** Update the docs in the
     same change. A stale architecture document makes the agent confidently
     wrong, which is worse than code search.
+
+11. **Use Exa search for knowledge.** When the agent needs external knowledge
+    during work, it is expected to use Exa search rather than relying on
+    memory or guessing.
+
+12. **UI changes get full browser review.** Whenever work touches the UI, the
+    agent must use Playwright to check its work in the running app. Every UI
+    change receives a full browser review before it is considered done.
 
 ## Build & Development Commands
 

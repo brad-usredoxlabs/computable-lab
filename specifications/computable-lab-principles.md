@@ -16,6 +16,10 @@ Computable-lab is the alternative: **your data, your ontology, your knowledge la
 
 These principles exist because biology is complicated, and vendor software treats it like a CSV export.
 
+## The Point
+
+The whole point is to answer one question — **"what happened in the lab today?"** — in a way that is stimulating, not penalizing. There is no prewritten script; experiments are made up day to day, testing truth-for-the-day. Record each day faithfully, and as a few days become weeks, become months, become years, they compound into real knowledge.
+
 ---
 
 ## 1. Context Is Everything in Biology
