@@ -350,6 +350,57 @@
   border: 1px solid var(--cl-border);
 }
 
+/* Unassigned-run "attach to project" affordance */
+.run-card__attach {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px dashed var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.run-card__attach-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--cl-accent);
+  background: transparent;
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.run-card__attach-btn:hover {
+  background: var(--cl-accent-soft);
+}
+
+.run-card__attach-select {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+}
+
+.run-card__attach-loading,
+.run-card__attach-empty {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.run-card__attach-cancel {
+  margin-left: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 /* ------------------------------------------------------------------ */
 /* Mobile                                                             */
 /* ------------------------------------------------------------------ */

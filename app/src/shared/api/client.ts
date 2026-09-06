@@ -475,10 +475,12 @@ export interface RunListItem {
   recordId: string
   title: string
   status: string
-  studyId: string
-  studyTitle: string
-  experimentId: string
-  experimentTitle: string
+  /** Present when the run links to a project; absent for unrooted runs. */
+  studyId?: string
+  studyTitle?: string
+  /** Present only when the run nests under a specific experiment. */
+  experimentId?: string
+  experimentTitle?: string
   updatedAt: string
   startedAt?: string
 }

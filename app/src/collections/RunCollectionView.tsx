@@ -16,6 +16,7 @@ import { runTabId } from '../event-editor/workspace/types'
 import { openContent, openInNewTab } from '../shared/lib/openContent'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
+import type { RecordEnvelope } from '../types/kernel'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { quickCreateRun } from '../event-editor/create/quickCreateRun'
 import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
@@ -50,6 +51,8 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<RunSortField>('date_updated')
   const [sortDirection, setSortDirection] = useState<RunSortDirection>('desc')
+  const [projects, setProjects] = useState<RecordEnvelope[] | null>(null)
+  const [attachingId, setAttachingId] = useState<string | null>(null)
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
 
@@ -77,11 +80,47 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
     void fetchRuns()
   }, [fetchRuns])
 
+  const refreshProjects = useCallback(async () => {
+    try {
+      const result = await apiClient.listRecordsByKind('study', 200)
+      setProjects(result.records)
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+      setProjects([])
+    }
+  }, [])
+
+  const openAttachPicker = useCallback(async (runId: string) => {
+    setAttachingId(runId)
+    if (projects === null) await refreshProjects()
+  }, [projects, refreshProjects])
+
+  const handleAttachToProject = useCallback(
+    async (runId: string, studyId: string) => {
+      if (!studyId) return
+      try {
+        const current = await apiClient.getRecord(runId)
+        // PUT /records/:id replaces the payload wholesale, so merge the current
+        // payload and add studyId (not a bare { studyId } patch).
+        await apiClient.updateRecord(runId, {
+          ...(current?.payload ?? {}),
+          studyId,
+        })
+        setAttachingId(null)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`Failed to attach run ${runId} to project:`, msg)
+      }
+      await fetchRuns()
+    },
+    [fetchRuns],
+  )
+
   /* Filter by search query */
   const query = searchQuery.toLowerCase().trim()
   const filteredRuns = query
     ? runs.filter((run) => {
-        const searchable = `${run.title} ${run.studyTitle} ${run.experimentTitle} ${run.recordId} ${run.status}`.toLowerCase()
+        const searchable = `${run.title} ${run.studyTitle ?? ''} ${run.experimentTitle ?? ''} ${run.recordId} ${run.status}`.toLowerCase()
         return searchable.includes(query)
       })
     : runs
@@ -224,7 +263,17 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
         ) : (
           <ul className="run-collection__list">
             {sortedRuns.map((run) => (
-              <RunRow key={run.recordId} run={run} onNavigate={navigate} openTabs={openTabs} />
+              <RunRow
+                key={run.recordId}
+                run={run}
+                onNavigate={navigate}
+                openTabs={openTabs}
+                attaching={attachingId === run.recordId}
+                projects={projects}
+                onAttachClick={openAttachPicker}
+                onAttachSelect={(studyId) => void handleAttachToProject(run.recordId, studyId)}
+                onCancelAttach={() => setAttachingId(null)}
+              />
             ))}
           </ul>
         )}
@@ -261,12 +310,23 @@ function RunRow({
   run,
   onNavigate,
   openTabs,
+  attaching,
+  projects,
+  onAttachClick,
+  onAttachSelect,
+  onCancelAttach,
 }: {
   run: RunListItem
   onNavigate: (to: string) => void
   openTabs: ReturnType<typeof useOptionalOpenTabs>
+  attaching: boolean
+  projects: RecordEnvelope[] | null
+  onAttachClick: (runId: string) => void
+  onAttachSelect: (studyId: string) => void
+  onCancelAttach: () => void
 }) {
   const statusIcon = STATUS_ICONS[run.status] ?? '?'
+  const studyTitle = run.studyTitle
 
   return (
     <li className="run-collection__row">
@@ -303,7 +363,7 @@ function RunRow({
         <div className="run-card__body">
           <h3 className="run-card__title">{run.title}</h3>
           <div className="run-card__meta">
-            <span className="run-card__study">{run.studyTitle}</span>
+            <span className="run-card__study">{studyTitle ?? 'Unassigned'}</span>
             {run.experimentTitle && (
               <>
                 <span className="run-card__separator">›</span>
@@ -312,12 +372,64 @@ function RunRow({
                 </span>
               </>
             )}
-            <span className="run-card__separator">›</span>
+            {(studyTitle || run.experimentTitle) && (
+              <span className="run-card__separator">›</span>
+            )}
             <span className="run-card__id">{run.recordId}</span>
           </div>
         </div>
         <span className="run-card__status-label">{run.status.replace('_', ' ')}</span>
       </button>
+      {!studyTitle && (
+        <div className="run-card__attach" data-testid={`run-attach-${run.recordId}`}>
+          {attaching ? (
+            projects === null ? (
+              <span className="run-card__attach-loading">Loading projects…</span>
+            ) : projects.length === 0 ? (
+              <>
+                <span className="run-card__attach-empty">No projects yet.</span>
+                <button
+                  type="button"
+                  className="run-card__attach-cancel"
+                  onClick={onCancelAttach}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <select
+                className="run-card__attach-select"
+                autoFocus
+                defaultValue=""
+                data-testid={`run-attach-select-${run.recordId}`}
+                onChange={(e) => onAttachSelect(e.target.value)}
+                onBlur={onCancelAttach}
+              >
+                <option value="" disabled>
+                  Attach to project…
+                </option>
+                {projects.map((p) => {
+                  const pid = p.recordId
+                  const ptitle = (p.payload?.title as string | undefined) ?? pid
+                  return (
+                    <option key={pid} value={pid}>
+                      {ptitle}
+                    </option>
+                  )
+                })}
+              </select>
+            )
+          ) : (
+            <button
+              type="button"
+              className="run-card__attach-btn"
+              onClick={() => onAttachClick(run.recordId)}
+            >
+              + Attach to project
+            </button>
+          )}
+        </div>
+      )}
     </li>
   )
 }

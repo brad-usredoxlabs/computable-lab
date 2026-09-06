@@ -54,10 +54,12 @@ export interface RunListItem {
   recordId: string;
   title: string;
   status: string;
-  studyId: string;
-  studyTitle: string;
-  experimentId: string;
-  experimentTitle: string;
+  /** Present when the run links to a project; absent for unrooted runs. */
+  studyId?: string;
+  studyTitle?: string;
+  /** Present only when the run nests under a specific experiment. */
+  experimentId?: string;
+  experimentTitle?: string;
   updatedAt: string;
   startedAt?: string;
 }
@@ -1687,41 +1689,65 @@ export function createTreeHandlers(
       // Get the full study tree to resolve parent titles
       const studies = await indexManager.getStudyTree();
 
-      // Collect every run across all studies, enriched with parent info
+      // Collect every run across all studies, enriched with parent info.
+      // Includes (a) runs nested under an experiment, (b) study-level direct
+      // runs (experiment-less projects), and (c) fully unrooted runs.
       const allRuns: RunListItem[] = [];
 
+      const pushRun = async (
+        run: { recordId: string; title?: string },
+        study?: { recordId: string; title: string },
+        experiment?: { recordId: string; title: string },
+      ) => {
+        // Read the actual run payload to get status and timestamps
+        const runRecord = await recordStore.get(run.recordId);
+        const runPayload = (runRecord?.payload ?? {}) as Record<string, unknown>;
+
+        const runStatus = typeof runPayload['status'] === 'string' ? runPayload['status'] : 'planned';
+        if (status && runStatus !== status) return;
+
+        const updatedAt = typeof runPayload['updatedAt'] === 'string'
+          ? runPayload['updatedAt']
+          : (runRecord?.meta?.updatedAt ?? '');
+        const startedAt = typeof runPayload['startedAt'] === 'string'
+          ? runPayload['startedAt']
+          : undefined;
+
+        allRuns.push({
+          recordId: run.recordId,
+          title: run.title || run.recordId,
+          status: runStatus,
+          ...(study ? { studyId: study.recordId, studyTitle: study.title } : {}),
+          ...(experiment ? { experimentId: experiment.recordId, experimentTitle: experiment.title } : {}),
+          updatedAt,
+          ...(startedAt ? { startedAt } : {}),
+        });
+      };
+
       for (const study of studies) {
+        // studyId filter: only runs belonging to the requested study.
+        if (studyId && study.recordId !== studyId) continue;
         for (const experiment of study.experiments) {
+          if (experimentId && experiment.recordId !== experimentId) continue;
           for (const run of experiment.runs) {
-            // Read the actual run payload to get status and timestamps
-            const runRecord = await recordStore.get(run.recordId);
-            const runPayload = (runRecord?.payload ?? {}) as Record<string, unknown>;
-
-            // Apply filters
-            if (studyId && study.recordId !== studyId) continue;
-            if (experimentId && experiment.recordId !== experimentId) continue;
-            const runStatus = typeof runPayload['status'] === 'string' ? runPayload['status'] : 'planned';
-            if (status && runStatus !== status) continue;
-
-            const updatedAt = typeof runPayload['updatedAt'] === 'string'
-              ? runPayload['updatedAt']
-              : (runRecord?.meta?.updatedAt ?? '');
-            const startedAt = typeof runPayload['startedAt'] === 'string'
-              ? runPayload['startedAt']
-              : undefined;
-
-            allRuns.push({
-              recordId: run.recordId,
-              title: run.title || run.recordId,
-              status: runStatus,
-              studyId: study.recordId,
-              studyTitle: study.title,
-              experimentId: experiment.recordId,
-              experimentTitle: experiment.title,
-              updatedAt,
-              ...(startedAt ? { startedAt } : {}),
-            });
+            await pushRun(run, study, experiment);
           }
+        }
+        for (const run of study.runs ?? []) {
+          await pushRun(run, study);
+        }
+      }
+
+      // Unrooted runs: any run in the index not already placed by a study tree
+      // (no studyId/projectIds link to an indexed study). Tagged "unassigned"
+      // in the UI via absent parent fields. A studyId filter intentionally
+      // excludes these — they belong to no project yet.
+      if (!studyId) {
+        const placed = new Set(allRuns.map((r) => r.recordId));
+        const allRunEntries = await indexManager.query({ kind: 'run' });
+        for (const entry of allRunEntries) {
+          if (placed.has(entry.recordId)) continue;
+          await pushRun(entry);
         }
       }
 

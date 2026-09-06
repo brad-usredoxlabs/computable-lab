@@ -40,7 +40,7 @@ export interface QuickCreateRunResult {
 }
 
 export async function quickCreateRun(options: {
-  studyId: string
+  studyId?: string
   experimentId?: string
   protocolName?: string
 }): Promise<QuickCreateRunResult> {
@@ -55,10 +55,15 @@ export async function quickCreateRun(options: {
   const payload: Record<string, unknown> = {
     kind: 'run',
     recordId,
-    studyId: options.studyId,
     status: 'planned',
     title,
     shortSlug,
+  }
+
+  // studyId is optional — a run may be created unrooted and attached to a
+  // project later. Only include if provided (exactOptionalPropertyTypes).
+  if (options.studyId) {
+    payload.studyId = options.studyId
   }
 
   // experimentId is optional — only include if provided (exactOptionalPropertyTypes)
