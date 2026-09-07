@@ -17,6 +17,8 @@ import { resolveProtocolPick } from '../shared/lib/protocolRouting'
 import { openContent, openInNewTab } from '../shared/lib/openContent'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
+import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
+import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
@@ -271,6 +273,9 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
     setSortField(field as SortField)
   }
 
+  // Per-row access visibility (private/shared/public) for browse badges.
+  const visibilities = useRecordVisibilities(sortedRecords.map((r) => r.recordId))
+
   // Sort control UI with search
   const sortControls = (
     <CollectionSearchSort
@@ -397,6 +402,9 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
                       <span className="lab-entity-card__title" title={displayName}>
                         {displayName}
                       </span>
+                      {visibilities[record.recordId] ? (
+                        <VisibilityBadge visibility={visibilities[record.recordId]!} />
+                      ) : null}
                       {helperTokens.length > 0 && (
                         <span className="lab-entity-card__helper">
                           {helperTokens.map((tok, i) => (
