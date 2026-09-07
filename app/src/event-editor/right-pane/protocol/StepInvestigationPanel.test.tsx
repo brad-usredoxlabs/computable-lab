@@ -194,3 +194,36 @@ describe('StepInvestigationPanel reference-a-protocol', () => {
     expect(mocks.commitStepRef).toHaveBeenCalledWith({ kind: 'record', type: 'protocol', id: 'PRT-cell-culture' })
   })
 })
+
+describe('StepInvestigationPanel initialInstruction (per-step prompt Localize)', () => {
+  it('auto-sends the caller-supplied instruction through the AI chat', () => {
+    renderPanel({ initialInstruction: 'use a deepwell plate, not the 96-well' })
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+    const composed = mocks.send.mock.calls[0]![0]
+    // prompt + step text both reach the model
+    expect(composed).toContain('use a deepwell plate, not the 96-well')
+    expect(composed).toContain('Wash the media off the cells')
+  })
+
+  it('does not re-fire when re-rendered with the same instruction', () => {
+    const utils = render(
+      <StepInvestigationPanel
+        runId="RUN-000001"
+        step={{ stepId: 'S2', label: 'Wash the media off the cells', ordinal: 2, description: 'Remove media, dispense PBS, shake' }}
+        stepText="Wash the media off the cells"
+        onFocusStep={mocks.setFocusStepId}
+        initialInstruction="use RPMI 1640"
+      />,
+    )
+    utils.rerender(
+      <StepInvestigationPanel
+        runId="RUN-000001"
+        step={{ stepId: 'S2', label: 'Wash the media off the cells', ordinal: 2, description: 'Remove media, dispense PBS, shake' }}
+        stepText="Wash the media off the cells"
+        onFocusStep={mocks.setFocusStepId}
+        initialInstruction="use RPMI 1640"
+      />,
+    )
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+  })
+})

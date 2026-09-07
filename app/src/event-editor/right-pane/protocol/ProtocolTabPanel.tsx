@@ -27,6 +27,7 @@ import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepInvestigationPanel, type LocalProtocolSetupRows } from './StepInvestigationPanel'
+import { StepChipPrompt } from './StepChipPrompt'
 import { StepIndicator } from './StepIndicator'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
@@ -514,11 +515,15 @@ interface StepChipProps {
   onToggle: () => void
   onPlay: () => void
   onSelect: () => void
+  /** The step's human step text, carried with a localize prompt to the AI. */
+  stepText?: string
+  /** Fire when the per-step prompt box's Localize is clicked. */
+  onLocalize?: (payload: { prompt: string; stepText: string }) => void
   /** Called when the completion timestamp is edited. */
   onCompletionChange?: (stepId: string, completedAt: string) => void
 }
 
-function StepChip({ step, isActive, onToggle, onPlay, onSelect, onCompletionChange }: StepChipProps) {
+function StepChip({ step, isActive, onToggle, onPlay, onSelect, stepText, onLocalize, onCompletionChange }: StepChipProps) {
   const [editingTime, setEditingTime] = useState<string | null>(null)
 
   // Determine which timestamp to show: completedAt > startedAt
@@ -742,6 +747,11 @@ function StepChip({ step, isActive, onToggle, onPlay, onSelect, onCompletionChan
           )}
         </div>
       )}
+
+      {/* Per-step prompt box — visible only when the step chip is highlighted.
+          Localize sends { prompt, stepText } so the AI ghosts an event graph
+          for this step's realization. */}
+      <StepChipPrompt active={isActive} stepText={stepText} onLocalize={onLocalize} />
     </div>
   )
 }
@@ -1026,6 +1036,21 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // Step execution modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [pendingStep, setPendingStep] = useState<ProtocolStep | null>(null)
+
+  // Per-step prompt → when the user clicks Localize in a StepChip's prompt box,
+  // this holds the instruction for the expanded StepInvestigationPanel to
+  // auto-send (revealing its inline AI) so { prompt + stepText } reach the model.
+  const [stepInitialInstruction, setStepInitialInstruction] = useState<{ stepId: string; instruction: string } | null>(null)
+
+  const handleStepLocalize = useCallback(
+    (stepId: string, instruction: string) => {
+      // Ensure the step is active + expanded so its investigation panel is mounted.
+      setActiveStepId(stepId)
+      setExpandedStepId(stepId)
+      setStepInitialInstruction({ stepId, instruction })
+    },
+    [setActiveStepId, setExpandedStepId],
+  )
 
   // Run metadata state
   const [runName, setRunName] = useState('')
@@ -1794,6 +1819,8 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               isActive={activeStepId === step.stepId}
               onToggle={() => handleToggleVisibility(step.stepId)}
               onPlay={() => handlePlayStep(step)}
+              stepText={(splitHumanSteps(humanStepsText ?? '')[step.ordinal] ?? step.description) ?? undefined}
+              onLocalize={({ prompt }) => handleStepLocalize(step.stepId, prompt)}
               onSelect={async () => {
                 const wasActive = activeStepId === step.stepId
                 if (!wasActive) {
@@ -1837,6 +1864,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                     runId={runId}
                     step={{ stepId: step.stepId, label: step.label, ordinal: step.ordinal, description: step.description }}
                     stepText={text}
+                    initialInstruction={
+                      stepInitialInstruction && stepInitialInstruction.stepId === step.stepId
+                        ? stepInitialInstruction.instruction
+                        : undefined
+                    }
                     localProtocolSetup={
                       // Concrete LPR rows only — the universal-protocol role
                       // preview is abstract (no refs), so it must not ride in

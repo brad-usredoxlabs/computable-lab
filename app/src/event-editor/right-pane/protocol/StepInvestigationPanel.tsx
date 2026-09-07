@@ -13,7 +13,7 @@
  * the focused step highlights via ProtocolSelectionContext/ProtocolPreviewBridge.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
@@ -66,6 +66,10 @@ export interface StepInvestigationPanelProps {
   onCommitStepRef?: (ref: { kind: 'record'; type: 'protocol' | 'local-protocol'; id: string }) => void
   /** Commit the focused step's realization (events + labware map). Caller persists. */
   onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => void
+  /** When the caller supplies an instruction, auto-send it once (prompt + stepText
+   *  to the AI) and reveal the inline AI — used by the per-step StepChip prompt
+   *  box Localize action. Cleared after sending so it doesn't re-fire on re-render. */
+  initialInstruction?: string
 }
 
 export function StepInvestigationPanel({
@@ -77,6 +81,7 @@ export function StepInvestigationPanel({
   availableProtocolRefs,
   onCommitStepRef,
   onSaveRealization,
+  initialInstruction,
 }: StepInvestigationPanelProps) {
   const ws = useWorkspace()
   const editor = useOptionalEventEditor()
@@ -224,6 +229,15 @@ export function StepInvestigationPanel({
     },
     [chat, step, stepText],
   )
+
+  // Consume a caller-supplied initial instruction (per-step prompt Localize):
+  // auto-send it once — prompt + stepText reach the AI and the inline AI reveals.
+  // Guarded by a ref so it fires once per instruction even across re-renders.
+  const consumedInitialRef = useRef<string | null>(null)
+  if (initialInstruction && consumedInitialRef.current !== initialInstruction) {
+    consumedInitialRef.current = initialInstruction
+    handleLocalize(initialInstruction)
+  }
 
   const handleRevise = useCallback(() => {
     if (!whatToDoDifferently.trim()) return
