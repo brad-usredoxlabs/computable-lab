@@ -258,7 +258,7 @@
 }
 
 .vpdf-review__modal {
-  background: var(--cl-bg-elev);
+  background: #ffffff;
   border: 1px solid var(--cl-border);
   border-radius: 10px;
   padding: 20px;
@@ -267,6 +267,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  color: var(--cl-text);
+  /* Fully-opaque solid card so the title text reads clearly against the
+     dimmed page behind it. */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .vpdf-review__modal-title {
@@ -288,9 +292,10 @@
   padding: 8px 10px;
   border: 1px solid var(--cl-border);
   border-radius: 6px;
-  background: var(--cl-bg);
+  background: #ffffff;
   color: var(--cl-text);
   font-size: 13px;
+  font-weight: 600;
 }
 
 .vpdf-review__modal-actions {

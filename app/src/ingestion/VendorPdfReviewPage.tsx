@@ -499,7 +499,15 @@ export function VendorPdfReviewPage() {
       {/* Save As modal — pre-loaded with the real protocol title. */}
       {saveAsOpen ? (
         <div className="vpdf-review__modal-overlay" data-testid="vpdf-saveas-modal">
-          <div className="vpdf-review__modal" role="dialog" aria-modal="true">
+          <form
+            className="vpdf-review__modal"
+            role="dialog"
+            aria-modal="true"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void handleSaveAsConfirm()
+            }}
+          >
             <h3 className="vpdf-review__modal-title">Save Protocol As</h3>
             <label className="vpdf-review__modal-label">
               Protocol title
@@ -515,11 +523,11 @@ export function VendorPdfReviewPage() {
               <button type="button" className="vpdf-review__save vpdf-review__save--secondary" onClick={() => setSaveAsOpen(false)} data-testid="vpdf-saveas-cancel">
                 Cancel
               </button>
-              <button type="button" className="vpdf-review__save" onClick={() => void handleSaveAsConfirm()} disabled={saving} data-testid="vpdf-saveas-confirm">
+              <button type="submit" className="vpdf-review__save" disabled={saving} data-testid="vpdf-saveas-confirm">
                 Save As
               </button>
             </div>
-          </div>
+          </form>
         </div>
       ) : null}
     </div>
