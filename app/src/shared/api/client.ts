@@ -4497,6 +4497,20 @@ export const apiClient = {
     })
   },
 
+  // Localize a step by REFERENCE: point the step's subGraphRef at an existing
+  // protocol/local-protocol that realizes it (the riff's "use our cell culture"
+  // answer, rather than hand-building an event graph). Reuses PATCH step.
+  async patchStepRef(payload: {
+    protocolId: string
+    stepId: string
+    ref: { kind: 'record'; type: 'protocol' | 'local-protocol'; id: string }
+  }): Promise<{ step: Record<string, unknown> }> {
+    return request(`/protocols/${encodeURIComponent(payload.protocolId)}/steps/${encodeURIComponent(payload.stepId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ subGraphRef: payload.ref }),
+    })
+  },
+
   // === Plan execution (spec-034) ===
 
   /**

@@ -1640,6 +1640,31 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     }
   })()
 
+  // Protocols a step can realize BY REFERENCE: the localized (attachable) ones
+  // from context. A step pointing here means "realized by that protocol" —
+  // CellROX 'grow cells' -> Cell Culture, etc. Deduped by id across the groups.
+  const localizedRefs = (() => {
+    const seen = new Set<string>()
+    const refs: Array<{ id: string; title: string; type: 'protocol' | 'local-protocol' }> = []
+    for (const group of [protocolContext?.availableProtocols, protocolContext?.projectTemplates]) {
+      for (const rec of group ?? []) {
+        const payload = (rec.payload ?? rec) as Record<string, unknown> | null
+        if (payload?.localizationReady !== true) continue
+        const id = rec.recordId as string | undefined
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        const kind = (rec.meta?.kind ?? payload?.kind) as string | undefined
+        refs.push({
+          id,
+          title: typeof payload?.title === 'string' ? payload.title
+            : typeof payload?.name === 'string' ? payload.name : id,
+          type: kind === 'local-protocol' ? 'local-protocol' : 'protocol',
+        })
+      }
+    }
+    return refs
+  })()
+
   return (
     <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', height: '100%' }}>
       {/* Very visible "which concept am I realizing?" indicator when a step is
@@ -1818,6 +1843,19 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                       // the localization context as if it were a declared setup.
                       localSetup && !setupIsPreview ? localSetup : undefined
                     }
+                    availableProtocolRefs={localizedRefs}
+                    onCommitStepRef={(ref) => {
+                      // Localize by reference: point the step's subGraphRef at
+                      // an existing protocol that realizes it.
+                      if (!stepsProtocolId || !step.stepId) return
+                      void apiClient
+                        .patchStepRef({ protocolId: stepsProtocolId, stepId: step.stepId, ref })
+                        .then(() => {
+                          void fetchStepGraph(step.stepId)
+                          window.dispatchEvent(new CustomEvent('cl:records-changed'))
+                        })
+                        .catch((err) => console.error('Failed to commit step reference:', err))
+                    }}
                     onFocusStep={(fstep) => setFocusedStep(fstep)}
                     onSaveRealization={(events, labwares) => {
                       // Commit the focused step's realization (concept → event-graph).

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   useChatThread: vi.fn(),
   setFocusStepId: vi.fn(),
+  commitStepRef: vi.fn(),
 }))
 
 vi.mock('../../workspace/WorkspaceContext', () => ({
@@ -177,5 +178,19 @@ describe('StepInvestigationPanel focus', () => {
     renderPanel()
     fireEvent.click(screen.getByTestId('step-investigate-focus-on'))
     expect(mocks.setFocusStepId).toHaveBeenCalledWith({ stepId: 'S2', label: 'Wash the media off the cells', ordinal: 2 })
+  })
+})
+
+describe('StepInvestigationPanel reference-a-protocol', () => {
+  it('commits a protocol reference as the step realization', () => {
+    renderPanel({
+      availableProtocolRefs: [{ id: 'PRT-cell-culture', title: 'Cell Culture' }, { id: 'PRT-counting', title: 'HepG2 Counting' }],
+      onCommitStepRef: mocks.commitStepRef,
+    })
+    fireEvent.click(screen.getByTestId('step-investigate-ref-protocol'))
+    // the picker surfaces the available protocols
+    expect(screen.getByText('Cell Culture')).not.toBeNull()
+    fireEvent.click(screen.getByText('Cell Culture'))
+    expect(mocks.commitStepRef).toHaveBeenCalledWith({ kind: 'record', type: 'protocol', id: 'PRT-cell-culture' })
   })
 })

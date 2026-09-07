@@ -58,6 +58,12 @@ export interface StepInvestigationPanelProps {
   localProtocolSetup?: LocalProtocolSetupRows
   /** Focus this step's realization on the deck (setFocusedStep). */
   onFocusStep?: (step: { stepId: string; label: string; ordinal?: number } | null) => void
+  /** Accepted protocols a step can realize by reference (the riff's best answer:
+   *  "for this assay, use HepRG — reference our cell protocol"). Each is a
+   *  {id, title} summary the picker renders; commit writes subGraphRef → protocol. */
+  availableProtocolRefs?: Array<{ id: string; title: string; type?: 'protocol' | 'local-protocol' }>
+  /** Commit the step's realization as a reference to an existing protocol. */
+  onCommitStepRef?: (ref: { kind: 'record'; type: 'protocol' | 'local-protocol'; id: string }) => void
   /** Commit the focused step's realization (events + labware map). Caller persists. */
   onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => void
 }
@@ -68,6 +74,8 @@ export function StepInvestigationPanel({
   stepText,
   localProtocolSetup,
   onFocusStep,
+  availableProtocolRefs,
+  onCommitStepRef,
   onSaveRealization,
 }: StepInvestigationPanelProps) {
   const ws = useWorkspace()
@@ -76,6 +84,7 @@ export function StepInvestigationPanel({
 
   // Realization actions + feedback loop state.
   const [mode, setMode] = useState<'idle' | 'ai' | 'manual'>('idle')
+  const [refPickerOpen, setRefPickerOpen] = useState(false)
   const [lastInstruction, setLastInstruction] = useState<string | null>(null)
   const [whatToDoDifferently, setWhatToDoDifferently] = useState('')
   const [revisionCount, setRevisionCount] = useState(0)
@@ -289,6 +298,17 @@ export function StepInvestigationPanel({
         >
           {mode === 'manual' ? 'Exit manual' : 'Edit events by hand'}
         </button>
+        {availableProtocolRefs && availableProtocolRefs.length > 0 ? (
+          <button
+            type="button"
+            className="step-investigation-panel__btn"
+            data-testid="step-investigate-ref-protocol"
+            onClick={() => setRefPickerOpen(!refPickerOpen)}
+            title="Realize this step by referencing an existing protocol"
+          >
+            {refPickerOpen ? 'Close reference' : 'Reference a protocol'}
+          </button>
+        ) : null}
         <button
           type="button"
           className="step-investigation-panel__btn"
@@ -326,6 +346,34 @@ export function StepInvestigationPanel({
           >
             Save step
           </button>
+        </div>
+      ) : null}
+
+      {/* Reference a protocol picker: realize this step by pointing at an
+          existing protocol (the riff's best answer). Writes subGraphRef →
+          protocol / local-protocol, so the step's localization is a reference. */}
+      {refPickerOpen && availableProtocolRefs ? (
+        <div className="step-investigation-panel__refpicker" data-testid="step-investigate-refpicker">
+          <p className="step-investigation-panel__refpicker-hint">
+            Realize <strong>{step.label}</strong> by referencing an existing protocol — e.g. "use our cell culture"
+            for a growth step. The referenced protocol becomes this step's realization.
+          </p>
+          <ul className="step-investigation-panel__refpicker-list">
+            {availableProtocolRefs.map((ref) => (
+              <li key={ref.id}>
+                <button
+                  type="button"
+                  className="step-investigation-panel__btn"
+                  onClick={() => {
+                    onCommitStepRef?.({ kind: 'record', type: ref.type ?? 'protocol', id: ref.id })
+                    setRefPickerOpen(false)
+                  }}
+                >
+                  {ref.title}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
