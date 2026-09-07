@@ -23,6 +23,12 @@ export function UserSwitcher() {
   const [editFields, setEditFields] = useState({ displayName: '', username: '', email: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  // "Set password" — lets a pre-auth user (e.g. USR-BRAD) establish a login.
+  const [setPassOpen, setSetPassOpen] = useState(false)
+  const [setPassPassword, setSetPassPassword] = useState('')
+  const [setPassError, setSetPassError] = useState<string | null>(null)
+  const [setPassMsg, setSetPassMsg] = useState<string | null>(null)
+  const [settingPass, setSettingPass] = useState(false)
   // Login form (shown when the session is anonymous; see below).
   const [loginMode, setLoginMode] = useState(false)
   const [loginFields, setLoginFields] = useState({ username: '', password: '' })
@@ -123,6 +129,25 @@ export function UserSwitcher() {
     window.location.assign('/')
   }
 
+  async function handleSetPassword() {
+    if (setPassPassword.length < 8) {
+      setSetPassError('Password must be at least 8 characters')
+      return
+    }
+    setSettingPass(true)
+    setSetPassError(null)
+    setSetPassMsg(null)
+    try {
+      await apiClient.setPassword(setPassPassword)
+      setSetPassMsg('Password set. Log in with your username + new password.')
+      setSetPassPassword('')
+    } catch (err) {
+      setSetPassError(err instanceof Error ? err.message : 'Failed to set password')
+    } finally {
+      setSettingPass(false)
+    }
+  }
+
   const hasSession = Boolean(getSessionToken())
 
   return (
@@ -213,6 +238,37 @@ export function UserSwitcher() {
                     disabled={saving}
                   />
                 </label>
+                <div className="user-switcher__set-pass">
+                  {setPassOpen ? (
+                    <>
+                      <label>
+                        <span>New password</span>
+                        <input
+                          type="password"
+                          value={setPassPassword}
+                          onChange={(e) => setSetPassPassword(e.target.value)}
+                          placeholder="min 8 characters"
+                          disabled={settingPass}
+                        />
+                      </label>
+                      <div className="user-switcher__edit-actions">
+                        <button type="button" onClick={() => { setSetPassOpen(false); setSetPassError(null); setSetPassMsg(null) }} disabled={settingPass}>Cancel</button>
+                        <button
+                          type="button"
+                          className="user-switcher__edit-save"
+                          onClick={() => void handleSetPassword()}
+                          disabled={settingPass || setPassPassword.length < 8}
+                        >{settingPass ? '…' : 'Set password'}</button>
+                      </div>
+                      {setPassMsg ? <div className="user-switcher__set-pass-msg">{setPassMsg}</div> : null}
+                      {setPassError ? <div className="user-switcher__add-error">{setPassError}</div> : null}
+                    </>
+                  ) : (
+                    <button type="button" className="user-switcher__set-pass-btn" onClick={() => setSetPassOpen(true)}>
+                      Set password
+                    </button>
+                  )}
+                </div>
                 <div className="user-switcher__edit-actions">
                   <button type="button" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
                   <button
@@ -401,6 +457,19 @@ const userSwitcherStyles = `
 .user-switcher__divider { height: 1px; margin: 4px 0; background: var(--cl-border); }
 .user-switcher__add-form { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; }
 .user-switcher__login-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.user-switcher__set-pass { display: flex; flex-direction: column; gap: 6px; }
+.user-switcher__set-pass-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  background: transparent;
+  color: var(--cl-accent);
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.user-switcher__set-pass-msg { font-size: 0.78rem; color: var(--cl-accent); }
 .user-switcher__login-form label { display: flex; flex-direction: column; gap: 2px; }
 .user-switcher__login-form label span { font-size: 0.7rem; color: var(--cl-text-faint); }
 .user-switcher__login-form input {

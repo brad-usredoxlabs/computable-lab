@@ -1684,6 +1684,13 @@ export const apiClient = {
     setSessionToken(null)
   },
 
+  async setPassword(password: string): Promise<{ success: boolean; userId?: string }> {
+    return request<{ success: boolean; userId?: string }>('/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    })
+  },
+
   /**
    * Self-edit the current user's profile (PATCH /api/me). The server resolves
    * the user from the request, so only the active user can be edited here.
