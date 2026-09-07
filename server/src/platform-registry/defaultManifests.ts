@@ -72,6 +72,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
         title: 'Manual Bench (freeform)',
         slots: [],
         surface: { kind: 'lawn', widthMm: 1200, heightMm: 800 },
+        sideLawn: { widthMm: 600, heightMm: 400, label: 'Labware lawn' },
       },
     ],
   },

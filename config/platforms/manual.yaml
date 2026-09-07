@@ -43,3 +43,9 @@ variants:
       kind: lawn
       widthMm: 1200
       heightMm: 800
+    # A second, smaller freebench so tiles can be dragged between two lawn
+    # surfaces (primary bench ↔ side labware lawn). DeckStage renders both.
+    sideLawn:
+      widthMm: 600
+      heightMm: 400
+      label: Labware lawn

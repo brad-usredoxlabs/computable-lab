@@ -29,6 +29,24 @@ describe('default platform manifests', () => {
     ]);
   });
 
+  it('manual_freeform exposes BOTH a primary bench surface and a side labware lawn (so tiles can be dragged between them)', async () => {
+    // Assert on BOTH the YAML that the live server loads (config/platforms/manual.yaml)
+    // and the DEFAULT_PLATFORM_MANIFESTS fallback so the two never drift.
+    const manual = DEFAULT_PLATFORM_MANIFESTS.find((platform) => platform.id === 'manual');
+    const freeform = manual?.variants.find((variant) => variant.id === 'manual_freeform');
+    expect(freeform).toBeDefined();
+    expect(freeform?.surface).toEqual({ kind: 'lawn', widthMm: 1200, heightMm: 800 });
+    expect(freeform?.sideLawn).toEqual({ widthMm: 600, heightMm: 400, label: 'Labware lawn' });
+
+    const { registry, source } = await loadPlatformRegistry('..');
+    expect(source).toBe('yaml');
+    const yamlManual = registry.getPlatform('manual');
+    const yamlFreeform = yamlManual?.variants.find((variant) => variant.id === 'manual_freeform');
+    expect(yamlFreeform).toBeDefined();
+    expect(yamlFreeform?.surface).toEqual({ kind: 'lawn', widthMm: 1200, heightMm: 800 });
+    expect(yamlFreeform?.sideLawn).toEqual({ widthMm: 600, heightMm: 400, label: 'Labware lawn' });
+  });
+
   it('loads the YAML manual platform with single plate as the default variant', async () => {
     const { registry, source } = await loadPlatformRegistry('..');
     const manual = registry.getPlatform('manual');
