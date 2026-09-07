@@ -1369,7 +1369,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       return contextStepGraphs[stepId] as unknown as EventGraph;
     }
     try {
-      const res = await fetch(`/api/protocols/${runId}/steps/${stepId}/graph`);
+      // The graph route requires the UNIVERSAL protocol id (kind:'protocol').
+      // stepsProtocolId is resolved in fetchSteps (an inherited universal id for
+      // LPR-attached runs). Fall back to runId if no protocol id resolved yet.
+      const protoId = stepsProtocolId ?? runId
+      const res = await fetch(`/api/protocols/${protoId}/steps/${stepId}/graph`);
       if (!res.ok) {
         console.warn(`Failed to fetch sub-graph for step ${stepId}: ${res.status}`);
         return null;
@@ -1384,7 +1388,18 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       console.error(`Error fetching sub-graph for step ${stepId}:`, err);
       return null;
     }
-  }, [runId, contextStepGraphs, setContextStepGraph]);
+  }, [stepsProtocolId, runId, contextStepGraphs, setContextStepGraph]);
+
+  // Populate stepGraphs for every step once the protocol is resolved and steps
+  // load, so the deck ghosts the protocol's realization events
+  // (ProtocolPreviewBridge reads stepGraphs). Without this the deck stays empty
+  // after attach — the step graphs were never fetched.
+  useEffect(() => {
+    if (!stepsProtocolId || steps.length === 0) return
+    void Promise.all(steps.map((s) => fetchStepGraph(s.stepId))).catch(() => {
+      // one graph failing isn't fatal — the other steps still ghost
+    })
+  }, [stepsProtocolId, steps, fetchStepGraph])
 
   /** Fetch settings for a single step. */
   const fetchStepSettings = useCallback(async (stepId: string): Promise<void> => {
@@ -1762,6 +1777,8 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                 setActiveStepId(wasActive ? null : step.stepId)
                 setExpandedStepId(wasActive ? null : step.stepId)
                 protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
+                // Load THIS step's realization so focus ghosts it on the deck.
+                void fetchStepGraph(step.stepId)
                 // Enter/exit investigate mode: isolate THIS step's realization
                 // on the deck. null = flat ghosting (Phase 1 focus).
                 protocolSelection?.setFocusedStep(
