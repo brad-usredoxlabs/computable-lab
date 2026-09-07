@@ -44,4 +44,26 @@ describe('ProtocolSelectionContext', () => {
     expect([...result.current!.visibleSteps]).toEqual(['step-1', 'step-2'])
     expect(result.current?.currentStepId).toBe('step-2')
   })
+
+  it('defaults focusStepId to null (flat ghosting preserved)', () => {
+    const { result } = renderSelection()
+    expect(result.current?.focusStepId).toBeNull()
+  })
+
+  it('sets focusStepId to isolate a single step realization', () => {
+    const { result } = renderSelection()
+    act(() => {
+      result.current?.setFocusStepId('step-1')
+    })
+    expect(result.current?.focusStepId).toBe('step-1')
+  })
+
+  it('clears focus when set back to null', () => {
+    const { result } = renderSelection()
+    act(() => {
+      result.current?.setFocusStepId('step-1')
+      result.current?.setFocusStepId(null)
+    })
+    expect(result.current?.focusStepId).toBeNull()
+  })
 })

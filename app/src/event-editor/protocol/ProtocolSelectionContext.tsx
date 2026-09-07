@@ -42,6 +42,14 @@ interface ProtocolSelectionState {
   setCurrentStepId: (id: string | null) => void
   /** Set the active step (null to deselect). */
   setActiveStepId: (id: string | null) => void
+  /**
+   * Single-step focus for investigating a step's REALIZATION. When set, the
+   * preview bridge shows ONLY this step's sub-graph events (concept→realization
+   * isolation). When null, flat "ghost all visible steps" is preserved.
+   */
+  focusStepId: string | null
+  /** Set the focused step (null to restore flat ghosting). */
+  setFocusStepId: (id: string | null) => void
   /** Toggle a step's canvas visibility. */
   toggleStepVisibility: (stepId: string) => void
   /** Set whether a step is visible. */
@@ -57,6 +65,7 @@ const ProtocolSelectionContext = createContext<ProtocolSelectionState | null>(nu
 export function ProtocolSelectionProvider({ children }: { children: ReactNode }) {
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
   const [currentStepId, setCurrentStepId] = useState<string | null>(null)
+  const [focusStepId, setFocusStepId] = useState<string | null>(null)
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
 
@@ -100,6 +109,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         setCurrentStepId,
         visibleSteps,
         stepGraphs,
+        focusStepId,
+        setFocusStepId,
         setActiveStepId,
         toggleStepVisibility,
         setStepVisibility,

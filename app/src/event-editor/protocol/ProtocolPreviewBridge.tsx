@@ -30,13 +30,20 @@ export function ProtocolPreviewBridge() {
   const visibleSteps = protocolSelection?.visibleSteps ?? new Set<string>()
   const stepGraphs = protocolSelection?.stepGraphs ?? {}
   const currentStepId = protocolSelection?.currentStepId ?? null
+  const focusStepId = protocolSelection?.focusStepId ?? null
 
   useEffect(() => {
     const allEvents: PlateEvent[] = []
     const allLabwareMap: Record<string, Labware> = {}
     const allPlacements: EventEditorPlacement[] = []
 
-    for (const stepId of visibleSteps) {
+    // Single-step focus: when a step is focused for investigation, show ONLY
+    // that step's realization. Otherwise ghost all visible steps.
+    const sourceSteps = focusStepId !== null
+      ? (focusStepId in stepGraphs ? [focusStepId] : [])
+      : Array.from(visibleSteps)
+
+    for (const stepId of sourceSteps) {
       const graph = stepGraphs[stepId]
       if (!graph) continue
       for (const event of graph.events) {
@@ -79,7 +86,7 @@ export function ProtocolPreviewBridge() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleSteps, stepGraphs, currentStepId])
+  }, [visibleSteps, stepGraphs, currentStepId, focusStepId])
 
   return null
 }
