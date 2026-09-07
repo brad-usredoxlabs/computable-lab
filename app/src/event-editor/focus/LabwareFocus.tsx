@@ -26,6 +26,7 @@ import {
   previewStepStatusForLabware,
 } from '../lib/previewProjection'
 import { ReadPlateModal } from '../rail/ReadPlateModal'
+import { InstrumentFocus } from './InstrumentFocus'
 import type { LabwareOrientation, WellSelection } from '../types'
 
 /**
@@ -380,6 +381,19 @@ export function LabwareFocus() {
     ? state.selection.wells
     : []
   const selectionCount = selectedWells.length
+
+  // A bench instrument is not well-addressable — show a compact equipment detail
+  // pane instead of the well grid + context menu. Zoom-in still works (the tile
+  // focus resolves to this pane); it just has no wells to show.
+  if (labware.labwareType === 'instrument') {
+    return (
+      <InstrumentFocus
+        labware={labware}
+        locationLabel={locationLabel}
+        onClose={() => actions.setFocus(null)}
+      />
+    )
+  }
 
   return (
     <div className="focus" onClick={handleBackdropClick}>

@@ -3138,6 +3138,43 @@
   overflow: hidden;
 }
 
+/* ---- Bench instrument focus (InstrumentFocus) — no wells, just identity ---- */
+
+.event-editor .focus__body--instrument {
+  padding: 24px;
+  gap: 14px;
+  overflow: auto;
+  align-items: flex-start;
+}
+
+.event-editor .focus__instrument-id {
+  padding: 6px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
+
+.event-editor .focus__instrument-meta {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+
+.event-editor .focus__instrument-notes {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.event-editor .focus__instrument-hint {
+  margin-top: auto;
+  color: var(--cl-text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .plate-rail {
   display: flex;
   flex-direction: column;
