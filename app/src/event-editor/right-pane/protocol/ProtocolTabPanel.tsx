@@ -26,12 +26,11 @@ import { apiClient, type ProtocolContextResponse } from '../../../shared/api/cli
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
-import { StepInvestigationPanel } from './StepInvestigationPanel'
+import { StepInvestigationPanel, type LocalProtocolSetupRows } from './StepInvestigationPanel'
 import { StepIndicator } from './StepIndicator'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import { BranchPicker } from '../../protocol/BranchPicker'
-import type { LocalProtocolSetupRows } from './StepLocalizationPane'
 import './protocolTabPanel.css'
 
 /* ------------------------------------------------------------------ */
