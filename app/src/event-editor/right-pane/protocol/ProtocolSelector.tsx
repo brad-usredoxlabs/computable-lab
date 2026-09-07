@@ -67,11 +67,18 @@ export function ProtocolSelector({ runId, studyId, context, onAttached, alreadyA
     return state === 'approved' || state === 'effective' || state === 'accepted' || state === 'superseded'
   }
 
-  const projectProtocols = (context?.projectTemplates ?? []).filter(approved)
+  // A protocol is attachable when it is approved-ish AND every one of its steps
+  // is localized (has a realization ref). Bare approved concepts whose steps
+  // aren't localized stay localizable in the event editor, not attachable here.
+  const attachable = (p: { payload?: Record<string, unknown> | null }): boolean => {
+    return approved(p) && p?.payload?.localizationReady === true
+  }
+
+  const projectProtocols = (context?.projectTemplates ?? []).filter(attachable)
   const labProtocols = (context?.availableProtocols ?? []).filter(
     (p) => {
       const links = p.payload?.links as { studyId?: string; experimentId?: string } | undefined
-      return !links?.studyId && !links?.experimentId && approved(p)
+      return !links?.studyId && !links?.experimentId && attachable(p)
     },
   )
   const ingestedPdfs = context?.ingestedPdfs ?? []

@@ -14,8 +14,9 @@ const protocol = (id: string, title: string, kind = 'protocol', links?: Record<s
   recordId: id,
   schemaId: `https://computable-lab.com/schema/computable-lab/${kind}.schema.yaml`,
   meta: { kind },
-  // Approved so the selector's approved-only filter surfaces it.
-  payload: { kind, title, state: 'approved', ...(links ? { links } : {}) },
+  // Approved + localized (every step has a realization ref) so the selector's
+  // attachable filter surfaces it. Override with payload { localizationReady: false }.
+  payload: { kind, title, state: 'approved', localizationReady: true, ...(links ? { links } : {}) },
 })
 
 function context(): ProtocolContextResponse {
@@ -172,5 +173,26 @@ describe('ProtocolSelector', () => {
 
     await screen.findByText('Approved one')
     expect(screen.queryByText('Draft candidate')).toBeNull()
+  })
+
+  it('shows only protocols whose steps are localized (bare approved concepts are hidden)', async () => {
+    const base = context()
+    const bare = {
+      recordId: 'PRT-BARE',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+      meta: { kind: 'protocol' },
+      payload: { kind: 'protocol', title: 'Bare concept', state: 'approved', localizationReady: false },
+    }
+    const ctx = {
+      ...base,
+      projectTemplates: [],
+      availableProtocols: [protocol('PRT-OK', 'Approved localized', 'protocol'), bare],
+    }
+    render(
+      <ProtocolSelector runId="RUN-1" studyId="STU-1" context={ctx} onAttached={() => {}} />,
+    )
+
+    await screen.findByText('Approved localized')
+    expect(screen.queryByText('Bare concept')).toBeNull()
   })
 })
