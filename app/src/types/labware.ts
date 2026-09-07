@@ -75,6 +75,10 @@ export type LabwareType =
   | 'flask_250ml'
   | 'flask_500ml'
   | 'flask_1000ml'
+  // Bench instruments (shaker, incubator, plate reader, centrifuge, …) — lawn-only
+  // bench equipment minted from an Exa equipment record (sourceRecordId = the EQP-*).
+  // Forward-compatible with the future "move plate onto instrument" deck-flow.
+  | 'instrument'
   | 'deepwell_96'
   | 'tiprack_ot2_20'
   | 'tiprack_ot2_200'
@@ -128,6 +132,7 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   flask_250ml: '250 mL Flask',
   flask_500ml: '500 mL Flask',
   flask_1000ml: '1 L Flask',
+  instrument: 'Instrument (Exa)',
   deepwell_96: '96-Well Deep Well (2 mL)',
   tiprack_ot2_20: 'OT-2 Tip Rack 20 uL',
   tiprack_ot2_200: 'OT-2 Tip Rack 200 uL',
@@ -182,6 +187,7 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   flask_250ml: '🍶',
   flask_500ml: '🍶',
   flask_1000ml: '🍶',
+  instrument: '⚙️',
   deepwell_96: '🔬',
   tiprack_ot2_20: '🪡',
   tiprack_ot2_200: '🪡',
@@ -199,7 +205,7 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
 /**
  * Labware category for grouping in UI
  */
-export type LabwareCategory = 'plate' | 'reservoir' | 'tube' | 'tiprack' | 'glassware'
+export type LabwareCategory = 'plate' | 'reservoir' | 'tube' | 'tiprack' | 'glassware' | 'instrument'
 
 export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   plate_96: 'plate',
@@ -238,6 +244,7 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   flask_250ml: 'glassware',
   flask_500ml: 'glassware',
   flask_1000ml: 'glassware',
+  instrument: 'instrument',
   deepwell_96: 'plate',
   tiprack_ot2_20: 'tiprack',
   tiprack_ot2_200: 'tiprack',
@@ -921,6 +928,15 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     layoutFamily: 'tube',
     orientationPolicy: 'fixed_columns',
     color: '#7950f2',
+    lawnOnly: true,
+  },
+  instrument: {
+    labwareType: 'instrument',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 0, minVolume_uL: 0, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#ff922b',
     lawnOnly: true,
   },
   deepwell_96: {

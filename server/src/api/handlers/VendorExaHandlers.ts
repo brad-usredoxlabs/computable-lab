@@ -423,7 +423,8 @@ function hashOf(value: string): string {
 }
 
 function slugTitle(title: string): string {
-  return labelSlug(title);
+  // Uppercase so EQ IDs satisfy `^EQP-[A-Z0-9…]` (and LBW stays consistent).
+  return labelSlug(title).toUpperCase()
 }
 
 function provenanceNotes(url: string, snippet?: string): string {

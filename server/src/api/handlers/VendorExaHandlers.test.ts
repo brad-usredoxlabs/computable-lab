@@ -163,7 +163,26 @@ describe('VendorExaHandlers', () => {
       manufacturer: 'Bio-Rad',
       model: 'CFX96',
     });
-    expect(String(envelope.payload.id)).toMatch(/^EQP-/);
+    expect(String(envelope.payload.id)).toMatch(/^EQP-[A-Z0-9][A-Z0-9_-]*$/);
+  });
+
+  it('creates an equipment record whose id survives real schema validation (uppercase EQP-)', async () => {
+    // Regression: slugTitle previously lowercased → `EQP-eppendorf-…` which the
+    // equipment schema (`^EQP-[A-Z0-9][A-Z0-9_-]*$`) rejects on a REAL store.
+    // The mock store above skips validation, so assert the pattern directly and
+    // that the slug portion is uppercased.
+    const create = vi.fn(async ({ envelope }) => ({ success: true, envelope }));
+    const handlers = createVendorExaHandlers({ getAppConfig: () => ({}), store: store({ create } as Partial<RecordStore>) });
+
+    await handlers.createFromExa({
+      body: { candidate: { title: 'eppendorf thermomixer c', url: 'https://eppendorf.com/tc', category: 'equipment' } },
+    } as never, reply() as never);
+
+    const envelope = create.mock.calls[0]![0].envelope;
+    const id = String(envelope.payload.id);
+    expect(id).toMatch(/^EQP-[A-Z0-9][A-Z0-9_-]*$/);
+    // first segment after the prefix is uppercased (no lowercase letters in id)
+    expect(id).not.toMatch(/[a-z]/);
   });
 
   it('returns 400 when candidate lacks title/url', async () => {
