@@ -157,6 +157,12 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
     onCommit(next)
     syncMentions(mentions)
   }
+  const updateStepField = (index: number, field: string, fieldValue: unknown) => {
+    const next = steps.map((step, i) => i === index ? { ...step, [field]: fieldValue } : step)
+    onCommit(next)
+  }
+  const stepProvenance = (step: Record<string, unknown>) =>
+    Array.isArray(step.provenance) ? (step.provenance as Array<Record<string, unknown>>) : []
   return (
     <div className="taptab-protocol-list taptab-protocol-steps">
       {steps.length === 0 && <span className="taptab-widget-empty">No steps</span>}
@@ -178,6 +184,30 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
           )}
           {!readOnly && <button type="button" onClick={() => onCommit(steps.filter((_, i) => i !== index))} aria-label={`Remove step ${index + 1}`}>x</button>}
           </div>
+          {!readOnly && (
+            <label className="taptab-protocol-step-optional">
+              <input
+                type="checkbox"
+                checked={Boolean(step.isOptional)}
+                onChange={(e) => updateStepField(index, 'isOptional', e.target.checked)}
+              />
+              Optional
+            </label>
+          )}
+          {stepProvenance(step).length > 0 ? (
+            <details className="taptab-protocol-provenance">
+              <summary className="taptab-protocol-provenance__summary">View provenance</summary>
+              <ul className="taptab-protocol-provenance__list">
+                {stepProvenance(step).map((p, pi) => (
+                  <li key={String(p.anchorId ?? pi)}>
+                    {typeof p.pageNumber === 'number' ? `Page ${p.pageNumber}` : ''}
+                    {typeof p.sectionId === 'string' && p.sectionId ? ` · ${p.sectionId}` : ''}
+                    {typeof p.snippet === 'string' && p.snippet ? ` — ${p.snippet.slice(0, 80)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </li>
           ))}
         </ol>

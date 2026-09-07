@@ -1016,6 +1016,41 @@
   list-style: decimal;
 }
 
+.taptab-protocol-step-optional {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.taptab-protocol-step-optional input[type='checkbox'] {
+  accent-color: var(--cl-accent, #4b8bbe);
+}
+
+.taptab-protocol-provenance {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.taptab-protocol-provenance__summary {
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.8;
+}
+
+.taptab-protocol-provenance__list {
+  margin: 2px 0 0 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--cl-text-dim);
+}
+
 .taptab-protocol-chip-list {
   display: flex;
   flex-wrap: wrap;
