@@ -63,6 +63,7 @@ import {
   createLabSettingsHandlers,
   createVendorSearchHandlers,
   createVendorDocumentHandlers,
+  createVendorExaHandlers,
   createChemistryHandlers,
   createIngestionHandlers,
   createRunWorkspaceHandlers,
@@ -703,6 +704,12 @@ export async function createServer(
     // workspace Browse tab can surface it durably.
     store: ctx.store,
   });
+  const vendorExaHandlers = createVendorExaHandlers({
+    // Live accessor (same rationale as vendorSearchHandlers): a key pasted
+    // into Settings takes effect immediately, no server restart.
+    getAppConfig: () => ctx.appConfig,
+    store: ctx.store,
+  });
   const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
   const chemistryHandlers = createChemistryHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
@@ -1270,6 +1277,7 @@ export async function createServer(
       vocabHandlers,
       vendorSearchHandlers,
       vendorDocumentHandlers,
+      vendorExaHandlers,
       chemistryHandlers,
       ingestionHandlers,
       tagHandlers,

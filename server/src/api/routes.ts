@@ -35,6 +35,7 @@ import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
 import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers.js';
 import type { EquipmentHandlers } from './handlers/EquipmentHandlers.js';
+import type { VendorExaHandlers } from './handlers/VendorExaHandlers.js';
 import type { ExtractProtocolHandlers } from './handlers/ExtractProtocolHandler.js';
 import type { ProtocolBuilderHandlers } from './handlers/ProtocolBuilderHandlers.js';
 import type { CheckinHandlers } from './handlers/CheckinHandlers.js';
@@ -112,6 +113,7 @@ export interface RouteOptions {
   materialLifecycleHandlers?: MaterialLifecycleHandlers;
   materialProfileHandlers?: MaterialProfileHandlers;
   equipmentHandlers?: EquipmentHandlers;
+  vendorExaHandlers?: VendorExaHandlers;
   extractProtocolHandlers?: ExtractProtocolHandlers;
   protocolBuilderHandlers?: ProtocolBuilderHandlers;
   protocolPromotionHandlers?: ProtocolPromotionHandlers;
@@ -481,6 +483,15 @@ export function registerRoutes(
   if (equipmentHandlers) {
     fastify.get('/equipment/exa-search', equipmentHandlers.searchExa.bind(equipmentHandlers));
     fastify.post('/equipment/from-exa', equipmentHandlers.createFromExa.bind(equipmentHandlers));
+  }
+
+  // Exa-backed vendor product search + creation across materials/labware/equipment.
+  // Mirrors the equipment pair but is category-generic; used by the event-editor
+  // Add-material / Add-labware flows and the AI chat slash resolvers.
+  const { vendorExaHandlers } = options;
+  if (vendorExaHandlers) {
+    fastify.post('/vendor/exa/search', vendorExaHandlers.searchExa.bind(vendorExaHandlers));
+    fastify.post('/vendor/exa/from', vendorExaHandlers.createFromExa.bind(vendorExaHandlers));
   }
 
   const { vendorDocumentHandlers } = options;
