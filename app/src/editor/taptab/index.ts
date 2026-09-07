@@ -20,7 +20,7 @@ export { FieldRow } from './extensions/FieldRow';
 export { TapTabEditor, ProjectionTapTabEditor } from './TapTabEditor';
 export { RecordRefPicker } from './RecordRefPicker';
 export { buildDocument, buildProjectionDocument } from './documentMapper';
-export { serializeDocument, isDirty } from './recordSerializer';
+export { serializeDocument, isDirty, stripSystemProvenance } from './recordSerializer';
 
 // Composite widget exports
 export {

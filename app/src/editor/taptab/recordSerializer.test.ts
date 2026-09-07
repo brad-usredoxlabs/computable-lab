@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { serializeDocument, isDirty } from './recordSerializer';
+import { serializeDocument, isDirty, stripSystemProvenance } from './recordSerializer';
 
 /**
  * Minimal TipTap JSON content node type - matches @tiptap/core JSONContent.
@@ -214,6 +214,20 @@ describe('serializeDocument', () => {
 
     // Should return a clone of the base record with no changes
     expect(result.name).toBe('Original');
+  });
+
+  it('strips system provenance from a serialized record', () => {
+    const payload: Record<string, unknown> = {
+      name: 'X',
+      createdBy: 'USR-BRAD',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-02T00:00:00Z',
+    };
+    const out = stripSystemProvenance(structuredClone(payload));
+    expect(out).not.toHaveProperty('createdBy');
+    expect(out).not.toHaveProperty('createdAt');
+    expect(out).not.toHaveProperty('updatedAt');
+    expect(out.name).toBe('X');
   });
 });
 

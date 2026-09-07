@@ -666,9 +666,10 @@ describe('Cross-fixture: default editor path invariants', () => {
 
     // name should be updated
     expect(payload.name).toBe('test')
-    // createdAt and createdBy should be preserved from baseRecord
-    expect(payload.createdAt).toBe('2024-01-01')
-    expect(payload.createdBy).toBe('system')
+    // System provenance is server-owned — serializeDocument strips it so the
+    // client can never round-trip a stale user-typed createdBy/createdAt.
+    expect(payload.createdAt).toBeUndefined()
+    expect(payload.createdBy).toBeUndefined()
   })
 
   it('serializeDocument does not mutate the baseRecord', () => {

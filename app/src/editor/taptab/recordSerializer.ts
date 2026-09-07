@@ -46,6 +46,23 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
 }
 
 /**
+ * Paths that are always system-owned. The client must never write these;
+ * the server stamps createdBy/createdAt/updatedAt authoritatively on create
+ * and update. Stripping here makes every TapTab save provenance-free.
+ */
+const SYSTEM_PROVENANCE_KEYS = new Set(['createdBy', 'createdAt', 'updatedAt']);
+
+/** Remove system provenance keys from a serialized record (mutates + returns it). */
+export function stripSystemProvenance(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  for (const key of SYSTEM_PROVENANCE_KEYS) {
+    delete payload[key];
+  }
+  return payload;
+}
+
+/**
  * Serializes a TipTap document JSON back into a record object.
  * Walks the doc tree, extracts each FieldRow's path and value,
  * and reconstructs the record using setValueAtPath.
@@ -72,7 +89,8 @@ export function serializeDocument(
     result = extractFieldRows(doc.content, result);
   }
 
-  return result;
+  // System provenance is server-owned; never round-trip it through the client.
+  return stripSystemProvenance(result);
 }
 
 /**

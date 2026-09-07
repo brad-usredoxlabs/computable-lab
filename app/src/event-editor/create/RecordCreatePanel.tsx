@@ -23,6 +23,7 @@ import { describeApiError } from '../../shared/api/errors'
 import {
   ProjectionTapTabEditor,
   serializeDocument,
+  stripSystemProvenance,
   type TapTabEditorHandle,
 } from '../../editor/taptab'
 import type { EditorProjectionResponse } from '../../types/uiSpec'
@@ -223,6 +224,8 @@ export function RecordCreatePanel({
           randRef.current,
         )
         payload.kind = nodeType
+        // System provenance is server-owned — never submit it from the client.
+        stripSystemProvenance(payload)
         if (!payload.shortSlug && typeof payload.title === 'string') {
           payload.shortSlug = slugify(payload.title, 30)
         }
