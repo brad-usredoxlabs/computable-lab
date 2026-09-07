@@ -1,0 +1,117 @@
+.step-investigation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.step-investigation-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.step-investigation-panel__concept {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.step-investigation-panel__model-hint {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  font-weight: 500;
+}
+
+.step-investigation-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.step-investigation-panel__btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  color: var(--cl-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.step-investigation-panel__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.step-investigation-panel__btn--primary {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border-color: var(--cl-accent);
+}
+
+.step-investigation-panel__manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--cl-accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cl-accent) 6%, transparent);
+}
+
+.step-investigation-panel__manual-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+  line-height: 1.4;
+}
+
+.step-investigation-panel__revise {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+}
+
+.step-investigation-panel__revise-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.step-investigation-panel__revise-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-accent);
+}
+
+.step-investigation-panel__revise-hint {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.step-investigation-panel__revise textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.step-investigation-panel__resolve {
+  display: flex;
+  gap: 6px;
+}
