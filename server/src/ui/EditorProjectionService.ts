@@ -349,6 +349,29 @@ function resolvePath(
 }
 
 // ============================================================================
+// Provenance enforcement
+// ============================================================================
+
+/** Paths that are always system-owned and must never be user-editable. */
+const SYSTEM_PROVENANCE_PATHS = new Set(['$.createdBy', '$.createdAt', '$.updatedAt']);
+
+/**
+ * Force provenance slots read-only regardless of the ui spec. The backend
+ * stamps createdBy/createdAt/updatedAt authoritatively at create/update; the
+ * editor must not let the user type into them. Applied centrally so a schema
+ * that forgets `readonly: true` can never leak the field as editable.
+ */
+function enforceSystemProvenanceReadOnly(
+  slots: ProjectionSlot[],
+): ProjectionSlot[] {
+  return slots.map((slot) =>
+    SYSTEM_PROVENANCE_PATHS.has(slot.path)
+      ? { ...slot, readOnly: true }
+      : slot,
+  );
+}
+
+// ============================================================================
 // Main projection function
 // ============================================================================
 
@@ -402,6 +425,10 @@ export function projectRecord(
   diagnostics.push(
     ...emitDiagnostics(uiSpec, payload)
   );
+
+  // Central provenance enforcement: createdAt/createdBy/updatedAt are always
+  // read-only, regardless of the ui spec.
+  slots = enforceSystemProvenanceReadOnly(slots);
 
   return {
     schemaId,

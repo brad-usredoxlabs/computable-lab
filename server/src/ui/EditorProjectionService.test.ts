@@ -449,4 +449,43 @@ describe('EditorProjectionService', () => {
       expect(result.diagnostics).toHaveLength(2); // EMPTY_BLOCKS + EMPTY_SLOTS
     });
   });
+
+  describe('provenance read-only enforcement', () => {
+    it('forces createdBy/createdAt/updatedAt read-only even when the ui spec leaves them editable', () => {
+      // A ui spec that does NOT mark provenance as readonly (the leak the user
+      // hit: "created/created by are free-text fields").
+      const uiSpec: UISpec = {
+        uiVersion: 1,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/provenance.schema.yaml',
+        editor: {
+          mode: 'document',
+          blocks: [{ id: 'provenance', kind: 'section', label: 'Provenance', path: '$.provenance' }],
+          slots: [
+            { id: 's-created', path: '$.createdBy', label: 'Created By', widget: 'text' },
+            { id: 's-at', path: '$.createdAt', label: 'Created', widget: 'text' },
+            { id: 's-upd', path: '$.updatedAt', label: 'Updated', widget: 'text' },
+            { id: 's-title', path: '$.title', label: 'Title', widget: 'text' },
+          ],
+        },
+      };
+      const payload: Record<string, unknown> = {
+        title: 'Test',
+        createdBy: 'USR-BRAD',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-02T00:00:00Z',
+      };
+
+      const result = projectRecord(uiSpec, payload, uiSpec.schemaId, 'PROV-001');
+      const created = result.slots.find((s) => s.path === '$.createdBy');
+      const at = result.slots.find((s) => s.path === '$.createdAt');
+      const upd = result.slots.find((s) => s.path === '$.updatedAt');
+      const title = result.slots.find((s) => s.path === '$.title');
+
+      expect(created?.readOnly).toBe(true);
+      expect(at?.readOnly).toBe(true);
+      expect(upd?.readOnly).toBe(true);
+      // Non-provenance fields are unaffected.
+      expect(title?.readOnly).toBe(false);
+    });
+  });
 });
