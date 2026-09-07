@@ -56,8 +56,8 @@ export interface StepInvestigationPanelProps {
   stepText?: string
   /** Plate-setting sections from the run's local protocol (AI context). */
   localProtocolSetup?: LocalProtocolSetupRows
-  /** Delegate to ProtocolSelectionContext.setFocusStepId (isolate on deck). */
-  onFocusStep?: (id: string | null) => void
+  /** Focus this step's realization on the deck (setFocusedStep). */
+  onFocusStep?: (step: { stepId: string; label: string; ordinal?: number } | null) => void
   /** Commits the focused step's realization to its subGraphRef (caller wires). */
   onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => void
 }
@@ -293,7 +293,7 @@ export function StepInvestigationPanel({
           type="button"
           className="step-investigation-panel__btn"
           data-testid="step-investigate-focus-on"
-          onClick={() => onFocusStep?.(step.stepId)}
+          onClick={() => onFocusStep?.({ stepId: step.stepId, label: step.label, ordinal: step.ordinal })}
           title="Isolate this step's realization on the deck"
         >
           Investigate on deck

@@ -48,8 +48,10 @@ interface ProtocolSelectionState {
    * isolation). When null, flat "ghost all visible steps" is preserved.
    */
   focusStepId: string | null
+  /** The focused step's concept identity (label + order) for the indicator/banner. */
+  focusedStep: { stepId: string; label: string; ordinal?: number } | null
   /** Set the focused step (null to restore flat ghosting). */
-  setFocusStepId: (id: string | null) => void
+  setFocusedStep: (step: { stepId: string; label: string; ordinal?: number } | null) => void
   /** Toggle a step's canvas visibility. */
   toggleStepVisibility: (stepId: string) => void
   /** Set whether a step is visible. */
@@ -65,9 +67,15 @@ const ProtocolSelectionContext = createContext<ProtocolSelectionState | null>(nu
 export function ProtocolSelectionProvider({ children }: { children: ReactNode }) {
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
   const [currentStepId, setCurrentStepId] = useState<string | null>(null)
-  const [focusStepId, setFocusStepId] = useState<string | null>(null)
+  const [focusStepId, setFocusStepIdState] = useState<string | null>(null)
+  const [focusedStep, setFocusedStepState] = useState<{ stepId: string; label: string; ordinal?: number } | null>(null)
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
+
+  const setFocusedStep = useCallback((step: { stepId: string; label: string; ordinal?: number } | null) => {
+    setFocusStepIdState(step ? step.stepId : null)
+    setFocusedStepState(step)
+  }, [])
 
   const toggleStepVisibility = useCallback((stepId: string) => {
     setVisibleStepsState((prev) => {
@@ -110,7 +118,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         visibleSteps,
         stepGraphs,
         focusStepId,
-        setFocusStepId,
+        focusedStep,
+        setFocusedStep,
         setActiveStepId,
         toggleStepVisibility,
         setStepVisibility,

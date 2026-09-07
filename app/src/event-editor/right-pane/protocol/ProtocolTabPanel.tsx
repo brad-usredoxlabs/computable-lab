@@ -27,6 +27,7 @@ import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepInvestigationPanel } from './StepInvestigationPanel'
+import { StepIndicator } from './StepIndicator'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import { BranchPicker } from '../../protocol/BranchPicker'
@@ -958,7 +959,8 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const setContextStepGraph = protocolSelection?.setStepGraph ?? (() => {})
   // Single-step investigate mode: the focused step's realization is isolated
   // on the deck (concept→realization focus), driven by ProtocolSelectionContext.
-  const setFocusStepId = protocolSelection?.setFocusStepId ?? (() => {})
+  const focusedStep = protocolSelection?.focusedStep ?? null
+  const setFocusedStep = protocolSelection?.setFocusedStep ?? (() => {})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [noProtocol, setNoProtocol] = useState(false)
@@ -1622,6 +1624,19 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
   return (
     <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', height: '100%' }}>
+      {/* Very visible "which concept am I realizing?" indicator when a step is
+          focused for investigation (focusStepId set). */}
+      {(() => {
+        const fstep = focusedStep
+        return fstep ? (
+          <StepIndicator
+            stepId={fstep.stepId}
+            ordinal={fstep.ordinal}
+            label={fstep.label}
+            onClearFocus={() => setFocusedStep(null)}
+          />
+        ) : null
+      })()}
       {/* Run metadata header */}
       <RunHeader
         runId={runId}
@@ -1746,7 +1761,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                 protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
                 // Enter/exit investigate mode: isolate THIS step's realization
                 // on the deck. null = flat ghosting (Phase 1 focus).
-                protocolSelection?.setFocusStepId(wasActive ? null : step.stepId)
+                protocolSelection?.setFocusedStep(
+                  wasActive ? null : { stepId: step.stepId, label: step.label, ordinal: step.ordinal },
+                )
               }}
               onCompletionChange={handleCompletionChange}
             />
@@ -1781,7 +1798,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                       // the localization context as if it were a declared setup.
                       localSetup && !setupIsPreview ? localSetup : undefined
                     }
-                    onFocusStep={(id) => setFocusStepId(id)}
+                    onFocusStep={(fstep) => setFocusedStep(fstep)}
                   />
                 </div>
               )

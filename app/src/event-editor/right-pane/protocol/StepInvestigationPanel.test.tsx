@@ -173,9 +173,9 @@ describe('StepInvestigationPanel revise (feedback loop)', () => {
 })
 
 describe('StepInvestigationPanel focus', () => {
-  it('offers an investigate-on-deck toggle that sets focusStepId', () => {
+  it('offers an investigate-on-deck toggle that focuses the step', () => {
     renderPanel()
     fireEvent.click(screen.getByTestId('step-investigate-focus-on'))
-    expect(mocks.setFocusStepId).toHaveBeenCalledWith('S2')
+    expect(mocks.setFocusStepId).toHaveBeenCalledWith({ stepId: 'S2', label: 'Wash the media off the cells', ordinal: 2 })
   })
 })

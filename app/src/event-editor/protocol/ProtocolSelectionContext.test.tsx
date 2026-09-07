@@ -45,25 +45,28 @@ describe('ProtocolSelectionContext', () => {
     expect(result.current?.currentStepId).toBe('step-2')
   })
 
-  it('defaults focusStepId to null (flat ghosting preserved)', () => {
+  it('defaults focus to null (flat ghosting preserved)', () => {
     const { result } = renderSelection()
     expect(result.current?.focusStepId).toBeNull()
+    expect(result.current?.focusedStep).toBeNull()
   })
 
-  it('sets focusStepId to isolate a single step realization', () => {
+  it('sets focus to isolate a single step realization (carries the concept)', () => {
     const { result } = renderSelection()
     act(() => {
-      result.current?.setFocusStepId('step-1')
+      result.current?.setFocusedStep({ stepId: 'step-1', label: 'Wash the cells', ordinal: 1 })
     })
     expect(result.current?.focusStepId).toBe('step-1')
+    expect(result.current?.focusedStep).toEqual({ stepId: 'step-1', label: 'Wash the cells', ordinal: 1 })
   })
 
   it('clears focus when set back to null', () => {
     const { result } = renderSelection()
     act(() => {
-      result.current?.setFocusStepId('step-1')
-      result.current?.setFocusStepId(null)
+      result.current?.setFocusedStep({ stepId: 'step-1', label: 'Wash the cells', ordinal: 1 })
+      result.current?.setFocusedStep(null)
     })
     expect(result.current?.focusStepId).toBeNull()
+    expect(result.current?.focusedStep).toBeNull()
   })
 })

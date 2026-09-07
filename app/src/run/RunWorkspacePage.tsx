@@ -20,7 +20,9 @@ import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
+import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
+import { StepIndicator } from '../event-editor/right-pane/protocol/StepIndicator'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -202,5 +204,29 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
 
   // Plan mode — render the DeckViewer (deck stage + event graph editor).
   // EventEditorProvider is already wrapping the entire shell one level up.
-  return <DeckViewer />
+  return (
+    <>
+      <RunDeckStepBanner />
+      <DeckViewer />
+    </>
+  )
+}
+
+/**
+ * RunDeckStepBanner — a very visible banner above the deck that shows WHICH
+ * protocol step (concept) is focused, so every event the user adds on the deck
+ * is clearly attributed to that step's realization. Hides when no step focused.
+ */
+function RunDeckStepBanner() {
+  const protocolSelection = useProtocolSelection()
+  const focusedStep = protocolSelection?.focusedStep ?? null
+  if (!focusedStep) return null
+  return (
+    <StepIndicator
+      stepId={focusedStep.stepId}
+      ordinal={focusedStep.ordinal}
+      label={focusedStep.label}
+      onClearFocus={protocolSelection?.setFocusedStep ? () => protocolSelection!.setFocusedStep(null) : undefined}
+    />
+  )
 }

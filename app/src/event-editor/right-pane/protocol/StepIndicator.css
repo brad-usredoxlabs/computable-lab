@@ -1,0 +1,51 @@
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid var(--cl-accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cl-accent) 12%, transparent);
+  color: var(--cl-text);
+  font-size: 13px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+
+.step-indicator__badge {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.step-indicator__concept {
+  color: var(--cl-text);
+  font-weight: 700;
+}
+
+.step-indicator__hint {
+  color: var(--cl-text-dim);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.step-indicator__clear {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  color: var(--cl-text);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.step-indicator__clear:hover {
+  border-color: var(--cl-danger);
+  color: var(--cl-danger);
+}
