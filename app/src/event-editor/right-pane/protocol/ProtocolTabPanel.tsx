@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ExecutionProvider, useExecution } from '../../execution/ExecutionContext'
 import { StepExecutionModal } from '../../../components/StepExecutionModal'
 import type { StepInfo } from '../../../components/StepExecutionModal'
@@ -25,7 +26,7 @@ import { apiClient, type ProtocolContextResponse } from '../../../shared/api/cli
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
-import { StepLocalizationPane } from './StepLocalizationPane'
+import { StepInvestigationPanel } from './StepInvestigationPanel'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import { BranchPicker } from '../../protocol/BranchPicker'
@@ -945,6 +946,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     )
   }
 
+  const navigate = useNavigate()
   const [steps, setSteps] = useState<ProtocolStep[]>([])
   const protocolSelection = useProtocolSelection()
   const activeStepId = protocolSelection?.activeStepId ?? null
@@ -954,11 +956,22 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const setVisibleSteps = protocolSelection?.setVisibleSteps ?? (() => {})
   const contextStepGraphs = protocolSelection?.stepGraphs ?? {}
   const setContextStepGraph = protocolSelection?.setStepGraph ?? (() => {})
+  // Single-step investigate mode: the focused step's realization is isolated
+  // on the deck (concept→realization focus), driven by ProtocolSelectionContext.
+  const setFocusStepId = protocolSelection?.setFocusStepId ?? (() => {})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [noProtocol, setNoProtocol] = useState(false)
   const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
   const [refetchTrigger, setRefetchTrigger] = useState(0)
+  // Search box on the Protocol tab for finding protocols / PDFs to attach.
+  const [protocolQuery, setProtocolQuery] = useState('')
+  // Change-protocol flow: when true, the ProtocolSelector is shown even though
+  // a protocol IS attached, so the user can preview and switch while planning.
+  const [changingProtocol, setChangingProtocol] = useState(false)
+  // The run's lifecycle status ('planned' | 'in_progress' | ...) — used to gate
+  // switching: only planned (or unknown) runs may change their protocol.
+  const [runStatus, setRunStatus] = useState<string | null>(null)
   // Plate-setting sections declared on the run's local protocol (if the
   // attached protocol is an LPR-*). Rendered above the step chips and fed to
   // each StepLocalizationPane as read-only localization context.
@@ -1054,6 +1067,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       try {
         const runEnv = await apiClient.getRecord(runId)
         const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+        setRunStatus(typeof rp?.status === 'string' ? (rp.status as string) : null)
         const plr = rp?.plannedRunRef as { id?: string } | undefined
         if (plr?.id) {
           const plrEnv = await apiClient.getRecord(plr.id)
@@ -1205,6 +1219,29 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     void fetchSteps()
     return () => { cancelled = true }
   }, [runId, refetchTrigger])
+
+  // Debounced search across the protocol context (protocols, run methods, and
+  // ingested vendor PDFs) — the server filters via getProtocolContext's `q`.
+  useEffect(() => {
+    if (!studyId) return
+    const trimmed = protocolQuery.trim()
+    let cancelled = false
+    const handle = window.setTimeout(() => {
+      apiClient
+        .getProtocolContext({ studyId, q: trimmed || undefined })
+        .then((ctx) => {
+          if (!cancelled) setProtocolContext(ctx)
+        })
+        .catch(() => {
+          // Keep the current context on a failed search; the selector still
+          // shows its empty state.
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [protocolQuery, studyId])
 
   // Initialize visibleSteps when steps are first loaded — all steps
   // default to visible so their events ghost onto the canvas.
@@ -1511,17 +1548,56 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     }
   }, [runId, steps, operatorName, mode, setExecStep])
 
-  if (noProtocol) {
+  // Opening the change-protocol flow from an attached protocol: ensure the
+  // selector has context (it is normally only fetched on the no-protocol path).
+  const openChangeProtocol = async () => {
+    setChangingProtocol(true)
+    if (!protocolContext) {
+      try {
+        const ctx = await apiClient.getProtocolContext({ studyId })
+        setProtocolContext(ctx)
+      } catch {
+        // The selector shows its own empty state when context is unavailable.
+      }
+    }
+  }
+
+  if (noProtocol || changingProtocol) {
     return (
-      <ProtocolSelector
-        runId={runId}
-        studyId={studyId}
-        context={protocolContext}
-        onAttached={() => {
-          setNoProtocol(false)
-          setRefetchTrigger(n => n + 1)
-        }}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%' }}>
+        <input
+          type="search"
+          placeholder="Search protocols and PDFs…"
+          value={protocolQuery}
+          onChange={(e) => setProtocolQuery(e.target.value)}
+          data-testid="protocol-search-input"
+          style={{
+            margin: '12px 12px 0',
+            padding: '6px 8px',
+            borderRadius: '6px',
+            border: '1px solid var(--cl-border)',
+            background: 'var(--cl-bg-elev)',
+            color: 'var(--cl-text)',
+            fontSize: '13px',
+          }}
+        />
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <ProtocolSelector
+            runId={runId}
+            studyId={studyId}
+            context={protocolContext}
+            // In change mode a protocol IS attached — attaching here replaces it.
+            alreadyAttached={changingProtocol && !noProtocol}
+            onCancel={changingProtocol && !noProtocol ? () => setChangingProtocol(false) : undefined}
+            onOpenIngestedPdf={(id) => navigate(`/ingestion/vendor-pdf/${encodeURIComponent(id)}`)}
+            onAttached={() => {
+              setNoProtocol(false)
+              setChangingProtocol(false)
+              setRefetchTrigger((n) => n + 1)
+            }}
+          />
+        </div>
+      </div>
     )
   }  if (isLoading) return <LoadingState />
   if (error && steps.length === 0) return <ErrorState error={error} />
@@ -1557,6 +1633,30 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         onRunNameChange={setRunName}
         onPlayAll={handlePlayAll}
       />
+
+      {/* While still in the planning phase, let the user change which
+          protocol this run uses — re-opens the preview-then-commit selector. */}
+      {!noProtocol && !changingProtocol && (runStatus === null || runStatus === 'planned') ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            data-testid="change-protocol"
+            onClick={() => void openChangeProtocol()}
+            style={{
+              padding: '6px 10px',
+              background: 'transparent',
+              border: '1px solid var(--cl-border)',
+              borderRadius: '6px',
+              color: 'var(--cl-text-dim)',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Change protocol
+          </button>
+        </div>
+      ) : null}
 
       {/* One-shot protocol localization (chat-first) — primary load path for a
           run attached to a UNIVERSAL protocol. Open by default (not collapsed)
@@ -1644,6 +1744,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                 setActiveStepId(wasActive ? null : step.stepId)
                 setExpandedStepId(wasActive ? null : step.stepId)
                 protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
+                // Enter/exit investigate mode: isolate THIS step's realization
+                // on the deck. null = flat ghosting (Phase 1 focus).
+                protocolSelection?.setFocusStepId(wasActive ? null : step.stepId)
               }}
               onCompletionChange={handleCompletionChange}
             />
@@ -1658,8 +1761,8 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               />
             )}
 
-            {/* Step-localization AI input — inline under the EXPANDED step, pushing
-                subsequent steps down (per the Protocol Planning panel spec). */}
+            {/* Step-investigation panel — inline under the EXPANDED step. Shows the
+                step CONCEPT and three realization actions (AI / hand / revise). */}
             {expandedStepId === step.stepId && (() => {
               const section = splitHumanSteps(humanStepsText ?? '')[step.ordinal]
               // Empty/whitespace section (no humanStepsText → splitHumanSteps('')
@@ -1667,10 +1770,10 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               const text = (section && section.trim()) ? section : (step.description ?? humanStepsText ?? undefined)
               return (
                 <div ref={expandedPanelRef}>
-                  <StepLocalizationPane
-                    key={`sl-${step.stepId}`}
+                  <StepInvestigationPanel
+                    key={`si-${step.stepId}`}
                     runId={runId}
-                    step={{ stepId: step.stepId, label: step.label }}
+                    step={{ stepId: step.stepId, label: step.label, ordinal: step.ordinal, description: step.description }}
                     stepText={text}
                     localProtocolSetup={
                       // Concrete LPR rows only — the universal-protocol role
@@ -1678,6 +1781,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                       // the localization context as if it were a declared setup.
                       localSetup && !setupIsPreview ? localSetup : undefined
                     }
+                    onFocusStep={(id) => setFocusStepId(id)}
                   />
                 </div>
               )
