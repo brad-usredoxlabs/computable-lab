@@ -72,4 +72,26 @@ describe('Protocol candidate-mapper payload schema conformance', () => {
     }, schemaId);
     expect(result.valid).toBe(true);
   });
+
+  it('accepts a step whose subGraphRef points at a protocol (concept realized by another protocol)', () => {
+    const result = validator.validate({
+      kind: 'protocol',
+      recordId: 'PRT-cellrox',
+      title: 'CellROX',
+      steps: [{ stepId: 'st1', label: 'Grow cells', ordinal: 1, kind: 'other', description: 'Grow cells',
+        subGraphRef: { kind: 'record', type: 'protocol', id: 'PRT-cell-culture' } }],
+    }, schemaId);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a step whose subGraphRef points at a local-protocol', () => {
+    const result = validator.validate({
+      kind: 'protocol',
+      recordId: 'PRT-cellrox',
+      title: 'CellROX',
+      steps: [{ stepId: 'st1', label: 'Grow cells', ordinal: 1, kind: 'other', description: 'Grow cells',
+        subGraphRef: { kind: 'record', type: 'local-protocol', id: 'LPR-heparg' } }],
+    }, schemaId);
+    expect(result.valid).toBe(true);
+  });
 });

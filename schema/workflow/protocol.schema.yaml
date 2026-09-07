@@ -813,6 +813,12 @@ $defs:
         - type: object
           properties:
             type: { const: event-graph }
+        - type: object
+          properties:
+            type: { const: protocol }
+        - type: object
+          properties:
+            type: { const: local-protocol }
 
       # Step-level settings referencing the Setting schema.
       settings:
