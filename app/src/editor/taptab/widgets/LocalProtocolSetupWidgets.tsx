@@ -15,6 +15,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ProtocolMentionEditor, removeSlashMenuRoots } from './ProtocolAuthoringWidgets'
 import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
 import { API_BASE } from '../../../shared/api/base'
+import { useMaterialSearch } from '../../../event-editor/material/useMaterialSearch'
+import type { MaterialSearchItem } from '../../../shared/api/client'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
 // This widget renders the setup rows AND the ProtocolMentionEditor slash-combobox
 // inside them. Its styles live in taptab.css. Import that stylesheet HERE so the
@@ -65,7 +67,9 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
   const [adding, setAdding] = useState(false)
   const [roleText, setRoleText] = useState('')
   const [descText, setDescText] = useState('')
-  const pendingMention = useRef<SlashMention | null>(null)
+  // The concrete binding picked from SetupSearchCombobox (material combobox =
+  // local → ontology → vendor). Applied to the new row on Add.
+  const pendingRef = useRef<SetupRow['ref'] | null>(null)
 
   const commit = (next: SetupRow[]) => onCommit(next)
 
@@ -75,10 +79,10 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
     const row: SetupRow = {
       role,
       ...(descText.trim() ? { description: descText.trim() } : {}),
-      ...(pendingMention.current ? { ref: mentionToSetupRef(pendingMention.current, kind) } : {}),
+      ...(pendingRef.current ? { ref: pendingRef.current } : {}),
     }
     commit([...rows, row])
-    pendingMention.current = null
+    pendingRef.current = null
     setRoleText('')
     setDescText('')
     setAdding(false)
@@ -200,16 +204,9 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
               placeholder="Note (concentration, lot, why this one) — optional"
               className="taptab-setup-add__desc"
             />
-            <ProtocolMentionEditor
-              value=""
-              placeholder={copy.pickPlaceholder}
-              className="taptab-setup-add__pick"
-              serialize="readable"
-              defaultSlashCommand={copy.slash}
-              onCommit={(_text, mentions) => {
-                pendingMention.current = mentions[0] ?? null
-              }}
-            />
+            {/* Concrete pick — the same local→ontology→vendor material combobox
+                the plate Add-Material modal uses. Picking binds the new row's ref. */}
+            <SetupSearchCombobox kind={kind} onPick={(ref) => { pendingRef.current = ref }} />
             <div className="taptab-setup-add__actions">
               <button type="button" onClick={addRow}>Add</button>
               <button
@@ -275,6 +272,102 @@ export function toRefBadgeRef(ref: NonNullable<SetupRow['ref']>): Ref {
     return { kind: 'ontology' as const, id: ref.id, namespace: ref.namespace ?? '', label: ref.label ?? ref.id }
   }
   return { kind: 'record' as const, type: ref.type ?? '', id: ref.id, label: ref.label ?? ref.id }
+}
+
+/**
+ * SetupSearchCombobox — a compact picker for choosing a concrete labware /
+ * equipment / material to bind into a setup row. Reuses the SAME search spine
+ * as the plate Add-Material modal (useMaterialSearch): local DB hits first,
+ * then on-demand ontology resolve (CURIE terms), then vendor Exa web hits. The
+ * plate-setting sections in the run-editor Protocol tab use this so adding a
+ * material/equipment to a protocol feels identical to adding one to a plate.
+ *
+ * Local-first → ontology → vendor (right-to-left). Picking a result resolves it
+ * through mentionToSetupRef into a SetupRow.ref (record or ontology CURIE).
+ */
+export function SetupSearchCombobox({
+  kind,
+  onPick,
+  placeholder,
+}: {
+  kind: SetupKind
+  onPick: (ref: NonNullable<SetupRow['ref']>) => void
+  placeholder?: string
+}) {
+  const s = useMaterialSearch()
+  const copy = KIND_COPY[kind]
+
+  // Synthesize a SlashMention-shaped object and route it through the same
+  // mapper the slash-combobox uses, so record/ontology/equipment/labware refs
+  // are shaped identically regardless of which picker produced the hit.
+  const pick = (mention: SlashMention) => {
+    const ref = mentionToSetupRef(mention, kind)
+    if (ref) onPick(ref)
+  }
+
+  return (
+    <div className="setup-search-combobox" data-testid="setup-search-combobox">
+      <input
+        data-testid="setup-search-input"
+        value={s.query}
+        onChange={(e) => s.setQuery(e.target.value)}
+        placeholder={placeholder ?? `Search ${copy.noun} — local, then ontology & vendor`}
+      />
+
+      {s.loadingLocal || s.loadingOntology || s.loadingExa ? (
+        <span className="setup-search-tier__label" data-testid="setup-search-loading">searching…</span>
+      ) : null}
+
+      {(s.localResults.length > 0 || s.exaResults.length > 0 || s.ontologyResults.length > 0) ? (
+        <div className="setup-search-combobox__results">
+          {s.localResults.length > 0 && (
+            <div className="setup-search-tier" data-testid="setup-search-local">
+              <span className="setup-search-tier__label">Local</span>
+              <ul>{s.localResults.map((r: MaterialSearchItem) => (
+                <li key={r.recordId}>
+                  <button type="button" className="setup-search-tier__item" onClick={() =>
+                    pick({ type: kind === 'labware' ? 'labware' : kind === 'equipment' ? 'equipment' : 'material', entityKind: r.kind, id: r.recordId, label: r.title } as SlashMention)
+                  }>
+                    {r.title}
+                  </button>
+                </li>
+              ))}</ul>
+            </div>
+          )}
+
+          {s.ontologyResults.length > 0 && (
+            <div className="setup-search-tier" data-testid="setup-search-ontology">
+              <span className="setup-search-tier__label">Ontology</span>
+              <ul>{s.ontologyResults.map((r) => (
+                <li key={`${r.curie ?? ''}-${r.label}`}>
+                  <button type="button" className="setup-search-tier__item" onClick={() =>
+                    pick({ type: 'material', entityKind: 'material', id: r.curie ?? r.label, label: r.label } as SlashMention)
+                  }>
+                    {r.label}
+                  </button>
+                </li>
+              ))}</ul>
+            </div>
+          )}
+
+          {s.exaResults.length > 0 && (
+            <div className="setup-search-tier" data-testid="setup-search-exa">
+              <span className="setup-search-tier__label">Vendor</span>
+              <ul>{s.exaResults.map((r) => (
+                <li key={r.id ?? r.title}>
+                  <button type="button" className="setup-search-tier__item" onClick={() =>
+                    pick({ type: kind === 'labware' ? 'labware' : kind === 'equipment' ? 'equipment' : 'material', entityKind: 'material', id: r.id ?? r.title, label: r.title ?? '' } as SlashMention)
+                  }>
+                    {r.title}
+                  </button>
+                </li>
+              ))}</ul>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 interface LocalProtocolStep {

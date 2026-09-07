@@ -49,9 +49,39 @@ vi.mock('./ProtocolAuthoringWidgets', async () => {
 
 const onCommitSpy = () => vi.fn()
 
+// SetupSearchCombobox read via useMaterialSearch — mock it so the add-form's
+// material combobox produces a controllable local hit, mirroring the plate
+// Add-Material modal's local→ontology→vendor tiers in isolation.
+const searchMock = vi.hoisted(() => ({
+  query: '',
+  setQuery: vi.fn((v: string) => { searchMock.query = v }),
+  localResults: [] as Array<{ recordId: string; kind: string; title: string; [k: string]: unknown }>,
+  ontologyResults: [] as Array<{ curie?: string; label: string; [k: string]: unknown }>,
+  exaResults: [] as Array<{ id: string; title: string; [k: string]: unknown }>,
+}))
+vi.mock('../../../event-editor/material/useMaterialSearch', () => ({
+  useMaterialSearch: () => ({
+    query: searchMock.query,
+    setQuery: searchMock.setQuery,
+    localResults: searchMock.localResults,
+    formulations: [],
+    ontologyResults: searchMock.ontologyResults,
+    exaResults: searchMock.exaResults,
+    loadingExa: false,
+    loadingLocal: false,
+    loadingOntology: false,
+    error: null,
+    searchOntology: vi.fn(),
+    clearOntology: vi.fn(),
+  }),
+}))
+
 describe('SetupSectionWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    searchMock.localResults = []
+    searchMock.ontologyResults = []
+    searchMock.exaResults = []
   })
 
   it('renders a section header plus rows: bound rows show ref label, unbound rows are editable lines', () => {
@@ -95,16 +125,19 @@ describe('SetupSectionWidget', () => {
     ])
   })
 
-  it('commits a new row with a picked ref', () => {
+  it('commits a new row with a picked ref (material combobox)', () => {
     const onCommit = onCommitSpy()
     render(<SetupSectionWidget kind="material" value={[]} readOnly={false} onCommit={onCommit} />)
     fireEvent.click(screen.getByRole('button', { name: /add material/i }))
+    // The material combobox surfaces a local hit; picking it binds the row's ref.
+    searchMock.localResults = [{ recordId: 'MAT-0001', kind: 'material', title: 'RPMI 1640' }]
+    // Typing the role re-renders → the combobox now sees the local hit.
     fireEvent.change(screen.getByPlaceholderText(/what is it for/i), { target: { value: 'Treatment' } })
-    // Simulate the combobox picking a workspace material:
-    fireEvent.change(screen.getByTestId('mock-mention-editor'), { target: { value: 'MAT-0001' } })
+    expect(screen.getByTestId('setup-search-local')).toBeDefined()
+    fireEvent.click(screen.getByText('RPMI 1640'))
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }))
     expect(onCommit).toHaveBeenCalledWith([
-      { role: 'Treatment', ref: { kind: 'record', id: 'MAT-0001', type: 'material', label: 'MAT-0001' } },
+      { role: 'Treatment', ref: { kind: 'record', id: 'MAT-0001', type: 'material', label: 'RPMI 1640' } },
     ])
   })
 
@@ -183,6 +216,20 @@ describe('SetupSectionWidget', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /remove labware row/i })[0])
     expect(onCommit).toHaveBeenCalledWith([
       { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: 'PCR plate' } },
+    ])
+  })
+
+  it('material combobox picks an ontology hit as a CURIE ref (local→ontology→vendor)', () => {
+    const onCommit = onCommitSpy()
+    render(<SetupSectionWidget kind="material" value={[]} readOnly={false} onCommit={onCommit} />)
+    fireEvent.click(screen.getByRole('button', { name: /add material/i }))
+    searchMock.ontologyResults = [{ curie: 'CHEBI:16236', label: 'isopropanol' }]
+    fireEvent.change(screen.getByPlaceholderText(/what is it for/i), { target: { value: 'Wash solvent' } })
+    expect(screen.getByTestId('setup-search-ontology')).toBeDefined()
+    fireEvent.click(screen.getByText('isopropanol'))
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }))
+    expect(onCommit).toHaveBeenCalledWith([
+      { role: 'Wash solvent', ref: { kind: 'ontology', id: 'CHEBI:16236', namespace: 'CHEBI', label: 'isopropanol' } },
     ])
   })
 })

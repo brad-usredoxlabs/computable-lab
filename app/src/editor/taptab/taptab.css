@@ -1308,3 +1308,91 @@
 .taptab-setup-line--suggested:focus-within {
   border-color: var(--shell-accent, #2563eb);
 }
+
+/* SetupSearchCombobox — the material combobox (local→ontology→vendor) used to
+   bind a concrete labware/equipment/material into a setup row on Add. Mirrors
+   the plate Add-Material modal's tiered search feel. */
+.setup-search-combobox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+.setup-search-combobox input {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  background: var(--shell-surface, #fff);
+  border: 1px solid var(--shell-border, #d1d5db);
+  border-radius: 0.375rem;
+}
+.setup-search-combobox__results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.setup-search-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.setup-search-tier__label,
+.setup-search-loading {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--shell-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.setup-search-tier ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-search-tier__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--shell-text, #111827);
+}
+.setup-search-tier__item:hover {
+  background: color-mix(in srgb, var(--shell-accent, #2563eb) 10%, transparent);
+}
+
+/* Per-step prompt box (StepChipPrompt) — shown only when the step chip is
+   highlighted; Localize sends { prompt + stepText } to ghost the realization. */
+.step-chip-prompt {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  margin-top: 0.375rem;
+}
+.step-chip-prompt input {
+  flex: 1;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--shell-surface, #fff);
+  border: 1px solid var(--shell-accent, #2563eb);
+  border-radius: 0.375rem;
+}
+.step-chip-prompt button {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  background: var(--shell-accent, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+.step-chip-prompt button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

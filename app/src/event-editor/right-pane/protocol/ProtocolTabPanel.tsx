@@ -1284,21 +1284,10 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   /**
    * Persist a changed plate-setting section back to the run's local-protocol
    * record and refresh the in-memory copy. Read-modify-write on the full
-   * payload so concurrent edits to other fields survive.
-   */
-  const patchSetup = useCallback(async (key: 'labwares' | 'equipment' | 'materials', rows: unknown[]) => {
-    if (!localProtocolId) return
-    try {
-      const env = await apiClient.getRecord(localProtocolId).catch(() => null)
-      const payload = (env?.payload ?? env) as Record<string, unknown>
-      await apiClient.updateRecord(localProtocolId, { ...payload, [key]: rows })
-      setLocalSetup((prev) => (prev ? { ...prev, [key]: rows } : prev))
-      // Let any TapTab form (or other record subscriber) resync the record.
-      window.dispatchEvent(new CustomEvent('cl:records-changed'))
-    } catch (err) {
-      console.warn('Failed to save plate setup section:', err)
-    }
-  }, [localProtocolId])
+     * payload so concurrent edits to other fields survive.
+     */
+     // (Defined after ensureLocalProtocolDraft so a universal-attached run's first
+     //  edit can mint an LPR draft before persisting.)
 
   /**
    * Ensure the run's attached method is a DRAFT LOCAL PROTOCOL (LPR) so the
@@ -1371,6 +1360,29 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     },
     [runId],
   )
+
+  /**
+   * Persist a changed plate-setting section back to the run's local-protocol
+   * record and refresh the in-memory copy. Read-modify-write on the full
+   * payload so concurrent edits to other fields survive. On a universal-attached
+   * run with no LPR draft yet, ensure one first so the first edit persists.
+   */
+  const patchSetup = useCallback(async (key: 'labwares' | 'equipment' | 'materials', rows: unknown[]) => {
+    if (!localProtocolId && universalProtocolId) {
+      await ensureLocalProtocolDraft({ id: universalProtocolId, ...(universalProtocolTitle ? { title: universalProtocolTitle } : {}) })
+    }
+    if (!localProtocolId) return
+    try {
+      const env = await apiClient.getRecord(localProtocolId).catch(() => null)
+      const payload = (env?.payload ?? env) as Record<string, unknown>
+      await apiClient.updateRecord(localProtocolId, { ...payload, [key]: rows })
+      setLocalSetup((prev) => (prev ? { ...prev, [key]: rows } : prev))
+      // Let any TapTab form (or other record subscriber) resync the record.
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+    } catch (err) {
+      console.warn('Failed to save plate setup section:', err)
+    }
+  }, [localProtocolId, universalProtocolId, universalProtocolTitle, ensureLocalProtocolDraft])
 
   // Protocol Planning means the user is working on a DRAFT, not on the
   // universal protocol: when the attached method is a universal protocol,
@@ -1772,8 +1784,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           <h3 className="protocol-setup-sections__title">This assay needs</h3>
           {setupIsPreview ? (
             <p className="protocol-setup-sections__hint" data-testid="protocol-setup-preview-hint">
-              Declared roles from the universal protocol — no concrete bindings yet. Use the
-              local version of this protocol to pick labware, equipment and materials.
+              Starting from the universal protocol's declared roles — pick concrete labware, equipment
+              and materials below (or remove what you don't use). The first edit saves an editable local
+              draft for this run.
             </p>
           ) : (
             <p className="protocol-setup-sections__hint" data-testid="protocol-setup-draft-hint">
@@ -1785,21 +1798,21 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           <SetupSectionWidget
             kind="labware"
             value={localSetup.labwares ?? []}
-            readOnly={setupIsPreview}
+            readOnly={false}
             suggestionRows={setupSuggestionIndices(localSetup.labwares ?? [], universalRoleIds?.labwares)}
             onCommit={(rows) => void patchSetup('labwares', rows)}
           />
           <SetupSectionWidget
             kind="equipment"
             value={localSetup.equipment ?? []}
-            readOnly={setupIsPreview}
+            readOnly={false}
             suggestionRows={setupSuggestionIndices(localSetup.equipment ?? [], universalRoleIds?.equipment)}
             onCommit={(rows) => void patchSetup('equipment', rows)}
           />
           <SetupSectionWidget
             kind="material"
             value={localSetup.materials ?? []}
-            readOnly={setupIsPreview}
+            readOnly={false}
             suggestionRows={setupSuggestionIndices(localSetup.materials ?? [], universalRoleIds?.materials)}
             onCommit={(rows) => void patchSetup('materials', rows)}
           />
