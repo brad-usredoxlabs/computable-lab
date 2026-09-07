@@ -75,6 +75,12 @@ export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onP
     return map
   }, [filtered])
 
+  // Exa web vendor-product search for labware, driven by the same query input.
+  // Declared ABOVE the early `return null` so the hook order is stable whether
+  // the dialog is open or closed (Rules of Hooks).
+  const vendorExa = useVendorExaSearch({ category: 'labware', controlled: { query } })
+  const [mintingUrl, setMintingUrl] = useState<string | null>(null)
+
   if (!open) return null
 
   function handlePick(type: LabwareType) {
@@ -88,10 +94,6 @@ export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onP
       console.error('Failed to create labware', error)
     }
   }
-
-  // Exa web vendor-product search for labware, driven by the same query input.
-  const vendorExa = useVendorExaSearch({ category: 'labware', controlled: { query } })
-  const [mintingUrl, setMintingUrl] = useState<string | null>(null)
 
   async function handlePickVendorExa(hit: VendorExaHit) {
     if (mintingUrl) return
