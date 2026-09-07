@@ -70,7 +70,7 @@ describe('datetime widget serialization', () => {
             {
               type: 'fieldRow',
               attrs: {
-                path: '$.createdAt',
+                path: '$.scheduledAt',
                 widget: 'datetime',
                 label: 'Created At',
                 value: '2024-06-15T10:30',
@@ -82,11 +82,11 @@ describe('datetime widget serialization', () => {
     };
 
     const baseRecord: Record<string, unknown> = {
-      createdAt: '',
+      scheduledAt: '',
     };
 
     const result = serializeDocument(doc, baseRecord);
-    expect(result.createdAt).toBe('2024-06-15T10:30');
+    expect(result.scheduledAt).toBe('2024-06-15T10:30');
   });
 });
 
@@ -472,7 +472,7 @@ describe('readonly widget serialization', () => {
             {
               type: 'fieldRow',
               attrs: {
-                path: '$.createdAt',
+                path: '$.scheduledAt',
                 widget: 'readonly',
                 label: 'Created At',
                 value: '2024-01-15T08:00',
@@ -484,11 +484,11 @@ describe('readonly widget serialization', () => {
     };
 
     const baseRecord: Record<string, unknown> = {
-      createdAt: '',
+      scheduledAt: '',
     };
 
     const result = serializeDocument(doc, baseRecord);
-    expect(result.createdAt).toBe('2024-01-15T08:00');
+    expect(result.scheduledAt).toBe('2024-01-15T08:00');
   });
 
   it('serializes a readonly object field without JSON formatting', () => {
@@ -555,7 +555,7 @@ describe('mixed composite widget round-trip', () => {
             {
               type: 'fieldRow',
               attrs: {
-                path: '$.createdAt',
+                path: '$.scheduledAt',
                 widget: 'datetime',
                 label: 'Created At',
                 value: '2024-06-15T10:30',
@@ -608,7 +608,7 @@ describe('mixed composite widget round-trip', () => {
 
     const baseRecord: Record<string, unknown> = {
       name: '',
-      createdAt: '',
+      scheduledAt: '',
       tags: [],
       components: [],
       settings: { threshold: 0, enabled: false },
@@ -618,7 +618,7 @@ describe('mixed composite widget round-trip', () => {
 
     // Verify all fields are present and correct
     expect(result.name).toBe('Protocol-001');
-    expect(result.createdAt).toBe('2024-06-15T10:30');
+    expect(result.scheduledAt).toBe('2024-06-15T10:30');
     expect(result.tags).toEqual(['active', 'reviewed']);
     expect(Array.isArray(result.components)).toBe(true);
     const components = result.components as Array<Record<string, unknown>>;
