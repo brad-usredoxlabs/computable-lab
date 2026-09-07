@@ -341,4 +341,23 @@ describe('local identity and authorization substrate', () => {
     expect((protoPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
     expect((datPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
   });
+
+  it('never guesses an owner for system-created records during backfill', async () => {
+    const store = new MemoryRecordStore([
+      user('USR-OWNER'),
+      {
+        recordId: 'PRT-SYSTEM',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+        payload: { kind: 'protocol', recordId: 'PRT-SYSTEM', title: 'Sys', steps: [] },
+        meta: { createdBy: 'system' },
+      } as RecordEnvelope,
+    ]);
+    const authorization = new AuthorizationService(store);
+    const created = await authorization.backfillOwnerPolicies('USR-LOCAL-ADMIN');
+    // No USR-* creator → no policy stamped → stays open.
+    expect(created).toBe(0);
+    expect(await authorization.findPolicyForRecord('PRT-SYSTEM')).toBeNull();
+    // Open = anyone can read.
+    expect(await authorization.canAccess('USR-OWNER', 'read', (await store.get('PRT-SYSTEM'))!)).toBe(true);
+  });
 });
