@@ -78,6 +78,26 @@ describe('ProtocolContextService', () => {
     expect(context.availableProtocols.map((record) => record.recordId)).toEqual(['PLR-run', 'EVG-run', 'LPR-exp', 'PRT-project', 'LPR-project']);
   });
 
+  it('marks protocols whose every step is localized with localizationReady', async () => {
+    const store = new MemoryRecordStore([
+      env('PRT-ready', {
+        kind: 'protocol', recordId: 'PRT-ready', title: 'Ready PRT', state: 'approved',
+        steps: [{ stepId: 's1', kind: 'other', description: 'grow', ordinal: 1, subGraphRef: { kind: 'record', type: 'event-graph', id: 'EVG-1' } }],
+      }),
+      env('PRT-bare', {
+        kind: 'protocol', recordId: 'PRT-bare', title: 'Bare PRT', state: 'approved',
+        steps: [{ stepId: 's1', kind: 'other', description: 'grow', ordinal: 1 }],
+      }),
+    ]);
+
+    const context = await new ProtocolContextService(store).getContext({});
+
+    const ready = context.availableProtocols.find((r) => r.recordId === 'PRT-ready');
+    const bare = context.availableProtocols.find((r) => r.recordId === 'PRT-bare');
+    expect((ready?.payload as Record<string, unknown>).localizationReady).toBe(true);
+    expect((bare?.payload as Record<string, unknown>).localizationReady).toBe(false);
+  });
+
   it('includes lab-wide universal protocols (no links) in availableProtocols', async () => {
     const store = new MemoryRecordStore([
       // A universal lab protocol — no study/experiment/run links.

@@ -94,6 +94,27 @@ function recordTitle(record: RecordEnvelope | null | undefined): string | undefi
   return payloadString(record, 'title') ?? payloadString(record, 'name');
 }
 
+// A protocol is localization-ready when it has at least one step and every
+// step carries a realization reference (an event graph, a graph-component,
+// or a referenced protocol/local-protocol). A bare concept with no step
+// realizations yet is not a usable, attachable recipe.
+export function isLocalized(record: RecordEnvelope): boolean {
+  const p = record.payload as Record<string, unknown> | undefined;
+  const steps = (Array.isArray(p?.steps) ? p.steps : []) as Array<Record<string, unknown>>;
+  if (steps.length === 0) return false;
+  return steps.every((s) => {
+    const ref = s.subGraphRef as { type?: string } | undefined;
+    return Boolean(ref && ['graph-component-instance', 'event-graph', 'protocol', 'local-protocol'].includes(ref.type ?? ''));
+  });
+}
+
+// Shallow-clone the envelope with localizationReady added to the payload,
+// so we never mutate the store's records.
+function withLocalization(record: RecordEnvelope): RecordEnvelope {
+  const payload = { ...(record.payload as Record<string, unknown>), localizationReady: isLocalized(record) };
+  return { ...record, payload } as RecordEnvelope;
+}
+
 function refFor(recordId: string, type: string, label?: string): Record<string, unknown> {
   return { kind: 'record', id: recordId, type, ...(label ? { label } : {}) };
 }
@@ -164,16 +185,16 @@ export class ProtocolContextService {
       ? uniqueById([
           ...approvedUniversal.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
           ...approvedLocal.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
-        ])
+        ]).map(withLocalization)
       : [];
 
     const experimentProtocols = query.experimentId
       ? approvedLocal.filter((record) => {
           if (linkString(record, 'experimentId') !== query.experimentId) return false;
           return !query.studyId || linkString(record, 'studyId') === query.studyId;
-        })
+        }).map(withLocalization)
       : query.studyId
-        ? approvedLocal.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId')))
+        ? approvedLocal.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId'))).map(withLocalization)
         : [];
 
     const runPlannedMethods = query.runId
@@ -195,7 +216,7 @@ export class ProtocolContextService {
       ...approvedLocal.filter(
         (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
       ),
-    ]);
+    ]).map(withLocalization);
 
     return {
       projectTemplates,
