@@ -91,4 +91,43 @@ describe('ProtocolPreviewBridge — step realization ghosting', () => {
     await new Promise((r) => setTimeout(r, 200))
     expect(setPreview).not.toHaveBeenCalled()
   })
+
+  it('REGRESSION: a consumer writing to the provider the bridge is UNDER ghosts (no extra nested provider between them)', async () => {
+    // This recreates the bug: ProtocolTabPanel used to mount its OWN
+    // <ProtocolSelectionProvider> around the pane, so the pane wrote to that
+    // inner provider while the bridge read the (empty) outer one. With only
+    // ONE provider shared by writer + bridge, the bridge must ghost.
+    // The writer (`PaneWriter`) and the bridge sit under THE SAME provider.
+    const graph = {
+      id: 'EVG-y',
+      events: [
+        { eventId: 'e1', event_type: 'wash', details: { labwareId: 'plate-A1', wells: ['A1'] } },
+      ],
+      labwares: [{ labwareId: 'plate-A1', labwareType: 'plate_96' }],
+    }
+    function PaneWriter() {
+      const ctx = useProtocolSelection()
+      const [done, setDone] = useState(false)
+      useEffect(() => {
+        if (!ctx || done) return
+        ctx.setStepGraph('step-1', graph as never)
+        ctx.setFocusedStep({ stepId: 'step-1', label: 'Wash' })
+        ctx.setCurrentStepId('step-1')
+        setDone(true)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [ctx, done])
+      return null
+    }
+    render(
+      <ProtocolSelectionProvider>
+        <PaneWriter />
+        <ProtocolPreviewBridge />
+      </ProtocolSelectionProvider>,
+    )
+    await waitFor(() => expect(setPreview).toHaveBeenCalled())
+    const lastCall = setPreview.mock.calls[setPreview.mock.calls.length - 1][0]
+    const evs = lastCall.previewEvents as Array<Record<string, unknown>>
+    expect(evs.length).toBe(1)
+    expect(evs[0]._protocolStepStatus).toBe('current')
+  })
 })

@@ -24,7 +24,7 @@ import type { PlateEvent } from '../../../types/events'
 import { updateExecutionState } from '../../../shared/api/execution'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import { SettingsPanel, type Setting } from './SettingsPanel'
-import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
+import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepInvestigationPanel, type LocalProtocolSetupRows } from './StepInvestigationPanel'
 import { StepIndicator } from './StepIndicator'
@@ -1872,10 +1872,8 @@ export function ProtocolTabPanel({ runId, studyId: _studyId }: ProtocolTabPanelP
   // studyId kept in the props interface for backward compatibility with RightPane
   void _studyId
   return (
-    <ProtocolSelectionProvider>
-      <ExecutionProvider>
-        <ProtocolTabPanelInner runId={runId} studyId={_studyId} />
-      </ExecutionProvider>
-    </ProtocolSelectionProvider>
+    <ExecutionProvider>
+      <ProtocolTabPanelInner runId={runId} studyId={_studyId} />
+    </ExecutionProvider>
   )
 }
