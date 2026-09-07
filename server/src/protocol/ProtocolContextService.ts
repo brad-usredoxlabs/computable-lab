@@ -150,20 +150,30 @@ export class ProtocolContextService {
     const filteredPlannedRuns = scoped(plannedRuns);
     const filteredEventGraphs = scoped(eventGraphs);
 
+    // The run-editor Protocol tab offers only APPROVED universal/local
+    // protocols (usable recipes), not raw extraction drafts (which stay
+    // `draft` until Save promotes them).
+    const approvedUniversal = filteredProtocols.filter((record) =>
+      ['approved', 'effective', 'accepted', 'superseded'].includes((record.payload as Record<string, unknown> | undefined)?.state as string),
+    );
+    const approvedLocal = filteredLocalProtocols.filter((record) =>
+      ['approved', 'effective', 'accepted', 'superseded'].includes((record.payload as Record<string, unknown> | undefined)?.state as string),
+    );
+
     const projectTemplates = query.studyId
       ? uniqueById([
-          ...filteredProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
-          ...filteredLocalProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
+          ...approvedUniversal.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
+          ...approvedLocal.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
         ])
       : [];
 
     const experimentProtocols = query.experimentId
-      ? filteredLocalProtocols.filter((record) => {
+      ? approvedLocal.filter((record) => {
           if (linkString(record, 'experimentId') !== query.experimentId) return false;
           return !query.studyId || linkString(record, 'studyId') === query.studyId;
         })
       : query.studyId
-        ? filteredLocalProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId')))
+        ? approvedLocal.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId')))
         : [];
 
     const runPlannedMethods = query.runId
@@ -179,10 +189,10 @@ export class ProtocolContextService {
     // are the "Lab Protocols" the selector offers in addition to project /
     // experiment / run-scoped ones.
     const labProtocols = uniqueById([
-      ...filteredProtocols.filter(
+      ...approvedUniversal.filter(
         (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
       ),
-      ...filteredLocalProtocols.filter(
+      ...approvedLocal.filter(
         (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
       ),
     ]);

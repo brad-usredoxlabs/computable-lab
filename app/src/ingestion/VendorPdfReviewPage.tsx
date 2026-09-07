@@ -22,7 +22,7 @@ import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
-import { candidateToProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
+import { candidateToProtocolPayload, normalizeProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
 import './VendorPdfReviewPage.css'
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml'
@@ -65,6 +65,9 @@ export function VendorPdfReviewPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveNote, setSaveNote] = useState<string | null>(null)
+  // Save As modal: prompts the user to confirm/overwrite the protocol title.
+  const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const [saveAsTitle, setSaveAsTitle] = useState('')
   // Resizable split — default 40:60 (PDF : editor).
   const [leftPct, setLeftPct] = useState(40)
   const splitDragRef = useRef<{ startX: number; startPct: number } | null>(null)
@@ -228,22 +231,24 @@ export function VendorPdfReviewPage() {
     })
   }, [])
 
-  // Save the currently edited protocol payload (create if never saved, else update).
+  // Save = accept the current version of the protocol, promoted to a usable
+  // protocol: state approved + the real (current) title. Reuses the stable id
+  // on subsequent saves.
   const handleSave = useCallback(async () => {
     if (!protocolPayload) return
     setSaving(true)
     setSaveError(null)
     setSaveNote(null)
     try {
-      const payload = protocolPayload
+      const payload = normalizeProtocolPayload(protocolPayload as unknown as Record<string, unknown>)
       if (savedRecordId) {
-        await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId })
+        await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId, state: 'approved' })
         setSaveNote('Saved.')
       } else {
         const recId = `PRT-${shortId()}`
-        await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId })
+        await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
         setSavedRecordId(recId)
-        setProtocolPayload({ ...payload, recordId: recId })
+        setProtocolPayload({ ...(payload as unknown as MappedProtocolPayload), recordId: recId })
         setSaveNote('Saved.')
       }
     } catch (err) {
@@ -253,15 +258,27 @@ export function VendorPdfReviewPage() {
     }
   }, [protocolPayload, savedRecordId])
 
-  // Save As — always create a fresh copy with a new id.
+  // Save As — open a modal pre-loaded with the real protocol title so the
+  // user can overwrite it, then save as a fresh approved copy.
   const handleSaveAs = useCallback(async () => {
     if (!protocolPayload) return
+    setSaveAsTitle(protocolPayload.title)
+    setSaveAsOpen(true)
+  }, [protocolPayload])
+
+  const handleSaveAsConfirm = useCallback(async () => {
+    if (!protocolPayload) return
+    setSaveAsOpen(false)
     setSaving(true)
     setSaveError(null)
     setSaveNote(null)
     try {
+      const payload = normalizeProtocolPayload({
+        ...protocolPayload,
+        title: saveAsTitle.trim() ? saveAsTitle.trim() : protocolPayload.title,
+      } as unknown as Record<string, unknown>)
       const recId = `PRT-${shortId()}`
-      await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...protocolPayload, recordId: recId })
+      await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
       setSavedRecordId(recId)
       setSaveNote('Saved as copy.')
     } catch (err) {
@@ -269,7 +286,7 @@ export function VendorPdfReviewPage() {
     } finally {
       setSaving(false)
     }
-  }, [protocolPayload])
+  }, [protocolPayload, saveAsTitle])
 
   // TapTab onUpdate: keep the edited payload when dirty.
   const handleTapTabUpdate = useCallback((serialized: Record<string, unknown>, dirty?: boolean) => {
@@ -478,6 +495,33 @@ export function VendorPdfReviewPage() {
           ) : null}
         </div>
       </div>
+
+      {/* Save As modal — pre-loaded with the real protocol title. */}
+      {saveAsOpen ? (
+        <div className="vpdf-review__modal-overlay" data-testid="vpdf-saveas-modal">
+          <div className="vpdf-review__modal" role="dialog" aria-modal="true">
+            <h3 className="vpdf-review__modal-title">Save Protocol As</h3>
+            <label className="vpdf-review__modal-label">
+              Protocol title
+              <input
+                data-testid="vpdf-saveas-title"
+                className="vpdf-review__modal-input"
+                value={saveAsTitle}
+                onChange={(e) => setSaveAsTitle(e.target.value)}
+                autoFocus
+              />
+            </label>
+            <div className="vpdf-review__modal-actions">
+              <button type="button" className="vpdf-review__save vpdf-review__save--secondary" onClick={() => setSaveAsOpen(false)} data-testid="vpdf-saveas-cancel">
+                Cancel
+              </button>
+              <button type="button" className="vpdf-review__save" onClick={() => void handleSaveAsConfirm()} disabled={saving} data-testid="vpdf-saveas-confirm">
+                Save As
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

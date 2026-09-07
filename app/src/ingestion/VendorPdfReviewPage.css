@@ -246,3 +246,56 @@
   font-size: 13px;
   text-align: center;
 }
+
+.vpdf-review__modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.vpdf-review__modal {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 360px;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vpdf-review__modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.vpdf-review__modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.vpdf-review__modal-input {
+  padding: 8px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.vpdf-review__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}

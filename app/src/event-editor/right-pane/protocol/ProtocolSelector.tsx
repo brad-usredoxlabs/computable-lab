@@ -62,11 +62,16 @@ export function ProtocolSelector({ runId, studyId, context, onAttached, alreadyA
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<ProtocolPreview | null>(null)
 
-  const projectProtocols = context?.projectTemplates ?? []
+  const approved = (p: { payload?: Record<string, unknown> | null }): boolean => {
+    const state = p?.payload?.state as string | undefined
+    return state === 'approved' || state === 'effective' || state === 'accepted' || state === 'superseded'
+  }
+
+  const projectProtocols = (context?.projectTemplates ?? []).filter(approved)
   const labProtocols = (context?.availableProtocols ?? []).filter(
     (p) => {
       const links = p.payload?.links as { studyId?: string; experimentId?: string } | undefined
-      return !links?.studyId && !links?.experimentId
+      return !links?.studyId && !links?.experimentId && approved(p)
     },
   )
   const ingestedPdfs = context?.ingestedPdfs ?? []

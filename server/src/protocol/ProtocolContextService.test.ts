@@ -63,9 +63,9 @@ function env(recordId: string, payload: Record<string, unknown>): RecordEnvelope
 describe('ProtocolContextService', () => {
   it('groups project templates, experiment protocols, and run methods by links', async () => {
     const store = new MemoryRecordStore([
-      env('PRT-project', { kind: 'protocol', recordId: 'PRT-project', title: 'Project PRT', links: { studyId: 'STU-1' }, steps: [] }),
-      env('LPR-project', { kind: 'local-protocol', recordId: 'LPR-project', title: 'Project LPR', links: { studyId: 'STU-1' }, inherits_from: { kind: 'record', id: 'PRT-project', type: 'protocol' }, status: 'draft' }),
-      env('LPR-exp', { kind: 'local-protocol', recordId: 'LPR-exp', title: 'Experiment LPR', links: { studyId: 'STU-1', experimentId: 'EXP-1' }, inherits_from: { kind: 'record', id: 'PRT-project', type: 'protocol' }, status: 'draft' }),
+      env('PRT-project', { kind: 'protocol', recordId: 'PRT-project', title: 'Project PRT', state: 'approved', links: { studyId: 'STU-1' }, steps: [] }),
+      env('LPR-project', { kind: 'local-protocol', recordId: 'LPR-project', title: 'Project LPR', state: 'approved', links: { studyId: 'STU-1' }, inherits_from: { kind: 'record', id: 'PRT-project', type: 'protocol' }, status: 'draft' }),
+      env('LPR-exp', { kind: 'local-protocol', recordId: 'LPR-exp', title: 'Experiment LPR', state: 'approved', links: { studyId: 'STU-1', experimentId: 'EXP-1' }, inherits_from: { kind: 'record', id: 'PRT-project', type: 'protocol' }, status: 'draft' }),
       env('PLR-run', { kind: 'planned-run', recordId: 'PLR-run', title: 'Run plan', sourceType: 'local-protocol', sourceRef: { kind: 'record', id: 'LPR-exp', type: 'local-protocol' }, state: 'draft', links: { studyId: 'STU-1', experimentId: 'EXP-1', runId: 'RUN-1' } }),
       env('EVG-run', { kind: 'event-graph', id: 'EVG-run', events: [], labwares: [], links: { studyId: 'STU-1', experimentId: 'EXP-1', runId: 'RUN-1' } }),
     ]);
@@ -81,8 +81,8 @@ describe('ProtocolContextService', () => {
   it('includes lab-wide universal protocols (no links) in availableProtocols', async () => {
     const store = new MemoryRecordStore([
       // A universal lab protocol — no study/experiment/run links.
-      env('PRT-universal', { kind: 'protocol', recordId: 'PRT-universal', title: 'Universal qPCR', steps: [] }),
-      env('LPR-universal', { kind: 'local-protocol', recordId: 'LPR-universal', title: 'Universal LPR', inherits_from: { kind: 'record', id: 'PRT-universal', type: 'protocol' }, status: 'draft' }),
+      env('PRT-universal', { kind: 'protocol', recordId: 'PRT-universal', title: 'Universal qPCR', state: 'approved', steps: [] }),
+      env('LPR-universal', { kind: 'local-protocol', recordId: 'LPR-universal', title: 'Universal LPR', state: 'approved', inherits_from: { kind: 'record', id: 'PRT-universal', type: 'protocol' }, status: 'draft' }),
       // Scoped ones must still be separated by the selector.
       env('PRT-project', { kind: 'protocol', recordId: 'PRT-project', title: 'Project PRT', links: { studyId: 'STU-1' }, steps: [] }),
       env('PLR-run', { kind: 'planned-run', recordId: 'PLR-run', title: 'Run plan', sourceType: 'protocol', sourceRef: { kind: 'record', id: 'PRT-project', type: 'protocol' }, state: 'draft', links: { studyId: 'STU-1', runId: 'RUN-1' } }),
@@ -169,9 +169,9 @@ describe('ProtocolContextService', () => {
 
   it('filters by q across title/recordId/steps without a regression when q is empty', async () => {
     const store = new MemoryRecordStore([
-      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', steps: [{ ordinal: 1, label: 'Prepare cells' }] }),
-      env('PRT-pcr', { kind: 'protocol', recordId: 'PRT-pcr', title: 'PCR Cleanup Kit', steps: [{ ordinal: 1, label: 'Bind' }] }),
-      env('PRT-generic', { kind: 'protocol', recordId: 'PRT-generic', title: 'Incubation', humanStepsText: 'Incubate with cellrox dye at 37C' }),
+      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', state: 'approved', steps: [{ ordinal: 1, label: 'Prepare cells' }] }),
+      env('PRT-pcr', { kind: 'protocol', recordId: 'PRT-pcr', title: 'PCR Cleanup Kit', state: 'approved', steps: [{ ordinal: 1, label: 'Bind' }] }),
+      env('PRT-generic', { kind: 'protocol', recordId: 'PRT-generic', title: 'Incubation', state: 'approved', humanStepsText: 'Incubate with cellrox dye at 37C' }),
     ]);
 
     const matched = await new ProtocolContextService(store).getContext({ q: 'cellrox' });
@@ -191,7 +191,7 @@ describe('ProtocolContextService', () => {
     const store = new MemoryRecordStore([
       env('VPDF-1', { kind: 'vendor-pdf', recordId: 'VPDF-1', title: 'CellROX Kit Manual', state: 'ingested' }),
       env('VPDF-2', { kind: 'vendor-pdf', recordId: 'VPDF-2', title: 'DNeasy Blood Kit', state: 'ingested' }),
-      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', steps: [] }),
+      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', state: 'approved', steps: [] }),
     ]);
 
     const matched = await new ProtocolContextService(store).getContext({ q: 'cellrox' });
