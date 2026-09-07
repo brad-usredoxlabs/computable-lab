@@ -295,4 +295,23 @@ describe('local identity and authorization substrate', () => {
 
     expect((await store.get('ACL-STU-NEW'))?.meta?.createdBy).toBe('USR-OWNER');
   });
+
+  it('stamps an owner policy for non-policy-root kinds like protocol and material-spec', async () => {
+    const store = new MemoryRecordStore([user('USR-OWNER')]);
+    const authorization = new AuthorizationService(store);
+
+    const proto = {
+      recordId: 'PRT-001',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+      payload: { kind: 'protocol', recordId: 'PRT-001', title: 'P', steps: [] },
+      meta: { createdBy: 'USR-OWNER' },
+    } as RecordEnvelope;
+
+    const created = await authorization.ensureOwnerPolicy(proto, 'USR-OWNER');
+    expect(created?.recordId).toBe('ACL-PRT-001');
+    expect((created?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
+    // The owner can now read it, but a non-owner cannot.
+    expect(await authorization.canAccess('USR-OWNER', 'read', proto)).toBe(true);
+    expect(await authorization.canAccess('USR-OTHER', 'read', proto)).toBe(false);
+  });
 });

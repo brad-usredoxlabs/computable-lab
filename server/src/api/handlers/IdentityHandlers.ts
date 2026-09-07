@@ -5,7 +5,6 @@ import { LocalIdentityService, USER_SCHEMA_ID } from '../../security/LocalIdenti
 import {
   AuthorizationService,
   ACCESS_POLICY_SCHEMA_ID,
-  POLICY_ROOT_KINDS,
 } from '../../security/AuthorizationService.js';
 import type { AccessGrant } from '../../security/AccessControlService.js';
 import type { CredentialStore } from '../../security/CredentialStore.js';
@@ -306,8 +305,10 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
         return { error: 'NOT_FOUND', message: `Record not found: ${id}` };
       }
       const kind = kindOf(record);
-      const isPolicyRoot = Boolean(kind && POLICY_ROOT_KINDS.has(kind));
       const direct = aclFromEnvelope(await authorizationService.findPolicyForRecord(id));
+      // A record is shareable when it carries a direct owner policy (C1 now
+      // stamps one for every lab kind) — not just the old policy-root set.
+      const isPolicyRoot = Boolean(direct) || (kind != null && kind !== 'user' && kind !== 'group' && kind !== 'access-policy');
       const effective = await authorizationService.resolveEffectivePolicy(record);
       const canAdmin = await authorizationService.canAccess(resolved.userId, 'admin', record);
       const canWrite = await authorizationService.canAccess(resolved.userId, 'write', record);
@@ -352,9 +353,10 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
         return { error: 'NOT_FOUND', message: `Record not found: ${id}` };
       }
       const kind = kindOf(record);
-      if (!kind || !POLICY_ROOT_KINDS.has(kind)) {
+      const SELF_MANAGING_KINDS = new Set(['user', 'group', 'access-policy']);
+      if (!kind || SELF_MANAGING_KINDS.has(kind)) {
         reply.status(400);
-        return { error: 'BAD_REQUEST', message: `Access policy can only be set on policy-root records (${[...POLICY_ROOT_KINDS].join(', ')})` };
+        return { error: 'BAD_REQUEST', message: `Access policy can only be set on data records, not ${kind ?? '(unknown)'}` };
       }
       const resolved = await identityService.resolveRequestUser(request);
       if (!(await authorizationService.canAccess(resolved.userId, 'admin', record))) {

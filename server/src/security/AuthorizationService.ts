@@ -100,7 +100,13 @@ export class AuthorizationService {
 
   async ensureOwnerPolicy(resource: RecordEnvelope, ownerUserId: string): Promise<RecordEnvelope | null> {
     const resourceKind = kindOf(resource);
-    if (!resourceKind || !POLICY_ROOT_KINDS.has(resourceKind)) return null;
+    // Stamp an owner policy for EVERY record kind except the identity/admin
+    // kinds that are self-referential (users/groups/access-policies manage
+    // access rather than being subject to it). This gives every lab item
+    // (protocol, material, result, data-reference, claim, ...) a private
+    // owner so list/browse filtering is meaningful and sharing is explicit.
+    const SELF_MANAGING_KINDS = new Set(['user', 'group', 'access-policy']);
+    if (!resourceKind || SELF_MANAGING_KINDS.has(resourceKind)) return null;
     const existing = await this.findPolicyForRecord(resource.recordId);
     if (existing) return existing;
 
