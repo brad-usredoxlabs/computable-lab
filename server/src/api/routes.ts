@@ -20,7 +20,9 @@ import type { VocabHandlers } from './handlers/VocabHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
+import type { ChatHandlers } from './handlers/ChatHandlers.js';
 import type { IdentityHandlers } from './handlers/IdentityHandlers.js';
+import type { AuthHandlers } from './handlers/AuthHandlers.js';
 import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
 import type { ComponentHandlers } from './handlers/ComponentHandlers.js';
@@ -65,6 +67,7 @@ import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
 import type { GraphSearchHandlers } from './handlers/GraphSearchHandlers.js';
 import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
 import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
+import type { VendorPdfBlobHandlers } from './handlers/VendorPdfBlobHandlers.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
@@ -92,7 +95,9 @@ export interface RouteOptions {
   aiHandlers?: AIHandlers;
   eventEditorFixHandlers?: EventEditorFixHandlers;
   configHandlers?: ConfigHandlers;
+  chatHandlers?: ChatHandlers;
   identityHandlers?: IdentityHandlers;
+  authHandlers?: AuthHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
   protocolIdeHandlers?: ProtocolIdeHandlers;
@@ -140,6 +145,7 @@ export interface RouteOptions {
   graphSearchHandlers?: GraphSearchHandlers;
   workspaceHandlers?: WorkspaceHandlers;
   artifactBlobHandlers?: ArtifactBlobHandlers;
+  vendorPdfBlobHandlers?: VendorPdfBlobHandlers;
   predicatesHandlers?: PredicatesHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
@@ -226,7 +232,11 @@ export function registerRoutes(
   }
 
   // Identity / groups / sharing (optional - requires identityHandlers)
-  const { identityHandlers } = options;
+  const { identityHandlers, authHandlers } = options;
+  if (authHandlers) {
+    fastify.post('/auth/login', authHandlers.login.bind(authHandlers));
+    fastify.post('/auth/logout', authHandlers.logout.bind(authHandlers));
+  }
   if (identityHandlers) {
     fastify.get('/me', identityHandlers.getMe.bind(identityHandlers));
     fastify.patch('/me', identityHandlers.updateMe.bind(identityHandlers));
@@ -463,6 +473,7 @@ export function registerRoutes(
     fastify.get('/vendors/protocol-ide/documents', vendorSearchHandlers.searchProtocolIdeDocuments.bind(vendorSearchHandlers));
     fastify.get('/vendors/graph-lemur/pdfs', vendorSearchHandlers.searchGraphLemurPdfs.bind(vendorSearchHandlers));
     fastify.post('/vendors/graph-lemur/pdfs/ingest', vendorSearchHandlers.ingestGraphLemurPdf.bind(vendorSearchHandlers));
+    fastify.post('/vendors/graph-lemur/pdfs/upload', vendorSearchHandlers.ingestGraphLemurPdfUpload.bind(vendorSearchHandlers));
   }
 
   const { equipmentHandlers } = options;
@@ -586,6 +597,15 @@ export function registerRoutes(
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
     fastify.post('/ai/context/warm', aiHandlers.warmContext.bind(aiHandlers));
     fastify.get('/ai/context/warm/status', aiHandlers.warmContextStatus.bind(aiHandlers));
+  }
+
+  // Standalone ChatGPT-style chat — proxies to a local Ollama native
+  // /api/chat and streams SSE with a final PP/decode tokens-per-sec event.
+  // Optional (requires chatHandlers) like every other handler family.
+  const { chatHandlers } = options;
+
+  if (chatHandlers) {
+    fastify.post('/ai/chat/stream', chatHandlers.streamChat.bind(chatHandlers));
   }
 
   const { extractProtocolHandlers } = options;
@@ -1108,6 +1128,16 @@ export function registerRoutes(
     fastify.get(
       '/studies/:studyId/artifacts/:artifactId/blob',
       artifactBlobHandlers.getArtifactBlob,
+    );
+  }
+
+  // Free-floating vendor-pdf blobs (no study scope) — serve the stored PDF
+  // bytes so the review surface's pdfjs can fetch them.
+  const { vendorPdfBlobHandlers } = options;
+  if (vendorPdfBlobHandlers) {
+    fastify.get(
+      '/vendor-pdfs/:recordId/pdf',
+      vendorPdfBlobHandlers.getVendorPdfBlob,
     );
   }
 

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { RecordStore } from '../store/types.js';
+import type { SessionStore } from './SessionStore.js';
 
 export const LOCAL_ADMIN_USER_ID = 'USR-LOCAL-ADMIN';
 export const USER_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/user.schema.yaml';
@@ -24,7 +25,20 @@ function isActiveUser(envelope: RecordEnvelope | null): envelope is RecordEnvelo
 }
 
 export class LocalIdentityService {
-  constructor(private readonly store: RecordStore) {}
+  constructor(
+    private readonly store: RecordStore,
+    private readonly sessionStore?: SessionStore,
+  ) {}
+
+  /* Resolve the strongest identity signal: a valid session token first, then
+     an explicit x-user-id header, then the active local user fallback. */
+  private async resolveSessionUserId(request: FastifyRequest): Promise<string | null> {
+    if (this.sessionStore) {
+      const token = headerString(request.headers['x-cl-session']);
+      if (token) return this.sessionStore.resolve(token);
+    }
+    return null;
+  }
 
   async ensureLocalAdminUser(): Promise<RecordEnvelope | null> {
     const existingUsers = await this.store.list({ kind: 'user', limit: 1000 });
@@ -67,6 +81,20 @@ export class LocalIdentityService {
   }
 
   async resolveRequestUser(request: FastifyRequest): Promise<ResolvedRequestUser> {
+    // Strongest identity signal: a valid session token.
+    const sessionUserId = await this.resolveSessionUserId(request);
+    if (sessionUserId) {
+      const record = await this.store.get(sessionUserId);
+      if (isActiveUser(record)) {
+        return { userId: sessionUserId, userRecord: record, isSystem: false };
+      }
+      return {
+        userId: null,
+        isSystem: false,
+        reason: `Session resolves to an inactive user: ${sessionUserId}`,
+      };
+    }
+
     const explicitUserId =
       headerString(request.headers['x-user-id']) ??
       headerString(request.headers['x-computable-user-id']);

@@ -48,6 +48,7 @@ import {
   createMetaHandlers,
   ConfigHandlers,
   createIdentityHandlers,
+  createAuthHandlers,
   createProtocolHandlers,
   createComponentHandlers,
   createExecutionHandlers,
@@ -97,6 +98,7 @@ import { ensureSeedProtocols } from './protocols/seedProtocols.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
+import { ChatHandlers } from './api/handlers/ChatHandlers.js';
 import { registerRoutes } from './api/routes.js';
 import type { ServerConfig } from './api/types.js';
 import { resolveGitHubIdentity, type ResolvedIdentity } from './identity/GitHubIdentity.js';
@@ -122,6 +124,7 @@ import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandl
 import { createPredicatesHandlers } from './api/handlers/PredicatesHandlers.js';
 import { createWorkspaceHandlers } from './api/handlers/WorkspaceHandlers.js';
 import { createArtifactBlobHandlers } from './api/handlers/ArtifactBlobHandlers.js';
+import { createVendorPdfBlobHandlers } from './api/handlers/VendorPdfBlobHandlers.js';
 import { getOntologyTermRegistry } from './registry/OntologyTermRegistry.js';
 import { getVerbActionMap } from './registry/VerbActionMapRegistry.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
@@ -141,6 +144,8 @@ import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
+import { CredentialStore } from './security/CredentialStore.js';
+import { SessionStore } from './security/SessionStore.js';
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
 import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
@@ -237,6 +242,8 @@ export interface AppContext {
   predicateRegistry?: PredicateRegistry | undefined;
   identity?: ResolvedIdentity | undefined;
   localIdentityService: LocalIdentityService;
+  credentialStore: CredentialStore;
+  sessionStore: SessionStore;
   authorizationService: AuthorizationService;
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
@@ -440,7 +447,12 @@ export async function initializeApp(
     ...(seedDir ? { seedDir } : {}),
   });
 
-  const localIdentityService = new LocalIdentityService(store);
+  // Local credential/session stores live under server.dataDir/auth (non-git):
+  // identity records sync; the secret verifier does not.
+  const authDir = join(dataDir, 'auth');
+  const credentialStore = new CredentialStore(authDir);
+  const sessionStore = new SessionStore(authDir);
+  const localIdentityService = new LocalIdentityService(store, sessionStore);
   await localIdentityService.ensureLocalAdminUser();
   const authorizationService = new AuthorizationService(store);
   // Backfill owner policies for pre-existing policy-root records that have no
@@ -582,6 +594,8 @@ export async function initializeApp(
     predicateRegistry,
     identity,
     localIdentityService,
+    credentialStore,
+    sessionStore,
     authorizationService,
     platformRegistry,
     lifecycleEngine,
@@ -1139,12 +1153,25 @@ export async function createServer(
     () => aiInfo,
   );
 
+  // Standalone ChatGPT-style chat — resolves the AI endpoint live from the
+  // current appConfig (activeProfile / named profiles), so profile switches
+  // made via the UI take effect on the next message without a restart.
+  const chatHandlers = new ChatHandlers({
+    getAppConfig: () => ctx.appConfig,
+  });
+
   // Identity / groups / sharing convenience endpoints — reuse the live
   // LocalIdentityService + AuthorizationService that already enforce access.
   const identityHandlers = createIdentityHandlers({
     store: ctx.store,
     identityService: ctx.localIdentityService,
     authorizationService: ctx.authorizationService,
+  });
+
+  const authHandlers = createAuthHandlers({
+    store: ctx.store,
+    credentialStore: ctx.credentialStore,
+    sessionStore: ctx.sessionStore,
   });
 
   // Create run-centered draft/accept handlers
@@ -1217,6 +1244,13 @@ export async function createServer(
     ctx.workspaceRoot,
   );
 
+  // Free-floating vendor-pdf blobs resolve under the same workspace root as
+  // artifacts, so the SAME expression must be passed here (never hardcode).
+  const vendorPdfBlobHandlers = createVendorPdfBlobHandlers({
+    recordStore: ctx.store,
+    workspaceRoot: ctx.workspaceRoot,
+  });
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -1265,6 +1299,7 @@ export async function createServer(
       predicatesHandlers,
       workspaceHandlers,
       artifactBlobHandlers,
+      vendorPdfBlobHandlers,
       corpusHandlers,
       storageHandlers,
       analysisHandlers,
@@ -1296,7 +1331,9 @@ export async function createServer(
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;
+    routeOpts.chatHandlers = chatHandlers;
     routeOpts.identityHandlers = identityHandlers;
+    routeOpts.authHandlers = authHandlers;
     registerRoutes(instance, routeOpts);
     
     // Protocol Steps Routes (CRUD for protocol step sub-graphs, settings, etc.)
