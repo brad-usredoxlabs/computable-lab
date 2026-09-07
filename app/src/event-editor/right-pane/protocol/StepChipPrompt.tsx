@@ -35,8 +35,13 @@ export function StepChipPrompt({
 
   if (!active) return null
 
+  // Stop propagation so interacting with the prompt box never triggers the
+  // owning StepChip's onSelect toggle (which would collapse the panel that is
+  // about to auto-send the instruction).
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
+
   return (
-    <div className="step-chip-prompt" data-testid="step-chip-prompt">
+    <div className="step-chip-prompt" data-testid="step-chip-prompt" onClick={stop} onKeyDown={stop}>
       <input
         type="text"
         data-testid="step-prompt-input"
@@ -46,6 +51,7 @@ export function StepChipPrompt({
         onKeyDown={(e) => {
           if (e.key === 'Enter' && canLocalize) {
             e.preventDefault()
+            e.stopPropagation()
             onLocalize?.({ prompt: prompt.trim(), stepText: stepText ?? '' })
           }
         }}
@@ -54,7 +60,10 @@ export function StepChipPrompt({
         type="button"
         data-testid="step-localize-btn"
         disabled={!canLocalize}
-        onClick={() => onLocalize?.({ prompt: prompt.trim(), stepText: stepText ?? '' })}
+        onClick={(e) => {
+          e.stopPropagation()
+          onLocalize?.({ prompt: prompt.trim(), stepText: stepText ?? '' })
+        }}
       >
         Localize
       </button>
