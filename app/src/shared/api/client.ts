@@ -53,7 +53,7 @@ import type {
 } from '../../types/ai'
 import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
-import { API_BASE, getCurrentUserId } from './base'
+import { API_BASE, getCurrentUserId, getSessionToken, setSessionToken } from './base'
 
 export interface ProtocolContextResponse {
   projectTemplates: RecordEnvelope[]
@@ -1269,6 +1269,9 @@ async function request<T>(
   // them (and applies their access policies) instead of the fallback admin.
   const currentUserId = getCurrentUserId()
   if (currentUserId) baseHeaders['x-user-id'] = currentUserId
+  // A valid login session is the strongest identity signal (provenance + ACLs).
+  const sessionToken = getSessionToken()
+  if (sessionToken) baseHeaders['x-cl-session'] = sessionToken
 
   try {
     const response = await fetch(url, {
@@ -1660,8 +1663,25 @@ export const apiClient = {
     return response.users
   },
 
-  async createUser(body: { displayName: string; username?: string }): Promise<UserSummary> {
+  async createUser(body: { displayName: string; username?: string; email: string; password: string }): Promise<UserSummary> {
     return request<UserSummary>('/users', { method: 'POST', body: JSON.stringify(body) })
+  },
+
+  async login(username: string, password: string): Promise<{ token: string; userId: string }> {
+    const res = await request<{ token: string; userId: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    })
+    setSessionToken(res.token)
+    return res
+  },
+
+  async logout(): Promise<void> {
+    const token = getSessionToken()
+    if (token) {
+      try { await request('/auth/logout', { method: 'POST' }) } catch { /* best-effort */ }
+    }
+    setSessionToken(null)
   },
 
   /**

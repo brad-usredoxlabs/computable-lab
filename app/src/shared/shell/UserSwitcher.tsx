@@ -8,18 +8,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { useOptionalCurrentUser } from '../identity/CurrentUserProvider'
 import { apiClient } from '../api/client'
+import { getSessionToken } from '../api/base'
 
 export function UserSwitcher() {
   const currentUserCtx = useOptionalCurrentUser()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [editFields, setEditFields] = useState({ displayName: '', username: '', email: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  // Login form (shown when the session is anonymous; see below).
+  const [loginMode, setLoginMode] = useState(false)
+  const [loginFields, setLoginFields] = useState({ username: '', password: '' })
+  const [loggingIn, setLoggingIn] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -52,7 +60,11 @@ export function UserSwitcher() {
     setCreating(true)
     setCreateError(null)
     try {
-      const created = await apiClient.createUser({ displayName: name })
+      const created = await apiClient.createUser({
+        displayName: name,
+        email: newEmail.trim(),
+        password: newPassword,
+      })
       // setCurrentUser persists the selection and reloads as the new user.
       setCurrentUser(created.recordId)
     } catch (err) {
@@ -89,6 +101,29 @@ export function UserSwitcher() {
       setSaving(false)
     }
   }
+
+  async function handleLogin() {
+    const username = loginFields.username.trim()
+    const password = loginFields.password
+    if (!username || !password) { setLoginError('Enter username and password'); return }
+    setLoggingIn(true)
+    setLoginError(null)
+    try {
+      await apiClient.login(username, password)
+      // Login sets the session token; reload as the authenticated user.
+      window.location.assign('/')
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : 'Login failed')
+      setLoggingIn(false)
+    }
+  }
+
+  async function handleLogout() {
+    await apiClient.logout()
+    window.location.assign('/')
+  }
+
+  const hasSession = Boolean(getSessionToken())
 
   return (
     <div ref={containerRef} className="user-switcher" style={{ position: 'relative' }}>
@@ -208,14 +243,28 @@ export function UserSwitcher() {
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); void handleCreate() }
-                  else if (e.key === 'Escape') { setAdding(false); setNewName('') }
+                  else if (e.key === 'Escape') { setAdding(false); setNewName(''); setNewEmail(''); setNewPassword('') }
                 }}
+                disabled={creating}
+              />
+              <input
+                type="email"
+                value={newEmail}
+                placeholder="email@lab.org"
+                onChange={(e) => setNewEmail(e.target.value)}
+                disabled={creating}
+              />
+              <input
+                type="password"
+                value={newPassword}
+                placeholder="password (min 8)"
+                onChange={(e) => setNewPassword(e.target.value)}
                 disabled={creating}
               />
               <button
                 type="button"
                 onClick={() => void handleCreate()}
-                disabled={creating || !newName.trim()}
+                disabled={creating || !newName.trim() || !newEmail.includes('@') || newPassword.length < 8}
               >{creating ? '…' : 'Add'}</button>
             </li>
           ) : (
@@ -227,6 +276,52 @@ export function UserSwitcher() {
             </li>
           )}
           {createError ? <li className="user-switcher__add-error">{createError}</li> : null}
+          <li className="user-switcher__divider" role="separator" />
+          {hasSession ? (
+            <li>
+              <button type="button" onClick={() => void handleLogout()}>
+                <span className="user-switcher__check" aria-hidden>⎋</span>
+                <span>Log out</span>
+              </button>
+            </li>
+          ) : loginMode ? (
+            <li className="user-switcher__login-form">
+              <label>
+                <span>Username</span>
+                <input
+                  type="text"
+                  autoFocus
+                  value={loginFields.username}
+                  onChange={(e) => setLoginFields((f) => ({ ...f, username: e.target.value }))}
+                  disabled={loggingIn}
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={loginFields.password}
+                  onChange={(e) => setLoginFields((f) => ({ ...f, password: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleLogin() } }}
+                  disabled={loggingIn}
+                />
+              </label>
+              {loginError ? <div className="user-switcher__add-error">{loginError}</div> : null}
+              <div className="user-switcher__edit-actions">
+                <button type="button" onClick={() => { setLoginMode(false); setLoginError(null) }} disabled={loggingIn}>Cancel</button>
+                <button type="button" className="user-switcher__edit-save" onClick={() => void handleLogin()} disabled={loggingIn || !loginFields.username.trim() || !loginFields.password}>
+                  {loggingIn ? '…' : 'Log in'}
+                </button>
+              </div>
+            </li>
+          ) : (
+            <li>
+              <button type="button" onClick={() => setLoginMode(true)}>
+                <span className="user-switcher__check" aria-hidden>⇥</span>
+                <span>Log in…</span>
+              </button>
+            </li>
+          )}
         </ul>
       ) : null}
       <style>{userSwitcherStyles}</style>
@@ -304,7 +399,19 @@ const userSwitcherStyles = `
 .user-switcher__sub { color: var(--cl-text-faint); font-size: 0.8em; }
 .user-switcher__empty { padding: 8px 12px; color: var(--cl-text-faint); font-size: 0.85rem; }
 .user-switcher__divider { height: 1px; margin: 4px 0; background: var(--cl-border); }
-.user-switcher__add-form { display: flex; gap: 6px; padding: 6px 12px; }
+.user-switcher__add-form { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; }
+.user-switcher__login-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.user-switcher__login-form label { display: flex; flex-direction: column; gap: 2px; }
+.user-switcher__login-form label span { font-size: 0.7rem; color: var(--cl-text-faint); }
+.user-switcher__login-form input {
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
 .user-switcher__add-form input {
   flex: 1 1 auto;
   min-width: 0;

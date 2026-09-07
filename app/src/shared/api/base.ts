@@ -41,3 +41,24 @@ export function setCurrentUserId(id: string | null): void {
   if (currentUserId) localStorage.setItem(CURRENT_USER_STORAGE_KEY, currentUserId)
   else localStorage.removeItem(CURRENT_USER_STORAGE_KEY)
 }
+
+/**
+ * Local login session token, sent as `x-cl-session`. Stronger identity signal
+ * than `x-user-id`: a valid session resolves to its user for provenance + ACLs.
+ * Persisted in localStorage so reloads keep the login.
+ */
+const SESSION_STORAGE_KEY = 'cl.sessionToken'
+
+let sessionToken: string | null =
+  (typeof localStorage !== 'undefined' && localStorage.getItem(SESSION_STORAGE_KEY)) || null
+
+export function getSessionToken(): string | null {
+  return sessionToken
+}
+
+export function setSessionToken(token: string | null): void {
+  sessionToken = token && token.trim() ? token.trim() : null
+  if (typeof localStorage === 'undefined') return
+  if (sessionToken) localStorage.setItem(SESSION_STORAGE_KEY, sessionToken)
+  else localStorage.removeItem(SESSION_STORAGE_KEY)
+}
