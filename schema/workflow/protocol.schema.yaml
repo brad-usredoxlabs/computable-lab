@@ -807,9 +807,11 @@ $defs:
             kind: { const: record }
         description: "Optional pointer to the record that realizes this step's sub-event-graph (graph-component-instance or committed event-graph)."
         oneOf:
-        - properties:
+        - type: object
+          properties:
             type: { const: graph-component-instance }
-        - properties:
+        - type: object
+          properties:
             type: { const: event-graph }
 
       # Step-level settings referencing the Setting schema.
