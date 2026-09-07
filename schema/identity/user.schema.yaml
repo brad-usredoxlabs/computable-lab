@@ -16,6 +16,7 @@ required:
 - recordId
 - username
 - displayName
+- email
 - status
 
 properties:

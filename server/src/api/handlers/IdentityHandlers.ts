@@ -8,6 +8,8 @@ import {
   POLICY_ROOT_KINDS,
 } from '../../security/AuthorizationService.js';
 import type { AccessGrant } from '../../security/AccessControlService.js';
+import type { CredentialStore } from '../../security/CredentialStore.js';
+import { hashPassword } from '../../security/CredentialStore.js';
 
 /**
  * Thin convenience endpoints that surface the (already enforced) local
@@ -23,6 +25,7 @@ export interface IdentityHandlerOptions {
   store: RecordStore;
   identityService: LocalIdentityService;
   authorizationService: AuthorizationService;
+  credentialStore?: CredentialStore;
 }
 
 interface UserSummary {
@@ -154,7 +157,7 @@ function userSlug(name: string): string {
 }
 
 export function createIdentityHandlers(options: IdentityHandlerOptions) {
-  const { store, identityService, authorizationService } = options;
+  const { store, identityService, authorizationService, credentialStore } = options;
 
   async function loadGroupSummaries(): Promise<GroupSummary[]> {
     const groups = await store.list({ kind: 'group', limit: 10000 });
@@ -231,15 +234,25 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
       };
     },
 
-    // POST /api/users  { displayName, username? }
+    // POST /api/users  { displayName, username?, email (required), password (required) }
     async createUser(
-      request: FastifyRequest<{ Body: { displayName?: string; username?: string } }>,
+      request: FastifyRequest<{ Body: { displayName?: string; username?: string; email?: string; password?: string } }>,
       reply: FastifyReply,
     ) {
       const displayName = str(request.body?.displayName);
       if (!displayName) {
         reply.status(400);
         return { error: 'BAD_REQUEST', message: 'displayName is required' };
+      }
+      const email = str(request.body?.email);
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'a valid email is required' };
+      }
+      const password = str(request.body?.password);
+      if (!password || password.length < 8) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'password is required (min 8 chars)' };
       }
       const username = str(request.body?.username) ?? displayName.toLowerCase().replace(/\s+/g, '-');
       const recordId = userSlug(username);
@@ -256,6 +269,7 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
           recordId,
           username,
           displayName,
+          email,
           status: 'active',
           createdAt: now,
           updatedAt: now,
@@ -266,6 +280,14 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
       if (!result.success) {
         reply.status(400);
         return { error: 'USER_CREATE_FAILED', message: result.error ?? 'Failed to create user' };
+      }
+      // Persist the credential OUT of the records repo (server.dataDir/auth).
+      // Identity syncs; the secret does not. Failure here still returns the
+      // user but logs — the user just can't log in until a password set.
+      if (credentialStore) {
+        await credentialStore.setVerifier(recordId, hashPassword(password));
+      } else {
+        console.warn(`No credential store configured; ${recordId} cannot log in until one is set.`);
       }
       return summarizeUser(result.envelope ?? envelope);
     },

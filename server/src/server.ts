@@ -1166,6 +1166,7 @@ export async function createServer(
     store: ctx.store,
     identityService: ctx.localIdentityService,
     authorizationService: ctx.authorizationService,
+    credentialStore: ctx.credentialStore,
   });
 
   const authHandlers = createAuthHandlers({
