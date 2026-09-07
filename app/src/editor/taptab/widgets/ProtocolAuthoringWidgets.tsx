@@ -14,7 +14,6 @@ import {
 } from '../../../shared/taptab/slashMenu'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
 import { buildOntologyCopilotExtension } from '../../../shared/taptab/ontologyCopilot/OntologyCopilotExtension'
-import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
 import { focusAdjacentTapTabField } from '../tabNavPlugin'
 // ProtocolMentionEditor renders the slash-combobox DOM (slash menu + mention
 // chip). Its styles live in taptab.css — import it HERE so the editor is styled
@@ -90,25 +89,47 @@ function ProtocolRoleListWidget({ value, readOnly, onCommit, label, allowedKey, 
     setNewRole('')
     setNewRoleFocusSignal((signal) => signal + 1)
   }
-  const chips = roles.flatMap((role, index) => roleChips(role, index, allowedKey))
+  const updateRoleDescription = (index: number, description: string, mentions: SlashMention[]) => {
+    const next = roles.map((r, i) => i === index ? { ...r, description } : r)
+    commitRoles(next)
+    syncExternalMentions(mentions)
+  }
   return (
-    <div className="taptab-protocol-list">
-      {chips.length === 0 && <span className="taptab-widget-empty">No {emptyRoleLabel(label)}</span>}
-      {chips.length > 0 && (
-        <span className="taptab-chips-list taptab-protocol-chip-list">
-          {chips.map((chip) => (
-            <RefBadge
-              key={`${chip.roleIndex}:${chip.ref.id}`}
-              value={chip.ref}
-              size="md"
-              showExternalLink={false}
-              onRemove={readOnly ? undefined : () => commitRoles(roles.filter((_, i) => i !== chip.roleIndex))}
-            />
+    <div className="taptab-protocol-list taptab-protocol-role-list">
+      {roles.length === 0 && <span className="taptab-widget-empty">No {emptyRoleLabel(label)}</span>}
+      {roles.length > 0 && (
+        <ol className="taptab-protocol-numbered-list">
+          {roles.map((role, index) => (
+            <li className="taptab-protocol-step-item" key={String(role.roleId ?? role.description ?? index)}>
+              <div className="taptab-protocol-step">
+                {readOnly ? (
+                  <span>{String(role.description ?? role.roleId ?? '')}</span>
+                ) : (
+                  <ProtocolMentionEditor
+                    value={String(role.description ?? role.roleId ?? '')}
+                    placeholder={`Describe ${addRoleLabel(label)}`}
+                    className="taptab-protocol-role-editor"
+                    serialize="readable"
+                    defaultSlashCommand={defaultRoleSlashCommand(allowedKey)}
+                    onCommit={(description, mentions) => updateRoleDescription(index, description, mentions)}
+                  />
+                )}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    aria-label={`Remove role ${index + 1}`}
+                    onClick={() => commitRoles(roles.filter((_, i) => i !== index))}
+                  >
+                    x
+                  </button>
+                )}
+              </div>
+            </li>
           ))}
-        </span>
+        </ol>
       )}
       {!readOnly && (
-        <div className="taptab-protocol-add" contentEditable={false}>
+        <div className="taptab-protocol-add taptab-protocol-add-role" contentEditable={false}>
           <ProtocolMentionEditor
             value={newRole}
             placeholder={`Add ${addRoleLabel(label)}`}
@@ -355,28 +376,6 @@ function emptyRoleLabel(label: string): string {
   if (label === 'Equipment') return 'equipment'
   return label.toLowerCase()
 }
-
-function roleChips(role: Record<string, unknown>, roleIndex: number, allowedKey: string): Array<{ roleIndex: number; ref: Ref }> {
-  const ids = asStringArray(role[allowedKey])
-  const label = String(role.description ?? role.roleId ?? ids[0] ?? '')
-  if (ids.length === 0 && label) return [{ roleIndex, ref: roleRef(label, label, allowedKey) }]
-  return ids.map((id) => ({ roleIndex, ref: roleRef(id, label || id, allowedKey) }))
-}
-
-function roleRef(id: string, label: string, allowedKey: string): Ref {
-  if (/^[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_]+$/.test(id)) {
-    const [namespace = '', ...rest] = id.split(':')
-    return { kind: 'ontology', id, namespace: namespace.toUpperCase(), label: label || rest.join(':') }
-  }
-  const type = allowedKey === 'allowedMaterialIds'
-    ? 'material'
-    : allowedKey === 'expectedLabwareKinds'
-      ? 'labware'
-      : 'equipment'
-  return { kind: 'record', type, id, label: label || id }
-}
-
-
 
 function defaultRoleSlashCommand(allowedKey: string): string | undefined {
   if (allowedKey === 'allowedMaterialIds') return 'm'

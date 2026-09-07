@@ -1026,6 +1026,11 @@
   margin-top: 2px;
 }
 
+.taptab-protocol-add-role .taptab-protocol-add-btn::before {
+  content: '+';
+  margin-right: 2px;
+}
+
 .taptab-protocol-step-optional input[type='checkbox'] {
   accent-color: var(--cl-accent, #4b8bbe);
 }
