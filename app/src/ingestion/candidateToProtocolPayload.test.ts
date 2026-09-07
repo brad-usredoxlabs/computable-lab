@@ -71,4 +71,18 @@ describe('candidateToProtocolPayload', () => {
     const out = candidateToProtocolPayload(sampleCandidate(), 'PRT-x', '1. Seed.\n2. Read.')
     expect(out.humanStepsText).toBe('1. Seed.\n2. Read.')
   })
+
+  it('dedupes role arrays by roleId (schema requires uniqueItems)', () => {
+    const dup: AiProtocolCandidateSummary = {
+      kind: 'vendor-protocol-candidate',
+      title: 'T',
+      materials: [
+        { label: 'Reagent A', normalizedId: 'CL:reagent' },
+        { label: 'Reagent A (dup)', normalizedId: 'CL:reagent' },
+      ],
+    }
+    const out = candidateToProtocolPayload(dup, 'PRT-x')
+    expect(out.roles.materialRoles).toHaveLength(1)
+    expect(out.roles.materialRoles[0].allowedMaterialIds).toEqual(['CL:reagent'])
+  })
 })

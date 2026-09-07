@@ -119,15 +119,32 @@ function mapStep(st: AiProtocolCandidateStepSummary, i: number): MappedProtocolS
   }
 }
 
+function dedupeById<T extends { roleId: string }>(rows: T[]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const r of rows) {
+    if (seen.has(r.roleId)) continue
+    seen.add(r.roleId)
+    out.push(r)
+  }
+  return out
+}
+
 export function candidateToProtocolPayload(
   candidate: AiProtocolCandidateSummary,
   recordId: string,
   humanStepsText?: string,
 ): MappedProtocolPayload {
   const roles = {
-    materialRoles: (candidate.materials ?? []).map((it) => mapItem(it, 'allowedMaterialIds')) as MaterialRole[],
-    labwareRoles: (candidate.labware ?? []).map((it) => mapItem(it, 'expectedLabwareKinds')) as LabwareRole[],
-    instrumentRoles: (candidate.equipment ?? []).map((it) => mapItem(it, 'allowedInstrumentIds')) as InstrumentRole[],
+    materialRoles: dedupeById(
+      (candidate.materials ?? []).map((it) => mapItem(it, 'allowedMaterialIds')) as MaterialRole[],
+    ),
+    labwareRoles: dedupeById(
+      (candidate.labware ?? []).map((it) => mapItem(it, 'expectedLabwareKinds')) as LabwareRole[],
+    ),
+    instrumentRoles: dedupeById(
+      (candidate.equipment ?? []).map((it) => mapItem(it, 'allowedInstrumentIds')) as InstrumentRole[],
+    ),
   }
 
   return {

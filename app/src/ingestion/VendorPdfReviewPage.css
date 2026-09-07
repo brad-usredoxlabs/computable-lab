@@ -1,0 +1,248 @@
+.vpdf-review {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.vpdf-review--centered {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.vpdf-review__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev);
+  flex-wrap: wrap;
+}
+
+.vpdf-review__back {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vpdf-review__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+  flex: 1;
+  min-width: 120px;
+}
+
+.vpdf-review__meta {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+.vpdf-review__view-toggle {
+  display: flex;
+  gap: 4px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.vpdf-review__toggle {
+  padding: 4px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vpdf-review__toggle--active {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+
+.vpdf-review__toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vpdf-review__save-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.vpdf-review__save {
+  padding: 6px 12px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border: 0;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vpdf-review__save--secondary {
+  background: transparent;
+  color: var(--cl-text-dim);
+  border: 1px solid var(--cl-border);
+}
+
+.vpdf-review__save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vpdf-review__save-note {
+  color: var(--cl-success, #2e7d32);
+  font-size: 12px;
+}
+
+.vpdf-review__save-error {
+  color: var(--cl-danger);
+  font-size: 12px;
+}
+
+.vpdf-review__panels {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.vpdf-review__left {
+  flex: 0 0 40%;
+  max-width: 40%;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--cl-border);
+  background: var(--cl-bg);
+}
+
+.vpdf-review__split {
+  flex: 0 0 6px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cl-bg-elev);
+  border-right: 1px solid var(--cl-border);
+  touch-action: none;
+  user-select: none;
+}
+
+.vpdf-review__split span {
+  writing-mode: vertical-rl;
+  font-size: 9px;
+  color: var(--cl-text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.vpdf-review__split:hover,
+.vpdf-review__split:active {
+  background: var(--cl-accent);
+}
+
+.vpdf-review__split:hover span,
+.vpdf-review__split:active span {
+  color: var(--cl-on-accent);
+}
+
+.vpdf-review__pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.vpdf-review__page {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: #fff;
+}
+
+.vpdf-review__text {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vpdf-review__text-page {}
+.vpdf-review__text-page-header {
+  color: var(--cl-accent);
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.vpdf-review__text-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--cl-text);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.vpdf-review__right {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--cl-bg-elev);
+}
+
+.vpdf-review__taptab {
+  min-height: 400px;
+  height: 100%;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg);
+  padding: 4px;
+  overflow: auto;
+}
+
+.vpdf-review__extract {
+  padding: 10px 14px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border: 0;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vpdf-review__extract:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vpdf-review__error {
+  padding: 8px 12px;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid var(--cl-danger);
+  border-radius: 6px;
+  color: var(--cl-danger);
+  font-size: 12px;
+}
+
+.vpdf-review__hint {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+  text-align: center;
+}
