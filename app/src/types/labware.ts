@@ -119,6 +119,12 @@ export type LabwareType =
   | 'flask_250ml'
   | 'flask_500ml'
   | 'flask_1000ml'
+  // Cell-culture (T-) flasks: rectangular vented vessels used for adherent cell
+  // culture. Unlike the Erlenmeyer bench flasks these can sit on a deck slot
+  // (they are NOT lawnOnly) so a biologist can place their culture flask in the
+  // event editor's labware menu from a slot.
+  | 'flask_t25'
+  | 'flask_t75'
   // Bench instruments (shaker, incubator, plate reader, centrifuge, …) — lawn-only
   // bench equipment minted from an Exa equipment record (sourceRecordId = the EQP-*).
   // Forward-compatible with the future "move plate onto instrument" deck-flow.
@@ -176,6 +182,8 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   flask_250ml: '250 mL Flask',
   flask_500ml: '500 mL Flask',
   flask_1000ml: '1 L Flask',
+  flask_t25: 'T25 Flask',
+  flask_t75: 'T75 Flask',
   instrument: 'Instrument (Exa)',
   deepwell_96: '96-Well Deep Well (2 mL)',
   tiprack_ot2_20: 'OT-2 Tip Rack 20 uL',
@@ -231,6 +239,8 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   flask_250ml: '🍶',
   flask_500ml: '🍶',
   flask_1000ml: '🍶',
+  flask_t25: '🧴',
+  flask_t75: '🧴',
   instrument: '⚙️',
   deepwell_96: '🔬',
   tiprack_ot2_20: '🪡',
@@ -288,6 +298,8 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   flask_250ml: 'glassware',
   flask_500ml: 'glassware',
   flask_1000ml: 'glassware',
+  flask_t25: 'glassware',
+  flask_t75: 'glassware',
   instrument: 'instrument',
   deepwell_96: 'plate',
   tiprack_ot2_20: 'tiprack',
@@ -980,6 +992,25 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     orientationPolicy: 'fixed_columns',
     color: '#7950f2',
     lawnOnly: true,
+  },
+  // Cell-culture (T-) flasks — rectangular vented vessels, surface area 25 / 75 cm².
+  // These can be placed on a deck SLOT (NOT lawnOnly), so they surface in the
+  // deck-slot labware menu rather than only the freeform bench lawn.
+  flask_t25: {
+    labwareType: 'flask_t25',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 25000, minVolume_uL: 2000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#4dabf7',
+  },
+  flask_t75: {
+    labwareType: 'flask_t75',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 75000, minVolume_uL: 5000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#4dabf7',
   },
   instrument: {
     labwareType: 'instrument',

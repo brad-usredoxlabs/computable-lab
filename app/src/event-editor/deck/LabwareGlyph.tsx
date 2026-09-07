@@ -59,8 +59,9 @@ function inferProfile(labware: Labware): NonNullable<Labware['renderProfile']> {
 }
 
 /** Detect beaker / flask glassware by labwareType prefix. */
-function inferGlasswareType(labware: Labware): 'beaker' | 'flask' | null {
+function inferGlasswareType(labware: Labware): 'beaker' | 'flask' | 'tc-flask' | null {
   const lt = labware.labwareType ?? ''
+  if (lt === 'flask_t25' || lt === 'flask_t75') return 'tc-flask'
   if (lt.startsWith('beaker_')) return 'beaker'
   if (lt.startsWith('flask_')) return 'flask'
   return null
@@ -147,6 +148,53 @@ function FlaskSvg({ color }: GlasswareSvgProps) {
   )
 }
 
+/**
+ * Side-view SVG of a rectangular cell-culture (T-) flask: tapered neck + cap at
+ * the top, flat rectangular body, rounded back corner. Distinct from the
+ * Erlenmeyer so a T25/T75 reads instantly as a culture flask.
+ */
+function CultureFlaskSvg({ color }: GlasswareSvgProps) {
+  return (
+    <svg
+      className="tile__glyph"
+      viewBox="0 0 50 50"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      {/* Neck */}
+      <path
+        d="M 17 3 L 17 10 L 26 14 L 26 8 Z"
+        fill={color}
+        fillOpacity={0.18}
+        stroke={color}
+        strokeWidth={1.3}
+      />
+      {/* Cap (vented lid) */}
+      <rect x={15} y={1} width={12} height={4} rx={1} fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1} />
+      {/* Rectangular body with angled shoulder + rounded back */}
+      <path
+        d="M 26 8 L 26 14 L 14 14 L 8 30 L 44 30 L 44 44 L 8 44 L 8 40 L 14 40 Z"
+        fill={color}
+        fillOpacity={0.22}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {/* Base line */}
+      <path
+        d="M 8 42 L 44 42"
+        stroke={color}
+        strokeWidth={1.6}
+      />
+      {/* Culture surface fill hint (flat floor) */}
+      <path
+        d="M 12 32 L 40 32 L 40 40 L 12 40 Z"
+        fill={color}
+        fillOpacity={0.12}
+      />
+    </svg>
+  )
+}
+
 export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
   const profile = inferProfile(labware)
   const glasswareType = inferGlasswareType(labware)
@@ -165,6 +213,9 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
   }
   if (glasswareType === 'flask') {
     return <FlaskSvg color={color} />
+  }
+  if (glasswareType === 'tc-flask') {
+    return <CultureFlaskSvg color={color} />
   }
 
   // Bench instruments draw a per-kind silhouette (qPCR, plate reader,

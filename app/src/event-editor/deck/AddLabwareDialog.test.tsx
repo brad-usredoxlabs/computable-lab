@@ -24,6 +24,37 @@ describe('AddLabwareDialog', () => {
     createFromVendorExa.mockReset()
   })
 
+  it('shows T25 and T75 cell-culture flasks in the deck-slot menu (not lawn-only)', () => {
+    render(
+      <AddLabwareDialog
+        open
+        contextLabel="Slot B"
+        surfaceKind="slot"
+        onClose={() => {}}
+        onPick={() => {}}
+      />,
+    )
+
+    // Deck-slot palette: the two culture flasks must appear (Lawn-only types
+    // like beakers / Erlenmeyer flasks are filtered out of slot mode, but these
+    // are deliberately placeable on a slot).
+    expect(screen.getByRole('button', { name: /T25 Flask/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /T75 Flask/i })).toBeTruthy()
+  })
+
+  it('does not show lawn-only glassware (beaker) in the deck-slot menu', () => {
+    render(
+      <AddLabwareDialog
+        open
+        contextLabel="Slot B"
+        surfaceKind="slot"
+        onClose={() => {}}
+        onPick={() => {}}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /Beaker/i })).toBeNull()
+  })
+
   it('searches Exa for labware and mints a record on pick', async () => {
     searchVendorExa.mockResolvedValue({
       configured: true,
