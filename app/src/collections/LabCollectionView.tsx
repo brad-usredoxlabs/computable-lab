@@ -402,9 +402,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
                       <span className="lab-entity-card__title" title={displayName}>
                         {displayName}
                       </span>
-                      {visibilities[record.recordId] ? (
-                        <VisibilityBadge visibility={visibilities[record.recordId]!} />
-                      ) : null}
+                      <VisibilityBadge visibility={visibilities[record.recordId] ?? null} />
                       {helperTokens.length > 0 && (
                         <span className="lab-entity-card__helper">
                           {helperTokens.map((tok, i) => (
