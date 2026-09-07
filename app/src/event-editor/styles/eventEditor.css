@@ -2653,6 +2653,79 @@
   padding: 8px 16px 16px;
 }
 
+/* ---- Bench equipment (Exa) — AddEquipmentDialog + AddLabwareDialog Exa tier ---- */
+
+.event-editor .lawn__equipment-btn {
+  margin-left: 10px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.event-editor .lawn__equipment-btn:hover {
+  border-color: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+
+.event-editor .ee-dialog__vendor-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0 0 6px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.event-editor .ee-dialog__vendor-row:hover {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .ee-dialog__vendor-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.event-editor .ee-dialog__vendor-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.event-editor .ee-dialog__vendor-sub {
+  color: var(--cl-text-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.event-editor .ee-dialog__vendor-spinner {
+  color: var(--cl-text-faint);
+  font-size: 11px;
+}
+
+.event-editor .ee-dialog__body--equipment {
+  min-height: 140px;
+}
+
 /* ---- Proposed-changes inspector (View changes) ---- */
 
 .event-editor .proposed-graph {

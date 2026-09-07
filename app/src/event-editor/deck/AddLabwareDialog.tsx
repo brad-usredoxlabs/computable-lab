@@ -33,6 +33,7 @@ const CATEGORY_LABELS: Record<LabwareCategory, string> = {
   tube: 'Tubes',
   tiprack: 'Tip Racks',
   glassware: 'Glassware',
+  instrument: 'Instruments',
 }
 
 export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onPick }: AddLabwareDialogProps) {
@@ -59,6 +60,9 @@ export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onP
     const q = query.trim().toLowerCase()
     const all = Object.entries(LABWARE_TYPE_LABELS) as Array<[LabwareType, string]>
     return all.filter(([type, label]) => {
+      // `instrument` has no liquid geometry — it is added only through the
+      // Exa equipment flow (AddEquipmentDialog), never from this bare palette.
+      if (type === 'instrument') return false
       if (surfaceKind === 'slot' && isLawnOnlyLabwareType(type)) return false
       return !q || label.toLowerCase().includes(q)
     })

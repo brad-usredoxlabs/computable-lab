@@ -1,0 +1,138 @@
+import { useMemo, useState } from 'react'
+import { createLabware, type Labware } from '../../types/labware'
+import { apiClient, type VendorExaHit } from '../../shared/api/client'
+import { useVendorExaSearch } from '../../shared/vendor-exa/useVendorExaSearch'
+
+/**
+ * AddEquipmentDialog — add a bench INSTRUMENT (shaker, incubator, plate reader,
+ * centrifuge, …) to the freeform bench, sourced by **Exa web search**.
+ *
+ * The bench placement model is labware-typed, so a picked instrument becomes an
+ * `instrument`-type lawn-only Labware whose `sourceRecordId` points at the
+ * real `EQP-…` equipment record the server mints on `createFromVendorExa`. The
+ * EQP- record stays the canonical equipment; the deck tile is the editor's
+ * view of it. This keeps the materials/labware/equipment hierarchy intact and
+ * is forward-compatible with the future "move the plate onto the instrument"
+ * deck flow.
+ */
+
+interface AddEquipmentDialogProps {
+  open: boolean
+  contextLabel: string
+  onClose: () => void
+  onPick: (labware: Labware) => void
+}
+
+export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddEquipmentDialogProps) {
+  const [query, setQuery] = useState('')
+  const [customName, setCustomName] = useState('')
+  const [mintingUrl, setMintingUrl] = useState<string | null>(null)
+
+  // Exa web vendor-product search for equipment. Declared ABOVE the early
+  // `return null` so the hook count is stable whether open or closed
+  // (Rules of Hooks — the exact bug that hit AddLabwareDialog).
+  const vendorExa = useVendorExaSearch({ category: 'equipment', controlled: { query } })
+
+  // Exa hits matching the query, deduped.
+  const hits = useMemo(() => {
+    const seen = new Set<string>()
+    return vendorExa.exaResults.filter((h) => {
+      const key = h.url.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [vendorExa.exaResults])
+
+  if (!open) return null
+
+  async function handlePickVendorExa(hit: VendorExaHit) {
+    if (mintingUrl) return
+    setMintingUrl(hit.url)
+    try {
+      const created = await apiClient.createFromVendorExa(hit)
+      // Build a lawn-only `instrument` labware tile pointing at the minted
+      // EQP- record. The name is what the biologist sees on the bench.
+      const instrument = createLabware('instrument', customName.trim() || created.label)
+      instrument.sourceRecordId = created.recordId
+      instrument.notes = `Imported from Exa equipment search: ${hit.url}`
+      onPick(instrument)
+      onClose()
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create instrument from Exa', error)
+    } finally {
+      setMintingUrl(null)
+    }
+  }
+
+  return (
+    <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="ee-dialog" onClick={(e) => e.stopPropagation()}>
+        <header className="ee-dialog__header">
+          <span className="ee-dialog__title">Add instrument</span>
+          <span className="ee-dialog__context">→ {contextLabel}</span>
+          <button className="ee-dialog__close" onClick={onClose} aria-label="Close">×</button>
+        </header>
+        <input
+          autoFocus
+          type="text"
+          className="ee-dialog__search"
+          placeholder="Search instruments… (e.g. shaker, plate reader, centrifuge)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <input
+          type="text"
+          className="ee-dialog__search"
+          placeholder="Name on bench (optional)"
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
+        />
+        <div className="ee-dialog__body ee-dialog__body--equipment">
+          {hits.length > 0 || vendorExa.loading || !query.trim() ? (
+            <section className="ee-dialog__vendor">
+              <div className="ee-dialog__group-title">
+                Vendor / web (Exa)
+                {vendorExa.loading ? <span className="ee-dialog__vendor-spinner">…</span> : null}
+              </div>
+              {vendorExa.exaResults.length === 0 && vendorExa.loading ? (
+                <div className="ee-dialog__empty">Searching vendor instruments…</div>
+              ) : hits.length === 0 && query.trim() ? (
+                <div className="ee-dialog__empty">No instrument matches "{query.trim()}".</div>
+              ) : null}
+              {hits.map((hit) => (
+                <button
+                  key={hit.url}
+                  type="button"
+                  className="ee-dialog__vendor-row"
+                  disabled={mintingUrl !== null}
+                  onClick={() => void handlePickVendorExa(hit)}
+                >
+                  <span className="ee-dialog__vendor-label">
+                    {hit.title}
+                    <span className="ee-dialog__vendor-badge">WEB</span>
+                  </span>
+                  <span className="ee-dialog__vendor-sub">
+                    {mintingUrl === hit.url ? 'Creating instrument record…' : `Exa · ${baseUrlOf(hit.url)}`}
+                    {hit.snippet ? ` · ${hit.snippet}` : ''}
+                  </span>
+                </button>
+              ))}
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Extract the hostname from a full URL (e.g. "thermofisher.com"). */
+function baseUrlOf(url: string): string {
+  try {
+    const host = new URL(url).hostname
+    return host || url
+  } catch {
+    return url
+  }
+}
