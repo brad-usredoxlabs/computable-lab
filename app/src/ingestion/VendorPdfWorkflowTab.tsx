@@ -5,8 +5,10 @@
  * recently ingested first-class `vendor-pdf` records.
  *
  * Ingest here writes a free-floating first-class vendor-pdf record (Phase 2),
- * so no studyId is required. "Open in Protocol Builder" routes to the
- * standalone /protocol-builder to promote the extracted candidate.
+ * so no studyId is required. Every per-row action and the search section's
+ * "Build Protocol" action open the single review surface
+ * (/ingestion/vendor-pdf/:recordId) — PDF on the left, extracted protocol on
+ * the right — there is no separate builder routing anymore.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -39,8 +41,6 @@ export function VendorPdfWorkflowTab() {
   const [recent, setRecent] = useState<VendorPdfRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [draftingId, setDraftingId] = useState<string | null>(null)
-  const [extractError, setExtractError] = useState<string | null>(null)
 
   const loadRecent = useCallback(async () => {
     setLoading(true)
@@ -59,21 +59,10 @@ export function VendorPdfWorkflowTab() {
     void loadRecent()
   }, [loadRecent])
 
-  const handleExtractProtocol = useCallback(
-    async (r: VendorPdfRecord) => {
-      setExtractError(null)
-      setDraftingId(r.recordId)
-      try {
-        const res = await apiClient.createVendorPdfExtractionDraft(r.recordId)
-        if (!res.success || !res.draftId) {
-          throw new Error('No extraction draft was returned.')
-        }
-        navigate(`/extraction/review/${res.draftId}`)
-      } catch (err) {
-        setExtractError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setDraftingId(null)
-      }
+  // Every action opens the single vendor-PDF review surface.
+  const openReview = useCallback(
+    (recordId: string) => {
+      navigate(`/ingestion/vendor-pdf/${encodeURIComponent(recordId)}`)
     },
     [navigate],
   )
@@ -84,18 +73,13 @@ export function VendorPdfWorkflowTab() {
         onIngested={() => {
           void loadRecent()
         }}
-        onBuildProtocol={() => {
-          navigate('/protocol-builder')
+        onBuildProtocol={(artifactId) => {
+          openReview(artifactId)
         }}
       />
 
       <section className="vendor-pdf-workflow__recent" data-testid="vendor-pdf-recent">
         <h3 className="vendor-pdf-workflow__heading">Recent ingests</h3>
-        {extractError ? (
-          <p className="vendor-pdf-workflow__error" data-testid="vendor-pdf-extract-error">
-            {extractError}
-          </p>
-        ) : null}
         {error ? (
           <p className="vendor-pdf-workflow__error" data-testid="vendor-pdf-recent-error">
             {error}
@@ -125,26 +109,9 @@ export function VendorPdfWorkflowTab() {
                     type="button"
                     className="vendor-pdf-workflow__item-btn vendor-pdf-workflow__item-btn--primary"
                     data-testid={`recent-extract-${r.recordId}`}
-                    disabled={draftingId !== null}
-                    onClick={() => void handleExtractProtocol(r)}
+                    onClick={() => openReview(r.recordId)}
                   >
-                    {draftingId === r.recordId ? 'Drafting…' : 'Extract Protocol'}
-                  </button>
-                  <button
-                    type="button"
-                    className="vendor-pdf-workflow__item-btn"
-                    data-testid={`recent-view-${r.recordId}`}
-                    onClick={() => navigate(`/lab/vendor-pdfs/${r.recordId}`)}
-                  >
-                    View
-                  </button>
-                  <button
-                    type="button"
-                    className="vendor-pdf-workflow__item-btn"
-                    data-testid={`recent-build-${r.recordId}`}
-                    onClick={() => navigate('/protocol-builder')}
-                  >
-                    Open in Protocol Builder
+                    Review
                   </button>
                 </div>
               </div>

@@ -1,7 +1,9 @@
 /**
  * Tests for VendorPdfWorkflowTab — the standalone vendor-PDF ingestion
  * workflow surface. Verifies it renders the shared search section AND the
- * recent-ingests list, and that View / Open-in-Protocol-Builder navigate.
+ * recent-ingests list, and that every per-row action (Review / View / the
+ * search section's Build Protocol) opens the single review surface at
+ * /ingestion/vendor-pdf/:recordId.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,13 +13,11 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 const listKindMock = vi.fn()
 const searchMock = vi.fn()
 const ingestMock = vi.fn()
-const createDraftMock = vi.fn()
 vi.mock('../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: (...args: unknown[]) => listKindMock(...args),
     searchGraphLemurVendorPdfs: (...args: unknown[]) => searchMock(...args),
     ingestGraphLemurVendorPdf: (...args: unknown[]) => ingestMock(...args),
-    createVendorPdfExtractionDraft: (...args: unknown[]) => createDraftMock(...args),
   },
 }))
 
@@ -29,7 +29,6 @@ beforeEach(() => {
   listKindMock.mockReset()
   searchMock.mockReset()
   ingestMock.mockReset()
-  createDraftMock.mockReset()
 })
 
 afterEach(() => cleanup())
@@ -42,7 +41,12 @@ const sampleRecord = {
     title: 'NEBNext Ultra II',
     state: 'ingested',
     source: { engine: 'exa', vendor: 'NEB' },
+    extractedText: [{ pageNumber: 1, text: 'Step 1. Add reagent\nStep 2. Incubate' }],
   },
+}
+
+function ReviewProbe() {
+  return <div data-testid="review-surface" />
 }
 
 function renderTab(records = [sampleRecord]) {
@@ -60,9 +64,7 @@ function renderTab(records = [sampleRecord]) {
             </ThemeProvider>
           }
         />
-        <Route path="/lab/vendor-pdfs/:recordId" element={<div data-testid="lab-viewer" />} />
-        <Route path="/protocol-builder" element={<div data-testid="protocol-builder" />} />
-        <Route path="/extraction/review/:draftId" element={<div data-testid="extraction-review" />} />
+        <Route path="/ingestion/vendor-pdf/:recordId" element={<ReviewProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -84,37 +86,11 @@ describe('VendorPdfWorkflowTab', () => {
     await waitFor(() => expect(listKindMock).toHaveBeenCalledWith('vendor-pdf', 100))
   })
 
-  it('navigates to the first-class record viewer on View', async () => {
-    renderTab()
-    await waitFor(() => expect(screen.getByTestId('recent-vendor-pdf-VPDF-ABC123')).toBeDefined())
-    fireEvent.click(screen.getByTestId('recent-view-VPDF-ABC123'))
-    expect(screen.getByTestId('lab-viewer')).toBeDefined()
-  })
-
-  it('navigates to the protocol builder on Open in Protocol Builder', async () => {
-    renderTab()
-    await waitFor(() => expect(screen.getByTestId('recent-vendor-pdf-VPDF-ABC123')).toBeDefined())
-    fireEvent.click(screen.getByTestId('recent-build-VPDF-ABC123'))
-    expect(screen.getByTestId('protocol-builder')).toBeDefined()
-  })
-
-  it('extracts a protocol draft and routes to the review page', async () => {
-    createDraftMock.mockResolvedValue({ success: true, draftId: 'XDR-000042', candidateCount: 1 })
+  it('navigates to the single review surface on Review', async () => {
     renderTab()
     await waitFor(() => expect(screen.getByTestId('recent-vendor-pdf-VPDF-ABC123')).toBeDefined())
     fireEvent.click(screen.getByTestId('recent-extract-VPDF-ABC123'))
-    await waitFor(() => expect(createDraftMock).toHaveBeenCalledWith('VPDF-ABC123'))
-    expect(screen.getByTestId('extraction-review')).toBeDefined()
-  })
-
-  it('surfaces an error when extracting a draft fails', async () => {
-    createDraftMock.mockRejectedValue(new Error('draft failed'))
-    renderTab()
-    await waitFor(() => expect(screen.getByTestId('recent-vendor-pdf-VPDF-ABC123')).toBeDefined())
-    fireEvent.click(screen.getByTestId('recent-extract-VPDF-ABC123'))
-    await waitFor(() =>
-      expect(screen.getByTestId('vendor-pdf-extract-error').textContent).toContain('draft failed'),
-    )
+    expect(screen.getByTestId('review-surface')).toBeDefined()
   })
 
   it('shows an empty state when no vendor PDFs are ingested', async () => {

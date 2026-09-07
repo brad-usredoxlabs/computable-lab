@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest'
+import { candidateToProtocolPayload } from './candidateToProtocolPayload'
+import type { AiProtocolCandidateSummary } from '../types/ai'
+
+function sampleCandidate(): AiProtocolCandidateSummary {
+  return {
+    kind: 'vendor-protocol-candidate',
+    title: 'CellROX Green Flow Cytometry',
+    materials: [
+      { label: 'CellROX reagent', role: 'probe', normalizedId: 'CL:CellROX' },
+      { label: 'DMSO' },
+    ],
+    labware: [{ label: '96-well plate', role: 'reaction-plate', normalizedId: 'CL:plate96' }],
+    equipment: [{ label: 'Flow cytometer', role: 'detector' }],
+    steps: [
+      { stepNumber: 1, title: 'Seed cells', text: 'Seed 50k cells per well.', notes: ['keep sterile'] },
+      {
+        stepNumber: 2,
+        title: 'Incubate 37C',
+        text: 'Incubate for 30 minutes at 37C.',
+        evidence: [{ pageNumber: 5, sectionId: 'protocol', snippet: 'Incubate 30 min' }],
+      },
+    ],
+  }
+}
+
+describe('candidateToProtocolPayload', () => {
+  it('maps materials/equipment/labware to role arrays with roleId from normalizedId', () => {
+    const out = candidateToProtocolPayload(sampleCandidate(), 'PRT-x')
+    expect(out.roles.materialRoles).toContainEqual({
+      roleId: 'cl-cellrox',
+      description: 'CellROX reagent',
+      allowedMaterialIds: ['CL:CellROX'],
+    })
+    expect(out.roles.materialRoles).toContainEqual({ roleId: 'dmso', description: 'DMSO' })
+    expect(out.roles.labwareRoles[0].expectedLabwareKinds).toEqual(['CL:plate96'])
+    expect(out.roles.labwareRoles[0].roleId).toBe('cl-plate96')
+    expect(out.roles.instrumentRoles[0].roleId).toBe('detector') // from role, not normalizedId
+  })
+
+  it('maps steps with stepId/ordinal + forces `other` kind (schema-safe)', () => {
+    const out = candidateToProtocolPayload(sampleCandidate(), 'PRT-x')
+    expect(out.steps.map((s) => s.ordinal)).toEqual([1, 2])
+    expect(out.steps.map((s) => s.stepId)).toEqual(['step-1', 'step-2'])
+    expect(out.steps[1].label).toBe('Incubate 37C')
+    expect(out.steps[1].kind).toBe('other') // never a structured kind
+    expect(out.steps[0].notes).toBe('keep sterile')
+    expect(out.steps[1].provenance?.[0].pageNumber).toBe(5)
+  })
+
+  it('extracts step label from title, falls back to text/Step N', () => {
+    const bare: AiProtocolCandidateSummary = {
+      kind: 'vendor-protocol-candidate',
+      title: 'T',
+      steps: [{ text: 'Dispense 200 uL to all wells' }, { title: '', text: '' }],
+    }
+    const out = candidateToProtocolPayload(bare, 'PRT-x')
+    expect(out.steps[0].label).toBe('Dispense 200 uL to all wells')
+    expect(out.steps[0].label.length).toBeLessThanOrEqual(80)
+    expect(out.steps[1].label).toBe('Step 2')
+  })
+
+  it('empty candidate produces title fallback and empty roles', () => {
+    const out = candidateToProtocolPayload({ kind: 'vendor-protocol-candidate', title: '  ' }, 'PRT-x')
+    expect(out.title).toBe('Untitled protocol')
+    expect(out.steps).toEqual([])
+    expect(out.roles.materialRoles).toEqual([])
+  })
+
+  it('threads humanStepsText when provided', () => {
+    const out = candidateToProtocolPayload(sampleCandidate(), 'PRT-x', '1. Seed.\n2. Read.')
+    expect(out.humanStepsText).toBe('1. Seed.\n2. Read.')
+  })
+})
