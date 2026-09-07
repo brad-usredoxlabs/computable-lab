@@ -5,10 +5,13 @@ import {
   LABWARE_CATEGORIES,
   createLabware,
   isLawnOnlyLabwareType,
+  labwareRecordToEditorLabware,
   type LabwareCategory,
   type LabwareType,
 } from '../../types/labware'
 import type { Labware } from '../../types/labware'
+import { apiClient, type VendorExaHit } from '../../shared/api/client'
+import { useVendorExaSearch } from '../../shared/vendor-exa/useVendorExaSearch'
 
 interface AddLabwareDialogProps {
   open: boolean
@@ -86,6 +89,34 @@ export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onP
     }
   }
 
+  // Exa web vendor-product search for labware, driven by the same query input.
+  const vendorExa = useVendorExaSearch({ category: 'labware', controlled: { query } })
+  const [mintingUrl, setMintingUrl] = useState<string | null>(null)
+
+  async function handlePickVendorExa(hit: VendorExaHit) {
+    if (mintingUrl) return
+    setMintingUrl(hit.url)
+    try {
+      const created = await apiClient.createFromVendorExa(hit)
+      // A vendor labware record has no grid geometry the editor can render
+      // authoritatively — the sanctioned mapper keeps the recordId provenance
+      // and falls back to a sensible editor type for unknown containers.
+      const labware = labwareRecordToEditorLabware({
+        kind: 'labware',
+        recordId: created.recordId,
+        name: customName.trim() || created.label,
+        labwareType: 'other',
+      })
+      onPick(labware)
+      onClose()
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create labware from Exa', error)
+    } finally {
+      setMintingUrl(null)
+    }
+  }
+
   return (
     <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="ee-dialog" onClick={(e) => e.stopPropagation()}>
@@ -136,7 +167,42 @@ export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onP
             <div className="ee-dialog__empty">No labware matches "{query}".</div>
           ) : null}
         </div>
+        {vendorExa.exaResults.length > 0 || vendorExa.loading ? (
+          <section className="ee-dialog__vendor">
+            <div className="ee-dialog__group-title">
+              Vendor / web (Exa)
+              {vendorExa.loading ? <span className="ee-dialog__vendor-spinner">…</span> : null}
+            </div>
+            {vendorExa.exaResults.map((hit) => (
+              <button
+                key={hit.url}
+                type="button"
+                className="ee-dialog__vendor-row"
+                disabled={mintingUrl !== null}
+                onClick={() => void handlePickVendorExa(hit)}
+              >
+                <span className="ee-dialog__vendor-label">
+                  {hit.title}
+                  <span className="ee-dialog__vendor-badge">WEB</span>
+                </span>
+                <span className="ee-dialog__vendor-sub">
+                  {mintingUrl === hit.url ? 'Creating labware record…' : `Exa · ${baseUrlOf(hit.url)}`}
+                </span>
+              </button>
+            ))}
+          </section>
+        ) : null}
       </div>
     </div>
   )
+}
+
+/** Extract the hostname from a full URL (e.g. "caymanchem.com"). */
+function baseUrlOf(url: string): string {
+  try {
+    const host = new URL(url).hostname
+    return host || url
+  } catch {
+    return url
+  }
 }
