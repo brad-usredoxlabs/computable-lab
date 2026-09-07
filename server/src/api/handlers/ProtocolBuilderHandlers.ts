@@ -278,12 +278,18 @@ function buildChunkExtractionPrompt(
       kind: 'vendor-protocol-candidate',
       title: '',
       scope: '',
-      materials: [],
-      labware: [],
-      equipment: [],
-      steps: [],
+      materials: [{ label: 'CellROX Detection Reagent', role: 'detection-reagent' }],
+      labware: [{ label: '96-well plate' }],
+      equipment: [{ label: 'Flow Cytometer' }],
+      steps: [{ stepNumber: 1, text: 'Add detection reagent.', materials: ['CellROX Detection Reagent'], equipment: ['Flow Cytometer'] }],
       diagnostics: [],
     }, null, 2),
+    '',
+    'IMPORTANT:',
+    '- The label of every material/labware/equipment item MUST be the concrete noun that appears in the text (e.g. "Flow Cytometer", "SYTOX Dead Cell Stain", "CellROX Detection Reagent").',
+    '- NEVER use placeholders like "material:role", "equipment:role", "labware:role", "role", "n/a", "unknown", or "tools".',
+    '- When an item does not have an obvious semantic role, set role to the noun itself or omit it — never set it to "role".',
+    '- List every material/labware/equipment you put in the top-level arrays ALSO inside the matching per-step arrays of the steps that use them. If a section names none, return [].',
     '',
     ...(documentId ? [`Document ID: ${documentId}`, ''] : []),
     ...(vendor ? [`Vendor: ${vendor}`, ''] : []),
@@ -377,6 +383,37 @@ function extractJsonFromResponse(text: string): unknown {
  * - Materials/labware/equipment deduplicated by label
  * - Diagnostics concatenated
  */
+/** True when a role label is a generic placeholder the model emitted instead
+ *  of a concrete noun (e.g. "material:role", "equipment:role", "n/a"). */
+export function isGenericRoleLabel(label: string | undefined): boolean {
+  const l = (label ?? '').trim().toLowerCase()
+  if (!l) return true
+  if (/^(material|equipment|labware|reagent|instrument)?(:| )?role$/.test(l)) return true
+  return /^(n\/?a|unknown|tools?|misc)$/.test(l)
+}
+
+/** Backfill a role list from the real nouns in steps, dropping generics and
+ *  deduping case-insensitively. Steps[] is a gold source because the model
+ *  reliably names materials/equipment/labware per-step even when the top-level
+ *  lists degrade to placeholders in the multi-chunk path. */
+export function backfillRolesFromSteps<T extends { label: string }>(
+  generic: T[],
+  steps: Array<{ materials?: string[]; labware?: string[]; equipment?: string[] }>,
+  kind: 'materials' | 'labware' | 'equipment',
+): T[] {
+  const out: T[] = generic.filter((x) => !isGenericRoleLabel(x.label))
+  const seen = new Set(out.map((x) => x.label.toLowerCase()))
+  for (const step of steps) {
+    for (const name of step[kind] ?? []) {
+      const n = String(name ?? '').trim()
+      if (!n || seen.has(n.toLowerCase())) continue
+      seen.add(n.toLowerCase())
+      out.push({ label: n } as T)
+    }
+  }
+  return out
+}
+
 function mergeChunkResults(chunks: AiProtocolCandidateSummary[]): AiProtocolCandidateSummary {
   if (chunks.length === 0) {
     return {
@@ -416,41 +453,23 @@ function mergeChunkResults(chunks: AiProtocolCandidateSummary[]): AiProtocolCand
     }
   }
 
-  // Materials: deduplicate by label
-  const materialLabels = new Set<string>();
-  const materials: Array<{ label: string; role?: string; confidence?: number }> = [];
-  for (const chunk of chunks) {
-    for (const mat of (chunk.materials ?? [])) {
-      if (!materialLabels.has(mat.label)) {
-        materialLabels.add(mat.label);
-        materials.push(mat);
-      }
-    }
-  }
-
-  // Labware: deduplicate by label
-  const labwareLabels = new Set<string>();
-  const labware: Array<{ label: string; role?: string }> = [];
-  for (const chunk of chunks) {
-    for (const lw of (chunk.labware ?? [])) {
-      if (!labwareLabels.has(lw.label)) {
-        labwareLabels.add(lw.label);
-        labware.push(lw);
-      }
-    }
-  }
-
-  // Equipment: deduplicate by label
-  const equipmentLabels = new Set<string>();
-  const equipment: Array<{ label: string }> = [];
-  for (const chunk of chunks) {
-    for (const eq of (chunk.equipment ?? [])) {
-      if (!equipmentLabels.has(eq.label)) {
-        equipmentLabels.add(eq.label);
-        equipment.push(eq);
-      }
-    }
-  }
+  // Materials/labware/equipment: drop generic placeholders and backfill real
+  // nouns from steps (the model reliably names them per-step).
+  const materials = backfillRolesFromSteps(
+    chunks.flatMap((c) => (c.materials ?? [])),
+    allSteps,
+    'materials',
+  )
+  const labware = backfillRolesFromSteps(
+    chunks.flatMap((c) => (c.labware ?? [])),
+    allSteps,
+    'labware',
+  )
+  const equipment = backfillRolesFromSteps(
+    chunks.flatMap((c) => (c.equipment ?? [])),
+    allSteps,
+    'equipment',
+  )
 
   // Diagnostics: concatenate
   const diagnostics: Array<{ code: string; severity: 'info' | 'warning' | 'error'; message: string }> = [];
