@@ -61,6 +61,9 @@ export interface ProtocolContextResponse {
   runMethods: RecordEnvelope[]
   promotableRunMethods: RecordEnvelope[]
   availableProtocols: RecordEnvelope[]
+  /** Free-floating ingested vendor PDFs. NOT attachable — rendered with an
+   *  Open action. */
+  ingestedPdfs: RecordEnvelope[]
 }
 
 export interface UseProtocolInRunResponse {
@@ -2284,6 +2287,21 @@ export const apiClient = {
     })
   },
 
+  async uploadGraphLemurVendorPdf(params: {
+    url?: string
+    title?: string
+    vendor?: string
+    studyId?: string
+    query?: string
+    fileName?: string
+    contentBase64: string
+  }): Promise<GraphLemurPdfIngestResponse> {
+    return request<GraphLemurPdfIngestResponse>('/vendors/graph-lemur/pdfs/upload', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  },
+
   async createVendorPdfExtractionDraft(
     vendorPdfId: string,
     body?: { regenerate?: boolean; title?: string },
@@ -4338,11 +4356,12 @@ export const apiClient = {
 
   // === Protocol context and actions ===
 
-  async getProtocolContext(query: { studyId?: string; experimentId?: string; runId?: string }): Promise<ProtocolContextResponse> {
+  async getProtocolContext(query: { studyId?: string; experimentId?: string; runId?: string; q?: string }): Promise<ProtocolContextResponse> {
     const params = new URLSearchParams()
     if (query.studyId) params.set('studyId', query.studyId)
     if (query.experimentId) params.set('experimentId', query.experimentId)
     if (query.runId) params.set('runId', query.runId)
+    if (query.q && query.q.trim()) params.set('q', query.q.trim())
     const suffix = params.toString()
     return request<ProtocolContextResponse>(`/protocol-context${suffix ? `?${suffix}` : ''}`)
   },
@@ -4383,6 +4402,23 @@ export const apiClient = {
     return request<{ success: true; record: RecordEnvelope }>('/protocol-actions/promote-to-project-template', {
       method: 'POST',
       body: JSON.stringify(payload),
+    })
+  },
+
+  /**
+   * Commit a protocol step's REALIZATION (concept → realization): mints an
+   * event-graph from the concrete events/labwares and points the step's
+   * subGraphRef at it. Returns the new realization ref.
+   */
+  async patchStepSubgraph(payload: {
+    protocolId: string
+    stepId: string
+    events: Record<string, unknown>[]
+    labwares: Record<string, unknown>[]
+  }): Promise<{ subGraphRef: { kind: 'record'; type: 'event-graph'; id: string }; realizationId: string }> {
+    return request(`/protocols/${encodeURIComponent(payload.protocolId)}/steps/${encodeURIComponent(payload.stepId)}/subgraph`, {
+      method: 'POST',
+      body: JSON.stringify({ events: payload.events, labwares: payload.labwares }),
     })
   },
 
@@ -4481,6 +4517,15 @@ export const apiClient = {
    */
   artifactBlobUrl(studyId: string, artifactId: string): string {
     return `${API_BASE}/studies/${encodeURIComponent(studyId)}/artifacts/${encodeURIComponent(artifactId)}/blob`
+  },
+
+  /**
+   * URL of a free-floating vendor-pdf's stored bytes. Unlike artifactBlobUrl
+   * this is NOT study-scoped (ingested vendor PDFs have no studyId), so pdfjs
+   * can fetch the PDF for the review surface's left pane.
+   */
+  vendorPdfBlobUrl(recordId: string): string {
+    return `${API_BASE}/vendor-pdfs/${encodeURIComponent(recordId)}/pdf`
   },
 
   // === Per-study Workspace State ===

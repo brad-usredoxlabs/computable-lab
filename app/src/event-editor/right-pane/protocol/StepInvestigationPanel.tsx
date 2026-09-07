@@ -58,7 +58,7 @@ export interface StepInvestigationPanelProps {
   localProtocolSetup?: LocalProtocolSetupRows
   /** Focus this step's realization on the deck (setFocusedStep). */
   onFocusStep?: (step: { stepId: string; label: string; ordinal?: number } | null) => void
-  /** Commits the focused step's realization to its subGraphRef (caller wires). */
+  /** Commit the focused step's realization (events + labware map). Caller persists. */
   onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => void
 }
 

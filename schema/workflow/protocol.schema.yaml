@@ -795,15 +795,22 @@ $defs:
         description: "Explicit compartment hint for well-state propagation: whether the material(s) produced/affected by this step are in free solution ('soluble') or immobilized on a solid phase ('adsorbed'). Absent defaults to 'soluble'. The well-state tracker never infers this from context."
         enum: [ soluble, adsorbed ]
 
-      # Reference to a sub-event-graph (graph-component-instance) for this step.
+      # Reference to this step's concrete REALIZATION (its sub-event-graph).
+      # The concept → realization model: a step ("wash the cells") points at the
+      # specific event series that actualizes it. Target may be a reusable
+      # graph-component-instance OR a committed event-graph realization.
       subGraphRef:
         allOf:
         - $ref: "./datatypes/ref.schema.yaml"
         - type: object
           properties:
             kind: { const: record }
+        description: "Optional pointer to the record that realizes this step's sub-event-graph (graph-component-instance or committed event-graph)."
+        oneOf:
+        - properties:
             type: { const: graph-component-instance }
-        description: "Optional pointer to the graph-component-instance that implements this step's sub-event-graph."
+        - properties:
+            type: { const: event-graph }
 
       # Step-level settings referencing the Setting schema.
       settings:

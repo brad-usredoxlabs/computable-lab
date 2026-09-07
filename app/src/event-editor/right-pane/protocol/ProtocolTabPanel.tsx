@@ -966,6 +966,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const [noProtocol, setNoProtocol] = useState(false)
   const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
   const [refetchTrigger, setRefetchTrigger] = useState(0)
+  // The protocol id whose steps we show (run → plannedRunRef → protocolRef) —
+  // needed to commit a step's realization (patchStepSubgraph) by protocol.
+  const [stepsProtocolId, setStepsProtocolId] = useState<string | null>(null)
   // Search box on the Protocol tab for finding protocols / PDFs to attach.
   const [protocolQuery, setProtocolQuery] = useState('')
   // Change-protocol flow: when true, the ProtocolSelector is shown even though
@@ -1138,6 +1141,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         setUniversalProtocolId(resolvedUniversalId)
         setUniversalProtocolTitle(resolvedUniversalTitle)
         setUniversalRoleIds(resolvedRoleIds)
+        setStepsProtocolId(stepsId)
       }
 
       // For an LPR, the long-form text lives on the INHERITED universal
@@ -1799,6 +1803,20 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                       localSetup && !setupIsPreview ? localSetup : undefined
                     }
                     onFocusStep={(fstep) => setFocusedStep(fstep)}
+                    onSaveRealization={(events, labwares) => {
+                      // Commit the focused step's realization (concept → event-graph).
+                      if (!stepsProtocolId || !step.stepId) return
+                      const labwareList = Object.values(labwares) as Record<string, unknown>[]
+                      void apiClient
+                        .patchStepSubgraph({ protocolId: stepsProtocolId, stepId: step.stepId, events, labwares: labwareList })
+                        .then((r) => {
+                          // Reflect the committed realization: refresh this step's graph.
+                          void fetchStepGraph(step.stepId)
+                          window.dispatchEvent(new CustomEvent('cl:records-changed'))
+                          void r
+                        })
+                        .catch((err) => console.error('Failed to commit step realization:', err))
+                    }}
                   />
                 </div>
               )

@@ -14,10 +14,10 @@ import { StepGraphCompiler } from '../../protocol/StepGraphCompiler.js';
 // Types
 // ---------------------------------------------------------------------------
 
-/** Reference to a graph-component-instance (sub-event-graph for a step). */
+/** Reference to a graph-component-instance or committed event-graph realization. */
 interface SubGraphRef {
   kind: 'record';
-  type: 'graph-component-instance';
+  type: 'graph-component-instance' | 'event-graph';
   id: string;
 }
 
@@ -515,7 +515,26 @@ export function registerProtocolStepsRoutes(
         return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
       }
 
-      // Compile the step into a sub-graph
+      // Prefer the COMMITTED realization (concept → realization): if the step's
+      // subGraphRef points at an event-graph, return its concrete events/labwares.
+      // Fall back to compiling the step template on demand.
+      const subGraphRef = result.step?.subGraphRef;
+      if (subGraphRef && subGraphRef.type === 'event-graph' && subGraphRef.id) {
+        const realization = await ctx.store.get(subGraphRef.id);
+        const rp = realization?.payload as Record<string, unknown> | null;
+        if (rp && rp.kind === 'event-graph') {
+          return {
+            graph: {
+              id: subGraphRef.id,
+              name: rp.name ?? `${result.step.label} realization`,
+              events: Array.isArray(rp.events) ? rp.events : [],
+              labwares: Array.isArray(rp.labwares) ? rp.labwares : [],
+            },
+          };
+        }
+      }
+
+      // Compile the step into a sub-graph (derived realization).
       const compiler = new StepGraphCompiler();
       const bindings = request.query as Record<string, unknown>;
       const compiled = compiler.compileStepToGraph(result.step as any, bindings);
@@ -628,4 +647,88 @@ export function registerProtocolStepsRoutes(
       };
     }
   });
+
+  // ========================================================================
+  // POST /api/protocols/:protocolId/steps/:stepId/subgraph
+  // Commit a step's REALIZATION: mint an event-graph from the concrete
+  // {events, labwares} and point the step's subGraphRef at it (concept →
+  // realization). Replaces any prior committed realization.
+  // ========================================================================
+  fastify.post<{
+    Params: { protocolId: string; stepId: string };
+    Body: { events?: unknown[]; labwares?: unknown[] };
+  }>(
+    '/protocols/:protocolId/steps/:stepId/subgraph',
+    async (
+      request: FastifyRequest<{ Params: { protocolId: string; stepId: string }; Body: { events?: unknown[]; labwares?: unknown[] } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const { protocolId, stepId } = request.params;
+        const body = request.body ?? {};
+
+        const record = await ctx.store.get(protocolId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'PROTOCOL_NOT_FOUND', message: `Protocol '${protocolId}' not found` };
+        }
+        const payload = record.payload as Record<string, unknown>;
+        if (payload.kind !== 'protocol') {
+          reply.status(400);
+          return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
+        }
+        const steps = (payload.steps as ProtocolStep[]) ?? [];
+        const result = findStep(steps, stepId);
+        if (!result) {
+          reply.status(404);
+          return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
+        }
+
+        // Mint an event-graph realization record (the concrete event series).
+        const realizationId = `EVG-STEP-${stepId}-${Date.now().toString(36)}`;
+        const now = new Date().toISOString();
+        const eventGraphPayload = {
+          kind: 'event-graph',
+          recordId: realizationId,
+          id: realizationId,
+          name: `${result.step.label ?? 'Step'} realization`,
+          events: Array.isArray(body.events) ? body.events : [],
+          labwares: Array.isArray(body.labwares) ? body.labwares : [],
+          status: 'filed',
+          createdAt: now,
+          updatedAt: now,
+        };
+        const eventGraphEnvelope = {
+          recordId: realizationId,
+          schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
+          payload: eventGraphPayload,
+          meta: { createdAt: now, updatedAt: now },
+        };
+        const created = await ctx.store.create({ envelope: eventGraphEnvelope, message: `Realize step '${stepId}' as ${realizationId}` });
+        if (!created.success) {
+          reply.status(422);
+          return { error: 'CREATE_FAILED', message: created.error ?? 'Failed to create realization event-graph' };
+        }
+
+        // Point the step at its realization.
+        const subGraphRef = { kind: 'record' as const, id: realizationId, type: 'event-graph' as const };
+        result.step = { ...result.step, subGraphRef };
+        steps[result.index] = result.step;
+        payload.steps = steps;
+        await ctx.store.update({
+          envelope: { ...record, payload },
+          message: `Commit realization ${realizationId} to step '${stepId}' in protocol '${protocolId}'`,
+        });
+
+        return { subGraphRef, realizationId };
+      } catch (error) {
+        console.error('Error committing step realization:', error);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to commit step realization',
+        };
+      }
+    },
+  );
 }
