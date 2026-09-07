@@ -15,6 +15,7 @@ import {
   type FormulationSummary,
   type MaterialSearchItem,
   type ResolveCandidate,
+  type VendorExaHit,
 } from '../../api/client'
 import type {
   SlashResolver,
@@ -105,6 +106,9 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
       } catch {
         /* remote-tail failure — silently drop, user has earlier paints */
       }
+      // Exa vendor-product tier streams in last — real web products, minted
+      // locally on select so the funnel never emits a bare ontology CURIE.
+      appendVendorExaHits(ctx, seen, q, 'catalog')
     })()
   }
 
@@ -123,6 +127,73 @@ function appendOntologyHits(
     additions.push(s)
   }
   if (additions.length > 0) onUpdate(additions)
+}
+
+/**
+ * Build slash suggestions from Exa vendor-product hits, minting the local
+ * record on select (via the shared `/vendor/exa/from` path). Keeps the funnel
+ * honest: vendor hits are a real, discoverable end (badge "Web"), never a bare
+ * ontology CURIE — selecting one lands a durable local record.
+ */
+function vendorExaSuggestions(
+  hits: VendorExaHit[],
+  category: 'catalog' | 'labware' | 'equipment',
+): SlashSuggestion[] {
+  return hits.map((hit) => {
+    const mentionType =
+      category === 'equipment'
+        ? { type: 'equipment' as const, id: '' as const }
+        : category === 'labware'
+          ? { type: 'labware' as const, id: '' as const }
+          : { type: 'material' as const, entityKind: 'vendor-product' as const, id: '' as const }
+    return {
+      key: `vendor-exa:${hit.url}`,
+      label: hit.title,
+      badge: 'Web',
+      subtitle: hit.url,
+      detail: {
+        source: 'Exa web search',
+        id: hit.url,
+        ...(hit.snippet ? { definition: hit.snippet.slice(0, 300) } : {}),
+        extra: [{ label: 'Kind', value: category }],
+      },
+      mention: { ...mentionType, label: hit.title } as SlashMention,
+      resolveMention: async () => {
+        const created = await apiClient.createFromVendorExa(hit)
+        if (category === 'equipment') {
+          return { type: 'equipment', id: created.recordId, label: created.label }
+        }
+        if (category === 'labware') {
+          return { type: 'labware', id: created.recordId, label: created.label }
+        }
+        return { type: 'material', entityKind: 'vendor-product', id: created.recordId, label: created.label }
+      },
+    }
+  })
+}
+
+/** Kick off an Exa vendor-product search and append results via onUpdate. */
+function appendVendorExaHits(
+  ctx: { signal: AbortSignal; onUpdate?: SlashResolverContext['onUpdate'] },
+  seen: Set<string>,
+  q: string,
+  category: 'catalog' | 'labware' | 'equipment',
+): void {
+  if (!q || !ctx.onUpdate) return
+  void apiClient
+    .searchVendorExa({ q, category, limit: PAGE })
+    .then((res) => {
+      if (ctx.signal.aborted) return
+      const additions = vendorExaSuggestions(res.items ?? [], category).filter((s) => {
+        if (seen.has(s.key)) return false
+        seen.add(s.key)
+        return true
+      })
+      if (additions.length > 0) ctx.onUpdate!(additions)
+    })
+    .catch(() => {
+      /* Exa unavailable — silently drop; user has earlier paints */
+    })
 }
 
 /**
@@ -236,6 +307,9 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
       mention: { type: 'labware', id: hit.recordId, label: hit.label },
     })
   }
+  // Exa web vendor-product tier — streams after local records + definitions so
+  // a fresh appliance can still discover vendor labware off the web.
+  appendVendorExaHits(ctx, seen, q, 'labware')
   return [...records, ...defs].slice(0, PAGE)
 }
 
@@ -262,34 +336,13 @@ export const resolveEquipment: SlashResolver = async (query, ctx) => {
     mention: { type: 'equipment', id: hit.recordId, label: hit.label },
   }))
 
-  if (records.length > 0 || q.length < 2) return records
-
-  try {
-    const exa = await apiClient.searchEquipmentExa({ q, limit: PAGE })
-    abortIfNeeded(ctx)
-    return exa.items.map((item) => ({
-      key: `equipment-exa:${item.id}`,
-      label: item.title,
-      badge: 'Web',
-      subtitle: item.manufacturer || item.model ? [item.manufacturer, item.model].filter(Boolean).join(' ') : item.url,
-      detail: {
-        source: 'Exa web search',
-        id: item.url,
-        ...(item.snippet ? { definition: item.snippet } : {}),
-        extra: [
-          ...(item.manufacturer ? [{ label: 'Manufacturer', value: item.manufacturer }] : []),
-          ...(item.model ? [{ label: 'Model', value: item.model }] : []),
-        ],
-      },
-      mention: { type: 'equipment', id: '', label: item.title },
-      resolveMention: async () => {
-        const created = await apiClient.createEquipmentFromExaCandidate(item)
-        return { type: 'equipment', id: created.recordId, label: created.label }
-      },
-    }))
-  } catch {
-    return []
+  if (q.length >= 2) {
+    const seen = new Set(records.map((s) => s.key))
+    // Exa-backed equipment creation streams after local records so a fresh
+    // appliance can still find instruments off the web.
+    appendVendorExaHits(ctx, seen, q, 'equipment')
   }
+  return records
 }
 
 export const resolveProtocol: SlashResolver = async (query, ctx) => {

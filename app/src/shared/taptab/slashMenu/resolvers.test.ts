@@ -226,20 +226,27 @@ describe('resolveEquipment', () => {
           title: 'Eppendorf 5424R centrifuge',
           url: 'https://example.com/5424r',
           snippet: 'Benchtop laboratory centrifuge',
-          manufacturer: 'Eppendorf',
-          model: '5424R',
+          category: 'equipment',
           source: 'exa',
         }],
       }),
     } as Response)
 
-    const out = await resolveEquipment('centrifuge', ctx())
-    expect(out[0]).toMatchObject({
-      key: 'equipment-exa:exa-1',
+    const additions: Awaited<ReturnType<typeof resolveEquipment>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    const out = await resolveEquipment('centrifuge', ctx({ onUpdate: more }))
+    // Initial paint: no local equipment records, so nothing inline.
+    expect(out).toHaveLength(0)
+
+    // The Exa vendor tier streams in via onUpdate with a mint-on-select mention.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(additions.length).toBeGreaterThan(0)
+    expect(additions[0]).toMatchObject({
+      key: 'vendor-exa:https://example.com/5424r',
       badge: 'Web',
       mention: { type: 'equipment', id: '', label: 'Eppendorf 5424R centrifuge' },
     })
-    expect(out[0]?.resolveMention).toBeTypeOf('function')
+    expect(additions[0]?.resolveMention).toBeTypeOf('function')
 
     fetchSpy.mockResolvedValueOnce({
       ok: true,
@@ -248,10 +255,11 @@ describe('resolveEquipment', () => {
         success: true,
         recordId: 'EQP-EPPENDORF-5424R',
         label: 'Eppendorf 5424R centrifuge',
+        ref: { kind: 'record', id: 'EQP-EPPENDORF-5424R', type: 'equipment', label: 'Eppendorf 5424R centrifuge' },
         record: {},
       }),
     } as Response)
-    await expect(out[0]!.resolveMention!()).resolves.toEqual({
+    await expect(additions[0]!.resolveMention!()).resolves.toEqual({
       type: 'equipment',
       id: 'EQP-EPPENDORF-5424R',
       label: 'Eppendorf 5424R centrifuge',
