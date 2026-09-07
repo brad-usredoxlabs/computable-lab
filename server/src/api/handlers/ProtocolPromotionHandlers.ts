@@ -189,6 +189,17 @@ export function createProtocolPromotionHandlers(ctx: AppContext): ProtocolPromot
           return { error: 'NOT_FOUND', message: `Execution run not found: ${derivedFromRunId}` };
         }
 
+        // Resolve the run's materialized event graph so the promoted protocol
+        // stays linked to the working realization (Concept → realization: the
+        // ad-hoc run becomes a reusable recipe that carries its event graph).
+        let egId: string | undefined;
+        try {
+          const eg = await executionRunService.getMaterializedEventGraph(derivedFromRunId);
+          egId = eg?.eventGraphId;
+        } catch {
+          egId = undefined;
+        }
+
         // Create protocol record with evolvedFrom field
         const protocolRecord: any = {
           kind: 'protocol',
@@ -208,12 +219,20 @@ export function createProtocolPromotionHandlers(ctx: AppContext): ProtocolPromot
               reason: 'Adapted from execution run with AI-assisted corrections',
               evolvedAt: new Date().toISOString(),
             },
+            ...(egId ? [{
+              sourceType: 'event-graph',
+              sourceRef: { kind: 'record', type: 'event-graph', id: egId },
+              reason: 'Kept run event graph as the promoted protocol realization',
+              evolvedAt: new Date().toISOString(),
+            }] : []),
           ],
           steps: draft.steps?.map((step: any, index: number) => ({
             stepId: `step-${index + 1}`,
             action: step.correctedAction || step.originalAction,
             ...(step.deviationNote && { description: step.deviationNote }),
             ordinal: index + 1,
+            // Concept → realization: the promoted step realizes the run's event graph.
+            ...(egId ? { subGraphRef: { kind: 'record', type: 'event-graph', id: egId } } : {}),
           })) || [],
         };
 
