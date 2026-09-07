@@ -189,8 +189,17 @@ export class AuthorizationService {
    */
   async backfillOwnerPolicies(defaultOwnerId: string): Promise<number> {
     let created = 0;
-    // Parents before children so a stamped study covers its experiments/runs.
-    for (const kind of ['study', 'experiment', 'planned-run', 'run']) {
+    // Parents before children so a stamped study covers its experiments/runs,
+    // then all browseable lab kinds (protocols, materials, data-references,
+    // claims, results, etc.) so they are private-to-owner rather than open.
+    const BACKFILL_KINDS = [
+      'study', 'experiment', 'planned-run', 'run',
+      'protocol', 'local-protocol', 'material', 'material-spec', 'material-instance',
+      'aliquot', 'data-reference', 'claim', 'assertion', 'evidence', 'measurement',
+      'measurement-context', 'well-group', 'artifact', 'analysis-run',
+      'analysis-output-artifact', 'event-graph', 'planned-protocol',
+    ];
+    for (const kind of BACKFILL_KINDS) {
       const records = await this.store.list({ kind, limit: 100000 });
       for (const record of records) {
         if (await this.resolveEffectivePolicy(record)) continue;

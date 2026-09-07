@@ -314,4 +314,31 @@ describe('local identity and authorization substrate', () => {
     expect(await authorization.canAccess('USR-OWNER', 'read', proto)).toBe(true);
     expect(await authorization.canAccess('USR-OTHER', 'read', proto)).toBe(false);
   });
+
+  it('backfills owner policies onto existing lab-item records owned by a user', async () => {
+    const store = new MemoryRecordStore([
+      user('USR-OWNER'),
+      {
+        recordId: 'PRT-EXIST',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+        payload: { kind: 'protocol', recordId: 'PRT-EXIST', title: 'Old', steps: [] },
+        meta: { createdBy: 'USR-OWNER' },
+      } as RecordEnvelope,
+      {
+        recordId: 'DAT-EXIST',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/data-reference.schema.yaml',
+        payload: { kind: 'data-reference', recordId: 'DAT-EXIST', id: 'DAT-EXIST', title: 'D', storageDeviceId: 'x', path: 'foo', contentHash: 'a'.repeat(64), sizeBytes: 1, dataKind: 'signal' },
+        meta: { createdBy: 'USR-OWNER' },
+      } as RecordEnvelope,
+    ]);
+    const authorization = new AuthorizationService(store);
+
+    const created = await authorization.backfillOwnerPolicies('USR-LOCAL-ADMIN');
+    expect(created).toBe(2);
+    // Both lab items now carry owner policies owned by their creator.
+    const protoPolicy = await authorization.findPolicyForRecord('PRT-EXIST');
+    const datPolicy = await authorization.findPolicyForRecord('DAT-EXIST');
+    expect((protoPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
+    expect((datPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
+  });
 });
