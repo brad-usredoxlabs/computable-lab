@@ -1100,6 +1100,32 @@ export interface EquipmentFromExaResponse {
   record: RecordEnvelope
 }
 
+export type VendorExaCategory = 'catalog' | 'labware' | 'equipment'
+
+export interface VendorExaHit {
+  id: string
+  title: string
+  url: string
+  snippet?: string
+  score?: number
+  category: VendorExaCategory
+  source: 'exa'
+}
+
+export interface VendorExaSearchResponse {
+  configured: boolean
+  query: string
+  items: VendorExaHit[]
+}
+
+export interface VendorFromExaResponse {
+  success: true
+  recordId: string
+  label: string
+  ref: { kind: 'record'; id: string; type: string; label: string }
+  record: RecordEnvelope
+}
+
 export interface GraphLemurPdfIngestResponse {
   sourcePdf: AiSourcePdfSummary
   sourceProtocolCandidate: AiProtocolCandidateSummary
@@ -2353,6 +2379,28 @@ export const apiClient = {
 
   async createEquipmentFromExaCandidate(candidate: EquipmentExaSearchResult): Promise<EquipmentFromExaResponse> {
     return request<EquipmentFromExaResponse>('/equipment/from-exa', {
+      method: 'POST',
+      body: JSON.stringify({ candidate }),
+    })
+  },
+
+  async searchVendorExa(params: {
+    q: string
+    category?: VendorExaCategory
+    limit?: number
+  }): Promise<VendorExaSearchResponse> {
+    return request<VendorExaSearchResponse>('/vendor/exa/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        q: params.q,
+        ...(params.category ? { category: params.category } : {}),
+        ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
+      }),
+    })
+  },
+
+  async createFromVendorExa(candidate: VendorExaHit): Promise<VendorFromExaResponse> {
+    return request<VendorFromExaResponse>('/vendor/exa/from', {
       method: 'POST',
       body: JSON.stringify({ candidate }),
     })
