@@ -13,6 +13,8 @@ const materialSearchMock = vi.hoisted(() => ({
     localResults: [] as Array<{ recordId: string; kind: string; title: string; category: string; subtitle?: string; termKind?: string; domain?: string; curie?: string }>,
     formulations: [],
     ontologyResults: [],
+    exaResults: [] as Array<{ id: string; title: string; url: string; snippet?: string; score?: number; category: string; source: string }>,
+    loadingExa: false,
     loadingLocal: false,
     loadingOntology: false,
     error: null as string | null,
@@ -21,10 +23,14 @@ const materialSearchMock = vi.hoisted(() => ({
 
 const api = vi.hoisted(() => ({
   getBiologicalTypesRegistry: vi.fn(),
+  createFromVendorExa: vi.fn(),
 }))
 
 vi.mock('../../shared/api/client', () => ({
-  apiClient: { getBiologicalTypesRegistry: api.getBiologicalTypesRegistry },
+  apiClient: {
+    getBiologicalTypesRegistry: api.getBiologicalTypesRegistry,
+    createFromVendorExa: api.createFromVendorExa,
+  },
 }))
 
 vi.mock('../EventEditorContext', () => ({
@@ -132,6 +138,8 @@ describe('AddMaterialModal', () => {
       localResults: [],
       formulations: [],
       ontologyResults: [],
+      exaResults: [],
+      loadingExa: false,
       loadingLocal: false,
       loadingOntology: false,
       error: null,
@@ -157,9 +165,51 @@ describe('AddMaterialModal', () => {
     expect(parentClick).not.toHaveBeenCalled()
   })
 
+  it('renders Exa vendor-product hits and mints a record before configuring', async () => {
+    const hit = {
+      id: 'exa-1',
+      title: 'Cayman Rotenone',
+      url: 'https://caymanchem.com/product/10506',
+      category: 'catalog',
+      source: 'exa',
+    }
+    api.createFromVendorExa.mockResolvedValue({
+      success: true,
+      recordId: 'VPR-CAYMAN-10506',
+      label: 'Cayman Rotenone',
+      ref: { kind: 'record', id: 'VPR-CAYMAN-10506', type: 'vendor-product', label: 'Cayman Rotenone' },
+    })
+    materialSearchMock.value = {
+      query: 'rotenone',
+      localResults: [],
+      formulations: [],
+      ontologyResults: [],
+      exaResults: [hit],
+      loadingExa: false,
+      loadingLocal: false,
+      loadingOntology: false,
+      error: null,
+    }
+    render(<AddMaterialModal isOpen labware={labware} wells={['A1']} onClose={() => {}} />)
+
+    // The Exa vendor section surfaces the web hit with a "WEB" badge.
+    expect(screen.getByText(/Vendor \/ web/)).toBeTruthy()
+    const row = screen.getByRole('button', { name: /Cayman Rotenone/i })
+    expect(row.textContent).toContain('WEB')
+
+    await waitFor(() => {
+      fireEvent.click(row)
+      expect(api.createFromVendorExa).toHaveBeenCalledWith(hit)
+    })
+    // Mint completed → the configure step opens with the created record.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Add to well/i })).toBeTruthy())
+  })
+
   it('shows volume and role configuration after a direct saved-material pick', () => {
     materialSearchMock.value = {
       query: 'dmso',
+      exaResults: [],
+      loadingExa: false,
       // An addable saved material (a prepared instance) — bare concept-only
       // records are intentionally hidden from the well-add list.
       localResults: [{
@@ -197,6 +247,8 @@ describe('AddMaterialModal', () => {
       localResults: [{ recordId: 'MAT-clo', kind: 'material', title: 'clofibrate', category: 'concept-only' }],
       formulations: [],
       ontologyResults: [],
+      exaResults: [],
+      loadingExa: false,
       loadingLocal: false,
       loadingOntology: false,
       error: null,
@@ -240,6 +292,8 @@ describe('AddMaterialModal', () => {
       }],
       formulations: [],
       ontologyResults: [],
+      exaResults: [],
+      loadingExa: false,
       loadingLocal: false,
       loadingOntology: false,
       error: null,
@@ -270,6 +324,8 @@ describe('AddMaterialModal', () => {
       }],
       formulations: [],
       ontologyResults: [],
+      exaResults: [],
+      loadingExa: false,
       loadingLocal: false,
       loadingOntology: false,
       error: null,

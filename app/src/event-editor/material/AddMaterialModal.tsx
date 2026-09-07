@@ -6,12 +6,14 @@ import {
   initialState,
   pickedFromFormulation,
   pickedFromSearchItem,
+  pickedFromVendorExa,
   reducer,
   type PickedMaterial,
 } from './state'
 import type { Labware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
-import type { FormulationSummary, MaterialSearchItem, ResolveCandidate } from '../../shared/api/client'
+import type { FormulationSummary, MaterialSearchItem, ResolveCandidate, VendorExaHit } from '../../shared/api/client'
+import { apiClient } from '../../shared/api/client'
 import type { ResolveRef } from '../../shared/api/resolveUtil'
 import { DetailTooltip } from '../../shared/taptab/slashMenu/SlashSuggestionList'
 import { candidateDetail } from '../../shared/taptab/slashMenu/resolvers'
@@ -142,6 +144,25 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
   }, [actions, labware, onClose, state, wells])
 
   const isConfigure = state.phase === 'configure'
+  // A vendor-Exa pick mints the local record before we can configure — track
+  // that pending mint so the row can show "Creating…" and guard double-clicks.
+  const [pendingVendorUrl, setPendingVendorUrl] = useState<string | null>(null)
+
+  const handlePickVendorExa = useCallback(
+    async (hit: VendorExaHit) => {
+      if (pendingVendorUrl) return
+      setPendingVendorUrl(hit.url)
+      try {
+        const created = await apiClient.createFromVendorExa(hit)
+        dispatch({ type: 'pick', material: pickedFromVendorExa(created) })
+      } catch (err) {
+        dispatch({ type: 'fail', message: err instanceof Error ? err.message : 'Failed to create vendor product' })
+      } finally {
+        setPendingVendorUrl(null)
+      }
+    },
+    [pendingVendorUrl],
+  )
   const bioLookup = useBiologicalRuleLookup({
     domain: isConfigure ? state.picked.domain : undefined,
     label: isConfigure ? state.picked.label : undefined,
@@ -211,6 +232,8 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
                 ontologyRef: ref,
               })
             }}
+            onPickVendorExa={(hit) => void handlePickVendorExa(hit)}
+            pendingVendorUrl={pendingVendorUrl}
             onRequestCreate={() => dispatch({ type: 'open-intent' })}
           />
         ) : null}
@@ -288,6 +311,8 @@ interface SearchViewProps {
   onPickLocal: (item: MaterialSearchItem) => void
   onPickFormulation: (formulation: FormulationSummary) => void
   onPickOntology: (candidate: ResolveCandidate) => void
+  onPickVendorExa: (hit: VendorExaHit) => void
+  pendingVendorUrl: string | null
   onRequestCreate: () => void
 }
 
@@ -297,6 +322,8 @@ function SearchView({
   onPickLocal,
   onPickFormulation,
   onPickOntology,
+  onPickVendorExa,
+  pendingVendorUrl,
   onRequestCreate,
 }: SearchViewProps) {
   const {
@@ -305,6 +332,8 @@ function SearchView({
     localResults,
     formulations,
     ontologyResults,
+    exaResults,
+    loadingExa,
     loadingLocal,
     loadingOntology,
     error,
@@ -462,6 +491,41 @@ function SearchView({
                   document.body,
                 )
               : null}
+          </section>
+
+          <section className="add-material-section">
+            <div className="add-material-section-title">
+              <span>Vendor / web (Exa)</span>
+              {loadingExa ? <span className="add-material-spinner" aria-hidden /> : null}
+            </div>
+            {exaResults.length > 0 ? (
+              <ul className="add-material-list add-material-list--scroll">
+                {exaResults.map((hit) => (
+                  <li key={hit.url}>
+                    <button
+                      type="button"
+                      className="add-material-row"
+                      data-category="vendor-exa"
+                      disabled={pendingVendorUrl !== null}
+                      onClick={() => onPickVendorExa(hit)}
+                    >
+                      <span className="add-material-row-title">
+                        {hit.title}
+                        <span className="add-material-row-ontology">WEB</span>
+                      </span>
+                      <span className="add-material-row-meta">
+                        {pendingVendorUrl === hit.url
+                          ? 'Creating local vendor product…'
+                          : `Exa · ${baseUrlOf(hit.url)}`}
+                        {hit.snippet ? ` · ${hit.snippet}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : loadingExa ? (
+              <div className="add-material-hint">Searching vendor products on the web…</div>
+            ) : null}
           </section>
 
           <section className="add-material-section">
@@ -666,5 +730,15 @@ function ConfigureView({
       </footer>
     </form>
   )
+}
+
+/** Extract the hostname from a full URL (e.g. "caymanchem.com"). */
+function baseUrlOf(url: string): string {
+  try {
+    const host = new URL(url).hostname
+    return host || url
+  } catch {
+    return url
+  }
 }
 

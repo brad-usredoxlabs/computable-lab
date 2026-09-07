@@ -218,3 +218,21 @@ export function pickedFromFormulation(formulation: {
     ...(composition.length > 0 ? { compositionSnapshot: composition } : {}),
   }
 }
+
+/**
+ * Build a `PickedMaterial` from a freshly-minted vendor-product record. The
+ * caller must create the record first (`createFromVendorExa`), so the ref
+ * points at a real local record — never a bare ontology CURIE.
+ */
+export function pickedFromVendorExa(created: {
+  recordId: string
+  label: string
+  ref: Ref
+}): PickedMaterial {
+  return {
+    recordId: created.recordId,
+    ref: created.ref,
+    label: created.label,
+    hasCellComposition: false,
+  }
+}

@@ -42,7 +42,7 @@ describe('useVendorExaSearch', () => {
       query: 'cayman',
       items: [hit('Cayman DMSO')],
     })
-    const { result } = renderHook(() => useVendorExaSearch('catalog'))
+    const { result } = renderHook(() => useVendorExaSearch({ category: 'catalog' }))
 
     act(() => result.current.setQuery('cayman'))
 

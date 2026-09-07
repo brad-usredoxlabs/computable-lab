@@ -4,8 +4,10 @@ import {
   type FormulationSummary,
   type MaterialSearchItem,
   type ResolveCandidate,
+  type VendorExaHit,
 } from '../../shared/api/client'
 import { rankByLabelMatch } from '../../shared/search/rankByLabelMatch'
+import { useVendorExaSearch } from '../../shared/vendor-exa/useVendorExaSearch'
 
 /**
  * Debounced material search combining local DB (records + formulations)
@@ -52,6 +54,10 @@ export interface UseMaterialSearchResult {
   formulations: FormulationSummary[]
   /** Ontology hits — empty until `searchOntology()` is called. */
   ontologyResults: ResolveCandidate[]
+  /** Exa web hits for vendor products (catalog/labware/equipment). */
+  exaResults: VendorExaHit[]
+  /** True while Exa vendor search is in-flight. */
+  loadingExa: boolean
   /** True while local fetches are in-flight. */
   loadingLocal: boolean
   /** True while ontology fetch is in-flight. */
@@ -111,6 +117,10 @@ export function useMaterialSearch(): UseMaterialSearchResult {
 
   const setQuery = useCallback((value: string) => setQueryRaw(value), [])
 
+  // Exa web vendor-product layer, driven by the SAME query (controlled) so a
+  // single keystroke updates local + ontology + vendor-Exa results together.
+  const vendorExa = useVendorExaSearch({ category: 'catalog', controlled: { query } })
+
   const runOntologySearch = useCallback(async (trimmed: string) => {
     if (trimmed.length < 2) return
     setLoadingOntology(true)
@@ -168,6 +178,8 @@ export function useMaterialSearch(): UseMaterialSearchResult {
     localResults,
     formulations,
     ontologyResults,
+    exaResults: vendorExa.exaResults,
+    loadingExa: vendorExa.loading,
     loadingLocal,
     loadingOntology,
     error,
