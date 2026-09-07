@@ -280,5 +280,53 @@ describe('CandidatePromoter', () => {
         expect(outcome.promotion.candidate_path).toBe('candidates[7]');
       }
     });
+
+    it('uses the source title when the draft title is generic', () => {
+      const candidate = createCandidate('protocol', {
+        title: 'Quick Reference',
+        steps: [{ stepId: 's1', ordinal: 1, label: 'a', kind: 'other', description: 'b' }]
+      });
+
+      const outcome = promoteCandidate({
+        candidate,
+        draftRecordId: 'XDR-009',
+        candidatePath: 'candidates[8]',
+        sourceArtifactRef,
+        sourceTitle: 'Molecular Probes CellROX Green Flow Cytometry Assay Kit',
+        targetRecordId: 'CAN-protocol-123',
+        targetSchemaIdByKind,
+        validator: createStubValidator(true),
+        now: fixedNow
+      });
+
+      expect(outcome.ok).toBe(true);
+      if (outcome.ok) {
+        expect(outcome.record.title).toBe('Molecular Probes CellROX Green Flow Cytometry Assay Kit');
+      }
+    });
+
+    it('does not replace a specific draft title with the source title', () => {
+      const candidate = createCandidate('protocol', {
+        title: 'My Custom ROS Protocol',
+        steps: [{ stepId: 's1', ordinal: 1, label: 'a', kind: 'other', description: 'b' }]
+      });
+
+      const outcome = promoteCandidate({
+        candidate,
+        draftRecordId: 'XDR-010',
+        candidatePath: 'candidates[9]',
+        sourceArtifactRef,
+        sourceTitle: 'Vendor Generic Title',
+        targetRecordId: 'CAN-protocol-124',
+        targetSchemaIdByKind,
+        validator: createStubValidator(true),
+        now: fixedNow
+      });
+
+      expect(outcome.ok).toBe(true);
+      if (outcome.ok) {
+        expect(outcome.record.title).toBe('My Custom ROS Protocol');
+      }
+    });
   });
 });

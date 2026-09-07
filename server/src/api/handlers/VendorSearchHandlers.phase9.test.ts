@@ -19,16 +19,28 @@
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockDownloadVendorPdf = vi.hoisted(() => vi.fn());
 const mockExtractCandidate = vi.hoisted(() => vi.fn());
 const mockExtractVendorPdfText = vi.hoisted(() => vi.fn());
+const mockExaGetContents = vi.hoisted(() => vi.fn());
 
-vi.mock('../../vendor-documents/pdfAcquisition.js', () => ({
-  downloadVendorPdf: mockDownloadVendorPdf,
-  extractVendorPdfText: mockExtractVendorPdfText,
+vi.mock('../../integrations/exa.js', () => ({
+  exaSearch: vi.fn(),
+  exaGetContents: mockExaGetContents,
+  resolveExaConfig: () => ({ apiKey: 'test-key' }),
 }));
+
+vi.mock('../../vendor-documents/pdfAcquisition.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../vendor-documents/pdfAcquisition.js')>();
+  return {
+    ...actual,
+    downloadVendorPdf: mockDownloadVendorPdf,
+    extractVendorPdfText: mockExtractVendorPdfText,
+  };
+});
 
 vi.mock(
   '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js',
@@ -379,4 +391,100 @@ describe('GraphLemur PDF ingest → artifact', () => {
       expect(extractedText).toHaveLength(0);
     }
   });
+
+  it('persists a durable vendor-pdf record when the vendor blocks the download, even without studyId', async () => {
+    // Vendor blocks the direct download → server falls back to Exa text.
+    mockDownloadVendorPdf.mockRejectedValueOnce(new Error('HTTP 403'));
+    mockExaGetContents.mockResolvedValue({
+      results: [{ text: 'Exa fallback protocol text...', title: 'Blocked Protocol' }],
+    });
+
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({
+      workspaceRoot: '/workspace',
+      store,
+    });
+    const reply = makeReply();
+    const result = await handlers.ingestGraphLemurPdf(
+      ingestRequest({ url: 'https://vendor.example/blocked.pdf' }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+
+    // Despite no studyId, a durable vendor-pdf record is written so the ingest
+    // is never "silently lost" — the free-floating ingestion surface needs it.
+    const vpdf = upserted.find((e) => (e.payload as { kind?: string }).kind === 'vendor-pdf');
+    expect(vpdf).toBeDefined();
+    const payload = vpdf!.payload as Record<string, unknown>;
+    expect(payload.state).toBe('ingested');
+    expect(payload.file).toBeUndefined(); // no binary — text-only
+    expect((payload.extractedText as Array<{ text?: string }>)[0]?.text).toContain('Exa fallback');
+
+    const recorded = (result as { recordedArtifact?: { recordId?: string } }).recordedArtifact;
+    expect(recorded?.recordId).toBe(vpdf!.recordId);
+  });
 });
+
+describe('GraphLemur PDF upload → durable vendor-pdf record', () => {
+  it('persists a vendor-pdf record from an uploaded PDF', async () => {
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({
+      workspaceRoot: '/workspace',
+      store,
+    });
+    const reply = makeReply();
+    // A minimal PDF header is enough — the handler hashes bytes and persists
+    // without re-parsing the bytes.
+    const base64 = Buffer.from('%PDF-1.4 uploaded-demo-bytes').toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({
+        url: 'https://vendor.example/protocol.pdf',
+        title: 'Uploaded protocol',
+        vendor: 'thermo',
+        fileName: 'protocol.pdf',
+        contentBase64: base64,
+      }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+
+    expect(upserted).toHaveLength(1);
+    const env = upserted[0];
+    const payload = env.payload as Record<string, unknown>;
+    expect(payload.kind).toBe('vendor-pdf');
+    expect(payload.state).toBe('ingested');
+    // Content-addressed by the uploaded bytes
+    const expected = createVendorPdfIdFromBytes(base64);
+    expect(env.recordId).toBe(expected);
+
+    const source = payload.source as Record<string, unknown>;
+    expect(source.engine).toBe('exa');
+    expect(source.url).toBe('https://vendor.example/protocol.pdf');
+    const file = payload.file as Record<string, unknown>;
+    expect(file.media_type).toBe('application/pdf');
+    expect(file.file_name).toBe('protocol.pdf');
+
+    const recorded = (result as { recordedArtifact?: { recordId: string } }).recordedArtifact;
+    expect(recorded?.recordId).toBe(expected);
+  });
+
+  it('returns 400 when contentBase64 is missing', async () => {
+    const { store } = makeStubStore();
+    const handlers = createVendorSearchHandlers({
+      workspaceRoot: '/workspace',
+      store,
+    });
+    const reply = makeReply();
+    await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ url: 'https://vendor.example/protocol.pdf' }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(400);
+  });
+});
+
+// Mirror of the handler's content-addressed id derivation for the upload path.
+function createVendorPdfIdFromBytes(base64: string): string {
+  const bytes = Buffer.from(base64, 'base64');
+  return `VPDF-${createHash('sha256').update(bytes).digest('hex').slice(0, 12).toUpperCase()}`;
+}

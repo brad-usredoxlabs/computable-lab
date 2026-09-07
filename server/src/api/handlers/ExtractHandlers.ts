@@ -188,6 +188,25 @@ export function createExtractHandlers(
       // Build candidate path for promotion record
       const candidatePath = `candidates[${candidateIndex}]`;
 
+      // If the source artifact is a record (e.g. a vendor-pdf, which the
+      // draft references with kind:'file' + the VPDF-* id), lift its title so
+      // the promoted protocol carries a meaningful name instead of a generic
+      // extractor draft title ("Quick Reference"). Missing/non-record sources
+      // simply yield no sourceTitle → the extractor draft title is unchanged.
+      let sourceTitle: string | undefined;
+      const sourceArtifactId = draft.source_artifact?.id;
+      if (sourceArtifactId) {
+        try {
+          const srcEnv = await store.get(sourceArtifactId);
+          const srcTitle = (srcEnv?.payload as Record<string, unknown> | undefined)?.title;
+          if (typeof srcTitle === 'string' && srcTitle.trim()) {
+            sourceTitle = srcTitle.trim();
+          }
+        } catch {
+          // Source record unreadable — fall through with no title override.
+        }
+      }
+
       // Prepare promotion args
       const bodyHumanStepsText =
         typeof request.body?.humanStepsText === 'string' && request.body.humanStepsText.trim().length > 0
@@ -205,6 +224,7 @@ export function createExtractHandlers(
         draftRecordId: id,
         candidatePath,
         sourceArtifactRef: draft.source_artifact,
+        ...(sourceTitle !== undefined ? { sourceTitle } : {}),
         targetRecordId,
         promotionRecordId,
         targetSchemaIdByKind,

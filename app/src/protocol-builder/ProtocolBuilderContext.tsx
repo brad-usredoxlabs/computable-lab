@@ -6,7 +6,8 @@
  * and page navigation within the /protocol-builder route.
  */
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { PlateEvent } from '../types/events'
 
@@ -115,6 +116,21 @@ export function ProtocolBuilderProvider({ children }: { children: ReactNode }) {
   const [promotedRecordId, setPromotedRecordIdState] = useState<string | null>(null)
   const [promoted, setPromotedState] = useState(false)
   const [exporting, setExportingState] = useState(false)
+
+  // Seed the builder from navigation state (e.g. "Build Protocol" from the
+  // vendor-PDF ingestion surface passes the extracted source text so the
+  // builder is ROOTED on it instead of landing empty).
+  const location = useLocation()
+  useEffect(() => {
+    const seed = (location.state as { sourceText?: unknown; title?: unknown } | null) ?? null
+    const seedText = typeof seed?.sourceText === 'string' && seed.sourceText.trim()
+      ? seed.sourceText
+      : null
+    if (seedText && !sourceText) {
+      setSourceTextState(seedText)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   const toggleStep = useCallback((stepKey: string, enabled: boolean) => {
     setSkippedStepsState((prev) => {

@@ -22,6 +22,14 @@ export interface PromoteCandidateArgs {
   draftRecordId: string;             // the XDR-* recordId the candidate came from
   candidatePath: string;             // JSON-path into XDR.candidates[] (e.g. "candidates[2]")
   sourceArtifactRef: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string };
+  /**
+   * A good human title for the promoted record, usually the source
+   * vendor-pdf's title. When present and the candidate's draft title is
+   * missing or generic ("Quick Reference", "June 2023", etc.), the promoted
+   * record carries this instead — so the run Protocol tab shows a meaningful
+   * name, never "Quick Reference CAN-protocol-…".
+   */
+  sourceTitle?: string;
   targetRecordId: string;            // id to assign to the new canonical record
   promotionRecordId?: string;        // optional override; default `XPR-${targetRecordId}-v1`
   targetSchemaIdByKind: ReadonlyMap<string, string>;   // kind → $id
@@ -134,13 +142,28 @@ export function promoteCandidate(args: PromoteCandidateArgs): PromotionOutcome {
 
   // Mint the canonical record
   // Override kind and recordId even if the draft provided them
-  const record: CanonicalRecord = {
+  let record: CanonicalRecord = {
     ...candidate.draft,
     kind: candidate.target_kind,
     recordId: targetRecordId
   };
 
-  // Compute content hash
+  // When the source (e.g. a vendor-pdf) has a meaningful title and the
+  // extractor's draft title is missing or generic, use the source title so
+  // the record (and the run Protocol tab listing it) shows it. Conservative:
+  // a specific hand-authored draft title is never replaced.
+  const sourceTitle = args.sourceTitle?.trim();
+  const DRAFT_GENERIC = /^(quick reference|untitled|unsigned|protocol steps not detected|june \d{4})$/i;
+  if (sourceTitle) {
+    const draftTitle = typeof record.title === 'string' ? record.title.trim() : '';
+    const replace = !draftTitle || DRAFT_GENERIC.test(draftTitle);
+    if (replace) {
+      record = { ...record, title: sourceTitle };
+    }
+  }
+
+  // Compute content hash (after the title override so a corrected title is
+  // part of the content identity).
   const sourceContentHash = computeContentHash(record);
 
   // Create the extraction-promotion record

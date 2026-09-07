@@ -166,4 +166,41 @@ describe('ProtocolContextService', () => {
       links: { studyId: 'STU-1' },
     });
   });
+
+  it('filters by q across title/recordId/steps without a regression when q is empty', async () => {
+    const store = new MemoryRecordStore([
+      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', steps: [{ ordinal: 1, label: 'Prepare cells' }] }),
+      env('PRT-pcr', { kind: 'protocol', recordId: 'PRT-pcr', title: 'PCR Cleanup Kit', steps: [{ ordinal: 1, label: 'Bind' }] }),
+      env('PRT-generic', { kind: 'protocol', recordId: 'PRT-generic', title: 'Incubation', humanStepsText: 'Incubate with cellrox dye at 37C' }),
+    ]);
+
+    const matched = await new ProtocolContextService(store).getContext({ q: 'cellrox' });
+    // cellrox matches by title AND by humanStepsText body.
+    expect(matched.availableProtocols.map((r) => r.recordId)).toEqual(
+      expect.arrayContaining(['PRT-cellrox', 'PRT-generic']),
+    );
+    expect(matched.availableProtocols.map((r) => r.recordId)).not.toContain('PRT-pcr');
+
+    const all = await new ProtocolContextService(store).getContext({ q: '' });
+    expect(all.availableProtocols.map((r) => r.recordId)).toEqual(
+      expect.arrayContaining(['PRT-cellrox', 'PRT-pcr', 'PRT-generic']),
+    );
+  });
+
+  it('returns ingested vendor PDFs in their own field (never in availableProtocols)', async () => {
+    const store = new MemoryRecordStore([
+      env('VPDF-1', { kind: 'vendor-pdf', recordId: 'VPDF-1', title: 'CellROX Kit Manual', state: 'ingested' }),
+      env('VPDF-2', { kind: 'vendor-pdf', recordId: 'VPDF-2', title: 'DNeasy Blood Kit', state: 'ingested' }),
+      env('PRT-cellrox', { kind: 'protocol', recordId: 'PRT-cellrox', title: 'CellROX Flow Assay', steps: [] }),
+    ]);
+
+    const matched = await new ProtocolContextService(store).getContext({ q: 'cellrox' });
+    expect(matched.ingestedPdfs.map((r) => r.recordId)).toEqual(['VPDF-1']);
+    // Vendor-pdfs are NOT attachable — must not leak into availableProtocols.
+    expect(matched.availableProtocols.map((r) => r.recordId)).toEqual(['PRT-cellrox']);
+
+    const all = await new ProtocolContextService(store).getContext({});
+    expect(all.ingestedPdfs.map((r) => r.recordId)).toEqual(expect.arrayContaining(['VPDF-1', 'VPDF-2']));
+    expect(all.availableProtocols.map((r) => r.recordId)).not.toContain('VPDF-1');
+  });
 });

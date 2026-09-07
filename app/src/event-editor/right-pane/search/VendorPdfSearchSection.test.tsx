@@ -29,7 +29,7 @@ vi.mock('../../../shared/api/client', () => ({
   },
 }))
 
-import { VendorPdfSearchSection } from './VendorPdfSearchSection'
+import { VendorPdfSearchSection, baseUrlOf } from './VendorPdfSearchSection'
 
 beforeEach(() => {
   searchMock.mockReset()
@@ -72,6 +72,117 @@ function renderSectionNoStudy(onIngested = vi.fn()) {
 }
 
 describe('VendorPdfSearchSection', () => {
+  it('shows the vendor and base url in the hit meta', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), {
+      target: { value: 'ultra' },
+    })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    // Meta renders vendor + hostname + documentType.
+    await screen.findByText(/neb\.example/)
+    expect(screen.getByText(/neb · neb\.example · protocol/)).toBeTruthy()
+  })
+
+  it('baseUrlOf extracts the hostname and tolerates garbage input', () => {
+    expect(baseUrlOf('https://neb.example/ultra.pdf')).toBe('neb.example')
+    expect(baseUrlOf('not a url')).toBeNull()
+  })
+
+  it('shows an "Open source URL" remediation when the vendor blocks the PDF download', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: {
+        diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: 'blocked' }],
+      },
+      // recordedArtifact omitted — nothing durable written
+    })
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() => expect(screen.getByText('NEBNext Ultra II')).toBeTruthy())
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    // Remediation appears on the failed hit.
+    await waitFor(() => expect(screen.getByText(/Step 1 — Open source URL/)).toBeTruthy())
+  })
+
+  it('opens the source URL in a new tab from the blocked remediation', async () => {
+    const openSpy = vi.fn()
+    vi.stubGlobal('open', openSpy)
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: {
+        diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: 'blocked' }],
+      },
+    })
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() => expect(screen.getByText('NEBNext Ultra II')).toBeTruthy())
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    await waitFor(() => expect(screen.getByText(/Step 1 — Open source URL/)).toBeTruthy())
+    fireEvent.click(screen.getByText(/Step 1 — Open source URL/))
+    expect(openSpy).toHaveBeenCalledWith('https://neb.example/ultra.pdf', '_blank', expect.stringContaining('noopener'))
+  })
+
+  it('does not show the open-source remediation on a clean ingest', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: { diagnostics: [] },
+      recordedArtifact: { recordId: 'ART-1234', studyId: 'STU-000001', extractedTextPageCount: 1 },
+    })
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() => expect(screen.getByText('NEBNext Ultra II')).toBeTruthy())
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    // Successful ingest → no remediation button appears.
+    await waitFor(() => expect(screen.getByTestId('vendor-pdf-ingest-success')).toBeTruthy())
+    expect(screen.queryAllByText(/Step 1 — Open source URL/)).toHaveLength(0)
+  })
+
+  it('brings the downloaded file back by uploading it', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    const uploadMock = vi.fn().mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: { diagnostics: [] },
+      recordedArtifact: { recordId: 'VPDF-UPLOADED' },
+    })
+    const { apiClient } = await import('../../../shared/api/client')
+    ;(apiClient as unknown as { uploadGraphLemurVendorPdf: typeof uploadMock }).uploadGraphLemurVendorPdf = uploadMock
+
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() => expect(screen.getByText('NEBNext Ultra II')).toBeTruthy())
+    // Force the blocked state (EXA_TEXT_FALLBACK) so the bring-back button shows.
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: { diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: 'blocked' }] },
+    })
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    await waitFor(() => expect(screen.getByText(/Step 1 — Open source URL/)).toBeTruthy())
+
+    // Simulate picking a downloaded PDF file.
+    const file = new File(['%PDF-1.4 brought back'], 'protocol.pdf', { type: 'application/pdf' })
+    const input = screen.getByTestId('vendor-pdf-bring-back') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() => expect(uploadMock).toHaveBeenCalled())
+    const args = uploadMock.mock.calls[0][0]
+    expect(args.fileName).toBe('protocol.pdf')
+    expect(args.contentBase64).toBeTruthy()
+    expect(args.url).toBe('https://neb.example/ultra.pdf')
+  })
+
   it('runs a search and renders rows', async () => {
     searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
     renderSection()

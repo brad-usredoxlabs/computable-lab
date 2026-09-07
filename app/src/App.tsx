@@ -52,6 +52,7 @@ const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((
 // Phase 8: Lab entity workspace
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
 const IngestionPage = lazy(async () => import('./ingestion/IngestionPage').then((m) => ({ default: m.IngestionPage })))
+const VendorPdfReviewPage = lazy(async () => import('./ingestion/VendorPdfReviewPage').then((m) => ({ default: m.VendorPdfReviewPage })))
 const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((m) => ({ default: m.SplashRoute })))
 const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then((m) => ({ default: m.HomeRedirect })))
 // Phase 2a: standalone artifact viewer routes
@@ -64,6 +65,7 @@ const ExtractionDraftsListPage = lazy(async () => import('./extraction/Extractio
 const ExtractionReviewPage = lazy(async () => import('./extraction/ExtractionReviewPage').then((m) => ({ default: m.ExtractionReviewPage })))
 const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage').then((m) => ({ default: m.GraphSearchPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
+const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -122,6 +124,8 @@ export function App() {
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
+              {/* Single vendor-PDF review surface (PDF left, extracted protocol right). */}
+              <Route path="/ingestion/vendor-pdf/:recordId" element={<DeferredRoute><VendorPdfReviewPage /></DeferredRoute>} />
 
               {/* Extraction drafts — reached from ingestion "Extract Protocol" and
                   ExtractionDraftsListPage. (Legacy LiteratureBody also uses these.) */}
@@ -172,6 +176,8 @@ export function App() {
                   browser-back like every other shell page. */}
               <Route path="/find" element={<DeferredRoute><GraphSearchPage /></DeferredRoute>} />
               <Route path="/analysis" element={<DeferredRoute><AnalysisPage /></DeferredRoute>} />
+              {/* Standalone ChatGPT-style chat against the local AI model. */}
+              <Route path="/chat" element={<DeferredRoute><ChatPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />

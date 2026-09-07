@@ -32,6 +32,30 @@ export interface ProtocolCandidatePreviewProps {
   onToggleStep: (stepKey: string, enabled: boolean) => void
   /** Called when the user edits an inline override. */
   onOverrideChange: (stepKey: string, field: keyof StepOverride, value: string | null) => void
+  /**
+   * When set, the per-step "Page N" provenance becomes a button that calls
+   * this with the page number so the review surface can jump the PDF pane to
+   * that page. When absent, provenance renders as plain text (no jump).
+   */
+  onGotoPage?: (pageNumber: number) => void
+}
+
+// Quantity detection is heuristic: AiProtocolCandidateStepSummary carries no
+// typed volume/temperature fields, so we detect them from the step's text
+// (and notes). Each regex matches the common lab units.
+const OVERRIDE_QUANTITY = {
+  volume: /(\d+(?:\.\d+)?\s*(?:µl|ul|μl|ml|\bmL\b|\buL\b|\bµL\b)\b)/i,
+  temperature: /(\d+(?:\.\d+)?\s*°?[cCfF]\b)/i,
+  duration: /(\d+(?:\.\d+)?\s*(?:min|minute|hr|hour|sec|second)\b)/i,
+  concentration: /(\d+(?:\.\d+)?\s*(?:m|µ|μ|u|n){0,1}[mM]\b)/i,
+}
+
+function stepQuantityText(step: AiProtocolCandidateStepSummary): string {
+  return `${step.text ?? ''} ${Array.isArray(step.notes) ? step.notes.join(' ') : ''}`
+}
+
+function stepHasQuantity(step: AiProtocolCandidateStepSummary, field: keyof typeof OVERRIDE_QUANTITY): boolean {
+  return OVERRIDE_QUANTITY[field].test(stepQuantityText(step))
 }
 
 function stepKey(step: AiProtocolCandidateStepSummary): string {
@@ -44,6 +68,7 @@ export function ProtocolCandidatePreview({
   overrides,
   onToggleStep,
   onOverrideChange,
+  onGotoPage,
 }: ProtocolCandidatePreviewProps) {
   const [collapsedSteps, setCollapsedSteps] = useState<Set<string>>(new Set())
 
@@ -239,59 +264,81 @@ export function ProtocolCandidatePreview({
                   {step.evidence?.[0] ? (
                     <div className="protocol-candidate-preview__provenance">
                       <span className="protocol-candidate-preview__inline-label">Source:</span>
-                      {step.evidence[0].pageNumber
-                        ? `Page ${step.evidence[0].pageNumber}`
-                        : 'PDF'}
+                      {step.evidence[0].pageNumber && onGotoPage ? (
+                        <button
+                          type="button"
+                          className="protocol-candidate-preview__provenance-link"
+                          onClick={() => onGotoPage(step.evidence![0]!.pageNumber!)}
+                          title={`Jump PDF to page ${step.evidence[0].pageNumber}`}
+                        >
+                          Page {step.evidence[0].pageNumber}
+                        </button>
+                      ) : (
+                        <span>
+                          {step.evidence[0].pageNumber
+                            ? `Page ${step.evidence[0].pageNumber}`
+                            : 'PDF'}
+                        </span>
+                      )}
                       {step.evidence[0].sectionId
                         ? ` · ${step.evidence[0].sectionId}`
                         : ''}
                     </div>
                   ) : null}
 
-                  {/* Inline overrides */}
+                  {/* Inline overrides — each field shows only when the step actually
+                      has that quantity (detected heuristically from its text). */}
                   <div className="protocol-candidate-preview__overrides">
                     <span className="protocol-candidate-preview__override-label">Overrides:</span>
                     <div className="protocol-candidate-preview__override-row">
-                      <label className="protocol-candidate-preview__override-field">
-                        Volume (µL):
-                        <input
-                          type="text"
-                          className="protocol-candidate-preview__override-input"
-                          placeholder="use extracted"
-                          value={override?.volume ?? ''}
-                          onChange={(e) => onOverrideChange(key, 'volume', e.target.value || null)}
-                        />
-                      </label>
-                      <label className="protocol-candidate-preview__override-field">
-                        Temp (°C):
-                        <input
-                          type="text"
-                          className="protocol-candidate-preview__override-input"
-                          placeholder="use extracted"
-                          value={override?.temperature ?? ''}
-                          onChange={(e) => onOverrideChange(key, 'temperature', e.target.value || null)}
-                        />
-                      </label>
-                      <label className="protocol-candidate-preview__override-field">
-                        Duration:
-                        <input
-                          type="text"
-                          className="protocol-candidate-preview__override-input"
-                          placeholder="use extracted"
-                          value={override?.duration ?? ''}
-                          onChange={(e) => onOverrideChange(key, 'duration', e.target.value || null)}
-                        />
-                      </label>
-                      <label className="protocol-candidate-preview__override-field">
-                        Concentration:
-                        <input
-                          type="text"
-                          className="protocol-candidate-preview__override-input"
-                          placeholder="use extracted"
-                          value={override?.concentration ?? ''}
-                          onChange={(e) => onOverrideChange(key, 'concentration', e.target.value || null)}
-                        />
-                      </label>
+                      {stepHasQuantity(step, 'volume') && (
+                        <label className="protocol-candidate-preview__override-field">
+                          Volume (µL):
+                          <input
+                            type="text"
+                            className="protocol-candidate-preview__override-input"
+                            placeholder="use extracted"
+                            value={override?.volume ?? ''}
+                            onChange={(e) => onOverrideChange(key, 'volume', e.target.value || null)}
+                          />
+                        </label>
+                      )}
+                      {stepHasQuantity(step, 'temperature') && (
+                        <label className="protocol-candidate-preview__override-field">
+                          Temp (°C):
+                          <input
+                            type="text"
+                            className="protocol-candidate-preview__override-input"
+                            placeholder="use extracted"
+                            value={override?.temperature ?? ''}
+                            onChange={(e) => onOverrideChange(key, 'temperature', e.target.value || null)}
+                          />
+                        </label>
+                      )}
+                      {stepHasQuantity(step, 'duration') && (
+                        <label className="protocol-candidate-preview__override-field">
+                          Duration:
+                          <input
+                            type="text"
+                            className="protocol-candidate-preview__override-input"
+                            placeholder="use extracted"
+                            value={override?.duration ?? ''}
+                            onChange={(e) => onOverrideChange(key, 'duration', e.target.value || null)}
+                          />
+                        </label>
+                      )}
+                      {stepHasQuantity(step, 'concentration') && (
+                        <label className="protocol-candidate-preview__override-field">
+                          Concentration:
+                          <input
+                            type="text"
+                            className="protocol-candidate-preview__override-input"
+                            placeholder="use extracted"
+                            value={override?.concentration ?? ''}
+                            onChange={(e) => onOverrideChange(key, 'concentration', e.target.value || null)}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
                 </div>

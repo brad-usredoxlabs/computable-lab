@@ -61,6 +61,13 @@ export function VendorPdfSearchSection({
   const [ingestError, setIngestError] = useState<string | null>(null)
   const [ingestNotice, setIngestNotice] = useState<string | null>(null)
   const [lastIngested, setLastIngested] = useState<string | null>(null)
+  // The hit that hit the vendor-blocked-download path. Its row shows an
+  // "Open source URL" remediation so the user can download the PDF themselves.
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null)
+  // "Bring the file back": uploading a PDF the user downloaded themselves when
+  // the vendor blocked our server-side download.
+  const [bringingBack, setBringingBack] = useState(false)
+  const [bringBackError, setBringBackError] = useState<string | null>(null)
 
   const runSearch = useCallback(async () => {
     const trimmed = query.trim()
@@ -101,10 +108,12 @@ export function VendorPdfSearchSection({
           (d) => d.code === 'EXA_TEXT_FALLBACK',
         )
         if (exaTextFallback) {
+          setBlockedUrl(result.url)
           setIngestNotice(
-            'Vendor blocked the PDF download — saved the document text via web search instead. ' +
-              'No original PDF or table/layout extraction.',
+            'This vendor blocks our automatic download — follow the steps below to download it yourself and bring the file back.',
           )
+        } else {
+          setBlockedUrl(null)
         }
         const info = {
           ...(result.title ? { title: result.title } : {}),
@@ -134,6 +143,45 @@ export function VendorPdfSearchSection({
       }
     },
     [studyId, query, onIngested, onBuildProtocol],
+  )
+
+  // "Bring the file back": the user downloaded the PDF themselves (the vendor
+  // blocked us), and now uploads it so it becomes a durable vendor-pdf record.
+  const handleBringBack = useCallback(
+    async (result: VendorPdfResult, file: File) => {
+      setBringingBack(true)
+      setBringBackError(null)
+      try {
+        const contentBase64 = await fileToBase64(file)
+        const response = await apiClient.uploadGraphLemurVendorPdf({
+          url: result.url,
+          ...(result.title ? { title: result.title } : {}),
+          ...(result.vendor ? { vendor: result.vendor } : {}),
+          ...(studyId ? { studyId } : {}),
+          query,
+          fileName: file.name,
+          contentBase64,
+        })
+        if (response.recordedArtifact) {
+          setBlockedUrl(null)
+          setLastIngested(response.recordedArtifact.recordId)
+          onIngested(response.recordedArtifact.recordId, {
+            ...(result.title ? { title: result.title } : {}),
+            sourceUrl: result.url,
+            ...(result.vendor ? { vendor: result.vendor } : {}),
+          })
+        } else {
+          setBringBackError(
+            'Uploaded but no durable record was written — check that the server workspace is configured.',
+          )
+        }
+      } catch (err) {
+        setBringBackError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setBringingBack(false)
+      }
+    },
+    [studyId, query, onIngested],
   )
 
   return (
@@ -192,41 +240,88 @@ export function VendorPdfSearchSection({
       {results.length > 0 ? (
         <div className="vendor-pdf-search__results">
           {results.map((r) => (
-            <div key={r.url} className="vendor-pdf-search__result-row">
-              <button
-                type="button"
-                className="vendor-pdf-search__result"
-                disabled={ingestingUrl !== null}
-                onClick={() => void runIngest(r)}
-                data-testid={`vendor-pdf-result-${hashKey(r.url)}`}
-                title={r.url}
-              >
-                <span className="vendor-pdf-search__result-title">
-                  {r.title ?? r.url}
-                </span>
-                {r.vendor || r.documentType ? (
-                  <span className="vendor-pdf-search__result-meta">
-                    {[r.vendor, r.documentType].filter(Boolean).join(' · ')}
+            <div key={r.url} className="vendor-pdf-search__result-wrap">
+              <div className="vendor-pdf-search__result-row">
+                <button
+                  type="button"
+                  className="vendor-pdf-search__result"
+                  disabled={ingestingUrl !== null}
+                  onClick={() => void runIngest(r)}
+                  data-testid={`vendor-pdf-result-${hashKey(r.url)}`}
+                  title={r.url}
+                >
+                  <span className="vendor-pdf-search__result-title">
+                    {r.title ?? r.url}
                   </span>
-                ) : null}
-                {r.snippet ? (
-                  <span className="vendor-pdf-search__result-snippet">
-                    {r.snippet}
+                  {r.vendor || r.documentType ? (
+                    <span className="vendor-pdf-search__result-meta">
+                      {[r.vendor, baseUrlOf(r.url), r.documentType].filter(Boolean).join(' · ')}
+                    </span>
+                  ) : null}
+                  {r.snippet ? (
+                    <span className="vendor-pdf-search__result-snippet">
+                      {r.snippet}
+                    </span>
+                  ) : null}
+                  <span className="vendor-pdf-search__result-cta">
+                    {ingestingUrl === r.url ? 'Ingesting…' : 'Ingest as artifact'}
                   </span>
-                ) : null}
-                <span className="vendor-pdf-search__result-cta">
-                  {ingestingUrl === r.url ? 'Ingesting…' : 'Ingest as artifact'}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="vendor-pdf-search__result-build"
-                disabled={ingestingUrl !== null}
-                onClick={() => void runIngest(r, true)}
-                title="Open PDF viewer and start building a protocol"
-              >
-                Build Protocol
-              </button>
+                </button>
+                <button
+                  type="button"
+                  className="vendor-pdf-search__result-build"
+                  disabled={ingestingUrl !== null}
+                  onClick={() => void runIngest(r, true)}
+                  title="Open PDF viewer and start building a protocol"
+                >
+                  Build Protocol
+                </button>
+              </div>
+              {blockedUrl === r.url ? (
+                <div className="vendor-pdf-search__blocked" data-testid={`blocked-${hashKey(r.url)}`}>
+                  <p className="vendor-pdf-search__blocked-text">
+                    <strong>Step 1:</strong> Open the source URL in a new tab — your browser
+                    downloads the PDF automatically to its <em>Downloads</em> folder (no need to
+                    choose where to save).
+                  </p>
+                  <p className="vendor-pdf-search__blocked-text">
+                    <strong>Step 2:</strong> Once it&apos;s saved, use &quot;Bring the file back&quot; to
+                    <em>select that downloaded PDF</em> from your Downloads folder (look for the
+                    filename of this document) and upload it here.
+                  </p>
+                  <span className="vendor-pdf-search__blocked-actions">
+                    <button
+                      type="button"
+                      className="vendor-pdf-search__blocked-open"
+                      onClick={() => window.open(r.url, '_blank', 'noopener,noreferrer')}
+                    >
+                      Step 1 — Open source URL
+                    </button>
+                    <label
+                      className="vendor-pdf-search__blocked-bring"
+                      title="Select the PDF your browser downloaded to its Downloads folder"
+                    >
+                      {bringingBack ? 'Uploading…' : 'Step 2 — Bring the file back'}
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        data-testid="vendor-pdf-bring-back"
+                        disabled={bringingBack}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) void handleBringBack(r, file)
+                          e.currentTarget.value = ''
+                        }}
+                      />
+                    </label>
+                  </span>
+                </div>
+              ) : null}
+              {bringBackError ? (
+                <p className="vendor-pdf-search__blocked-error" data-testid="vendor-pdf-bring-back-error">
+                  {bringBackError}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -242,4 +337,25 @@ function hashKey(s: string): string {
     h = (h * 31 + s.charCodeAt(i)) >>> 0
   }
   return h.toString(36)
+}
+
+/** Extract the hostname (base url) from a full URL, e.g. "neb.example". */
+export function baseUrlOf(url: string): string | null {
+  try {
+    const host = new URL(url).hostname
+    return host || null
+  } catch {
+    return null
+  }
+}
+
+/** Read a File into a base64 data string for upload. */
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.slice(i, i + 0x8000))
+  }
+  return btoa(binary)
 }

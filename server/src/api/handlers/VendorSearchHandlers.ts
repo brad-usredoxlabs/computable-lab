@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, relative } from 'node:path';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import type { AppConfig } from '../../config/types.js';
@@ -16,6 +18,7 @@ import { getCuratedVendorRegistry } from '../../registry/CuratedVendorRegistry.j
 import {
   downloadVendorPdf,
   extractVendorPdfText,
+  vendorPdfArtifactRoot,
 } from '../../vendor-documents/pdfAcquisition.js';
 import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { RecordStore } from '../../store/types.js';
@@ -1101,33 +1104,41 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
             steps: candidateStepsFromText(exaText),
             diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: blockedMessage }],
           };
-          // Persist a durable, text-only artifact so the chip isn't stuck in
-          // "legacy chat-draft mode". No `file` (the binary was blocked); the
-          // Exa-retrieved text lands in `extractedText` so it's searchable and
-          // openable. Content-addressed by the text hash for idempotency.
+          // Persist a durable, text-only vendor-pdf record so the ingest is
+          // NEVER silently lost — even in the free-floating ingestion surface
+          // (no studyId). No `file` (the binary was blocked); the Exa-retrieved
+          // text lands in `extractedText` so it's searchable and openable.
+          // Content-addressed by the text hash for idempotency.
           let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
-          if (requestedStudyId && store) {
+          if (store) {
             const sha256 = createHash('sha256').update(exaText).digest('hex');
-            const recordId = `ART-${sha256.slice(0, 12).toUpperCase()}`;
+            const recordId = `VPDF-${sha256.slice(0, 12).toUpperCase()}`;
+            const documentId = `graph-lemur-${sha256.slice(0, 12)}`;
             const payload = {
-              kind: 'artifact' as const,
+              kind: 'vendor-pdf' as const,
               recordId,
               title: candidateTitle,
-              studyId: requestedStudyId,
-              artifactKind: 'pdf' as const,
-              extractedText: [{ pageNumber: 1, text: exaText }],
+              state: 'ingested',
               source: {
+                engine: 'exa' as const,
                 ...(vendor ? { vendor } : {}),
                 url,
                 ...(ingestQuery ? { query: ingestQuery } : {}),
                 ingestedAt: new Date().toISOString(),
-                acquisition: 'exa-text',
+                pageCount: 1,
               },
+              extractedText: [{ pageNumber: 1, text: exaText }],
+              vendorProtocolCandidateRef: {
+                kind: 'record' as const,
+                type: 'vendor-protocol-candidate' as const,
+                id: documentId,
+              },
+              ...(requestedStudyId ? { links: { studyId: requestedStudyId } } : {}),
             };
             const envelope = createEnvelope(
               payload,
-              'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
-              { kind: 'artifact' },
+              'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml',
+              { kind: 'vendor-pdf' },
             );
             if (envelope) {
               const exists = await store.exists(recordId).catch(() => false);
@@ -1137,15 +1148,57 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
                   message: `GraphLemur ingest (Exa text): ${candidateTitle}`,
                 });
                 if (result.success) {
-                  recordedArtifact = { recordId, studyId: requestedStudyId, extractedTextPageCount: 1 };
+                  recordedArtifact = {
+                    recordId,
+                    ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+                    extractedTextPageCount: 1,
+                  };
                 } else {
                   request.log?.warn?.(
                     { error: result.error },
-                    'GraphLemur ingest (Exa text): artifact record create failed',
+                    'GraphLemur ingest (Exa text): vendor-pdf record create failed',
                   );
                 }
               } else {
-                recordedArtifact = { recordId, studyId: requestedStudyId, extractedTextPageCount: 1 };
+                recordedArtifact = {
+                  recordId,
+                  ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+                  extractedTextPageCount: 1,
+                };
+              }
+            }
+            // Phase 9 legacy: a study-scoped ARTIFACT record when studyId present
+            // (mirrors the happy path), so in-study contexts keep the artifact too.
+            if (requestedStudyId) {
+              const artId = `ART-${sha256.slice(0, 12).toUpperCase()}`;
+              const artPayload = {
+                kind: 'artifact' as const,
+                recordId: artId,
+                title: candidateTitle,
+                studyId: requestedStudyId,
+                artifactKind: 'pdf' as const,
+                extractedText: [{ pageNumber: 1, text: exaText }],
+                source: {
+                  ...(vendor ? { vendor } : {}),
+                  url,
+                  ...(ingestQuery ? { query: ingestQuery } : {}),
+                  ingestedAt: new Date().toISOString(),
+                  acquisition: 'exa-text',
+                },
+              };
+              const artEnvelope = createEnvelope(
+                artPayload,
+                'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
+                { kind: 'artifact' },
+              );
+              if (artEnvelope) {
+                const artExists = await store.exists(artId).catch(() => false);
+                if (!artExists) {
+                  await store.create({
+                    envelope: artEnvelope,
+                    message: `GraphLemur ingest (Exa text): ${candidateTitle}`,
+                  });
+                }
               }
             }
           }
@@ -1372,6 +1425,194 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           message: err instanceof Error ? err.message : String(err),
         };
       }
+    },
+
+    /**
+     * Ingest a vendor PDF from an UPLOADED file (the user downloaded it
+     * themselves because the vendor blocked our server-side download, then
+     * brings it back). Persists a durable kind=vendor-pdf record —
+     * content-addressed by the uploaded bytes — so it lands in the same
+     * "Recent ingests" list as a direct-download ingest.
+     */
+    async ingestGraphLemurPdfUpload(
+      request: FastifyRequest<{
+        Body: {
+          url?: string;
+          title?: string;
+          vendor?: string;
+          query?: string;
+          fileName?: string;
+          contentBase64?: string;
+          studyId?: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<GraphLemurPdfIngestResponse | ApiError> {
+      const body = request.body ?? {};
+      const contentBase64 = stringValue(body.contentBase64);
+      if (!contentBase64) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'Body field "contentBase64" is required.',
+        };
+      }
+      if (!workspaceRoot) {
+        reply.status(503);
+        return {
+          error: 'WORKSPACE_NOT_CONFIGURED',
+          message: 'GraphLemur PDF upload requires a configured workspace root.',
+        };
+      }
+
+      const url = stringValue(body.url);
+      const title = stringValue(body.title);
+      const vendor = stringValue(body.vendor);
+      const requestedStudyId = stringValue(body.studyId);
+      const ingestQuery = stringValue(body.query);
+      const fileName = stringValue(body.fileName) ?? (url ? basename(url) : 'document.pdf');
+      if (requestedStudyId && !/^STU-[A-Za-z0-9_-]+$/.test(requestedStudyId)) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'Invalid studyId.',
+        };
+      }
+
+      let data: Buffer;
+      try {
+        data = Buffer.from(contentBase64, 'base64');
+      } catch {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'contentBase64 is not valid base64.',
+        };
+      }
+      if (data.length === 0) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'contentBase64 decoded to an empty file.',
+        };
+      }
+
+      const sha256 = createHash('sha256').update(data).digest('hex');
+      const recordId = `VPDF-${sha256.slice(0, 12).toUpperCase()}`;
+      const artifactTitle = title || url || fileName || 'Vendor PDF';
+
+      // Write the uploaded bytes into the artifact store, content-addressed,
+      // so the record points at real bytes the user can open/extract later.
+      // Best-effort: if it fails (e.g. storage dir unavailable), still persist
+      // the durable record — the record is what makes the ingest findable.
+      const artifactPath = join(vendorPdfArtifactRoot(workspaceRoot), `${sha256.slice(0, 12)}.pdf`);
+      try {
+        await mkdir(dirname(artifactPath), { recursive: true });
+        await writeFile(artifactPath, data);
+      } catch (err) {
+        request.log?.warn?.({ err }, 'GraphLemur PDF upload: writing artifact bytes failed');
+      }
+
+      let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
+      if (store) {
+        const payload = {
+          kind: 'vendor-pdf' as const,
+          recordId,
+          title: artifactTitle,
+          state: 'ingested',
+          source: {
+            engine: 'exa' as const,
+            ...(vendor ? { vendor } : {}),
+            ...(url ? { url } : {}),
+            ...(ingestQuery ? { query: ingestQuery } : {}),
+            ingestedAt: new Date().toISOString(),
+            pageCount: 0,
+          },
+          file: {
+            file_name: fileName,
+            media_type: 'application/pdf',
+            ...(url ? { source_url: url } : {}),
+            size_bytes: data.length,
+            sha256,
+            stored_path: relative(workspaceRoot, artifactPath),
+          },
+          extractedText: [],
+          vendorProtocolCandidateRef: {
+            kind: 'record',
+            type: 'vendor-protocol-candidate',
+            id: `graph-lemur-${sha256.slice(0, 12)}`,
+          },
+          ...(requestedStudyId ? { links: { studyId: requestedStudyId } } : {}),
+        };
+        const envelope = createEnvelope(
+          payload,
+          'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml',
+          { kind: 'vendor-pdf' },
+        );
+        if (envelope) {
+          const exists = await store.exists(recordId).catch(() => false);
+          if (!exists) {
+            const result = await store.create({
+              envelope,
+              message: `GraphLemur PDF upload: ${artifactTitle}`,
+            });
+            if (result.success) {
+              recordedArtifact = {
+                recordId,
+                ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+                extractedTextPageCount: 0,
+              };
+            } else {
+              request.log?.warn?.(
+                { error: result.error },
+                'GraphLemur PDF upload: vendor-pdf record create failed',
+              );
+            }
+          } else {
+            recordedArtifact = {
+              recordId,
+              ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+              extractedTextPageCount: 0,
+            };
+          }
+        }
+      }
+
+      return {
+        sourcePdf: {
+          url: url ?? '',
+          title: artifactTitle,
+          ...(vendor ? { vendor } : {}),
+          artifactPath: relative(workspaceRoot, artifactPath),
+          sha256,
+        },
+        sourceProtocolCandidate: {
+          kind: 'vendor-protocol-candidate',
+          title: artifactTitle,
+          source: {
+            documentId: `graph-lemur-${sha256.slice(0, 12)}`,
+            ...(vendor ? { vendor } : {}),
+            title: artifactTitle,
+            ...(url ? { url } : {}),
+          },
+          materials: [],
+          labware: [],
+          equipment: [],
+          steps: candidateStepsFromText(''), // placeholder — extraction runs on the draft path
+          diagnostics: [],
+        },
+        extraction: {
+          requestedUrl: url ?? '',
+          resolvedPdfUrl: url ?? '',
+          resolution: 'direct',
+          artifactPath: relative(workspaceRoot, artifactPath),
+          pageCount: 0,
+          sectionCount: 0,
+          tableCount: 0,
+          diagnostics: [],
+        },
+        ...(recordedArtifact ? { recordedArtifact } : {}),
+      };
     },
 
     /**

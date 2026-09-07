@@ -371,6 +371,15 @@
   background: var(--cl-bg);
 }
 
+/* Left-pane workspace surfaces (pages like /ingestion, /lab, /browse) render
+   their content directly as tall blocks; the pane clips anything past its
+   fixed bottom edge. Let the left pane scroll vertically so long content
+   (e.g. a long list of search hits) stays reachable instead of being cut off. */
+.cl-app--workspace .cl-workspace__pane--left {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .cl-app--workspace .cl-workspace__pane--right {
   background: var(--cl-bg-elev);
   border-left: 1px solid var(--cl-border);

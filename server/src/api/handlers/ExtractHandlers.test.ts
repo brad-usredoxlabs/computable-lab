@@ -327,6 +327,91 @@ describe('ExtractHandlers - promoteCandidate', () => {
     const canonical = createdEnvelopes.find((e) => e.schemaId.includes('/protocol.schema.yaml'));
     expect(canonical?.payload).toMatchObject({ humanStepsText: '1. Add cells\n2. Seal plate' });
   });
+
+  it('threads the source vendor-pdf title into the promoted record', async () => {
+    const draft = {
+      kind: 'extraction-draft',
+      recordId: 'XDR-test-002',
+      source_artifact: { kind: 'file' as const, id: 'VPDF-ABC123' },
+      status: 'pending_review',
+      candidates: [
+        {
+          target_kind: 'protocol',
+          status: 'pending_review',
+          confidence: 0.9,
+          draft: {
+            kind: 'protocol',
+            recordId: 'PRT-2',
+            title: 'Quick Reference',
+            steps: [],
+          },
+          ambiguity_spans: [],
+        },
+      ],
+    };
+
+    const createdEnvelopes: RecordEnvelope[] = [];
+    const mockStore: RecordStore = {
+      // The draft (recordId XDR-test-002) and the source vendor-pdf (VPDF-ABC123).
+      get: vi.fn().mockImplementation(async (id: string) => {
+        if (id === 'XDR-test-002') {
+          return { recordId: 'XDR-test-002', schemaId: 'x', payload: draft };
+        }
+        if (id === 'VPDF-ABC123') {
+          return {
+            recordId: 'VPDF-ABC123',
+            schemaId: 'x',
+            payload: { title: 'CellROX Green Flow Cytometry Assay Kit', kind: 'vendor-pdf' },
+          };
+        }
+        return null;
+      }),
+      create: vi.fn().mockImplementation(async (args: { envelope: RecordEnvelope }) => {
+        createdEnvelopes.push(args.envelope);
+        return { success: true, recordId: args.envelope.recordId } as StoreResult;
+      }),
+      update: vi.fn().mockResolvedValue({ success: true } as StoreResult),
+    } as unknown as RecordStore;
+
+    const mockSchemaRegistry: SchemaRegistry = {
+      getAll: vi.fn().mockReturnValue([
+        {
+          id: 'protocol.schema.yaml',
+          schema: {
+            $id: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+            properties: { kind: { const: 'protocol' } },
+          },
+        },
+      ]),
+    } as unknown as SchemaRegistry;
+
+    const mockValidator: AjvValidator = {
+      validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
+    } as unknown as AjvValidator;
+
+    const handlers: ExtractHandlers = createExtractHandlers(
+      {} as ExtractionRunnerService,
+      mockStore,
+      mockSchemaRegistry,
+      mockValidator,
+    );
+
+    const mockRequest = {
+      params: { id: 'XDR-test-002', i: '0' },
+      body: {},
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string }; Body: { humanStepsText?: unknown } }>;
+
+    const mockReply = {} as unknown as FastifyReply;
+
+    await handlers.promoteCandidate(mockRequest, mockReply);
+
+    // The canonical protocol record appended the source vendor-pdf's title,
+    // replacing the generic "Quick Reference" draft title.
+    const canonical = createdEnvelopes.find((e) => e.schemaId.includes('/protocol.schema.yaml'));
+    expect(canonical?.payload).toMatchObject({
+      title: 'CellROX Green Flow Cytometry Assay Kit',
+    });
+  });
 });
 
 describe('ExtractHandlers - rejectCandidate', () => {

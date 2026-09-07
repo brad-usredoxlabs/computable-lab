@@ -4,7 +4,7 @@
  * in ProtocolBuilderContext and displays a summary.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useProtocolBuilderState } from './ProtocolBuilderContext'
 
 /** Estimate how many protocol steps the text contains. */
@@ -51,7 +51,7 @@ export interface SourceIntakePanelProps {
 }
 
 export function SourceIntakePanel({ onSourceLoaded }: SourceIntakePanelProps) {
-  const { actions } = useProtocolBuilderState()
+  const { state, actions } = useProtocolBuilderState()
   const [activeTab, setActiveTab] = useState<'pdf-url' | 'paste-text'>('pdf-url')
   const [pdfUrl, setPdfUrl] = useState('')
   const [pastedText, setPastedText] = useState('')
@@ -59,6 +59,17 @@ export function SourceIntakePanel({ onSourceLoaded }: SourceIntakePanelProps) {
   const [extractError, setExtractError] = useState('')
   const [isExtracting, setIsExtracting] = useState(false)
   const [summary, setSummary] = useState<SourceSummary | null>(null)
+
+  // Reflect a source that was seeded into context (e.g. "Build Protocol" from
+  // the vendor-PDF ingestion surface) so the panel shows it as loaded instead
+  // of an empty intake.
+  useEffect(() => {
+    if (summary) return
+    const seeded = state.sourceText
+    if (seeded && seeded.trim()) {
+      setSummary(buildSummary(seeded))
+    }
+  }, [state.sourceText, summary])
 
   const validateUrl = (url: string): boolean => {
     try {

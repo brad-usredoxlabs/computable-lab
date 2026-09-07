@@ -11,6 +11,13 @@ export interface ProtocolContextQuery {
   studyId?: string;
   experimentId?: string;
   runId?: string;
+  /**
+   * Case-insensitive substring filter across record title / recordId /
+   * humanStepsText (and step labels). Applied BEFORE scope grouping so every
+   * produced group (availableProtocols, runMethods, project/experiment
+   * scopes) honors the query. Empty/absent means no filtering.
+   */
+  q?: string;
 }
 
 export interface ProtocolContextResponse {
@@ -19,6 +26,10 @@ export interface ProtocolContextResponse {
   runMethods: RecordEnvelope[];
   promotableRunMethods: RecordEnvelope[];
   availableProtocols: RecordEnvelope[];
+  /** Free-floating ingested vendor PDFs matching the query (when q set).
+   *  NOT attachable via useProtocolInRun, so they ride in their own field
+   *  and the UI renders them with an Open action, never Attach. */
+  ingestedPdfs: RecordEnvelope[];
 }
 
 export interface UseProtocolInRunOptions {
@@ -112,34 +123,54 @@ export class ProtocolContextService {
   constructor(private store: RecordStore) {}
 
   async getContext(query: ProtocolContextQuery): Promise<ProtocolContextResponse> {
-    const [protocols, localProtocols, plannedRuns, eventGraphs] = await Promise.all([
+    const needle = (query.q ?? '').trim().toLowerCase();
+    const matchesQuery = (record: RecordEnvelope): boolean => {
+      const p = (record.payload ?? {}) as Record<string, unknown>;
+      const steps = Array.isArray(p.steps) ? (p.steps as Array<{ label?: unknown }>).map((s) => typeof s.label === 'string' ? s.label : '').join(' ') : '';
+      const haystack = [
+        typeof p.title === 'string' ? p.title : '',
+        record.recordId,
+        typeof p.humanStepsText === 'string' ? p.humanStepsText : '',
+        steps,
+      ].join(' ').toLowerCase();
+      return haystack.includes(needle);
+    };
+    const scoped = <T extends RecordEnvelope>(list: T[]): T[] => (needle ? list.filter(matchesQuery) : list);
+
+    const [protocols, localProtocols, plannedRuns, eventGraphs, vendorPdfs] = await Promise.all([
       this.store.list({ kind: 'protocol' }),
       this.store.list({ kind: 'local-protocol' }),
       this.store.list({ kind: 'planned-run' }),
       this.store.list({ kind: 'event-graph' }),
+      this.store.list({ kind: 'vendor-pdf' }),
     ]);
+
+    const filteredProtocols = scoped(protocols);
+    const filteredLocalProtocols = scoped(localProtocols);
+    const filteredPlannedRuns = scoped(plannedRuns);
+    const filteredEventGraphs = scoped(eventGraphs);
 
     const projectTemplates = query.studyId
       ? uniqueById([
-          ...protocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
-          ...localProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
+          ...filteredProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
+          ...filteredLocalProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && !linkString(record, 'experimentId') && !linkString(record, 'runId')),
         ])
       : [];
 
     const experimentProtocols = query.experimentId
-      ? localProtocols.filter((record) => {
+      ? filteredLocalProtocols.filter((record) => {
           if (linkString(record, 'experimentId') !== query.experimentId) return false;
           return !query.studyId || linkString(record, 'studyId') === query.studyId;
         })
       : query.studyId
-        ? localProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId')))
+        ? filteredLocalProtocols.filter((record) => linkString(record, 'studyId') === query.studyId && Boolean(linkString(record, 'experimentId')))
         : [];
 
     const runPlannedMethods = query.runId
-      ? plannedRuns.filter((record) => linkString(record, 'runId') === query.runId)
+      ? filteredPlannedRuns.filter((record) => linkString(record, 'runId') === query.runId)
       : [];
     const runEventGraphMethods = query.runId
-      ? eventGraphs.filter((record) => linkString(record, 'runId') === query.runId)
+      ? filteredEventGraphs.filter((record) => linkString(record, 'runId') === query.runId)
       : [];
     const runMethods = uniqueById([...runPlannedMethods, ...runEventGraphMethods]);
     const promotableRunMethods = runMethods.filter((record) => ['planned-run', 'event-graph'].includes(recordKind(record) ?? ''));
@@ -148,10 +179,10 @@ export class ProtocolContextService {
     // are the "Lab Protocols" the selector offers in addition to project /
     // experiment / run-scoped ones.
     const labProtocols = uniqueById([
-      ...protocols.filter(
+      ...filteredProtocols.filter(
         (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
       ),
-      ...localProtocols.filter(
+      ...filteredLocalProtocols.filter(
         (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
       ),
     ]);
@@ -162,6 +193,7 @@ export class ProtocolContextService {
       runMethods,
       promotableRunMethods,
       availableProtocols: uniqueById([...labProtocols, ...runMethods, ...experimentProtocols, ...projectTemplates]),
+      ingestedPdfs: uniqueById(scoped(vendorPdfs)),
     };
   }
 
