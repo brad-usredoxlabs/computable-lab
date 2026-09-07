@@ -112,6 +112,8 @@ describe('LabwareFocus — instrument tap', () => {
     // Shows the bench object name + the canonical EQP record identity.
     expect(screen.getByTestId('focus-instrument').textContent).toContain('Eppendorf ThermoMixer C')
     expect(screen.getByTestId('focus-instrument').textContent).toContain('EQP-EPPENDORF-THERMOMIXER')
+    // Shows the silhouette kind label (defaults to generic when untagged).
+    expect(screen.getByTestId('focus-instrument-kind').textContent).toBe('Other / generic')
   })
 
   it('Close exits the instrument focus back to the bench', async () => {

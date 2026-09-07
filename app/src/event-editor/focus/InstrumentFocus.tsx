@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Labware } from '../../types/labware'
-import { LABWARE_TYPE_LABELS } from '../../types/labware'
+import { INSTRUMENT_KIND_LABELS, LABWARE_TYPE_LABELS } from '../../types/labware'
 import { apiClient } from '../../shared/api/client'
+import { InstrumentGlyph } from '../deck/InstrumentGlyphs'
 
 /**
  * InstrumentFocus — the zoomed-in detail pane for a bench instrument tile.
@@ -69,6 +70,15 @@ export function InstrumentFocus({ labware, locationLabel, onClose }: InstrumentF
           >Close</button>
         </header>
         <div className="focus__body focus__body--instrument">
+          <div className="focus__instrument-hero" aria-hidden>
+            <InstrumentGlyph kind={labware.instrumentKind ?? 'generic'} color="#ff922b" />
+          </div>
+          <div
+            className="focus__instrument-kind"
+            data-testid="focus-instrument-kind"
+          >
+            {INSTRUMENT_KIND_LABELS[labware.instrumentKind ?? 'generic']}
+          </div>
           <div className="focus__instrument-id" data-testid="focus-instrument-id">
             {labware.sourceRecordId ? `Equipment record: ${labware.sourceRecordId}` : 'Bench instrument (no equipment record linked)'}
           </div>

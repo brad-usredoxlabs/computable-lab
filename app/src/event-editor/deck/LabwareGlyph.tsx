@@ -1,5 +1,6 @@
 import type { Labware } from '../../types/labware'
 import type { LabwareOrientation } from '../types'
+import { InstrumentGlyph } from './InstrumentGlyphs'
 
 /**
  * Compact, schematic SVG of a labware's well layout, drawn for the small deck
@@ -164,6 +165,12 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
   }
   if (glasswareType === 'flask') {
     return <FlaskSvg color={color} />
+  }
+
+  // Bench instruments draw a per-kind silhouette (qPCR, plate reader,
+  // heater-shaker, vortex, generic) instead of a bare well dot.
+  if (labware.labwareType === 'instrument') {
+    return <InstrumentGlyph kind={labware.instrumentKind ?? 'generic'} color={color} />
   }
 
   let { cols, rows } = landscapeDims(labware)

@@ -2726,6 +2726,60 @@
   min-height: 140px;
 }
 
+/* ---- Instrument type picker + silhouettes (AddEquipmentDialog / focus) ---- */
+
+.event-editor .ee-dialog__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 16px 0;
+}
+
+.event-editor .ee-dialog__kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 60px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  color: var(--cl-text);
+  cursor: pointer;
+  padding: 4px 2px;
+}
+
+.event-editor .ee-dialog__kind--active {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft, var(--cl-bg-elev-2));
+  color: var(--cl-on-accent);
+}
+
+.event-editor .ee-dialog__kind-glyph {
+  width: 34px;
+  height: 30px;
+  display: block;
+}
+
+.event-editor .ee-dialog__kind-label {
+  font-size: 9.5px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.event-editor .focus__instrument-hero {
+  width: 120px;
+  height: 120px;
+  color: inherit;
+}
+
+.event-editor .focus__instrument-kind {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin-top: 2px;
+}
+
 /* ---- Proposed-changes inspector (View changes) ---- */
 
 .event-editor .proposed-graph {

@@ -31,6 +31,50 @@ function alphaRowLabels(count: number): string[] {
 /**
  * Labware type discriminator
  */
+
+/**
+ * Bench instrument sub-kind used to draw a per-instrument silhouette on the
+ * tile and in instrument focus. Biologists recognize a qPCR machine, plate
+ * reader, heater-shaker, and vortex instantly; `'generic'` is the fallback for
+ * anything else (centrifuge, incubator, …).
+ */
+export type InstrumentKind =
+  | 'qpcr'
+  | 'plate_reader'
+  | 'heater_shaker'
+  | 'vortex'
+  | 'generic'
+
+export const INSTRUMENT_KINDS: readonly InstrumentKind[] = [
+  'qpcr',
+  'plate_reader',
+  'heater_shaker',
+  'vortex',
+  'generic',
+]
+
+export const INSTRUMENT_KIND_LABELS: Record<InstrumentKind, string> = {
+  qpcr: 'qPCR machine',
+  plate_reader: 'Plate reader',
+  heater_shaker: 'Heater-shaker',
+  vortex: 'Vortex',
+  generic: 'Other / generic',
+}
+
+/**
+ * Best-effort classify an instrument label into a drawing kind. The user can
+ * still pick explicitly in AddEquipmentDialog; this just pre-selects a sensible
+ * default from the vendor name so the tile looks right even before they edit.
+ */
+export function inferInstrumentKind(label: string): InstrumentKind {
+  const t = label.trim().toLowerCase()
+  if (/\b(qpcr|qrt\-?pcr|thermocycler|thermal\s*cycler|cycler|real\s*-?time\s*(pcr)?)\b/.test(t)) return 'qpcr'
+  if (/\b(plate\s*reader|microplate\s*reader|multimode\s*reader|reader)\b/.test(t)) return 'plate_reader'
+  if (/\b(thermomixer|heater\s*shaker|heater\-?shaker|heat\s*block|shaker\s*with\s*heat|thermo\s*shaker|shaking\s*incubator)\b/.test(t)) return 'heater_shaker'
+  if (/\b(vortex|vortexer)\b/.test(t)) return 'vortex'
+  return 'generic'
+}
+
 export type LabwareType =
   | 'plate_96'
   | 'plate_384'
@@ -331,6 +375,13 @@ export interface Labware {
   notes?: string
   /** Source record ID if this labware was created from a persisted record */
   sourceRecordId?: string
+  /**
+   * Bench instrument sub-kind (only meaningful when labwareType === 'instrument').
+   * Drives the per-instrument silhouette drawn on the tile and in instrument
+   * focus. Absent → 'generic'. Tags a bench instrument so the biologist can tell
+   * a qPCR machine from a plate reader from a vortex at a glance on the bench.
+   */
+  instrumentKind?: InstrumentKind
   /** Generic labware class requirement backing this instance, e.g. CL:96_well_plate. */
   requirementClassCurie?: string
   /** Optional trait constraints from a labware requirement, e.g. CL:black. */

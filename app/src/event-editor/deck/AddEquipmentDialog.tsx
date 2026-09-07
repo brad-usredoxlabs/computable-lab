@@ -1,7 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createLabware, type Labware } from '../../types/labware'
+import {
+  INSTRUMENT_KINDS,
+  INSTRUMENT_KIND_LABELS,
+  inferInstrumentKind,
+  type InstrumentKind,
+} from '../../types/labware'
 import { apiClient, type VendorExaHit } from '../../shared/api/client'
 import { useVendorExaSearch } from '../../shared/vendor-exa/useVendorExaSearch'
+import { InstrumentGlyph } from './InstrumentGlyphs'
 
 /**
  * AddEquipmentDialog — add a bench INSTRUMENT (shaker, incubator, plate reader,
@@ -26,7 +33,14 @@ interface AddEquipmentDialogProps {
 export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddEquipmentDialogProps) {
   const [query, setQuery] = useState('')
   const [customName, setCustomName] = useState('')
+  const [selectedKind, setSelectedKind] = useState<InstrumentKind>('generic')
   const [mintingUrl, setMintingUrl] = useState<string | null>(null)
+
+  // Reset the type pick each time the dialog reopens so a prior instrument's
+  // tag doesn't leak onto the next one.
+  useEffect(() => {
+    if (!open) setSelectedKind('generic')
+  }, [open])
 
   // Exa web vendor-product search for equipment. Declared ABOVE the early
   // `return null` so the hook count is stable whether open or closed
@@ -56,6 +70,10 @@ export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddE
       const instrument = createLabware('instrument', customName.trim() || created.label)
       instrument.sourceRecordId = created.recordId
       instrument.notes = `Imported from Exa equipment search: ${hit.url}`
+      // Tag the instrument kind for the silhouette: an explicit pick wins;
+      // otherwise best-effort classify the vendor title.
+      instrument.instrumentKind =
+        selectedKind !== 'generic' ? selectedKind : inferInstrumentKind(hit.title)
       onPick(instrument)
       onClose()
     } catch (error) {
@@ -89,6 +107,23 @@ export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddE
           value={customName}
           onChange={(e) => setCustomName(e.target.value)}
         />
+        <div className="ee-dialog__kinds" role="group" aria-label="Instrument type">
+          {INSTRUMENT_KINDS.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={`ee-dialog__kind${selectedKind === kind ? ' ee-dialog__kind--active' : ''}`}
+              onClick={() => setSelectedKind(kind)}
+              title={INSTRUMENT_KIND_LABELS[kind]}
+              aria-pressed={selectedKind === kind}
+            >
+              <span className="ee-dialog__kind-glyph">
+                <InstrumentGlyph kind={kind} color="#ff922b" />
+              </span>
+              <span className="ee-dialog__kind-label">{INSTRUMENT_KIND_LABELS[kind]}</span>
+            </button>
+          ))}
+        </div>
         <div className="ee-dialog__body ee-dialog__body--equipment">
           {hits.length > 0 || vendorExa.loading || !query.trim() ? (
             <section className="ee-dialog__vendor">
