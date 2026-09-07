@@ -10,13 +10,16 @@ import {
   previewLawnPlacements,
 } from '../lib/previewProjection'
 import type { Labware } from '../../types/labware'
-import type { EventEditorPlacement } from '../types'
+import type { LawnSurfaceId, EventEditorPlacement } from '../types'
+import { DEFAULT_LAWN_SURFACE_ID } from '../types'
 
 interface LawnSurfaceProps {
   widthMm: number
   heightMm: number
   title: string
   primary?: boolean
+  /** Which freebench surface this is; lawn placements are scoped to it. */
+  surfaceId?: LawnSurfaceId
 }
 
 const MM_PER_PIXEL_PRIMARY = 1.6
@@ -35,7 +38,7 @@ const TILE_MM_WIDTH_PORTRAIT = TILE_MM_HEIGHT
 const LAWN_TILE_LANDSCAPE = { w: 126, h: 80 }
 const LAWN_TILE_PORTRAIT = { w: 80, h: 126 }
 
-export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnSurfaceProps) {
+export function LawnSurface({ widthMm, heightMm, title, primary = false, surfaceId = DEFAULT_LAWN_SURFACE_ID }: LawnSurfaceProps) {
   const { state, actions } = useEventEditor()
   const scale = primary ? MM_PER_PIXEL_PRIMARY : MM_PER_PIXEL_SIDE
   const widthPx = Math.round(widthMm / scale)
@@ -55,23 +58,25 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
   const platform = getPlatformManifest(state.platforms, state.platformId)
   const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
 
+  // Only this surface's own lawn placements. Without scoping, every lawn would
+  // render every lawn placement (double-render with two coexisting benches).
   const lawnPlacements = useMemo(
     () =>
       state.placements.filter(
-        (p): p is EventEditorPlacement & { location: { kind: 'lawn'; xMm: number; yMm: number } } =>
-          p.location.kind === 'lawn',
+        (p): p is EventEditorPlacement & { location: { kind: 'lawn'; xMm: number; yMm: number; surfaceId?: LawnSurfaceId } } =>
+          p.location.kind === 'lawn' && (p.location.surfaceId ?? DEFAULT_LAWN_SURFACE_ID) === surfaceId,
       ),
-    [state.placements],
+    [state.placements, surfaceId],
   )
 
   const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
   const ghostLawnPlacements = useMemo(
     () =>
       previewLawnPlacements(state.preview).filter(
-        (p): p is EventEditorPlacement & { location: { kind: 'lawn'; xMm: number; yMm: number } } =>
-          p.location.kind === 'lawn',
+        (p): p is EventEditorPlacement & { location: { kind: 'lawn'; xMm: number; yMm: number; surfaceId?: LawnSurfaceId } } =>
+          p.location.kind === 'lawn' && (p.location.surfaceId ?? DEFAULT_LAWN_SURFACE_ID) === surfaceId,
       ),
-    [state.preview],
+    [state.preview, surfaceId],
   )
 
   const screenToLawnMm = useCallback(
@@ -95,6 +100,11 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     }
   }
 
+  /** Build a lawn location carrying this surface's id (placement is scoped to it). */
+  function lawnLoc(xMm: number, yMm: number): { kind: 'lawn'; xMm: number; yMm: number; surfaceId: LawnSurfaceId } {
+    return { kind: 'lawn', xMm, yMm, surfaceId }
+  }
+
   function handleSurfaceClick(event: MouseEvent<HTMLDivElement>) {
     // Ignore clicks that bubbled up from a tile.
     if ((event.target as HTMLElement).closest('.tile')) return
@@ -116,7 +126,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     const validation = validatePlacement({
       platform,
       variant,
-      location: { kind: 'lawn', xMm: clamped.xMm, yMm: clamped.yMm },
+      location: lawnLoc(clamped.xMm, clamped.yMm),
       labware: picked,
     })
     if (!validation.ok) {
@@ -126,7 +136,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     const orientation = resolveOrientation(validation, undefined, picked)
     actions.placeNewLabware(
       picked,
-      { kind: 'lawn', xMm: clamped.xMm, yMm: clamped.yMm },
+      lawnLoc(clamped.xMm, clamped.yMm),
       orientation,
     )
     setError(null)
@@ -145,7 +155,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     const validation = validatePlacement({
       platform,
       variant,
-      location: { kind: 'lawn', xMm: spot.xMm, yMm: spot.yMm },
+      location: lawnLoc(spot.xMm, spot.yMm),
       labware: picked,
     })
     if (!validation.ok) {
@@ -154,7 +164,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     }
     actions.placeNewLabware(
       picked,
-      { kind: 'lawn', xMm: spot.xMm, yMm: spot.yMm },
+      lawnLoc(spot.xMm, spot.yMm),
       resolveOrientation(validation, undefined, picked),
     )
     setError(null)
@@ -190,7 +200,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
     const validation = validatePlacement({
       platform,
       variant,
-      location: { kind: 'lawn', xMm: clamped.xMm, yMm: clamped.yMm },
+      location: lawnLoc(clamped.xMm, clamped.yMm),
       labware: movingLabware,
       desiredOrientation: moving.orientation,
     })
@@ -199,9 +209,11 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
       return
     }
     const orientation = resolveOrientation(validation, moving.orientation, movingLabware)
+    // Stamping `lawnLoc(... )` (this surfaceId) is what MOVES a placement from
+    // one bench to another: the same placementId now belongs to the drop surface.
     actions.movePlacement(
       moving.placementId,
-      { kind: 'lawn', xMm: clamped.xMm, yMm: clamped.yMm },
+      lawnLoc(clamped.xMm, clamped.yMm),
       orientation,
     )
     setError(null)

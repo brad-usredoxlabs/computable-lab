@@ -67,12 +67,13 @@ function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState 
 }
 
 // Primary freeform bench (1200×800) + a side labware lawn (600×400), as the
-// manual_freeform variant exposes after the manifest change.
+// manual_freeform variant exposes after the manifest change. Each lawn is
+// explicitly scoped to its own surface id.
 function renderTwoLawns() {
   return render(
     <div>
-      <LawnSurface widthMm={1200} heightMm={800} title="Manual Bench (freeform)" primary />
-      <LawnSurface widthMm={600} heightMm={400} title="Labware lawn" />
+      <LawnSurface widthMm={1200} heightMm={800} title="Manual Bench (freeform)" primary surfaceId="primary" />
+      <LawnSurface widthMm={600} heightMm={400} title="Labware lawn" surfaceId="side" />
     </div>,
   )
 }
@@ -126,6 +127,15 @@ describe('cross-lawn drag (two freebench surfaces)', () => {
     // Both lawn surfaces render (`aria-label={title}` on each <section>).
     expect(screen.getAllByLabelText(/Manual Bench|Labware lawn/)).toHaveLength(2)
 
+    // Surface-scoping regression: the placement (no surfaceId → primary) renders
+    // as EXACTLY ONE tile, on the PRIMARY bench only — not doubled on both lawns.
+    const tileAnchors = Array.from(document.querySelectorAll('.lawn__tile-anchor'))
+    expect(tileAnchors).toHaveLength(1)
+    const primaryTiles = document.querySelector('.lawn--primary .lawn__tile-anchor')
+    const sideTiles = document.querySelectorAll<HTMLDivElement>('.lawn__surface')[1]?.querySelectorAll('.lawn__tile-anchor').length ?? 0
+    expect(primaryTiles).toBeTruthy()
+    expect(sideTiles).toBe(0)
+
     // The SIDE lawn's surface div is the drop target. Locate by CSS: the second
     // `.lawn__surface` belongs to the 600×400 side lawn (smaller).
     const surfaces = Array.from(document.querySelectorAll<HTMLDivElement>('.lawn__surface'))
@@ -150,16 +160,36 @@ describe('cross-lawn drag (two freebench surfaces)', () => {
     })
     sideDrop.dispatchEvent(drop)
 
-    // The drop must MOVE the placement to the side lawn's coordinates (not
-    // recreate it or remove it), keeping placementId + labwareId intact.
+    // The drop must MOVE the placement to the side lawn (not recreate or remove
+    // it), and stamp surfaceId='side' so the SAME placement now belongs to the
+    // side bench — this is what moving between two benches means.
     expect(mocks.removePlacement).not.toHaveBeenCalled()
     expect(mocks.placeNewLabware).not.toHaveBeenCalled()
     const call = mocks.movePlacement.mock.calls[0]
     expect(call).toBeTruthy()
     expect(call?.[0]).toBe('pl-1')
-    expect(call?.[1]).toMatchObject({ kind: 'lawn' })
+    expect(call?.[1]).toMatchObject({ kind: 'lawn', surfaceId: 'side' })
     // Coordinate clamped inside the side lawn's 600×400 mm bounds.
     expect(call?.[1].xMm).toBeGreaterThanOrEqual(0)
     expect(call?.[1].yMm).toBeGreaterThanOrEqual(0)
+  })
+
+  it('renders each placement only on its own surface (no double-render across benches)', () => {
+    const plate = createLabware('plate_96', 'Plate 1')
+    const sidePlate = createLabware('plate_96', 'Side Plate')
+    mocks.state = makeState({
+      labwares: { 'plate-1': plate, 'side-1': sidePlate },
+      placements: [
+        { placementId: 'pl-1', labwareId: 'plate-1', location: { kind: 'lawn', xMm: 10, yMm: 10, surfaceId: 'primary' }, orientation: 'landscape' },
+        { placementId: 'pl-2', labwareId: 'side-1', location: { kind: 'lawn', xMm: 10, yMm: 10, surfaceId: 'side' }, orientation: 'landscape' },
+      ],
+    })
+
+    renderTwoLawns()
+    const surfaces = Array.from(document.querySelectorAll<HTMLDivElement>('.lawn__surface'))
+    const primaryTiles = surfaces[0]!.querySelectorAll('.lawn__tile-anchor').length
+    const sideTiles = surfaces[1]!.querySelectorAll('.lawn__tile-anchor').length
+    expect(primaryTiles).toBe(1) // only the primary placement
+    expect(sideTiles).toBe(1) // only the side placement
   })
 })

@@ -254,6 +254,11 @@ properties:
                     type: number
                   yMm:
                     type: number
+                  # Which freebench surface this lawn placement belongs to
+                  # ('primary' | 'side'). Absent = 'primary' (legacy records).
+                  surfaceId:
+                    type: string
+                    enum: [ primary, side ]
 
   tags:
     type: array

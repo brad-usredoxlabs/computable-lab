@@ -53,6 +53,7 @@ export function DeckStage() {
           heightMm={surface.heightMm}
           title={variant.title}
           primary
+          surfaceId="primary"
         />
       ) : null}
       {sideLawn ? (
@@ -60,6 +61,7 @@ export function DeckStage() {
           widthMm={sideLawn.widthMm}
           heightMm={sideLawn.heightMm}
           title={sideLawn.label ?? 'Labware lawn'}
+          surfaceId="side"
         />
       ) : null}
       <PreviewActionBar />

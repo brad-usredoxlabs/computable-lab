@@ -2,9 +2,20 @@ import type { Labware } from '../types/labware'
 
 export type LabwareOrientation = 'portrait' | 'landscape'
 
+/**
+ * Which freebench surface a lawn placement belongs to. `'primary'` is the main
+ * bench (`surface`); `'side'` is the secondary bench (`sideLawn`). A lawn
+ * placement must carry this so each LawnSurface renders ONLY its own tiles
+ * (without it, every lawn renders every lawn placement — the double-render bug
+ * two coexisting surfaces expose). Absent (legacy records) → 'primary'.
+ */
+export type LawnSurfaceId = 'primary' | 'side'
+
+export const DEFAULT_LAWN_SURFACE_ID: LawnSurfaceId = 'primary'
+
 export type PlacementLocation =
   | { kind: 'slot'; slotId: string }
-  | { kind: 'lawn'; xMm: number; yMm: number }
+  | { kind: 'lawn'; xMm: number; yMm: number; surfaceId?: LawnSurfaceId }
 
 export interface EventEditorPlacement {
   placementId: string
