@@ -667,7 +667,10 @@ export async function createServer(
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store, ctx.platformRegistry);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
-  const resolveSpine = createResolveSpineFromContext(ctx);
+  // Pass the live config accessor so the spine's tier-4 Exa vendor provider
+  // reads a freshly-pasted key (PATCH /api/config) without a server restart,
+  // same as the vendor search + equipment handlers.
+  const resolveSpine = createResolveSpineFromContext({ ...ctx, getAppConfig: () => ctx.appConfig });
   const resolveHandlers = createResolveHandlers(resolveSpine);
 
   // Warm the remote ontology (OLS4) connection at boot. The first request to

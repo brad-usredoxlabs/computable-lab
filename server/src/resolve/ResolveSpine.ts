@@ -20,7 +20,7 @@
  * they fail or the box is offline.
  */
 
-import type { OntologyConfig } from '../config/types.js';
+import type { OntologyConfig, AppConfig } from '../config/types.js';
 import type { RecordStore } from '../store/types.js';
 import type {
   MaterialLevel,
@@ -35,6 +35,7 @@ import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
 import { createRecordProvider } from './providers/records.js';
 import { createTermProvider } from './providers/terms.js';
+import { createVendorExaProvider } from './providers/vendorExa.js';
 
 const TIER_BASE: Record<ResolveTier, number> = { 0: 1.2, 1: 1.0, 2: 0.8, 3: 0.6, 4: 0.4, 5: 0.05 };
 const DEFAULT_LOCAL_TIMEOUT_MS = 1500;
@@ -252,12 +253,15 @@ function toCandidate(
 export function createResolveSpineFromContext(ctx: {
   store: RecordStore;
   appConfig?: { ontology?: OntologyConfig } | undefined;
+  /** Live config accessor so the tier-4 Exa vendor provider reads a freshly-pasted key. */
+  getAppConfig?: () => AppConfig | undefined;
 }): ResolveSpine {
   const deps: ResolveSpineDeps = {
     termProvider: createTermProvider(ctx.store),
     recordProvider: createRecordProvider(ctx.store),
   };
   if (ctx.appConfig?.ontology) deps.ontology = ctx.appConfig.ontology;
+  if (ctx.getAppConfig) deps.vendorProvider = createVendorExaProvider(ctx.getAppConfig);
   return createResolveSpine(deps);
 }
 

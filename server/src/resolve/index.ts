@@ -8,5 +8,6 @@ export { createOakProvider, resolveOakServiceUrl } from './providers/oak.js';
 export { createOls4Provider, searchOls4 } from './providers/ols4.js';
 export { createRecordProvider } from './providers/records.js';
 export { createTermProvider } from './providers/terms.js';
+export { createVendorExaProvider } from './providers/vendorExa.js';
 export { createCompileOntologyResolver } from './compileResolver.js';
 export type { CompileOntologyHit } from './compileResolver.js';

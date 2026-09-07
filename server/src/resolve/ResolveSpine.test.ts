@@ -118,4 +118,21 @@ describe('resolve() spine', () => {
     expect(out[0]?.curie).toBe('local:MAT-2');
     expect(out[out.length - 1]?.source).toBe('mint');
   });
+
+  it('surfaces vendor hits with source vendor when a vendor provider is wired', async () => {
+    stubFetch({});
+    const spine = createResolveSpine({
+      vendorProvider: staticProvider([{
+        curie: 'local:vendor-catalog-abc1',
+        label: 'Cayman Rotenone 1 mM',
+        namespace: 'local',
+        uri: 'https://example.com/rotenone',
+      }]),
+    });
+    const out = await spine.resolve('rotenone');
+    const vendor = out.find((c) => c.source === 'vendor');
+    expect(vendor).toBeDefined();
+    expect(vendor?.tier).toBe(4);
+    expect(vendor?.uri).toBe('https://example.com/rotenone');
+  });
 });
