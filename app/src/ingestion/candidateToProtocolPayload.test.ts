@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { candidateToProtocolPayload } from './candidateToProtocolPayload'
+import { candidateToProtocolPayload, normalizeProtocolPayload } from './candidateToProtocolPayload'
 import type { AiProtocolCandidateSummary } from '../types/ai'
 
 function sampleCandidate(): AiProtocolCandidateSummary {
@@ -84,5 +84,27 @@ describe('candidateToProtocolPayload', () => {
     const out = candidateToProtocolPayload(dup, 'PRT-x')
     expect(out.roles.materialRoles).toHaveLength(1)
     expect(out.roles.materialRoles[0].allowedMaterialIds).toEqual(['CL:reagent'])
+  })
+
+  it('normalizes non-string prose fields to strings (schema requires type:string)', () => {
+    const payload = {
+      kind: 'protocol',
+      recordId: 'PRT-x',
+      title: 'T',
+      notes: ['line 1', 'line 2'],            // array → joined string
+      purpose: { a: 1 },                       // object → dropped (not stringable)
+      humanStepsText: 'ok',
+      steps: [
+        { stepId: 's1', label: 'Step 1', ordinal: 1, kind: 'other', notes: ['a', 'b'] },
+        { stepId: 's2', label: 123 as unknown as string, ordinal: 2, kind: 'other', notes: null as unknown as string },
+      ],
+    }
+    const out = normalizeProtocolPayload(payload)
+    expect(out.notes).toBe('line 1\nline 2')
+    expect(out.purpose).toBeUndefined()           // object prose dropped
+    expect(out.humanStepsText).toBe('ok')          // string kept
+    expect((out.steps as Record<string, unknown>[])[0].notes).toBe('a\nb')
+    expect((out.steps as Record<string, unknown>[])[1].label).toBe('123')
+    expect((out.steps as Record<string, unknown>[])[1].notes).toBeUndefined() // null dropped
   })
 })

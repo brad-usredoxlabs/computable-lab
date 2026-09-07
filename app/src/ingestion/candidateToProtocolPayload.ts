@@ -25,6 +25,56 @@ export type ProtocolStepKind =
   | 'harvest'
   | 'other'
 
+const PROSE_STRING_FIELDS = ['notes', 'purpose', 'humanStepsText', 'description', 'label', 'title'] as const
+
+/** Coerce a value to a string for prose fields (the protocol schema requires
+ *  `type: string`). Arrays join on newlines; scalars stringify; null/empty drop. */
+function asProseString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined
+  if (typeof value === 'string') return value.trim() || undefined
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const joined = value
+      .map((v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')))
+      .filter(Boolean)
+      .join('\n')
+    return joined.trim() || undefined
+  }
+  return undefined
+}
+
+/** Normalize the protocol payload so every prose field the schema expects as a
+ *  string is a string. Guards against the TapTab editor occasionally emitting
+ *  an array/object for a prose slot (which fails Ajv: `/notes: Expected type:
+ *  string`). Pure + side-effect-free. */
+export function normalizeProtocolPayload<T extends Record<string, unknown>>(payload: T): T {
+  const out: Record<string, unknown> = { ...payload }
+  for (const key of PROSE_STRING_FIELDS) {
+    if (key in out) {
+      const s = asProseString(out[key])
+      if (s === undefined) delete out[key]
+      else out[key] = s
+    }
+  }
+  // Steps' prose fields too.
+  if (Array.isArray(out.steps)) {
+    out.steps = out.steps.map((step) => {
+      const s = typeof step === 'object' && step !== null ? { ...(step as Record<string, unknown>) } : step
+      if (typeof s === 'object') {
+        for (const key of PROSE_STRING_FIELDS) {
+          if (key in s) {
+            const v = asProseString(s[key])
+            if (v === undefined) delete s[key]
+            else s[key] = v
+          }
+        }
+      }
+      return s
+    })
+  }
+  return out as T
+}
+
 export interface MappedProtocolStep {
   stepId: string
   ordinal: number
