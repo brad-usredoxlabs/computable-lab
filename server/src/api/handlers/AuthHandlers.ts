@@ -2,12 +2,14 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { RecordStore } from '../../store/types.js';
 import type { CredentialStore } from '../../security/CredentialStore.js';
 import type { SessionStore } from '../../security/SessionStore.js';
-import { verifyPassword } from '../../security/CredentialStore.js';
+import type { LocalIdentityService } from '../../security/LocalIdentityService.js';
+import { verifyPassword, hashPassword } from '../../security/CredentialStore.js';
 
 export interface AuthHandlerOptions {
   store: RecordStore;
   credentialStore: CredentialStore;
   sessionStore: SessionStore;
+  identityService?: LocalIdentityService;
 }
 
 function payloadOf(env: { payload?: unknown } | null | undefined): Record<string, unknown> {
@@ -34,7 +36,7 @@ async function findUserByUsername(store: RecordStore, username: string) {
 }
 
 export function createAuthHandlers(options: AuthHandlerOptions) {
-  const { store, credentialStore, sessionStore } = options;
+  const { store, credentialStore, sessionStore, identityService } = options;
 
   return {
     // POST /auth/login  { username, password }
@@ -76,6 +78,32 @@ export function createAuthHandlers(options: AuthHandlerOptions) {
       const token = headerString(request.headers['x-cl-session']);
       if (token) await sessionStore.revoke(token);
       return { success: true };
+    },
+
+    // POST /auth/set-password  { password }  (self-service: sets the CURRENT user's password)
+    // Lets a pre-auth user (e.g. USR-BRAD, created before auth existed) establish
+    // a password so they can actually log in. Resolves the caller from the
+    // request (session/x-user-id), so a user can only set their OWN password.
+    async setPassword(
+      request: FastifyRequest<{ Body: { password?: string } }>,
+      reply: FastifyReply,
+    ): Promise<unknown> {
+      if (!identityService) {
+        reply.status(503);
+        return { error: 'APP_NOT_READY', message: 'Identity service not configured.' };
+      }
+      const password = asString(request.body?.password);
+      if (!password || password.length < 8) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'password is required (min 8 chars)' };
+      }
+      const resolved = await identityService.resolveRequestUser(request);
+      if (!resolved.userId || resolved.isSystem || !(await store.get(resolved.userId))) {
+        reply.status(403);
+        return { error: 'NO_CURRENT_USER', message: 'No concrete current user to set a password for (system identity).' };
+      }
+      await credentialStore.setVerifier(resolved.userId, hashPassword(password));
+      return { success: true, userId: resolved.userId };
     },
   };
 }

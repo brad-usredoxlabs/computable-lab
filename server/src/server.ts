@@ -1173,6 +1173,7 @@ export async function createServer(
     store: ctx.store,
     credentialStore: ctx.credentialStore,
     sessionStore: ctx.sessionStore,
+    identityService: ctx.localIdentityService,
   });
 
   // Create run-centered draft/accept handlers

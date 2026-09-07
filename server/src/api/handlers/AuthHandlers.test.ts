@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { CredentialStore, hashPassword } from '../../security/CredentialStore.js';
 import { SessionStore } from '../../security/SessionStore.js';
+import { LocalIdentityService } from '../../security/LocalIdentityService.js';
 import { createAuthHandlers } from './AuthHandlers.js';
 import type { RecordStore } from '../../store/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
@@ -113,5 +114,34 @@ describe('AuthHandlers', () => {
     const logoutR = makeReply();
     await handlers.logout(makeRequest({}, { 'x-cl-session': token }), logoutR.reply);
     expect(await sessions.resolve(token)).toBeNull();
+  });
+
+  it('setPassword establishes a credential for the current user', async () => {
+    const credDir = join(tmp, 'auth');
+    mkdirSync(credDir, { recursive: true });
+    const store = makeStore([makeUserEnv('USR-BRAD', 'brad', 'Brad')]);
+    const identity = new LocalIdentityService(store);
+    const creds = new CredentialStore(credDir);
+    const handlers = createAuthHandlers({ store, credentialStore: creds, sessionStore: new SessionStore(credDir), identityService: identity });
+
+    const r = makeReply();
+    r.setBody(await handlers.setPassword(makeRequest({ password: 'bradpass123' }, { 'x-user-id': 'USR-BRAD' }), r.reply));
+    expect(r.status).toBe(200);
+    expect((r.body as { success: boolean }).success).toBe(true);
+
+    // The user can now log in with that password.
+    const loginR = makeReply();
+    loginR.setBody(await handlers.login(makeRequest({ username: 'brad', password: 'bradpass123' }), loginR.reply));
+    expect(loginR.status).toBe(200);
+  });
+
+  it('setPassword rejects a short password with 400', async () => {
+    const credDir = join(tmp, 'auth');
+    const store = makeStore([makeUserEnv('USR-BRAD', 'brad', 'Brad')]);
+    const identity = new LocalIdentityService(store);
+    const handlers = createAuthHandlers({ store, credentialStore: new CredentialStore(credDir), sessionStore: new SessionStore(credDir), identityService: identity });
+    const r = makeReply();
+    r.setBody(await handlers.setPassword(makeRequest({ password: 'short' }, { 'x-user-id': 'USR-BRAD' }), r.reply));
+    expect(r.status).toBe(400);
   });
 })

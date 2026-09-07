@@ -236,6 +236,7 @@ export function registerRoutes(
   if (authHandlers) {
     fastify.post('/auth/login', authHandlers.login.bind(authHandlers));
     fastify.post('/auth/logout', authHandlers.logout.bind(authHandlers));
+    fastify.post('/auth/set-password', authHandlers.setPassword.bind(authHandlers));
   }
   if (identityHandlers) {
     fastify.get('/me', identityHandlers.getMe.bind(identityHandlers));
