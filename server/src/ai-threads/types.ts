@@ -46,6 +46,8 @@ export interface ThreadMention {
 export interface AiThread {
   endpoint: ApplianceEndpoint;
   userId: string;
+  /** Stable identity independent of endpoint/route/mount (agent harness). */
+  conversationId?: string;
   messages: ThreadMessage[];
   mentions: ThreadMention[];
   updatedAt: string;
@@ -54,6 +56,9 @@ export interface AiThread {
 export interface AppendMessageInput {
   message: Omit<ThreadMessage, 'createdAt'> & { createdAt?: string };
   mentions?: ThreadMention[];
+  /** When set, the append is addressed to this stable conversation regardless
+   *  of which endpoint surface is currently active. */
+  conversationId?: string;
 }
 
 export interface PromoteOptions {

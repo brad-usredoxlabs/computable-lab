@@ -54,6 +54,35 @@ export class AiThreadStore {
     return join(this.rootDir, safeUser, `${endpoint}.json`);
   }
 
+  /**
+   * Stable-conversation file keyed by conversationId alone (NOT per-endpoint),
+   * so a permanent chat keeps one identity across route/surface mounts.
+   */
+  private conversationPath(conversationId: string): string {
+    const safe = sanitizeSegment(conversationId, 'conversationId');
+    return join(this.rootDir, '_conversations', `${safe}.json`);
+  }
+
+  /** Read a conversation by its stable id; null when it does not exist yet. */
+  async getConversation(conversationId: string): Promise<AiThread | null> {
+    const path = this.conversationPath(conversationId);
+    try {
+      const raw = await readFile(path, 'utf8');
+      const parsed = JSON.parse(raw) as Partial<AiThread>;
+      return {
+        conversationId,
+        endpoint: (parsed.endpoint ?? 'event-editor') as ApplianceEndpoint,
+        userId: parsed.userId ?? '',
+        messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+        mentions: Array.isArray(parsed.mentions) ? parsed.mentions : [],
+        updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date(0).toISOString(),
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+
   /** Read a thread; return an empty thread when no file exists yet. */
   async getThread(userId: string, endpoint: ApplianceEndpoint): Promise<AiThread> {
     const path = this.threadPath(userId, endpoint);
@@ -81,7 +110,20 @@ export class AiThreadStore {
     endpoint: ApplianceEndpoint,
     input: AppendMessageInput,
   ): Promise<AiThread> {
-    const thread = await this.getThread(userId, endpoint);
+    // Stable-conversation addressing: when a conversationId is supplied, the
+    // append lands on THAT conversation regardless of the current endpoint
+    // surface, so a permanent chat survives route/tab changes under one id.
+    const conversationId = input.conversationId;
+    const thread = conversationId
+      ? (await this.getConversation(conversationId)) ?? {
+          conversationId,
+          endpoint,
+          userId,
+          messages: [],
+          mentions: [],
+          updatedAt: new Date(0).toISOString(),
+        }
+      : await this.getThread(userId, endpoint);
     const message: ThreadMessage = {
       ...input.message,
       createdAt: input.message.createdAt ?? new Date().toISOString(),
@@ -97,7 +139,11 @@ export class AiThreadStore {
       thread.messages = thread.messages.slice(-this.snapshotKeepTail);
     }
 
-    await this.writeAtomic(userId, endpoint, thread);
+    if (conversationId) {
+      await this.writeConversationAtomic(conversationId, thread);
+    } else {
+      await this.writeAtomic(userId, endpoint, thread);
+    }
     return thread;
   }
 
@@ -124,6 +170,15 @@ export class AiThreadStore {
     thread: AiThread,
   ): Promise<void> {
     const finalPath = this.threadPath(userId, endpoint);
+    await mkdir(dirname(finalPath), { recursive: true });
+    const tmpPath = `${finalPath}.${randomUUID()}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(thread, null, 2), 'utf8');
+    await rename(tmpPath, finalPath);
+  }
+
+  /** tmp-then-rename write for a stable-conversation thread file. */
+  private async writeConversationAtomic(conversationId: string, thread: AiThread): Promise<void> {
+    const finalPath = this.conversationPath(conversationId);
     await mkdir(dirname(finalPath), { recursive: true });
     const tmpPath = `${finalPath}.${randomUUID()}.tmp`;
     await writeFile(tmpPath, JSON.stringify(thread, null, 2), 'utf8');
