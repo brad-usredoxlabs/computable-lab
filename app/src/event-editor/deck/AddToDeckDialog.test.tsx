@@ -169,6 +169,10 @@ describe('AddToDeckDialog', () => {
     const { picked } = openDialog()
     fireEvent.click(screen.getByRole('button', { name: /^Equipment$/i }))
 
+    // No redundant "Generic …" text-rows: the kind chips (with their icons)
+    // are the addable fixtures, not a second section.
+    expect(screen.queryByRole('button', { name: /Generic qPCR machine/i })).toBeNull()
+
     // Click the qPCR chip, name it QS5 → Add must enable immediately.
     screen.getByRole('button', { name: 'qPCR machine' }).click()
     fireEvent.change(screen.getByPlaceholderText(/Name on deck/), { target: { value: 'QS5' } })

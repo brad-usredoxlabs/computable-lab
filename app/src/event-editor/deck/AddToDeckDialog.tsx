@@ -77,18 +77,6 @@ const BADGE: Record<AddDeckSourceItem['source'], string> = {
   ontology: '◇',
 }
 
-/** The equipment tab's catalog "defaults" — one generic instrument per
- *  silhouette kind. The kind chips up top are the clickable affordance for
- *  these; selecting a chip makes that generic the selected row so "Add to
- *  deck" enables immediately (with the optional custom name applied). */
-const GENERIC_INSTRUMENTS: Array<{ kind: InstrumentKind; label: string }> = [
-  { kind: 'qpcr', label: 'Generic qPCR machine' },
-  { kind: 'plate_reader', label: 'Generic plate reader' },
-  { kind: 'heater_shaker', label: 'Generic heater-shaker' },
-  { kind: 'vortex', label: 'Generic vortex' },
-  { kind: 'generic', label: 'Generic instrument' },
-]
-
 export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPick }: AddToDeckDialogProps) {
   const [activeTab, setActiveTabState] = useState<AddDeckTab>('plates')
   const [query, setQuery] = useState('')
@@ -256,16 +244,13 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
         by[key] = { source: 'ontology', key, label: candidate.label, isInstrument: false }
       }
     } else {
-      // Generic instruments are the equipment tab's "defaults" — the kind
-      // chips up top select them. They render as rows only in the blank state
-      // (no query) so a real local/search hit never has to outrank a vague
-      // catch-all; a chip click selects the key directly.
-      for (const g of GENERIC_INSTRUMENTS) {
-        const key = `generic:${g.kind}`
-        if (!trimmed) {
-          catalog.push({ key, source: 'catalog', label: g.label, kind: 'instrument' })
-        }
-        by[key] = { source: 'catalog', key, label: g.label, instrumentKind: g.kind }
+      // Generic instruments are the kind chips up top — clicking one selects
+      // its key directly (see the chip onClick), so "Add to deck" enables
+      // without any online match. They are NOT rendered as redundant rows;
+      // seed only the resolution map so a chip selection builds on submit.
+      for (const kind of INSTRUMENT_KINDS) {
+        const key = `generic:${kind}`
+        by[key] = { source: 'catalog', key, label: INSTRUMENT_KIND_LABELS[kind], instrumentKind: kind }
       }
       for (const hit of vendorExa.exaResults) {
         const key = `exa:${hit.url}`
