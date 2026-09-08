@@ -60,12 +60,33 @@ export interface AssistDraftResult {
   error?: string
 }
 
+export interface PipelineDiagnosticItem {
+  pass_id: string
+  code: string
+  severity: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export interface DraftEventProposal {
+  eventId?: string
+  event_type?: string
+  details?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export type AssistStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; delta: string }
   | { type: 'done'; result?: AssistDraftResult }
   | { type: 'error'; message: string }
   | { type: 'protocol_extracted'; candidate: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
+  // Observability events — the AI's actual tool trail + pipeline diagnostics.
+  // These make the loop legible ("why did a 24-well land for a T25 request")
+  // instead of dropping the model's resolved decisions.
+  | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
+  | { type: 'pipeline_diagnostics'; outcome: string; diagnostics: PipelineDiagnosticItem[] }
+  | { type: 'draft'; events: DraftEventProposal[] }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -183,7 +204,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[] }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -205,6 +226,18 @@ function dispatchFrame(
     case 'error':
       onEvent({ type: 'error', message: parsed.message ?? 'Unknown error' })
       return
+    case 'tool_call':
+      onEvent({ type: 'tool_call', toolName: parsed.toolName ?? 'unknown', args: parsed.args ?? {} })
+      return
+    case 'tool_result':
+      onEvent({ type: 'tool_result', toolName: parsed.toolName ?? 'unknown', success: parsed.success === true, durationMs: parsed.durationMs ?? 0 })
+      return
+    case 'pipeline_diagnostics':
+      onEvent({ type: 'pipeline_diagnostics', outcome: parsed.outcome ?? 'unknown', diagnostics: Array.isArray(parsed.diagnostics) ? parsed.diagnostics : [] })
+      return
+    case 'draft':
+      onEvent({ type: 'draft', events: Array.isArray(parsed.events) ? parsed.events : [] })
+      return
     case 'protocol_extracted':
       if (parsed.candidate) {
         onEvent({
@@ -215,9 +248,8 @@ function dispatchFrame(
       }
       return
     default:
-      // thinking / tool_call / tool_result / draft / pipeline_diagnostics
-      // are valid backend events but not relevant for the workspace chat;
-      // silently ignore.
+      // thinking and genuinely unknown events are still ignored — they carry
+      // no UI value in the chat surface.
       return
   }
 }

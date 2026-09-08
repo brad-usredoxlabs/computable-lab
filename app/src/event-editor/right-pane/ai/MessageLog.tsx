@@ -115,6 +115,34 @@ export function MessageLog({ state }: MessageLogProps) {
           </p>
         </article>
       ) : null}
+      {(state.trace ?? []).length > 0 ? (
+        <div className="message-log__trace" data-testid="message-log-trace">
+          {(state.trace ?? []).map((t) => (
+            <div key={`trace-${t.seq}`} className="message-log__trace-entry" data-testid={`trace-${t.kind}`} role="status">
+              {t.kind === 'tool_call' ? (
+                <span className="message-log__trace-icon">⚙</span>
+              ) : t.kind === 'tool_result' ? (
+                <span className={t.success === false ? 'message-log__trace-icon message-log__trace-icon--error' : 'message-log__trace-icon'}>✓</span>
+              ) : t.kind === 'draft' ? (
+                <span className="message-log__trace-icon message-log__trace-icon--draft">◈</span>
+              ) : (
+                <span className={`message-log__trace-icon message-log__trace-icon--${t.severity ?? 'info'}`}>◆</span>
+              )}
+              <span className="message-log__trace-text">
+                {t.kind === 'tool_call' ? (
+                  <>Tool: {t.toolName}</>
+                ) : t.kind === 'tool_result' ? (
+                  <>{t.toolName} {t.success === false ? 'failed' : 'ok'}{t.durationMs ? ` · ${t.durationMs}ms` : ''}</>
+                ) : t.kind === 'draft' ? (
+                  <>{t.evidence ?? 'draft'}</>
+                ) : (
+                  <>{t.message ?? t.code ?? (t.severity ?? 'info')}</>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {state.status ? (
         <div className="message-log__status" data-testid="message-log-status">
           {state.status}

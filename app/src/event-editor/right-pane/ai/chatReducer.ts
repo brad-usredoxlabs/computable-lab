@@ -24,6 +24,29 @@ export interface ChatMessage {
   clarificationRequests?: AiClarificationRequest[]
 }
 
+/**
+ * One entry in the AI's observable tool trail / decision trail during a turn.
+ * Rendered under the assistant turn so the scientist can see WHY the model
+ * acted (which records it actually looked up, whether a forced-draft tool
+ * mutated, what the compiler warned about) instead of a black box.
+ */
+export interface TraceEntry {
+  /** t=N ordinal within the turn — stable key for rendering. */
+  seq: number
+  kind: 'tool_call' | 'tool_result' | 'diagnostic' | 'draft'
+  toolName?: string
+  args?: Record<string, unknown>
+  success?: boolean
+  durationMs?: number
+  outcome?: string
+  /** pipeline diagnostic details (pass, code, severity, message). */
+  passId?: string
+  code?: string
+  severity?: 'info' | 'warning' | 'error'
+  message?: string
+  evidence?: string
+}
+
 export interface ChatState {
   messages: ChatMessage[]
   /** When non-null, the assistant turn is in flight. Held outside `messages`
@@ -35,6 +58,10 @@ export interface ChatState {
   protocolCandidate?: AiProtocolCandidateSummary
   /** Source PDF metadata for the extracted candidate. */
   sourcePdf?: AiSourcePdfSummary
+  /** The observable tool/decision trail of the CURRENT (in-flight) assistant
+   *  turn — tool calls, their results, pipeline diagnostics, and draft events.
+   *  Cleared on a new send so each turn shows its own trail. */
+  trace: TraceEntry[]
 }
 
 export type ChatAction =
@@ -47,12 +74,17 @@ export type ChatAction =
   | { type: 'reset' }
   | { type: 'stream-protocol-extracted'; candidate: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
   | { type: 'clear-protocol-candidate' }
+  /** Append an observability trace entry (tool call/result, diagnostic, draft). */
+  | { type: 'stream-trace'; entry: TraceEntry }
+  /** Reset the current turn's trace (a new send begins its own trail). */
+  | { type: 'clear-trace' }
 
 export const initialChatState: ChatState = {
   messages: [],
   pending: null,
   status: null,
   error: null,
+  trace: [],
 }
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -60,14 +92,27 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'send': {
       // The user's message is committed immediately; an empty pending
       // assistant message is started so the UI can render the spinner /
-      // streaming text in-place rather than appending a new bubble.
+      // streaming text in-place rather than appending a new bubble. A new
+      // turn starts a fresh observability trail.
       return {
         ...state,
         messages: [...state.messages, action.userMessage],
         pending: { id: action.pendingAssistantId, text: '' },
         status: null,
         error: null,
+        trace: [],
       }
+    }
+
+    case 'stream-trace': {
+      return {
+        ...state,
+        trace: [...state.trace, action.entry],
+      }
+    }
+
+    case 'clear-trace': {
+      return { ...state, trace: [] }
     }
 
     case 'stream-status': {

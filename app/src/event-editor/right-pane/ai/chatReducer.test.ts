@@ -136,4 +136,34 @@ describe('chatReducer', () => {
     const reset = chatReducer(state, { type: 'reset' })
     expect(reset).toEqual(initialChatState)
   })
+
+  it('a new send clears the previous turn trace; stream-trace appends', () => {
+    let state = chatReducer(initialChatState, {
+      type: 'send',
+      userMessage: userMessage('hi'),
+      pendingAssistantId: 'a-1',
+    })
+    state = chatReducer(state, { type: 'stream-trace', entry: { seq: 0, kind: 'tool_call', toolName: 'search_records', args: { query: 'T25' } } })
+    state = chatReducer(state, { type: 'stream-trace', entry: { seq: 1, kind: 'tool_result', toolName: 'search_records', success: true, durationMs: 5 } })
+    expect(state.trace).toHaveLength(2)
+    expect(state.trace[0]?.toolName).toBe('search_records')
+
+    // A fresh send resets the trail for the next turn.
+    state = chatReducer(state, {
+      type: 'send',
+      userMessage: userMessage('next'),
+      pendingAssistantId: 'a-2',
+    })
+    expect(state.trace).toEqual([])
+  })
+
+  it('stream-trace records pipeline diagnostics', () => {
+    let state = chatReducer(initialChatState, {
+      type: 'send',
+      userMessage: userMessage('hi'),
+      pendingAssistantId: 'a-1',
+    })
+    state = chatReducer(state, { type: 'stream-trace', entry: { seq: 0, kind: 'diagnostic', passId: 'validate', code: 'V1', severity: 'warning', message: 'labware resolved' } })
+    expect(state.trace[0]).toMatchObject({ kind: 'diagnostic', severity: 'warning', code: 'V1' })
+  })
 })

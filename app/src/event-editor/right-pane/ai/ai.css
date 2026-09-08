@@ -364,6 +364,46 @@
   font-style: italic;
 }
 
+.message-log__trace {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+.message-log__trace-entry {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  font-family: ui-monospace, monospace;
+}
+.message-log__trace-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-accent);
+}
+.message-log__trace-icon--error {
+  background: color-mix(in srgb, var(--cl-danger) 30%, transparent);
+  color: var(--cl-danger);
+}
+.message-log__trace-icon--draft {
+  background: color-mix(in srgb, var(--cl-accent) 20%, transparent);
+  color: var(--cl-accent);
+}
+.message-log__trace-icon--warning {
+  background: color-mix(in srgb, var(--cl-warn) 30%, transparent);
+  color: var(--cl-warn);
+}
+
 .message-log__error {
   align-self: stretch;
   color: var(--cl-danger);

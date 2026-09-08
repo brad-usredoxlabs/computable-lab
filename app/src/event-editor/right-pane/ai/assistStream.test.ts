@@ -107,11 +107,11 @@ describe('runAssistStream', () => {
     expect(events).toEqual([{ type: 'error', message: 'agent crashed' }])
   })
 
-  it('ignores unknown event types (thinking, tool_call, draft, etc.)', async () => {
+  it('ignores genuinely unknown event types', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       makeStreamResponse([
         frame({ type: 'thinking', content: 'hidden' }),
-        frame({ type: 'tool_call', toolName: 'foo', args: {} }),
+        frame({ type: 'some_future_event', n: 1 }),
         frame({ type: 'text_delta', delta: 'visible' }),
         frame({ type: 'done' }),
       ]),
@@ -123,6 +123,32 @@ describe('runAssistStream', () => {
     )
     expect(events).toEqual([
       { type: 'text_delta', delta: 'visible' },
+      { type: 'done' },
+    ])
+  })
+
+  it('forwards observability events (tool_call, tool_result, pipeline_diagnostics, draft)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      makeStreamResponse([
+        frame({ type: 'tool_call', toolName: 'search_records', args: { query: 'T25' } }),
+        frame({ type: 'tool_result', toolName: 'search_records', success: true, durationMs: 12 }),
+        frame({ type: 'pipeline_diagnostics', outcome: 'complete', diagnostics: [{ pass_id: 'validate', code: 'V1', severity: 'warning', message: 'labware resolved' }] }),
+        frame({ type: 'draft', events: [{ eventId: 'N1', event_type: 'add_material' }] }),
+        frame({ type: 'text_delta', delta: 'ok' }),
+        frame({ type: 'done' }),
+      ]),
+    )
+    const events: AssistStreamEvent[] = []
+    await runAssistStream(
+      { prompt: 'hi', surface: 'workspace.deck', context: {} },
+      { onEvent: (e) => events.push(e) },
+    )
+    expect(events).toEqual([
+      { type: 'tool_call', toolName: 'search_records', args: { query: 'T25' } },
+      { type: 'tool_result', toolName: 'search_records', success: true, durationMs: 12 },
+      { type: 'pipeline_diagnostics', outcome: 'complete', diagnostics: [{ pass_id: 'validate', code: 'V1', severity: 'warning', message: 'labware resolved' }] },
+      { type: 'draft', events: [{ eventId: 'N1', event_type: 'add_material' }] },
+      { type: 'text_delta', delta: 'ok' },
       { type: 'done' },
     ])
   })

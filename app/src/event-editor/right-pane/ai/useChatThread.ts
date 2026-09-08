@@ -100,6 +100,7 @@ export function useChatThread({
         // Defensive: another send is in flight; don't overlap streams.
         abortRef.current.abort()
       }
+      let traceSeq = 0
       const userMessage: ChatMessage = {
         id: makeMessageId('user'),
         role: 'user',
@@ -173,6 +174,22 @@ export function useChatThread({
                   candidate: event.candidate,
                   ...(event.sourcePdf ? { sourcePdf: event.sourcePdf } : {}),
                 })
+                return
+              // Observability: forward the model's tool trail + pipeline
+              // diagnostics into the chat as a per-turn trace (plan §5.3).
+              case 'tool_call':
+                dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'tool_call', toolName: event.toolName, args: event.args } })
+                return
+              case 'tool_result':
+                dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'tool_result', toolName: event.toolName, success: event.success, durationMs: event.durationMs } })
+                return
+              case 'pipeline_diagnostics':
+                for (const d of event.diagnostics.slice(0, 12)) {
+                  dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'diagnostic', passId: d.pass_id, code: d.code, severity: d.severity, message: d.message } })
+                }
+                return
+              case 'draft':
+                dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'draft', evidence: `${event.events.length} event(s) drafted` } })
                 return
               default: {
                 const _exhaustive: never = event
