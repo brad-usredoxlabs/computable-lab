@@ -34,12 +34,19 @@ export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddE
   const [query, setQuery] = useState('')
   const [customName, setCustomName] = useState('')
   const [selectedKind, setSelectedKind] = useState<InstrumentKind>('generic')
+  // The Exa hit the user has selected but not yet added to the bench.
+  const [selectedHit, setSelectedHit] = useState<VendorExaHit | null>(null)
   const [mintingUrl, setMintingUrl] = useState<string | null>(null)
 
-  // Reset the type pick each time the dialog reopens so a prior instrument's
-  // tag doesn't leak onto the next one.
+  // Reset draft state each time the dialog reopens so a prior instrument's
+  // selection/name/type don't leak onto the next one.
   useEffect(() => {
-    if (!open) setSelectedKind('generic')
+    if (!open) {
+      setSelectedKind('generic')
+      setSelectedHit(null)
+      setCustomName('')
+      setQuery('')
+    }
   }, [open])
 
   // Exa web vendor-product search for equipment. Declared ABOVE the early
@@ -60,20 +67,20 @@ export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddE
 
   if (!open) return null
 
-  async function handlePickVendorExa(hit: VendorExaHit) {
-    if (mintingUrl) return
-    setMintingUrl(hit.url)
+  async function handleSubmit() {
+    if (!selectedHit || mintingUrl) return
+    setMintingUrl(selectedHit.url)
     try {
-      const created = await apiClient.createFromVendorExa(hit)
+      const created = await apiClient.createFromVendorExa(selectedHit)
       // Build a lawn-only `instrument` labware tile pointing at the minted
       // EQP- record. The name is what the biologist sees on the bench.
       const instrument = createLabware('instrument', customName.trim() || created.label)
       instrument.sourceRecordId = created.recordId
-      instrument.notes = `Imported from Exa equipment search: ${hit.url}`
+      instrument.notes = `Imported from Exa equipment search: ${selectedHit.url}`
       // Tag the instrument kind for the silhouette: an explicit pick wins;
       // otherwise best-effort classify the vendor title.
       instrument.instrumentKind =
-        selectedKind !== 'generic' ? selectedKind : inferInstrumentKind(hit.title)
+        selectedKind !== 'generic' ? selectedKind : inferInstrumentKind(selectedHit.title)
       onPick(instrument)
       onClose()
     } catch (error) {
@@ -136,27 +143,47 @@ export function AddEquipmentDialog({ open, contextLabel, onClose, onPick }: AddE
               ) : hits.length === 0 && query.trim() ? (
                 <div className="ee-dialog__empty">No instrument matches "{query.trim()}".</div>
               ) : null}
-              {hits.map((hit) => (
-                <button
-                  key={hit.url}
-                  type="button"
-                  className="ee-dialog__vendor-row"
-                  disabled={mintingUrl !== null}
-                  onClick={() => void handlePickVendorExa(hit)}
-                >
-                  <span className="ee-dialog__vendor-label">
-                    {hit.title}
-                    <span className="ee-dialog__vendor-badge">WEB</span>
-                  </span>
-                  <span className="ee-dialog__vendor-sub">
-                    {mintingUrl === hit.url ? 'Creating instrument record…' : `Exa · ${baseUrlOf(hit.url)}`}
-                    {hit.snippet ? ` · ${hit.snippet}` : ''}
-                  </span>
-                </button>
-              ))}
+              {hits.map((hit) => {
+                const isSelected = selectedHit?.url === hit.url
+                return (
+                  <button
+                    key={hit.url}
+                    type="button"
+                    className={`ee-dialog__vendor-row${isSelected ? ' ee-dialog__vendor-row--selected' : ''}`}
+                    aria-pressed={isSelected}
+                    disabled={mintingUrl !== null}
+                    onClick={() => setSelectedHit(hit)}
+                  >
+                    <span className="ee-dialog__vendor-label">
+                      {hit.title}
+                      <span className="ee-dialog__vendor-badge">WEB</span>
+                    </span>
+                    <span className="ee-dialog__vendor-sub">
+                      {isSelected ? 'Selected — press "Add to bench" below' : `Exa · ${baseUrlOf(hit.url)}`}
+                      {hit.snippet ? ` · ${hit.snippet}` : ''}
+                    </span>
+                  </button>
+                )
+              })}
             </section>
           ) : null}
         </div>
+        <footer className="ee-dialog__footer">
+          <button
+            type="button"
+            className="ee-dialog__btn"
+            onClick={onClose}
+          >Close</button>
+          <button
+            type="button"
+            className="ee-dialog__btn ee-dialog__btn--primary"
+            disabled={!selectedHit || mintingUrl !== null}
+            onClick={() => void handleSubmit()}
+            title="Mint the selected instrument and place it on the bench"
+          >
+            {mintingUrl ? 'Adding…' : 'Add to bench'}
+          </button>
+        </footer>
       </div>
     </div>
   )

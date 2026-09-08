@@ -2690,6 +2690,47 @@
   border-color: var(--cl-accent);
 }
 
+.event-editor .ee-dialog__vendor-row--selected {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft, var(--cl-bg-elev-2));
+  color: var(--cl-on-accent);
+}
+
+.event-editor .ee-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.event-editor .ee-dialog__btn {
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.event-editor .ee-dialog__btn:hover {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .ee-dialog__btn--primary {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border-color: var(--cl-accent);
+  font-weight: 600;
+}
+
+.event-editor .ee-dialog__btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .event-editor .ee-dialog__vendor-label {
   display: flex;
   align-items: center;

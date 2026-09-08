@@ -66,7 +66,14 @@ describe('AddEquipmentDialog', () => {
     })
     const row = await screen.findByRole('button', { name: /Eppendorf ThermoMixer/i })
     expect(row.textContent).toContain('WEB')
+    // Selecting a hit highlights it but does NOT add yet.
     fireEvent.click(row)
+    expect(row.getAttribute('aria-pressed')).toBe('true')
+
+    // "Add to bench" submits: it is disabled until a hit is selected.
+    const addBtn = screen.getByRole('button', { name: /^add to bench$/i })
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(addBtn)
 
     await waitFor(() => {
       expect(createFromVendorExa).toHaveBeenCalled()
@@ -117,6 +124,7 @@ describe('AddEquipmentDialog', () => {
     fireEvent.change(screen.getByPlaceholderText(/Search instruments/), { target: { value: 'vortex mixer' } })
     const row = await screen.findByRole('button', { name: /Benchmark Scientific Vortex/i })
     fireEvent.click(row)
+    fireEvent.click(screen.getByRole('button', { name: /^add to bench$/i }))
 
     await waitFor(() => expect(picked).not.toBeNull())
     expect(picked!.instrumentKind).toBe('qpcr')
