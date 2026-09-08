@@ -2696,6 +2696,29 @@
   color: var(--cl-on-accent);
 }
 
+.event-editor .ee-dialog__tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.event-editor .ee-dialog__tab {
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.event-editor .ee-dialog__tab--active {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border-color: var(--cl-accent);
+  font-weight: 600;
+}
+
 .event-editor .ee-dialog__footer {
   display: flex;
   justify-content: flex-end;
