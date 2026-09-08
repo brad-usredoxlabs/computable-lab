@@ -175,7 +175,7 @@ describe('ProtocolSelector', () => {
     expect(screen.queryByText('Draft candidate')).toBeNull()
   })
 
-  it('shows only protocols whose steps are localized (bare approved concepts are hidden)', async () => {
+  it('shows approved universal protocols even before their steps are localized (localization happens in the editor)', async () => {
     const base = context()
     const bare = {
       recordId: 'PRT-BARE',
@@ -192,7 +192,9 @@ describe('ProtocolSelector', () => {
       <ProtocolSelector runId="RUN-1" studyId="STU-1" context={ctx} onAttached={() => {}} />,
     )
 
+    // Both are approved → both attach (localization is not a gate; the editor
+    // is where the universal's steps get localized).
     await screen.findByText('Approved localized')
-    expect(screen.queryByText('Bare concept')).toBeNull()
+    expect(screen.queryByText('Bare concept')).not.toBeNull()
   })
 })

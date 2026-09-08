@@ -94,9 +94,19 @@ center, not new columns. Never add a left sidebar or third pane.
     during work, it is expected to use Exa search rather than relying on
     memory or guessing.
 
-12. **UI changes get full browser review.** Whenever work touches the UI, the
-    agent must use Playwright to check its work in the running app. Every UI
-    change receives a full browser review before it is considered done.
+12. **UI work is NOT done until Playwright runs.** A job is never done if it
+    touches the UI and Playwright hasn't been run (browser_exec / curl / unit
+    tests / typecheck are NOT sufficient). Every UI change must be verified in
+    the running app via a Playwright e2e spec — a committed, repeatable test
+    that drives the actual interface (open the surface, perform the action,
+    assert the result). Not browser_exec, not a manual pass. If no spec covers
+    the surface you touched, WRITE ONE. If Playwright can't run (browser
+    install/binary down), say so explicitly and treat the work as BLOCKED, not
+    done. The phrase "I verified it in the browser" means a Playwright spec
+    ran and passed — nothing else. Concretely: for each UI change, (a) write or
+    update the relevant `app/e2e/*.spec.ts`, (b) run `cd app && npx playwright test` (or the file),
+    (c) report the pass. Regressions caught only after the fact (e.g. "the
+    protocol tab reverted to Open links") are the cost of skipping this gate.
 
 ## Build & Development Commands
 
