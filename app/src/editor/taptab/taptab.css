@@ -1319,12 +1319,16 @@
   width: 100%;
 }
 .setup-search-combobox input,
-.step-chip-prompt input {
+.step-chip-prompt input,
+.taptab-setup-add__role,
+.taptab-setup-add__desc {
   color-scheme: light;
   color: #111827;
 }
 .setup-search-combobox input::placeholder,
-.step-chip-prompt input::placeholder {
+.step-chip-prompt input::placeholder,
+.taptab-setup-add__role::placeholder,
+.taptab-setup-add__desc::placeholder {
   color: #6b7280;
 }
 .setup-search-combobox input {
