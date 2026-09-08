@@ -1318,6 +1318,15 @@
   gap: 0.25rem;
   width: 100%;
 }
+.setup-search-combobox input,
+.step-chip-prompt input {
+  color-scheme: light;
+  color: #111827;
+}
+.setup-search-combobox input::placeholder,
+.step-chip-prompt input::placeholder {
+  color: #6b7280;
+}
 .setup-search-combobox input {
   width: 100%;
   padding: 0.375rem 0.5rem;
