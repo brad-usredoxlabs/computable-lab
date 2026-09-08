@@ -22,9 +22,12 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function openDialog(props: Partial<{ surfaceKind: 'slot' | 'lawn' }> = {}): { picked: () => Labware | null } {
+function openDialog(props: Partial<{ surfaceKind: 'slot' | 'lawn' }> = {}): {
+  picked: () => Labware | null
+  container: HTMLElement
+} {
   const holder = { labware: null as Labware | null }
-  render(
+  const view = render(
     <AddToDeckDialog
       open
       contextLabel="Bench 1"
@@ -33,7 +36,7 @@ function openDialog(props: Partial<{ surfaceKind: 'slot' | 'lawn' }> = {}): { pi
       onPick={(labware) => { holder.labware = labware }}
     />,
   )
-  return { picked: () => holder.labware }
+  return { picked: () => holder.labware, container: view.container }
 }
 
 describe('AddToDeckDialog', () => {
@@ -115,5 +118,46 @@ describe('AddToDeckDialog', () => {
     await waitFor(() => expect(picked()).not.toBeNull())
     expect(picked()!.labwareType).toBe('plate_96')
     expect(picked()!.name).toBe('My plate')
+  })
+
+  it('switching to the Equipment tab searches Exa with the equipment category and scopes results', async () => {
+    searchVendorExa.mockResolvedValue({ configured: true, query: '', items: [] })
+    openDialog()
+    fireEvent.click(screen.getByRole('button', { name: /^Equipment$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search equipment/), { target: { value: 'incubator' } })
+
+    await waitFor(() => {
+      expect(searchVendorExa).toHaveBeenCalledWith({ q: 'incubator', category: 'equipment', limit: 8 })
+    })
+  })
+
+  it('renders catalog + lab-db hits above Exa hits in DOM order', async () => {
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [{ recordId: 'LBW-CORNING-96', label: 'Corning 96 Well Plate', kind: 'labware-definition' }],
+      total: 1,
+    })
+    searchVendorExa.mockResolvedValue({
+      configured: true,
+      query: 'plate',
+      items: [
+        { id: 'exa-1', title: 'Corning Costar 96 Well Plate (WEB)', url: 'https://corning.com/96', category: 'labware', source: 'exa' },
+      ],
+    })
+
+    const { container } = openDialog()
+    // Query matches a catalog plate ('96-Well Plate'), the lab-db hit, and the exa hit.
+    fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'plate' } })
+
+    await screen.findByRole('button', { name: /Corning Costar 96 Well Plate \(WEB\)/i })
+
+    const labels = [...container.querySelectorAll('.ee-dialog__vendor-row')].map((el) => el.textContent ?? '')
+    const catalogIdx = labels.findIndex((t) => t.includes('96-Well Plate'))
+    const labDbIdx = labels.findIndex((t) => t.includes('Corning 96 Well Plate'))
+    const exaIdx = labels.findIndex((t) => t.includes('Corning Costar'))
+    expect(catalogIdx).toBeGreaterThanOrEqual(0)
+    expect(labDbIdx).toBeGreaterThan(catalogIdx)
+    expect(exaIdx).toBeGreaterThan(labDbIdx)
+    // Sources are badged so the biologist can tell them apart.
+    expect(container.querySelectorAll('.ee-dialog__vendor-badge').length).toBeGreaterThanOrEqual(2)
   })
 })

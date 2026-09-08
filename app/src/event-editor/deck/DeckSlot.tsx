@@ -3,7 +3,7 @@ import { getDeckSlotLockedOrientation, getPlatformManifest, getVariantManifest }
 import type { PlatformSlotManifest } from '../../types/platformRegistry'
 import { useEventEditor } from '../EventEditorContext'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
-import { AddLabwareDialog } from './AddLabwareDialog'
+import { AddToDeckDialog } from './AddToDeckDialog'
 import { LabwareTile } from './LabwareTile'
 import {
   buildPreviewWellIndex,
@@ -202,7 +202,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
           {dropError}
         </div>
       ) : null}
-      <AddLabwareDialog
+      <AddToDeckDialog
         open={dialogOpen}
         contextLabel={`Slot ${slot.id}`}
         surfaceKind="slot"

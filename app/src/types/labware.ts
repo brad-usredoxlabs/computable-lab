@@ -63,7 +63,7 @@ export const INSTRUMENT_KIND_LABELS: Record<InstrumentKind, string> = {
 
 /**
  * Best-effort classify an instrument label into a drawing kind. The user can
- * still pick explicitly in AddEquipmentDialog; this just pre-selects a sensible
+ * still pick explicitly in AddToDeckDialog (equipment tab); this just pre-selects a sensible
  * default from the vendor name so the tile looks right even before they edit.
  */
 export function inferInstrumentKind(label: string): InstrumentKind {

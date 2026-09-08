@@ -2,8 +2,7 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type MouseEvent
 import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
-import { AddLabwareDialog } from './AddLabwareDialog'
-import { AddEquipmentDialog } from './AddEquipmentDialog'
+import { AddToDeckDialog } from './AddToDeckDialog'
 import { LabwareTile } from './LabwareTile'
 import {
   buildPreviewWellIndex,
@@ -51,7 +50,6 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
     xMm: 0,
     yMm: 0,
   })
-  const [equipmentOpen, setEquipmentOpen] = useState(false)
   const [isDragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -143,32 +141,6 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
   }
 
   /** Place a minted instrument at a staggered top-left bench spot (no click needed). */
-  function handleEquipmentPick(picked: Labware) {
-    if (!platform || !variant) return
-    const index = lawnPlacements.filter((p) => state.labwares[p.labwareId]?.labwareType === 'instrument').length
-    const spot = clampToLawn(
-      TILE_MM_WIDTH / 2,
-      TILE_MM_HEIGHT / 2 + index * (TILE_MM_HEIGHT + 8),
-      TILE_MM_WIDTH,
-      TILE_MM_HEIGHT,
-    )
-    const validation = validatePlacement({
-      platform,
-      variant,
-      location: lawnLoc(spot.xMm, spot.yMm),
-      labware: picked,
-    })
-    if (!validation.ok) {
-      setError(validation.errors.join(' '))
-      return
-    }
-    actions.placeNewLabware(
-      picked,
-      lawnLoc(spot.xMm, spot.yMm),
-      resolveOrientation(validation, undefined, picked),
-    )
-    setError(null)
-  }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     if (!event.dataTransfer.types.includes('application/x-event-editor-placement')) return
@@ -223,14 +195,6 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
     <section className={`lawn${primary ? ' lawn--primary' : ''}`} aria-label={title}>
       <div className="lawn__title">
         <span>{title}</span>
-        <button
-          type="button"
-          className="lawn__equipment-btn"
-          onClick={() => setEquipmentOpen(true)}
-          title="Search Exa for a bench instrument (shaker, incubator, plate reader, …) and add it to the bench"
-        >
-          ⚙️ + Add equipment (Exa)
-        </button>
       </div>
       <div
         ref={surfaceRef}
@@ -339,18 +303,12 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
           </div>
         ) : null}
       </div>
-      <AddLabwareDialog
+      <AddToDeckDialog
         open={dialogState.open}
         contextLabel={`${title} (${dialogState.xMm}, ${dialogState.yMm} mm)`}
         surfaceKind="lawn"
         onClose={() => setDialogState((s) => ({ ...s, open: false }))}
         onPick={handlePick}
-      />
-      <AddEquipmentDialog
-        open={equipmentOpen}
-        contextLabel={title}
-        onClose={() => setEquipmentOpen(false)}
-        onPick={handleEquipmentPick}
       />
     </section>
   )
