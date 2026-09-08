@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-FLOW-CYTOMETER
+name: Flow Cytometer
+status: active
+keywords:
+  - flow cytometer
+  - cytometer
+  - cell analyzer
+notes: declared by vendor protocols (CellROX flow cytometry assay)

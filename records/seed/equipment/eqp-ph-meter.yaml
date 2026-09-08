@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-PH-METER
+name: pH Meter
+status: active
+keywords:
+  - pH meter
+  - pH probe
+  - pH electrode
+notes: common lab equipment starter set

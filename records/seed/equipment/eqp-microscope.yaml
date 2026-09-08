@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-MICROSCOPE
+name: Microscope
+status: active
+keywords:
+  - microscope
+  - inverted microscope
+  - bright field
+notes: common lab equipment starter set

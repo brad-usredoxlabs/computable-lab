@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-FRIDGE
+name: Refrigerator (4 °C)
+status: active
+keywords:
+  - fridge
+  - refrigerator
+  - 4C fridge
+notes: common lab equipment starter set

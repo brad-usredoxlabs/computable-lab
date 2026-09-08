@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-PLATE-READER
+name: Plate Reader
+status: active
+keywords:
+  - plate reader
+  - spectrophotometer
+  - absorbance reader
+  - fluorescence reader
+  - multi-mode reader
+notes: common lab equipment starter set

@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-QPCR
+name: Real-Time qPCR Instrument
+status: active
+keywords:
+  - qPCR
+  - real-time pcr
+  - quantitative pcr machine
+notes: common lab equipment starter set

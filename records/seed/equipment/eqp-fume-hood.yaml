@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-FUME-HOOD
+name: Fume Hood
+status: active
+keywords:
+  - fume hood
+  - chemical fume hood
+  - exhaust hood
+notes: common lab equipment starter set

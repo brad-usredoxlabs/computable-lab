@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-AUTOCLAVE
+name: Autoclave
+status: active
+keywords:
+  - autoclave
+  - sterilizer
+  - steam sterilizer
+notes: common lab equipment starter set

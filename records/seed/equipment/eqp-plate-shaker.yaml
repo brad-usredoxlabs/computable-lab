@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-PLATE-SHAKER
+name: Plate Shaker
+status: active
+keywords:
+  - plate shaker
+  - shaker
+  - orbital shaker
+notes: declared by vendor protocols (shaker)

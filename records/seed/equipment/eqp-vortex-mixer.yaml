@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-VORTEX-MIXER
+name: Vortex Mixer
+status: active
+keywords:
+  - vortex
+  - vortex mixer
+  - vortexer
+notes: declared by vendor protocols (vortex)

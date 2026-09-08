@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-PIPETTE
+name: Pipette
+status: active
+keywords:
+  - pipette
+  - manual pipette
+  - micropipette
+  - P1000
+  - P200
+notes: declared by vendor protocols (pipette)

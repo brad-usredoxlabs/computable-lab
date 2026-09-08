@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-INCUBATOR
+name: Incubator
+status: active
+keywords:
+  - incubator
+  - CO2 incubator
+  - cell culture incubator
+  - 37C incubator
+notes: declared by vendor protocols (incubator)

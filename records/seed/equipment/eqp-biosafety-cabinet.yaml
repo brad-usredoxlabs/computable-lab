@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-BIOSAFETY-CABINET
+name: Biosafety Cabinet
+status: active
+keywords:
+  - biosafety cabinet
+  - BSC
+  - vertical laminar flow hood
+  - cell culture hood
+notes: common lab equipment starter set

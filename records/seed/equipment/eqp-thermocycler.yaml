@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-THERMOCYCLER
+name: Thermal Cycler
+status: active
+keywords:
+  - thermal cycler
+  - PCR machine
+  - thermocycler
+  - PCR cycler
+notes: common lab equipment starter set

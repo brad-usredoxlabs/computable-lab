@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-WATER-BATH
+name: Water Bath
+status: active
+keywords:
+  - water bath
+  - heated water bath
+notes: common lab equipment starter set

@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-NANODROP
+name: Microvolume Spectrophotometer
+status: active
+keywords:
+  - nanodrop
+  - microvolume spectrophotometer
+  - spectrophotometer microvolume
+notes: common lab equipment starter set

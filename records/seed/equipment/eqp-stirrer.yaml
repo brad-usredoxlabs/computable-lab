@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-STIRRER
+name: Magnetic Stirrer
+status: active
+keywords:
+  - stirrer
+  - magnetic stir plate
+  - stir plate
+notes: common lab equipment starter set

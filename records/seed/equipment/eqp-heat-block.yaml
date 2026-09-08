@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-HEAT-BLOCK
+name: Heat Block
+status: active
+keywords:
+  - heat block
+  - heating block
+  - dry block warmer
+  - heater
+notes: declared by vendor protocols (heating block)

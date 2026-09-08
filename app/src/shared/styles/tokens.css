@@ -69,6 +69,21 @@
   --cl-focus-size: 720px;
   --cl-fixit-width: 420px;
   --cl-dock-height: 240px;
+
+  /* The TipTap/setup widgets (taptab.css) default to a light shell palette
+     (:root --shell-* = black text, white paper). When those widgets render
+     inside the dark app, remap their --shell-* tokens to the app's dark tokens
+     so section headers, rows and text have contrast instead of black-on-black.
+     The light-shell standalone document-shell (outside .cl-app) keeps its own
+     :root values. */
+  --shell-text-primary: var(--cl-text);
+  --shell-text-secondary: var(--cl-text-dim);
+  --shell-text-muted: var(--cl-text-faint);
+  --shell-border: var(--cl-border);
+  --shell-accent: var(--cl-accent);
+  --shell-accent-hover: #79c0ff;
+  --shell-danger: var(--cl-danger);
+  --shell-warning: var(--cl-warn);
 }
 
 .cl-app[data-theme='light'] {

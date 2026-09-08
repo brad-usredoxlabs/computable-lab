@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-CENTRIFUGE
+name: Centrifuge
+status: active
+keywords:
+  - centrifuge
+  - spin
+  - centrifugation
+notes: declared by vendor protocols (centrifugation)

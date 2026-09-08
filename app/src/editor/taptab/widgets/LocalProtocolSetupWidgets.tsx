@@ -16,7 +16,7 @@ import { ProtocolMentionEditor, removeSlashMenuRoots } from './ProtocolAuthoring
 import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
 import { API_BASE } from '../../../shared/api/base'
 import { useMaterialSearch } from '../../../event-editor/material/useMaterialSearch'
-import type { MaterialSearchItem } from '../../../shared/api/client'
+import { apiClient, type MaterialSearchItem } from '../../../shared/api/client'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
 // This widget renders the setup rows AND the ProtocolMentionEditor slash-combobox
 // inside them. Its styles live in taptab.css. Import that stylesheet HERE so the
@@ -297,6 +297,49 @@ export function SetupSearchCombobox({
   const s = useMaterialSearch()
   const copy = KIND_COPY[kind]
 
+  // Kind-aware LOCAL search over the seeded/bundled records. useMaterialSearch's
+  // searchMaterials only covers material records — labware (96-well plate,
+  // deepwell) and equipment (flow cytometer, incubator, heater-shaker) live as
+  // their own record kinds, so query them via /ai/search-records so the bundled
+  // defaults show up FIRST (local-first). Materials keep the material picker's
+  // local results; ontology + vendor tiers still come from useMaterialSearch.
+  const RECORD_KINDS: Record<Exclude<SetupKind, 'material'>, string[]> = {
+    labware: ['labware', 'labware-definition'],
+    equipment: ['equipment'],
+  }
+  const wantsRecordSearch = kind !== 'material'
+  const [recordLocal, setRecordLocal] = useState<Array<{ recordId: string; title: string; kind: string }>>([])
+  const [loadingRecords, setLoadingRecords] = useState(false)
+  useEffect(() => {
+    if (!wantsRecordSearch) return
+    const trimmed = s.query.trim()
+    if (trimmed.length < 2) {
+      setRecordLocal([])
+      setLoadingRecords(false)
+      return
+    }
+    setLoadingRecords(true)
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await apiClient.searchRecords(trimmed, RECORD_KINDS[kind])
+        // Keep only LOCAL hits so bundled/saved records lead; web hits are
+        // already surfaced in the Vendor tier below.
+        setRecordLocal((res.results ?? []).filter((r) => r.origin === 'local' && r.recordId).map((r) => ({
+          recordId: r.recordId as string,
+          title: r.title,
+          kind: r.kind ?? kind,
+        })))
+      } catch {
+        setRecordLocal([])
+      } finally {
+        setLoadingRecords(false)
+      }
+    }, 200)
+    return () => window.clearTimeout(handle)
+  }, [s.query, kind, wantsRecordSearch])
+
+  const localHits = wantsRecordSearch ? recordLocal : (s.localResults as MaterialSearchItem[])
+
   // Synthesize a SlashMention-shaped object and route it through the same
   // mapper the slash-combobox uses, so record/ontology/equipment/labware refs
   // are shaped identically regardless of which picker produced the hit.
@@ -304,6 +347,12 @@ export function SetupSearchCombobox({
     const ref = mentionToSetupRef(mention, kind)
     if (ref) onPick(ref)
   }
+  const pickRecord = (recordId: string, label: string) => pick({
+    type: kind === 'labware' ? 'labware' : kind === 'equipment' ? 'equipment' : 'material',
+    entityKind: kind,
+    id: recordId,
+    label,
+  } as SlashMention)
 
   return (
     <div className="setup-search-combobox" data-testid="setup-search-combobox">
@@ -314,19 +363,19 @@ export function SetupSearchCombobox({
         placeholder={placeholder ?? `Search ${copy.noun} — local, then ontology & vendor`}
       />
 
-      {s.loadingLocal || s.loadingOntology || s.loadingExa ? (
+      {loadingRecords || s.loadingLocal || s.loadingOntology || s.loadingExa ? (
         <span className="setup-search-tier__label" data-testid="setup-search-loading">searching…</span>
       ) : null}
 
-      {(s.localResults.length > 0 || s.exaResults.length > 0 || s.ontologyResults.length > 0) ? (
+      {(localHits.length > 0 || s.exaResults.length > 0 || s.ontologyResults.length > 0) ? (
         <div className="setup-search-combobox__results">
-          {s.localResults.length > 0 && (
+          {localHits.length > 0 && (
             <div className="setup-search-tier" data-testid="setup-search-local">
               <span className="setup-search-tier__label">Local</span>
-              <ul>{s.localResults.map((r: MaterialSearchItem) => (
-                <li key={r.recordId}>
+              <ul>{localHits.map((r) => (
+                <li key={`${r.recordId}-${r.title}`}>
                   <button type="button" className="setup-search-tier__item" onClick={() =>
-                    pick({ type: kind === 'labware' ? 'labware' : kind === 'equipment' ? 'equipment' : 'material', entityKind: r.kind, id: r.recordId, label: r.title } as SlashMention)
+                    pickRecord(r.recordId, r.title)
                   }>
                     {r.title}
                   </button>

@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-FREEZER-80
+name: -80 °C Freezer
+status: active
+keywords:
+  - -80 freezer
+  - minus 80
+  - ultra low freezer
+  - ULF
+notes: common lab equipment starter set

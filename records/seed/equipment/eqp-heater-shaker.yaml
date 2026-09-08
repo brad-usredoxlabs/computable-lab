@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-HEATER-SHAKER
+name: Heater-Shaker
+status: active
+keywords:
+  - heater shaker
+  - heater
+  - hot plate shaker
+  - thermomixer
+  - thermal mixer
+notes: common lab equipment starter set

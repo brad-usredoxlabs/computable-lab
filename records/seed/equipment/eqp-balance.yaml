@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-BALANCE
+name: Analytical Balance
+status: active
+keywords:
+  - balance
+  - scale
+  - analytical scale
+  - weighing scale
+notes: common lab equipment starter set

@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-FREEZER-20
+name: -20 °C Freezer
+status: active
+keywords:
+  - -20 freezer
+  - minus 20
+  - freezer -20
+notes: common lab equipment starter set
