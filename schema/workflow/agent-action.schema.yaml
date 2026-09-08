@@ -1,0 +1,52 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/agent-action.schema.yaml"
+title: "Agent Action"
+description: >
+  A declarative action an agent (tool or stream event) can emit to drive the
+  workspace harness: focus the investigation on a target or open a registered
+  surface. Actions are STRUCTURED OUTPUT validated by Ajv — never prose-parsed
+  from assistant text. This is a transport value (not a stored record kind),
+  so it reuses the shared Ref datatype rather than introducing record schemas.
+
+type: object
+additionalProperties: false
+required:
+- action
+
+properties:
+  action:
+    type: string
+    enum:
+    - focus          # retarget the current investigation to `target`
+    - open-surface   # open a registered surface, optionally scoped to `target`
+    description: "The declared verb. Unknown verbs are rejected."
+
+  target:
+    description: "What the action is scoped to. Discriminated union."
+    oneOf:
+    # A protocol step concept (concept → realization focus)
+    - type: object
+      required: [ kind, protocolId, stepId ]
+      properties:
+        kind: { const: protocol-step }
+        protocolId: { type: string }
+        stepId: { type: string }
+        label: { type: string }
+      additionalProperties: false
+    # Any record or ontology ref (run, analysis-run, material, well, ...)
+    - $ref: "../datatypes/ref.schema.yaml"
+
+  surface:
+    type: string
+    description: "Registered surface id (e.g. analysis, run-design, results) for open-surface actions."
+
+  contextNote:
+    type: string
+    description: >
+      An AI-authored, human-readable EXPLANATION of the focus. It NEVER overrides
+      the authoritative resolved label; it may only annotate it.
+
+  supportedBy:
+    type: array
+    items: { $ref: "../datatypes/ref.schema.yaml" }
+    description: "Read-only references consulted to understand/answer (supporting context), never edit targets."
