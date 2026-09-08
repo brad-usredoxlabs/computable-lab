@@ -6,6 +6,7 @@ import type { Labware } from '../../types/labware'
 const searchVendorExa = vi.hoisted(() => vi.fn())
 const createFromVendorExa = vi.hoisted(() => vi.fn())
 const searchLabwareDefinitions = vi.hoisted(() => vi.fn())
+const searchRecords = vi.hoisted(() => vi.fn())
 const resolve = vi.hoisted(() => vi.fn())
 
 vi.mock('../../shared/api/client', () => ({
@@ -13,6 +14,7 @@ vi.mock('../../shared/api/client', () => ({
     searchVendorExa,
     createFromVendorExa,
     searchLabwareDefinitions,
+    searchRecords,
     resolve,
   },
 }))
@@ -44,8 +46,10 @@ describe('AddToDeckDialog', () => {
     searchVendorExa.mockReset()
     createFromVendorExa.mockReset()
     searchLabwareDefinitions.mockReset()
+    searchRecords.mockReset()
     resolve.mockReset()
     searchLabwareDefinitions.mockResolvedValue({ hits: [], total: 0 })
+    searchRecords.mockResolvedValue({ results: [], sources: ['local'] })
     resolve.mockResolvedValue({ candidates: [] })
   })
 
@@ -159,5 +163,64 @@ describe('AddToDeckDialog', () => {
     expect(exaIdx).toBeGreaterThan(labDbIdx)
     // Sources are badged so the biologist can tell them apart.
     expect(container.querySelectorAll('.ee-dialog__vendor-badge').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('lets a generic instrument chip be added directly (no online match needed)', async () => {
+    const { picked } = openDialog()
+    fireEvent.click(screen.getByRole('button', { name: /^Equipment$/i }))
+
+    // Click the qPCR chip, name it QS5 → Add must enable immediately.
+    screen.getByRole('button', { name: 'qPCR machine' }).click()
+    fireEvent.change(screen.getByPlaceholderText(/Name on deck/), { target: { value: 'QS5' } })
+    const addBtn = screen.getByRole('button', { name: /^Add to deck$/i })
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.click(addBtn)
+    await waitFor(() => expect(picked()).not.toBeNull())
+    expect(picked()!.labwareType).toBe('instrument')
+    expect(picked()!.instrumentKind).toBe('qpcr')
+    expect(picked()!.name).toBe('QS5')
+  })
+
+  it('surfaces previously-minted / seeded local equipment first, before online hits', async () => {
+    // Local tier: a just-minted EQP record + a seeded heater-shaker.
+    searchRecords.mockResolvedValue({
+      results: [
+        { origin: 'local', recordId: 'EQP-KUHNER-LS-Z-BENCHTOP-SHA-3776', title: 'Kuhner – LS-Z benchtop shaker', kind: 'equipment' },
+        { origin: 'local', recordId: 'EQP-HEATER-SHAKER', title: 'Heater-Shaker', kind: 'equipment' },
+      ],
+      sources: ['local'],
+    })
+    // Web (Exa) tier: some online shaker.
+    searchVendorExa.mockResolvedValue({
+      configured: true,
+      query: 'shaker',
+      items: [
+        { id: 'exa-1', title: 'Ohaus Endeavor Shaker (WEB)', url: 'https://ohaus.com/shaker', category: 'equipment', source: 'exa' },
+      ],
+    })
+
+    const { picked, container } = openDialog()
+    fireEvent.click(screen.getByRole('button', { name: /^Equipment$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search equipment/), { target: { value: 'shaker' } })
+
+    // The local Kuhner record leads the results, before any online hit.
+    await screen.findByRole('button', { name: /Kuhner – LS-Z benchtop shaker/i })
+    await screen.findByRole('button', { name: /Ohaus Endeavor Shaker \(WEB\)/i })
+
+    const labels = [...container.querySelectorAll('.ee-dialog__vendor-row')].map((el) => el.textContent ?? '')
+    const kuhnerIdx = labels.findIndex((t) => t.includes('Kuhner'))
+    const localHeatIdx = labels.findIndex((t) => t.includes('Heater-Shaker'))
+    const webIdx = labels.findIndex((t) => t.includes('Ohaus Endeavor'))
+    expect(kuhnerIdx).toBeGreaterThanOrEqual(0)
+    expect(localHeatIdx).toBeGreaterThan(kuhnerIdx)
+    expect(webIdx).toBeGreaterThan(localHeatIdx)
+
+    // Selecting the local record and adding reuses its canonical EQP id.
+    fireEvent.click(screen.getByRole('button', { name: /Kuhner – LS-Z benchtop shaker/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Add to deck$/i }))
+    await waitFor(() => expect(picked()).not.toBeNull())
+    expect(picked()!.labwareType).toBe('instrument')
+    expect(picked()!.sourceRecordId).toBe('EQP-KUHNER-LS-Z-BENCHTOP-SHA-3776')
   })
 })

@@ -54,17 +54,19 @@ interface AddToDeckDialogProps {
   onPick: (labware: Labware) => void
 }
 
-/** A lab-definition search hit, as returned by `searchLabwareDefinitions`. */
-interface LabDefinitionHit {
+/** A lab-definition or local-equipment search hit, normalized across sources. */
+interface LabDbHit {
   recordId: string
   label: string
-  kind: 'labware-definition'
+  /** True when this is an equipment record (minted EQP-… or seeded) rather
+   *  than a labware definition. */
+  isInstrument: boolean
 }
 
 /** One rendered, selectable row, carrying the payload needed to build on submit. */
 type DeckRow =
-  | { source: 'catalog'; key: string; label: string; labwareType: LabwareType }
-  | { source: 'lab-db'; key: string; label: string; record: LabwareRecordPayload }
+  | { source: 'catalog'; key: string; label: string; labwareType?: LabwareType; instrumentKind?: InstrumentKind }
+  | { source: 'lab-db'; key: string; label: string; record: LabwareRecordPayload; isInstrument: boolean }
   | { source: 'exa'; key: string; label: string; hit: VendorExaHit; isInstrument: boolean }
   | { source: 'ontology'; key: string; label: string; isInstrument: boolean }
 
@@ -75,6 +77,18 @@ const BADGE: Record<AddDeckSourceItem['source'], string> = {
   ontology: '◇',
 }
 
+/** The equipment tab's catalog "defaults" — one generic instrument per
+ *  silhouette kind. The kind chips up top are the clickable affordance for
+ *  these; selecting a chip makes that generic the selected row so "Add to
+ *  deck" enables immediately (with the optional custom name applied). */
+const GENERIC_INSTRUMENTS: Array<{ kind: InstrumentKind; label: string }> = [
+  { kind: 'qpcr', label: 'Generic qPCR machine' },
+  { kind: 'plate_reader', label: 'Generic plate reader' },
+  { kind: 'heater_shaker', label: 'Generic heater-shaker' },
+  { kind: 'vortex', label: 'Generic vortex' },
+  { kind: 'generic', label: 'Generic instrument' },
+]
+
 export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPick }: AddToDeckDialogProps) {
   const [activeTab, setActiveTabState] = useState<AddDeckTab>('plates')
   const [query, setQuery] = useState('')
@@ -82,7 +96,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [selectedKind, setSelectedKind] = useState<InstrumentKind>('generic')
   const [mintingKey, setMintingKey] = useState<string | null>(null)
-  const [labDbHits, setLabDbHits] = useState<LabDefinitionHit[]>([])
+  const [labDbHits, setLabDbHits] = useState<LabDbHit[]>([])
   const [loadingLabDb, setLoadingLabDb] = useState(false)
   const [ontologyCandidates, setOntologyCandidates] = useState<ResolveCandidate[]>([])
   const [loadingOntology, setLoadingOntology] = useState(false)
@@ -128,25 +142,34 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   // shows at rest; never on the equipment tab.
   useEffect(() => {
     const trimmed = query.trim()
+    if (activeTab === 'equipment' && trimmed.length < 2) {
+      setLabDbHits([])
+      setLoadingLabDb(false)
+      return
+    }
     setLoadingLabDb(true)
     const handle = window.setTimeout(async () => {
       try {
         if (activeTab === 'equipment') {
-          setLabDbHits([])
-          return
+          // Local-equipment tier: seeded + previously-minted equipment records
+          // (e.g. EQP-…) via the kind-aware /ai/search-records, kept LOCAL-only
+          // so the just-added instrument leads the results. Web (Exa) hits that
+          // /ai/search-records also returns are surfaced by the exa tier below.
+          const res = await apiClient.searchRecords(trimmed, ['equipment'])
+          setLabDbHits((res.results ?? [])
+            .filter((r) => r.origin === 'local' && r.recordId)
+            .map((r) => ({ recordId: r.recordId as string, label: r.title, isInstrument: true })))
+        } else {
+          const res = await apiClient.searchLabwareDefinitions({ q: trimmed, limit: 12 })
+          setLabDbHits(res.hits.map((h) => ({ recordId: h.recordId, label: h.label, isInstrument: false })))
         }
-        const res = await apiClient.searchLabwareDefinitions({ q: trimmed, limit: 12 })
-        setLabDbHits(res.hits)
       } catch {
         setLabDbHits([])
       } finally {
         setLoadingLabDb(false)
       }
     }, 200)
-    return () => {
-      window.clearTimeout(handle)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }
+    return () => window.clearTimeout(handle)
   }, [query, activeTab])
 
   // Ontology / resolve tier — only meaningful with a non-empty query, and only
@@ -185,6 +208,28 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
     const ontology: AddDeckSourceItem[] = []
     const trimmed = query.trim().toLowerCase()
 
+    // Local labware definitions (plates/labware) AND local equipment records
+    // (seeded + previously-minted EQP-…) share the same ranked "lab-db"
+    // bucket, so local-first holds regardless of tab. Insulate each from the
+    // catalog key-space (LabwareType names) by prefixing with `lab-db:`.
+    for (const hit of labDbHits) {
+      if (trimmed && !hit.label.toLowerCase().includes(trimmed)) continue
+      const key = `lab-db:${hit.recordId}`
+      labDb.push({ key, source: 'lab-db', label: hit.label, kind: hit.isInstrument ? 'instrument' : 'labware' })
+      by[key] = {
+        source: 'lab-db',
+        key,
+        label: hit.label,
+        isInstrument: hit.isInstrument,
+        record: {
+          kind: 'labware',
+          recordId: hit.recordId,
+          name: customName.trim() || hit.label,
+          labwareType: 'other',
+        },
+      }
+    }
+
     if (activeTab !== 'equipment') {
       for (const [type, label] of Object.entries(LABWARE_TYPE_LABELS) as Array<[LabwareType, string]>) {
         if (type === 'instrument') continue
@@ -197,25 +242,6 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
         by[type] = { source: 'catalog', key: type, label, labwareType: type }
       }
 
-      for (const hit of labDbHits) {
-        if (trimmed && !hit.label.toLowerCase().includes(trimmed)) continue
-        const key = `lab-db:${hit.recordId}`
-        labDb.push({ key, source: 'lab-db', label: hit.label, kind: 'labware' })
-        by[key] = {
-          source: 'lab-db',
-          key,
-          label: hit.label,
-          record: {
-            kind: 'labware',
-            recordId: hit.recordId,
-            name: customName.trim() || hit.label,
-            labwareType: 'other',
-          },
-        }
-      }
-
-      // Insulate catalog vs lab-db default rows from being the same key-space;
-      // catalog keys are LabwareType names, lab-db keys are recordIds.
       for (const hit of vendorExa.exaResults) {
         const key = `exa:${hit.url}`
         if (trimmed && !hit.title.toLowerCase().includes(trimmed)) continue
@@ -230,6 +256,17 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
         by[key] = { source: 'ontology', key, label: candidate.label, isInstrument: false }
       }
     } else {
+      // Generic instruments are the equipment tab's "defaults" — the kind
+      // chips up top select them. They render as rows only in the blank state
+      // (no query) so a real local/search hit never has to outrank a vague
+      // catch-all; a chip click selects the key directly.
+      for (const g of GENERIC_INSTRUMENTS) {
+        const key = `generic:${g.kind}`
+        if (!trimmed) {
+          catalog.push({ key, source: 'catalog', label: g.label, kind: 'instrument' })
+        }
+        by[key] = { source: 'catalog', key, label: g.label, instrumentKind: g.kind }
+      }
       for (const hit of vendorExa.exaResults) {
         const key = `exa:${hit.url}`
         if (trimmed && !hit.title.toLowerCase().includes(trimmed)) continue
@@ -268,8 +305,24 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
     const name = customName.trim()
     switch (row.source) {
       case 'catalog':
-        return createLabware(row.labwareType, name || undefined)
+        if (row.instrumentKind) {
+          // A generic instrument chosen via the kind chips — pet the
+          // silhouette onto an `instrument` labware and apply the custom name.
+          const lab = createLabware('instrument', name || row.label)
+          lab.instrumentKind = row.instrumentKind
+          return lab
+        }
+        return createLabware(row.labwareType!, name || undefined)
       case 'lab-db':
+        if (row.isInstrument) {
+          // An existing (seeded or previously-minted) equipment record. Reuse
+          // the record's canonical id and best-effort classify its silhouette
+          // from the label; the custom name wins if given.
+          const lab = createLabware('instrument', name || row.label)
+          lab.sourceRecordId = row.record.recordId
+          lab.instrumentKind = inferInstrumentKind(row.label)
+          return lab
+        }
         return labwareRecordToEditorLabware({
           kind: 'labware',
           recordId: row.record.recordId,
@@ -369,7 +422,15 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
                 key={kind}
                 type="button"
                 className={`ee-dialog__kind${selectedKind === kind ? ' ee-dialog__kind--active' : ''}`}
-                onClick={() => setSelectedKind(kind)}
+                onClick={() => {
+                setSelectedKind(kind)
+                // Clicking a kind chip = add a generic instrument of that type:
+                // make it the selected row so "Add to deck" enables immediately
+                // (optional name applies). Clear any active query so a real /
+                // search hit doesn't shadow the generic row.
+                setQuery('')
+                setSelectedKey(`generic:${kind}`)
+              }}
                 title={INSTRUMENT_KIND_LABELS[kind]}
                 aria-pressed={selectedKind === kind}
               >
