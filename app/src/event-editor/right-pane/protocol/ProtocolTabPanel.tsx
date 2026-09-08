@@ -1904,9 +1904,12 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                     onFocusStep={(fstep) => setFocusedStep(fstep)}
                     onSaveRealization={(events, labwares) => {
                       // Commit the focused step's realization (concept → event-graph).
+                      // Returns the promise so the panel only flips to "accepted" on
+                      // durable success; on a 422 gate failure the ApiError propagates
+                      // and the draft is kept (plan §6).
                       if (!stepsProtocolId || !step.stepId) return
                       const labwareList = Object.values(labwares) as Record<string, unknown>[]
-                      void apiClient
+                      return apiClient
                         .patchStepSubgraph({ protocolId: stepsProtocolId, stepId: step.stepId, events, labwares: labwareList })
                         .then((r) => {
                           // Reflect the committed realization: refresh this step's graph.
@@ -1914,7 +1917,6 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                           window.dispatchEvent(new CustomEvent('cl:records-changed'))
                           void r
                         })
-                        .catch((err) => console.error('Failed to commit step realization:', err))
                     }}
                   />
                 </div>

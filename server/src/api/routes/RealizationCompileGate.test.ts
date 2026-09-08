@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkRealizationProposal } from './RealizationCompileGate.js'
+import { checkRealizationProposal, type ValidateFn, type LintFn } from './RealizationCompileGate.js'
 
 describe('checkRealizationProposal', () => {
   const okValidate: ValidateFn = async () => ({ valid: true, errors: [] })
@@ -54,5 +54,34 @@ describe('checkRealizationProposal', () => {
     const before = JSON.stringify({ events, labwares })
     const r = await checkRealizationProposal(events, labwares, { validate: okValidate })
     expect(JSON.stringify({ events: r.events, labwares: r.labwares })).toBe(before)
+  })
+
+  it('validates the FULL to-be-persisted payload, not just the bare proposal (id/recordId present)', async () => {
+    // Regression: the event-graph schema requires top-level `id`. If the gate
+    // validated only {kind, events, labwares} it would REJECT every real commit
+    // (the server mints id/recordId/name inside the route). Supply a payload that
+    // carries those fields and capture what the schema authority received.
+    let validatedPayload: unknown
+    const captureValidate: ValidateFn = async (payload) => {
+      validatedPayload = payload
+      return { valid: true, errors: [] }
+    }
+    const events = [{ eventId: 'E1', event_type: 'wash', details: { target_labwareId: 'a', wells: ['A1'] } }]
+    const labwares = [{ labwareId: 'a', labwareType: 'plate_96' }]
+    const fullPayload = {
+      kind: 'event-graph',
+      recordId: 'EVG-STEP-s1-abc',
+      id: 'EVG-STEP-s1-abc',
+      name: 'Wash the cells realization',
+      events,
+      labwares,
+      status: 'filed',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    const r = await checkRealizationProposal(events, labwares, { validate: captureValidate }, fullPayload)
+    expect(r.valid).toBe(true)
+    expect((validatedPayload as Record<string, unknown>).id).toBe('EVG-STEP-s1-abc')
+    expect((validatedPayload as Record<string, unknown>).events).toBe(events)
   })
 })

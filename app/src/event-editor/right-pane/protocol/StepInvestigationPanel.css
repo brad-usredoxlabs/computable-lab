@@ -115,3 +115,13 @@
   display: flex;
   gap: 6px;
 }
+.step-investigation-panel__accept-error {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-danger);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-danger);
+  font-size: 11px;
+  line-height: 1.4;
+}

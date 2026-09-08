@@ -12,7 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { defaultWorkspaceState } from '../../workspace/types'
 import { StepInvestigationPanel } from './StepInvestigationPanel'
 
@@ -164,12 +164,33 @@ describe('StepInvestigationPanel revise (feedback loop)', () => {
     expect(revised).toContain('deepwell')
   })
 
-  it('Accept commits the preview; Discard clears it', () => {
-    renderPanel()
+  it('Accept commits the preview only after durable save success; Discard clears it', async () => {
+    let resolveSave: (() => void) | undefined
+    const save = vi.fn(() => new Promise<void>((resolve) => {
+      resolveSave = resolve
+    }))
+    renderPanel({ onSaveRealization: save })
     fireEvent.click(screen.getByTestId('step-investigate-accept'))
-    expect(mocks.commitPreview).toHaveBeenCalled()
+    // Durable accept: the preview is NOT flipped until the save resolves.
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    expect(mocks.commitPreview).not.toHaveBeenCalled()
+    resolveSave?.()
+    await waitFor(() => expect(mocks.commitPreview).toHaveBeenCalledTimes(1))
+
     fireEvent.click(screen.getByTestId('step-investigate-discard'))
     expect(mocks.clearPreview).toHaveBeenCalled()
+  })
+
+  it('keeps the draft and surfaces the gate error when the save is rejected (422)', async () => {
+    renderPanel({
+      onSaveRealization: vi.fn(() => Promise.reject(new Error('REALIZATION_NOT_ACCEPTED: schema failure; the draft is preserved.'))),
+    })
+    fireEvent.click(screen.getByTestId('step-investigate-accept'))
+    // The preview was NOT committed (draft preserved), and the finding is surfaced.
+    const errEl = await screen.findByTestId('step-investigate-accept-error')
+    expect(mocks.commitPreview).not.toHaveBeenCalled()
+    expect(errEl.textContent).toContain('Not accepted')
+    expect(errEl.textContent).toContain('schema failure')
   })
 })
 

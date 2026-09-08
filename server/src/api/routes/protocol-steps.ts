@@ -707,10 +707,27 @@ export function registerProtocolStepsRoutes(
             return { valid: r.valid, errors: (r.violations ?? []).map((v) => ({ path: v.path ?? '/', message: v.message })) };
           },
         };
+        // The exact event-graph payload this commit WILL persist. The gate
+        // validates THIS shape (schema + lint), so "accepted" means the persisted
+        // record is valid — not just the bare proposal.
+        const realizationId = `EVG-STEP-${stepId}-${Date.now().toString(36)}`;
+        const now = new Date().toISOString();
+        const eventGraphPayload = {
+          kind: 'event-graph',
+          recordId: realizationId,
+          id: realizationId,
+          name: `${result.step.label ?? 'Step'} realization`,
+          events: evento.events,
+          labwares: evento.labwares,
+          status: 'filed',
+          createdAt: now,
+          updatedAt: now,
+        };
         const gate = await checkRealizationProposal(
           evento.events as { eventId: string; details?: Record<string, unknown> }[],
           evento.labwares as { labwareId: string }[],
           gateDeps,
+          eventGraphPayload,
         );
         if (!gate.valid) {
           reply.status(422);
@@ -720,21 +737,9 @@ export function registerProtocolStepsRoutes(
             findings: gate.findings,
           };
         }
-
-        // Mint an event-graph realization record (the concrete event series).
-        const realizationId = `EVG-STEP-${stepId}-${Date.now().toString(36)}`;
-        const now = new Date().toISOString();
-        const eventGraphPayload = {
-          kind: 'event-graph',
-          recordId: realizationId,
-          id: realizationId,
-          name: `${result.step.label ?? 'Step'} realization`,
-          events: gate.events,
-          labwares: gate.labwares,
-          status: 'filed',
-          createdAt: now,
-          updatedAt: now,
-        };
+        // Commit the REVIEWED realization (the gate does not mutate the proposal).
+        eventGraphPayload.events = gate.events;
+        eventGraphPayload.labwares = gate.labwares;
         const eventGraphEnvelope = {
           recordId: realizationId,
           schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',

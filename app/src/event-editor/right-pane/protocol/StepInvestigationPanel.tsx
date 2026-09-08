@@ -64,8 +64,11 @@ export interface StepInvestigationPanelProps {
   availableProtocolRefs?: Array<{ id: string; title: string; type?: 'protocol' | 'local-protocol' }>
   /** Commit the step's realization as a reference to an existing protocol. */
   onCommitStepRef?: (ref: { kind: 'record'; type: 'protocol' | 'local-protocol'; id: string }) => void
-  /** Commit the focused step's realization (events + labware map). Caller persists. */
-  onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => void
+  /** Commit the focused step's realization (events + labware map). Caller persists
+   *  and returns the durable result: resolves ONLY on durable success so the panel
+   *  flips to "accepted" only after the server committed the realization. Rejects
+   *  (ApiError with findings) on a deterministic-gate failure, keeping the draft. */
+  onSaveRealization?: (events: Record<string, unknown>[], labwares: Record<string, unknown>) => Promise<void> | void
   /** When the caller supplies an instruction, auto-send it once (prompt + stepText
    *  to the AI) and reveal the inline AI — used by the per-step StepChip prompt
    *  box Localize action. Cleared after sending so it doesn't re-fire on re-render. */
@@ -93,6 +96,8 @@ export function StepInvestigationPanel({
   const [lastInstruction, setLastInstruction] = useState<string | null>(null)
   const [whatToDoDifferently, setWhatToDoDifferently] = useState('')
   const [revisionCount, setRevisionCount] = useState(0)
+  // Deterministic-gate failure surfaced from a rejected save (draft preserved).
+  const [acceptError, setAcceptError] = useState<string | null>(null)
 
   // Minimal deck scope for placement validation (mirror AiTabPanel).
   const activeDeckScope = useMemo(() => {
@@ -262,26 +267,40 @@ export function StepInvestigationPanel({
     setRevisionCount((n) => n + 1)
   }, [chat, step, stepText, lastInstruction, whatToDoDifferently])
 
-  const handleAccept = useCallback(() => {
+  const handleAccept = useCallback(async () => {
     if (!editor) return
     const { state, actions } = editor
     const committedEvents = [...state.events, ...(state.preview?.previewEvents ?? [])] as unknown as Record<string, unknown>[]
     const committedLabwares = { ...state.labwares, ...(state.preview?.previewLabwares ?? {}) } as Record<string, unknown>
-    actions.commitPreview()
-    onSaveRealization?.(committedEvents, committedLabwares)
-    setRevisionCount(0)
+    // Durable accept: persist the realization FIRST. Only on durable server
+    // success do we flip the local preview to "accepted" (commitPreview). On a
+    // deterministic-gate failure (422), the server kept nothing — so we keep the
+    // draft, surface the findings, and let the scientist revise (plan §6).
+    setAcceptError(null)
+    try {
+      await onSaveRealization?.(committedEvents, committedLabwares)
+      actions.commitPreview()
+      setRevisionCount(0)
+    } catch (err) {
+      setAcceptError(
+        err instanceof Error
+          ? `Not accepted — ${err.message}`
+          : 'Not accepted — the realization failed validation; the draft is preserved.',
+      )
+    }
   }, [editor, onSaveRealization])
 
   const handleDiscard = useCallback(() => {
     editor?.actions.clearPreview()
     setRevisionCount(0)
+    setAcceptError(null)
   }, [editor])
 
   const handleManualSave = useCallback(() => {
     if (!editor) return
     const events = [...editor.state.events] as unknown as Record<string, unknown>[]
     const labwares = { ...editor.state.labwares } as Record<string, unknown>
-    onSaveRealization?.(events, labwares)
+    void onSaveRealization?.(events, labwares)
   }, [editor, onSaveRealization])
 
   const conceptTitle = `STEP ${step.ordinal ?? '?'}: ${step.label}`
@@ -438,6 +457,11 @@ export function StepInvestigationPanel({
               Discard
             </button>
           </div>
+          {acceptError ? (
+            <div className="step-investigation-panel__accept-error" data-testid="step-investigate-accept-error" role="alert">
+              {acceptError}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -19,12 +19,12 @@ interface Labware {
   [key: string]: unknown
 }
 
-type ValidateFn = (
+export type ValidateFn = (
   payload: unknown,
   schemaId: string,
 ) => Promise<{ valid: boolean; errors: Array<{ path: string; message: string }> }>
 
-type LintFn = (
+export type LintFn = (
   payload: unknown,
   schemaId: string,
 ) => Promise<{ valid: boolean; errors?: Array<{ path: string; message: string }> }>
@@ -71,11 +71,16 @@ export async function checkRealizationProposal(
   events: PlateEvent[],
   labwares: Labware[],
   deps: RealizationCompileDeps,
+  /** The exact event-graph payload the caller will persist (id/recordId/name/…).
+   *  When supplied, schema+lint run against THIS — the shape that actually gets
+   *  committed — so a proposal is only "valid" if its persistence passes. Tests
+   *  pass undefined and use a permissive validate. */
+  payload?: Record<string, unknown>,
 ): Promise<RealizationGateResult> {
   const findings: RealizationGateResult['findings'] = []
 
-  const payload = { kind: 'event-graph', events, labwares }
-  const v = await deps.validate(payload, EVENT_GRAPH_SCHEMA_ID)
+  const validationPayload = payload ?? { kind: 'event-graph', events, labwares }
+  const v = await deps.validate(validationPayload, EVENT_GRAPH_SCHEMA_ID)
   if (!v.valid) {
     for (const err of v.errors) {
       findings.push({ severity: 'error', code: 'schema', path: err.path, message: err.message })
@@ -83,7 +88,7 @@ export async function checkRealizationProposal(
   }
 
   if (deps.lint) {
-    const l = await deps.lint(payload, EVENT_GRAPH_SCHEMA_ID)
+    const l = await deps.lint(validationPayload, EVENT_GRAPH_SCHEMA_ID)
     if (!l.valid) {
       for (const err of l.errors ?? []) {
         findings.push({ severity: 'error', code: 'lint', path: err.path, message: err.message })
