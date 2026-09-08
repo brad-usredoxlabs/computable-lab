@@ -33,8 +33,10 @@ test.describe('Run Protocol tab search + Ingested PDFs', () => {
     await expect(page.getByTestId('open-pdf-VPDF-651F03789D80')).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('attach-VPDF-651F03789D80')).toHaveCount(0)
 
-    // CellROX-titled promoted protocols appear and ARE attachable.
-    await expect(page.getByTestId('attach-CAN-protocol-1788724639561')).toBeVisible({ timeout: 15000 })
+    // CellROX-titled APPROVED protocols appear and ARE attachable. (Draft
+    // extraction candidates like CAN-protocol-* are hidden — run tab is
+    // approved-only.)
+    await expect(page.getByTestId('attach-PRT-g5zy9e')).toBeVisible({ timeout: 15000 })
   })
 
   test('approved universal protocols are attachable even before their steps are localized', async ({ page }) => {
