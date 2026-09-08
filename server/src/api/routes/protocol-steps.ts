@@ -9,6 +9,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import { StepGraphCompiler } from '../../protocol/StepGraphCompiler.js';
+import { checkRealizationProposal } from './RealizationCompileGate.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -684,6 +685,42 @@ export function registerProtocolStepsRoutes(
           return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
         }
 
+        // ---- Deterministic compile-before-commit gate (Phase 4A) -------------
+        // Run the reviewed proposal through the declarative event-graph schema
+        // (Ajv) + lint + reference-connectivity checks BEFORE marking it
+        // accepted. A failing proposal keeps the draft; it is NOT minted or
+        // committed, so the UI never flips to "accepted" on an invalid graph.
+        const evento = {
+          events: Array.isArray(body.events) ? body.events : ([] as unknown[]),
+          labwares: Array.isArray(body.labwares) ? body.labwares : ([] as unknown[]),
+        };
+        const gateDeps = {
+          // Adapters over the SINGLE validation authority (Ajv) and the
+          // declarative lint engine. No second validator is introduced.
+          // `await` tolerates both the synchronous AjvValidator and async mocks.
+          validate: async (data: unknown, schemaId: string) => {
+            const r = await ctx.validator.validate(data, schemaId);
+            return { valid: r.valid, errors: r.errors ?? [] };
+          },
+          lint: async (data: unknown, schemaId: string) => {
+            const r = await ctx.lintEngine.lint(data, schemaId);
+            return { valid: r.valid, errors: (r.violations ?? []).map((v) => ({ path: v.path ?? '/', message: v.message })) };
+          },
+        };
+        const gate = await checkRealizationProposal(
+          evento.events as { eventId: string; details?: Record<string, unknown> }[],
+          evento.labwares as { labwareId: string }[],
+          gateDeps,
+        );
+        if (!gate.valid) {
+          reply.status(422);
+          return {
+            error: 'REALIZATION_NOT_ACCEPTED',
+            message: 'Step realization failed the deterministic schema/lint/reference gate; the draft is preserved.',
+            findings: gate.findings,
+          };
+        }
+
         // Mint an event-graph realization record (the concrete event series).
         const realizationId = `EVG-STEP-${stepId}-${Date.now().toString(36)}`;
         const now = new Date().toISOString();
@@ -692,8 +729,8 @@ export function registerProtocolStepsRoutes(
           recordId: realizationId,
           id: realizationId,
           name: `${result.step.label ?? 'Step'} realization`,
-          events: Array.isArray(body.events) ? body.events : [],
-          labwares: Array.isArray(body.labwares) ? body.labwares : [],
+          events: gate.events,
+          labwares: gate.labwares,
           status: 'filed',
           createdAt: now,
           updatedAt: now,
