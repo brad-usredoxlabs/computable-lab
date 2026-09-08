@@ -27,15 +27,17 @@ test('searching "shaker" surfaces the locally-saved equipment record first', asy
   const search = page.locator('.ee-dialog__search').first()
   await search.fill('shaker')
 
-  // The minted Kuhner record (origin 'local') must lead the results.
-  await expect(page.locator('.ee-dialog__vendor-row', { hasText: /Kuhner – LS-Z benchtop shaker/ }))
-    .toBeVisible({ timeout: 15_000 })
+  // The minted Kuhner record must appear as a LOCAL hit (LAB / "Your lab"),
+  // and it must be the FIRST result. A web/Exa variant of the same product may
+  // also appear below it — that is expected.
+  const localKuhner = page
+    .locator('.ee-dialog__vendor-row', { hasText: /Kuhner – LS-Z benchtop shaker/ })
+    .filter({ hasText: /Your lab/i })
+  await expect(localKuhner).toBeVisible({ timeout: 15_000 })
 
-  const rows = page.locator('.ee-dialog__vendor-row')
-  const firstRowText = await rows.nth(0).innerText()
-  expect(firstRowText).toContain('Kuhner – LS-Z benchtop shaker')
-  // The likely bug: it must be badged as local (LAB / "Your lab"), not web.
-  expect(firstRowText.toLowerCase()).toContain('lab')
+  const firstRowText = (await page.locator('.ee-dialog__vendor-row').nth(0).innerText()).toLowerCase()
+  expect(firstRowText).toContain('kuhner – ls-z benchtop shaker')
+  expect(firstRowText).toContain('your lab')
 })
 
 test('a generic instrument kind chip is addable directly (no online match)', async ({ page }) => {
