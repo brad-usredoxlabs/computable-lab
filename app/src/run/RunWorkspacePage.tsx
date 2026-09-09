@@ -22,6 +22,7 @@ import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { ProtocolNavPanel } from '../event-editor/right-pane/protocol/ProtocolNavPanel'
+import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -124,6 +125,7 @@ export function RunWorkspacePage() {
 
   return (
     <ProtocolSelectionProvider>
+      <RunProtocolStepsLoader runId={runId} />
       <WorkspaceProvider studyId={resolvedStudyId}>
         <RunPaneMode />
         <EventEditorProvider
