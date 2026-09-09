@@ -1,0 +1,43 @@
+/* Live working-focus header above the AI chat — --cl-* tokens. */
+.chat-context-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  font-size: 12px;
+}
+
+.chat-context-header__label {
+  flex-shrink: 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  color: var(--cl-text-dim);
+  background: var(--cl-bg-elev);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.chat-context-header__value {
+  flex: 1 1 auto;
+  color: var(--cl-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-context-header--active {
+  background: color-mix(in srgb, var(--cl-accent) 10%, var(--cl-bg-elev-2));
+}
+
+.chat-context-header--active .chat-context-header__label {
+  background: color-mix(in srgb, var(--cl-accent) 25%, transparent);
+  color: var(--cl-accent);
+}
+
+.chat-context-header--active .chat-context-header__value {
+  color: var(--cl-text);
+}

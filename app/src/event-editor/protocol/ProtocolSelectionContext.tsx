@@ -24,6 +24,13 @@ export interface ProtocolStepGraph {
   labwares: Array<Record<string, unknown>>
 }
 
+/** Minimal step identity for the left navigation rail (concepts/steps). */
+export interface ProtocolStepSummary {
+  stepId: string
+  label: string
+  ordinal: number
+}
+
 interface ProtocolSelectionState {
   /** The currently selected step (for settings display, etc.). */
   activeStepId: string | null
@@ -52,6 +59,11 @@ interface ProtocolSelectionState {
   focusedStep: { stepId: string; label: string; ordinal?: number } | null
   /** Set the focused step (null to restore flat ghosting). */
   setFocusedStep: (step: { stepId: string; label: string; ordinal?: number } | null) => void
+  /** The protocol's steps as concept summaries — shared source of truth for
+   *  the left navigation rail and any deck consumer that lists them. */
+  steps: ProtocolStepSummary[]
+  /** Set the step concept list (populated when the protocol steps first load). */
+  setSteps: (steps: ProtocolStepSummary[]) => void
   /** Toggle a step's canvas visibility. */
   toggleStepVisibility: (stepId: string) => void
   /** Set whether a step is visible. */
@@ -71,6 +83,7 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   const [focusedStep, setFocusedStepState] = useState<{ stepId: string; label: string; ordinal?: number } | null>(null)
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
+  const [steps, setStepsState] = useState<ProtocolStepSummary[]>([])
 
   const setFocusedStep = useCallback((step: { stepId: string; label: string; ordinal?: number } | null) => {
     setFocusStepIdState(step ? step.stepId : null)
@@ -109,6 +122,10 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
     setVisibleStepsState(new Set(stepIds))
   }, [])
 
+  const setSteps = useCallback((next: ProtocolStepSummary[]) => {
+    setStepsState(next)
+  }, [])
+
   return (
     <ProtocolSelectionContext.Provider
       value={{
@@ -121,6 +138,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         focusedStep,
         setFocusedStep,
         setActiveStepId,
+        steps,
+        setSteps,
         toggleStepVisibility,
         setStepVisibility,
         setStepGraph,

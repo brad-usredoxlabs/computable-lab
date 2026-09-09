@@ -1,0 +1,97 @@
+/* Left navigation rail — three-pane agent harness. Styled with --cl-* tokens
+   so it inherits the dark palette. The pane itself scrolls (AppShell --nav
+   rule); this rail fills it. */
+.protocol-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 8px;
+  color: var(--cl-text);
+}
+
+.protocol-nav__head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-dim);
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.protocol-nav__empty {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+  line-height: 1.4;
+  padding: 0 4px;
+}
+
+.protocol-nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.protocol-nav__item--active .protocol-nav__step {
+  background: color-mix(in srgb, var(--cl-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--cl-accent) 60%, var(--cl-border));
+}
+
+.protocol-nav__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.protocol-nav__step:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.protocol-nav__ordinal {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-accent);
+}
+
+.protocol-nav__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.protocol-nav__realized {
+  flex-shrink: 0;
+  color: var(--cl-type-run, #3fb950);
+  font-size: 12px;
+}
+
+.protocol-nav__hidden {
+  flex-shrink: 0;
+  color: var(--cl-text-faint);
+  font-size: 12px;
+}

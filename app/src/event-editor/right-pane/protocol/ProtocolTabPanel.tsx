@@ -964,6 +964,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const visibleSteps = protocolSelection?.visibleSteps ?? new Set<string>()
   const toggleStepVisibility = protocolSelection?.toggleStepVisibility ?? (() => {})
   const setVisibleSteps = protocolSelection?.setVisibleSteps ?? (() => {})
+  const setContextSteps = protocolSelection?.setSteps ?? (() => {})
   const contextStepGraphs = protocolSelection?.stepGraphs ?? {}
   const setContextStepGraph = protocolSelection?.setStepGraph ?? (() => {})
   // Single-step investigate mode: the focused step's realization is isolated
@@ -1274,12 +1275,19 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   }, [protocolQuery, studyId])
 
   // Initialize visibleSteps when steps are first loaded — all steps
-  // default to visible so their events ghost onto the canvas.
+  // default to visible so their events ghost onto the canvas. Also publish
+  // the step concept list to the shared ProtocolSelectionContext so the left
+  // navigation rail (ProtocolNavPanel) renders the same steps.
   useEffect(() => {
     if (steps.length > 0 && visibleSteps.size === 0) {
       setVisibleSteps(steps.map(s => s.stepId))
     }
-  }, [steps, visibleSteps.size, setVisibleSteps])
+    setContextSteps(steps.map((s, i) => ({
+      stepId: s.stepId,
+      label: s.label ?? s.description ?? `Step ${s.ordinal ?? i + 1}`,
+      ordinal: s.ordinal ?? i + 1,
+    })))
+  }, [steps, visibleSteps.size, setVisibleSteps, setContextSteps])
 
   /**
    * Persist a changed plate-setting section back to the run's local-protocol

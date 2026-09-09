@@ -23,6 +23,7 @@ import { useWorkspace } from '../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../EventEditorContext'
 import type { WorkspaceRightPaneMode } from '../workspace/types'
 import { AiTabPanel } from './ai/AiTabPanel'
+import { ChatContextHeader } from './ai/ChatContextHeader'
 import { SearchTabPanel } from './search/SearchTabPanel'
 import { DetailsTabPanel } from './details/DetailsTabPanel'
 import { ProtocolTabPanel } from './protocol/ProtocolTabPanel'
@@ -83,7 +84,15 @@ export function RightPane() {
         ))}
       </div>
       <div className="right-pane__body">
-        {active === 'ai' ? <AiTabPanel /> : null}
+        {active === 'ai' ? (
+          <>
+            {/* Live working-focus header (three-pane harness, plan §9): "EDITING:
+                Step 3 — <concept>". Derives from the resolved focused step, never
+                an AI-authored note. */}
+            <ChatContextHeader />
+            <AiTabPanel />
+          </>
+        ) : null}
         {active === 'search' ? <SearchTabPanel /> : null}
         {active === 'details' ? <DetailsTabPanel /> : null}
         {active === 'protocol' ? <ProtocolTabPanel runId={runId} studyId={ws.state.studyId} /> : null}

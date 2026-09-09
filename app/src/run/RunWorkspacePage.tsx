@@ -21,6 +21,7 @@ import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
+import { ProtocolNavPanel } from '../event-editor/right-pane/protocol/ProtocolNavPanel'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -132,6 +133,7 @@ export function RunWorkspacePage() {
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
             <RunWorkspaceShell
+              navPane={<ProtocolNavPanel title={title} />}
               rightPane={<RightPane />}
               viewerToolbar={
                 <div className="run-workspace-toolbar">

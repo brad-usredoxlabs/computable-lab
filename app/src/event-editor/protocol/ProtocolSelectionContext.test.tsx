@@ -69,4 +69,18 @@ describe('ProtocolSelectionContext', () => {
     expect(result.current?.focusStepId).toBeNull()
     expect(result.current?.focusedStep).toBeNull()
   })
+
+  it('publishes and reads the step concept list (shared nav source)', () => {
+    const { result } = renderSelection()
+    expect(result.current?.steps).toEqual([])
+    act(() => {
+      result.current?.setSteps([
+        { stepId: 's1', label: 'Wash the cells', ordinal: 1 },
+        { stepId: 's2', label: 'Seed T25s', ordinal: 2 },
+      ])
+    })
+    expect(result.current?.steps).toHaveLength(2)
+    expect(result.current?.steps[0]?.label).toBe('Wash the cells')
+    expect(result.current?.steps[1]?.ordinal).toBe(2)
+  })
 })

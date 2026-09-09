@@ -10,17 +10,19 @@ import './RunWorkspaceShell.css'
 
 export interface RunWorkspaceShellProps {
   children: ReactNode
+  navPane?: ReactNode
   rightPane?: ReactNode
   viewerToolbar?: ReactNode
 }
 
-export function RunWorkspaceShell({ children, rightPane, viewerToolbar }: RunWorkspaceShellProps) {
+export function RunWorkspaceShell({ children, navPane, rightPane, viewerToolbar }: RunWorkspaceShellProps) {
   return (
     <AppShell
       brand="Run Workspace"
       layout="workspace"
       topbarTabs={<WorkspaceTabStrip />}
       leftPane={children}
+      {...(navPane ? { navPane } : {})}
       {...(rightPane ? { rightPane } : {})}
       {...(viewerToolbar ? { viewerToolbar } : {})}
     />
