@@ -10,7 +10,7 @@
  * loader only guarantees the CONCEPT list (stepId/label/ordinal) is present.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { apiClient } from '../shared/api/client'
 import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../event-editor/protocol/ProtocolSelectionContext'
@@ -49,11 +49,8 @@ async function resolveRunProtocolId(runId: string): Promise<string | null> {
 
 export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
   const sel = useProtocolSelection()
-  const loadedRef = useRef(false)
 
   useEffect(() => {
-    if (loadedRef.current) return
-    loadedRef.current = true
     let cancelled = false
     const doLoad = async () => {
       const stepsId = (await resolveRunProtocolId(runId)) ?? runId
@@ -71,6 +68,9 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
             ordinal: (s.ordinal as number) ?? i + 1,
           }))
           .filter((s) => s)
+        // Publish non-empty steps idempotently. We NEVER clear the shared
+        // list here, so a racing ProtocolTabPanel that drops it can't blank
+        // the rail — this loader is the nav's source of truth on load.
         if (steps.length > 0) {
           sel?.setSteps(steps)
           sel?.setVisibleSteps(steps.map((s) => s.stepId))
