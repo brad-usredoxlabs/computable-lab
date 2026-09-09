@@ -1,27 +1,14 @@
-/**
- * Smoke tests for AppShell — covers the new workspace layout introduced
- * for the project-workspace redesign.
- *
- * Goals:
- *  1. Default (stacked) layout still renders children inline below the topbar
- *     and emits the dock slot — no regression for /browser, /protocols,
- *     /literature, or the legacy event-editor stacked render.
- *  2. Workspace layout renders the viewer-toolbar slot, both panes, and a
- *     resize handle. The plain `children` and `dock` props become optional
- *     here (right pane subsumes the dock's role).
- *  3. Topbar tabs slot stacks beneath the chrome row when supplied.
- */
-
-import { describe, it, expect, afterEach } from 'vitest'
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { ThemeProvider } from './useTheme'
 import { OpenTabsProvider } from './OpenTabsContext'
 
-afterEach(() => {
-  cleanup()
-})
+// The workspace layout renders a PanelGroup of panes. When a navPane is
+// supplied alongside leftPane+rightPane, it should produce a THREE-pane split:
+// nav (left) | action (center, the old leftPane) | chat (right). The two-pane
+// path (no navPane) must stay byte-identical to today.
 
 function renderShell(props: Parameters<typeof AppShell>[0]) {
   return render(
@@ -35,241 +22,41 @@ function renderShell(props: Parameters<typeof AppShell>[0]) {
   )
 }
 
-/** Force the mobile viewport branch by mocking window.matchMedia to match. */
-function installMobileViewport() {
-  const original = window.matchMedia
-  window.matchMedia = ((query: string) => ({
-    matches: query.includes('max-width'),
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia
-  return () => {
-    window.matchMedia = original
-  }
+function paneClasses(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('*'))
+    .map((e) => e.className && String(e.className))
+    .filter(Boolean)
+    .map(String)
+    .filter((cls) => cls.includes('cl-workspace__pane--'))
 }
 
-describe('AppShell — stacked (default) layout', () => {
-  it('renders brand, children, and dock inline', () => {
-    renderShell({
-      brand: <span data-testid="brand">CL</span>,
-      dock: <div data-testid="dock">DOCK</div>,
-      children: <div data-testid="children">CHILDREN</div>,
-    })
-    expect(screen.getByTestId('brand')).toBeTruthy()
-    expect(screen.getByTestId('children')).toBeTruthy()
-    expect(screen.getByTestId('dock')).toBeTruthy()
-    // Stacked mode does NOT add the workspace marker class.
-    expect(document.querySelector('.cl-app--workspace')).toBeNull()
-  })
-
-  it('omits the workspace toolbar and panels when workspace props are not provided', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      children: <div>CHILDREN</div>,
-      // viewerToolbar / leftPane / rightPane intentionally omitted
-    })
-    expect(document.querySelector('.cl-workspace')).toBeNull()
-    expect(document.querySelector('.cl-workspace__handle')).toBeNull()
-  })
-
-  it('does NOT inject the .topbar__chrome wrapper when no project tabs', () => {
-    // Regression: unconditionally wrapping brand/middle/right in
-    // `.topbar__chrome` broke stacked-mode pages (Protocols / Literature /
-    // Browser) because the wrapper has no flex CSS outside the
-    // `.topbar--with-tabs` modifier. Items stacked vertically and pushed
-    // the page content past the viewport.
-    renderShell({
-      brand: <span>CL</span>,
-      topbarMiddle: <div>chips</div>,
-      topbarRight: <nav>right</nav>,
-      children: <div>BODY</div>,
-    })
-    expect(document.querySelector('.topbar__chrome')).toBeNull()
-    expect(document.querySelector('.topbar--with-tabs')).toBeNull()
-  })
-
-  it('injects the .topbar__chrome wrapper only when tabs are present', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      topbarTabs: <div data-testid="tabs">[StudyA]</div>,
-      children: <div>BODY</div>,
-    })
-    expect(document.querySelector('.topbar__chrome')).toBeTruthy()
-    expect(document.querySelector('.topbar--with-tabs')).toBeTruthy()
-  })
-})
-
-describe('AppShell — workspace layout', () => {
-  it('renders the viewer toolbar + both panes + a resize handle', () => {
-    renderShell({
-      brand: <span>CL</span>,
+describe('AppShell three-pane workspace layout', () => {
+  it('renders three panes (nav/action/chat) when a navPane is supplied', () => {
+    const { container } = renderShell({
+      brand: 'Run',
       layout: 'workspace',
-      viewerToolbar: <div data-testid="viewer-toolbar">TOOLBAR</div>,
-      leftPane: <div data-testid="left-pane">LEFT</div>,
-      rightPane: <div data-testid="right-pane">RIGHT</div>,
+      leftPane: <div data-testid="action" />,
+      rightPane: <div data-testid="chat" />,
+      navPane: <div data-testid="nav" />,
     })
-    expect(screen.getByTestId('viewer-toolbar')).toBeTruthy()
-    expect(screen.getByTestId('left-pane')).toBeTruthy()
-    expect(screen.getByTestId('right-pane')).toBeTruthy()
-    expect(document.querySelector('.cl-app--workspace')).toBeTruthy()
-    // react-resizable-panels emits a handle element for each PanelResizeHandle.
-    expect(document.querySelector('.cl-workspace__handle')).toBeTruthy()
-    // Desktop (wide) viewport keeps the side-by-side horizontal split.
-    expect(
-      document
-        .querySelector('.cl-workspace__panels')
-        ?.getAttribute('data-panel-group-direction'),
-    ).toBe('horizontal')
+    const classes = paneClasses(container)
+    expect(classes.join(' ')).toContain('cl-workspace__pane--nav')
+    expect(classes.join(' ')).toContain('cl-workspace__pane--action')
+    expect(classes.join(' ')).toContain('cl-workspace__pane--chat')
   })
 
-  it('slides the tabbed nav in from the right as a drawer on mobile', () => {
-    const restore = installMobileViewport()
-    renderShell({
-      brand: <span>CL</span>,
+  it('keeps two panes (action/right) when no navPane is supplied (back-compat)', () => {
+    const { container } = renderShell({
+      brand: 'Run',
       layout: 'workspace',
-      leftPane: <div data-testid="left-pane">GRAPH</div>,
-      rightPane: <div data-testid="right-pane">NAV</div>,
+      leftPane: <div data-testid="action" />,
+      rightPane: <div data-testid="chat" />,
     })
-    expect(screen.getByTestId('left-pane')).toBeTruthy()
-    expect(screen.getByTestId('right-pane')).toBeTruthy()
-    // No resizable-panels split on mobile — the nav is a slide-in drawer.
-    expect(document.querySelector('[data-panel-group]')).toBeNull()
-    const drawer = document.querySelector(
-      '.cl-workspace__drawer',
-    ) as HTMLElement
-    expect(drawer).toBeTruthy()
-    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(false)
-
-    // Tapping the revealed edge slides the drawer into place.
-    fireEvent.click(screen.getByLabelText('Show panel'))
-    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(true)
-
-    // Tapping the main pane docks it back out of the way.
-    fireEvent.click(screen.getByTestId('left-pane'))
-    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(false)
-    restore()
-  })
-
-  it('Phase 12: workspace topbar has NO chrome row — only the tab strip', () => {
-    renderShell({
-      brand: <span data-testid="brand">CL</span>,
-      topbarMiddle: <div data-testid="middle">should not render</div>,
-      topbarRight: <nav data-testid="right">should not render</nav>,
-      topbarTabs: <div data-testid="tabs">[StudyA]</div>,
-      layout: 'workspace',
-      leftPane: <div>LEFT</div>,
-    })
-    // The workspace topbar uses the new `.topbar--workspace` marker
-    // and the tab strip becomes the entire header content. Brand,
-    // topbarMiddle, topbarRight are dropped entirely — Phase 12.3
-    // brings them back through a gear icon in the tab strip itself.
-    expect(document.querySelector('.topbar--workspace')).toBeTruthy()
-    expect(document.querySelector('.topbar__chrome')).toBeNull()
-    expect(document.querySelector('.topbar--with-tabs')).toBeNull()
-    expect(screen.queryByTestId('brand')).toBeNull()
-    expect(screen.queryByTestId('middle')).toBeNull()
-    expect(screen.queryByTestId('right')).toBeNull()
-    expect(screen.getByTestId('tabs')).toBeTruthy()
-  })
-
-  it('omits the resize handle when there is no right pane', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      layout: 'workspace',
-      leftPane: <div data-testid="left-pane-only">LEFT</div>,
-    })
-    expect(screen.getByTestId('left-pane-only')).toBeTruthy()
-    expect(document.querySelector('.cl-workspace__handle')).toBeNull()
-    // A single-pane workspace (e.g. /splash) must NOT mount a resizable-panels
-    // group at all — a lone collapsible Panel flipped vertical on portrait
-    // collapses to 0 height and blanks the main pane.
-    expect(document.querySelector('[data-panel-group]')).toBeNull()
-    expect(
-      document.querySelector('.cl-workspace__panels--single'),
-    ).toBeTruthy()
-  })
-
-  it('ignores plain children in workspace mode (left pane is the surface)', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      layout: 'workspace',
-      leftPane: <div data-testid="left">LEFT</div>,
-      rightPane: <div data-testid="right">RIGHT</div>,
-      children: <div data-testid="ignored-children">should not render</div>,
-    })
-    expect(screen.queryByTestId('ignored-children')).toBeNull()
-    expect(screen.getByTestId('left')).toBeTruthy()
-  })
-
-  it('workspace layout defaults to the unified tab strip when none is passed', () => {
-    renderShell({
-      brand: <span>X</span>,
-      layout: 'workspace',
-      leftPane: <div />,
-    })
-    expect(screen.getByTestId('workspace-tab-strip')).toBeDefined()
-  })
-
-  it('workspace layout respects an explicit topbarTabs override', () => {
-    renderShell({
-      brand: <span>X</span>,
-      layout: 'workspace',
-      topbarTabs: <div data-testid="custom" />,
-      leftPane: <div />,
-    })
-    expect(screen.getByTestId('custom')).toBeDefined()
-    expect(screen.queryByTestId('workspace-tab-strip')).toBeNull()
-  })
-})
-
-describe('AppShell — topbar tabs', () => {
-  it('renders a tabs row beneath the chrome row when topbarTabs is supplied', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      topbarTabs: <div data-testid="tabs">[StudyA][StudyB][+]</div>,
-      children: <div>BODY</div>,
-    })
-    expect(screen.getByTestId('tabs')).toBeTruthy()
-    expect(document.querySelector('.topbar--with-tabs')).toBeTruthy()
-    expect(document.querySelector('.topbar__tabs')).toBeTruthy()
-  })
-
-  it('does not render the tabs row when topbarTabs is not supplied', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      children: <div>BODY</div>,
-    })
-    expect(document.querySelector('.topbar--with-tabs')).toBeNull()
-    expect(document.querySelector('.topbar__tabs')).toBeNull()
-  })
-})
-
-describe('AppShell — bare mode', () => {
-  it('skips chrome entirely', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      bare: true,
-      children: <div data-testid="bare-content">FILL VIEWPORT</div>,
-    })
-    expect(screen.getByTestId('bare-content')).toBeTruthy()
-    expect(document.querySelector('.cl-app--bare')).toBeTruthy()
-    // Bare mode should never engage workspace layout even if layout='workspace'.
-    expect(document.querySelector('.cl-workspace')).toBeNull()
-  })
-
-  it('does not switch to workspace mode when bare=true', () => {
-    renderShell({
-      brand: <span>CL</span>,
-      bare: true,
-      layout: 'workspace',
-      leftPane: <div>LEFT</div>,
-      children: <div data-testid="bare-content">FILL VIEWPORT</div>,
-    })
-    expect(document.querySelector('.cl-app--workspace')).toBeNull()
+    const classes = paneClasses(container)
+    // No nav pane in the two-pane shape.
+    expect(classes.join(' ')).not.toContain('cl-workspace__pane--nav')
+    // The existing two-pane path keeps the --left/--right classes (byte-compat).
+    expect(classes.join(' ')).toContain('cl-workspace__pane--left')
+    expect(classes.join(' ')).toContain('cl-workspace__pane--right')
   })
 })

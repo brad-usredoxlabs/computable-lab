@@ -59,6 +59,14 @@ export interface AppShellProps {
   viewerToolbar?: ReactNode
   leftPane?: ReactNode
   rightPane?: ReactNode
+  /**
+   * Optional third column in the workspace layout: a left navigation rail
+   * (concepts/steps, provenance, cohorts). When supplied alongside leftPane +
+   * rightPane, the shell renders a THREE-pane split (nav | action | chat)
+   * instead of the default two-pane (left | right). Absent/missing keeps the
+   * two-pane path byte-identical for existing endpoints.
+   */
+  navPane?: ReactNode
   dock?: ReactNode
   fixItLauncher?: ReactNode
   rootClassName?: string
@@ -79,6 +87,7 @@ export function AppShell({
   topbarRight,
   topbarTabs,
   viewerToolbar,
+  navPane,
   leftPane,
   rightPane,
   dock,
@@ -135,6 +144,7 @@ export function AppShell({
       {isWorkspace ? (
         <WorkspaceMain
           viewerToolbar={viewerToolbar}
+          navPane={navPane}
           leftPane={leftPane}
           rightPane={rightPane}
           panelAutoSaveId={panelAutoSaveId}
@@ -150,6 +160,7 @@ export function AppShell({
 
 interface WorkspaceMainProps {
   viewerToolbar?: ReactNode
+  navPane?: ReactNode
   leftPane?: ReactNode
   rightPane?: ReactNode
   panelAutoSaveId?: string
@@ -167,11 +178,13 @@ interface WorkspaceMainProps {
  */
 function WorkspaceMain({
   viewerToolbar,
+  navPane,
   leftPane,
   rightPane,
   panelAutoSaveId,
 }: WorkspaceMainProps) {
   const hasRight = rightPane !== undefined && rightPane !== null
+  const hasNav = navPane !== undefined && navPane !== null
   const { isMobile } = useViewport()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -232,8 +245,53 @@ function WorkspaceMain({
     )
   }
 
-  // Desktop (wide): the viewer and the tabbed nav sit in a horizontal
-  // resizable split.
+  // Desktop (wide): the nav rail (three-pane) OR the viewer + tabbed nav in a
+  // horizontal resizable split (two-pane). The three-pane shape is
+  // nav | action | chat — the agent harness; the two-pane path stays
+  // byte-identical to the pre-harness layout.
+  if (hasNav) {
+    return (
+      <div className="cl-workspace">
+        {topBar}
+        <PanelGroup
+          direction="horizontal"
+          className="cl-workspace__panels cl-workspace__panels--three"
+          {...(panelAutoSaveId ? { autoSaveId: panelAutoSaveId } : {})}
+        >
+          <Panel
+            defaultSize={18}
+            minSize={12}
+            collapsible
+            collapsedSize={0}
+            className="cl-workspace__pane cl-workspace__pane--nav"
+          >
+            {navPane}
+          </Panel>
+          <PanelResizeHandle className="cl-workspace__handle" />
+          <Panel
+            defaultSize={52}
+            minSize={24}
+            collapsible
+            collapsedSize={0}
+            className="cl-workspace__pane cl-workspace__pane--action"
+          >
+            {leftPane}
+          </Panel>
+          <PanelResizeHandle className="cl-workspace__handle" />
+          <Panel
+            defaultSize={30}
+            minSize={16}
+            collapsible
+            collapsedSize={0}
+            className="cl-workspace__pane cl-workspace__pane--chat"
+          >
+            {rightPane}
+          </Panel>
+        </PanelGroup>
+      </div>
+    )
+  }
+
   return (
     <div className="cl-workspace">
       {topBar}

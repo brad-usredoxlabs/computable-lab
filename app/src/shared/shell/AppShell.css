@@ -385,6 +385,26 @@
   border-left: 1px solid var(--cl-border);
 }
 
+/* Three-pane (agent harness) composition: nav | action | chat. */
+.cl-app--workspace .cl-workspace__pane--nav {
+  background: var(--cl-bg-elev);
+  border-right: 1px solid var(--cl-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* The action/center pane behaves like the old left pane — long content
+   (deck, event list, record) scrolls rather than clipping. */
+.cl-app--workspace .cl-workspace__pane--action {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.cl-app--workspace .cl-workspace__pane--chat {
+  background: var(--cl-bg-elev);
+  border-left: 1px solid var(--cl-border);
+}
+
 /* react-resizable-panels assigns `data-panel-resize-handle-enabled` to the
    handle element; we layer our visual on top of its hit area. Keep the
    handle slim so the panels feel adjacent, then grow on hover so the user
