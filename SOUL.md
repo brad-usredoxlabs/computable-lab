@@ -46,10 +46,7 @@ script; experiments are made up as we go, testing truth-for-the-day. Record
 each day faithfully in a way that is stimulating, not penalizing — and days
 become weeks, months, years, compounding into real knowledge.
 
-**Two-pane layout is preferred.** The user explicitly rejects three-pane
-layouts. The existing two-pane layout with a tabbed right pane is the pattern
-to extend. Add tabs to the right pane, not new panels. Add surfaces to the
-center, not new columns. Never add a left sidebar or third pane.
+**Two-pane is the default; the run/deck + analysis agent harness is three-pane.** The run workspace (and analysis, when it adopts the harness) uses a THREE-pane agent-harness layout — left navigation rail (step concepts), center action (deck/record), right permanent AI chat with a live working-focus header — because the harness's whole point is the AI as conversational copilot over the deterministic machinery (see `.hermes/plans/2026-09-07_220226-three-pane-agent-harness.md`). This SUPERSEDES the earlier "never a third pane" rule FOR THESE harness surfaces only. Every other endpoint keeps the two-pane layout with a tabbed right pane: add tabs to the right pane, not new panels; add surfaces to the center, not new columns; never add a left sidebar or third pane outside the harness.
 
 ## Decision Rules
 
