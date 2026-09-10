@@ -63,6 +63,13 @@
   /* Layout dimensions. Overridden in the mobile @media block below so the
      same rules render correctly on phone viewports. */
   --cl-topbar-height: 48px;
+  /* Chrome compaction (plan 2026-09-09_223714-chrome-compaction-hover-toolbar.md):
+     the run workspace previously stacked three ~48px rows (~150px of header
+     before any deck content). These tokens let each row shrink independently;
+     every consumer falls back to --cl-topbar-height if a token is absent. */
+  --cl-globalnav-height: 40px;
+  --cl-tabstrip-height: 30px;
+  --cl-toolbar-height: 32px;
   --cl-stage-padding: 24px;
   --cl-deck-slot-width: 144px;
   --cl-deck-slot-height: 96px;

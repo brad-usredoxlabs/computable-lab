@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--cl-topbar-height);
+  height: var(--cl-globalnav-height, var(--cl-topbar-height));
   padding: 0 12px;
   background: var(--cl-bg-elev);
   border-bottom: 1px solid var(--cl-border);
@@ -33,7 +33,7 @@
 }
 
 .global-navbar__dest {
-  padding: 6px 12px;
+  padding: 4px 10px;
   border: none;
   background: transparent;
   color: var(--cl-text-dim);
