@@ -132,15 +132,15 @@
 .cl-app .topbar--workspace > .topbar__tabs,
 .cl-app .topbar--workspace > .project-tab-strip {
   /* The strip might render directly as the header's only child, or be
-     wrapped in `.topbar__tabs` for the mobile-tabs path; either way,
-     drop the now-stale border-top and let the workspace topbar's
-     border-bottom carry the divider.
-     Phase 1: restore a border-top to visually separate the tab strip
-     from the GlobalNavbar row above it. */
-  border-top: 1px solid var(--cl-border);
+     wrapped in `.topbar__tabs` for the mobile-tabs path. No border-top:
+     the GlobalNavbar above already carries a border-bottom, and stacking
+     both drew a double divider (the "unnecessary space" between the two
+     rows). The workspace topbar's own border-bottom is the only divider
+     between the header and the toolbar row below. */
+  border-top: none;
   background: transparent;
   flex: 1;
-  min-height: var(--cl-topbar-height);
+  min-height: var(--cl-tabstrip-height, 30px);
   align-items: stretch;
 }
 
@@ -458,10 +458,8 @@
     min-height: 28px;
   }
 
-  .cl-app .topbar--workspace > .topbar__tabs,
-  .cl-app .topbar--workspace > .project-tab-strip {
-    min-height: 28px;
-  }
+  /* Desktop and mobile now share the compact tab strip height from the
+     token (--cl-tabstrip-height); no mobile-specific override needed. */
 
   .cl-app--workspace .cl-workspace {
     min-height: 260px;
