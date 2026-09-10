@@ -115,6 +115,9 @@
   align-items: stretch;
   height: auto;
   padding: 0;
+  /* The base `.topbar` sets gap: 12px; as a column this puts unwanted space
+     between the GlobalNavbar and the tab strip. Zero it so the two sit flush. */
+  gap: 0;
   position: relative;
   background: var(--cl-bg-elev);
   border-bottom: 1px solid var(--cl-border);
