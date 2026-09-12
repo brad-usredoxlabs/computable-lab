@@ -1,14 +1,11 @@
 import { useState } from 'react'
 import { ProtocolNavPanel } from '../event-editor/right-pane/protocol/ProtocolNavPanel'
-import { ProtocolTabPanel } from '../event-editor/right-pane/protocol/ProtocolTabPanel'
 import { SearchTabPanel } from '../event-editor/right-pane/search/SearchTabPanel'
 import { DetailsTabPanel } from '../event-editor/right-pane/details/DetailsTabPanel'
 import './RunNavPane.css'
 
 export interface RunNavPaneProps {
   title?: string
-  runId: string | null
-  studyId: string
 }
 
 type NavTab = 'protocol' | 'search' | 'details'
@@ -19,7 +16,7 @@ const TABS: { mode: NavTab; label: string }[] = [
   { mode: 'details', label: 'Details' },
 ]
 
-export function RunNavPane({ title, runId, studyId }: RunNavPaneProps) {
+export function RunNavPane({ title }: RunNavPaneProps) {
   const [tab, setTab] = useState<NavTab>('protocol')
   return (
     <div className="run-nav-pane" data-testid="run-nav-pane">
@@ -43,15 +40,7 @@ export function RunNavPane({ title, runId, studyId }: RunNavPaneProps) {
         ))}
       </div>
       <div className="run-nav-pane__body">
-        {tab === 'protocol' ? (
-          <div className="run-nav-pane__protocol">
-            {/* The protocol STEP CONCEPTS (nav rail with tooltips) — the
-                "protocol steps" view the user switches to. */}
-            <ProtocolNavPanel title={title} />
-            {/* The full protocol panel (attach, run header, localization). */}
-            <ProtocolTabPanel runId={runId} studyId={studyId} />
-          </div>
-        ) : null}
+        {tab === 'protocol' ? <ProtocolNavPanel title={title} /> : null}
         {tab === 'search' ? <SearchTabPanel /> : null}
         {tab === 'details' ? <DetailsTabPanel /> : null}
       </div>
