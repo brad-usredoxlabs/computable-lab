@@ -29,6 +29,9 @@ export interface ProtocolStepSummary {
   stepId: string
   label: string
   ordinal: number
+  /** Full human-readable step text (description) for hover tooltips. Optional —
+   * absent when the source step carries no description. */
+  description?: string
 }
 
 interface ProtocolSelectionState {

@@ -10,7 +10,7 @@
  * chrome (plan §9: Left = navigate related work + inspect provenance).
  */
 
-import { useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
 import './ProtocolNavPanel.css'
@@ -20,6 +20,14 @@ export interface ProtocolNavPanelProps {
   title?: string
 }
 
+/** A hover/focus step with its anchor rect (viewport coords) for the fixed tooltip. */
+interface StepTip {
+  stepId: string
+  text: string
+  x: number
+  y: number
+}
+
 export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
   const sel = useProtocolSelection()
   const steps = sel?.steps ?? []
@@ -27,6 +35,21 @@ export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
   const setFocusedStep = sel?.setFocusedStep ?? (() => {})
   const stepGraphs = sel?.stepGraphs ?? {}
   const visibleSteps = sel?.visibleSteps ?? new Set<string>()
+  const [tip, setTip] = useState<StepTip | null>(null)
+  // Hold the anchor element so keyboard focus we can recompute the rect when
+  // the rail scrolls (reposition), and so we can ignore stale mouse events.
+  const anchorRef = useRef<HTMLElement | null>(null)
+
+  const showTip = useCallback((el: HTMLElement, text: string) => {
+    const rect = el.getBoundingClientRect()
+    anchorRef.current = el
+    setTip({ stepId: el.getAttribute('data-stepid') ?? '', text, x: rect.left, y: rect.bottom + 6 })
+  }, [])
+
+  const hideTip = useCallback(() => {
+    anchorRef.current = null
+    setTip(null)
+  }, [])
 
   const handleStepClick = useCallback(
     (step: ProtocolStepSummary) => {
@@ -64,7 +87,19 @@ export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
                 type="button"
                 className="protocol-nav__step"
                 data-testid={`protocol-nav-step-${step.stepId}`}
+                data-stepid={step.stepId}
                 aria-pressed={focused}
+                aria-describedby="protocol-nav-tooltip"
+                onMouseEnter={(e) => {
+                  const desc = step.description?.trim()
+                  if (desc) showTip(e.currentTarget, desc)
+                }}
+                onMouseLeave={hideTip}
+                onFocus={(e) => {
+                  const desc = step.description?.trim()
+                  if (desc) showTip(e.currentTarget, desc)
+                }}
+                onBlur={hideTip}
                 onClick={() => handleStepClick(step)}
                 title={`Focus step ${step.ordinal} on the deck`}
               >
@@ -77,6 +112,17 @@ export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
           )
         })}
       </ol>
+      {tip ? (
+        <div
+          id="protocol-nav-tooltip"
+          role="tooltip"
+          data-testid="protocol-nav-tooltip"
+          className="protocol-nav__tooltip"
+          style={{ left: tip.x, top: tip.y }}
+        >
+          {tip.text}
+        </div>
+      ) : null}
     </aside>
   )
 }

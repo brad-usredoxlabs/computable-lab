@@ -1286,6 +1286,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       stepId: s.stepId,
       label: s.label ?? s.description ?? `Step ${s.ordinal ?? i + 1}`,
       ordinal: s.ordinal ?? i + 1,
+      ...(typeof s.description === 'string' && s.description.trim() ? { description: s.description } : {}),
     })))
   }, [steps, visibleSteps.size, setVisibleSteps, setContextSteps])
 

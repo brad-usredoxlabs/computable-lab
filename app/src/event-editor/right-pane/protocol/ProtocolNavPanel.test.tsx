@@ -8,7 +8,7 @@ afterEach(() => {
   cleanup()
 })
 
-type Step = { stepId: string; label: string; ordinal: number }
+type Step = { stepId: string; label: string; ordinal: number; description?: string }
 type FocusChange = { stepId: string; label: string; ordinal?: number } | null
 type Graph = { id: string; events: Record<string, unknown>[]; labwares: Record<string, unknown>[] }
 
@@ -119,5 +119,48 @@ describe('ProtocolNavPanel (left navigation rail)', () => {
     renderNav({})
     expect(screen.getByTestId('protocol-nav')).not.toBeNull()
     expect(screen.getByText(/Attach a protocol/i)).not.toBeNull()
+  })
+
+  it('shows a tooltip with the full step text on hover', () => {
+    renderNav({
+      steps: [
+        {
+          stepId: 's1',
+          label: 'Seed cells',
+          ordinal: 1,
+          description: 'Seed 25,000 HepG2 cells per T25 flask in DMEM + 10% FBS and grow to sub-confluency.',
+        },
+      ],
+    })
+    const step = screen.getByTestId('protocol-nav-step-s1')
+    expect(screen.queryByTestId('protocol-nav-tooltip')).toBeNull()
+    fireEvent.mouseEnter(step)
+    const tip = screen.getByTestId('protocol-nav-tooltip')
+    expect(tip).not.toBeNull()
+    expect(tip.textContent).toContain('Seed 25,000 HepG2 cells per T25 flask')
+    fireEvent.mouseLeave(step)
+    expect(screen.queryByTestId('protocol-nav-tooltip')).toBeNull()
+  })
+
+  it('shows no tooltip for a step without a description', () => {
+    renderNav({ steps: [{ stepId: 's2', label: 'Add Compound B', ordinal: 2 }] })
+    fireEvent.mouseEnter(screen.getByTestId('protocol-nav-step-s2'))
+    expect(screen.queryByTestId('protocol-nav-tooltip')).toBeNull()
+  })
+
+  it('shows a tooltip on keyboard focus (accessibility)', () => {
+    renderNav({
+      steps: [
+        {
+          stepId: 's3',
+          label: 'Induce',
+          ordinal: 3,
+          description: 'Add 1 uM clofibrate to induce PPARa target genes.',
+        },
+      ],
+    })
+    const step = screen.getByTestId('protocol-nav-step-s3')
+    fireEvent.focus(step)
+    expect(screen.getByTestId('protocol-nav-tooltip').textContent).toContain('clofibrate')
   })
 })

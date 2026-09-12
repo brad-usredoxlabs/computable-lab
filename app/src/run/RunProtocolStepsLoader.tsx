@@ -66,6 +66,9 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
             stepId: (s.stepId as string) ?? `step-${i}`,
             label: (s.label as string) ?? (s.description as string) ?? `Step ${(s.ordinal as number) ?? i + 1}`,
             ordinal: (s.ordinal as number) ?? i + 1,
+            ...(typeof s.description === 'string' && (s.description as string).trim()
+              ? { description: s.description as string }
+              : {}),
           }))
           .filter((s) => s)
         // Publish non-empty steps idempotently. We NEVER clear the shared
