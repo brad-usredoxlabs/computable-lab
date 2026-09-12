@@ -8,11 +8,11 @@
  * - Right rail adapts: Plan → AI tab; Execute → Chat tab with run conversation
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
-import { WorkspaceProvider, useWorkspace } from '../event-editor/workspace/WorkspaceContext'
-import { RightPane } from '../event-editor/right-pane/RightPane'
+import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
+import { AgentChatPane } from '../agent/AgentChatPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
@@ -21,7 +21,7 @@ import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
-import { ProtocolNavPanel } from '../event-editor/right-pane/protocol/ProtocolNavPanel'
+import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
@@ -127,7 +127,6 @@ export function RunWorkspacePage() {
     <ProtocolSelectionProvider>
       <RunProtocolStepsLoader runId={runId} />
       <WorkspaceProvider studyId={resolvedStudyId}>
-        <RunPaneMode />
         <EventEditorProvider
           runId={runId}
           {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
@@ -135,8 +134,8 @@ export function RunWorkspacePage() {
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
             <RunWorkspaceShell
-              navPane={<ProtocolNavPanel title={title} />}
-              rightPane={<RightPane />}
+              navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
+              rightPane={<AgentChatPane />}
               viewerToolbar={
                 <div className="run-workspace-toolbar">
                   <ModeToggle mode={mode} onChange={setMode} />
@@ -153,20 +152,10 @@ export function RunWorkspacePage() {
   )
 }
 
-/** Set the run workspace's right pane to Protocol once on mount (mirrors
- *  ProjectWorkspacePage's deck+run auto-switch). A ref guard lets the user's
- *  manual mode choice win afterward. */
-function RunPaneMode() {
-  const ws = useWorkspace()
-  const done = useRef(false)
-  useEffect(() => {
-    if (!ws.ready || done.current) return
-    done.current = true
-    ws.setRightPaneMode('protocol')
-  }, [ws.ready, ws.setRightPaneMode])
-  return null
-}
-
+/**
+ * RunWorkspaceContent - renders the action pane by mode: Execute = ExecutionView,
+ * Plan = DeckViewer.
+ */
 interface RunWorkspaceContentProps {
   runId: string
   mode: RunMode
