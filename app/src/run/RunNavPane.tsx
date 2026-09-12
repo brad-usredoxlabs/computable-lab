@@ -23,9 +23,6 @@ export function RunNavPane({ title, runId, studyId }: RunNavPaneProps) {
   const [tab, setTab] = useState<NavTab>('protocol')
   return (
     <div className="run-nav-pane" data-testid="run-nav-pane">
-      <div className="run-nav-pane__rail">
-        <ProtocolNavPanel title={title} />
-      </div>
       <div className="run-nav-pane__tabs" role="tablist">
         {TABS.map(({ mode, label }) => (
           <button
@@ -46,7 +43,15 @@ export function RunNavPane({ title, runId, studyId }: RunNavPaneProps) {
         ))}
       </div>
       <div className="run-nav-pane__body">
-        {tab === 'protocol' ? <ProtocolTabPanel runId={runId} studyId={studyId} /> : null}
+        {tab === 'protocol' ? (
+          <div className="run-nav-pane__protocol">
+            {/* The protocol STEP CONCEPTS (nav rail with tooltips) — the
+                "protocol steps" view the user switches to. */}
+            <ProtocolNavPanel title={title} />
+            {/* The full protocol panel (attach, run header, localization). */}
+            <ProtocolTabPanel runId={runId} studyId={studyId} />
+          </div>
+        ) : null}
         {tab === 'search' ? <SearchTabPanel /> : null}
         {tab === 'details' ? <DetailsTabPanel /> : null}
       </div>

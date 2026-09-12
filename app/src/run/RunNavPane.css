@@ -4,7 +4,13 @@
   height: 100%;
   min-width: 0;
 }
-.run-nav-pane__rail {
+.run-nav-pane__protocol {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.run-nav-pane__protocol > .protocol-nav {
   flex-shrink: 0;
   max-height: 45%;
   overflow-y: auto;
