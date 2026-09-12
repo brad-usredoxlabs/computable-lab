@@ -4,6 +4,9 @@ import {
   COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
   parseSubmitSuggestionArgs,
   SUBMIT_SUGGESTION_TOOL_DEF,
+  AGENT_INTENT_TOOL_NAME,
+  AGENT_INTENT_TOOL_DEF,
+  parseAgentIntentArgs,
 } from './submitSuggestionTool.js';
 
 const USAGE = { promptTokens: 10, completionTokens: 20 };
@@ -258,5 +261,40 @@ describe('parseSubmitSuggestionArgs', () => {
     expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.type).toBe('function');
     expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.function.name).toBe(COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME);
     expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.function.parameters).toBe(SUBMIT_SUGGESTION_TOOL_DEF.function.parameters);
+    expect(AGENT_INTENT_TOOL_DEF.function.name).toBe(AGENT_INTENT_TOOL_NAME);
+  });
+});
+
+describe('agent_intent — the constrained emission menu', () => {
+  it('exposes a single forced tool with an intent enum (event_graph | deck_layout)', () => {
+    const params = AGENT_INTENT_TOOL_DEF.function.parameters;
+    expect(params).toHaveProperty('required', ['intent']);
+    const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
+    expect(props.intent?.type).toBe('string');
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout']);
+    // deck_layout args
+    expect(props.variantId?.type).toBe('string');
+    // event_graph args carried over from the draft tool
+    expect(props.events).toBeDefined();
+    expect(props.labwareRequirements).toBeDefined();
+    expect(props.labwareAdditions).toBeDefined();
+  });
+
+  it('parses an event_graph intent', () => {
+    expect(parseAgentIntentArgs({ intent: 'event_graph', events: [] })).toEqual({ intent: 'event_graph' });
+  });
+
+  it('parses a deck_layout intent with platform + variant', () => {
+    expect(parseAgentIntentArgs({ intent: 'deck_layout', platformId: 'manual', variantId: 'manual_freeform' }))
+      .toEqual({ intent: 'deck_layout', platformId: 'manual', variantId: 'manual_freeform' });
+  });
+
+  it('trims the deck args and ignores stray whitespace', () => {
+    expect(parseAgentIntentArgs({ intent: 'deck_layout', variantId: '  manual_freeform  ' }))
+      .toEqual({ intent: 'deck_layout', variantId: 'manual_freeform' });
+  });
+
+  it('reports unknown intent and rejects non-string platform/variant', () => {
+    expect(parseAgentIntentArgs({ intent: 'explode_the_lab', variantId: 7 })).toEqual({ intent: 'unknown' });
   });
 });

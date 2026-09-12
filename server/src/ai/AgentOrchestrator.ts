@@ -32,6 +32,9 @@ import {
   COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
   SUBMIT_SUGGESTION_INSTRUCTION,
   parseSubmitSuggestionArgs,
+  AGENT_INTENT_TOOL_NAME,
+  AGENT_INTENT_TOOL_DEF,
+  parseAgentIntentArgs,
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
@@ -369,7 +372,9 @@ function stampDraftProvenance<T>(events: T[]): T[] {
 
 const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
-  `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
+  `- You MUST finish this turn by calling the ${AGENT_INTENT_TOOL_NAME} tool exactly once, choosing ONE intent from its menu.`,
+  '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_graph" and fill the event/labware fields.',
+  '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
@@ -636,9 +641,10 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
 
 function buildForcedDraftJsonPrompt(originalPrompt: string): string {
   return [
-    `You did not emit the required ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool call.`,
-    'Return ONLY the JSON arguments for that tool. No markdown, no explanation.',
-    'Allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
+    `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
+    'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
+    'For event drafting, use intent "event_graph" and allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
+    'For a deck layout change, use intent "deck_layout" with variantId (e.g. "manual_freeform") and leave the event fields empty.',
     'For labware/deck setup, prefer labwareRequirements like {"classCurie":"CL:96_well_plate","deckSlot":"B2","reason":"96-well plate requested","specificity":"generic"}. Do not invent LBW-* recordIds.',
     'Do not ask which vendor/catalog/plate subtype for a generic request like a 96-well plate. Emit the generic requirement.',
     'For material nouns, use materials[].ref as {"curie":"..."} or {"mint":{"label":"...","domain":"..."}}.',
@@ -790,12 +796,16 @@ export function createAgentOrchestrator(
    * 3 common tokens when the warm omitted tools).
    */
   function buildToolDefs(forceDraftTool?: boolean, toolFilter?: readonly string[]) {
+    if (forceDraftTool) {
+      // Draft mode offers the model a SINGLE forced emission tool whose own
+      // schema is the constrained menu (event_graph | deck_layout), keeping
+      // every turn a structured emission while widening beyond the lone draft.
+      return [AGENT_INTENT_TOOL_DEF];
+    }
     const allToolDefs = toolBridge.getToolDefinitions();
-    const baseToolDefs = forceDraftTool
-      ? []
-      : toolFilter
-        ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
-        : allToolDefs;
+    const baseToolDefs = toolFilter
+      ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
+      : allToolDefs;
     return [...baseToolDefs, COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF];
   }
 
@@ -835,7 +845,7 @@ export function createAgentOrchestrator(
       ],
       tools,
       tool_choice: forceDraftTool
-        ? { type: 'function', function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } }
+        ? { type: 'function', function: { name: AGENT_INTENT_TOOL_NAME } }
         : 'auto',
     };
   }
@@ -1210,7 +1220,7 @@ export function createAgentOrchestrator(
           if (toolDefs.length > 0) {
             completionReq.tools = toolDefs;
             completionReq.tool_choice = forceDraftTool
-              ? { type: 'function', function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } }
+              ? { type: 'function', function: { name: AGENT_INTENT_TOOL_NAME } }
               : 'auto';
           }
 
@@ -1636,7 +1646,7 @@ export function createAgentOrchestrator(
         // the structured output tool. Capture its args as the result directly —
         // no regex parse, grounded by the tool schema.
         const submitCall = assistantMsg.tool_calls.find(
-          (tc) => tc.function.name === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME || tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
+          (tc) => tc.function.name === AGENT_INTENT_TOOL_NAME || tc.function.name === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME || tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
         );
         if (submitCall) {
           let submitArgs: Record<string, unknown>;
@@ -1646,6 +1656,45 @@ export function createAgentOrchestrator(
             submitArgs = {};
           }
           onEvent?.({ type: 'tool_call', toolName: submitCall.function.name, args: submitArgs });
+
+          // agent_intent with intent=deck_layout: switch the run deck, no event
+          // drafting. The variant is validated loosely (the client guards it
+          // against the platform manifest before applying). Returns a deckLayout
+          // result the client applies to the live editor + persists.
+          if (submitCall.function.name === AGENT_INTENT_TOOL_NAME) {
+            const agentIntent = parseAgentIntentArgs(submitArgs);
+            if (agentIntent.intent === 'deck_layout') {
+              const variantId = agentIntent.variantId;
+              const platformId = agentIntent.platformId ?? context.activeDeckScope?.platformId ?? 'manual';
+              const ok = typeof variantId === 'string' && variantId.length > 0;
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: ok, durationMs: 0 });
+              const elapsed = Date.now() - t0;
+              const deckResult: AgentResult = ok
+                ? { success: true, deckLayout: { platformId, variantId: variantId as string } }
+                : { success: false, error: 'deck_layout intent requires a variantId (e.g. "manual_freeform" = the freeform bench).' };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: deckResult.success,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              if (deckResult.error) summary.error = deckResult.error;
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done deck_layout success=${deckResult.success} variant=${variantId ?? '(none)'} elapsedMs=${elapsed}`);
+              return deckResult;
+            }
+          }
 
           const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
           if (parsed.events?.length) {

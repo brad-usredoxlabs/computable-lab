@@ -125,7 +125,6 @@ describe('runChatbotCompile', () => {
     const result = await runChatbotCompile({
       prompt: 'place another 96-well plate on deck slot B2',
       activeDeckScope: {
-        locked: true,
         runId: 'RUN-001',
         platformId: 'manual',
         variantId: 'manual_single_plate',
@@ -144,7 +143,7 @@ describe('runChatbotCompile', () => {
     expect(result.outcome).toBe('gap');
     expect(result.terminalArtifacts.gaps.some((gap) =>
       gap.message.includes('manual/manual_single_plate')
-        && gap.message.includes('Explicit layout replacement'),
+        && gap.message.includes('does not allow placing labware outside that scope'),
     )).toBe(true);
   });
   it('preserves mention tokens and short-circuits without the precompile LLM', async () => {

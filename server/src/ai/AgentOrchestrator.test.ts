@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import type { CompletionRequest, InferenceClient, ToolBridge, AgentEvent } from './types.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
-import { COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } from './submitSuggestionTool.js';
+import { COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME, AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
 
 describe('createAgentOrchestrator', () => {
   it('includes prior user and assistant turns before the current prompt', async () => {
@@ -137,9 +137,9 @@ describe('createAgentOrchestrator', () => {
 
     expect(capturedRequest?.tool_choice).toEqual({
       type: 'function',
-      function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME },
+      function: { name: AGENT_INTENT_TOOL_NAME },
     });
-    expect(capturedRequest?.tools?.map((tool) => tool.function.name)).toEqual([COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME]);
+    expect(capturedRequest?.tools?.map((tool) => tool.function.name)).toEqual([AGENT_INTENT_TOOL_NAME]);
     expect(compileSpy).not.toHaveBeenCalled();
     expect(events).toContainEqual({
       type: 'status',

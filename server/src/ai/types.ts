@@ -310,7 +310,6 @@ export interface GraphLemurContext {
 }
 
 export interface ActiveDeckScope {
-  locked: boolean;
   runId?: string;
   platformId: string;
   variantId: string;
@@ -579,6 +578,9 @@ export interface AgentResult {
   instrumentApplianceJobs?: InstrumentApplianceJob[];
   /** Ontology terms bound during draft compile; draftOnly entries materialize on human accept. */
   ontologyBindings?: DraftOntologyBinding[];
+  /** Deck layout switch requested via agent_intent (intent: deck_layout). The
+   *  client applies this to the live editor; nothing is drafted. */
+  deckLayout?: { platformId: string; variantId: string };
   /** Semantic interpretation of the parsed prompt — operations, materials, parameters. */
   interpretation?: {
     operations: Array<{

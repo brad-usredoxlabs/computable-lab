@@ -224,7 +224,7 @@ function normalizePromptForCompile(prompt: string): string {
 }
 
 function scopeAllowsLabwareAddition(addition: { deckSlot?: string }, scope?: ActiveDeckScope): boolean {
-  if (!scope?.locked) return true
+  if (!scope) return true
   if (addition.deckSlot) return scope.allowedSlots.includes(addition.deckSlot)
   if (!scope.allowedSurfaces.includes('lawn') && scope.allowedSlots.length === 1) return true
   return scope.allowedSurfaces.includes('lawn')
@@ -233,8 +233,8 @@ function scopeAllowsLabwareAddition(addition: { deckSlot?: string }, scope?: Act
 function deckScopeGapMessage(scope: ActiveDeckScope): string {
   const slots = scope.allowedSlots.length > 0 ? scope.allowedSlots.join(', ') : 'no deck slots'
   const surfaces = scope.allowedSurfaces.length > 0 ? scope.allowedSurfaces.join(', ') : 'no surfaces'
-  return 'This run is locked to ' + scope.platformId + '/' + scope.variantId
-    + ' (' + surfaces + '; slots: ' + slots + '). Explicit layout replacement is required before adding labware outside that scope.'
+  return 'The run\'s current deck ' + scope.platformId + '/' + scope.variantId
+    + ' (' + surfaces + '; slots: ' + slots + ') does not allow placing labware outside that scope.'
 }
 export async function runChatbotCompile(
   args: RunChatbotCompileArgs,

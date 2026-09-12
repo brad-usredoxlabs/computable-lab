@@ -40,9 +40,9 @@ export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
  */
 export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
-  '- Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.',
-  '- For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user\'s exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.',
-  '- Finish by calling the `compile_event_graph_draft` tool exactly once. Do NOT print JSON in your text reply.',
+  "- Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.",
+    '- For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user\'s exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.',
+    '- Finish by calling the `agent_intent` tool exactly once (intent "event_graph" to draft events, or "deck_layout" to switch the deck layout). Do NOT print JSON in your text reply.',
   "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.",
   '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
   '- Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.',
@@ -283,6 +283,85 @@ export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF: ToolDefinition = {
       'Compile an AI-proposed draft event graph through the server compiler and return ghostable events or clarification gaps. Every material reference MUST be grounded as {curie} or {mint:{label,domain}}.',
   },
 };
+
+/** The draft tool's event-graph arg fields, reused verbatim inside agent_intent's
+ *  event_graph branch so the model fills the same schema it does today. */
+const DRAFT_ARGS_PROPERTIES: Record<string, unknown> = (
+  COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.function.parameters as {
+    properties?: Record<string, unknown>;
+  }
+).properties ?? {};
+
+/**
+ * agent_intent — the single forced emission tool in draft mode.
+ *
+ * The model MUST call exactly this one tool each turn, and inside it pick ONE
+ * intent from a small constrained menu (never a free prose answer):
+ *   - `event_graph`: draft events onto the current deck (existing draft args).
+ *   - `deck_layout`: switch the run deck platform/variant (e.g. to the freeform
+ *     bench). No event drafting — the client applies the change to the editor.
+ *
+ * Keeping a single forced tool (tool_choice) preserves the hard constraint that
+ * the model emits structured output every turn, while widening the menu beyond
+ * the lone draft tool.
+ */
+export const AGENT_INTENT_TOOL_NAME = 'agent_intent';
+
+export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: AGENT_INTENT_TOOL_NAME,
+    description:
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, or `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"). Fill only the fields that belong to the intent you chose; never mix both.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['intent'],
+      properties: {
+        intent: {
+          type: 'string',
+          enum: ['event_graph', 'deck_layout'],
+          description:
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty.',
+        },
+        platformId: {
+          type: 'string',
+          description: 'deck_layout only: target deck platform id (omit to keep the current platform).',
+        },
+        variantId: {
+          type: 'string',
+          description: 'deck_layout only: target deck variant id, e.g. "manual_freeform" (the freeform bench / Manual Bench).',
+        },
+        events: DRAFT_ARGS_PROPERTIES['events'],
+        notes: DRAFT_ARGS_PROPERTIES['notes'],
+        unresolvedRefs: DRAFT_ARGS_PROPERTIES['unresolvedRefs'],
+        clarification: DRAFT_ARGS_PROPERTIES['clarification'],
+        clarificationRequests: DRAFT_ARGS_PROPERTIES['clarificationRequests'],
+        labwareRequirements: DRAFT_ARGS_PROPERTIES['labwareRequirements'],
+        labwareAdditions: DRAFT_ARGS_PROPERTIES['labwareAdditions'],
+      },
+    },
+  },
+};
+
+export interface AgentIntentArgs {
+  intent: 'event_graph' | 'deck_layout' | 'unknown';
+  platformId?: string;
+  variantId?: string;
+}
+
+/** Decode the selected intent from an agent_intent args payload. */
+export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
+  const intent = args.intent;
+  if (intent === 'event_graph' || intent === 'deck_layout') {
+    return {
+      intent,
+      ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
+      ...(typeof args.variantId === 'string' && args.variantId.trim().length > 0 ? { variantId: args.variantId.trim() } : {}),
+    };
+  }
+  return { intent: 'unknown' };
+}
 
 
 function asRecord(v: unknown): Record<string, unknown> | null {
