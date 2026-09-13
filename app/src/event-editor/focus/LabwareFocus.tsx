@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
-import { computeLabwareStates, getWellState, getMaterialsSummary } from '../../graph/lib/eventGraph'
-import { buildCompositionStyles, buildCompositionLegend, wellCompositionSignature, type WellHueStyle } from '../../graph/lib/wellSignature'
+import { computeLabwareStates, getWellState } from '../../graph/lib/eventGraph'
+import { buildCompositionStyles, wellCompositionSignature, type WellHueStyle } from '../../graph/lib/wellSignature'
 import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware, tubeWellsForLabware } from './wellStateProjection'
 import type { Labware } from '../../types/labware'
 import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS, isTubeRack } from '../../types/labware'
@@ -170,10 +170,6 @@ export function LabwareFocus() {
       labware ? new Set<WellId>(previewWellsForLabware(previewIndex, labware.labwareId)) : EMPTY_SET,
     [previewIndex, labware],
   )
-  const previewEventsForLabware = useMemo(
-    () => (labware ? previewIndex.eventsByLabware.get(labware.labwareId) ?? [] : []),
-    [previewIndex, labware],
-  )
   const protocolStepStatus = useMemo(
     () => (labware ? previewStepStatusForLabware(previewIndex, labware.labwareId) : undefined),
     [previewIndex, labware],
@@ -203,25 +199,6 @@ export function LabwareFocus() {
       wellOrder,
       (wellId) =>
         wellCompositionSignature(getWellState(labwareStates, labware.labwareId, wellId)),
-      groupWells,
-    )
-  }, [labware, labwareStates, occupiedWellIds, placementId, state.plateRail])
-
-  // Legend mapping each distinct composition hue back to a readable condition,
-  // built from the same well order so swatches match the on-plate fills.
-  const compositionLegend = useMemo(() => {
-    if (!labware || !labwareStates) return []
-    const groupWells = new Set<WellId>()
-    const rail = placementId ? state.plateRail[placementId] : undefined
-    for (const group of rail?.knowledge.groups ?? []) {
-      for (const well of group.wells) groupWells.add(well)
-    }
-    const wellOrder = [...occupiedWellIds].sort()
-    return buildCompositionLegend(
-      wellOrder,
-      (wellId) =>
-        wellCompositionSignature(getWellState(labwareStates, labware.labwareId, wellId)),
-      (wellId) => getMaterialsSummary(getWellState(labwareStates, labware.labwareId, wellId)),
       groupWells,
     )
   }, [labware, labwareStates, occupiedWellIds, placementId, state.plateRail])
@@ -256,7 +233,18 @@ export function LabwareFocus() {
     return new Set<WellId>(state.selection.wells)
   }, [state.selection, labware])
 
+  // Selection feedback (e.g. a multichannel pipette expanding a single click
+  // across its channels) is shown as a transient overlay over the plate, not a
+  // persistent footer — the plate owns the full focus height.
   const [selectionWarning, setSelectionWarning] = useState<string | null>(null)
+
+  // Auto-dismiss a transient selection warning after a beat; it is a toast,
+  // not a persistent footer.
+  useEffect(() => {
+    if (!selectionWarning) return
+    const t = setTimeout(() => setSelectionWarning(null), 2600)
+    return () => clearTimeout(t)
+  }, [selectionWarning])
 
   const handleWellRangeSelect = useCallback(
     (anchorWellId: WellId, targetWellId: WellId) => {
@@ -343,15 +331,6 @@ export function LabwareFocus() {
 
   if (!placement) return null
 
-  const slotForLock = (() => {
-    if (!variant) return null
-    if (placement.location.kind !== 'slot') return null
-    const slotId = placement.location.slotId
-    return variant.slots.find((s) => s.id === slotId) ?? null
-  })()
-  const rotateLocked = slotForLock?.orientationMode === 'locked_portrait'
-    || slotForLock?.orientationMode === 'locked_landscape'
-
   function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>) {
     if (canvasRef.current && canvasRef.current.contains(event.target as Node)) {
       return
@@ -404,11 +383,6 @@ export function LabwareFocus() {
   }
 
   if (!labware) return null
-
-  const selectedWells = state.selection?.labwareId === labware.labwareId
-    ? state.selection.wells
-    : []
-  const selectionCount = selectedWells.length
 
   // A bench instrument is not well-addressable — show a compact equipment detail
   // pane instead of the well grid + context menu. Zoom-in still works (the tile
@@ -488,44 +462,6 @@ export function LabwareFocus() {
               {activePipette ? ` · tool: ${activePipette.label}` : ''}
             </div>
           </div>
-          {!isPreviewPlacement ? (
-            <button
-              type="button"
-              className="focus__btn"
-              disabled={Boolean(rotateLocked)}
-              onClick={handleRotate}
-              title="Rotate"
-            >⟲ Rotate</button>
-          ) : null}
-          <button
-            type="button"
-            className="focus__btn"
-            disabled={selectionCount === 0}
-            onClick={() => {
-              if (selectionCount === 0) return
-              openAddMaterial(selectedWells)
-            }}
-          >Add material</button>
-          <button
-            type="button"
-            className="focus__btn"
-            disabled={selectionCount === 0}
-            onClick={(event) => {
-              if (selectionCount === 0) return
-              const rect = event.currentTarget.getBoundingClientRect()
-              setMenu({
-                open: true,
-                x: rect.left,
-                y: rect.bottom + 4,
-                targetWells: selectedWells,
-              })
-            }}
-          >Actions</button>
-          <button
-            type="button"
-            className="focus__btn"
-            onClick={() => setReadPlateOpen(true)}
-          >Read plate</button>
           <button
             type="button"
             className="focus__btn focus__btn--ghost"
@@ -586,6 +522,14 @@ export function LabwareFocus() {
                 setMenu((m) => ({ ...m, open: false }))
                 setMoveTubeFrom(fromWell)
               },
+              onRotate: () => {
+                setMenu((m) => ({ ...m, open: false }))
+                handleRotate()
+              },
+              onReadPlate: () => {
+                setMenu((m) => ({ ...m, open: false }))
+                setReadPlateOpen(true)
+              },
             })
             const items: ContextMenuItem[] = built.items
             return (
@@ -600,69 +544,12 @@ export function LabwareFocus() {
             )
           })()
         ) : null}
-        <footer className="focus__footer">
-          {moveTubeFrom ? (
-            <span className="focus__hint">
-              Moving tube from {moveTubeFrom} — click a destination well · esc to cancel
-            </span>
-          ) : null}
-          {previewEventsForLabware.length > 0 ? (
-            <span className="focus__preview-summary" title="Use the floating Accept button on the deck to commit.">
-              {previewEventsForLabware.length} proposed event
-              {previewEventsForLabware.length === 1 ? '' : 's'} touch this labware
-            </span>
-          ) : null}
-          {selectionCount > 0 ? (
-            <>
-              <span className="focus__selection-count">
-                {selectionCount} well{selectionCount === 1 ? '' : 's'} selected
-              </span>
-              <span className="focus__hint">
-                {activePipette ? `${activePipette.label} pattern` : 'single well'}
-                {' · '}
-                shift-click for range · cmd-click to toggle · esc to clear
-              </span>
-              {selectionWarning ? <span className="focus__warning">{selectionWarning}</span> : null}
-            </>
-          ) : (
-            <span className="focus__hint">
-              Hover a well to inspect · click to select{activePipette ? ` (expands to ${activePipette.label})` : ''}
-            </span>
-          )}
-        </footer>
-        {compositionLegend.length > 0 ? (
-          <div className="focus__legend" role="list" aria-label="Well compositions">
-            {compositionLegend.map((entry) => (
-              <button
-                key={entry.signature}
-                type="button"
-                role="listitem"
-                className="focus__legend-chip"
-                title={`Select the ${entry.wells.length} well${entry.wells.length === 1 ? '' : 's'} of ${entry.label}`}
-                onClick={() => {
-                  if (!labware) return
-                  const wells = entry.wells as WellId[]
-                  actions.setSelection({
-                    labwareId: labware.labwareId,
-                    wells,
-                    anchor: wells[0] ?? null,
-                  })
-                }}
-              >
-                <span
-                  className="focus__legend-swatch"
-                  style={{ background: entry.fill, borderColor: entry.stroke }}
-                  aria-hidden
-                />
-                <span className="focus__legend-label">{entry.label}</span>
-                <span className="focus__legend-count">
-                  ×{entry.wells.length}
-                  {entry.groupedCount > 0 ? ' ⬢' : ''}
-                </span>
-              </button>
-            ))}
+        {moveTubeFrom ? (
+          <div className="focus__move-hint" role="status">
+            Moving tube from {moveTubeFrom} — click a destination well · esc to cancel
           </div>
         ) : null}
+        {selectionWarning ? <div className="focus__toast" role="status">{selectionWarning}</div> : null}
         </div>
       </div>
       <ReadPlateModal

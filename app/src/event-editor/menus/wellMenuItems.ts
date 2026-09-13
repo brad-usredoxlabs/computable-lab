@@ -27,6 +27,9 @@ interface BuildArgs {
    * pending state and commits a move_tube on the next destination click.
    */
   onBeginMoveTube?: (fromWell: WellId) => void
+  /** Plate-level actions (labware-wide, not well-specific): rotate + read. */
+  onRotate?: () => void
+  onReadPlate?: () => void
 }
 
 export function buildWellMenuItems({
@@ -39,6 +42,8 @@ export function buildWellMenuItems({
   onInspect,
   onAddMaterial,
   onBeginMoveTube,
+  onRotate,
+  onReadPlate,
 }: BuildArgs): { title: string; items: ContextMenuItem[] } {
   const labwareId = labware.labwareId
   const single = targetWells.length === 1
@@ -70,6 +75,18 @@ export function buildWellMenuItems({
   const tubeRack = isTubeRack(labware)
 
   const items: ContextMenuItem[] = []
+
+  // ---- Plate-level actions (labware-wide, before any well-specific items) ----
+  // The compact plate view gives the whole focus to the plate; plate-wide
+  // commands (rotate, read) live here in the right-click menu instead of a
+  // header toolbar.
+  const plateActions: ContextMenuItem[] = []
+  if (onRotate) plateActions.push({ id: 'plate-rotate', label: 'Rotate', icon: '⟲', onSelect: onRotate })
+  if (onReadPlate) plateActions.push({ id: 'plate-read', label: 'Read plate…', icon: '📖', onSelect: onReadPlate })
+  if (plateActions.length > 0) {
+    items.push(...plateActions)
+    items.push({ id: 'sep-plate', label: '', separator: true })
+  }
 
   // ---- Aspirate (tip empty, well(s) have volume) ----
   items.push({
