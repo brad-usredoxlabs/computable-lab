@@ -1,0 +1,19 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml
+kind: equipment-class
+id: EQC-HEATER-SHAKER
+name: Heater Shaker
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+  - key: duration_sec
+    label: Duration
+    valueType: duration_sec
+    unit: s
+  - key: rpm
+    label: Shake speed
+    valueType: number
+    unit: rpm
+acceptsLabware: []
+notes: heater-shaker — heats and shakes; temperature, duration, and rpm are the configurable run parameters (declarative settingsDefinition).

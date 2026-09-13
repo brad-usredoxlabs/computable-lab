@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { ensureRunDeckLock, loadAcceptedEventGraph, type RunDeckLock, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
 import { EMPTY_HISTORY, withEditorHistory, type EditorHistory, type UndoableSnapshot } from './editorHistory'
 import { persistEditorHistory, loadEditorHistory, snapshotFingerprint } from './editorHistoryStorage'
@@ -8,6 +8,7 @@ import type { PlatformManifest } from '../types/platformRegistry'
 import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
 import { isLawnOnlyLabwareType } from '../types/labware'
+import type { Equipment } from '../types/equipment'
 import type {
   EventEditorPlacement,
   LabwareOrientation,
@@ -60,6 +61,9 @@ export interface EventEditorGraphLemurSource {
 
 export interface EventEditorPreview {
   previewLabwares: Record<string, Labware>
+  /** First-class bench equipment proposed by a draft — ghosted as instrument
+   *  silhouettes on the lawn, never labware geometry. */
+  previewEquipments: Record<string, Equipment>
   previewPlacements: EventEditorPlacement[]
   previewEvents: PlateEvent[]
   /**
@@ -257,10 +261,11 @@ export interface EventEditorState {
   toolTypeId: string | null
   assistPipetteId: string | null
   runId: string | null
-  runDeckLock: RunDeckLock | null
+  runDeck: RunDeckMemory | null
   eventGraphId: string | null
   eventGraphSave: SavedEventGraphCommit | null
   labwares: Record<string, Labware>
+  equipments: Record<string, Equipment>
   placements: EventEditorPlacement[]
   focusPlacementId: string | null
   selection: WellSelection | null
@@ -317,6 +322,7 @@ export type EventEditorAction =
       runId: string | null
       events: PlateEvent[]
       labwares: Record<string, Labware>
+      equipments: Record<string, Equipment>
       placements: EventEditorPlacement[]
     }
   | { type: 'set_platform'; platformId: string }
@@ -324,7 +330,7 @@ export type EventEditorAction =
   | { type: 'set_vocab'; vocabPackId: string }
   | { type: 'set_tool'; toolTypeId: string | null; assistPipetteId: string | null }
   | { type: 'set_run'; runId: string | null }
-  | { type: 'set_run_deck_lock'; lock: RunDeckLock | null }
+  | { type: 'set_run_deck'; deck: RunDeckMemory | null }
   | { type: 'hydrate_history'; history: EditorHistory }
   | {
       type: 'place_new_labware'
@@ -332,6 +338,8 @@ export type EventEditorAction =
       location: PlacementLocation
       orientation: LabwareOrientation
     }
+  | { type: 'place_equipment'; equipment: Equipment; location: PlacementLocation; orientation: LabwareOrientation }
+  | { type: 'update_equipment_settings'; equipmentId: string; settings: Record<string, unknown> }
   | {
       type: 'move_placement'
       placementId: string
@@ -387,10 +395,11 @@ const initialState: EventEditorState = {
   toolTypeId: null,
   assistPipetteId: null,
   runId: null,
-  runDeckLock: null,
+  runDeck: null,
   eventGraphId: null,
   eventGraphSave: null,
   labwares: {},
+  equipments: {},
   placements: [],
   focusPlacementId: null,
   selection: null,
@@ -547,7 +556,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       const platforms = action.platforms
       const fallbackPlatformId =
         platforms.find((p) => p.id === DEFAULT_PLATFORM_ID)?.id ?? platforms[0]?.id ?? DEFAULT_PLATFORM_ID
-      const platformId = state.runDeckLock?.platformId ?? action.initialPlatformId ?? fallbackPlatformId
+      const platformId = state.runDeck?.platformId ?? action.initialPlatformId ?? fallbackPlatformId
       const defaults = pickDefaultsForPlatform(platforms, platformId)
       return {
         ...state,
@@ -555,7 +564,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         loadError: null,
         platforms,
         platformId,
-        variantId: state.runDeckLock?.variantId ?? defaults.variantId,
+        variantId: state.runDeck?.variantId ?? defaults.variantId,
         vocabPackId: defaults.vocabPackId,
         toolTypeId: defaults.toolTypeId,
         assistPipetteId: null,
@@ -570,6 +579,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         runId: action.runId,
         events: action.events,
         labwares: action.labwares,
+        equipments: action.equipments,
         placements: action.placements,
         focusPlacementId: null,
         selection: null,
@@ -578,7 +588,6 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         tipState: { kind: 'empty' },
       }
     case 'set_platform': {
-      if (state.runDeckLock?.locked && action.platformId !== state.runDeckLock.platformId) return state
       if (action.platformId === state.platformId) return state
       const defaults = pickDefaultsForPlatform(state.platforms, action.platformId)
       // Switching platforms wipes placements — slot IDs aren't comparable across decks.
@@ -616,7 +625,6 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     }
     case 'set_variant':
-      if (state.runDeckLock?.locked && action.variantId !== state.runDeckLock.variantId) return state
       // Variant change keeps labwares but drops slot placements that no longer exist.
       // We don't know the new variant's slots here, so the DeckStage will reconcile —
       // for now, keep placements; orphaned ones simply won't render.
@@ -635,15 +643,15 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       // Restore a persisted undo/redo stack after a reload. The wrapper leaves
       // this through (not undoable, not a reset), so the field is adopted as-is.
       return { ...state, history: action.history }
-    case 'set_run_deck_lock': {
-      const defaults = action.lock ? pickDefaultsForPlatform(state.platforms, action.lock.platformId) : null
+    case 'set_run_deck': {
+      const defaults = action.deck ? pickDefaultsForPlatform(state.platforms, action.deck.platformId) : null
       return {
         ...state,
-        runDeckLock: action.lock,
-        ...(action.lock
+        runDeck: action.deck,
+        ...(action.deck
           ? {
-              platformId: action.lock.platformId,
-              variantId: action.lock.variantId,
+              platformId: action.deck.platformId,
+              variantId: action.deck.variantId,
               ...(defaults ? { vocabPackId: defaults.vocabPackId, toolTypeId: defaults.toolTypeId } : {}),
             }
           : {}),
@@ -681,6 +689,32 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         placements: [...placements, placement],
         plateRail,
         ...(singlePlateSlot ? { focusPlacementId: placement.placementId } : {}),
+      }
+    }
+    case 'place_equipment': {
+      const placement: EventEditorPlacement = {
+        placementId: nextPlacementId(),
+        entityKind: 'equipment',
+        equipmentId: action.equipment.equipmentId,
+        labwareId: action.equipment.equipmentId,
+        location: action.location,
+        orientation: action.orientation,
+      }
+      return {
+        ...state,
+        equipments: { ...state.equipments, [action.equipment.equipmentId]: action.equipment },
+        placements: [...state.placements, placement],
+      }
+    }
+    case 'update_equipment_settings': {
+      const current = state.equipments[action.equipmentId]
+      if (!current) return state
+      return {
+        ...state,
+        equipments: {
+          ...state.equipments,
+          [action.equipmentId]: { ...current, settings: action.settings },
+        },
       }
     }
     case 'move_placement': {
@@ -824,6 +858,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
+        equipments: { ...state.equipments, ...preview.previewEquipments },
         placements: [...state.placements, ...preview.previewPlacements],
         events: [...state.events, ...(action.previewEvents ?? preview.previewEvents)],
         eventGraphId: action.eventGraphId ?? state.eventGraphId,
@@ -1042,6 +1077,12 @@ export interface EventEditorActions {
     location: PlacementLocation,
     orientation: LabwareOrientation,
   ) => void
+  placeEquipment: (
+    equipment: Equipment,
+    location: PlacementLocation,
+    orientation: LabwareOrientation,
+  ) => void
+  updateEquipmentSettings: (equipmentId: string, settings: Record<string, unknown>) => void
   movePlacement: (
     placementId: string,
     location: PlacementLocation,
@@ -1127,17 +1168,6 @@ interface ProviderProps {
   children: ReactNode
 }
 
-function isRunDeckLock(value: unknown): value is RunDeckLock {
-  return Boolean(value)
-    && typeof value === 'object'
-    && !Array.isArray(value)
-    && (value as { locked?: unknown }).locked === true
-    && typeof (value as { platformId?: unknown }).platformId === 'string'
-    && typeof (value as { variantId?: unknown }).variantId === 'string'
-    && typeof (value as { source?: unknown }).source === 'string'
-    && typeof (value as { lockedAt?: unknown }).lockedAt === 'string'
-}
-
 export function EventEditorProvider({ runId, eventGraphId, children }: ProviderProps) {
   const [state, dispatch] = useReducer(eventEditorReducer, initialState)
   const stateRef = useRef(state)
@@ -1146,31 +1176,12 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // so the load-time history reset doesn't get re-persisted (clobbering the
   // saved stack) before we restore it.
   const hydratedForRef = useRef<string | null>(null)
-
-  function lockRunDeckForFirstEdit() {
-    const current = stateRef.current
-    if (!current.runId || current.runDeckLock) return
-    const lockedAt = new Date().toISOString()
-    const optimisticLock: RunDeckLock = {
-      locked: true,
-      platformId: current.platformId,
-      variantId: current.variantId,
-      source: 'first-edit',
-      lockedAt,
-    }
-    dispatch({ type: 'set_run_deck_lock', lock: optimisticLock })
-    void ensureRunDeckLock({
-      runId: current.runId,
-      platformId: current.platformId,
-      variantId: current.variantId,
-    }, undefined, undefined, () => lockedAt)
-      .then((lock) => {
-        if (lock) dispatch({ type: 'set_run_deck_lock', lock })
-      })
-      .catch((error: unknown) => {
-        console.warn('Failed to persist run deck lock', error)
-      })
-  }
+  // True once the run's remembered deck (methodPlatform/methodVariantId) has
+  // been read. The persist-on-change effect waits on this so a fresh reload
+  // never overwrites the run's remembered freeform bench with the platform
+  // default before the record is loaded.
+  const runDeckLoadedRef = useRef(false)
+  const lastPersistedDeckRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1197,7 +1208,8 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
 
   useEffect(() => {
     if (!runId) {
-      dispatch({ type: 'set_run_deck_lock', lock: null })
+      runDeckLoadedRef.current = false
+      dispatch({ type: 'set_run_deck', deck: null })
       return
     }
     let cancelled = false
@@ -1205,15 +1217,44 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       .then((record) => {
         if (cancelled) return
         const payload = (record.payload ?? {}) as Record<string, unknown>
-        dispatch({ type: 'set_run_deck_lock', lock: isRunDeckLock(payload.methodDeckLock) ? payload.methodDeckLock : null })
+        runDeckLoadedRef.current = true
+        if (
+          typeof payload.methodPlatform === 'string'
+          && typeof payload.methodVariantId === 'string'
+        ) {
+          dispatch({ type: 'set_run_deck', deck: { platformId: payload.methodPlatform, variantId: payload.methodVariantId } })
+        } else {
+          dispatch({ type: 'set_run_deck', deck: null })
+        }
       })
       .catch(() => {
-        if (!cancelled) dispatch({ type: 'set_run_deck_lock', lock: null })
+        if (!cancelled) {
+          runDeckLoadedRef.current = true
+          dispatch({ type: 'set_run_deck', deck: null })
+        }
       })
     return () => {
       cancelled = true
     }
   }, [runId])
+
+  // Persist the run's current deck (platform/variant) back to the record on
+  // every change so a reload remembers it — deliberately NOT a lock, just a
+  // mutable memory of the last deck the user left the run on. Assumes the
+  // platform/variant are valid (the switcher only offers manifest variants).
+  useEffect(() => {
+    if (!state.runId || !runDeckLoadedRef.current) return
+    const key = `${state.runId}:${state.platformId}:${state.variantId}`
+    if (lastPersistedDeckRef.current === key) return
+    lastPersistedDeckRef.current = key
+    void writeRunDeckMemory({
+      runId: state.runId,
+      platformId: state.platformId,
+      variantId: state.variantId,
+    }).catch((error: unknown) => {
+      console.warn('Failed to persist current deck', error)
+    })
+  }, [state.runId, state.platformId, state.variantId])
 
   useEffect(() => {
     if (!eventGraphId) return
@@ -1227,6 +1268,7 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
           runId: runId ?? graph.runId,
           events: graph.events,
           labwares: graph.labwares,
+          equipments: graph.equipments,
           placements: graph.placements,
         })
       })
@@ -1294,15 +1336,16 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
           assistPipetteId: assistPipetteId ?? null,
         }),
       placeNewLabware: (labware, location, orientation) => {
-        lockRunDeckForFirstEdit()
         dispatch({ type: 'place_new_labware', labware, location, orientation })
       },
+      placeEquipment: (equipment, location, orientation) =>
+        dispatch({ type: 'place_equipment', equipment, location, orientation }),
+      updateEquipmentSettings: (equipmentId, settings) =>
+        dispatch({ type: 'update_equipment_settings', equipmentId, settings }),
       movePlacement: (placementId, location, orientation) => {
-        lockRunDeckForFirstEdit()
         dispatch({ type: 'move_placement', placementId, location, orientation })
       },
       removePlacement: (placementId) => {
-        lockRunDeckForFirstEdit()
         dispatch({ type: 'remove_placement', placementId })
       },
       renameLabware: (labwareId, name) => dispatch({ type: 'rename_labware', labwareId, name }),

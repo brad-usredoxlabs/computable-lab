@@ -27,6 +27,7 @@ import {
 } from '../lib/previewProjection'
 import { ReadPlateModal } from '../rail/ReadPlateModal'
 import { InstrumentFocus } from './InstrumentFocus'
+import { EquipmentFocus } from './EquipmentFocus'
 import type { LabwareOrientation, WellSelection } from '../types'
 
 /**
@@ -53,6 +54,14 @@ export function LabwareFocus() {
       : null) ?? null
   const isPreviewPlacement =
     placement != null && !state.placements.includes(placement)
+  // First-class bench equipment lives in `state.equipments`, NOT `state.labwares`
+  // (never labware geometry). Resolve it so a focused equipment tile shows its
+  // capabilities pane instead of a blank focus.
+  const equipment = placement?.entityKind === 'equipment'
+    ? state.equipments[placement.equipmentId ?? placement.labwareId]
+      ?? state.preview?.previewEquipments[placement.equipmentId ?? placement.labwareId]
+      ?? null
+    : null
   const labware: Labware | null = placement
     ? state.labwares[placement.labwareId]
       ?? state.preview?.previewLabwares[placement.labwareId]
@@ -332,7 +341,7 @@ export function LabwareFocus() {
     [actions, activePipette, labware, placement, state.selection, moveTubeFrom],
   )
 
-  if (!placement || !labware) return null
+  if (!placement) return null
 
   const slotForLock = (() => {
     if (!variant) return null
@@ -370,12 +379,31 @@ export function LabwareFocus() {
     )
   }
 
-  const wellState = hover && labwareStates ? getWellState(labwareStates, labware.labwareId, hover.wellId) : null
+  const wellState = hover && labwareStates && labware
+    ? getWellState(labwareStates, labware.labwareId, hover.wellId)
+    : null
 
   const locationLabel =
     placement.location.kind === 'slot'
       ? `slot ${placement.location.slotId}`
       : `lawn (${placement.location.xMm}, ${placement.location.yMm} mm)`
+
+  // First-class bench equipment is NOT well-addressable — show its capabilities
+  // pane (settings + accepted labware from the equipment-class) instead of a
+  // well grid. This also gives an explicit Close so the user returns to the deck.
+  if (equipment) {
+    return (
+      <EquipmentFocus
+        equipment={equipment}
+        locationLabel={locationLabel}
+        onClose={() => actions.setFocus(null)}
+        onUpdateSettings={(equipmentId, settings) =>
+          actions.updateEquipmentSettings(equipmentId, settings)}
+      />
+    )
+  }
+
+  if (!labware) return null
 
   const selectedWells = state.selection?.labwareId === labware.labwareId
     ? state.selection.wells

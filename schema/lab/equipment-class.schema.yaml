@@ -48,5 +48,39 @@ properties:
       qualificationRequired:
         type: boolean
 
+  # First-class equipment capability (declarative): the PRODUCED-parameters this
+  # class exposes (e.g. a water bath's temperature_c), and the LABWARE it accepts
+  # (e.g. a qPCR machine accepts a plate_96). Instances set concrete `settings`
+  # keyed by these definitions; only `acceptsLabware` instruments may receive
+  # labware placed onto them. Empty/absent acceptsLabware = accepts none.
+  settingsDefinition:
+    type: array
+    description: >-
+      Configurable parameters this class exposes. Each is a key the instance's
+      `settings` must/would set. Declarative: a water-bath class declares
+      `temperature_c`; a thermocycler declares `anneal_temperature_c`/`cycles`.
+    uniqueItems: true
+    items:
+      type: object
+      additionalProperties: false
+      required: [ key, label ]
+      properties:
+        key: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        valueType: { type: string, enum: [ number, string, boolean, enum, duration_sec ] }
+        unit: { type: string }
+        min: { type: number }
+        max: { type: number }
+        enum: { type: array, items: { type: string } }
+
+  acceptsLabware:
+    type: array
+    description: >-
+      Labware types this equipment accepts, e.g. qPCR accepts `plate_96`. Only
+      instruments that declare a type here may have that labware placed onto
+      them. Empty/absent = accepts no labware.
+    uniqueItems: true
+    items: { type: string }
+
   notes:
     type: string

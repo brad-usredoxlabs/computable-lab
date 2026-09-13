@@ -162,18 +162,6 @@
   flex-shrink: 0;
 }
 
-/* Locked deck/variant: after a run's first edit the deck is pinned (RunDeckLock).
-   Grey the selector and show a lock so it's clear the choice is fixed. */
-.event-editor .chip-select[data-locked='true'] {
-  opacity: 0.75;
-  border-style: dashed;
-}
-
-.event-editor .chip-select select:disabled {
-  cursor: default;
-  color: var(--cl-text-dim);
-}
-
 /* Mobile — miniaturized deck/vocab/tool controls pinned at the top.
    Compact the deck-layout + vocabulary switchers into a slim strip so they
    sit right at the top of the workspace without an overflowing full-size
@@ -613,6 +601,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--cl-text);
+}
+
+/* Read-only settings chip on first-class equipment tiles (e.g. "55 °C"). */
+.event-editor .tile__chip--settings {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 146, 43, 0.14);
+  border: 1px solid rgba(255, 146, 43, 0.35);
+  color: var(--cl-text);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .event-editor .tile__controls {
@@ -3291,6 +3296,82 @@
   color: var(--cl-text-faint);
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* ---- First-class equipment focus: settings + accepts-labware capability ---- */
+
+.event-editor .focus__equipment-kind {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin-top: 2px;
+}
+
+.event-editor .focus__equipment-section {
+  margin-top: 6px;
+}
+
+.event-editor .focus__equipment-section-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-text-faint);
+}
+
+.event-editor .focus__equipment-empty {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+.event-editor .focus__equipment-settings-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  align-items: start;
+}
+
+.event-editor .focus__equipment-setting-label {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+.event-editor .focus__equipment-setting-value {
+  color: var(--cl-text);
+  font-size: 13px;
+  margin: 0;
+}
+
+.event-editor .focus__equipment-chip {
+  margin-top: 6px;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 146, 43, 0.14);
+  border: 1px solid rgba(255, 146, 43, 0.35);
+  color: var(--cl-text);
+  font-size: 12px;
+}
+
+.event-editor .focus__equipment-accepts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.event-editor .focus__equipment-accepts-list li {
+  padding: 2px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
 }
 
 .plate-rail {
