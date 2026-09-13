@@ -103,6 +103,80 @@ describe('POST /protocols/:id/steps/:stepId/subgraph (commit a step realization)
     expect((p.labwares as unknown[]).length).toBe(2)
   })
 
+  it('carries first-class equipment (with settings) in the minted realization', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/protocols/${protocolId}/steps/step-1/subgraph`,
+      payload: {
+        events: [{
+          eventId: 'E-inc',
+          event_type: 'incubate',
+          details: { labwareId: 'eqp-bath-1', duration_min: 30, temperature_C: 55 },
+        }],
+        labwares: [],
+        equipments: [{
+          equipmentId: 'eqp-bath-1',
+          recordId: 'EQP-WATER-BATH',
+          name: 'Water bath',
+          instrumentKind: 'water_bath',
+          settings: { temperature_c: 55 },
+        }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.payload)
+    const realization = created.find((e) => e.recordId === body.realizationId)
+    expect(realization).toBeDefined()
+    const p = realization?.payload as Record<string, unknown>
+    const labwares = p.labwares as Array<Record<string, unknown>>
+    // The equipment is minted as a first-class entry, not dropped.
+    const bath = labwares.find((l) => l.kind === 'equipment' && l.equipmentId === 'eqp-bath-1')
+    expect(bath).toBeDefined()
+    expect(bath?.settings).toEqual({ temperature_c: 55 })
+    expect(bath?.recordId).toBe('EQP-WATER-BATH')
+    expect(bath?.name).toBe('Water bath')
+  })
+
+  it('rejects a malformed cycling program in equipment settings (422, draft preserved)', async () => {
+    const { store: s3, validator: v3, lintEngine: l3, created: created3 } = makeStore({ [protocolId]: protocolEnvelope(protocolId, [
+      { stepId: 'step-1', label: 'Amplify', ordinal: 1, kind: 'other' },
+    ]) })
+    const tapp = Fastify()
+    await tapp.register(async (instance) => {
+      registerProtocolStepsRoutes(instance, { store: s3, validator: v3, lintEngine: l3 } as never)
+    }, { prefix: '/api' })
+    await tapp.ready()
+
+    const res = await tapp.inject({
+      method: 'POST',
+      url: `/api/protocols/${protocolId}/steps/step-1/subgraph`,
+      payload: {
+        events: [{ eventId: 'E1', event_type: 'incubate', details: { labwareId: 'tc-1', duration_min: 30, temperature_C: 95 } }],
+        labwares: [],
+        equipments: [{
+          equipmentId: 'tc-1',
+          recordId: 'EQP-THERMOCYCLER',
+          name: 'TC1',
+          instrumentKind: 'qpcr',
+          settings: {
+            cycling_program: {
+              initial: { temperature_c: 95, duration_sec: 60 },
+              cycles: { count: 0, steps: [{ temperature_c: 60, duration_sec: 30 }] }, // count must be positive
+            },
+          },
+        }],
+      },
+    })
+    expect(res.statusCode).toBe(422)
+    const body = JSON.parse(res.payload)
+    expect(body.error).toBe('REALIZATION_NOT_ACCEPTED')
+    expect(body.findings[0]).toMatchObject({ code: 'malformed-cycling-program' })
+    // Draft preserved — no realization minted, no subGraphRef committed.
+    expect(created3.some((e) => e.recordId.startsWith('EVG-STEP-'))).toBe(false)
+    await tapp.close()
+    void v3
+  })
+
   it('persists the subGraphRef onto the step so the committed realization is discoverable', async () => {
     const res = await app.inject({ method: 'GET', url: `/api/protocols/${protocolId}/steps/step-1` })
     expect(res.statusCode).toBe(200)

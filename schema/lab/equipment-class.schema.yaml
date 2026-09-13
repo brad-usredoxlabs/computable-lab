@@ -67,11 +67,43 @@ properties:
       properties:
         key: { type: string, minLength: 1 }
         label: { type: string, minLength: 1 }
-        valueType: { type: string, enum: [ number, string, boolean, enum, duration_sec ] }
+        valueType: { type: string, enum: [ number, string, boolean, enum, duration_sec, profile ] }
         unit: { type: string }
         min: { type: number }
         max: { type: number }
         enum: { type: array, items: { type: string } }
+        # Declarative shape for a multi-step cycling program (valueType: profile).
+        # A thermocycler declares its run profile here; the instance sets the
+        # concrete value under the same key in `settings`. Nothing here is labware
+        # geometry — it is the machine's run program.
+        profileDefinition:
+          type: object
+          additionalProperties: false
+          required: [ initial, cycles ]
+          properties:
+            initial:
+              type: object
+              additionalProperties: false
+              required: [ temperature_c, duration_sec ]
+              properties:
+                temperature_c: { type: number }
+                duration_sec: { type: number }
+            cycles:
+              type: object
+              additionalProperties: false
+              required: [ count, steps ]
+              properties:
+                count: { type: integer, exclusiveMinimum: 0 }
+                steps:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [ temperature_c, duration_sec ]
+                    properties:
+                      temperature_c: { type: number }
+                      duration_sec: { type: number }
 
   acceptsLabware:
     type: array

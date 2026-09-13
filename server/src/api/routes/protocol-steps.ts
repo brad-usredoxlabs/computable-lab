@@ -156,6 +156,54 @@ function rebuildOrdinals(steps: ProtocolStep[]): ProtocolStep[] {
   return sorted.map((s, i) => ({ ...s, ordinal: i + 1 }));
 }
 
+/**
+ * Validate a cycling-program settings value against the declarative profile
+ * shape: `{ initial: { temperature_c, duration_sec }, cycles: { count,
+ * steps: [{ temperature_c, duration_sec }] } }`. Returns a human message when
+ * the value structurally resembles a cycling program but is malformed; null
+ * when it is absent/valid (non-program settings are untouched).
+ */
+function cyclingProgramError(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const v = value as Record<string, unknown>
+  // Not a cycling program (e.g. a plain temperature or duration) → leave alone.
+  if (!('initial' in v) && !('cycles' in v)) return null
+  const isNum = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
+
+  const initial = v.initial as Record<string, unknown> | null
+  if (typeof initial !== 'object' || initial === null || !isNum(initial.temperature_c) || !isNum(initial.duration_sec)) {
+    return 'cycling program initial hold must have numeric temperature_c and duration_sec'
+  }
+  const cycles = v.cycles as Record<string, unknown> | null
+  if (typeof cycles !== 'object' || cycles === null || !isNum(cycles.count) || (cycles.count as number) <= 0) {
+    return 'cycling program cycles.count must be a positive number'
+  }
+  if (!Array.isArray(cycles.steps) || cycles.steps.length < 1) {
+    return 'cycling program cycles.steps must contain at least one step'
+  }
+  for (const stepRaw of cycles.steps) {
+    const step = stepRaw as Record<string, unknown> | null
+    if (typeof step !== 'object' || step === null || !isNum(step.temperature_c) || !isNum(step.duration_sec)) {
+      return 'each cycling program step must have numeric temperature_c and duration_sec'
+    }
+  }
+  return null
+}
+
+/** Scan equipment settings for the first malformed cycling program. */
+function findMalformedCyclingPrograms(equipments: unknown[]): string | null {
+  for (const raw of equipments) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const settings = (raw as Record<string, unknown>).settings
+    if (typeof settings !== 'object' || settings === null) continue
+    for (const value of Object.values(settings as Record<string, unknown>)) {
+      const err = cyclingProgramError(value)
+      if (err) return err
+    }
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -657,11 +705,11 @@ export function registerProtocolStepsRoutes(
   // ========================================================================
   fastify.post<{
     Params: { protocolId: string; stepId: string };
-    Body: { events?: unknown[]; labwares?: unknown[] };
+    Body: { events?: unknown[]; labwares?: unknown[]; equipments?: unknown[] };
   }>(
     '/protocols/:protocolId/steps/:stepId/subgraph',
     async (
-      request: FastifyRequest<{ Params: { protocolId: string; stepId: string }; Body: { events?: unknown[]; labwares?: unknown[] } }>,
+      request: FastifyRequest<{ Params: { protocolId: string; stepId: string }; Body: { events?: unknown[]; labwares?: unknown[]; equipments?: unknown[] } }>,
       reply: FastifyReply,
     ) => {
       try {
@@ -690,9 +738,47 @@ export function registerProtocolStepsRoutes(
         // (Ajv) + lint + reference-connectivity checks BEFORE marking it
         // accepted. A failing proposal keeps the draft; it is NOT minted or
         // committed, so the UI never flips to "accepted" on an invalid graph.
+        // First-class equipment (EQP- record or mint) is declared alongside
+        // labware so the event-graph's labwares[] carries it with its settings.
+        const labwares = Array.isArray(body.labwares) ? body.labwares : ([] as unknown[])
+        const equipments = Array.isArray(body.equipments) ? body.equipments : ([] as unknown[])
+
+        // ---- Cyclic-program settings gate ---------------------------------
+        // A thermocycler's `settings[<key>].valueType === 'profile'` value must
+        // match the declarative cycling-program shape (initial hold; cycles with
+        // a positive count and >=1 {temperature_c, duration_sec} steps). A
+        // malformed program is not accepted — the draft is preserved.
+        const profileFinding = findMalformedCyclingPrograms(equipments)
+        if (profileFinding) {
+          reply.status(422);
+          return {
+            error: 'REALIZATION_NOT_ACCEPTED',
+            message: 'Step realization contains a malformed cycling program (a profile setting must have an initial hold + positive cycle count + >=1 steps with temperature_c/duration_sec); the draft is preserved.',
+            findings: [{ severity: 'error', code: 'malformed-cycling-program', message: profileFinding, path: '/equipments' }],
+          };
+        }
+
         const evento = {
           events: Array.isArray(body.events) ? body.events : ([] as unknown[]),
-          labwares: Array.isArray(body.labwares) ? body.labwares : ([] as unknown[]),
+          // Equipment entries become `kind:'equipment'` labwares entries keyed
+          // by equipmentId (so event refs connect and the machinery declares
+          // them), carrying settings — never labware geometry.
+          labwares: [
+            ...labwares,
+            ...equipments.map((raw) => {
+              const eq = (raw as Record<string, unknown> & { equipmentId?: string })
+              const id = typeof eq.equipmentId === 'string' ? eq.equipmentId : (eq.labwareId as string | undefined)
+              return {
+                kind: 'equipment',
+                labwareId: id ?? `eqp:${Date.now().toString(36)}`,
+                ...(id ? { equipmentId: id } : {}),
+                ...(typeof eq.recordId === 'string' ? { recordId: eq.recordId } : {}),
+                ...(typeof eq.name === 'string' ? { name: eq.name } : {}),
+                ...(typeof eq.instrumentKind === 'string' ? { instrumentKind: eq.instrumentKind } : {}),
+                ...((eq.settings && typeof eq.settings === 'object') ? { settings: eq.settings } : {}),
+              }
+            }),
+          ],
         };
         const gateDeps = {
           // Adapters over the SINGLE validation authority (Ajv) and the
