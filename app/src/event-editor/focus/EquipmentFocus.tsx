@@ -33,9 +33,44 @@ interface EquipmentClassRecord {
     min?: number
     max?: number
     enum?: string[]
+    profileDefinition?: CyclingProfileDefinition
   }>
   acceptsLabware?: string[]
   notes?: string
+}
+
+/** Declarative cycling-program shape: initial hold + N cycles of steps. */
+interface CyclingProfile {
+  initial: { temperature_c: number; duration_sec: number }
+  cycles: { count: number; steps: Array<{ temperature_c: number; duration_sec: number }> }
+}
+
+interface CyclingProfileDefinition {
+  initial?: { temperature_c?: number; duration_sec?: number }
+  cycles?: { count?: number; steps?: Array<{ temperature_c?: number; duration_sec?: number }> }
+}
+
+/** Coerce an unknown value to a populated CyclingProfile, or null if unshaped. */
+export function asCyclingProfile(value: unknown): CyclingProfile | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const v = value as Partial<CyclingProfile>
+  const initial = v.initial
+  const cycles = v.cycles
+  if (
+    typeof initial !== 'object' || initial === null
+    || typeof cycles !== 'object' || cycles === null
+    || !Array.isArray(cycles.steps))
+  {
+    return null
+  }
+  const steps = (cycles.steps as Array<Partial<{ temperature_c: number; duration_sec: number }>>).map((s) => ({
+    temperature_c: s.temperature_c ?? 0,
+    duration_sec: s.duration_sec ?? 0,
+  }))
+  return {
+    initial: { temperature_c: initial.temperature_c ?? 0, duration_sec: initial.duration_sec ?? 0 },
+    cycles: { count: typeof cycles.count === 'number' ? cycles.count : 1, steps },
+  }
 }
 
 interface EquipmentFocusProps {
@@ -87,10 +122,43 @@ function initialDraft(
 ): Record<string, string> {
   const out: Record<string, string> = {}
   for (const def of defs) {
+    if (def.valueType === 'profile') continue
     const v = settings[def.key]
     out[def.key] = v === undefined || v === null ? '' : String(v)
   }
   return out
+}
+
+/** Initial structured draft for every profile-declared setting key. */
+function initialProfileDrafts(
+  defs: NonNullable<EquipmentClassRecord['settingsDefinition']>,
+  settings: Record<string, unknown>,
+): Record<string, CyclingProfile> {
+  const out: Record<string, CyclingProfile> = {}
+  for (const def of defs) {
+    if (def.valueType !== 'profile') continue
+    const existing = asCyclingProfile(settings[def.key])
+    out[def.key] = existing ?? defaultProfile(def.profileDefinition)
+  }
+  return out
+}
+
+/** A cycling program seeded from the class's profileDefinition, or a minimal
+ *  valid one (a single 30 s hold) when the class declares none. */
+function defaultProfile(def: CyclingProfileDefinition | undefined): CyclingProfile {
+  const d = def ?? {}
+  const initial = d.initial ?? {}
+  const cycles = d.cycles ?? {}
+  const steps = (cycles.steps ?? []).length > 0
+    ? (cycles.steps as Array<{ temperature_c?: number; duration_sec?: number }>).map((s) => ({
+        temperature_c: s.temperature_c ?? 95,
+        duration_sec: s.duration_sec ?? 30,
+      }))
+    : [{ temperature_c: 95, duration_sec: 30 }]
+  return {
+    initial: { temperature_c: initial.temperature_c ?? 95, duration_sec: initial.duration_sec ?? 30 },
+    cycles: { count: typeof cycles.count === 'number' ? cycles.count : 1, steps },
+  }
 }
 
 /** Fallback when a declared key has no current value. */
@@ -139,6 +207,77 @@ function renderSettingControl(
   )
 }
 
+/**
+ * CyclingProgramEditor — edits a multi-step thermal cycling program:
+ * an initial hold (`temperature_c` × `duration_sec`), a positive cycle count,
+ * and a repeatable list of per-cycle steps (each `temperature_c` ×
+ * `duration_sec`). Mutations are reported up via `onProfile`, which the parent
+ * stores in the profile draft. Uses seconds for durations to match the schema.
+ */
+interface ProfileEditorProps {
+  defKey: string
+  profile: CyclingProfile
+  onProfile: (p: CyclingProfile) => void
+}
+
+export function ProfileEditor({ defKey, profile, onProfile }: ProfileEditorProps) {
+  const clone = () => ({
+    initial: { ...profile.initial },
+    cycles: { count: profile.cycles.count, steps: profile.cycles.steps.map((s) => ({ ...s })) },
+  })
+
+  const setInitial = (field: 'temperature_c' | 'duration_sec', value: number) => {
+    onProfile({ ...clone(), initial: { ...profile.initial, [field]: value } })
+  }
+  const setCount = (count: number) => {
+    onProfile({ ...clone(), cycles: { ...profile.cycles, count } })
+  }
+  const setStep = (idx: number, field: 'temperature_c' | 'duration_sec', value: number) => {
+    const steps = profile.cycles.steps.map((s, i) => (i === idx ? { ...s, [field]: value } : s))
+    onProfile({ ...clone(), cycles: { ...profile.cycles, steps } })
+  }
+  const addStep = () => {
+    const steps = [...profile.cycles.steps, { temperature_c: 60, duration_sec: 30 }]
+    onProfile({ ...clone(), cycles: { ...profile.cycles, steps } })
+  }
+  const removeStep = (idx: number) => {
+    const steps = profile.cycles.steps.filter((_, i) => i !== idx)
+    onProfile({ ...clone(), cycles: { ...profile.cycles, steps } })
+  }
+
+  const num = (testId: string) =>
+    `equipment-profile-${defKey}-${testId}`
+
+  return (
+    <div className="focus__profile-editor" data-testid={`equipment-profile-editor-${defKey}`}>
+      <div className="focus__profile-row">
+        <span className="focus__profile-label">Initial hold</span>
+        <input type="number" data-testid={num('initial-temperature_c')} value={profile.initial.temperature_c}
+          onChange={(e) => setInitial('temperature_c', Number(e.target.value))} /> °C
+        <input type="number" data-testid={num('initial-duration_sec')} value={profile.initial.duration_sec}
+          onChange={(e) => setInitial('duration_sec', Number(e.target.value))} /> s
+      </div>
+      <div className="focus__profile-row">
+        <span className="focus__profile-label">Cycles</span>
+        <input type="number" data-testid={num('cycle-count')} value={profile.cycles.count}
+          onChange={(e) => setCount(Number(e.target.value))} />
+      </div>
+      <div className="focus__profile-steps">
+        {profile.cycles.steps.map((step, i) => (
+          <div key={i} className="focus__profile-step-row" data-testid={`${num('step')}-${i}`}>
+            <input type="number" data-testid={num(`step-${i}-temperature_c`)} value={step.temperature_c}
+              onChange={(e) => setStep(i, 'temperature_c', Number(e.target.value))} /> °C
+            <input type="number" data-testid={num(`step-${i}-duration_sec`)} value={step.duration_sec}
+              onChange={(e) => setStep(i, 'duration_sec', Number(e.target.value))} /> s
+            <button type="button" className="focus__btn--ghost" onClick={() => removeStep(i)}>−</button>
+          </div>
+        ))}
+        <button type="button" className="focus__btn--ghost" data-testid={num('add-step')} onClick={addStep}>＋ step</button>
+      </div>
+    </div>
+  )
+}
+
 export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSettings }: EquipmentFocusProps) {
   const [cls, setCls] = useState<EquipmentClassRecord | null>(null)
   useEffect(() => {
@@ -156,9 +295,13 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
   const chip = settingsChipText(equipment)
 
   // Editable draft: a working copy of the settings for the class-defined keys.
-  // Number values are edited as strings (HTML number inputs), converted on save.
+  // Scalar values (number/enum/boolean/string) are edited as strings; `profile`
+  // values are edited as structured CyclingProfile drafts.
   const [draft, setDraft] = useState<Record<string, string>>(
     () => initialDraft(cls?.settingsDefinition ?? [], settings),
+  )
+  const [profileDrafts, setProfileDrafts] = useState<Record<string, CyclingProfile>>(
+    () => initialProfileDrafts(cls?.settingsDefinition ?? [], settings),
   )
   const [savedFlash, setSavedFlash] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -167,8 +310,10 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
   // re-fire on every render (a fresh array each render would loop forever).
   const defs = useMemo(() => cls?.settingsDefinition ?? [], [cls])
 
-  // Reset the draft when the equipment or its class definition changes.
+  // Reset the drafts when the equipment or its class definition changes.
   useEffect(() => setDraft(initialDraft(defs, equipment.settings ?? {})),
+    [equipment, defs])
+  useEffect(() => setProfileDrafts(initialProfileDrafts(defs, equipment.settings ?? {})),
     [equipment, defs])
 
   const setSetting = (key: string, value: string) => {
@@ -176,14 +321,26 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
     setSavedFlash(false)
   }
 
+  const setProfile = (key: string, profile: CyclingProfile) => {
+    setProfileDrafts((prev) => ({ ...prev, [key]: profile }))
+    setSavedFlash(false)
+  }
+
   const handleSave = () => {
     if (!onUpdateSettings) return
     const compiled: Record<string, unknown> = { ...settings }
     for (const def of defs) {
+      if (def.valueType === 'profile') {
+        compiled[def.key] = profileDrafts[def.key] ?? asCyclingProfile(settings[def.key])
+        continue
+      }
       const raw = draft[def.key] ?? ''
       if (def.valueType === 'number' || def.valueType === 'duration_sec') {
+        // Empty draft → leave the existing value (or omit when none yet). Only
+        // validate a genuinely typed (non-empty) input.
+        if (raw.trim() === '') continue
         const n = Number(raw)
-        if (Number.isNaN(n) || raw.trim() === '') {
+        if (Number.isNaN(n)) {
           setDraftError(`“${def.label}” must be a number.`)
           return
         }
@@ -244,7 +401,13 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
                 {defs.map((def) => (
                   <div key={def.key} className="focus__equipment-setting">
                     <span className="focus__equipment-setting-label">{def.label}</span>
-                    {renderSettingControl(def, draft[def.key] ?? defaultValue(def, settings), setSetting)}
+                    {def.valueType === 'profile' ? (
+                      <ProfileEditor
+                        defKey={def.key}
+                        profile={profileDrafts[def.key] ?? asCyclingProfile(settings[def.key]) ?? defaultProfile(def.profileDefinition)}
+                        onProfile={(p) => setProfile(def.key, p)}
+                      />
+                    ) : renderSettingControl(def, draft[def.key] ?? defaultValue(def, settings), setSetting)}
                     {def.unit ? (
                       <span className="focus__equipment-setting-unit">{def.unit}</span>
                     ) : null}

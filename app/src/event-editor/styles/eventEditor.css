@@ -3374,6 +3374,63 @@
   font-size: 12px;
 }
 
+/* ---- Cycling-program (profile) editor in the equipment focus ---- */
+
+.event-editor .focus__profile-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+}
+
+.event-editor .focus__profile-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.event-editor .focus__profile-label {
+  color: var(--cl-text-dim);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.event-editor .focus__profile-row input,
+.event-editor .focus__profile-step-row input {
+  width: 64px;
+  font-size: 12px;
+  padding: 2px 6px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 3px;
+  color: var(--cl-text);
+}
+
+.event-editor .focus__profile-step-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.event-editor .focus__profile-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-editor .focus__btn--ghost {
+  border: 1px solid var(--cl-border);
+  background: transparent;
+  color: var(--cl-text);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
 .plate-rail {
   display: flex;
   flex-direction: column;

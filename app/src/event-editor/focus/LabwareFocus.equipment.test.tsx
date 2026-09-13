@@ -40,6 +40,38 @@ function waterBath(equipmentId: string, name: string, temperature_c: number): Eq
   }
 }
 
+function thermocycler(equipmentId: string, name: string): Equipment {
+  return {
+    equipmentId,
+    recordId: 'EQP-THERMOCYCLER',
+    name,
+    instrumentKind: 'qpcr',
+    equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-QPCR' },
+    settings: { cycling_program: { initial: { temperature_c: 95, duration_sec: 180 }, cycles: { count: 40, steps: [{ temperature_c: 60, duration_sec: 30 }] } } },
+  }
+}
+
+function qpcrClassRecord() {
+  return {
+    kind: 'equipment-class',
+    id: 'EQC-QPCR',
+    name: 'qPCR Machine',
+    settingsDefinition: [
+      { key: 'anneal_temperature_c', label: 'Anneal temperature', valueType: 'number', unit: '°C' },
+      {
+        key: 'cycling_program',
+        label: 'Cycling program',
+        valueType: 'profile',
+        profileDefinition: {
+          initial: { temperature_c: 95, duration_sec: 180 },
+          cycles: { count: 40, steps: [{ temperature_c: 95, duration_sec: 5 }, { temperature_c: 60, duration_sec: 30 }] },
+        },
+      },
+    ],
+    acceptsLabware: ['plate_96'],
+  }
+}
+
 function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState {
   return {
     loadState: 'ready',
@@ -246,5 +278,63 @@ describe('LabwareFocus — first-class equipment tap', () => {
       expect(mocks.updateEquipmentSettings).toHaveBeenCalledWith('eqp-1', { temperature_c: 62 }))
     // The pane reflects the saved value (kept local or echoed back).
     expect((screen.getByTestId('equipment-setting-input-temperature_c') as HTMLInputElement).value).toBe('62')
+  })
+
+  it('renders a cycling-program editor for a profile setting', async () => {
+    const eq = thermocycler('tc-1', 'TC1')
+    mocks.state = makeState({
+      focusPlacementId: 'pl-tc',
+      labwares: {},
+      equipments: { 'tc-1': eq },
+      placements: [{
+        placementId: 'pl-tc',
+        entityKind: 'equipment',
+        equipmentId: 'tc-1',
+        labwareId: 'tc-1',
+        location: { kind: 'lawn', xMm: 10, yMm: 10 },
+        orientation: 'landscape',
+      }],
+    })
+    mocks.getRecord.mockResolvedValue({ payload: qpcrClassRecord() })
+
+    render(<LabwareFocus />)
+    const editor = await screen.findByTestId('equipment-profile-editor-cycling_program')
+    expect(editor).toBeTruthy()
+    // The initial hold + a cycle-count input + step rows are present.
+    const text = editor.textContent ?? ''
+    expect(text).toContain('Initial hold')
+    expect(text).toContain('Cycles')
+  })
+
+  it('save dispatches a complete cycling program for a thermocycler', async () => {
+    const eq = thermocycler('tc-1', 'TC1')
+    mocks.state = makeState({
+      focusPlacementId: 'pl-tc',
+      labwares: {},
+      equipments: { 'tc-1': eq },
+      placements: [{
+        placementId: 'pl-tc',
+        entityKind: 'equipment',
+        equipmentId: 'tc-1',
+        labwareId: 'tc-1',
+        location: { kind: 'lawn', xMm: 10, yMm: 10 },
+        orientation: 'landscape',
+      }],
+    })
+    mocks.getRecord.mockResolvedValue({ payload: qpcrClassRecord() })
+
+    render(<LabwareFocus />)
+    await screen.findByTestId('equipment-profile-editor-cycling_program')
+    fireEvent.click(screen.getByTestId('equipment-settings-save'))
+    await waitFor(() =>
+      expect(mocks.updateEquipmentSettings).toHaveBeenCalledWith(
+        'tc-1',
+        expect.objectContaining({
+          cycling_program: expect.objectContaining({
+            initial: { temperature_c: 95, duration_sec: 180 },
+            cycles: expect.objectContaining({ count: 40 }),
+          }),
+        }),
+      ))
   })
 })
