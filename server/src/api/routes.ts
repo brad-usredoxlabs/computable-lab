@@ -611,9 +611,9 @@ export function registerRoutes(
     fastify.get('/ai/context/warm/status', aiHandlers.warmContextStatus.bind(aiHandlers));
   }
 
-  // Standalone ChatGPT-style chat — proxies to a local Ollama native
-  // /api/chat and streams SSE with a final PP/decode tokens-per-sec event.
-  // Optional (requires chatHandlers) like every other handler family.
+  // Standalone ChatGPT-style chat — proxies to the configured OpenAI-compatible
+  // /chat/completions stream (vLLM/llama.cpp) and forwards SSE deltas to the
+  // client. Optional (requires chatHandlers) like every other handler family.
   const { chatHandlers } = options;
 
   if (chatHandlers) {

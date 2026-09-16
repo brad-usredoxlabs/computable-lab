@@ -1,26 +1,24 @@
 /**
- * ChatHandlers — standalone ChatGPT-style chat backed by a local Ollama.
+ * ChatHandlers — standalone ChatGPT-style chat backed by an OpenAI-compatible
+ * endpoint (vLLM / llama.cpp / Ollama's /v1 with an OpenAI-translator).
  *
- * Proxies POST /api/ai/chat/stream to Ollama's NATIVE /api/chat endpoint
- * (NDJSON streaming, NOT the OpenAI-compat /v1/chat/completions). Each
- * upstream NDJSON chunk is forwarded verbatim to the client as one SSE
- * `data:` event so the browser can render token deltas live, and when the
- * final `done:true` chunk carries timing fields (prompt_eval_count,
- * prompt_eval_duration, eval_count, eval_duration) we emit ONE final
- * `data:` timing event with prompt-processing (PP) tokens/s and decode
- * tokens/s.
+ * Proxies POST /api/ai/chat/stream to the OpenAI-compatible
+ * `${baseUrl}/chat/completions` endpoint with `stream: true`. The upstream
+ * SSE `data:` frames (OpenAI `choices[].delta.content`) are translated into
+ * the client's expected event shapes and forwarded as SSE `data:` events so
+ * the browser can render token deltas live:
+ *   - each content delta  -> data: {"message":{"content": "<delta>"}}
+ *   - the [DONE] sentinel -> data: {"done":true}
+ * This keeps the frontend client contract unchanged while pointing the chat
+ * at the SAME OpenAI-compatible endpoint the rest of the app uses (config-driven,
+ * never a hardcoded IP — this repo NEVER hardcodes a host as the primary path).
  *
- * Active endpoint resolution follows the config convention (this repo
- * NEVER hardcodes an IP as the primary path):
+ * Active endpoint resolution follows the config convention:
  *   1. appConfig.ai.profiles[profileName]  — explicit profile in the body
  *   2. appConfig.ai.profiles[activeProfile] — the configured active profile
  *   3. appConfig.ai.inference (legacy inline config)
  *   4. env override CLA_ORNITh_BASE_URL / CLA_ORNITh_MODEL (dev-only,
  *      never the primary path)
- *
- * The configured baseUrl is OpenAI-style (e.g. "http://host:11434/v1"); we
- * strip a trailing "/v1" so the proxy targets Ollama's native
- * `${base}/api/chat` endpoint.
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -38,15 +36,9 @@ export interface ChatStreamBody {
   messages: ChatMessage[];
 }
 
-/** One NDJSON chunk from Ollama's native /api/chat (stream:true). */
-export interface OllamaChatChunk {
-  model?: string;
-  message?: { role?: string; content?: string };
-  done?: boolean;
-  prompt_eval_count?: number;
-  prompt_eval_duration?: number;
-  eval_count?: number;
-  eval_duration?: number;
+/** One OpenAI-compatible SSE data frame (parsed). */
+interface OpenAiStreamChunk {
+  choices?: Array<{ delta?: { content?: string } }>;
 }
 
 export interface ChatHandlersOptions {
@@ -58,33 +50,23 @@ export interface ChatHandlersOptions {
 const ENV_BASE_URL = process.env.CLA_ORNITh_BASE_URL;
 const ENV_MODEL = process.env.CLA_ORNITh_MODEL;
 
-function toOllamaNativeBase(baseUrl: string): string {
-  return baseUrl.replace(/\/v1\/?$/, '');
+/** Normalize a baseUrl to a single trailing `/v1` for the chat endpoint. */
+function toChatBase(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '');
 }
 
-function computeTiming(
-  chunk: OllamaChatChunk,
-): { type: 'timing'; ppTokensPerSec: number | null; decodeTokensPerSec: number | null } | null {
-  const promptSeconds =
-    typeof chunk.prompt_eval_duration === 'number' && chunk.prompt_eval_duration > 0
-      ? chunk.prompt_eval_duration / 1e9
-      : null;
-  const evalSeconds =
-    typeof chunk.eval_duration === 'number' && chunk.eval_duration > 0
-      ? chunk.eval_duration / 1e9
-      : null;
-
-  const ppTokensPerSec =
-    typeof chunk.prompt_eval_count === 'number' && chunk.prompt_eval_count > 0 && promptSeconds !== null
-      ? chunk.prompt_eval_count / promptSeconds
-      : null;
-  const decodeTokensPerSec =
-    typeof chunk.eval_count === 'number' && chunk.eval_count > 0 && evalSeconds !== null
-      ? chunk.eval_count / evalSeconds
-      : null;
-
-  if (ppTokensPerSec === null && decodeTokensPerSec === null) return null;
-  return { type: 'timing', ppTokensPerSec, decodeTokensPerSec };
+/** Extract the content delta from an OpenAI SSE chunk, if any. */
+function getDeltaText(data: string): string | null {
+  if (!data.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(data) as OpenAiStreamChunk;
+      const delta = parsed.choices?.[0]?.delta?.content;
+      return typeof delta === 'string' && delta.length > 0 ? delta : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export class ChatHandlers {
@@ -134,37 +116,9 @@ export class ChatHandlers {
     );
   }
 
-  /** Parse one NDJSON line and forward it as an SSE event. */
-  private async handleUpstreamLine(
-    line: string,
-    send: (data: string) => void,
-    seenDone: boolean,
-  ): Promise<{ seenDone: boolean; chunk: OllamaChatChunk | null }> {
-    const trimmed = line.trim();
-    if (!trimmed) return { seenDone, chunk: null };
-
-    let chunk: OllamaChatChunk;
-    try {
-      chunk = JSON.parse(trimmed) as OllamaChatChunk;
-    } catch {
-      // Partial line / keepalive — ignore, wait for the next chunk.
-      return { seenDone, chunk: null };
-    }
-
-    send(trimmed);
-
-    if (chunk.done === true && !seenDone) {
-      const timing = computeTiming(chunk);
-      if (timing) {
-        send(JSON.stringify(timing));
-      }
-      return { seenDone: true, chunk };
-    }
-    return { seenDone, chunk };
-  }
-
   /**
-   * POST /api/ai/chat/stream — proxy to Ollama native /api/chat over SSE.
+   * POST /api/ai/chat/stream — proxy to an OpenAI-compatible
+   * /chat/completions stream over SSE, translating upstream deltas.
    */
   async streamChat(
     request: FastifyRequest<{ Body: ChatStreamBody }>,
@@ -191,8 +145,7 @@ export class ChatHandlers {
       return;
     }
 
-    const nativeBase = toOllamaNativeBase(resolved.baseUrl);
-    const url = `${nativeBase}/api/chat`;
+    const url = `${toChatBase(resolved.baseUrl)}/chat/completions`;
 
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -232,30 +185,46 @@ export class ChatHandlers {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let seenDone = false;
+      let doneSent = false;
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-          for (const line of lines) {
-            const result = await this.handleUpstreamLine(line, send, seenDone);
-            if (result.seenDone) seenDone = true;
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() ?? '';
+          for (const frame of frames) {
+            const data = frame
+              .split('\n')
+              .filter((l) => l.startsWith('data:'))
+              .map((l) => l.slice(5).trim())
+              .join('\n');
+            if (!data) continue;
+            // OpenAI sentinel: empty payload terminates the stream.
+            if (data === '[DONE]' || data === '') {
+              if (!doneSent) {
+                send(JSON.stringify({ done: true }));
+                doneSent = true;
+              }
+              continue;
+            }
+            const delta = getDeltaText(data);
+            if (delta) {
+              send(JSON.stringify({ message: { content: delta } }));
+            }
           }
         }
-        // Flush any trailing partial line (should be none, but be safe).
-        if (buffer.trim()) {
-          const result = await this.handleUpstreamLine(buffer, send, seenDone);
-          if (result.seenDone) seenDone = true;
+        if (!doneSent) {
+          // End-of-EOF could precede an explicit [DONE] on some backends.
+          send(JSON.stringify({ done: true }));
+          doneSent = true;
         }
       } finally {
         reader.releaseLock();
       }
     } catch (err) {
-      request.log.warn(err, 'Ollama chat stream failed');
+      request.log.warn(err, 'AI chat stream failed');
       send(JSON.stringify({ type: 'error', message: err instanceof Error ? err.message : String(err) }));
     } finally {
       reply.raw.removeListener('close', onClose);

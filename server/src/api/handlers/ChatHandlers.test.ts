@@ -12,28 +12,33 @@ const APP_CONFIG: AppConfig = {
       ornith: {
         inference: {
           provider: 'openai-compatible',
-          baseUrl: 'http://100.111.141.22:11434/v1',
-          model: 'ornith-1.0-9b:latest',
+          baseUrl: 'http://thunderbeast:8080/v1',
+          model: 'singlespark-qwen3.8-flash-next',
         },
         agent: {},
       },
     },
     inference: {
-      baseUrl: 'http://100.111.141.22:11434/v1',
-      model: 'ornith-1.0-9b:latest',
+      baseUrl: 'http://thunderbeast:8080/v1',
+      model: 'singlespark-qwen3.8-flash-next',
     },
     agent: {},
   },
 };
 
-/** Build a web ReadableStream that emits each line as a UTF-8 NDJSON line. */
-function ndjsonStream(lines: string[]): ReadableStream<Uint8Array> {
+/**
+ * Build a web ReadableStream that emits OpenAI-format SSE lines:
+ *   data: {...}\n\n ... data: [DONE]\n\n
+ */
+function openaiSSEStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       for (const line of lines) {
-        controller.enqueue(encoder.encode(`${line}\n`));
+        // Each SSE event is a data: line followed by a blank line.
+        controller.enqueue(encoder.encode(`data: ${line}\n\n`));
       }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       controller.close();
     },
   });
@@ -72,22 +77,12 @@ function makeReply() {
 const written = (raw: FakeRaw) => (raw as unknown as { written: string[] }).written.join('');
 
 describe('ChatHandlers.streamChat', () => {
-  it('proxies Ollama NDJSON to SSE and emits a timing event with PP + decode tokens/s', async () => {
+  it('proxies an OpenAI-compatible /chat/completions stream to the client SSE shape', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(
-        ndjsonStream([
-          JSON.stringify({ model: 'x', message: { role: 'assistant', content: 'Hel' }, done: false }),
-          JSON.stringify({ model: 'x', message: { role: 'assistant', content: 'lo' }, done: false }),
-          JSON.stringify({
-            model: 'x',
-            message: { role: 'assistant', content: '' },
-            done: true,
-            done_reason: 'stop',
-            prompt_eval_count: 17,
-            prompt_eval_duration: 115785000,
-            eval_count: 1808,
-            eval_duration: 58549794000,
-          }),
+        openaiSSEStream([
+          JSON.stringify({ id: 'c1', choices: [{ index: 0, delta: { content: 'Hel' } }] }),
+          JSON.stringify({ id: 'c1', choices: [{ index: 0, delta: { content: 'lo' } }] }),
         ]),
         { status: 200 },
       );
@@ -107,27 +102,23 @@ describe('ChatHandlers.streamChat', () => {
       reply as any,
     );
 
-    const out = written(reply.raw);
-
-    // Upstream requested from the NATIVE endpoint with /v1 stripped.
+    // Upstream requested from the OpenAI-compatible endpoint (baseUrl kept
+    // intact, stream: true), NOT the Ollama-native /api/chat.
     expect(fetchImpl).toHaveBeenCalledWith(
-      'http://100.111.141.22:11434/api/chat',
+      'http://thunderbeast:8080/v1/chat/completions',
       expect.objectContaining({
         method: 'POST',
-        body: expect.stringContaining('"model":"ornith-1.0-9b:latest"'),
+        body: expect.stringContaining('"model":"singlespark-qwen3.8-flash-next"'),
       }),
     );
 
-    // Each NDJSON chunk forwarded as one SSE data: event.
-    expect(out).toContain('data: {"model":"x","message":{"role":"assistant","content":"Hel"},"done":false}');
-    expect(out).toContain('data: {"model":"x","message":{"role":"assistant","content":"lo"},"done":false}');
+    const out = written(reply.raw);
 
-    // Final timing event with computed rates:
-    //   pp = 17 / (115785000 / 1e9) = 146.8
-    //   decode = 1808 / (58549794000 / 1e9) = 30.9
-    expect(out).toContain('"type":"timing"');
-    expect(out).toContain('"ppTokensPerSec":146.');
-    expect(out).toContain('"decodeTokensPerSec":30.');
+    // Each OpenAI delta translated into the client `{message:{content}}` shape.
+    expect(out).toContain('data: {"message":{"content":"Hel"}}');
+    expect(out).toContain('data: {"message":{"content":"lo"}}');
+    // The [DONE] sentinel becomes the client `{done:true}` event.
+    expect(out).toContain('data: {"done":true}');
     expect(reply.raw.end).toHaveBeenCalled();
   });
 
@@ -149,7 +140,7 @@ describe('ChatHandlers.streamChat', () => {
   });
 
   it('uses the active profile when profileName is omitted', async () => {
-    const fetchImpl = vi.fn(async () => new Response(ndjsonStream([]), { status: 200 }));
+    const fetchImpl = vi.fn(async () => new Response(openaiSSEStream([]), { status: 200 }));
     const handlers = new ChatHandlers({ getAppConfig: () => APP_CONFIG, fetchImpl });
     const reply = makeReply();
     await handlers.streamChat(
@@ -163,8 +154,8 @@ describe('ChatHandlers.streamChat', () => {
       reply as any,
     );
     expect(fetchImpl).toHaveBeenCalledWith(
-      'http://100.111.141.22:11434/api/chat',
-      expect.objectContaining({ body: expect.stringContaining('"model":"ornith-1.0-9b:latest"') }),
+      'http://thunderbeast:8080/v1/chat/completions',
+      expect.objectContaining({ body: expect.stringContaining('"model":"singlespark-qwen3.8-flash-next"') }),
     );
   });
 });
