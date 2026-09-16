@@ -90,14 +90,15 @@
 
 .chat-page__msg {
   display: flex;
+  flex-direction: column;
 }
 
 .chat-page__msg--user {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .chat-page__msg--assistant {
-  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .chat-page__msg-bubble {
