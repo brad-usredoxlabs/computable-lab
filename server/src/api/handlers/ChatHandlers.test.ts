@@ -122,6 +122,39 @@ describe('ChatHandlers.streamChat', () => {
     expect(reply.raw.end).toHaveBeenCalled();
   });
 
+  it('forwards reasoning deltas (chain-of-thought) as reasoning events', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        openaiSSEStream([
+          JSON.stringify({ id: 'c1', choices: [{ index: 0, delta: { reasoning: 'We ' } }] }),
+          JSON.stringify({ id: 'c1', choices: [{ index: 0, delta: { reasoning: 'answer' } }] }),
+          JSON.stringify({ id: 'c1', choices: [{ index: 0, delta: { content: '102' } }] }),
+        ]),
+        { status: 200 },
+      );
+    });
+
+    const handlers = new ChatHandlers({ getAppConfig: () => APP_CONFIG, fetchImpl });
+    const reply = makeReply();
+    await handlers.streamChat(
+      {
+        headers: {},
+        body: { profileName: 'ornith', messages: [{ role: 'user', content: '17 x 6?' }] },
+        log: { warn: vi.fn() },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      reply as any,
+    );
+
+    const out = written(reply.raw);
+    expect(out).toContain('data: {"type":"reasoning","content":"We "}');
+    expect(out).toContain('data: {"type":"reasoning","content":"answer"}');
+    // Final answer still surfaces as the content shape.
+    expect(out).toContain('data: {"message":{"content":"102"}}');
+    expect(out).toContain('data: {"done":true}');
+  });
+
   it('rejects an empty messages array with 400', async () => {
     const handlers = new ChatHandlers({ getAppConfig: () => APP_CONFIG });
     const reply = makeReply();

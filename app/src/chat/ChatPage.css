@@ -121,6 +121,31 @@
   border-bottom-left-radius: 3px;
 }
 
+/* Chain-of-thought (thinking) block — dimmed, collapsible, above the answer. */
+.chat-page__reasoning {
+  max-width: 80%;
+  margin: 0 0 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--cl-accent, #0969da);
+  background: color-mix(in srgb, var(--cl-accent, #0969da) 8%, transparent);
+  border-radius: 6px;
+  color: var(--cl-text-dim, #9aa7b4);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.chat-page__reasoning summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+  color: var(--cl-text-dim, #9aa7b4);
+}
+.chat-page__reasoning-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-style: italic;
+}
+
 .chat-page__composer {
   display: flex;
   flex-direction: column;

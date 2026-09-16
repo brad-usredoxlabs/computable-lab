@@ -16,6 +16,7 @@ export interface ChatMessageInput {
 
 export type ChatStreamEvent =
   | { type: 'chunk'; content: string }
+  | { type: 'reasoning'; content: string }
   | { type: 'timing'; ppTokensPerSec: number | null; decodeTokensPerSec: number | null }
   | { type: 'done' }
   | { type: 'error'; message: string }
@@ -109,6 +110,10 @@ function parseSSEBlock(block: string): ChatStreamEvent | null {
   }
   if (record.type === 'error') {
     return { type: 'error', message: typeof record.message === 'string' ? record.message : 'Unknown error' }
+  }
+  // Chain-of-thought delta forwarded by the proxy.
+  if (record.type === 'reasoning' && typeof record.content === 'string' && record.content.length > 0) {
+    return { type: 'reasoning', content: record.content }
   }
 
   // Raw Ollama native chunk forwarded verbatim by the proxy.

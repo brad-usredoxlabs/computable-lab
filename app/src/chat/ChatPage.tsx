@@ -22,6 +22,8 @@ import './ChatPage.css'
 interface ChatMessageView {
   role: 'user' | 'assistant'
   content: string
+  /** Streaming chain-of-thought (thinking) text, shown dimmed above the answer. */
+  reasoning?: string
 }
 
 interface TimingView {
@@ -85,7 +87,20 @@ export function ChatPage() {
             const next = [...prev]
             const last = next[next.length - 1]
             if (last && last.role === 'assistant') {
-              next[next.length - 1] = { role: 'assistant', content: last.content + event.content }
+              next[next.length - 1] = {
+                role: 'assistant',
+                content: last.content + event.content,
+                ...(last.reasoning ? { reasoning: last.reasoning } : {}),
+              }
+            }
+            return next
+          })
+        } else if (event.type === 'reasoning') {
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last && last.role === 'assistant') {
+              next[next.length - 1] = { role: 'assistant', content: last.content, reasoning: (last.reasoning ?? '') + event.content }
             }
             return next
           })
@@ -134,6 +149,12 @@ export function ChatPage() {
       <div className="chat-page__log" ref={logRef} data-testid="chat-log">
         {messages.map((m, i) => (
           <div key={i} className={`chat-page__msg chat-page__msg--${m.role}`} data-testid={`chat-msg-${m.role}`}>
+            {m.role === 'assistant' && m.reasoning ? (
+              <details className="chat-page__reasoning" data-testid="chat-reasoning" open>
+                <summary>Thinking</summary>
+                <div className="chat-page__reasoning-body">{m.reasoning}</div>
+              </details>
+            ) : null}
             <div className="chat-page__msg-bubble">{m.content || (streaming && i === messages.length - 1 ? '…' : '')}</div>
           </div>
         ))}

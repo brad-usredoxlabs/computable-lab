@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('streamChat', () => {
-  it('parses Ollama content deltas into chunk events', async () => {
+  it('parses content deltas into chunk events', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(
         sseStream([
@@ -42,6 +42,28 @@ describe('streamChat', () => {
     expect(events).toMatchObject([
       { type: 'chunk', content: 'Hel' },
       { type: 'chunk', content: 'lo' },
+    ])
+  })
+
+  it('yields reasoning deltas as reasoning events (chain of thought)', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        sseStream([
+          'data: {"type":"reasoning","content":"We "}',
+          'data: {"type":"reasoning","content":"answer"}',
+          'data: {"message":{"role":"assistant","content":"102"},"done":false}',
+          'data: {"done":true}',
+        ]),
+        { status: 200 },
+      ),
+    ) as unknown as typeof fetch
+
+    const events = await collect()
+    expect(events).toMatchObject([
+      { type: 'reasoning', content: 'We ' },
+      { type: 'reasoning', content: 'answer' },
+      { type: 'chunk', content: '102' },
+      { type: 'done' },
     ])
   })
 

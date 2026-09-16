@@ -4,10 +4,12 @@
  *
  * Proxies POST /api/ai/chat/stream to the OpenAI-compatible
  * `${baseUrl}/chat/completions` endpoint with `stream: true`. The upstream
- * SSE `data:` frames (OpenAI `choices[].delta.content`) are translated into
- * the client's expected event shapes and forwarded as SSE `data:` events so
- * the browser can render token deltas live:
+ * SSE `data:` frames (OpenAI `choices[].delta.content` and
+ * `choices[].delta.reasoning`) are translated into the client's expected
+ * event shapes and forwarded as SSE `data:` events so the browser can render
+ * token deltas live:
  *   - each content delta  -> data: {"message":{"content": "<delta>"}}
+ *   - each reasoning delta -> data: {"type":"reasoning","content": "<delta>"}
  *   - the [DONE] sentinel -> data: {"done":true}
  * This keeps the frontend client contract unchanged while pointing the chat
  * at the SAME OpenAI-compatible endpoint the rest of the app uses (config-driven,
@@ -38,7 +40,7 @@ export interface ChatStreamBody {
 
 /** One OpenAI-compatible SSE data frame (parsed). */
 interface OpenAiStreamChunk {
-  choices?: Array<{ delta?: { content?: string } }>;
+  choices?: Array<{ delta?: { content?: string; reasoning?: string } }>;
 }
 
 export interface ChatHandlersOptions {
@@ -61,6 +63,20 @@ function getDeltaText(data: string): string | null {
     try {
       const parsed = JSON.parse(data) as OpenAiStreamChunk;
       const delta = parsed.choices?.[0]?.delta?.content;
+      return typeof delta === 'string' && delta.length > 0 ? delta : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Extract the reasoning delta (chain-of-thought) from an OpenAI SSE chunk, if any. */
+function getReasoningText(data: string): string | null {
+  if (!data.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(data) as OpenAiStreamChunk;
+      const delta = parsed.choices?.[0]?.delta?.reasoning;
       return typeof delta === 'string' && delta.length > 0 ? delta : null;
     } catch {
       return null;
@@ -212,6 +228,11 @@ export class ChatHandlers {
             const delta = getDeltaText(data);
             if (delta) {
               send(JSON.stringify({ message: { content: delta } }));
+            }
+            // Chain-of-thought deltas (delta.reasoning) stream separately.
+            const reasoning = getReasoningText(data);
+            if (reasoning) {
+              send(JSON.stringify({ type: 'reasoning', content: reasoning }));
             }
           }
         }
