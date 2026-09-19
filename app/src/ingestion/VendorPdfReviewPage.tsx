@@ -16,13 +16,13 @@ import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { apiClient } from '../shared/api/client'
-import { API_BASE } from '../shared/api/base'
 import type { RecordEnvelope } from '../types/kernel'
 import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
-import type { IntakeReviewDetailResponse } from '../shared/api/client'
+import type { ExtractionOptions, ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
+import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
 import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
 import {
   reviewCandidateToProtocolPayload,
@@ -72,6 +72,17 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [candidate, setCandidate] = useState<AiProtocolCandidateSummary | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
+  // Live extraction progress: the reviewer must be able to tell a long run from
+  // a dead one, and to choose how hard the model thinks before starting.
+  const [extractOptions, setExtractOptions] = useState<ExtractionOptions | null>(null)
+  const [thinkingLevel, setThinkingLevel] = useState('')
+  const [extractStage, setExtractStage] = useState<string | null>(null)
+  const [extractLog, setExtractLog] = useState<ExtractionLogLine[]>([])
+  const [extractElapsedMs, setExtractElapsedMs] = useState(0)
+  const [extractNote, setExtractNote] = useState<string | null>(null)
+  const [sinceLastEventMs, setSinceLastEventMs] = useState<number | null>(null)
+  const lastEventAtRef = useRef<number | null>(null)
+  const extractAbortRef = useRef<AbortController | null>(null)
   const [skippedSteps, setSkippedSteps] = useState<Set<string>>(new Set())
   const [overrides, setOverrides] = useState<StepOverride[]>([])
 
@@ -116,6 +127,17 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   }, [])
 
   const title = record ? (record.payload as Record<string, unknown>).title : recordId
+  // The vendor label the extraction prompt uses, derived from the record's own
+  // source URL when the artifact carries one (never guessed from the file name).
+  const vendor = (() => {
+    const file = (record?.payload as Record<string, unknown> | undefined)?.file as { source_url?: string } | undefined
+    if (!file?.source_url) return undefined
+    try {
+      return new URL(file.source_url).hostname
+    } catch {
+      return undefined
+    }
+  })()
   const extractedText = (record?.payload as Record<string, unknown> | undefined)?.extractedText as
     | ExtractedPage[]
     | undefined
@@ -164,6 +186,39 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       cancelled = true
     }
   }, [recordId, reviewToken])
+
+  // Which thinking levels this deployment offers for an extraction (config).
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .getExtractionOptions()
+      .then((opts) => {
+        if (cancelled) return
+        setExtractOptions(opts)
+        setThinkingLevel((current) => current || (opts?.defaultThinkingLevel ?? ''))
+      })
+      .catch(() => {
+        // The picker simply does not render; extraction still works at the
+        // endpoint's own default.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Liveness clock: "last event Ns ago" is what separates a thinking model
+  // from a dead connection, so it must tick even when no event arrives.
+  useEffect(() => {
+    if (!extracting) {
+      setSinceLastEventMs(null)
+      return
+    }
+    const timer = setInterval(() => {
+      const at = lastEventAtRef.current
+      setSinceLastEventMs(at === null ? null : Date.now() - at)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [extracting])
 
   // Load the stored PDF once we have a blob URL. If it fails (no stored file
   // / 404), fall back to the extracted-text pane.
@@ -228,29 +283,31 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
+  /**
+   * Run the AI extraction as a live stream: the panel shows the server's stage,
+   * the model's reasoning as it arrives, and a liveness clock. Cancelling
+   * aborts the request rather than leaving a run going in the background.
+   */
   const handleExtract = useCallback(async () => {
     if (!extractedText) return
+    const controller = new AbortController()
+    extractAbortRef.current = controller
+    lastEventAtRef.current = Date.now()
     setExtracting(true)
     setExtractError(null)
-    try {
-      const sourceText = extractedText
-        .map((pg) => (typeof pg?.text === 'string' ? pg.text : ''))
-        .filter(Boolean)
-        .join('\n\n')
-      const response = await fetch(`${API_BASE}/protocol-builder/extract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: sourceText,
-          ...(typeof title === 'string' && title.trim() ? { title: title.trim() } : {}),
-        }),
-      })
-      if (!response.ok) {
-        const err = (await response.json().catch(() => ({}))) as { message?: string }
-        throw new Error(err.message || `Server returned ${response.status}`)
-      }
-      const data = (await response.json()) as { candidate?: AiProtocolCandidateSummary }
-      const c = data.candidate ?? null
+    setExtractNote(null)
+    setExtractStage(null)
+    setExtractLog([])
+    setExtractElapsedMs(0)
+    setSinceLastEventMs(0)
+
+    const sourceText = extractedText
+      .map((pg) => (typeof pg?.text === 'string' ? pg.text : ''))
+      .filter(Boolean)
+      .join('\n\n')
+
+    const applyCandidate = (raw: Record<string, unknown> | null): void => {
+      const c = (raw ?? null) as AiProtocolCandidateSummary | null
       setCandidate(c)
       if (c) {
         setProtocolPayload(candidateToProtocolPayload(c, 'DRAFT-' + recordId, sourceText))
@@ -258,12 +315,80 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         setSaveError(null)
         setSaveNote(null)
       }
+    }
+
+    try {
+      await apiClient.extractProtocolStream(
+        {
+          text: sourceText,
+          ...(recordId ? { documentId: recordId } : {}),
+          ...(typeof vendor === 'string' && vendor.trim() ? { vendor: vendor.trim() } : {}),
+          ...(thinkingLevel ? { thinkingLevel } : {}),
+        },
+        {
+          signal: controller.signal,
+          onEvent: (event: ExtractionStreamEvent) => {
+            lastEventAtRef.current = Date.now()
+            setSinceLastEventMs(0)
+            switch (event.type) {
+              case 'start':
+                setExtractStage('Preparing the extraction…')
+                setExtractLog((log) => [
+                  ...log,
+                  {
+                    kind: 'note',
+                    text: `${event.model} · ${event.chunks} chunk(s) · thinking: ${event.thinkingLevel || 'endpoint default'}\n`,
+                  },
+                ])
+                break
+              case 'stage':
+                setExtractStage(event.message)
+                setExtractLog((log) => [...log, { kind: 'note', text: `${event.message}\n` }])
+                break
+              case 'reasoning':
+                setExtractLog((log) => [...log, { kind: 'reasoning', text: event.text }])
+                break
+              case 'progress':
+                setExtractElapsedMs(event.elapsedMs)
+                break
+              case 'chunk-done':
+                setExtractLog((log) => [
+                  ...log,
+                  {
+                    kind: 'note',
+                    text: `\nchunk ${event.index}: ${event.parsed ? `${event.steps} step(s) parsed` : 'no JSON parsed'} in ${Math.round(event.elapsedMs / 1000)}s\n`,
+                  },
+                ])
+                break
+              case 'done':
+                setExtractElapsedMs(event.elapsedMs)
+                setExtractStage('Extraction complete')
+                applyCandidate(event.candidate as Record<string, unknown>)
+                break
+              case 'error':
+                setExtractError(event.message)
+                break
+              default:
+                break
+            }
+          },
+        },
+      )
     } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Extraction failed')
+      if (controller.signal.aborted) {
+        setExtractNote('Extraction cancelled.')
+      } else {
+        setExtractError(err instanceof Error ? err.message : 'Extraction failed')
+      }
     } finally {
       setExtracting(false)
+      extractAbortRef.current = null
     }
-  }, [extractedText, title])
+  }, [extractedText, recordId, thinkingLevel, vendor])
+
+  const handleCancelExtraction = useCallback(() => {
+    extractAbortRef.current?.abort()
+  }, [])
 
   /**
    * Build the editable protocol from the extraction the QUESTIONS gate (the
@@ -543,7 +668,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
         {/* Right: extracted protocol */}
         <div className="vpdf-review__right" style={{ flex: 1 }}>
-          {!protocolPayload && !extracting && (
+          {!protocolPayload ? (
             <>
               {review?.candidate ? (
                 <button
@@ -555,27 +680,23 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                   Use the extracted protocol ({review.candidate.steps.length} steps)
                 </button>
               ) : null}
-              <button
-                type="button"
-                className="vpdf-review__extract"
-                onClick={() => void handleExtract()}
-                disabled={!extractedText || extractedText.length === 0}
-                data-testid="vpdf-extract"
-              >
-                Extract Protocol (AI)
-              </button>
+              <ExtractionProgressPanel
+                options={extractOptions}
+                level={thinkingLevel}
+                onLevelChange={setThinkingLevel}
+                running={extracting}
+                stage={extractStage}
+                log={extractLog}
+                elapsedMs={extractElapsedMs}
+                sinceLastEventMs={sinceLastEventMs}
+                canStart={Boolean(extractedText && extractedText.length > 0)}
+                onStart={() => void handleExtract()}
+                onCancel={handleCancelExtraction}
+                error={extractError}
+                note={extractNote}
+              />
             </>
-          )}
-          {extracting && (
-            <p className="vpdf-review__hint" data-testid="vpdf-extracting">
-              Extracting…
-            </p>
-          )}
-          {extractError && (
-            <p className="vpdf-review__error" data-testid="vpdf-extract-error">
-              {extractError}
-            </p>
-          )}
+          ) : null}
           {recordId ? (
             <div className="vpdf-review__questions">
               {reviewLoading ? (

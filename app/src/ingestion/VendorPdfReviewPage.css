@@ -429,3 +429,74 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ---------------------------------------------------------------------------
+   Live extraction progress. A multi-minute extraction must look alive: the
+   stage line, the elapsed clock, how long since the last event, and the model's
+   streaming reasoning. The thinking level is chosen here, per extraction.
+   --------------------------------------------------------------------------- */
+.vpdf-review__extract-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.vpdf-review__extract-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vpdf-review__level {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.vpdf-review__level select {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+}
+
+.vpdf-review__extract-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vpdf-review__hint--idle {
+  color: var(--cl-warning, #fbbf24);
+}
+
+.vpdf-review__reasoning {
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  padding: 6px 8px;
+}
+
+.vpdf-review__reasoning summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.vpdf-review__reasoning-log {
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--cl-text-dim);
+}

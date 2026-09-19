@@ -4849,6 +4849,70 @@ export const apiClient = {
       },
     )
   },
+
+  /**
+   * The thinking presets this deployment offers for an extraction (config is
+   * the source; an empty list means none are declared).
+   */
+  async getExtractionOptions(): Promise<ExtractionOptions | null> {
+    try {
+      const response = await request<{ success: true } & ExtractionOptions>(
+        '/protocol-builder/extract-options',
+      )
+      return {
+        model: response.model ?? null,
+        defaultThinkingLevel: response.defaultThinkingLevel ?? '',
+        thinkingLevels: response.thinkingLevels ?? [],
+      }
+    } catch (err) {
+      // No AI backend, or an older server: the picker simply does not render.
+      if (ApiError.isApiError(err) && err.status === 503) return null
+      throw err
+    }
+  },
+
+  /**
+   * Run a text extraction as a live event stream. `onEvent` fires per event as
+   * it arrives; `signal` cancels the run (the server ends the stream).
+   */
+  async extractProtocolStream(
+    body: { text: string; documentId?: string; vendor?: string; thinkingLevel?: string },
+    handlers: { onEvent: (event: ExtractionStreamEvent) => void; signal?: AbortSignal },
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE}/protocol-builder/extract-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(getSessionToken() ? {} : {}) },
+      body: JSON.stringify(body),
+      ...(handlers.signal ? { signal: handlers.signal } : {}),
+    })
+    if (!response.ok) {
+      const detail = (await response.json().catch(() => ({}))) as { message?: string; error?: string }
+      throw new ApiError({
+        status: response.status,
+        code: detail.error ?? 'EXTRACT_STREAM_FAILED',
+        message: detail.message ?? `Server returned ${response.status}`,
+      })
+    }
+    if (!response.body) throw new ApiError({ status: 500, code: 'NO_STREAM', message: 'no response body' })
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const { events, rest } = parseSseBlocks(buffer)
+      buffer = rest
+      for (const event of events) {
+        handlers.onEvent(event as ExtractionStreamEvent)
+      }
+    }
+    // Anything left without a trailing blank line still counts.
+    for (const event of parseSseBlocks(`${buffer}\n\n`).events) {
+      handlers.onEvent(event as ExtractionStreamEvent)
+    }
+  }
 }
 
 /**
@@ -4881,3 +4945,61 @@ function generateEventGraphId(): string {
 }
 
 export type ApiClient = typeof apiClient
+
+
+// ============================================================================
+// Extraction progress: the review tab's live view of a long extraction
+// ============================================================================
+
+/** A thinking preset this deployment offers for an extraction. */
+export interface ExtractionThinkingLevel {
+  id: string
+  label: string
+}
+
+export interface ExtractionOptions {
+  model: string | null
+  defaultThinkingLevel: string
+  thinkingLevels: ExtractionThinkingLevel[]
+}
+
+/** One SSE event from POST /protocol-builder/extract-stream. */
+export type ExtractionStreamEvent =
+  | { type: 'start'; model: string; chunks: number; characters: number; thinkingLevel: string; thinkingParams: Record<string, unknown> }
+  | { type: 'stage'; index: number; total: number; message: string }
+  | { type: 'reasoning'; index: number; text: string }
+  | { type: 'content'; index: number; chars: number }
+  | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
+  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
+  | { type: 'done'; candidate: Record<string, unknown>; source: Record<string, unknown>; document: Record<string, unknown>; elapsedMs: number }
+  | { type: 'error'; message: string; index?: number }
+
+/**
+ * Parse complete SSE blocks out of a buffer, returning the events plus the
+ * unparsed tail (a block may be cut mid-arrival by the network).
+ * Pure — the streaming reader runs every fetch chunk through it.
+ */
+export function parseSseBlocks(buffer: string): { events: unknown[]; rest: string } {
+  const parts = buffer.split('\n\n')
+  const rest = parts.pop() ?? ''
+  const events: unknown[] = []
+  for (const part of parts) {
+    const line = part
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.startsWith('data:'))
+    if (!line) continue
+    const payload = line.slice('data:'.length).trim()
+    if (!payload || payload === '[DONE]') continue
+    try {
+      events.push(JSON.parse(payload))
+    } catch {
+      // A malformed frame is dropped rather than killing the run; the stream
+      // itself is the source of truth and the final event carries the result.
+    }
+  }
+  return { events, rest }
+}
+
+// Attached to the existing client object (defined above) rather than declared
+// again, so there is exactly one apiClient.
