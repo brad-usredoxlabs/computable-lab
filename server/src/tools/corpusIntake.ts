@@ -177,7 +177,23 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
     }
   }
 
-  const artifactRoot = join(workspaceRoot, 'artifacts', 'foundry');
+  // Resolve the ingest runtime BEFORE collecting: in embedded-git mode the
+  // app relocates its workspace root into the lab-data worktree, and PDF
+  // bytes must be collected under THAT root (the extractor enforces the
+  // artifact boundary relative to ctx.workspaceRoot). Injected ingestFn
+  // (tests, embedders) keeps the caller's root — no app boot.
+  let effectiveRoot = workspaceRoot;
+  let ingestFn = deps.ingestFn;
+  if (!ingestFn) {
+    const runtime = await resolveIntakeRuntime(workspaceRoot);
+    ingestFn = runtime.ingestFn;
+    effectiveRoot = runtime.workspaceRoot;
+    if (effectiveRoot !== workspaceRoot) {
+      log(`app relocated workspace root -> ${effectiveRoot} (artifacts + records collected there)`);
+    }
+  }
+
+  const artifactRoot = join(effectiveRoot, 'artifacts', 'foundry');
   const report = await collectFn({
     artifactRoot,
     candidates,
@@ -196,7 +212,6 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
       }
     }
   } else {
-    const ingestFn = deps.ingestFn ?? defaultIngestFn(workspaceRoot);
     for (const record of report.records) {
       // 'skipped_duplicate' means the bytes are already in the artifact
       // store from a previous crawl — still offer them to intake so nightly
@@ -257,7 +272,7 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
     perPdf,
   };
 
-  const reportPath = join(workspaceRoot, 'artifacts', 'foundry', 'intake', 'latest-run.json');
+  const reportPath = join(effectiveRoot, 'artifacts', 'foundry', 'intake', 'latest-run.json');
   await mkdir(dirname(reportPath), { recursive: true });
   await writeFile(reportPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), ...runResult }, null, 2)}\n`, 'utf-8');
 
@@ -269,26 +284,49 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
 }
 
 /**
- * Default ingest adapter for the CLI: loads the intake service lazily and
- * boots a real AppContext (schemas+validator+store) the same way
- * mcp-stdio.ts does. Dynamic import keeps this out of the test module graph.
+ * Default ingest runtime for the CLI: boots a real AppContext (schemas +
+ * validator + store) the same way mcp-stdio.ts does and returns BOTH the
+ * ingest edge and the workspace root the app actually resolved.
+ *
+ * Why the root is returned: in embedded-git mode (the default repo config)
+ * the app relocates its workspaceRoot into the lab-data worktree
+ * (~/.computable-lab/worktrees/main). Artifacts — records, PDFs, the run
+ * report — all belong beside the records, NOT beside the code repo: the
+ * review UI resolves artifactPath relative to ctx.workspaceRoot. Collection
+ * therefore uses the relocated root, so paths satisfy the extractor's
+ * 'artifactPath must be inside <root>/artifacts/foundry/pdfs' boundary by
+ * construction. The boundary itself is enforced by the candidate extractor
+ * (single authority — never duplicated here).
+ *
+ * Dynamic imports keep all of this out of the test module graph.
  */
-function defaultIngestFn(workspaceRoot: string): NonNullable<CorpusIntakeRunnerDeps['ingestFn']> {
-  let servicePromise: Promise<import('../protocol-intake/ProtocolIntakeService.js').ProtocolIntakeService> | null = null;
-  return async (args) => {
-    servicePromise ??= (async () => {
+export interface IntakeRuntime {
+  workspaceRoot: string;
+  ingestFn: NonNullable<CorpusIntakeRunnerDeps['ingestFn']>;
+}
+
+export async function resolveIntakeRuntime(
+  workspaceRoot: string,
+  deps?: {
+    appBooter?: (base: string) => Promise<{ workspaceRoot: string; store: unknown; validator: unknown }>;
+  },
+): Promise<IntakeRuntime> {
+  const booter =
+    deps?.appBooter ??
+    (async (base: string) => {
       const { initializeApp } = await import('../server.js');
-      const { ProtocolIntakeService } = await import('../protocol-intake/ProtocolIntakeService.js');
-      const ctx = await initializeApp(workspaceRoot);
-      return new ProtocolIntakeService({
-        workspaceRoot: ctx.workspaceRoot,
-        store: ctx.store,
-        validator: ctx.validator,
-      });
-    })();
-    const service = await servicePromise;
-    return service.ingestDocument(args);
-  };
+      const ctx = await initializeApp(base);
+      return { workspaceRoot: ctx.workspaceRoot, store: ctx.store, validator: ctx.validator };
+    });
+  const ctx = await booter(workspaceRoot);
+  const root = typeof ctx.workspaceRoot === 'string' && ctx.workspaceRoot.length > 0 ? ctx.workspaceRoot : workspaceRoot;
+  const { ProtocolIntakeService } = await import('../protocol-intake/ProtocolIntakeService.js');
+  const service = new ProtocolIntakeService({
+    workspaceRoot: root,
+    store: ctx.store as never,
+    ...(ctx.validator ? { validator: ctx.validator as never } : {}),
+  });
+  return { workspaceRoot: root, ingestFn: (args) => service.ingestDocument(args) };
 }
 
 async function main(): Promise<number> {

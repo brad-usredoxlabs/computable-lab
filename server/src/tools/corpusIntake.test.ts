@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { runCorpusIntake, readSearchResults, type CorpusIntakeRunnerDeps } from './corpusIntake.js';
+import { runCorpusIntake, readSearchResults, resolveIntakeRuntime, type CorpusIntakeRunnerDeps } from './corpusIntake.js';
 import type { ResolvedExaConfig } from '../integrations/exa.js';
 import type { FoundryPdfCollectionReport } from '../foundry/FoundryPdfCollector.js';
 
@@ -270,6 +270,31 @@ topics:
       expect(result.proposals).toBe(1);
       const pdfRow = result.perPdf.find((p) => p.title === 'A kit');
       expect(pdfRow?.status).toBe('ingested');
+    });
+  });
+
+  it('resolveIntakeRuntime relocates to the app workspace root (embedded-git worktree)', async () => {
+    await withWorkspace(async (dir) => {
+      // Embedded-git mode moves ctx.workspaceRoot into the data worktree;
+      // the ingest edge must enforce THAT root's artifact boundary, or PDFs
+      // collected beside the code repo are rejected with
+      // 'artifactPath must be inside <worktree>/artifacts/foundry/pdfs'.
+      const dataRoot = join(dir, 'worktrees', 'main');
+      await mkdir(dataRoot, { recursive: true });
+      const fakeBooter = vi.fn(async () => ({
+        workspaceRoot: dataRoot,
+        store: {},
+        validator: undefined,
+      }));
+      const runtime = await resolveIntakeRuntime('/code/repo', { appBooter: fakeBooter as never });
+      expect(fakeBooter).toHaveBeenCalledWith('/code/repo');
+      expect(runtime.workspaceRoot).toBe(dataRoot);
+
+      const stray = join(dir, 'stray.pdf');
+      await writeFile(stray, '%PDF-1.4 fake bytes');
+      await expect(runtime.ingestFn({ artifactPath: stray, vendor: 'v.test' })).rejects.toThrow(
+        /artifactPath must be inside .*worktrees\/main\/artifacts\/foundry\/pdfs/,
+      );
     });
   });
 
