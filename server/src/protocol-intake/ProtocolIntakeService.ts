@@ -101,6 +101,47 @@ export function scaleOptionsFromRegistry(): DecisionTreeScaleOption[] {
 }
 
 /**
+ * Question gate — the pipeline answers the PDF's if/then questions by
+ * EXHAUSTIVE enumeration, never by silently dropping them (the original
+ * failure mode: branchy steps became a passive review gap and drafting
+ * proceeded with questions never materialized). Invariants, checked against
+ * the tree before ANY proposal is drafted:
+ *
+ *  1. A document with branchy steps (>=2 distinct branches, mirroring
+ *     deriveBranchAxes) that yielded zero question axes is a derivation bug
+ *     — the branches were silently dropped. Refuse to draft.
+ *  2. Every axis with conditions must have at least one condition carrying
+ *     then_stepIds — an axis nobody's answer can act on is not a question,
+ *     it is decoration. (Zero-condition axes are explicitly non-gating per
+ *     the plan: the question is kept as tree notes, drafting continues.)
+ */
+export type QuestionGateVerdict =
+  | { ok: true }
+  | { ok: false; code: 'derivation_silent_branch_drop' | 'axis_without_resolvable_conditions'; message: string };
+
+export function questionGate(tree: ProtocolDecisionTree, branchyStepCount: number): QuestionGateVerdict {
+  if (branchyStepCount > 0 && tree.axes.length === 0) {
+    return {
+      ok: false,
+      code: 'derivation_silent_branch_drop',
+      message: `source document has ${branchyStepCount} branchy step(s) but the decision tree has zero question axes; refusing to draft (questions would go unanswered)`,
+    };
+  }
+  for (const axis of tree.axes) {
+    if (axis.conditions.length === 0) continue; // explicit non-gating question
+    const actionable = axis.conditions.some((c) => Array.isArray(c.then_stepIds) && c.then_stepIds.length > 0);
+    if (!actionable) {
+      return {
+        ok: false,
+        code: 'axis_without_resolvable_conditions',
+        message: `question axis ${axis.axisId} has ${axis.conditions.length} condition(s) but none gate any steps; refusing to draft`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
  * The reviewer-facing record of WHY a subgraph looks the way it does:
  * the question trail, the chosen answers, the scale, and any redraft
  * instruction. Deterministic from (tree, binding, scale) inputs.
@@ -217,14 +258,26 @@ export class ProtocolIntakeService {
       ...(input.now ? { now: input.now } : {}),
     });
 
-    // 4. Persist the tree (idempotent).
-    const treePersisted = await this.persistTree(tree, diagnostics);
-    if (!treePersisted) {
+    // 4. Persist the tree (idempotent). The effective tree is the STORED
+    //    payload when one already exists — records are the truth.
+    const effectiveTree = await this.persistTree(tree, diagnostics);
+    if (!effectiveTree) {
       return { documentId, treeRecordId: tree.recordId, proposalRecordIds: [], eventGraphRecordIds: [], diagnostics };
     }
 
+    // 4b. Question gate: refuse to draft if the if/then questions were never
+    //     materialized (silent branch drop) or an axis is unanswerable.
+    const branchyStepCount = candidate.steps.filter(
+      (step) => new Set((step.branches ?? []).map((b) => b.trim()).filter(Boolean)).size >= 2,
+    ).length;
+    const gate = questionGate(effectiveTree, branchyStepCount);
+    if (!gate.ok) {
+      diagnostics.push({ severity: 'error', code: gate.code, message: gate.message });
+      return { documentId, treeRecordId: effectiveTree.recordId, proposalRecordIds: [], eventGraphRecordIds: [], diagnostics };
+    }
+
     // 5. Enumerate the deterministic binding set.
-    const enumRes = enumerateChoiceBindings(tree.axes, input.maxProposals ?? 12);
+    const enumRes = enumerateChoiceBindings(effectiveTree.axes, input.maxProposals ?? 12);
     if (enumRes.truncated) {
       diagnostics.push({
         severity: 'warning',
@@ -233,13 +286,15 @@ export class ProtocolIntakeService {
       });
     }
 
-    // 6. Draft + promote + propose per binding x scale level.
+    // 6. Draft + promote + propose per binding x scale level. Scale comes
+    //    from the EFFECTIVE tree (records are the truth; the redraft path
+    //    resolves scaleIndex against tree.scaleAxis.options).
     const proposalRecordIds: string[] = [];
     const eventGraphRecordIds: string[] = [];
     for (const [bindingIndex, binding] of enumRes.bindings.entries()) {
-      for (const [scaleIndex, scaleOption] of scaleOptions.entries()) {
+      for (const [scaleIndex, scaleOption] of effectiveTree.scaleAxis.options.entries()) {
         const outcome = await this.draftOneProposal({
-          tree,
+          tree: effectiveTree,
           candidate,
           binding,
           bindingIndex,
@@ -255,7 +310,7 @@ export class ProtocolIntakeService {
     }
 
     // 7. Run report artifact (review trail; not a record).
-    const result: IngestPdfResult = { documentId, treeRecordId: tree.recordId, proposalRecordIds, eventGraphRecordIds, diagnostics };
+    const result: IngestPdfResult = { documentId, treeRecordId: effectiveTree.recordId, proposalRecordIds, eventGraphRecordIds, diagnostics };
     await this.writeReport(docSlug, {
       ...result,
       productSize: enumRes.productSize,
@@ -343,12 +398,12 @@ export class ProtocolIntakeService {
     };
   }
 
-  private async persistTree(tree: ProtocolDecisionTree, diagnostics: IntakeDiagnostic[]): Promise<boolean> {
+  private async persistTree(tree: ProtocolDecisionTree, diagnostics: IntakeDiagnostic[]): Promise<ProtocolDecisionTree | null> {
     const { store, validator } = this.deps;
     const existing = await store.get(tree.recordId);
     if (existing) {
       diagnostics.push({ severity: 'info', code: 'tree_exists', message: `Decision tree ${tree.recordId} already exists; reusing` });
-      return true;
+      return (existing.payload as unknown as ProtocolDecisionTree) ?? tree;
     }
     if (validator) {
       const check = validator.validate(tree as unknown as Record<string, unknown>, PROTOCOL_DECISION_TREE_SCHEMA_ID);
@@ -358,20 +413,20 @@ export class ProtocolIntakeService {
           code: 'tree_validation_failed',
           message: `Decision tree failed schema validation: ${JSON.stringify(check.errors ?? []).slice(0, 400)}`,
         });
-        return false;
+        return null;
       }
     }
     const envelope = createEnvelope(tree as unknown as Record<string, unknown>, PROTOCOL_DECISION_TREE_SCHEMA_ID);
     if (!envelope) {
       diagnostics.push({ severity: 'error', code: 'tree_envelope_failed', message: 'Could not build envelope for decision tree' });
-      return false;
+      return null;
     }
     const created = await store.create({ envelope, message: `intake: decision tree ${tree.recordId}` });
     if (!created.success) {
       diagnostics.push({ severity: 'error', code: 'tree_create_failed', message: created.error ?? 'store.create failed' });
-      return false;
+      return null;
     }
-    return true;
+    return tree;
   }
 
   private async draftOneProposal(args: {

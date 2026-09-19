@@ -14,11 +14,13 @@ import { createValidator } from '../validation/AjvValidator.js';
 import type { RecordStoreImpl } from '../store/RecordStoreImpl.js';
 import {
   buildDecisionBlock,
+  questionGate,
   scaleOptionsFromRegistry,
   ProtocolIntakeService,
   PROTOCOL_DECISION_TREE_SCHEMA_ID,
   SUBGRAPH_PROPOSAL_SCHEMA_ID,
 } from './ProtocolIntakeService.js';
+import type { ProtocolDecisionTree } from './deriveDecisionTree.js';
 import type { ProtocolCandidate } from '../ingestion/vendor-protocol/types.js';
 import type { RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
 
@@ -249,6 +251,95 @@ describe('ProtocolIntakeService.redraftProposal', () => {
       const result = await service.redraftProposal({ proposalRecordId: sgp.recordId, now: FIXED_NOW });
       expect(result.proposalRecordIds).toEqual([]);
       expect(result.diagnostics.some((d) => d.code === 'candidate_source_unavailable' && d.severity === 'error')).toBe(true);
+    });
+  });
+});
+
+describe('questionGate', () => {
+  const scaleAxis = { question: 'scale?', options: [{ level: 'manual_tubes' as const }] };
+  const tree = (axes: unknown[]): ProtocolDecisionTree =>
+    ({
+      kind: 'protocol-decision-tree',
+      recordId: 'PDT-x',
+      documentId: 'x',
+      axes,
+      scaleAxis,
+      status: 'proposed',
+      generatedAt: FIXED_NOW,
+    }) as unknown as ProtocolDecisionTree;
+
+  it('fails loud when a branchy document produced zero question axes', () => {
+    const verdict = questionGate(tree([]), 2);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.ok === false && verdict.code).toBe('derivation_silent_branch_drop');
+  });
+
+  it('passes a linear document with zero axes and zero branchy steps', () => {
+    expect(questionGate(tree([]), 0).ok).toBe(true);
+  });
+
+  it('fails when an axis carries conditions with no then_stepIds (unanswerable question)', () => {
+    const axes = [
+      { axisId: 'a1', question: 'q?', choiceKey: 'branchSelection', origin: 'document_branch', conditions: [{ id: 'c1', label: 'x' }] },
+    ];
+    const verdict = questionGate(tree(axes), 1);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.ok === false && verdict.code).toBe('axis_without_resolvable_conditions');
+  });
+
+  it('treats a zero-condition axis as explicitly non-gating (plan: question kept as notes)', () => {
+    const axes = [{ axisId: 'a1', question: 'q?', choiceKey: 'branchSelection', origin: 'document_branch', conditions: [] }];
+    expect(questionGate(tree(axes), 1).ok).toBe(true);
+  });
+
+  it('passes a healthy tree: every condition gates steps', () => {
+    const axes = [
+      {
+        axisId: 'a1', question: 'q?', choiceKey: 'branchSelection', origin: 'document_branch',
+        conditions: [
+          { id: 'c1', label: 'x', predicate: { op: 'equals', path: '$.branchSelection.a1', value: 'x' }, then_stepIds: ['step-001'] },
+          { id: 'c2', label: 'y', predicate: { op: 'equals', path: '$.branchSelection.a1', value: 'y' }, then_stepIds: ['step-002'] },
+        ],
+      },
+    ];
+    expect(questionGate(tree(axes), 1).ok).toBe(true);
+  });
+});
+
+describe('ProtocolIntakeService question gate', () => {
+  it('refuses to draft when a stale tree dropped the document branches (silent branch drop)', async () => {
+    await withWorkspace(async (workspaceRoot) => {
+      const { store, records } = makeMockStore();
+      // Seed a zero-axis tree under the id ingestDocument will resolve to —
+      // simulates a stale/corrupt tree predating branch derivation.
+      records.set('PDT-gated', {
+        recordId: 'PDT-gated',
+        schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID,
+        payload: {
+          kind: 'protocol-decision-tree',
+          recordId: 'PDT-gated',
+          documentId: 'gated',
+          axes: [],
+          scaleAxis: { question: 'scale?', options: [{ level: 'manual_tubes' }] },
+          status: 'proposed',
+          generatedAt: FIXED_NOW,
+        },
+      });
+      const service = new ProtocolIntakeService({
+        workspaceRoot,
+        store,
+        validator,
+        compileRunner: compileStub,
+        scaleOptions: [{ level: 'manual_tubes' }],
+      });
+      const result = await service.ingestDocument({ text: BRANCHY_PROTOCOL, documentId: 'gated', now: FIXED_NOW });
+      // BRANCHY_PROTOCOL has branchy steps but the reused tree has no axes:
+      // drafting would silently run every branch — must refuse, fail loud.
+      expect(result.proposalRecordIds).toEqual([]);
+      expect(result.eventGraphRecordIds).toEqual([]);
+      expect(
+        result.diagnostics.some((d) => d.severity === 'error' && d.code === 'derivation_silent_branch_drop'),
+      ).toBe(true);
     });
   });
 });
