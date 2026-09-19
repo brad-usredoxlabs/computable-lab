@@ -127,6 +127,10 @@ test('a second device (fresh context, no localStorage) attaches to the same sess
   await expect(pageB.locator('.workspace-tab')).toHaveCount(3, { timeout: 15_000 })
   await expect(pageB).toHaveURL(new RegExp(`/runs/${runs[1]!.recordId}$`), { timeout: 15_000 })
 
+  // Leave a clean slate: this spec's seeded session is the user's persisted
+  // session, so do not leave synthetic tabs attached to the real user.
+  await resetServerSession(request)
+
   await deviceA.close()
   await deviceB.close()
 })
