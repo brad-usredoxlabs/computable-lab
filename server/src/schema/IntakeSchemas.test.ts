@@ -123,6 +123,49 @@ describe('protocol-decision-tree schema contract', () => {
     expect(out.errors ?? []).toEqual([]);
     expect(out.valid).toBe(true);
   });
+it('accepts a document_table axis (Phase 3b: the kit sample table is a question)', async () => {
+    const validator = await intakeValidator();
+    const tableAxisTree = {
+      ...minimalTree,
+      axes: [
+        ...minimalTree.axes,
+        {
+          axisId: 'axis-sample-type',
+          question: 'Which Sample Type?',
+          choiceKey: 'branchSelection',
+          origin: 'document_table',
+          evidence: [{ quote: 'Sample type maximum input | Sample Type\tMaximum Input', page: 2, stepNumber: 1 }],
+          conditions: [
+            {
+              id: 'option-1',
+              label: 'Feces',
+              predicate: { op: 'equals', path: '$.branchSelection.axis-sample-type', value: 'feces' },
+              then_stepIds: ['step-001'],
+            },
+            {
+              id: 'option-2',
+              label: 'Soil',
+              predicate: { op: 'equals', path: '$.branchSelection.axis-sample-type', value: 'soil' },
+              then_stepIds: ['step-001'],
+            },
+          ],
+        },
+      ],
+    };
+    const out = validator.validate(tableAxisTree, TREE_SCHEMA);
+    expect(out.errors ?? []).toEqual([]);
+    expect(out.valid).toBe(true);
+  });
+
+  it('rejects an axis origin that is not grounded in the document or the AI pass', async () => {
+    const validator = await intakeValidator();
+    const bad = {
+      ...minimalTree,
+      axes: [{ ...minimalTree.axes[0], axisId: 'axis-guessed', origin: 'model_guess' }],
+    };
+    const out = validator.validate(bad, TREE_SCHEMA);
+    expect(out.valid).toBe(false);
+  });
 });
 
 describe('subgraph-proposal schema contract', () => {

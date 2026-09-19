@@ -249,6 +249,7 @@ export class ProtocolIntakeService {
     const tree = deriveDecisionTree({
       documentId: docSlug,
       steps: candidate.steps,
+      tables: candidate.tables,
       scaleOptions,
       sourcePdf: {
         ...(input.artifactPath ? { artifactPath: input.artifactPath } : {}),

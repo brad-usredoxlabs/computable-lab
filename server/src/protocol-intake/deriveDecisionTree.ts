@@ -14,6 +14,7 @@
  */
 
 import { deriveBranchAxes, slugify } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
+import { deriveSampleSourceAxis } from './deriveDocumentTableAxis.js';
 import type { BranchAxisLike, BranchConditionLike } from '../protocol/BranchResolver.js';
 
 export interface QuestionEvidence {
@@ -26,7 +27,7 @@ export interface DecisionTreeAxis {
   axisId: string;
   question: string;
   choiceKey: string;
-  origin: 'document_branch' | 'ai_suggested';
+  origin: 'document_branch' | 'document_table' | 'ai_suggested';
   evidence?: QuestionEvidence[];
   conditions: NonNullable<BranchAxisLike['conditions']>;
 }
@@ -55,7 +56,16 @@ export interface ProtocolDecisionTree {
 
 export interface DeriveDecisionTreeInput {
   documentId: string;
-  steps: Array<{ stepNumber?: number; stepId?: string; branches?: string[] }>;
+  steps: Array<{
+    stepNumber?: number;
+    stepId?: string;
+    branches?: string[];
+    /** Step text — used to find steps that point at a document table (3b). */
+    sourceText?: unknown;
+    actions?: unknown;
+  }>;
+  /** Document tables verbatim — the sample table is a question (Phase 3b). */
+  tables?: unknown;
   /** Caller passes registry levels — NEVER hardcoded here. */
   scaleOptions: DecisionTreeScaleOption[];
   aiQuestions?: Array<{
@@ -113,6 +123,29 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
     });
   }
 
+  // Document-table questions (Phase 3b): a table the document's own steps
+  // point at ("using the table below") is a question, exactly like lettered
+  // branches. Refusals are recorded as notes — never silently dropped.
+  let tableNote: string | undefined;
+  const tableAxis = deriveSampleSourceAxis({ tables: input.tables, steps: input.steps });
+  if (tableAxis.axis) {
+    const a = tableAxis.axis;
+    if (!axes.some((existing) => existing.axisId === a.axisId)) {
+      axes.push({
+        axisId: a.axisId,
+        question: a.question,
+        choiceKey: a.choiceKey,
+        origin: 'document_table' as const,
+        evidence: a.evidence,
+        conditions: rebindPredicatePath(a.conditions as NonNullable<BranchAxisLike['conditions']>, a.axisId),
+      });
+    }
+  } else if (tableAxis.reason && tableAxis.reason !== 'no_sample_table') {
+    tableNote = `sample_source_axis_not_derived: ${tableAxis.reason}`;
+  }
+
+  const notes = [input.notes, tableNote].filter((n): n is string => typeof n === 'string' && n.length > 0);
+
   return {
     kind: 'protocol-decision-tree',
     recordId: `PDT-${input.documentId}`,
@@ -125,6 +158,6 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
     },
     status: 'proposed',
     generatedAt: input.now ?? new Date().toISOString(),
-    ...(input.notes ? { notes: input.notes } : {}),
+    ...(notes.length > 0 ? { notes: notes.join('; ') } : {}),
   };
 }

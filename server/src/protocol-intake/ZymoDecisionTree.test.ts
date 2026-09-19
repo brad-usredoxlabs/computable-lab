@@ -53,7 +53,10 @@ describe('Zymo decision tree golden (intake question materialization)', () => {
         stepNumber: step.stepNumber,
         stepId: step.id,
         branches: step.branches,
+        sourceText: step.sourceText,
+        actions: step.actions,
       })),
+      tables: candidate.tables,
       scaleOptions: SCALE_OPTIONS,
     });
 
@@ -103,5 +106,23 @@ describe('Zymo decision tree golden (intake question materialization)', () => {
       'bench_plate_multichannel',
       'robot_deck',
     ]);
+
+    // Phase 3b — the document's own sample table ("Sample type maximum
+    // input") IS a question, and step 1 ("...using the table below:") is the
+    // step it gates. This is the "which are we extracting?" clarification the
+    // review loop has to ask, derived from the PDF, not from an AI guess.
+    const sampleAxis = tree.axes.find((axis) => axis.axisId === 'axis-sample-type');
+    expect(sampleAxis).toBeDefined();
+    expect(sampleAxis!.origin).toBe('document_table');
+    expect(sampleAxis!.conditions.map((c) => c.label)).toEqual([
+      'Feces',
+      'Soil',
+      'Liquid samples and swab collections',
+      'Cells suspended in PBS',
+      'Samples in DNA/RNA Shield',
+    ]);
+    expect(sampleAxis!.conditions.every((c) => (c.then_stepIds ?? []).length > 0)).toBe(true);
+    const gatingIds = new Set(sampleAxis!.conditions.flatMap((c) => c.then_stepIds ?? []));
+    expect(gatingIds.has(branchySteps[0]!.id)).toBe(true);
   });
 });
