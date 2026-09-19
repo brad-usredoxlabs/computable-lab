@@ -1,16 +1,35 @@
 # Data file: what the nightly corpus crawl searches for.
 # Consumed by: npm run corpus:intake -w server (server/src/tools/corpusIntake.ts)
 # Business logic is data — the runner never hardcodes topics.
+#
+# includeDomains matters: the first production crawl searched the open web
+# with category:'research paper' and got doi.org/PMC journal articles —
+# papers have no lettered a./b. branch steps and no 'Protocol' section, so
+# the vendor extractor produced zero-axis trees and empty proposals. Vendor
+# KIT MANUALS are the corpus target: they carry the if/then branch structure
+# the decision-tree loop exists to materialize.
 version: 1
 search:
   category: research paper
   numResults: 5
-  includeDomains: []            # empty = open web
+  includeDomains: # manufacturer protocol-manual hosts, not the open web
+    - zymoresearch.com
+    - qiagen.com
+    - promega.com
+    - thermofisher.com
+    - sigmaaldrich.com
+    - merckmillipore.com
+    - abcam.com
+    - neb.com
+    - macherey-nagel.com
+    - invivogen.com
+    - takara.bio
+    - pars-tolbiosciences.com
   contentMode: highlights
 topics:
   - id: adipocyte-differentiation
-    query: "adipocyte differentiation assay protocol kit manufacturer manual PDF"
+    query: "adipocyte differentiation assay protocol kit instructions PDF"
   - id: oxidative-stress-ros
-    query: "intracellular ROS detection assay protocol kit manual PDF"
+    query: "intracellular ROS detection assay kit protocol instructions PDF"
   - id: dna-purification-microbiome
-    query: "microbial DNA purification kit protocol manual PDF"
+    query: "microbial DNA purification kit protocol instructions PDF"
