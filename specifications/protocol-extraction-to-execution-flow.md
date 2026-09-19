@@ -1,5 +1,16 @@
 # UI Flow Design: Extracted Protocol → Usable ProtocolStep List
 
+> **SUPERSEDED IN PART (2026-09-19).** The flow below is still the best account of
+> the extraction → configure → draft → promote mechanics, but its claim that
+> `/protocol-builder` is *the canonical* authoring surface is out of date: it
+> predates the TapTab protocol editor and the vendor-PDF review surface
+> (`/ingestion/vendor-pdf/:recordId`), and predates the deterministic
+> intake pipeline (decision tree → subgraph proposal → redraft). For the current
+> model see `specifications/protocol-worldview.md` (five layers, two pipelines)
+> and the consolidation plan
+> `.hermes/plans/2026-09-19_121028-protocol-pipeline-consolidation.md`. Read this
+> document for the component-level detail, not for which surface owns the flow.
+
 ## Problem
 
 Users need to **"promote" or "import"** an AI-extracted protocol (`AiProtocolCandidateSummary`) into a real `ProtocolStep` list that can be executed in the event editor. The current system has two partially-overlapping flows but no clear, integrated path from **Search → Review → Configure → Draft → Promote → Execute**.
