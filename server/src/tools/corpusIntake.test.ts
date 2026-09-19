@@ -163,6 +163,35 @@ topics:
     });
   });
 
+  it('default config resolver reads integrations.exa from <workspace>/config.yaml', async () => {
+    await withWorkspace(async (dir) => {
+      const topicsPath = await topicsFixture(dir);
+      await writeFile(
+        join(dir, 'config.yaml'),
+        [
+          'integrations:',
+          '  exa:',
+          '    enabled: true',
+          '    apiKey: file-key-123',
+          '    defaultSearchType: auto',
+        ].join('\n'),
+        'utf8',
+      );
+      const searchFn = vi.fn(async () => ({ web: [] }));
+      const result = await runCorpusIntake({
+        workspaceRoot: dir,
+        topicsPath,
+        searchFn,
+        collectFn: async () => collectionReport({ found: 0, counts: { downloaded: 0, skippedDuplicate: 0, failed: 0 }, records: [] }),
+        ingestFn: async () => ({ documentId: '', treeRecordId: '', proposalRecordIds: [], eventGraphRecordIds: [], diagnostics: [] }),
+        // NOTE: no resolveConfigFn — exercises the default loader path.
+      } as unknown as CorpusIntakeRunnerDeps);
+      expect(result.ok).toBe(true);
+      expect(searchFn).toHaveBeenCalled();
+      expect(searchFn.mock.calls[0]![0]).toMatchObject({ apiKey: 'file-key-123' });
+    });
+  });
+
   it('throws on an empty topics file', async () => {
     await withWorkspace(async (dir) => {
       const topicsPath = await topicsFixture(dir, 'version: 1\ntopics: []\n');

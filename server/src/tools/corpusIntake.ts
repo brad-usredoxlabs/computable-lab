@@ -17,6 +17,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readYamlFile } from '../foundry/FoundryArtifacts.js';
+import { loadConfig } from '../config/loader.js';
 import {
   collectFoundryPdfs,
   type FoundryPdfCollectionCandidate,
@@ -44,7 +45,7 @@ export interface CorpusIntakeRunnerDeps {
   searchFn?: (config: ResolvedExaConfig, query: string, search: NonNullable<TopicsFile['search']>) => Promise<unknown>;
   collectFn?: (options: { artifactRoot: string; candidates: FoundryPdfCollectionCandidate[]; targetCount?: number }) => Promise<FoundryPdfCollectionReport>;
   ingestFn?: (args: { artifactPath: string; vendor: string; maxProposals?: number }) => Promise<IngestPdfResult>;
-  resolveConfigFn?: () => ResolvedExaConfig | null;
+  resolveConfigFn?: () => ResolvedExaConfig | null | Promise<ResolvedExaConfig | null>;
   perTopic?: number;
   maxProposals?: number;
   dryRun?: boolean;
@@ -124,7 +125,14 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
   }
   const search = topicsFile.search ?? {};
 
-  const config = (deps.resolveConfigFn ?? (() => resolveExaConfig(undefined)))();
+  const config = await (deps.resolveConfigFn ??
+    (async () => {
+      // Same config surface the server uses: <workspace>/config.yaml
+      // (integrations.exa.apiKey), with the EXA_API_KEY env fallback
+      // inside resolveExaConfig.
+      const app = await loadConfig({ configPath: join(workspaceRoot, 'config.yaml') });
+      return resolveExaConfig(app);
+    }))();
   if (!config) {
     return {
       ok: false,
