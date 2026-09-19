@@ -222,6 +222,17 @@ export interface InferenceConfig {
   thinkingLevels?: Record<string, import('../ai/thinkingLevels.js').ThinkingLevelDefinition>;
   /** Level id applied when a request names none (defaults to the first). */
   defaultThinkingLevel?: string;
+  /**
+   * STREAMING soft timeout: abort only when the server sends NO data for this
+   * long (default 300 000ms). Long generations are normal — a big vendor-PDF
+   * chunk with thinking on legitimately runs for minutes — so the clock resets
+   * on every received chunk rather than capping the whole request.
+   */
+  streamIdleTimeoutMs?: number;
+  /**
+   * Optional hard ceiling for one streamed request (undefined = no ceiling).
+   */
+  streamMaxMs?: number;
 }
 
 /**

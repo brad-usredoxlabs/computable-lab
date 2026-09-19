@@ -48,7 +48,18 @@ function normalizeReasoningDelta(chunk: StreamChunk): StreamChunk {
  * Create an inference client for the given config.
  */
 export function createInferenceClient(config: InferenceConfig): InferenceClient {
-  const { apiKey, timeoutMs = 120_000, enableThinking } = config;
+  const {
+    apiKey,
+    timeoutMs = 120_000,
+    // Streaming: a long generation is NORMAL, silence is the failure. The old
+    // code armed one timer for the whole request, so a healthy chunk that
+    // needed more than `timeoutMs` was killed mid-stream ("Inference stream
+    // timeout after 120000ms") — which is what a large vendor PDF hit on its
+    // second chunk. The idle timer resets on every byte the server sends.
+    streamIdleTimeoutMs = 300_000,
+    streamMaxMs,
+    enableThinking,
+  } = config;
   const baseUrl = normalizeBaseUrl(config.baseUrl);
 
   // Build common headers
@@ -151,7 +162,27 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
 
     async *completeStream(request: CompletionRequest): AsyncIterable<StreamChunk> {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      // Idle (stall) timer, re-armed on every received chunk; plus an optional
+      // hard ceiling for callers that want one.
+      let abortReason: 'idle' | 'max' | null = null;
+      let idleTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+        abortReason = 'idle';
+        controller.abort();
+      }, streamIdleTimeoutMs);
+      const armIdle = (): void => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          abortReason = 'idle';
+          controller.abort();
+        }, streamIdleTimeoutMs);
+      };
+      const maxTimer =
+        typeof streamMaxMs === 'number' && streamMaxMs > 0
+          ? setTimeout(() => {
+              abortReason = 'max';
+              controller.abort();
+            }, streamMaxMs)
+          : null;
 
       try {
         const res = await fetch(`${baseUrl}/chat/completions`, {
@@ -177,6 +208,8 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          // Data arrived: the stream is alive, so the stall clock starts over.
+          armIdle();
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -198,11 +231,17 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          throw new Error(`Inference stream timeout after ${timeoutMs}ms`);
+          if (abortReason === 'max') {
+            throw new Error(`Inference stream exceeded the configured maximum ${streamMaxMs}ms`);
+          }
+          throw new Error(
+            `Inference stream stalled: no data for ${streamIdleTimeoutMs}ms (raise streamIdleTimeoutMs if the model legitimately takes longer to start)`,
+          );
         }
         throw err;
       } finally {
-        clearTimeout(timer);
+        if (idleTimer) clearTimeout(idleTimer);
+        if (maxTimer) clearTimeout(maxTimer);
       }
     },
   };

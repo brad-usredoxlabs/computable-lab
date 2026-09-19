@@ -171,6 +171,11 @@ repositories:
 #         # is UI-only; an unknown requested level is refused (never silently
 #         # downgraded to the default).
 #         defaultThinkingLevel: off
+#         # Streaming: abort only after this much SILENCE (not total duration).
+#         # A large document chunk with thinking on legitimately runs minutes.
+#         streamIdleTimeoutMs: 600000
+#         # Optional hard ceiling for one streamed request (omit for none).
+#         # streamMaxMs: 1800000
 #         thinkingLevels:
 #           off:
 #             label: "Off — direct JSON"
