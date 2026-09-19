@@ -163,6 +163,25 @@ repositories:
 #         model: /home/brad/models/lfm2.5/LFM2.5-2.6B-Q4_K_M.gguf
 #         temperature: 0.1
 #         enableThinking: false
+#         # "How hard should the model think" presets, offered per extraction in
+#         # the vendor-PDF review tab. A level's MEANING belongs to the serving
+#         # stack, so the mapping is config, not code: vLLM + a Qwen3-style chat
+#         # template takes chat_template_kwargs.enable_thinking; an
+#         # OpenAI-compatible reasoning endpoint takes reasoning_effort. `label`
+#         # is UI-only; an unknown requested level is refused (never silently
+#         # downgraded to the default).
+#         defaultThinkingLevel: off
+#         thinkingLevels:
+#           off:
+#             label: "Off — direct JSON"
+#             enableThinking: false
+#             chat_template_kwargs:
+#               enable_thinking: false
+#           on:
+#             label: "Thinking — watch the reasoning"
+#             enableThinking: true
+#             chat_template_kwargs:
+#               enable_thinking: true
 #       agent:
 #         maxTurns: 15
 #         historyTurns: 4

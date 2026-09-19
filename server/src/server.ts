@@ -732,6 +732,10 @@ export async function createServer(
       model: aiProfile.inference.model,
       ...(aiProfile.inference.apiKey ? { apiKey: aiProfile.inference.apiKey } : {}),
       ...(aiProfile.inference.temperature ? { temperature: aiProfile.inference.temperature } : {}),
+      // Thinking presets are config (data): what a level means is the serving
+      // stack's business (chat_template_kwargs vs reasoning_effort).
+      ...(aiProfile.inference.thinkingLevels ? { thinkingLevels: aiProfile.inference.thinkingLevels } : {}),
+      ...(aiProfile.inference.defaultThinkingLevel ? { defaultThinkingLevel: aiProfile.inference.defaultThinkingLevel } : {}),
     } : undefined,
     pbOrchestratorRef,
   );

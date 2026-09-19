@@ -12,6 +12,11 @@ import type { ApiError } from '../types.js';
 import type { AgentOrchestrator, AgentResult } from '../../ai/types.js';
 import type { EditorContext } from '../../ai/types.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
+import {
+  resolveThinkingLevel,
+  thinkingLevelOptions,
+  type ThinkingLevelDefinition,
+} from '../../ai/thinkingLevels.js';
 import { promoteVendorProtocolEventGraph } from '../../ingestion/vendor-protocol/VendorProtocolEventGraphPromotionService.js';
 import type { VendorProtocolEventGraphDraftResult } from '../../ingestion/vendor-protocol/VendorProtocolEventGraphDraftService.js';
 import type { PlateEventPrimitive } from '../../compiler/biology/BiologyVerbExpander.js';
@@ -23,7 +28,29 @@ interface ExtractProtocolBody {
   text: string;
   documentId?: string;
   vendor?: string;
+  /** Config-declared thinking level id (ai...inference.thinkingLevels). */
+  thinkingLevel?: string;
 }
+
+/** Request body for the streaming extract endpoint (same fields). */
+interface ExtractProtocolStreamBody extends ExtractProtocolBody {}
+
+/**
+ * SSE events the streaming extraction emits. The browser renders them as a
+ * progress log — a long extraction must never look like a hung one.
+ */
+type ExtractProtocolStreamEvent =
+  | { type: 'start'; model: string; chunks: number; characters: number; thinkingLevel: string; thinkingParams: Record<string, unknown> }
+  | { type: 'stage'; index: number; total: number; message: string }
+  | { type: 'reasoning'; index: number; text: string }
+  | { type: 'content'; index: number; chars: number }
+  | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
+  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
+  | { type: 'done'; candidate: AiProtocolCandidateSummary; source: ProtocolBuilderExtractResponse['source']; document: ProtocolBuilderExtractResponse['document']; elapsedMs: number }
+  | { type: 'error'; message: string; index?: number };
+
+/** Invoked for each SSE event (tests inject a collector). */
+type ExtractStreamEmitter = (event: ExtractProtocolStreamEvent) => void;
 
 /**
  * Response shape — mirrors AiProtocolCandidateSummary from the frontend types.
@@ -184,6 +211,26 @@ export interface ProtocolBuilderHandlers {
     request: FastifyRequest<{ Body: ExtractProtocolBody }>,
     reply: FastifyReply,
   ): Promise<ProtocolBuilderExtractResponse | ApiError>;
+  /**
+   * The thinking levels this deployment offers for an extraction, plus which
+   * one is the default. Read by the review tab's level picker.
+   */
+  extractOptions(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<
+    | { success: true; model: string | null; defaultThinkingLevel: string; thinkingLevels: Array<{ id: string; label: string }> }
+    | ApiError
+  >;
+  /**
+   * Same extraction as `extractProtocol`, streamed as Server-Sent Events so a
+   * multi-minute run shows its stages and the model's reasoning live instead of
+   * an opaque "Extracting…".
+   */
+  extractProtocolStream(
+    request: FastifyRequest<{ Body: ExtractProtocolStreamBody }>,
+    reply: FastifyReply,
+  ): Promise<ProtocolBuilderExtractResponse | ApiError | void>;
   redraft(
     request: FastifyRequest<{ Body: RedraftRequest }>,
     reply: FastifyReply,
@@ -208,6 +255,38 @@ export interface ProtocolBuilderHandlers {
     request: FastifyRequest<{ Body: DeriveFromRunRequest }>,
     reply: FastifyReply,
   ): Promise<DeriveFromRunResponse | ApiError>;
+}
+
+
+/**
+ * Coerce one chunk's raw model output into a candidate summary, or null when
+ * the model produced nothing usable. Shared by the blocking and the streaming
+ * extraction so the two can never diverge in how they read the model.
+ */
+function coerceChunkCandidate(responseText: string): AiProtocolCandidateSummary | null {
+  if (!responseText.trim()) return null;
+  try {
+    const parsed = extractJsonFromResponse(responseText) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.kind === 'vendor-protocol-candidate') return parsed as unknown as AiProtocolCandidateSummary;
+    if (Array.isArray(parsed.steps)) {
+      // Fallback: accept any JSON with a steps array, even with a missing or
+      // different kind, and coerce into the expected shape.
+      return {
+        kind: 'vendor-protocol-candidate' as const,
+        title: (parsed.title as string) ?? '',
+        ...(parsed.scope ? { scope: parsed.scope as string } : {}),
+        ...(Array.isArray(parsed.materials) ? { materials: parsed.materials as AiProtocolCandidateSummary['materials'] } : {}),
+        ...(Array.isArray(parsed.labware) ? { labware: parsed.labware as AiProtocolCandidateSummary['labware'] } : {}),
+        ...(Array.isArray(parsed.equipment) ? { equipment: parsed.equipment as AiProtocolCandidateSummary['equipment'] } : {}),
+        steps: parsed.steps as AiProtocolCandidateSummary['steps'],
+        ...(Array.isArray(parsed.diagnostics) ? { diagnostics: parsed.diagnostics as AiProtocolCandidateSummary['diagnostics'] } : {}),
+      } as AiProtocolCandidateSummary;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -499,16 +578,45 @@ function mergeChunkResults(chunks: AiProtocolCandidateSummary[]): AiProtocolCand
 
 export function createProtocolBuilderHandlers(
   workspaceRoot: string,
-  inferenceConfig?: { baseUrl: string; model: string; apiKey?: string; temperature?: number },
+  inferenceConfig?: {
+    baseUrl: string;
+    model: string;
+    apiKey?: string;
+    temperature?: number;
+    /**
+     * Config-declared thinking presets (ai...inference.thinkingLevels) — what a
+     * level means is the serving stack's business, so the mapping is DATA.
+     */
+    thinkingLevels?: Record<string, ThinkingLevelDefinition>;
+    defaultThinkingLevel?: string;
+  },
   orchestratorRef?: { current?: AgentOrchestrator | undefined },
 ): ProtocolBuilderHandlers {
   const inferenceClient = inferenceConfig?.baseUrl
     ? createInferenceClient(inferenceConfig)
     : null;
+  const thinkingLevels = inferenceConfig?.thinkingLevels;
+  const defaultThinkingLevel = inferenceConfig?.defaultThinkingLevel;
 
   return {
+    async extractOptions(_request, reply) {
+      if (!inferenceClient || !inferenceConfig) {
+        reply.status(503);
+        return {
+          error: 'AI_UNAVAILABLE',
+          message: 'AI inference is not configured; protocol extraction requires an AI backend',
+        };
+      }
+      return {
+        success: true as const,
+        model: inferenceConfig.model,
+        defaultThinkingLevel: defaultThinkingLevel ?? '',
+        thinkingLevels: thinkingLevelOptions(thinkingLevels, defaultThinkingLevel),
+      };
+    },
+
     async extractProtocol(request, reply) {
-      const { text, documentId, vendor } = request.body;
+      const { text, documentId, vendor, thinkingLevel } = request.body;
 
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
         reply.status(400);
@@ -519,6 +627,14 @@ export function createProtocolBuilderHandlers(
       }
 
       if (inferenceClient) {
+        // "How hard should the model think" comes from config, never from a
+        // literal here; an unknown level is refused rather than downgraded.
+        const level = resolveThinkingLevel(thinkingLevels, thinkingLevel, defaultThinkingLevel);
+        if (!level.ok) {
+          reply.status(400);
+          return { error: 'UNKNOWN_THINKING_LEVEL', message: level.error, available: level.available } as ApiError;
+        }
+
         // Chunk the text for models with limited context windows
         const chunks = chunkText(text.trim());
 
@@ -531,41 +647,18 @@ export function createProtocolBuilderHandlers(
             messages: [{ role: 'user' as const, content: chunkPrompt }],
             max_tokens: 8192,
             temperature: inferenceConfig?.temperature ?? 0.1,
-            // Disable thinking mode for extraction — we need direct JSON output,
-            // not reasoning. Without this, Qwen3.5/3.6 thinking models use all
-            // tokens on internal reasoning and return null content.
-            enableThinking: false,
-            chat_template_kwargs: { enable_thinking: false },
+            ...level.resolved.params,
           });
 
           const chunkResponseText = chunkResult.choices?.[0]?.message?.content ?? '';
-          if (chunkResponseText.trim()) {
-            try {
-              const parsed = extractJsonFromResponse(chunkResponseText) as Record<string, unknown>;
-              if (parsed && typeof parsed === 'object') {
-                if (parsed.kind === 'vendor-protocol-candidate') {
-                  chunkResults.push(parsed as unknown as AiProtocolCandidateSummary);
-                } else if (Array.isArray(parsed.steps)) {
-                  // Fallback: accept any JSON that has a steps array, even if
-                  // kind is missing or different. Coerce into expected shape.
-                  chunkResults.push({
-                    kind: 'vendor-protocol-candidate' as const,
-                    title: (parsed.title as string) ?? '',
-                    ...(parsed.scope ? { scope: parsed.scope as string } : {}),
-                    ...(Array.isArray(parsed.materials) ? { materials: parsed.materials as AiProtocolCandidateSummary['materials'] } : {}),
-                    ...(Array.isArray(parsed.labware) ? { labware: parsed.labware as AiProtocolCandidateSummary['labware'] } : {}),
-                    ...(Array.isArray(parsed.equipment) ? { equipment: parsed.equipment as AiProtocolCandidateSummary['equipment'] } : {}),
-                    steps: parsed.steps as AiProtocolCandidateSummary['steps'],
-                    ...(Array.isArray(parsed.diagnostics) ? { diagnostics: parsed.diagnostics as AiProtocolCandidateSummary['diagnostics'] } : {}),
-                  } as AiProtocolCandidateSummary);
-                } else {
-                  request.log.warn({ chunkIndex: i, kind: parsed.kind, responsePreview: chunkResponseText.slice(0, 200) }, 'Chunk result missing expected kind field and no steps array found');
-                }
-              }
-            } catch (err) {
-              // Log but continue — a failed chunk shouldn't kill the whole extraction
-              request.log.warn({ chunkIndex: i, error: err, responsePreview: chunkResponseText.slice(0, 200) }, 'Failed to parse chunk extraction response');
-            }
+          const candidate = coerceChunkCandidate(chunkResponseText);
+          if (candidate) {
+            chunkResults.push(candidate);
+          } else if (chunkResponseText.trim()) {
+            request.log.warn(
+              { chunkIndex: i, responsePreview: chunkResponseText.slice(0, 200) },
+              'Chunk extraction produced no usable candidate',
+            );
           }
         }
 
@@ -594,6 +687,150 @@ export function createProtocolBuilderHandlers(
         error: 'AI_UNAVAILABLE',
         message: 'AI inference is not configured; protocol extraction requires an AI backend',
       };
+    },
+
+    /**
+     * Streaming extraction: same work as `extractProtocol`, but the reviewer
+     * watches it happen. Emits stage boundaries, the model's reasoning as it
+     * arrives, a heartbeat (so "still working" is distinguishable from "dead"),
+     * then the merged candidate. Errors end the stream with an `error` event
+     * rather than leaving the client waiting.
+     */
+    async extractProtocolStream(request, reply) {
+      const { text, documentId, vendor, thinkingLevel } = request.body;
+
+      if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        reply.status(400);
+        return { error: 'MISSING_TEXT', message: 'text is required and must be a non-empty string' };
+      }
+      if (!inferenceClient || !inferenceConfig) {
+        reply.status(503);
+        return {
+          error: 'AI_UNAVAILABLE',
+          message: 'AI inference is not configured; protocol extraction requires an AI backend',
+        };
+      }
+      const level = resolveThinkingLevel(thinkingLevels, thinkingLevel, defaultThinkingLevel);
+      if (!level.ok) {
+        reply.status(400);
+        return { error: 'UNKNOWN_THINKING_LEVEL', message: level.error, available: level.available } as ApiError;
+      }
+
+      const chunks = chunkText(text.trim());
+      const startedAt = Date.now();
+      let currentIndex = 0;
+      let reasoningChars = 0;
+      let contentChars = 0;
+
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      const emit: ExtractStreamEmitter = (event) => {
+        if (reply.raw.writableEnded) return;
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      // Heartbeat: proves liveness during long single-call stretches, and gives
+      // the UI an elapsed clock that is the server's, not the browser's.
+      const heartbeat = setInterval(() => {
+        emit({
+          type: 'progress',
+          index: currentIndex,
+          elapsedMs: Date.now() - startedAt,
+          reasoningChars,
+          contentChars,
+        });
+      }, 4000);
+
+      try {
+        emit({
+          type: 'start',
+          model: inferenceConfig.model,
+          chunks: chunks.length,
+          characters: text.trim().length,
+          thinkingLevel: level.resolved.level,
+          thinkingParams: level.resolved.params,
+        });
+
+        const chunkResults: AiProtocolCandidateSummary[] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          currentIndex = i + 1;
+          reasoningChars = 0;
+          contentChars = 0;
+          emit({
+            type: 'stage',
+            index: i + 1,
+            total: chunks.length,
+            message: `Extracting chunk ${i + 1} of ${chunks.length} (${chunks[i]!.length.toLocaleString()} characters)`,
+          });
+
+          const chunkPrompt = buildChunkExtractionPrompt(chunks[i]!, i, chunks.length, documentId, vendor);
+          const chunkStartedAt = Date.now();
+          let content = '';
+          let reasoning = '';
+
+          for await (const chunk of inferenceClient.completeStream({
+            model: inferenceConfig.model,
+            messages: [{ role: 'user' as const, content: chunkPrompt }],
+            max_tokens: 8192,
+            temperature: inferenceConfig.temperature ?? 0.1,
+            ...level.resolved.params,
+          })) {
+            const delta = (chunk.choices?.[0]?.delta ?? {}) as Record<string, unknown>;
+            const reasoningDelta = [delta.reasoning, delta.reasoning_content].find(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            );
+            if (reasoningDelta) {
+              reasoning += reasoningDelta;
+              reasoningChars = reasoning.length;
+              emit({ type: 'reasoning', index: i + 1, text: reasoningDelta });
+              // The inference client FOLDS a reasoning delta into `content` when
+              // the frame carries no content of its own (so blocking callers see
+              // text). Reporting that echo as answer content would double-count
+              // the reasoning, so it is skipped here.
+            } else if (typeof delta.content === 'string' && delta.content.length > 0) {
+              content += delta.content;
+              contentChars = content.length;
+              emit({ type: 'content', index: i + 1, chars: content.length });
+            }
+          }
+
+          // When a thinking model returns only reasoning, the client normally
+          // folds it into content; do the same here so a level that thinks is
+          // still usable for extraction.
+          const effective = content.trim() ? content : reasoning;
+          const candidate = coerceChunkCandidate(effective);
+          if (candidate) chunkResults.push(candidate);
+          emit({
+            type: 'chunk-done',
+            index: i + 1,
+            parsed: Boolean(candidate),
+            steps: candidate?.steps?.length ?? 0,
+            elapsedMs: Date.now() - chunkStartedAt,
+          });
+        }
+
+        const candidate = mergeChunkResults(chunkResults);
+        emit({
+          type: 'done',
+          candidate,
+          source: { inputKind: 'text', fileName: 'pasted-text.txt', sha256: '' },
+          document: { pageCount: 0, sectionCount: 0, tableCount: 0 },
+          elapsedMs: Date.now() - startedAt,
+        });
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        emit({ type: 'error', message, index: currentIndex });
+        reply.log.error({ err }, 'streaming extraction failed');
+        return;
+      } finally {
+        clearInterval(heartbeat);
+        if (!reply.raw.writableEnded) reply.raw.end();
+      }
     },
 
     async redraft(request, reply) {

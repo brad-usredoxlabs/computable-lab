@@ -211,6 +211,17 @@ export interface InferenceConfig {
    * Default undefined = leave the model at its server-side default.
    */
   enableThinking?: boolean;
+  /**
+   * Named "how hard should the model think" presets, offered per extraction in
+   * the vendor-PDF review tab. What a level MEANS belongs to the serving stack,
+   * so the mapping is DATA here (e.g. `{ off: { enableThinking: false,
+   * chat_template_kwargs: { enable_thinking: false } } }` for vLLM + Qwen3, or
+   * `{ high: { reasoning_effort: high } }` for an OpenAI-compatible reasoning
+   * endpoint). An unknown requested level is refused, never downgraded.
+   */
+  thinkingLevels?: Record<string, import('../ai/thinkingLevels.js').ThinkingLevelDefinition>;
+  /** Level id applied when a request names none (defaults to the first). */
+  defaultThinkingLevel?: string;
 }
 
 /**

@@ -636,6 +636,8 @@ export function registerRoutes(
 
   if (protocolBuilderHandlers) {
     fastify.post('/protocol-builder/extract', protocolBuilderHandlers.extractProtocol.bind(protocolBuilderHandlers));
+    fastify.get('/protocol-builder/extract-options', protocolBuilderHandlers.extractOptions.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/extract-stream', protocolBuilderHandlers.extractProtocolStream.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/redraft', protocolBuilderHandlers.redraft.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/promote', protocolBuilderHandlers.promote.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/export', protocolBuilderHandlers.exportProtocol.bind(protocolBuilderHandlers));
