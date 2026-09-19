@@ -35,10 +35,12 @@ describe('deriveBranchAxes', () => {
     const axis = axes[0];
     expect(axis.axisId).toBe('branch-axis-step-001');
     expect(axis.conditions).toHaveLength(2);
-    // each condition targets the step and reuses the PredicateEvaluator equals op
+    // each condition targets the step and reuses the PredicateEvaluator equals op.
+    // The option VALUE is the condition phrase (letter + "if using" boilerplate
+    // stripped, Phase 3 grouping): the sentence itself stays as the label.
     expect(axis.conditions[0]).toMatchObject({
       id: 'branch-1',
-      predicate: { op: 'equals', path: '$.branchSelection', value: 'a-if-using-bashingbead-rack-200-ul-lysis' },
+      predicate: { op: 'equals', path: '$.branchSelection', value: 'bashingbead-rack-200-ul-lysis' },
       then_stepIds: ['step-001'],
     });
     expect(axis.conditions[1]).toMatchObject({

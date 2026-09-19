@@ -57,8 +57,22 @@ describe('Zymo decision tree golden (intake question materialization)', () => {
       scaleOptions: SCALE_OPTIONS,
     });
 
-    // Every branchy step became an axis...
-    expect(tree.axes.length).toBe(branchySteps.length);
+    // Every branchy step is gated by a question axis. Axes are grouped by
+    // QUESTION (Phase 3): this document asks its lysis-format question in two
+    // steps, so one axis gates both — the count is no longer 1:1 with steps,
+    // and the invariant that matters is "no branchy step goes unasked".
+    expect(tree.axes.length).toBeGreaterThanOrEqual(1);
+    const gatedStepIds = new Set(
+      tree.axes.flatMap((axis) => axis.conditions.flatMap((cond) => cond.then_stepIds ?? [])),
+    );
+    for (const step of branchySteps) {
+      expect(gatedStepIds.has(step.id)).toBe(true);
+    }
+    // The shared question gates both of the steps that ask it.
+    const sharedAxes = tree.axes.filter((axis) =>
+      axis.conditions.every((cond) => (cond.then_stepIds ?? []).length >= 2),
+    );
+    expect(sharedAxes.length).toBeGreaterThanOrEqual(1);
     for (const axis of tree.axes) {
       // ...with >=2 options, each carrying the reviewer-facing question...
       expect(axis.conditions.length).toBeGreaterThanOrEqual(2);
