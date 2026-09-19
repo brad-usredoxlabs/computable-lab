@@ -14,6 +14,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
 import { AttachProtocolPanel } from './AttachProtocolPanel'
+import { ProtocolIdentity } from './ProtocolIdentity'
 import './AttachProtocolPanel.css'
 import './ProtocolNavPanel.css'
 
@@ -126,6 +127,17 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
   return (
     <aside className="protocol-nav" data-testid="protocol-nav">
       {title ? <header className="protocol-nav__head">{title}</header> : null}
+      {/* WHICH protocol this is: the run's attached protocol by name, with its
+          record metadata (ID, parent artifact, created…) on hover. The header
+          above names the RUN; this names the protocol being realized. */}
+      {sel?.protocol ? (
+        <div className="protocol-nav__identity">
+          <ProtocolIdentity
+            protocolId={sel.protocol.recordId}
+            fallbackTitle={sel.protocol.title ?? null}
+          />
+        </div>
+      ) : null}
       <ol className="protocol-nav__list" data-testid="protocol-nav-list">
         {steps.map((step) => {
           const focused = focusedStep?.stepId === step.stepId

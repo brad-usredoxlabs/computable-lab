@@ -28,6 +28,18 @@
   padding: 0 4px;
 }
 
+/* WHICH protocol this is — the rail's identity line, directly under the run
+   header. Sits in the same 4px gutter as the header and step rows. */
+.protocol-nav__identity {
+  padding: 0 0 2px;
+}
+
+.protocol-nav__identity .protocol-identity {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .protocol-nav__list {
   list-style: none;
   margin: 0;

@@ -19,8 +19,18 @@ export interface RunProtocolStepsLoaderProps {
   runId: string
 }
 
+/** The run's attached protocol: what to name/identify it by, and where its steps live. */
+interface ResolvedRunProtocol {
+  /** The ATTACHED protocol (LPR when the run is specialized). */
+  attachedId: string
+  /** Protocol record the STEPS are read from (the inherited universal for an LPR). */
+  stepsId: string
+  /** Ref label from the PLR — the display fallback until the record lands. */
+  label: string | null
+}
+
 /** Resolve run → plannedRunRef (PLR) → protocolRef → protocol record. */
-async function resolveRunProtocolId(runId: string): Promise<string | null> {
+async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | null> {
   try {
     const runEnv = await apiClient.getRecord(runId)
     const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
@@ -28,20 +38,23 @@ async function resolveRunProtocolId(runId: string): Promise<string | null> {
     if (!plr?.id) return null
     const plrEnv = await apiClient.getRecord(plr.id)
     const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
-    const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string; kind?: string } | undefined
+    const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string; kind?: string; label?: string } | undefined
     if (typeof protoRef?.id !== 'string') return null
+    const attachedId = protoRef.id
+    const label = typeof protoRef.label === 'string' ? protoRef.label : null
     const kind = typeof protoRef.kind === 'string' ? protoRef.kind : (pp?.kind as string | undefined)
     if (kind === 'local-protocol') {
       try {
-        const lpEnv = await apiClient.getRecord(protoRef.id)
+        const lpEnv = await apiClient.getRecord(attachedId)
         const lp = (lpEnv?.payload ?? lpEnv) as Record<string, unknown> | null
         const inh = lp?.inherits_from as { id?: string } | undefined
-        if (typeof inh?.id === 'string') return inh.id
+        if (typeof inh?.id === 'string') return { attachedId, stepsId: inh.id, label }
       } catch {
-        // fall through — return the local id; caller falls back to run id
+        // fall through — an LPR without a resolvable parent still shows steps
+        // by its own id, and the identity is still the local protocol.
       }
     }
-    return protoRef.id
+    return { attachedId, stepsId: attachedId, label }
   } catch {
     return null
   }
@@ -62,8 +75,17 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
   useEffect(() => {
     let cancelled = false
     const doLoad = async () => {
-      const stepsId = (await resolveRunProtocolId(runId)) ?? runId
+      const resolved = await resolveRunProtocol(runId)
+      const stepsId = resolved?.stepsId ?? runId
       if (cancelled) return
+      // Publish WHICH protocol this run executes (the nav rail names it on
+      // hover with the record's provenance) before the step fetch, so the rail
+      // has an identity even if the steps call is slow or fails.
+      sel?.setProtocol(
+        resolved
+          ? { recordId: resolved.attachedId, ...(resolved.label ? { title: resolved.label } : {}) }
+          : null,
+      )
       try {
         const res = await fetch(`/api/protocols/${encodeURIComponent(stepsId)}/steps`)
         if (!res.ok) return

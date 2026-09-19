@@ -34,6 +34,17 @@ export interface ProtocolStepSummary {
   description?: string
 }
 
+/**
+ * The protocol a run is attached to (run → plannedRunRef → protocolRef) —
+ * the subject of every Protocol surface. `title` is the ref's label, used only
+ * until the record itself is read (ProtocolIdentity reads the canonical name
+ * from the record).
+ */
+export interface ProtocolIdentityRef {
+  recordId: string
+  title?: string
+}
+
 interface ProtocolSelectionState {
   /** The currently selected step (for settings display, etc.). */
   activeStepId: string | null
@@ -67,6 +78,11 @@ interface ProtocolSelectionState {
   steps: ProtocolStepSummary[]
   /** Set the step concept list (populated when the protocol steps first load). */
   setSteps: (steps: ProtocolStepSummary[]) => void
+  /** The attached protocol (normalized from the run's chain) — one source of
+   *  truth for "which protocol is this?" across the Protocol surfaces. */
+  protocol: ProtocolIdentityRef | null
+  /** Publish the attached protocol (null when the run has none). */
+  setProtocol: (protocol: ProtocolIdentityRef | null) => void
   /** Toggle a step's canvas visibility. */
   toggleStepVisibility: (stepId: string) => void
   /** Set whether a step is visible. */
@@ -87,6 +103,7 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
   const [steps, setStepsState] = useState<ProtocolStepSummary[]>([])
+  const [protocol, setProtocol] = useState<ProtocolIdentityRef | null>(null)
 
   const setFocusedStep = useCallback((step: { stepId: string; label: string; ordinal?: number } | null) => {
     setFocusStepIdState(step ? step.stepId : null)
@@ -143,6 +160,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         setActiveStepId,
         steps,
         setSteps,
+        protocol,
+        setProtocol,
         toggleStepVisibility,
         setStepVisibility,
         setStepGraph,
