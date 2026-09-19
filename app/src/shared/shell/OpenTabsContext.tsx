@@ -18,9 +18,11 @@ import {
   useReducer,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from 'react'
 import type { BreadcrumbItem, WorkspaceRightPaneMode, WorkspaceTab } from '../../event-editor/workspace/types'
+import { getCurrentUserId } from '../api/base'
 
 export interface OpenTabState {
   tab: WorkspaceTab
@@ -315,7 +317,8 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
   }
 }
 
-function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
+/** Sensible right-pane default for a tab kind (exported for the session loader). */
+export function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
   switch (tab.kind) {
     case 'project':
     case 'project-details':
@@ -347,7 +350,8 @@ function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
   }
 }
 
-// ── localStorage persistence ──────────────────────────────────────────
+// ── localStorage persistence (per-user; the server session is the source of
+//    truth for cross-device attach — this is the first-paint cache) ────────
 
 const STORAGE_KEY = 'cl-open-tabs'
 
@@ -364,15 +368,43 @@ interface StoredState {
   activeTabId: string | null
   history?: string[]
   historyCursor?: number
+  /** Wall clock of the last write, for adopt-newer reconciliation. */
+  updatedAt?: string
 }
 
-function loadFromStorage(userId?: string): OpenTabsState {
-  const key = userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY
+export const EMPTY_TABS_STATE: OpenTabsState = {
+  tabs: [],
+  activeTabId: null,
+  history: [],
+  historyCursor: -1,
+}
+
+/** Resolve the storage key: explicit userId wins, else the signed-in user. */
+export function tabsStorageKey(userId?: string): string {
+  const uid = userId ?? getCurrentUserId() ?? undefined
+  return uid ? `${STORAGE_KEY}:${uid}` : STORAGE_KEY
+}
+
+/**
+ * localStorage accessor. The app runs in a browser; under jsdom (tests) Node's
+ * own experimental global `localStorage` can shadow jsdom's, so prefer the
+ * window's explicitly. Returns null when storage is unavailable.
+ */
+function storage(): Storage | null {
   try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
+    return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null
+  } catch {
+    return null
+  }
+}
+
+/** Read the persisted session. Exported so tests and the sync hook share one reader. */
+export function loadFromStorage(userId?: string): OpenTabsState {
+  try {
+    const raw = storage()?.getItem(tabsStorageKey(userId))
+    if (!raw) return EMPTY_TABS_STATE
     const parsed = JSON.parse(raw) as StoredState
-    if (!Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
+    if (!Array.isArray(parsed.tabs)) return EMPTY_TABS_STATE
     return {
       tabs: parsed.tabs.map((t) => {
         const entry = {
@@ -394,12 +426,12 @@ function loadFromStorage(userId?: string): OpenTabsState {
       historyCursor: typeof parsed.historyCursor === 'number' ? parsed.historyCursor : -1,
     }
   } catch {
-    return { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
+    return EMPTY_TABS_STATE
   }
 }
 
-function saveToStorage(state: OpenTabsState, userId?: string) {
-  const key = userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY
+/** Write the persisted session (best-effort; localStorage may be unavailable). */
+export function saveToStorage(state: OpenTabsState, userId?: string): void {
   try {
     const toStore: StoredState = {
       tabs: state.tabs.map((t) => ({
@@ -412,8 +444,9 @@ function saveToStorage(state: OpenTabsState, userId?: string) {
       activeTabId: state.activeTabId,
       history: state.history,
       historyCursor: state.historyCursor,
+      updatedAt: new Date().toISOString(),
     }
-    localStorage.setItem(key, JSON.stringify(toStore))
+    storage()?.setItem(tabsStorageKey(userId), JSON.stringify(toStore))
   } catch {
     // localStorage might be full or unavailable — silently ignore.
   }
@@ -444,6 +477,8 @@ export interface OpenTabsContextValue {
   /** Move within the ACTIVE tab's own content trail. */
   withinBack: () => void
   withinForward: () => void
+  /** Replace the ENTIRE session (server attach, session-YAML apply). */
+  replaceState: (state: OpenTabsState) => void
 }
 
 const OpenTabsContext = createContext<OpenTabsContextValue | null>(null)
@@ -455,22 +490,30 @@ export interface OpenTabsProviderProps {
 }
 
 export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
-  const [state, dispatch] = useReducer(openTabsReducer, {
-    tabs: [],
-    activeTabId: null,
-    history: [],
-    historyCursor: -1,
-  })
+  // Hydrate SYNCHRONOUSLY on the first render: HomeRedirect and every host
+  // page's mount effect read `state` during that render, so a useEffect-based
+  // load would (a) route the user to /splash and (b) let the persist effect
+  // below write the EMPTY pre-hydration state over the stored session (which,
+  // under StrictMode's double-invoked effects, wiped it on every page load).
+  const resolvedUserId = userId ?? getCurrentUserId() ?? undefined
+  const [state, dispatch] = useReducer(openTabsReducer, resolvedUserId, loadFromStorage)
+  const hydratedRef = useRef(false)
 
-  // Load from localStorage on mount
+  // A user switch re-reads that user's session instead of bleeding the
+  // previous user's tabs into the new one. (The switcher also reloads.)
   useEffect(() => {
-    dispatch({ type: 'replace', state: loadFromStorage(userId) })
-  }, [userId])
+    dispatch({ type: 'replace', state: loadFromStorage(resolvedUserId) })
+  }, [resolvedUserId])
 
-  // Persist to localStorage on state change
+  // Persist on change — never before hydration, or the first render's empty
+  // state wipes the stored session.
   useEffect(() => {
-    saveToStorage(state, userId)
-  }, [state, userId])
+    if (!hydratedRef.current) {
+      hydratedRef.current = true
+      return
+    }
+    saveToStorage(state, resolvedUserId)
+  }, [state, resolvedUserId])
 
   // Stable dispatch callbacks (memoized once, independent of `state`).
   const openTab = useCallback((tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => {
@@ -498,6 +541,7 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
   const forward = useCallback(() => dispatch({ type: 'forward' }), [])
   const withinBack = useCallback(() => dispatch({ type: 'within-back' }), [])
   const withinForward = useCallback(() => dispatch({ type: 'within-forward' }), [])
+  const replaceState = useCallback((next: OpenTabsState) => dispatch({ type: 'replace', state: next }), [])
 
   // Memoize so the context object's identity only changes when `state`
   // changes. Consumers that put the context object in effect deps (or that
@@ -527,7 +571,8 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
     })(),
     withinBack,
     withinForward,
-  }), [state, openTab, navigateTab, navigateActiveTab, closeTab, activateTab, renameTab, setRightPaneMode, back, forward, withinBack, withinForward])
+    replaceState,
+  }), [state, openTab, navigateTab, navigateActiveTab, closeTab, activateTab, renameTab, setRightPaneMode, back, forward, withinBack, withinForward, replaceState])
 
   return <OpenTabsContext.Provider value={value}>{children}</OpenTabsContext.Provider>
 }
