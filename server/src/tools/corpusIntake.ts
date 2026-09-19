@@ -308,7 +308,7 @@ export interface IntakeRuntime {
 export async function resolveIntakeRuntime(
   workspaceRoot: string,
   deps?: {
-    appBooter?: (base: string) => Promise<{ workspaceRoot: string; store: unknown; validator: unknown }>;
+    appBooter?: (base: string) => Promise<{ workspaceRoot: string; store: unknown; validator: unknown; extractionRunner?: unknown }>;
   },
 ): Promise<IntakeRuntime> {
   const booter =
@@ -316,15 +316,34 @@ export async function resolveIntakeRuntime(
     (async (base: string) => {
       const { initializeApp } = await import('../server.js');
       const ctx = await initializeApp(base);
-      return { workspaceRoot: ctx.workspaceRoot, store: ctx.store, validator: ctx.validator };
+      return { workspaceRoot: ctx.workspaceRoot, store: ctx.store, validator: ctx.validator, extractionRunner: ctx.extractionRunner };
     });
   const ctx = await booter(workspaceRoot);
   const root = typeof ctx.workspaceRoot === 'string' && ctx.workspaceRoot.length > 0 ? ctx.workspaceRoot : workspaceRoot;
   const { ProtocolIntakeService } = await import('../protocol-intake/ProtocolIntakeService.js');
+  // Compile edge: same construction the review API (ProtocolIntakeHandlers)
+  // uses, so nightly drafts are AI-compiled whenever the extractor profile
+  // is configured. Dynamic imports here keep the module graph free of
+  // server.js at load time (the default booter loads it on demand anyway).
+  let compileRunner: ConstructorParameters<typeof ProtocolIntakeService>[0]['compileRunner'];
+  if (ctx.extractionRunner) {
+    const { runChatbotCompile } = await import('../ai/runChatbotCompile.js');
+    const { createLabwareLookup } = await import('../ai/compiler/labwareLookup.js');
+    const store = ctx.store as never;
+    const extractionService = ctx.extractionRunner as never;
+    const searchLabwareByHint = createLabwareLookup(store);
+    compileRunner = ({ prompt, deterministicOnly }) =>
+      runChatbotCompile({
+        prompt,
+        deterministicOnly,
+        deps: { extractionService, llmClient: null, searchLabwareByHint, store },
+      });
+  }
   const service = new ProtocolIntakeService({
     workspaceRoot: root,
     store: ctx.store as never,
     ...(ctx.validator ? { validator: ctx.validator as never } : {}),
+    ...(compileRunner ? { compileRunner } : {}),
   });
   return { workspaceRoot: root, ingestFn: (args) => service.ingestDocument(args) };
 }
