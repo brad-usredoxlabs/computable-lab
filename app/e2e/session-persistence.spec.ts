@@ -14,6 +14,7 @@ import { test, expect, type Page, type APIRequestContext } from '@playwright/tes
  *     (HomeRedirect used to read the not-yet-hydrated store → /splash)
  *  3. a third device attaches to the same session (tmux-style)
  *  4. the project workspace mounts without an update-depth loop (below)
+ *  5. a protocol-less run offers ATTACH in the left nav Protocol tab (below)
  *
  * The strip DOM is asserted on /splash, because /splash is the one workspace
  * surface that always mounts the shell. (The run workspace is separately
@@ -204,4 +205,44 @@ test('re-opening the same project does not loop either (idempotent re-registrati
 
   await page.waitForTimeout(1_000)
   expect(errors.filter((e) => /Maximum update depth/.test(e))).toEqual([])
+})
+
+/**
+ * --- left nav Protocol tab: attach affordance ---
+ *
+ * User report: "in the left hand pane, there is a protocol tab, but no way to
+ * attach a protocol." The rail's empty state was a dead end because the only
+ * mount of the protocol picker lived in the right-pane ProtocolTabPanel, which
+ * the three-pane harness no longer renders. NON-MUTATING: it asserts the
+ * affordance and never clicks Attach (that writes a planned run + method graph).
+ */
+async function firstRunWithoutProtocol(request: APIRequestContext): Promise<string> {
+  const list = await request.get('/api/runs?limit=8')
+  const runs = ((await list.json()) as { runs: Array<{ recordId: string }> }).runs
+  for (const run of runs) {
+    const res = await request.get(`/api/records/${run.recordId}`)
+    if (!res.ok()) continue
+    const body = (await res.json()) as { record?: { payload?: Record<string, unknown> } }
+    const payload = body.record?.payload ?? {}
+    if (!payload.plannedRunRef && !payload.methodEventGraphId) return run.recordId
+  }
+  throw new Error('no protocol-less run found to assert the attach affordance')
+}
+
+test('a protocol-less run offers attach in the left nav Protocol tab', async ({ page, request }) => {
+  const runId = await firstRunWithoutProtocol(request)
+  await resetServerSession(request)
+
+  await page.goto(`/runs/${runId}`)
+
+  const nav = page.getByTestId('run-nav-pane')
+  await expect(nav).toBeVisible({ timeout: 20_000 })
+  await expect(nav.getByTestId('run-nav-tab-protocol')).toHaveAttribute('aria-selected', 'true')
+
+  // the find-&-attach surface, not a dead end
+  await expect(nav.getByTestId('attach-protocol')).toBeVisible({ timeout: 15_000 })
+  await expect(nav.getByTestId('protocol-search-input')).toBeVisible()
+  await expect(nav.getByText(/Attach a protocol to see its steps/i)).toHaveCount(0)
+  // at least one attachable protocol (this lab has several) — the commit control
+  await expect(nav.locator('[data-testid^="attach-"]').first()).toBeVisible({ timeout: 15_000 })
 })

@@ -6,6 +6,10 @@ import './RunNavPane.css'
 
 export interface RunNavPaneProps {
   title?: string
+  /** The run this harness is open on — the Protocol tab needs it to attach one. */
+  runId?: string
+  /** The run's study — scopes the protocol search. */
+  studyId?: string
 }
 
 type NavTab = 'protocol' | 'search' | 'details'
@@ -16,7 +20,7 @@ const TABS: { mode: NavTab; label: string }[] = [
   { mode: 'details', label: 'Details' },
 ]
 
-export function RunNavPane({ title }: RunNavPaneProps) {
+export function RunNavPane({ title, runId, studyId }: RunNavPaneProps) {
   const [tab, setTab] = useState<NavTab>('protocol')
   return (
     <div className="run-nav-pane" data-testid="run-nav-pane">
@@ -40,7 +44,13 @@ export function RunNavPane({ title }: RunNavPaneProps) {
         ))}
       </div>
       <div className="run-nav-pane__body">
-        {tab === 'protocol' ? <ProtocolNavPanel title={title} /> : null}
+        {tab === 'protocol' ? (
+          <ProtocolNavPanel
+            {...(title !== undefined ? { title } : {})}
+            {...(runId !== undefined ? { runId } : {})}
+            {...(studyId !== undefined ? { studyId } : {})}
+          />
+        ) : null}
         {tab === 'search' ? <SearchTabPanel /> : null}
         {tab === 'details' ? <DetailsTabPanel /> : null}
       </div>

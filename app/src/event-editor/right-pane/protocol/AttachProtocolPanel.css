@@ -1,0 +1,30 @@
+/**
+ * AttachProtocolPanel — the run workspace's find-&-attach surface inside the
+ * left nav Protocol tab. Inherits the rail's narrow width, so it must be
+ * compact and scrollable: the search stays put, the picker body scrolls.
+ * (All of the copy lives in ProtocolSelector.)
+ */
+
+.attach-protocol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+  padding: 10px 10px 12px;
+}
+
+.attach-protocol__search {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.attach-protocol__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

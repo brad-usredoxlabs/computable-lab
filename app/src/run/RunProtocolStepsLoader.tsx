@@ -10,7 +10,7 @@
  * loader only guarantees the CONCEPT list (stepId/label/ordinal) is present.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../event-editor/protocol/ProtocolSelectionContext'
@@ -49,6 +49,15 @@ async function resolveRunProtocolId(runId: string): Promise<string | null> {
 
 export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
   const sel = useProtocolSelection()
+  // Bumped when a protocol is attached to this run (ProtocolSelector dispatches
+  // 'cl:records-changed'), so the rail refills instead of staying empty.
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    const onRecordsChanged = () => setRefreshKey((n) => n + 1)
+    window.addEventListener('cl:records-changed', onRecordsChanged)
+    return () => window.removeEventListener('cl:records-changed', onRecordsChanged)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -87,7 +96,7 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId])
+  }, [runId, refreshKey])
 
   return null
 }

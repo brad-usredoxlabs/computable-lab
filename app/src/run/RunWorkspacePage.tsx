@@ -134,7 +134,7 @@ export function RunWorkspacePage() {
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
             <RunWorkspaceShell
-              navPane={<RunNavPane title={title} />}
+              navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
               rightPane={<AgentChatPane />}
               viewerToolbar={
                 <div className="run-workspace-toolbar">

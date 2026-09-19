@@ -13,11 +13,17 @@
 import { useCallback, useRef, useState } from 'react'
 import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
+import { AttachProtocolPanel } from './AttachProtocolPanel'
+import './AttachProtocolPanel.css'
 import './ProtocolNavPanel.css'
 
 export interface ProtocolNavPanelProps {
   /** Surface label to lead the rail (e.g. the run title). */
   title?: string
+  /** The run this rail belongs to — needed to attach a protocol when none is. */
+  runId?: string
+  /** The run's study — scopes the protocol search. */
+  studyId?: string
 }
 
 /** A hover/focus step with its anchor rect (viewport coords) for the fixed tooltip. */
@@ -28,7 +34,7 @@ interface StepTip {
   y: number
 }
 
-export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
+export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProps) {
   const sel = useProtocolSelection()
   const steps = sel?.steps ?? []
   const focusedStep = sel?.focusedStep
@@ -62,6 +68,26 @@ export function ProtocolNavPanel({ title }: ProtocolNavPanelProps) {
   )
 
   if (steps.length === 0) {
+    // No protocol on this run → the rail has nothing to rail. This is the ONE
+    // place a biologist can attach one from the run workspace (the right-pane
+    // Protocol tab that used to host the picker is not rendered by the
+    // three-pane harness), so render the find-&-attach surface — not a dead end.
+    if (runId && studyId) {
+      return (
+        <aside className="protocol-nav" data-testid="protocol-nav">
+          {title ? <header className="protocol-nav__head">{title}</header> : null}
+          <AttachProtocolPanel
+            runId={runId}
+            studyId={studyId}
+            onAttached={() => {
+              // After attaching, the step rail refills: attaching writes the
+              // run's plannedRunRef, so the loader re-resolves on this event.
+              window.dispatchEvent(new CustomEvent('cl:records-changed'))
+            }}
+          />
+        </aside>
+      )
+    }
     return (
       <aside className="protocol-nav" data-testid="protocol-nav">
         {title ? <header className="protocol-nav__head">{title}</header> : null}
