@@ -1414,6 +1414,13 @@ export async function createServer(
       registerSurfacesRoutes(instance, ctx);
     }
 
+    // Workspace-session Routes (persistent, cross-device workspace session —
+    // tmux-style attach: the same open tabs on every device).
+    {
+      const { registerWorkspaceSessionRoutes } = await import('./api/routes/workspace-session.js');
+      registerWorkspaceSessionRoutes(instance, ctx);
+    }
+
     // Protocol Evolution Routes (need ctx access)
     instance.get('/protocols/:id/evolution-suggestions', async (request, reply) => {
       try {

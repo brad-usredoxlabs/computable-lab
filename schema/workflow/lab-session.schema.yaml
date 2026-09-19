@@ -1,0 +1,64 @@
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'https://computable-lab.com/schema/computable-lab/workflow/lab-session.schema.yaml'
+title: 'Lab Session'
+description: >-
+  A transient, per-user UI workspace session: the open workspace tabs, which one
+  is active, and each tab's right-pane mode. Stored under var/sessions/{userId}/
+  (outside the records git tree, like var/ai-threads) — it is UI state, NOT a
+  record kind, NOT a biological `CTX-…` context, and NOT the per-study
+  records/studies/<id>/workspace.yaml sidecar. Validated by Ajv at the API
+  boundary (rule #3): this is a transport document, so it has no lint/ui
+  companion (compare schema/workflow/agent-action.schema.yaml). Tab slot ids are
+  deliberately NOT part of the document — they are re-derived from the tab's
+  stable id helpers (app/src/shared/session/tabId.ts).
+type: object
+additionalProperties: false
+required:
+- version
+- tabs
+properties:
+  version:
+    const: 1
+  activeTabId:
+    type:
+    - string
+    - 'null'
+  updatedAt:
+    type: string
+  tabs:
+    type: array
+    description: >-
+      Open workspace tabs, in strip order. Each entry is a WorkspaceTab payload
+      minus its slot id (see app/src/event-editor/workspace/types.ts).
+    items:
+      type: object
+      additionalProperties: true
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - project
+          - project-details
+          - run
+          - execution
+          - deck
+          - claim
+          - lab-entity
+          - record-edit
+          - record-create
+          - pdf
+          - document
+          - collection
+          - splash
+        title:
+          type: string
+        activeRightPaneMode:
+          type: string
+          enum:
+          - ai
+          - search
+          - find
+          - details
+          - protocol
