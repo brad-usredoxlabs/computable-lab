@@ -8,6 +8,13 @@ description: >
   ONE run surface (one tab per run — locked decision #3) sharing surface id
   `run-plan|run-design|run-execute`.
 
+  # A surface is DEEP-LINKABLE iff it declares `params`: each `:token` in `path`
+  # bound to the active objectType that fills it. Surfaces without `params`
+  # (find, analysis, knowledge) are AI-CONTEXT surfaces reached through their
+  # collection routes — they are not routable on their own. `path` is a route
+  # pattern relative to the app router (app/src/App.tsx), and the run surfaces
+  # share ONE route: plan/design/execute/results are MODES of one run tab.
+
 surfaces:
   - id: find
     label: "Find / Search"
@@ -17,25 +24,33 @@ surfaces:
     aiRole: "search selection → AI context"
   - id: run-plan
     label: "Run · Plan"
-    path: "/project/:studyId/run/:runId"
+    path: "/runs/:runId"
+    params:
+      runId: run
     objectTypes: [run]
     selectableKinds: [event, well, material, protocol-step]
     aiRole: "protocol localization & planning"
   - id: run-design
     label: "Run · Design"
-    path: "/project/:studyId/run/:runId"
+    path: "/runs/:runId"
+    params:
+      runId: run
     objectTypes: [run]
     selectableKinds: [event, well, material]
     aiRole: "event-graph editing"
   - id: run-execute
     label: "Run · Execute"
-    path: "/project/:studyId/run/:runId"
+    path: "/runs/:runId"
+    params:
+      runId: run
     objectTypes: [run]
     selectableKinds: [event, well, material]
     aiRole: "batch execution"
   - id: results
     label: "Results"
-    path: "/project/:studyId/results"
+    path: "/runs/:runId"
+    params:
+      runId: run
     objectTypes: [run]
     selectableKinds: [well, measurement, event]
     aiRole: "readouts & results"
@@ -54,6 +69,8 @@ surfaces:
   - id: project
     label: "Project"
     path: "/project/:studyId"
+    params:
+      studyId: project
     objectTypes: [project]
     selectableKinds: []
     aiRole: "project home"

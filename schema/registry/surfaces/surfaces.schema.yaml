@@ -1,0 +1,75 @@
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+$id: 'surfaces-registry.schema.yaml'
+title: 'Work-Surface Registry Document Schema'
+description: >
+  Structural validation for schema/registry/surfaces/surfaces.yaml. Ajv is the
+  single validation authority (rule #3): surface identity is a controlled
+  vocabulary enforced HERE, never by a hardcoded allow-list in TypeScript.
+  `path` is the canonical route pattern; `paths` optionally declares extra
+  route patterns the same surface serves. Exactly one of the surfaces array
+  entries per id (uniqueIds keyword).
+type: object
+required: [version, surfaces]
+additionalProperties: false
+properties:
+  version:
+    const: 1
+  title:
+    type: string
+  description:
+    type: string
+  surfaces:
+    type: array
+    minItems: 1
+    uniqueIds: [id]
+    items:
+      type: object
+      required: [id, label, path]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+          enum: [project, run-plan, run-design, run-execute, results, analysis, knowledge, find]
+        label:
+          type: string
+          minLength: 1
+        path:
+          type: string
+          pattern: '^/'
+        params:
+          type: object
+          description: >-
+            `:token` in `path` → the objectType that fills it. PRESENCE makes the
+            surface deep-linkable; a surface without params is an AI-context
+            surface reached through its collection route.
+          additionalProperties:
+            type: string
+            minLength: 1
+        paths:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            pattern: '^/'
+        objectTypes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        selectableKinds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        aiRole:
+          type: string
+          minLength: 1
+        aiEndpoint:
+          type: object
+          required: [route]
+          additionalProperties: false
+          properties:
+            route:
+              type: string
+              pattern: '^/'

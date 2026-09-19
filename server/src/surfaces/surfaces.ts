@@ -9,12 +9,20 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
+import Ajv2020 from 'ajv/dist/2020.js';
 import type { SurfaceId } from '../surfaceContext/SurfaceContext.js';
 
 export interface SurfaceSpec {
   id: SurfaceId;
   label: string;
   path: string;
+  /**
+   * `:token` in `path` → the objectType that fills it. PRESENCE makes the
+   * surface deep-linkable (see app/src/shared/surfaces/surfaceRoute.ts); a
+   * surface without params is an AI-context surface reached through its
+   * collection route.
+   */
+  params?: Record<string, string>;
   objectTypes: string[];
   selectableKinds: string[];
   aiRole?: string;
@@ -51,10 +59,10 @@ function stringArray(value: unknown, context: string): string[] {
 
 function normalizeSurface(raw: unknown, index: number): SurfaceSpec {
   const obj = asObject(raw, `surfaces[${index}]`);
+  // Membership + shape are enforced by Ajv against
+  // schema/registry/surfaces/surfaces.schema.yaml (see assertValidRegistry).
+  // There is deliberately NO id allow-list in TypeScript (repo rule #1/#3).
   const id = requiredString(obj.id, `surfaces[${index}].id`);
-  if (id && !['project', 'run-plan', 'run-design', 'run-execute', 'results', 'analysis', 'knowledge', 'find'].includes(id)) {
-    throw new Error(`surfaces[${index}].id invalid: ${id}`);
-  }
   const aiRole = obj.aiRole;
   const spec: SurfaceSpec = {
     id: id as SurfaceId,
@@ -63,10 +71,57 @@ function normalizeSurface(raw: unknown, index: number): SurfaceSpec {
     objectTypes: stringArray(obj.objectTypes, `surfaces[${index}].objectTypes`),
     selectableKinds: stringArray(obj.selectableKinds, `surfaces[${index}].selectableKinds`),
   };
+  if (obj.params !== undefined) {
+    const params = asObject(obj.params, `surfaces[${index}].params`);
+    const entries = Object.entries(params);
+    for (const [token, objectType] of entries) {
+      if (!token.trim() || typeof objectType !== 'string' || !objectType.trim()) {
+        throw new Error(`surfaces[${index}].params must map a non-empty token → objectType`);
+      }
+    }
+    // Every `:token` in path must be bound, or a route built from this surface
+    // would contain an unfilled placeholder.
+    const tokens = [...spec.path.matchAll(/:([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]);
+    const bound = entries.map(([token]) => token).sort();
+    if (JSON.stringify([...tokens].sort()) !== JSON.stringify(bound)) {
+      throw new Error(
+        `surfaces[${index}].params must bind exactly the path tokens [${tokens.join(', ')}] (got [${bound.join(', ')}])`,
+      );
+    }
+    spec.params = Object.fromEntries(entries.map(([token, objectType]) => [token.trim(), (objectType as string).trim()]));
+  }
   if (typeof aiRole === 'string' && aiRole.trim().length > 0) {
     spec.aiRole = aiRole.trim();
   }
   return spec;
+}
+
+/**
+ * Validate the registry document with Ajv against
+ * schema/registry/surfaces/surfaces.schema.yaml — the single validation
+ * authority (repo rule #3).
+ *
+ * The schema's `uniqueIds: [id]` rule is implemented below because JSON Schema
+ * has no built-in unique-by-field keyword; the declaration stays in the schema
+ * so the rule is visible where registry authors look.
+ */
+function assertValidRegistry(schemaDir: string, doc: unknown): void {
+  // Duplicates first, so the most actionable error wins (Ajv's enum error would
+  // otherwise mask a copy-paste id).
+  const surfaces = (doc as { surfaces?: Array<{ id?: unknown }> }).surfaces ?? [];
+  const seen = new Set<unknown>();
+  for (const surface of surfaces) {
+    if (seen.has(surface.id)) {
+      throw new Error(`surfaces registry invalid: duplicate surface id "${String(surface.id)}"`);
+    }
+    seen.add(surface.id);
+  }
+  const schemaPath = resolve(schemaDir, 'registry/surfaces/surfaces.schema.yaml');
+  const schema = parse(readFileSync(schemaPath, 'utf8')) as object;
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  if (!ajv.validate(schema, doc)) {
+    throw new Error(`surfaces registry invalid: ${ajv.errorsText()}`);
+  }
 }
 
 function normalize(v: unknown): SurfacesDocument {
@@ -96,6 +151,9 @@ export class SurfacesRegistry {
 
 export function loadSurfacesRegistry(path: string): SurfacesRegistry {
   const parsed = parse(readFileSync(path, 'utf8')) as unknown;
+  // The sibling schema lives at <schemaDir>/registry/surfaces/…; derive it from
+  // the registry path so no caller has to pass the schema dir twice.
+  assertValidRegistry(resolve(path, '..', '..', '..'), parsed);
   return new SurfacesRegistry(normalize(parsed));
 }
 
