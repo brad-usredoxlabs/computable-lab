@@ -356,3 +356,65 @@ sets disagree in wording.
 5. **Superseded docs.** `specifications/protocol-extraction-to-execution-flow.md`
    should get a banner, not a delete; the corpus/history value of these docs is
    real.
+
+---
+
+## Implementation status — 2026-09-19
+
+### Decisions taken by Brad
+
+- **D2 — `/protocol-builder` is DEPRECATED.** One authoring surface: the review
+  surface. The redirect lands in Phase 2.5 (once the review surface can take a URL
+  or pasted text); `specifications/protocol-extraction-to-execution-flow.md`
+  already carries the superseded banner.
+- **D4 — yes, the right-pane Protocol tab loses its picker.** Landed.
+
+### Phase 1 — DONE (`dbf90b63`)
+
+- `protocol-review` tab kind: route + stable id + entity kind + right-pane default
+  + `lab-session.schema.yaml` enum (`app/src/event-editor/workspace/types.ts`,
+  `app/src/shared/shell/WorkspaceTabStrip.tsx`, `app/src/shared/session/tabId.ts`,
+  `app/src/shared/shell/OpenTabsContext.tsx`, `schema/workflow/lab-session.schema.yaml`).
+  Test: `app/src/shared/session/protocolReviewTab.test.ts` (RED 3 → GREEN 3).
+- `ProtocolReviewHostPage` hosts the review body in AppShell with the tab strip;
+  `VendorPdfReviewPage` gained an `embedded` prop (drops its own back button and
+  heading — the shell owns the brand) and the route now points at the host.
+- OPEN opens its own tab (`openProtocolReview` in `app/src/shared/lib/openContent.ts`)
+  from the run rail, the right pane and the ingestion list; focuses an existing tab
+  instead of stacking duplicates.
+- `/ingestion` and `/ingestion/vendor-pdf` registered as surfaces (registry +
+  schema enum + both `SurfaceId` unions + `resolveSurface.ts`); they used to resolve
+  to `project`.
+- `SessionSync` only redirects on adopt when the route is `/` or `/splash` — an
+  explicit deep link is never yanked away, which also removed a class of e2e
+  interference.
+
+Evidence: `npx playwright test e2e/session-persistence.spec.ts
+e2e/protocol-selector-search.spec.ts --project=chromium` → **11 passed** (incl. "a
+vendor-PDF deep link renders the review surface inside the shell with a tab", which
+also survives a refresh). Unit: **100 passed** across `src/ingestion`,
+`src/shared/{session,surfaces,shell}`. Typecheck clean in every file touched.
+Live on `:5174`: `/ingestion/vendor-pdf` → Review opened the ZymoBIOMICS kit in a
+second tab next to the run; `vpdf-review` + `vpdf-split-handle` present.
+
+Two pre-existing breakages fixed on the way (both would have masked real failures):
+`IngestionPage.test.tsx`'s `apiClient` mock lacked `getSurfaces` (the workspace
+shell renders `SurfaceIndicator`); `protocol-selector-search.spec.ts` hard-coded
+`RUN-2026-09-06-run-43wx`, long deleted → all 4 tests were red and now discover a
+protocol-less run.
+
+### Phase 4 — DONE (`0076db4b`)
+
+The rail grew **Change protocol** (reusing `AttachProtocolPanel alreadyAttached`);
+`ProtocolTabPanel` lost both picker entry points, its dead `protocolQuery` debounce,
+`changingProtocol`/`runStatus` state and the `ProtocolSelector` import. Test:
+`ProtocolNavPanel.change.test.tsx` (RED: no `protocol-nav-change` → GREEN). 66 tests
+in `right-pane/protocol` green. Live: a run with 16 steps → Change protocol →
+picker in replace mode → Cancel → back to the 16 steps.
+
+### Remaining
+
+- Phase 2 (engine feeds the review surface: axes as questions, branch-aware Save,
+  redraft in place, then the `/protocol-builder` redirect + `/extraction` demotion).
+- Phase 3 (sample-source axes — the real work; spike first, per the plan).
+- Phase 5 (layer naming in the UI).

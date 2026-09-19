@@ -147,18 +147,17 @@ surface moves under the tab strip (new `protocol-review` tab kind), so opening a
 source document adds a tab instead of replacing the surface. Same pattern as
 `ArtifactHostPage`/`DeckHostPage`.
 
-**D2 — One authoring surface, one engine.** `/ingestion/vendor-pdf/:recordId`
-(the surface you like, close to the source document) becomes the single
-review-and-author surface; the intake engine (candidate → decision tree →
-subgraph proposal → redraft) feeds it, so the axes and provenance arrive as
-*questions at the top of the review surface*, and Save promotes the
-branch-resolved result to a global protocol. `/protocol-builder` is demoted
-(kept only if a flow there is not reproducible in the review surface);
-`/extraction` becomes an audit list or is retired.
-This supersedes `specifications/protocol-extraction-to-execution-flow.md`'s
-"`/protocol-builder` is the canonical flow" — written before the TapTab protocol
-editor and the vendor-PDF review surface existed. That doc should get a
-superseded banner rather than being deleted.
+**D2 — One authoring surface, one engine. RATIFIED 2026-09-19; `/protocol-builder`
+is DEPRECATED.** `/ingestion/vendor-pdf/:recordId` (the surface you like, close to
+the source document) becomes the single review-and-author surface; the intake
+engine (candidate → decision tree → subgraph proposal → redraft) feeds it, so the
+axes and provenance arrive as *questions at the top of the review surface*, and
+Save promotes the branch-resolved result to a global protocol. `/protocol-builder`
+is retired (its route redirects into the review surface once that surface can take
+a URL or pasted text — Phase 2.5); `/extraction` becomes an audit list or is
+retired. This supersedes `specifications/protocol-extraction-to-execution-flow.md`'s
+"`/protocol-builder` is the canonical flow" — that doc now carries a superseded
+banner rather than being deleted.
 
 **D3 — Sample-source axes are derived, not asked.** `deriveBranchAxes` gains
 cross-step axis grouping so the same conceptual question asked in steps 1/3/5
@@ -167,9 +166,10 @@ buccal"), with options carrying document provenance. Acceptance: the ZymoBIOMICS
 DNA Miniprep tree (D4300) gains a sample-source axis with ≥3 options, and its
 proposal count becomes options × scale levels instead of 3.
 
-**D4 — One protocol surface per workspace.** The run workspace's left rail owns
-attach + steps. The right-pane `ProtocolTabPanel` keeps record *editing* but
-loses the picker (the picker now exists in the rail).
+**D4 — One protocol surface per workspace. RATIFIED 2026-09-19.** The run
+workspace's left rail owns attach AND change (both landed — commits `e02ff910`,
+`0076db4b`). The right-pane `ProtocolTabPanel` keeps protocol *record* editing but
+its picker is retired; its empty state points at the rail.
 
 **D5 — Name the layer in the UI.** Every protocol-family surface shows which of
 the five layers it is editing (Document truth · AI draft · Global · Lab · This
