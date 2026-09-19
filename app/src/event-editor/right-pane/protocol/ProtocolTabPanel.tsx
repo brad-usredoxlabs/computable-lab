@@ -28,6 +28,7 @@ import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/Pro
 import { StepInvestigationPanel, type LocalProtocolSetupRows } from './StepInvestigationPanel'
 import { StepChipPrompt } from './StepChipPrompt'
 import { StepIndicator } from './StepIndicator'
+import { ProtocolIdentity } from './ProtocolIdentity'
 import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import { BranchPicker } from '../../protocol/BranchPicker'
@@ -978,6 +979,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // The protocol id whose steps we show (run → plannedRunRef → protocolRef) —
   // needed to commit a step's realization (patchStepSubgraph) by protocol.
   const [stepsProtocolId, setStepsProtocolId] = useState<string | null>(null)
+  // The ATTACHED protocol (run → plannedRunRef → protocolRef) — its name labels
+  // this tab and its record metadata is revealed on hover (ProtocolIdentity).
+  const [attachedProtocol, setAttachedProtocol] = useState<{ recordId: string; title?: string } | null>(null)
   // (The protocol picker used to live here: a search box + ProtocolSelector.
   // It is retired — plan 2026-09-19_121028 D4: attach and change belong to the
   // run workspace's left Protocol rail. This panel edits the ATTACHED protocol.)
@@ -1088,6 +1092,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       // protocolRef. `/api/protocols/{id}/steps` requires a PROTOCOL id, not
       // the run id (which would 400 NOT_A_PROTOCOL and hide the steps).
       let protocolId: string | null = null
+      // Ref label from the run's chain — shown as the protocol name until the
+      // protocol record itself lands (see ProtocolIdentity).
+      let protocolRefLabel: string | null = null
       try {
         const runEnv = await apiClient.getRecord(runId)
         const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
@@ -1095,8 +1102,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         if (plr?.id) {
           const plrEnv = await apiClient.getRecord(plr.id)
           const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
-          const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string } | undefined
+          const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string; label?: string } | undefined
           if (typeof protoRef?.id === 'string') protocolId = protoRef.id
+          if (typeof protoRef?.label === 'string') protocolRefLabel = protoRef.label
         }
       } catch {
         // resolution failed — fall back to the run id below
@@ -1115,12 +1123,22 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       let resolvedUniversalId: string | null = null
       let resolvedUniversalTitle: string | null = null
       let resolvedRoleIds: { labwares: string[]; equipment: string[]; materials: string[] } | null = null
+      // Identity of the ATTACHED protocol (the chain run → PLR → protocolRef),
+      // for the ProtocolIdentity line. Distinct from `resolvedUniversalId`,
+      // which is the universal protocol when the run is attached directly to
+      // one — a local protocol is what a specialized run actually executes.
+      let resolvedProtocolKind: string | null = null
+      let resolvedProtocolTitle: string | null = null
       try {
         const env = await apiClient.getRecord(attachedId)
         if (!cancelled) {
           const pp = (env?.payload ?? env) as Record<string, unknown> | null
           const t = pp?.humanStepsText
           if (typeof t === 'string') setHumanStepsText(t)
+          if (pp?.kind === 'protocol' || pp?.kind === 'local-protocol') {
+            resolvedProtocolKind = pp.kind
+            resolvedProtocolTitle = typeof pp.title === 'string' ? pp.title : null
+          }
           resolvedSetup = extractLocalProtocolSetup(env)
           if (pp?.kind === 'local-protocol') {
             const inh = pp?.inherits_from as { id?: string } | undefined
@@ -1160,6 +1178,16 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         setUniversalProtocolTitle(resolvedUniversalTitle)
         setUniversalRoleIds(resolvedRoleIds)
         setStepsProtocolId(stepsId)
+        setAttachedProtocol(
+          resolvedProtocolKind
+            ? {
+                recordId: attachedId,
+                ...(resolvedProtocolTitle ?? protocolRefLabel
+                  ? { title: (resolvedProtocolTitle ?? protocolRefLabel) as string }
+                  : {}),
+              }
+            : null,
+        )
       }
 
       // For an LPR, the long-form text lives on the INHERITED universal
@@ -1228,6 +1256,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           setError(null)
           setNoProtocol(true)
           setSteps([])
+          setAttachedProtocol(null)
           try {
             const ctx = await apiClient.getProtocolContext({ studyId })
             if (!cancelled) setProtocolContext(ctx)
@@ -1665,6 +1694,15 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
   return (
     <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', height: '100%' }}>
+      {/* WHICH protocol this is — the record's name, with its provenance (ID,
+          parent artifact, created…) on hover. Leads the tab so the step list
+          below is never read against the wrong protocol. */}
+      {attachedProtocol ? (
+        <ProtocolIdentity
+          protocolId={attachedProtocol.recordId}
+          fallbackTitle={attachedProtocol.title ?? null}
+        />
+      ) : null}
       {/* Very visible "which concept am I realizing?" indicator when a step is
           focused for investigation (focusStepId set). */}
       {(() => {

@@ -509,3 +509,101 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* ---- Protocol identity line (ProtocolIdentity) --------------------------
+   Leads the Protocol tab: which protocol is this run executing, and (on
+   hover/focus) where the record came from. Read-only provenance, no actions:
+   attach / change protocol live in the run workspace's Protocol rail. */
+
+.protocol-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+}
+
+.protocol-identity__eyebrow {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-text-dim);
+}
+
+.protocol-identity__main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  cursor: help;
+  outline: none;
+}
+
+.protocol-identity__main:focus-visible .protocol-identity__name {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.protocol-identity__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+  text-decoration: underline dotted;
+  text-decoration-color: var(--cl-border-strong, var(--cl-border));
+  text-underline-offset: 3px;
+}
+
+.protocol-identity__id {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-identity__tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 8px 10px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+}
+
+.protocol-identity__tooltip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin-bottom: 6px;
+}
+
+.protocol-identity__tooltip-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.protocol-identity__tooltip-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.protocol-identity__tooltip-row dt {
+  flex: 0 0 96px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-identity__tooltip-row dd {
+  margin: 0;
+  font-size: 11px;
+  color: var(--cl-text);
+  overflow-wrap: anywhere;
+}
