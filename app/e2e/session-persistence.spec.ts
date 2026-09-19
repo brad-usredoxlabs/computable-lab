@@ -12,10 +12,15 @@ import { test, expect, type Page, type APIRequestContext } from '@playwright/tes
  *     persist effect used to wipe the stored session on EVERY load)
  *  2. a full page load at "/" must resume the ACTIVE tab's route
  *     (HomeRedirect used to read the not-yet-hydrated store → /splash)
+ *  3. a third device attaches to the same session (tmux-style)
+ *  4. the project workspace mounts without an update-depth loop (below)
  *
  * The strip DOM is asserted on /splash, because /splash is the one workspace
  * surface that always mounts the shell. (The run workspace is separately
  * exercised by its own specs.)
+ *
+ * These tests are SERIAL and share one file: the persisted session is per-user
+ * SERVER state, so specs running in parallel adopt each other's sessions.
  */
 const KEY = 'cl-open-tabs'
 
@@ -133,4 +138,70 @@ test('a second device (fresh context, no localStorage) attaches to the same sess
   await deviceA.close()
   await deviceB.close()
   await resetServerSession(request)
+})
+
+/**
+ * --- project-workspace update-depth loop (same file, same reason) ---
+ *
+ * Symptom (user-reported): opening a project then "New Run" hung forever with
+ * "Warning: Maximum update depth exceeded ... at WorkspaceShellHost
+ * (ProjectWorkspacePage.tsx)". These tests live HERE because they need the same
+ * per-user server session cleared, and the session is shared process-wide: two
+ * files running in parallel adopt each other's sessions.
+ */
+async function firstStudyId(request: APIRequestContext): Promise<string> {
+  const res = await request.get('/api/records?kind=study&limit=1')
+  const body = (await res.json()) as { records: Array<{ recordId: string }> }
+  const id = body.records[0]?.recordId
+  expect(id, 'a study record must exist to open a project workspace').toBeTruthy()
+  return id!
+}
+
+function collectErrors(page: Page): string[] {
+  const errors: string[] = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
+  page.on('pageerror', (err) => errors.push(String(err)))
+  return errors
+}
+
+test('opening a project renders its workspace with no update-depth loop', async ({ page, request }) => {
+  const errors = collectErrors(page)
+  const studyId = await firstStudyId(request)
+  await resetServerSession(request)
+
+  await page.goto(`/project/${studyId}`)
+
+  // The workspace mounted: the shell, its tab strip, and one active project tab.
+  // (The tab label is the study TITLE once it resolves, so assert the shape, not
+  // the id text.)
+  await expect(page.getByTestId('workspace-tab-strip')).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.workspace-tab--active')).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator('.workspace-tab--active')).toHaveClass(/workspace-tab--project/, {
+    timeout: 15_000,
+  })
+
+  // The Create affordance offers New Run (the flow the user was trying).
+  await page.getByRole('button', { name: '+ Create' }).click()
+  await expect(page.getByTestId('create-menu-new-run')).toBeVisible({ timeout: 5_000 })
+
+  // Let any runaway effect reveal itself before asserting.
+  await page.waitForTimeout(1_000)
+  expect(errors.filter((e) => /Maximum update depth/.test(e))).toEqual([])
+})
+
+test('re-opening the same project does not loop either (idempotent re-registration)', async ({ page, request }) => {
+  const errors = collectErrors(page)
+  const studyId = await firstStudyId(request)
+  await resetServerSession(request)
+
+  await page.goto(`/project/${studyId}`)
+  await expect(page.locator('.workspace-tab--active')).toHaveCount(1, { timeout: 15_000 })
+  await page.reload()
+  await expect(page.locator('.workspace-tab--active')).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator('.workspace-tab')).toHaveCount(1, { timeout: 15_000 })
+
+  await page.waitForTimeout(1_000)
+  expect(errors.filter((e) => /Maximum update depth/.test(e))).toEqual([])
 })
