@@ -418,3 +418,85 @@ picker in replace mode → Cancel → back to the 16 steps.
   redraft in place, then the `/protocol-builder` redirect + `/extraction` demotion).
 - Phase 3 (sample-source axes — the real work; spike first, per the plan).
 - Phase 5 (layer naming in the UI).
+
+---
+
+## Phase 2 + 3 status — 2026-09-19 (later)
+
+### Phase 3 — DONE (commits `19bd0a5c`, `27b17233`)
+
+**3a. The question is the option set, not the step** (`deriveBranchAxes`).
+The real ZymoBIOMICS 96 kit asks its lysis-format question twice — step 1
+("add 550 µl") and step 4 ("centrifuge at ≥ 4 000 x g") — with the SAME two
+options. Per-step axes asked the biologist twice and multiplied the proposal
+product 2×2. Option identity is now the CONDITION phrase (lettered marker and
+"if using" boilerplate stripped; parenthesised catalogue qualifiers ignored
+when comparing, since step 1 writes "(0.1 & 0.5 mm, D6002-96-7)" and step 4
+writes "(0.1 & 0.5 mm)"). Steps sharing an option set collapse into ONE axis
+whose conditions gate all of them; a step with a unique option set keeps the
+legacy `branch-axis-<stepId>` shape.
+
+Live, from the real PDF: `branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead-lysis-tubes`
+with 2 conditions, each gating `step-001` AND `step-004`. The golden
+(`ZymoDecisionTree.test.ts`) now asserts every branchy step is GATED rather
+than 1:1 with axes.
+
+**3b. A table the document's steps point at is a question**
+(`deriveDocumentTableAxis`, origin `document_table`, new schema enum value).
+The 96 kit states its sample choices in "Sample type maximum input" (Feces,
+Soil, Liquid samples and swab collections, Cells suspended in PBS, Samples in
+DNA/RNA Shield) and step 1 says "…using the table below:". That becomes
+`axis-sample-type` (question "Which Sample Type?"), 5 conditions, gating
+exactly the steps that reference the table, carrying the table as evidence.
+Refusals are explicit and never fabricate: `no_sample_table`,
+`table_too_small`, `option_column_not_categorical`, `no_step_references_table`
+(recorded on the tree's notes).
+
+**3.3 Re-derivation (live, real store + Ajv):** the 96 kit now yields 2 axes /
+30 proposals (2 lysis × 5 sample type × 3 scales), each proposal carrying
+`branchPath` + `activeStepIds`.
+
+**Blocker found (not fixable from this layer):** the ZymoBIOMICS DNA Miniprep
+(D4300T) candidate has **0 steps, 0 sections, 0 tables** — the extractor's own
+diagnostics say "No Protocol section heading was found" / "The sample input
+table was not extracted". No axis can be derived from a document that yields no
+structure; that document's sample-source question needs section/table
+extraction work first.
+
+### Phase 2 — DONE (commits `f47ab4a9`, `4aed65c8`, `8c1563d6`)
+
+**2.1 The join** (`resolveReviewDocument`, `GET /api/protocol-ide/intake/review/:artifactId`).
+The review surface is keyed by a `vendor-pdf` ARTIFACT while the engine keys
+trees by extraction documentId — the two name the same PDF differently (the
+artifact store renames files; the nightly crawl stored absolute download
+paths). Trees now record `sourcePdf.sha256`; the join is content-first
+(sha256 → stored file name), and when nothing matches it returns an explicit
+gap plus the trees it saw. Live: `GET /api/protocol-ide/intake/review/VPDF-257F57196F6C`
+→ 200, `matchVia: sha256`, 2 axes, 30 proposals.
+
+**2.2 The review tab asks the questions** (`BranchQuestionsPanel`). Renders
+each axis with the document's own wording and its provenance, resolves the
+answers to the enumerated realization ("This branch runs 2 steps (step-001,
+step-004) at bench plate multichannel scale"), and includes the redraft box.
+Live: answered 2 questions → resolution shown; redrafted that branch →
+proposal `…-b5-s0` revision 2, state `redrafted`, new graph `…-r2`
+(`compileStatus: error` on that revision — the compile pass reported a gap; the
+round-trip itself worked).
+
+**2.3 Branch-aware promotion.** `treeAxesToBranchAxes` maps the tree into the
+protocol's `branch_axes`, so the promoted recipe carries its questions and the
+localization answers them (the layer model). Guarded by an Ajv contract test
+(`ProtocolProseFieldsSchema.test.ts`) — and a negative case: a
+condition-less axis is rejected.
+
+**2.5 `/protocol-builder` redirects to `/ingestion`** (D2).
+
+### Still open
+- The review tab's editable step body still comes from the AI extraction
+  candidate while the questions come from the vendor candidate; unifying those
+  into one step identity is the next slice (the plan's "one surface, one engine").
+- `openSurface()` is still not wired to the agent-action channel.
+- `compileStatus: error` on redrafted revisions — the compile pass needs its own
+  investigation (it is not the redraft wiring).
+- The Miniprep-class documents need section/table extraction before any
+  question can be derived from them.
