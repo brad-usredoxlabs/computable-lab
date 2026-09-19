@@ -83,6 +83,7 @@ import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
 import { createHumanStepsHandlers, type HumanStepsHandlers } from './api/handlers/HumanStepsHandlers.js';
 import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js';
+import { createProtocolIntakeHandlers } from './api/handlers/ProtocolIntakeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
 import { createCorpusHandlers } from './api/handlers/CorpusHandlers.js';
@@ -829,6 +830,9 @@ export async function createServer(
     ctx,
     protocolIdeAiDeps as Parameters<typeof createProtocolIdeHandlers>[1],
   );
+  // Corpus-intake review surface (decision trees + subgraph proposals).
+  // Reads ctx.extractionRunner lazily, so it is safe to create pre-AI-runtime.
+  const protocolIntakeHandlers = createProtocolIntakeHandlers(ctx);
   const plannedRunHandlers = createPlannedRunHandlers(ctx);
   const componentHandlers = createComponentHandlers(ctx);
   const executionHandlers = createExecutionHandlers(ctx);
@@ -1298,6 +1302,7 @@ export async function createServer(
       metaHandlers,
       protocolHandlers,
       protocolIdeHandlers,
+      protocolIntakeHandlers,
       plannedRunHandlers,
       componentHandlers,
       executionHandlers,

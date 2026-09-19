@@ -62,6 +62,7 @@ import type { OntologyTermHandlers } from './handlers/OntologyTermHandlers.js';
 import type { VerbActionMapHandlers } from './handlers/VerbActionMapHandlers.js';
 import type { FoundryJobHandlers } from './handlers/FoundryJobHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
+import type { ProtocolIntakeHandlers } from './handlers/ProtocolIntakeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
@@ -102,6 +103,7 @@ export interface RouteOptions {
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
   protocolIdeHandlers?: ProtocolIdeHandlers;
+  protocolIntakeHandlers?: ProtocolIntakeHandlers;
   plannedRunHandlers?: PlannedRunHandlers;
   componentHandlers?: ComponentHandlers;
   executionHandlers?: ExecutionHandlers;
@@ -896,6 +898,19 @@ export function registerRoutes(
     fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/curated-vendors', protocolIdeHandlers.getCuratedVendors.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/lab-context-override', protocolIdeHandlers.setProtocolIdeLabContextOverride.bind(protocolIdeHandlers));
+  }
+
+  // ============================================================================
+  // Corpus Intake Routes (optional - requires protocolIntakeHandlers)
+  // ============================================================================
+
+  const { protocolIntakeHandlers } = options;
+
+  if (protocolIntakeHandlers) {
+    fastify.get('/protocol-ide/intake/trees', protocolIntakeHandlers.listTrees.bind(protocolIntakeHandlers));
+    fastify.get('/protocol-ide/intake/trees/:treeId', protocolIntakeHandlers.getTree.bind(protocolIntakeHandlers));
+    fastify.post('/protocol-ide/intake/proposals/:proposalId/prompt', protocolIntakeHandlers.setProposalPrompt.bind(protocolIntakeHandlers));
+    fastify.post('/protocol-ide/intake/proposals/:proposalId/redraft', protocolIntakeHandlers.redraftProposal.bind(protocolIntakeHandlers));
   }
 
   // ============================================================================
