@@ -43,6 +43,9 @@ properties:
       url: { type: string }
       title: { type: string }
       vendor: { type: string }
+      # Vendor manuals carry a version (e.g. '1.4.1'); provenance of the
+      # exact manual the tree was derived from.
+      version: { type: string }
 
   axes:
     type: array

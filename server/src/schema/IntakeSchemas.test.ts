@@ -109,6 +109,20 @@ describe('protocol-decision-tree schema contract', () => {
     const out = validator.validate(bad, TREE_SCHEMA);
     expect(out.valid).toBe(false);
   });
+
+  it('carries the source manual version (kit provenance; the intake service emits it)', async () => {
+    // Nightly regression: vendor manuals carry a version (e.g. '1.4.1');
+    // the service copies candidate.source.version onto the tree. If the
+    // schema rejects it, tree persist fails and the whole document yields
+    // zero proposals (observed live on Zymo D6110/D6010/D4303).
+    const validator = await intakeValidator();
+    const out = validator.validate(
+      { ...minimalTree, sourcePdf: { ...minimalTree.sourcePdf, version: '1.4.1' } },
+      TREE_SCHEMA,
+    );
+    expect(out.errors ?? []).toEqual([]);
+    expect(out.valid).toBe(true);
+  });
 });
 
 describe('subgraph-proposal schema contract', () => {
