@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { candidateToProtocolPayload, normalizeProtocolPayload } from './candidateToProtocolPayload'
+import {
+  candidateToProtocolPayload,
+  normalizeProtocolPayload,
+  treeAxesToBranchAxes,
+} from './candidateToProtocolPayload'
 import type { AiProtocolCandidateSummary } from '../types/ai'
 
 function sampleCandidate(): AiProtocolCandidateSummary {
@@ -106,5 +110,55 @@ describe('candidateToProtocolPayload', () => {
     expect((out.steps as Record<string, unknown>[])[0].notes).toBe('a\nb')
     expect((out.steps as Record<string, unknown>[])[1].label).toBe('123')
     expect((out.steps as Record<string, unknown>[])[1].notes).toBeUndefined() // null dropped
+  })
+})
+describe('treeAxesToBranchAxes (promotion carries the document\'s questions)', () => {
+  it('maps a decision tree axis into a protocol branch_axes entry', () => {
+    const axes = treeAxesToBranchAxes([
+      {
+        axisId: 'axis-sample-type',
+        question: 'Which Sample Type?',
+        conditions: [
+          {
+            id: 'option-1',
+            label: 'Feces',
+            predicate: { op: 'equals', path: '$.branchSelection.axis-sample-type', value: 'feces' },
+            then_stepIds: ['step-001'],
+          },
+          { id: 'option-2', label: 'Soil' },
+        ],
+      },
+    ])
+    expect(axes).toEqual([
+      {
+        axisId: 'axis-sample-type',
+        label: 'Which Sample Type?',
+        conditions: [
+          {
+            id: 'option-1',
+            label: 'Feces',
+            predicate: { op: 'equals', path: '$.branchSelection.axis-sample-type', value: 'feces' },
+            then_stepIds: ['step-001'],
+          },
+          // a condition with no gating steps keeps an empty list (schema-valid),
+          // never a missing key
+          { id: 'option-2', label: 'Soil', predicate: {}, then_stepIds: [] },
+        ],
+      },
+    ])
+  })
+
+  it('drops malformed axes/conditions instead of writing broken branch_axes', () => {
+    expect(treeAxesToBranchAxes([{ axisId: '' }, { axisId: 'ok', conditions: [{ id: '' }] } as never])).toEqual([
+      { axisId: 'ok', label: 'ok', conditions: [] },
+    ])
+  })
+
+  it('travels with the promoted payload when the caller supplies axes', () => {
+    const payload = candidateToProtocolPayload(sampleCandidate(), 'PRT-x', undefined, [
+      { axisId: 'axis-sample-type', label: 'Which Sample Type?', conditions: [] },
+    ])
+    expect(payload.branch_axes).toEqual([{ axisId: 'axis-sample-type', label: 'Which Sample Type?', conditions: [] }])
+    expect(candidateToProtocolPayload(sampleCandidate(), 'PRT-x').branch_axes).toBeUndefined()
   })
 })

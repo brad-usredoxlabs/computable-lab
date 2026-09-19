@@ -22,6 +22,8 @@ import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
+import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
+import { treeAxesToBranchAxes, type MappedBranchAxis } from './candidateToProtocolPayload'
 import { candidateToProtocolPayload, normalizeProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
 import './VendorPdfReviewPage.css'
 
@@ -71,6 +73,8 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   // TapTab protocol-surface state (Phase 3).
   const [protocolPayload, setProtocolPayload] = useState<MappedProtocolPayload | null>(null)
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
+  // The document's if/then questions, answered by the reviewer (branch panel).
+  const [reviewBranch, setReviewBranch] = useState<ResolvedReviewBranch | null>(null)
   const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -241,6 +245,20 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     })
   }, [])
 
+  const handleReviewResolved = useCallback((resolved: ResolvedReviewBranch | null) => {
+    setReviewBranch(resolved)
+  }, [])
+
+  // The promoted protocol carries the document's questions as `branch_axes`:
+  // the global recipe keeps every step AND asks which branch applies, so the
+  // lab realization can answer it (protocol-worldview: recipes carry questions,
+  // localizations carry answers).
+  const branchAxesForSave = useCallback((): MappedBranchAxis[] | undefined => {
+    if (!reviewBranch) return undefined
+    const axes = treeAxesToBranchAxes(reviewBranch.axes)
+    return axes.length > 0 ? axes : undefined
+  }, [reviewBranch])
+
   // Save = accept the current version of the protocol, promoted to a usable
   // protocol: state approved + the real (current) title. Reuses the stable id
   // on subsequent saves.
@@ -250,7 +268,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     setSaveError(null)
     setSaveNote(null)
     try {
-      const payload = normalizeProtocolPayload(protocolPayload as unknown as Record<string, unknown>)
+      const axes = branchAxesForSave()
+      const payload = normalizeProtocolPayload({
+        ...(protocolPayload as unknown as Record<string, unknown>),
+        ...(axes ? { branch_axes: axes } : {}),
+      })
       if (savedRecordId) {
         await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId, state: 'approved' })
         setSaveNote('Saved.')
@@ -266,7 +288,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     } finally {
       setSaving(false)
     }
-  }, [protocolPayload, savedRecordId])
+  }, [protocolPayload, savedRecordId, branchAxesForSave])
 
   // Save As — open a modal pre-loaded with the real protocol title so the
   // user can overwrite it, then save as a fresh approved copy.
@@ -283,9 +305,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     setSaveError(null)
     setSaveNote(null)
     try {
+      const axes = branchAxesForSave()
       const payload = normalizeProtocolPayload({
         ...protocolPayload,
         title: saveAsTitle.trim() ? saveAsTitle.trim() : protocolPayload.title,
+        ...(axes ? { branch_axes: axes } : {}),
       } as unknown as Record<string, unknown>)
       const recId = `PRT-${shortId()}`
       await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
@@ -296,7 +320,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     } finally {
       setSaving(false)
     }
-  }, [protocolPayload, saveAsTitle])
+  }, [protocolPayload, saveAsTitle, branchAxesForSave])
 
   // TapTab onUpdate: keep the edited payload when dirty.
   const handleTapTabUpdate = useCallback((serialized: Record<string, unknown>, dirty?: boolean) => {
@@ -487,6 +511,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
               {extractError}
             </p>
           )}
+          {recordId ? (
+            <div className="vpdf-review__questions">
+              <BranchQuestionsPanel artifactId={recordId} onResolved={handleReviewResolved} />
+            </div>
+          ) : null}
           {/* TapTab protocol surface once we have a candidate + projection. */}
           {candidate && protocolPayload && projection ? (
             <div className="vpdf-review__taptab" data-testid="vpdf-taptab">

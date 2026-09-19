@@ -105,6 +105,8 @@ export interface MappedProtocolPayload {
     instrumentRoles: Array<{ roleId: string; description: string; allowedInstrumentIds?: string[] }>
   }
   humanStepsText?: string
+  /** Declarative if/then questions carried by the promoted protocol. */
+  branch_axes?: MappedBranchAxis[]
 }
 
 function slugId(label: string | undefined): string {
@@ -184,6 +186,7 @@ export function candidateToProtocolPayload(
   candidate: AiProtocolCandidateSummary,
   recordId: string,
   humanStepsText?: string,
+  branchAxes?: MappedBranchAxis[],
 ): MappedProtocolPayload {
   const roles = {
     materialRoles: dedupeById(
@@ -204,5 +207,51 @@ export function candidateToProtocolPayload(
     steps: (candidate.steps ?? []).map(mapStep),
     roles,
     ...(humanStepsText?.trim() ? { humanStepsText } : {}),
+    ...(branchAxes && branchAxes.length > 0 ? { branch_axes: branchAxes } : {}),
   }
+}
+
+/**
+ * A protocol `branch_axes` entry (protocol.schema.yaml). The document's
+ * questions travel WITH the promoted protocol so the run's localization can
+ * ask them; the reviewer's answers stay on the proposal that carries them.
+ */
+export interface MappedBranchAxis {
+  axisId: string
+  label: string
+  conditions: Array<{
+    id: string
+    label: string
+    predicate: unknown
+    then_stepIds: string[]
+  }>
+}
+
+/**
+ * Map a decision tree's axes into a promotion-ready `branch_axes` array.
+ * Pure; the tree is the document's question set (registered intake contract)
+ * and the protocol is where it belongs: the global recipe carries the
+ * questions, the lab realization answers them.
+ */
+export function treeAxesToBranchAxes(
+  axes: Array<{
+    axisId: string
+    question?: string
+    conditions?: Array<{ id: string; label?: string; predicate?: unknown; then_stepIds?: string[] }>
+  }>,
+): MappedBranchAxis[] {
+  return axes
+    .filter((axis) => typeof axis.axisId === 'string' && axis.axisId.length > 0)
+    .map((axis) => ({
+      axisId: axis.axisId,
+      label: axis.question?.trim() ? axis.question.trim() : axis.axisId,
+      conditions: (axis.conditions ?? [])
+        .filter((c) => typeof c.id === 'string' && c.id.length > 0)
+        .map((c) => ({
+          id: c.id,
+          label: c.label?.trim() ? c.label.trim() : c.id,
+          predicate: c.predicate ?? {},
+          then_stepIds: Array.isArray(c.then_stepIds) ? c.then_stepIds.filter((s) => typeof s === 'string') : [],
+        })),
+    }))
 }

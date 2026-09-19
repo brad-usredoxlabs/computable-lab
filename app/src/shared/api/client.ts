@@ -1520,6 +1520,29 @@ export interface IntakeTreeDetailResponse {
   proposals: IntakeProposal[]
 }
 
+/**
+ * The review read model for one vendor-PDF ARTIFACT: the artifact, the tree
+ * derived from that same document (joined by content hash / stored file name),
+ * and every proposal under it. `matchVia` says which join rule matched.
+ */
+export interface IntakeReviewDetailResponse extends IntakeTreeDetailResponse {
+  matchVia: 'sha256' | 'stored_path_basename'
+  artifact: {
+    recordId: string
+    title: string | null
+    storedPath: string | null
+    sha256: string | null
+  }
+}
+
+/** The join found no tree for this artifact — a gap, with what it did see. */
+export interface IntakeReviewGap {
+  error: 'TREE_NOT_DERIVED'
+  message: string
+  artifactId: string
+  treeCandidates: string[]
+}
+
 export interface FoundryReviewContext {
   kind: 'protocol-foundry-review-context'
   protocolId: string
@@ -4277,6 +4300,29 @@ export const apiClient = {
       `/protocol-ide/intake/trees/${encodeURIComponent(treeId)}`,
     )
     return { tree: response.tree, proposals: response.proposals }
+  },
+
+  /**
+   * The intake review read model for a vendor-PDF artifact: which questions the
+   * document asks (its tree) and every branch realization under it. Returns
+   * `null` when no tree is attributable to this artifact — a gap the caller
+   * must show, never a reason to borrow another document's questions.
+   */
+  async getIntakeReview(artifactId: string): Promise<IntakeReviewDetailResponse | null> {
+    try {
+      const response = await request<{ success: true } & IntakeReviewDetailResponse>(
+        `/protocol-ide/intake/review/${encodeURIComponent(artifactId)}`,
+      )
+      return {
+        matchVia: response.matchVia,
+        artifact: response.artifact,
+        tree: response.tree,
+        proposals: response.proposals,
+      }
+    } catch (err) {
+      if (ApiError.isApiError(err) && err.status === 404) return null
+      throw err
+    }
   },
 
   /** Attach a reviewer redraft instruction to one subgraph proposal. */

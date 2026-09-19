@@ -15,7 +15,7 @@
  *   - `/create/study`            — TapTab-first project creation
  *   - `/event-editor/*`          — legacy redirects
  *   - `/literature`              — intake funnel
- *   - `/protocol-builder`       — standalone protocol builder
+ *   - `/protocol-builder`       — deprecated (D2); redirects to /ingestion
  *   - `/settings`                — off-nav settings
  *
  * Redirects:
@@ -41,7 +41,6 @@ const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((
 const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
 const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const CreateStudyPage = lazy(async () => import('./welcome/CreateStudyPage').then((m) => ({ default: m.CreateStudyPage })))
-const ProtocolBuilderPage = lazy(async () => import('./protocol-builder/ProtocolBuilderPage').then((m) => ({ default: m.ProtocolBuilderPage })))
 const RunWorkspacePage = lazy(async () => import('./run/RunWorkspacePage').then((m) => ({ default: m.RunWorkspacePage })))
 // Phase 1: collection view stubs
 const ProjectCollectionView = lazy(async () => import('./collections/ProjectCollectionView').then((m) => ({ default: m.ProjectCollectionView })))
@@ -181,7 +180,9 @@ export function App() {
               <Route path="/protocols" element={<DeferredRoute><LegacyModeRedirect mode="protocols" /></DeferredRoute>} />
               <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
               {/* Standalone Protocol Builder page */}
-              <Route path="/protocol-builder" element={<DeferredRoute><ProtocolBuilderPage /></DeferredRoute>} />
+              {/* D2 (protocol-worldview): authoring happens in the review tab; the
+                standalone builder is retired and its links land in ingestion. */}
+              <Route path="/protocol-builder" element={<Navigate to="/ingestion" replace />} />
 
               {/* Phase 1: Run workspace moved from /project/:studyId/run/:runId
                   to /runs/:runId. Old route redirects for one release cycle. */}
