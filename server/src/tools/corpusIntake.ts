@@ -198,7 +198,12 @@ export async function runCorpusIntake(deps: CorpusIntakeRunnerDeps): Promise<Cor
   } else {
     const ingestFn = deps.ingestFn ?? defaultIngestFn(workspaceRoot);
     for (const record of report.records) {
-      if (record.status !== 'downloaded') {
+      // 'skipped_duplicate' means the bytes are already in the artifact
+      // store from a previous crawl — still offer them to intake so nightly
+      // converges an interrupted run (the intake service dedupes tree and
+      // proposal records itself: 'tree_exists' / 'proposal_exists').
+      const ingestable = record.status === 'downloaded' || record.status === 'skipped_duplicate';
+      if (!ingestable) {
         // Download-level failures (HTML-instead-of-PDF, 403s) are normal
         // crawl noise: recorded, but they do not fail the run. Only intake
         // (tree/proposal) errors do.

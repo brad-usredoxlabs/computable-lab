@@ -110,10 +110,14 @@ describe('runCorpusIntake', () => {
       expect(call.candidates).toHaveLength(4);
       expect(call.candidates[0]).toMatchObject({ vendor: 'v.test', searchQuery: 'alpha protocol manual PDF' });
       expect(result.ok).toBe(true);
-      expect(result.ingested).toBe(1);
-      expect(result.proposals).toBe(1);
-      expect(ingestFn).toHaveBeenCalledTimes(1);
+      // The default fixture carries one 'downloaded' and one
+      // 'skipped_duplicate' (with pdfPath): both are offered to intake so
+      // nightly converges; 'failed' is crawl noise only.
+      expect(result.ingested).toBe(2);
+      expect(result.proposals).toBe(2);
+      expect(ingestFn).toHaveBeenCalledTimes(2);
       expect(ingestFn.mock.calls[0]![0]).toMatchObject({ artifactPath: '/tmp/artifacts/foundry/pdfs/a.pdf', vendor: 'v1.example.com' });
+      expect(ingestFn.mock.calls[1]![0]).toMatchObject({ artifactPath: '/tmp/artifacts/foundry/pdfs/b.pdf', vendor: 'v2.example.com' });
 
       // Run report written with totals.
       const run = JSON.parse(await readFile(join(dir, 'artifacts', 'foundry', 'intake', 'latest-run.json'), 'utf-8'));
@@ -220,6 +224,52 @@ topics:
       } as unknown as CorpusIntakeRunnerDeps);
       const call = collectFn.mock.calls[0]![0] as { candidates: Array<Record<string, unknown>> };
       expect(call.candidates).toHaveLength(1);
+    });
+  });
+
+  it('re-offers previously-downloaded PDFs (skipped_duplicate) to intake so nightly converges', async () => {
+    await withWorkspace(async (dir) => {
+      const topicsPath = await topicsFixture(dir, `
+version: 1
+search:
+  numResults: 3
+topics:
+  - id: dna-kits
+    query: dna purification kit protocol pdf
+`);
+      // Nightly run #1 downloaded a.pdf; run #2 sees it as skipped_duplicate
+      // with its artifact path — intake must still be offered (the service
+      // dedupes tree/proposal records itself), or an interrupted run never
+      // converges.
+      const ingestFn = vi.fn(async () => ({
+        documentId: 'DOC-A',
+        treeRecordId: 'PDT-DOC-A',
+        proposalRecordIds: ['SGP-DOC-A-b0-s0'],
+        eventGraphRecordIds: [],
+        diagnostics: [{ severity: 'info', code: 'tree_exists', message: 'reusing' }],
+      }));
+      const result = await runCorpusIntake({
+        workspaceRoot: dir,
+        topicsPath,
+        searchFn: async () => ({ web: [{ title: 'A kit', url: 'https://v.test/a.pdf' }] }),
+        collectFn: async () => collectionReport({
+          found: 1,
+          counts: { downloaded: 0, skippedDuplicate: 1, failed: 0 },
+          records: [{
+            title: 'A kit',
+            url: 'https://v.test/a.pdf',
+            vendor: 'v.test',
+            status: 'skipped_duplicate',
+            pdfPath: join(dir, 'artifacts', 'foundry', 'pdfs', 'a.pdf'),
+          }],
+        }),
+        ingestFn,
+        resolveConfigFn: () => CONFIG,
+      } as unknown as CorpusIntakeRunnerDeps);
+      expect(ingestFn).toHaveBeenCalledTimes(1);
+      expect(result.proposals).toBe(1);
+      const pdfRow = result.perPdf.find((p) => p.title === 'A kit');
+      expect(pdfRow?.status).toBe('ingested');
     });
   });
 
