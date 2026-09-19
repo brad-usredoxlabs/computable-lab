@@ -258,6 +258,24 @@ export interface ProtocolBuilderHandlers {
 }
 
 
+
+/**
+ * A profile with no thinkingLevels runs at the ENDPOINT's default, which for a
+ * reasoning model means thinking may be ON during a JSON extraction — exactly
+ * the combination that historically returned null content. Say so in the log
+ * instead of letting it look like a model failure.
+ */
+function warnIfLevelUnconfigured(
+  log: { warn: (obj: unknown, msg?: string) => void },
+  resolved: { level: string },
+): void {
+  if (resolved.level !== '') return;
+  log.warn(
+    { configured: false },
+    'no thinking levels configured (ai.profiles.<name>.inference.thinkingLevels); extraction runs at the endpoint\'s default, which may include reasoning',
+  );
+}
+
 /**
  * Coerce one chunk's raw model output into a candidate summary, or null when
  * the model produced nothing usable. Shared by the blocking and the streaming
@@ -635,6 +653,8 @@ export function createProtocolBuilderHandlers(
           return { error: 'UNKNOWN_THINKING_LEVEL', message: level.error, available: level.available } as ApiError;
         }
 
+        warnIfLevelUnconfigured(request.log, level.resolved);
+
         // Chunk the text for models with limited context windows
         const chunks = chunkText(text.trim());
 
@@ -715,6 +735,8 @@ export function createProtocolBuilderHandlers(
         reply.status(400);
         return { error: 'UNKNOWN_THINKING_LEVEL', message: level.error, available: level.available } as ApiError;
       }
+
+      warnIfLevelUnconfigured(request.log, level.resolved);
 
       const chunks = chunkText(text.trim());
       const startedAt = Date.now();
