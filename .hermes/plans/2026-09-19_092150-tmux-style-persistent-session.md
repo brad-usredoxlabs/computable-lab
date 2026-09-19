@@ -1777,3 +1777,33 @@ Live drive on :5174 (browser, after the fix):
 - Backend was restarted manually (tsx `--watch` had not picked up `server.ts`); the
   new backend is a Hermes background process, and `.run/backend.pid` still holds the
   old PID. `./start-app.sh` cleans that up on its next run.
+
+### Follow-up fix (same day) — WorkspaceShellHost update-depth loop
+
+User report: *"I opened a project and did new run. It hung forever"* with
+`Warning: Maximum update depth exceeded ... at WorkspaceShellHost
+(ProjectWorkspacePage.tsx:105)`.
+
+Cause (two halves of one loop):
+1. `openTabsReducer` `'navigate-active'` returned a **new state object** even when
+   the active slot already held that exact entity — so a repeat dispatch, which is
+   exactly what a host page's mount effect does, was never idempotent.
+2. `WorkspaceShellHost`'s mount effect depended on the whole context object, whose
+   identity changes on every state change (the trap `RunWorkspacePage` documents).
+   New state → new identity → effect re-fires → dispatch → loop.
+
+Fix (`fe24e0e1`): a no-op guard in the reducer (`sameTabPayload` — a non-change
+returns the IDENTICAL state; the invariant that makes any host page's mount effect
+safe) + stable deps in the shell host. Every other host page
+(`RunWorkspacePage`, `RecordHostPage`, `DeckHostPage`, `ArtifactHostPage`) already
+used the stable callback; `ProjectWorkspacePage` was the only outlier.
+
+Evidence: `openTabsReducer.idempotent.test.ts` (RED 2 failed → GREEN 5 passed) and
+`app/e2e/session-persistence.spec.ts` tests 4-5, which capture the console and
+assert no update-depth warning — they emit the exact user-reported warnings when
+both halves are reverted. Live: project opens, `+ Create › New Run` creates a run
+and renders the run workspace (`/runs/RUN-2026-09-19-run-lp19`).
+
+Note for future e2e work: session-sensitive specs must live in ONE serial file.
+Playwright's default cross-file parallelism made two spec files adopt each other's
+per-user server session (observed: the cross-device test failed exactly that way).
