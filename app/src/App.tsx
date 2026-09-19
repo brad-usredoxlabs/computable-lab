@@ -53,6 +53,8 @@ const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
 const IngestionPage = lazy(async () => import('./ingestion/IngestionPage').then((m) => ({ default: m.IngestionPage })))
 const VendorPdfReviewPage = lazy(async () => import('./ingestion/VendorPdfReviewPage').then((m) => ({ default: m.VendorPdfReviewPage })))
+const IntakeTreeListPage = lazy(async () => import('./intake/IntakeTreeListPage').then((m) => ({ default: m.IntakeTreeListPage })))
+const IntakeTreeDetailPage = lazy(async () => import('./intake/IntakeTreeDetailPage').then((m) => ({ default: m.IntakeTreeDetailPage })))
 const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((m) => ({ default: m.SplashRoute })))
 const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then((m) => ({ default: m.HomeRedirect })))
 // Phase 2a: standalone artifact viewer routes
@@ -126,6 +128,10 @@ export function App() {
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               {/* Single vendor-PDF review surface (PDF left, extracted protocol right). */}
               <Route path="/ingestion/vendor-pdf/:recordId" element={<DeferredRoute><VendorPdfReviewPage /></DeferredRoute>} />
+
+              {/* Corpus intake review: nightly crawl -> decision trees -> subgraph proposals. */}
+              <Route path="/intake" element={<DeferredRoute><IntakeTreeListPage /></DeferredRoute>} />
+              <Route path="/intake/:treeId" element={<DeferredRoute><IntakeTreeDetailPage /></DeferredRoute>} />
 
               {/* Extraction drafts — reached from ingestion "Extract Protocol" and
                   ExtractionDraftsListPage. (Legacy LiteratureBody also uses these.) */}

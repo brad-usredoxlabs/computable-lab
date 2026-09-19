@@ -1443,6 +1443,72 @@ export const FOUNDRY_REJECTION_REASON_LABELS: Record<FoundryRejectionReasonClass
   other: 'Other',
 }
 
+/** Corpus-intake review surface (GET/POST /protocol-ide/intake/*). */
+export type IntakeScaleLevel = 'manual_tubes' | 'bench_plate_multichannel' | 'robot_deck'
+
+export type IntakeProposalState = 'proposed' | 'needs_prompt' | 'redrafted' | 'accepted' | 'rejected'
+
+export interface IntakeAxisCondition {
+  id: string
+  label?: string
+  [key: string]: unknown
+}
+
+export interface IntakeAxis {
+  axisId: string
+  question: string
+  choiceKey?: string
+  origin?: string
+  conditions: IntakeAxisCondition[]
+}
+
+export interface IntakeTreeSummary {
+  recordId: string
+  documentId: string
+  status?: string
+  generatedAt?: string
+  axisCount: number
+  scaleLevels: string[]
+  proposalCount: number
+  sourcePdf?: Record<string, unknown>
+}
+
+export interface IntakeTreeDetail extends IntakeTreeSummary {
+  axes: IntakeAxis[]
+  scaleAxis: { question: string; options: Array<{ level: string; label?: string; [key: string]: unknown }> }
+  notes?: string
+}
+
+export interface IntakeBranchPathEntry {
+  axisId: string
+  conditionId: string
+  label?: string
+}
+
+export interface IntakeProposal {
+  kind: 'subgraph-proposal'
+  recordId: string
+  documentId: string
+  treeRef: { kind: 'record'; id: string; type: 'protocol-decision-tree' }
+  branchPath: IntakeBranchPathEntry[]
+  scaleLevel: IntakeScaleLevel
+  deckProfileRef?: { kind: 'record'; id: string; type: 'execution-scale-profile' }
+  activeStepIds?: string[]
+  eventGraphRef: { kind: 'record'; id: string; type: 'event-graph' }
+  compileStatus?: 'not_run' | 'complete' | 'gap' | 'error'
+  reviewPrompt?: string
+  state: IntakeProposalState
+  revision?: number
+  generatedAt?: string
+  notes?: string
+  [key: string]: unknown
+}
+
+export interface IntakeTreeDetailResponse {
+  tree: IntakeTreeDetail
+  proposals: IntakeProposal[]
+}
+
 export interface FoundryReviewContext {
   kind: 'protocol-foundry-review-context'
   protocolId: string
@@ -4171,6 +4237,37 @@ export const apiClient = {
     })
   },
 
+  /** List decision trees (newest first); optionally filtered by source document. */
+  async listIntakeTrees(documentId?: string): Promise<IntakeTreeSummary[]> {
+    const qs = documentId ? `?documentId=${encodeURIComponent(documentId)}` : ''
+    const response = await request<{ success: true; trees: IntakeTreeSummary[] }>(`/protocol-ide/intake/trees${qs}`)
+    return response.trees
+  },
+
+  /** One tree with its axes, scale axis, and every subgraph proposal. */
+  async getIntakeTree(treeId: string): Promise<IntakeTreeDetailResponse> {
+    const response = await request<{ success: true } & IntakeTreeDetailResponse>(
+      `/protocol-ide/intake/trees/${encodeURIComponent(treeId)}`,
+    )
+    return { tree: response.tree, proposals: response.proposals }
+  },
+
+  /** Attach a reviewer redraft instruction to one subgraph proposal. */
+  async setIntakeProposalPrompt(proposalId: string, prompt: string): Promise<IntakeProposal> {
+    const response = await request<{ success: true; proposal: IntakeProposal }>(
+      `/protocol-ide/intake/proposals/${encodeURIComponent(proposalId)}/prompt`,
+      { method: 'POST', body: JSON.stringify({ prompt }) },
+    )
+    return response.proposal
+  },
+
+  /** Re-draft one subgraph proposal (consumes its reviewPrompt; revision+1). */
+  async redraftIntakeProposal(proposalId: string): Promise<{ success: true; documentId: string; proposalRecordIds: string[]; eventGraphRecordIds: string[] }> {
+    return request(`/protocol-ide/intake/proposals/${encodeURIComponent(proposalId)}/redraft`, {
+      method: 'POST',
+    })
+  },
+
   /**
    * Create a Protocol IDE session and stream per-phase progress as SSE.
    * Returns an async generator of progress events; consumers update UI per
@@ -4490,10 +4587,15 @@ export const apiClient = {
     stepId: string
     events: Record<string, unknown>[]
     labwares: Record<string, unknown>[]
+    equipments?: Record<string, unknown>[]
   }): Promise<{ subGraphRef: { kind: 'record'; type: 'event-graph'; id: string }; realizationId: string }> {
     return request(`/protocols/${encodeURIComponent(payload.protocolId)}/steps/${encodeURIComponent(payload.stepId)}/subgraph`, {
       method: 'POST',
-      body: JSON.stringify({ events: payload.events, labwares: payload.labwares }),
+      body: JSON.stringify({
+        events: payload.events,
+        labwares: payload.labwares,
+        ...(payload.equipments ? { equipments: payload.equipments } : {}),
+      }),
     })
   },
 
