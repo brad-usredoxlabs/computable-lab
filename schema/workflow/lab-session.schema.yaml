@@ -50,6 +50,7 @@ properties:
           - record-create
           - pdf
           - document
+          - protocol-review
           - collection
           - splash
         title:

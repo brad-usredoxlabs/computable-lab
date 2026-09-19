@@ -103,6 +103,13 @@ export type WorkspaceTab =
     }
   | {
       id: string
+      kind: 'protocol-review'
+      /** The vendor-PDF record (VPDF-*) under review. */
+      recordId: string
+      title: string
+    }
+  | {
+      id: string
       kind: 'collection'
       /** Which collection: projects, runs, claims, lab */
       collection: 'projects' | 'runs' | 'claims' | 'lab'
@@ -158,6 +165,11 @@ export function runTabId(runId: string): string {
   return `run:${runId}`
 }
 
+/** Stable id for a protocol-review tab — one per source document. */
+export function protocolReviewTabId(recordId: string): string {
+  return `protocol-review:${recordId}`
+}
+
 /** Stable id for a claim tab. */
 export function claimTabId(claimId: string): string {
   return `claim:${claimId}`
@@ -198,6 +210,7 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
       return 'lab'
     case 'pdf':
     case 'document':
+    case 'protocol-review':
     case 'project-details':
     case 'record-create':
       return null

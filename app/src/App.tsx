@@ -24,7 +24,7 @@
  */
 
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
@@ -53,7 +53,7 @@ const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((
 // Phase 8: Lab entity workspace
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
 const IngestionPage = lazy(async () => import('./ingestion/IngestionPage').then((m) => ({ default: m.IngestionPage })))
-const VendorPdfReviewPage = lazy(async () => import('./ingestion/VendorPdfReviewPage').then((m) => ({ default: m.VendorPdfReviewPage })))
+const ProtocolReviewHostPage = lazy(async () => import('./ingestion/ProtocolReviewHostPage').then((m) => ({ default: m.ProtocolReviewHostPage })))
 const IntakeTreeListPage = lazy(async () => import('./intake/IntakeTreeListPage').then((m) => ({ default: m.IntakeTreeListPage })))
 const IntakeTreeDetailPage = lazy(async () => import('./intake/IntakeTreeDetailPage').then((m) => ({ default: m.IntakeTreeDetailPage })))
 const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((m) => ({ default: m.SplashRoute })))
@@ -90,11 +90,16 @@ function RecordHistoryListener(): null {
 /** Attaches the tab store to the persisted, cross-device workspace session. */
 function SessionSync(): null {
   const navigate = useNavigate()
+  const location = useLocation()
   useSessionSync({
     onAdopt: (path) => {
       // Attached to a session from another device (or from storage) — go where
-      // that session is instead of staying on the launcher.
-      if (path) navigate(path)
+      // that session is, UNLESS the user is already on an explicit deep link:
+      // opening /runs/X from a bookmark or a shared URL must not be yanked away
+      // to whatever another device left open.
+      if (!path) return
+      const isLanding = location.pathname === '/' || location.pathname === '/splash'
+      if (isLanding && path !== location.pathname) navigate(path)
     },
   })
   return null
@@ -141,8 +146,9 @@ export function App() {
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
-              {/* Single vendor-PDF review surface (PDF left, extracted protocol right). */}
-              <Route path="/ingestion/vendor-pdf/:recordId" element={<DeferredRoute><VendorPdfReviewPage /></DeferredRoute>} />
+              {/* Single vendor-PDF review surface (PDF left, extracted protocol right),
+                  hosted as its own TAB so it never eats the run surface. */}
+              <Route path="/ingestion/vendor-pdf/:recordId" element={<DeferredRoute><ProtocolReviewHostPage /></DeferredRoute>} />
 
               {/* Corpus intake review: nightly crawl -> decision trees -> subgraph proposals. */}
               <Route path="/intake" element={<DeferredRoute><IntakeTreeListPage /></DeferredRoute>} />

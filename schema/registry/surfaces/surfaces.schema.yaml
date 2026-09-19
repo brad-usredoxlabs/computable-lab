@@ -30,7 +30,7 @@ properties:
         id:
           type: string
           pattern: '^[a-z][a-z0-9-]*$'
-          enum: [project, run-plan, run-design, run-execute, results, analysis, knowledge, find]
+          enum: [project, run-plan, run-design, run-execute, results, analysis, knowledge, find, ingestion, protocol-review]
         label:
           type: string
           minLength: 1

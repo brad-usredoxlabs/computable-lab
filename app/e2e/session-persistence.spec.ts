@@ -246,3 +246,37 @@ test('a protocol-less run offers attach in the left nav Protocol tab', async ({ 
   // at least one attachable protocol (this lab has several) — the commit control
   await expect(nav.locator('[data-testid^="attach-"]').first()).toBeVisible({ timeout: 15_000 })
 })
+
+/**
+ * --- protocol review is a TAB (plan 2026-09-19_121028, phase 1) ---
+ *
+ * User report: the vendor-PDF review surface "totally replaces the current run
+ * surface and disappears the tab system". It now renders inside the workspace
+ * shell with the tab strip, and is reachable as a `protocol-review` tab.
+ * NON-MUTATING: it never clicks Save.
+ */
+async function firstVendorPdfId(request: APIRequestContext): Promise<string> {
+  const res = await request.get('/api/records?kind=vendor-pdf&limit=1')
+  const body = (await res.json()) as { records: Array<{ recordId: string }> }
+  const id = body.records?.[0]?.recordId
+  expect(id, 'a vendor-pdf record must exist to open the review surface').toBeTruthy()
+  return id!
+}
+
+test('a vendor-PDF deep link renders the review surface inside the shell with a tab', async ({ page, request }) => {
+  const recordId = await firstVendorPdfId(request)
+  await resetServerSession(request)
+
+  await page.goto(`/ingestion/vendor-pdf/${recordId}`)
+
+  await expect(page.getByTestId('workspace-tab-strip')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByTestId('vpdf-review')).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.workspace-tab')).toHaveCount(1)
+  // the tab carries the protocol-review kind in its testid
+  await expect(page.locator(`[data-testid="workspace-tab-protocol-review:${recordId}"]`)).toBeVisible()
+
+  // a refresh keeps it (the tab store restored the session, not a page reload)
+  await page.reload()
+  await expect(page.getByTestId('workspace-tab-strip')).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.workspace-tab')).toHaveCount(1)
+})

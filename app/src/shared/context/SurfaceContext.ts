@@ -22,6 +22,8 @@ export type SurfaceId =
   | 'analysis'
   | 'knowledge'
   | 'find'
+  | 'ingestion'
+  | 'protocol-review'
 
 export interface ActiveObject {
   objectType: string

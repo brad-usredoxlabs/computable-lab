@@ -22,7 +22,9 @@ export type SurfaceId =
   | 'results'
   | 'analysis'
   | 'knowledge'
-  | 'find';
+  | 'find'
+  | 'ingestion'
+  | 'protocol-review';
 
 export interface ActiveObject {
   objectType: string;

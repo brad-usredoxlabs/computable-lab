@@ -40,7 +40,17 @@ interface ExtractedPage {
   text?: string
 }
 
-export function VendorPdfReviewPage() {
+export interface VendorPdfReviewPageProps {
+  /**
+   * Rendered inside a workspace tab (ProtocolReviewHostPage) rather than as a
+   * bare route: the shell already provides the brand/title and the tab strip, so
+   * the page drops its own back button and heading. The save actions and the
+   * PDF|text toggle stay — they are the page's job.
+   */
+  embedded?: boolean
+}
+
+export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPageProps = {}) {
   const { recordId } = useParams<{ recordId: string }>()
   const navigate = useNavigate()
 
@@ -339,17 +349,21 @@ export function VendorPdfReviewPage() {
   return (
     <div className="vpdf-review" data-testid="vpdf-review">
       <header className="vpdf-review__header">
-        <button
-          type="button"
-          className="vpdf-review__back"
-          onClick={() => navigate('/ingestion/vendor-pdf')}
-          data-testid="vpdf-review-back"
-        >
-          ← Ingestion
-        </button>
-        <h1 className="vpdf-review__title" data-testid="vpdf-review-title">
-          {typeof title === 'string' ? title : recordId}
-        </h1>
+        {embedded ? null : (
+          <button
+            type="button"
+            className="vpdf-review__back"
+            onClick={() => navigate('/ingestion/vendor-pdf')}
+            data-testid="vpdf-review-back"
+          >
+            ← Ingestion
+          </button>
+        )}
+        {embedded ? null : (
+          <h1 className="vpdf-review__title" data-testid="vpdf-review-title">
+            {typeof title === 'string' ? title : recordId}
+          </h1>
+        )}
         <span className="vpdf-review__meta">
           {recordId} · Vendor PDF · {pdfDoc?.numPages ?? extractedText?.length ?? 0} page(s)
         </span>

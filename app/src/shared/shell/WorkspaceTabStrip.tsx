@@ -194,6 +194,8 @@ export function tabPath(tab: WorkspaceTab): string | null {
       return `/artifact/pdf/${tab.artifactId}`
     case 'document':
       return `/artifact/document/${tab.artifactId}`
+    case 'protocol-review':
+      return `/ingestion/vendor-pdf/${tab.recordId}`
     case 'project-details':
       return null
     case 'record-create': {

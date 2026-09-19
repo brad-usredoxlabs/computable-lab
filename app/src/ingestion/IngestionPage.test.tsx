@@ -15,6 +15,8 @@ vi.mock('../shared/api/client', () => ({
     listRecordsByKind: (...args: unknown[]) => listKindMock(...args),
     searchGraphLemurVendorPdfs: (...args: unknown[]) => searchMock(...args),
     ingestGraphLemurVendorPdf: (...args: unknown[]) => ingestMock(...args),
+    // The workspace shell renders SurfaceIndicator, which loads the registry.
+    getSurfaces: async () => ({ surfaces: [] }),
   },
 }))
 

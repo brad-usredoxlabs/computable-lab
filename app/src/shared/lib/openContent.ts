@@ -9,7 +9,7 @@
  */
 
 import type { OpenTabsContextValue } from '../shell/OpenTabsContext'
-import type { BreadcrumbItem, WorkspaceTab } from '../../event-editor/workspace/types'
+import { protocolReviewTabId, type BreadcrumbItem, type WorkspaceTab } from '../../event-editor/workspace/types'
 
 /**
  * Navigate the CURRENT tab to `route`, replacing its content with `tab` and
@@ -46,4 +46,28 @@ export function openInNewTab(
 /** A fresh, unique tab slot id derived from the tab's semantic id. */
 export function uniqueTabSlotId(tab: WorkspaceTab): string {
   return `${tab.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * Open a source document's protocol-review surface in its OWN TAB.
+ *
+ * Focuses an already-open review tab for that document (the store's `open`
+ * action replaces+activates the same id) instead of stacking duplicates, so a
+ * run and an extraction can sit side by side and re-clicking OPEN returns to the
+ * existing tab. Falls back to plain navigation when there is no tab store
+ * (standalone routes, unit tests).
+ */
+export function openProtocolReview(
+  openTabs: OpenTabsContextValue | null,
+  navigate: (path: string) => void,
+  recordId: string,
+  title?: string,
+): string {
+  const route = `/ingestion/vendor-pdf/${encodeURIComponent(recordId)}`
+  openTabs?.openTab(
+    { id: protocolReviewTabId(recordId), kind: 'protocol-review', recordId, title: title ?? recordId },
+    true,
+  )
+  navigate(route)
+  return route
 }

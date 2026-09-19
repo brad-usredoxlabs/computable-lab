@@ -74,3 +74,17 @@ surfaces:
     objectTypes: [project]
     selectableKinds: []
     aiRole: "project home"
+  - id: ingestion
+    label: "Ingestion · Vendor PDFs"
+    path: "/ingestion"
+    objectTypes: [document]
+    selectableKinds: [material, labware]
+    aiRole: "source documents and extraction jobs"
+  - id: protocol-review
+    label: "Protocol review"
+    path: "/ingestion/vendor-pdf/:recordId"
+    params:
+      recordId: document
+    objectTypes: [document]
+    selectableKinds: [material, labware, protocol-step]
+    aiRole: "extract a protocol from a source document"

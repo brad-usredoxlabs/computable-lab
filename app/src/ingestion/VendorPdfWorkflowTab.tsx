@@ -14,6 +14,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { openProtocolReview } from '../shared/lib/openContent'
 import { VendorPdfSearchSection } from '../event-editor/right-pane/search/VendorPdfSearchSection'
 import type { RecordEnvelope } from '../types/kernel'
 import './VendorPdfWorkflowTab.css'
@@ -59,12 +61,13 @@ export function VendorPdfWorkflowTab() {
     void loadRecent()
   }, [loadRecent])
 
-  // Every action opens the single vendor-PDF review surface.
+  // Every action opens the single vendor-PDF review surface, in its own TAB.
+  const openTabs = useOptionalOpenTabs()
   const openReview = useCallback(
     (recordId: string) => {
-      navigate(`/ingestion/vendor-pdf/${encodeURIComponent(recordId)}`)
+      openProtocolReview(openTabs, navigate, recordId)
     },
-    [navigate],
+    [navigate, openTabs],
   )
 
   return (

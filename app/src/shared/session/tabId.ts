@@ -12,6 +12,7 @@ import {
   executionTabId,
   labEntityTabId,
   projectTabId,
+  protocolReviewTabId,
   recordCreateTabId,
   recordEditTabId,
   runTabId,
@@ -53,6 +54,8 @@ export function stableTabId(tab: WorkspaceTab): string {
     case 'pdf':
     case 'document':
       return `${tab.kind}:${tab.artifactId}`
+    case 'protocol-review':
+      return protocolReviewTabId(tab.recordId)
     case 'splash':
       return `splash:${slotSuffix()}`
     default: {

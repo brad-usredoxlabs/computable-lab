@@ -22,6 +22,8 @@ const SURFACE_BY_PATH: Array<{ pattern: RegExp; surface: SurfaceId }> = [
   { pattern: /^\/literature(?:\/|$)/, surface: 'knowledge' },
   { pattern: /^\/knowledge(?:\/|$)/, surface: 'knowledge' },
   { pattern: /^\/artifact\/(?:pdf|document)\//, surface: 'knowledge' },
+  { pattern: /^\/ingestion\/vendor-pdf\//, surface: 'protocol-review' },
+  { pattern: /^\/ingestion(?:\/|$)/, surface: 'ingestion' },
   { pattern: /^\/runs\//, surface: 'run-design' },
   { pattern: /^\/run\//, surface: 'run-design' },
   { pattern: /^\/deck\//, surface: 'run-design' },
@@ -41,6 +43,8 @@ const SURFACE_LABELS: Record<SurfaceId, string> = {
   analysis: 'Analysis',
   knowledge: 'Knowledge',
   find: 'Find',
+  ingestion: 'Ingestion',
+  'protocol-review': 'Protocol review',
 }
 
 /** Extract the active object id + type from a route path (best-effort). */
@@ -53,6 +57,8 @@ function activeFromPath(path: string): { objectType: string; objectId: string; l
   if (proj) return { objectType: 'project', objectId: proj[1]!, label: `Project ${proj[1]}` }
   const artifact = path.match(/^\/artifact\/(?:pdf|document)\/([^/?#]+)/)
   if (artifact) return { objectType: 'document', objectId: artifact[1]!, label: `Document ${artifact[1]}` }
+  const vendorPdf = path.match(/^\/ingestion\/vendor-pdf\/([^/?#]+)/)
+  if (vendorPdf) return { objectType: 'document', objectId: vendorPdf[1]!, label: `Document ${vendorPdf[1]}` }
   const find = path.match(/^\/find/)
   if (find) return { objectType: 'collection', objectId: 'find', label: 'Find' }
   return { objectType: 'root', objectId: 'home', label: 'Home' }

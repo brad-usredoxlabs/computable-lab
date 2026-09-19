@@ -359,6 +359,8 @@ export function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode 
       return 'ai'
     case 'pdf':
       return 'ai'
+    case 'protocol-review':
+      return 'ai'
     case 'document':
       return 'ai'
     case 'record-create':
