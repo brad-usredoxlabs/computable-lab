@@ -500,3 +500,70 @@ condition-less axis is rejected.
   investigation (it is not the redraft wiring).
 - The Miniprep-class documents need section/table extraction before any
   question can be derived from them.
+
+---
+
+## Continuation — one surface, one engine; why compiles fail; the D4300T blind spot
+
+### The review body now comes from the extraction the questions gate (commit `1535834a`, `a4ad47ca`)
+
+The review tab used to build its editable body from a SECOND AI extraction of the
+same PDF — positional `step-1..n` ids — while the tree gated the vendor
+candidate's ids. `GET /api/protocol-ide/intake/review/:artifactId` now returns
+`candidate`: the stored vendor candidate projected into review rows
+(`server/src/protocol-intake/reviewSteps.ts` — document order, gating axis ids +
+questions, page provenance, branch sentences) plus role labels. The page owns ONE
+fetch of that read model; the questions panel is presentational; and
+"Use the extracted protocol (N steps)" builds the body with
+`reviewCandidateToProtocolPayload` (no AI round trip, real step ids, conditional
+branches as step notes). Live: 17 steps, step-1 gated by both questions, step-4
+by the lysis question.
+
+### Two silent data bugs it exposed (both fixed in `1535834a`)
+
+1. **Trees gated ids that exist nowhere.** The candidate carries `id` ('step-7');
+   the derivation read only `stepId` and fell back to a padded 'step-007'. Every
+   derived tree gated ids the document does not have, so `resolveBranchAxes`
+   selected nothing. Both spellings are honoured now.
+2. **Step ids collided inside one document.** Manuals number more than one list
+   from 1 in the same protocol section (ZymoBIOMICS Quick-DNA D6010: a 12-step
+   main protocol, then "For samples collected in DNA/RNA Shield…" restarting at
+   1). Two steps shared 'step-1', so one condition gated both and proposals
+   listed duplicates. Ids are document-ordered now; the manual's number stays on
+   `stepNumber`. Live: D6010 activates step-1..step-14 once each.
+
+### A failed compile says why (`1a06a0e4`)
+
+`compileStatus: error` carried no reason. `compileDiagnostics` (schema field,
+maxItems 8, Ajv-guarded) now rides on the proposal and the panel shows the ERROR
+in preference to warnings. Live: "EXTRACTION_ERROR: Failed to extract from
+prompt: ExtractionRunnerService: draft_assemble pass produced no output" (pass
+`extract_entities`) — a fault in the compile loop itself, not in the redraft
+wiring.
+
+### The D4300T blind spot (`ecec5501`) — Brad's own kit
+
+The ZymoBIOMICS DNA Miniprep produced **zero steps**: page 4 heads its protocol
+`Protocol                    For Technical Assistance:`, and the whole-line
+pattern `^Protocol\s*$` matched nothing. A heading is now the title alone OR the
+title followed by a wide gap (≥2 spaces/tabs) and margin furniture — prose stays
+excluded (a sentence continues after ONE space; a clause after punctuation). Only
+the plural "Appendices" was a heading either, so the protocol section ran into
+the appendices (37 "steps"); per-letter "Appendix A…D" are headings now. Live:
+11 real steps for D4300T (was 0), and the other four Zymo documents re-derive
+identically.
+
+### Still open
+
+- **The review body's step NOTES are not visible in the editor.** The projected
+  TapTab blocks do not render a step's `notes`, so "Runs only for the selected
+  branch of: …" is stored but unseen. The projection (schema `.ui.yaml`) is the
+  place to fix it.
+- **The D4300T's sample table is still not extracted at all** (`tables: []`), so
+  its sample-source question cannot be derived yet; and the section-heading
+  vocabulary still lives in TypeScript (`SECTION_HEADINGS` in
+  `VendorProtocolPdf.ts`) instead of a data file — a repo-rule violation worth
+  moving to `config/` when the next heading variant appears.
+- **`compileStatus: not_run` after a detached backend restart** — the compile
+  runner is absent until the AI runtime initializes; the panel says so.
+- `openSurface()` still is not wired to the agent-action channel.
