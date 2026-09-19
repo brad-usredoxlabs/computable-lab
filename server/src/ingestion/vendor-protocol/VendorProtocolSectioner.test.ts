@@ -2,7 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { decodeVendorProtocolPdf } from './VendorProtocolPdf.js';
+import {
+  createVendorProtocolDocumentFromText,
+  decodeVendorProtocolPdf,
+  extractVendorProtocolCandidate,
+} from './VendorProtocolPdf.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -42,3 +46,48 @@ describe('VendorProtocolSectioner', () => {
     expect(productContents?.rows.some((row) => row.Component.includes('MagBinding Buffer'))).toBe(true);
   });
 });
+
+describe('page-margin furniture on a heading line (the D4300T blind spot)', () => {
+  // Real text, ZymoBIOMICS DNA Miniprep page 4: the heading shares its line
+  // with the page's technical-assistance blurb. A whole-line pattern found no
+  // protocol section, so that manual produced zero steps and no sample table.
+  const MANUAL = `Product Contents
+Component Amount
+Lysis Solution 4 ml
+
+Protocol                    For Technical Assistance:
+                            1-888-882-9682 or E-mail
+
+  1. Add sample to a ZR BashingBead Lysis Tube (0.1 & 0.5 mm).
+  2. Secure in a bead beater and homogenize.
+
+Appendix A
+Sample Collection
+`
+
+  it('finds the protocol section when the heading line carries margin text', () => {
+    const document = createVendorProtocolDocumentFromText(MANUAL, { filename: 'd4300t.pdf', documentId: 'doc-d4300t' })
+    const protocol = document.sections.find((s) => s.kind === 'protocol')
+    expect(protocol).toBeDefined()
+    expect(protocol!.sourceText).toContain('Add sample to a ZR BashingBead Lysis Tube')
+
+    const candidate = extractVendorProtocolCandidate(document)
+    expect(candidate.steps.map((s) => s.id)).toEqual(['step-1', 'step-2'])
+  })
+
+  it('does not mistake a sentence that starts with the word for a heading', () => {
+    const document = createVendorProtocolDocumentFromText(
+      `Product Contents
+Component Amount
+
+Protocol steps were reviewed by the lab and no changes are needed.
+1. Not a protocol, this is prose.
+
+Appendix A
+Sample Collection
+`,
+      { filename: 'prose.pdf', documentId: 'doc-prose' },
+    )
+    expect(document.sections.some((s) => s.kind === 'protocol')).toBe(false)
+  })
+})

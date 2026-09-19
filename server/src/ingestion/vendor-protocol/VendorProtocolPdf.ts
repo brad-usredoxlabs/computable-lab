@@ -89,17 +89,43 @@ const ALL_SOURCE_TERMS = {
   equipment: [...ZYMO_SOURCE_TERMS.equipment, ...GENERIC_SOURCE_TERMS.equipment],
 } as const;
 
+/**
+ * The pattern for one section heading.
+ *
+ * A heading is the title ALONE on its line, or the title followed by a WIDE gap
+ * (>= 2 spaces/tabs) and the page's margin furniture. ZymoBIOMICS DNA Miniprep
+ * (D4300T) page 4 reads `Protocol                    For Technical Assistance:`
+ * — a `^Protocol$` pattern found no protocol section at all, so that manual
+ * yielded ZERO steps and no sample table, and every downstream question was
+ * impossible. The wide-gap rule keeps prose out: a sentence continues after a
+ * SINGLE space ('Protocol steps were reviewed…') and a clause after punctuation
+ * ('Protocol, Supplier Q1, and …'), neither of which is a heading.
+ */
+function headingPattern(title: string): RegExp {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return new RegExp(`^${escaped}(?:\\s*$|[ \t]{2,}\\S[^\n]*$)`, 'im');
+}
+
 const SECTION_HEADINGS: Array<{ kind: VendorProtocolSectionKind; title: string; pattern: RegExp }> = [
-  { kind: 'table_of_contents', title: 'Table of Contents', pattern: /^Table of Contents\s*$/imu },
-  { kind: 'product_contents', title: 'Product Contents', pattern: /^Product Contents\s*$/imu },
-  { kind: 'specifications', title: 'Specifications', pattern: /^Specifications\s*$/imu },
-  { kind: 'product_description', title: 'Product Description', pattern: /^Product Description\s*$/imu },
-  { kind: 'protocol', title: 'Protocol', pattern: /^Protocol\s*$/imu },
-  { kind: 'appendix', title: 'Appendices', pattern: /^Appendices\s*$/imu },
-  { kind: 'troubleshooting', title: 'Troubleshooting', pattern: /^Troubleshooting\s*$/imu },
-  { kind: 'ordering_information', title: 'Ordering Information', pattern: /^Ordering Information\s*$/imu },
-  { kind: 'workflow', title: 'Complete Your Workflow', pattern: /^Complete Your Workflow\s*$/imu },
-  { kind: 'notes', title: 'Notes', pattern: /^Notes\s*$/imu },
+  { kind: 'table_of_contents', title: 'Table of Contents', pattern: headingPattern('Table of Contents') },
+  { kind: 'product_contents', title: 'Product Contents', pattern: headingPattern('Product Contents') },
+  { kind: 'specifications', title: 'Specifications', pattern: headingPattern('Specifications') },
+  { kind: 'product_description', title: 'Product Description', pattern: headingPattern('Product Description') },
+  { kind: 'protocol', title: 'Protocol', pattern: headingPattern('Protocol') },
+  // Manuals write the appendices both ways: a bare "Appendices" list heading
+  // and per-letter headings ("Appendix A", "Appendix B"). Matching only the
+  // plural let the PROTOCOL section run on into the appendices — the D4300T
+  // Miniprep then yielded 37 "steps" (protocol + appendix lists) instead of its
+  // 13 real steps.
+  {
+    kind: 'appendix',
+    title: 'Appendices',
+    pattern: /^(?:Appendices\b|Appendix\s+[A-Z]\b)/imu,
+  },
+  { kind: 'troubleshooting', title: 'Troubleshooting', pattern: headingPattern('Troubleshooting') },
+  { kind: 'ordering_information', title: 'Ordering Information', pattern: headingPattern('Ordering Information') },
+  { kind: 'workflow', title: 'Complete Your Workflow', pattern: headingPattern('Complete Your Workflow') },
+  { kind: 'notes', title: 'Notes', pattern: headingPattern('Notes') },
   { kind: 'guarantee', title: 'Guarantee', pattern: /^100% satisfaction guarantee/imu },
 ];
 
