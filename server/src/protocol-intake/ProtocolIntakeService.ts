@@ -253,6 +253,10 @@ export class ProtocolIntakeService {
       scaleOptions,
       sourcePdf: {
         ...(input.artifactPath ? { artifactPath: input.artifactPath } : {}),
+        // Content hash of the source PDF: this is what lets the review surface
+        // join an artifact record to the tree derived from it, whatever the
+        // file was named at either end.
+        ...(extraction.source.sha256 ? { sha256: extraction.source.sha256 } : {}),
         ...(input.vendor ? { vendor: input.vendor } : {}),
         ...(candidate.source.version ? { version: candidate.source.version } : {}),
       },

@@ -70,7 +70,8 @@ import type { GraphSearchHandlers } from './handlers/GraphSearchHandlers.js';
 import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
 import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
 import type { VendorPdfBlobHandlers } from './handlers/VendorPdfBlobHandlers.js';
-import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
+import { searchLabwareDefinitions } from './labwareDefinitionSearch.js';
+import type { RecordStore } from '../store/types.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
 import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
@@ -83,6 +84,8 @@ import type { HealthResponse } from './types.js';
  */
 export interface RouteOptions {
   recordHandlers: RecordHandlers;
+  /** Record store for definition-union search (labware-definition records). */
+  recordStore?: RecordStore;
   recordSearchHandlers?: RecordSearchHandlers;
   relatedRecordsHandlers?: RelatedRecordsHandlers;
   schemaHandlers: SchemaHandlers;
@@ -167,6 +170,7 @@ export function registerRoutes(
 ): void {
   const {
     recordHandlers,
+    recordStore,
     schemaHandlers,
     validationHandlers,
     schemaCount,
@@ -680,37 +684,20 @@ export function registerRoutes(
     fastify.post('/search/graph/ai-context', graphSearchHandlers.aiContext.bind(graphSearchHandlers));
   }
 
-  // Labware-definition search — backs the slash menu /l so a fresh
-  // appliance with no labware *records* still finds the generic/Corning/etc
-  // definitions shipped with the registry. Lightweight: just a substring
-  // match against display_name + id, no index needed (the registry is
-  // already loaded and cached in-process).
+  // Labware-definition search — backs the Add-to-deck dialog's lab-db tier
+  // and the slash menu /l. Unions the vendored registry dir with record-store
+  // labware-definition records and returns full hit payloads (topology,
+  // capacity, render_hints, physical_geometry) so the client can place a
+  // definition-driven instance without a second fetch. See
+  // labwareDefinitionSearch.ts for dedupe/tokenization semantics.
   fastify.post('/labware-definitions/search', async (request, reply) => {
     const body = (request.body ?? {}) as { q?: string; limit?: number };
-    const rawQ = (body.q ?? '').trim().toLowerCase();
-    const limit = Math.min(Math.max(body.limit ?? 12, 1), 50);
-    const all = getLabwareDefinitionRegistry().list();
-    // Tokenize so "96 well" matches "Generic 96-Well Plate" (hyphen in
-    // haystack, space in needle) and "well 96" matches the same record.
-    // Each token must appear in the joined searchable text — fold hyphens
-    // and underscores to spaces on both sides so neither word boundary
-    // breaks the search.
-    const fold = (s: string) => s.toLowerCase().replace(/[-_]+/g, ' ');
-    const tokens = rawQ ? fold(rawQ).split(/\s+/).filter(Boolean) : [];
-    const matches = tokens.length === 0
-      ? all
-      : all.filter((d) => {
-          const hay = fold(`${d.display_name} ${d.id} ${d.recordId}`);
-          return tokens.every((t) => hay.includes(t));
-        });
-    return reply.send({
-      hits: matches.slice(0, limit).map((d) => ({
-        recordId: d.recordId,
-        label: d.display_name,
-        kind: 'labware-definition',
-      })),
-      total: matches.length,
+    const result = await searchLabwareDefinitions({
+      store: recordStore,
+      q: body.q,
+      limit: body.limit,
     });
+    return reply.send(result);
   });
 
   const { eventEditorFixHandlers } = options;
@@ -909,6 +896,7 @@ export function registerRoutes(
   if (protocolIntakeHandlers) {
     fastify.get('/protocol-ide/intake/trees', protocolIntakeHandlers.listTrees.bind(protocolIntakeHandlers));
     fastify.get('/protocol-ide/intake/trees/:treeId', protocolIntakeHandlers.getTree.bind(protocolIntakeHandlers));
+    fastify.get('/protocol-ide/intake/review/:artifactId', protocolIntakeHandlers.getReviewByArtifact.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/prompt', protocolIntakeHandlers.setProposalPrompt.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/redraft', protocolIntakeHandlers.redraftProposal.bind(protocolIntakeHandlers));
   }

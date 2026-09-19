@@ -115,11 +115,41 @@ async function buildApp(store: RecordStore, workspaceRoot = '/tmp') {
   await app.register((instance) => {
     instance.get('/protocol-ide/intake/trees', handlers.listTrees.bind(handlers));
     instance.get('/protocol-ide/intake/trees/:treeId', handlers.getTree.bind(handlers));
+    instance.get('/protocol-ide/intake/review/:artifactId', handlers.getReviewByArtifact.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/prompt', handlers.setProposalPrompt.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/redraft', handlers.redraftProposal.bind(handlers));
   }, { prefix: '/api' });
   return app;
 }
+
+/** A vendor-pdf artifact as the artifact store writes it (relative path + sha). */
+const vendorPdfPayload = {
+  kind: 'vendor-pdf',
+  recordId: 'VPDF-ROUTE01',
+  title: 'ZymoBIOMICS 96 MagBead DNA Kit',
+  file: {
+    stored_path: 'artifacts/foundry/pdfs/ZymoBIOMICS-96-MagBead-DNA-Kit.pdf',
+    sha256: '257f57196f6cd7a337e5ad42d7da74f2ab2c3e1e343a41c898d76c7d085d613b',
+    file_name: 'ZymoBIOMICS-96-MagBead-DNA-Kit.pdf',
+  },
+};
+
+/** A tree derived from those same bytes, stored under the DOWNLOAD name. */
+const shaLinkedTreePayload = {
+  ...treePayload,
+  recordId: 'PDT-route-sha',
+  documentId: 'vendor-protocol:d4303-d4307-d4309-zymobiomics-96-dna-kit-pdf',
+  sourcePdf: {
+    artifactPath: '/home/brad/.computable-lab/worktrees/main/artifacts/foundry/pdfs/_d4303_d4307_d4309_zymobiomics_96_dna_kit.pdf',
+    sha256: '257f57196f6cd7a337e5ad42d7da74f2ab2c3e1e343a41c898d76c7d085d613b',
+  },
+};
+
+const shaLinkedProposalPayload = {
+  ...proposalPayload,
+  recordId: 'SGP-route-sha-b0-s0',
+  treeRef: { kind: 'record', id: 'PDT-route-sha', type: 'protocol-decision-tree' },
+};
 
 const compileStub = async (): Promise<RunChatbotCompileResult> => ({
   outcome: 'complete',
@@ -276,4 +306,75 @@ describe('POST /protocol-ide/intake/proposals/:proposalId/redraft', () => {
       await rm(workspaceRoot, { recursive: true, force: true });
     }
   }, 60_000);
+});
+
+describe('GET /protocol-ide/intake/review/:artifactId', () => {
+  it('joins a vendor-pdf artifact to the tree derived from its bytes (sha256)', async () => {
+    const { store } = makeMockStore([
+      makeEnvelope(vendorPdfPayload, 'vendor-pdf'),
+      makeEnvelope(shaLinkedTreePayload, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+      makeEnvelope(shaLinkedProposalPayload, SUBGRAPH_PROPOSAL_SCHEMA_ID),
+    ]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE01' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // The stored file name differs from the tree's artifactPath — only the
+    // content hash can join them, and it must report which rule matched.
+    expect(body.matchVia).toBe('sha256');
+    expect(body.artifact).toMatchObject({ recordId: 'VPDF-ROUTE01', title: 'ZymoBIOMICS 96 MagBead DNA Kit' });
+    expect(body.tree).toMatchObject({
+      recordId: 'PDT-route-sha',
+      documentId: 'vendor-protocol:d4303-d4307-d4309-zymobiomics-96-dna-kit-pdf',
+      axisCount: 1,
+      proposalCount: 1,
+    });
+    expect(body.tree.axes[0]).toMatchObject({ question: 'What is the DNA source?' });
+    expect(body.proposals).toHaveLength(1);
+    await app.close();
+  });
+
+  it('falls back to the stored file name for trees derived before the sha was recorded', async () => {
+    const legacyTree = {
+      ...treePayload,
+      recordId: 'PDT-route-legacy',
+      sourcePdf: { artifactPath: '/w/artifacts/foundry/pdfs/ZymoBIOMICS-96-MagBead-DNA-Kit.pdf' },
+    };
+    const { store } = makeMockStore([
+      makeEnvelope(vendorPdfPayload, 'vendor-pdf'),
+      makeEnvelope(legacyTree, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+    ]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE01' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().matchVia).toBe('stored_path_basename');
+    expect(res.json().tree.recordId).toBe('PDT-route-legacy');
+    await app.close();
+  });
+
+  it('reports the gap (and the trees it saw) instead of attaching another document', async () => {
+    const { store } = makeMockStore([
+      makeEnvelope(vendorPdfPayload, 'vendor-pdf'),
+      makeEnvelope(treePayload, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+    ]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE01' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'TREE_NOT_DERIVED', artifactId: 'VPDF-ROUTE01' });
+    expect(res.json().treeCandidates).toEqual(['PDT-route-doc']);
+    expect(res.json().message).toContain('no decision tree');
+    await app.close();
+  });
+
+  it('rejects a record that is not a vendor-pdf artifact', async () => {
+    const { store } = makeMockStore([makeEnvelope(treePayload, PROTOCOL_DECISION_TREE_SCHEMA_ID)]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/PDT-route-doc' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('NOT_A_VENDOR_PDF');
+    const missing = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-absent' });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error).toBe('ARTIFACT_NOT_FOUND');
+    await app.close();
+  });
 });

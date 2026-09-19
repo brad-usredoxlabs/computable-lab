@@ -22,6 +22,7 @@ import {
   SUBGRAPH_PROPOSAL_SCHEMA_ID,
   type IngestPdfResult,
 } from '../../protocol-intake/ProtocolIntakeService.js';
+import { resolveReviewTree } from '../../protocol-intake/resolveReviewDocument.js';
 import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
 import type { RunChatbotCompileResult } from '../../ai/runChatbotCompile.js';
 
@@ -173,6 +174,80 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
       } catch (err) {
         reply.status(500);
         return { error: 'INTAKE_TREE_FAILED', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /** GET /protocol-ide/intake/review/:artifactId
+     *
+     * The review surface's read model: one vendor-PDF ARTIFACT (what the
+     * reviewer is looking at) + the decision tree derived from that same
+     * document + every proposal under it. The join is content-first
+     * (sha256, then stored file name) — see resolveReviewDocument.ts. When no
+     * tree can be attributed, this reports the gap and the trees it saw; it
+     * never attaches a neighbouring document's questions to this PDF.
+     */
+    async getReviewByArtifact(
+      request: FastifyRequest<{ Params: { artifactId: string } }>,
+      reply: FastifyReply,
+    ): Promise<unknown> {
+      try {
+        const artifactId = request.params.artifactId?.trim();
+        if (!artifactId) {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'artifactId is required' };
+        }
+        const envelope = await ctx.store.get(artifactId);
+        if (!envelope) {
+          reply.status(404);
+          return { error: 'ARTIFACT_NOT_FOUND', message: `Record not found: ${artifactId}` };
+        }
+        const payload = envelope.payload as unknown as Record<string, unknown>;
+        if (payload['kind'] !== 'vendor-pdf') {
+          reply.status(400);
+          return { error: 'NOT_A_VENDOR_PDF', message: `Record ${artifactId} is not a vendor-pdf artifact` };
+        }
+
+        const trees = await ctx.store.list({ kind: 'protocol-decision-tree' });
+        const match = resolveReviewTree({
+          file: (payload['file'] ?? null) as { stored_path?: unknown; sha256?: unknown } | null,
+          trees: trees.map((e) => e.payload as unknown as Record<string, unknown>),
+        });
+        if (!match.ok) {
+          reply.status(404);
+          return {
+            error: 'TREE_NOT_DERIVED',
+            message: match.gap,
+            artifactId,
+            documentId: payload['documentId'] ?? null,
+            treeCandidates: match.candidates,
+          };
+        }
+
+        const treeEnvelope = await ctx.store.get(match.treeRecordId);
+        const treePayload = (treeEnvelope?.payload ?? {}) as unknown as Record<string, unknown>;
+        const proposals = await proposalsFor(match.treeRecordId);
+        const artifactFile = (payload['file'] ?? {}) as Record<string, unknown>;
+        reply.status(200);
+        return {
+          success: true,
+          matchVia: match.matchVia,
+          artifact: {
+            recordId: artifactId,
+            title: payload['title'] ?? null,
+            storedPath: artifactFile['stored_path'] ?? null,
+            sha256: artifactFile['sha256'] ?? null,
+          },
+          tree: {
+            ...toSummary(treePayload, proposals.length),
+            axes: treePayload['axes'] ?? [],
+            scaleAxis: treePayload['scaleAxis'] ?? { question: '', options: [] },
+            notes: treePayload['notes'],
+          },
+          proposals,
+        };
+      } catch (err) {
+        reply.status(500);
+        return { error: 'INTAKE_REVIEW_FAILED', message: err instanceof Error ? err.message : String(err) };
       }
     },
 
