@@ -10,7 +10,7 @@
  * Route: /ingestion/vendor-pdf/:recordId
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
@@ -23,6 +23,7 @@ import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/pro
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
 import type { ExtractionOptions, ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
 import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
+import { clampZoom, fitWidthScale, MIN_ZOOM, MAX_ZOOM, steppedZoom } from './pdfZoom'
 import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
 import {
   reviewCandidateToProtocolPayload,
@@ -107,6 +108,14 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [saveAsTitle, setSaveAsTitle] = useState('')
   // Resizable split — default 40:60 (PDF : editor).
   const [leftPct, setLeftPct] = useState(40)
+  // PDF zoom. Default is FIT: the preview used to render at a fixed 1.4 scale,
+  // which is wider than this pane on a laptop, so the document scrolled off the
+  // window sideways with no way back out.
+  const [zoomMode, setZoomMode] = useState<'fit' | 'manual'>('fit')
+  const [manualScale, setManualScale] = useState(1)
+  const [paneWidth, setPaneWidth] = useState(0)
+  const [basePageWidth, setBasePageWidth] = useState(0)
+  const pagesRef = useRef<HTMLDivElement | null>(null)
   const splitDragRef = useRef<{ startX: number; startPct: number } | null>(null)
   const splitPanelRef = useRef<HTMLDivElement | null>(null)
 
@@ -250,6 +259,69 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     }
   }, [pdfUrl])
 
+  const measurePane = useCallback(() => {
+    const el = pagesRef.current
+    if (!el) return
+    setPaneWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth))
+  }, [])
+
+  // The pane is resizable (split drag) AND responsive; measure it rather than
+  // assuming a fraction, and debounce so a drag doesn't repaint every page.
+  // The ref callback measures on ATTACH (it always has the element, and an
+  // effect can run before the container exists — that is how the first version
+  // silently measured 0 and never fit the page), the observer tracks resizes.
+  useEffect(() => {
+    if (pdfView !== 'pdf' || !pdfDoc) return
+    measurePane()
+    const el = pagesRef.current
+    if (!el) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setPaneWidth((prev) => (prev === width ? prev : width)), 120)
+    })
+    observer.observe(el)
+    return () => {
+      if (timer) clearTimeout(timer)
+      observer.disconnect()
+    }
+  }, [pdfView, pdfDoc, leftPct, measurePane])
+
+  // The page's own width at scale 1 — the denominator of "fit".
+  useEffect(() => {
+    let cancelled = false
+    if (!pdfDoc || pages.length === 0) {
+      setBasePageWidth(0)
+      return
+    }
+    pdfDoc
+      .getPage(pages[0]!)
+      .then((page: PDFPageProxy) => {
+        if (!cancelled) setBasePageWidth(page.getViewport({ scale: 1 }).width)
+      })
+      .catch(() => {
+        if (!cancelled) setBasePageWidth(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pdfDoc, pages])
+
+  const scale =
+    zoomMode === 'fit' && basePageWidth > 0 && paneWidth > 0
+      ? fitWidthScale(paneWidth, basePageWidth, 16)
+      : clampZoom(manualScale)
+
+  const zoomBy = useCallback(
+    (direction: 1 | -1) => {
+      setZoomMode('manual')
+      setManualScale((current) => steppedZoom(current === scale ? current : scale, direction))
+    },
+    [scale],
+  )
+  const fitToWidth = useCallback(() => setZoomMode('fit'), [])
+
   const renderPage = useCallback(
     async (pageNumber: number) => {
       if (!pdfDoc) return
@@ -259,18 +331,24 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         if (!canvas) return
         const context = canvas.getContext('2d')
         if (!context) return
-        const viewport = page.getViewport({ scale: 1.4 })
+        const viewport = page.getViewport({ scale })
         canvas.width = viewport.width
         canvas.height = viewport.height
+        // Keep the element's CSS box in step with the pixel buffer so the page
+        // is drawn at the zoom the reviewer chose (and stays crisp).
+        canvas.style.width = `${Math.round(viewport.width)}px`
+        canvas.style.height = `${Math.round(viewport.height)}px`
         await page.render({ canvas, canvasContext: context, viewport }).promise
       } catch (err) {
         console.error(`Failed to render page ${pageNumber}:`, err)
       }
     },
-    [pdfDoc],
+    [pdfDoc, scale],
   )
 
-  useMemo(() => {
+  // Painting canvases is a SIDE EFFECT, so it belongs in an effect (a memo runs
+  // during render and double-runs under StrictMode).
+  useEffect(() => {
     if (!pdfDoc || pages.length === 0) return
     pages.forEach((pageNum) => {
       void renderPage(pageNum)
@@ -621,7 +699,47 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         {/* Left: PDF (or plain-text fallback) */}
         <div className="vpdf-review__left" style={{ flex: `0 0 ${leftPct}%`, maxWidth: `${leftPct}%` }}>
           {pdfView === 'pdf' && pdfDoc && (
-            <div className="vpdf-review__pages">
+            <div className="vpdf-review__zoom" data-testid="vpdf-zoom">
+              <button
+                type="button"
+                onClick={() => zoomBy(-1)}
+                disabled={scale <= MIN_ZOOM}
+                aria-label="Zoom out"
+                title="Zoom out"
+              >
+                −
+              </button>
+              <span className="vpdf-review__zoom-value" data-testid="vpdf-zoom-value">
+                {Math.round(scale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => zoomBy(1)}
+                disabled={scale >= MAX_ZOOM}
+                aria-label="Zoom in"
+                title="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="vpdf-review__zoom-fit"
+                onClick={fitToWidth}
+                disabled={zoomMode === 'fit'}
+                data-testid="vpdf-zoom-fit"
+              >
+                Fit width
+              </button>
+            </div>
+          )}
+          {pdfView === 'pdf' && pdfDoc && (
+            <div
+              className="vpdf-review__pages"
+              ref={(el) => {
+                pagesRef.current = el
+                if (el) measurePane()
+              }}
+            >
               {pages.map((pageNum) => (
                 <div key={pageNum} data-vpdf-page={pageNum} className="vpdf-review__page">
                   <canvas

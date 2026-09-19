@@ -500,3 +500,44 @@
   line-height: 1.45;
   color: var(--cl-text-dim);
 }
+
+/* ---------------------------------------------------------------------------
+   PDF zoom. The preview fits the pane by default and is adjustable both ways:
+   rendering at a fixed scale pushed the document out of the window sideways.
+   --------------------------------------------------------------------------- */
+.vpdf-review__zoom {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev);
+}
+
+.vpdf-review__zoom button {
+  min-width: 26px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.vpdf-review__zoom button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vpdf-review__zoom-value {
+  min-width: 42px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
