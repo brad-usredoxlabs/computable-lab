@@ -3,6 +3,13 @@ kind: equipment
 id: EQP-PLATE-SHAKER
 name: Plate Shaker
 status: active
+# Generic physical kind — a CURIE, not an EQC- record (2026-09-19 ruling):
+# EQC- is reserved for vendor models the lab can evidence.
+equipmentClassRef:
+  kind: ontology
+  id: CL:orbital_shaker
+  namespace: CL
+  label: Orbital shaker
 keywords:
   - plate shaker
   - shaker

@@ -19,6 +19,7 @@ import type {
   AgentClarificationRequest,
   AgentLabwareAddition,
   AgentLabwareRequirement,
+  AgentEquipmentRequirement,
   GroundedMaterial,
   OntologyRefProposal,
   PlateEventProposal,
@@ -258,6 +259,37 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
             },
           },
         },
+        equipmentRequirements: {
+          type: 'array',
+          description:
+            'Bench EQUIPMENT to place on the bench (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader). Equipment is NOT labware: it has no wells and no addressing, and it is never placed in a deck slot — say that plainly instead of refusing in prose. '
+            + 'Records-first: if the lab already owns it, use `recordId` (an EQP- id from the provided context) and warn if the user asks to create something that already exists. '
+            + 'Otherwise use `classCurie`, spelled `equipment:<kind>` for a generic kind (equipment:water_bath, equipment:heat_block, equipment:heater_shaker, equipment:orbital_shaker, equipment:rocker, equipment:vortex, equipment:qpcr, equipment:plate_reader) or an EQC- id for a specific evidenced model — never invent a CL: class CURIE (it is derived). '
+            + '`settings` carries the values the equipment is set to, keyed by the class settingsDefinition (e.g. {"temperature_c":55} for a water bath, {"temperature_c":70,"rpm":300} for a heater-shaker); settings the user states belong here, and a later change of setting is its own event, not a rewrite of this one. '
+            + 'Do not describe what the equipment accepts — acceptance is decided by the capability/seat data, not by the model. Never emit a seat relationship (seatOn/placedIn): the editor cannot render it yet.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              classCurie: {
+                type: 'string',
+                description: 'Generic equipment kind as equipment:<kind>, or an EQC- equipment-class record id. Never a CL: CURIE.',
+              },
+              recordId: {
+                type: 'string',
+                description: 'An EQP- equipment record id when the lab already owns this equipment (records-first).',
+              },
+              handle: { type: 'string', description: 'Optional user-visible handle matching the user\'s words, e.g. "bath 55".' },
+              reason: { type: 'string' },
+              settings: {
+                type: 'object',
+                additionalProperties: true,
+                description: 'Values this instance is set to, keyed by the class settingsDefinition (temperature_c, rpm, timer_s…).',
+              },
+              source: { type: 'string', description: 'Attribution: where this model came from (user description, Exa search, existing record).' },
+            },
+          },
+        },
         labwareAdditions: {
           type: 'array',
           items: {
@@ -338,6 +370,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         clarification: DRAFT_ARGS_PROPERTIES['clarification'],
         clarificationRequests: DRAFT_ARGS_PROPERTIES['clarificationRequests'],
         labwareRequirements: DRAFT_ARGS_PROPERTIES['labwareRequirements'],
+        equipmentRequirements: DRAFT_ARGS_PROPERTIES['equipmentRequirements'],
         labwareAdditions: DRAFT_ARGS_PROPERTIES['labwareAdditions'],
       },
     },
@@ -616,6 +649,39 @@ function parseLabwareRequirements(raw: unknown): AgentLabwareRequirement[] {
 }
 
 /**
+ * Bench equipment requirements. Equipment is not labware: an entry names either an
+ * `EQP-` record (records-first) or a class — `equipment:<kind>` for a generic kind,
+ * or an `EQC-` id for a specific evidenced model. A malformed entry is DROPPED, not
+ * coerced: inventing equipment the user never asked for is worse than a skip.
+ */
+function parseEquipmentRequirements(raw: unknown): AgentEquipmentRequirement[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AgentEquipmentRequirement[] = [];
+  for (const item of raw) {
+    const r = asRecord(item);
+    if (!r) continue;
+    const classCurie = typeof r.classCurie === 'string' && r.classCurie.length > 0 ? r.classCurie : undefined;
+    const recordId = typeof r.recordId === 'string' && r.recordId.length > 0 ? r.recordId : undefined;
+    if (!classCurie && !recordId) continue;
+    const entry: AgentEquipmentRequirement = {};
+    if (classCurie) entry.classCurie = classCurie;
+    if (recordId) entry.recordId = recordId;
+    if (typeof r.handle === 'string') entry.handle = r.handle;
+    if (typeof r.reason === 'string') entry.reason = r.reason;
+    if (typeof r.source === 'string') entry.source = r.source;
+    const settings = asRecord(r.settings);
+    if (settings) entry.settings = settings;
+    out.push(entry);
+  }
+  return out;
+}
+
+/** True for the equipment spelling: `equipment:<kind>` (or `EQP-`/`EQC-` ids). */
+function isEquipmentToken(token: unknown): boolean {
+  return typeof token === 'string' && /^(equipment:|EQ[PC]-)/i.test(token);
+}
+
+/**
  * Map submit_suggestion tool arguments to an AgentResult. Defensive: even
  * though the schema constrains the shape, local models via vLLM may not always
  * conform, so every field is parsed tolerantly.
@@ -639,10 +705,31 @@ export function parseSubmitSuggestionArgs(
     .filter((entry): entry is AgentLabwareRequirement => entry !== null);
   const labwareClarificationRequirement = labwareRequirementFromClarification(clarification, notes);
   const labwareAdditions = rawLabwareAdditions.filter((addition) => labwareRequirementFromAddition(addition) === null);
+  // A misfiled equipment token must never reach labware minting (it would collapse
+  // into `tubeset_24` via labwareRequirement.ts). Route it to the equipment field.
+  const requestedLabwareRequirements = parseLabwareRequirements(args.labwareRequirements);
+  const misfiledEquipment = requestedLabwareRequirements.filter((requirement) => isEquipmentToken(requirement.classCurie));
+  const keptLabwareRequirements = requestedLabwareRequirements.filter((requirement) => !isEquipmentToken(requirement.classCurie));
   const labwareRequirements = [
-    ...parseLabwareRequirements(args.labwareRequirements),
+    ...keptLabwareRequirements,
     ...inferredLabwareRequirements,
     ...(labwareClarificationRequirement ? [labwareClarificationRequirement] : []),
+  ];
+  // Equipment: what the model asked for directly, plus anything it misfiled into
+  // labwareRequirements. `EQP-`/`EQC-` tokens keep their id; `equipment:<kind>`
+  // keeps its kind spelling (the client derives the CL: class CURIE).
+  const equipmentRequirements = [
+    ...parseEquipmentRequirements(args.equipmentRequirements),
+    ...misfiledEquipment.map((requirement): AgentEquipmentRequirement => {
+      const entry: AgentEquipmentRequirement = {};
+      if (isEquipmentToken(requirement.classCurie)) {
+        if (/^EQ[PC]-/i.test(requirement.classCurie)) entry.recordId = requirement.classCurie;
+        else entry.classCurie = requirement.classCurie;
+      }
+      if (requirement.handle) entry.handle = requirement.handle;
+      if (requirement.reason) entry.reason = requirement.reason;
+      return entry;
+    }),
   ];
 
   const result: AgentResult = {
@@ -664,5 +751,6 @@ export function parseSubmitSuggestionArgs(
   }
   if (labwareAdditions.length > 0) result.labwareAdditions = labwareAdditions;
   if (labwareRequirements.length > 0) result.labwareRequirements = labwareRequirements;
+  if (equipmentRequirements.length > 0) result.equipmentRequirements = equipmentRequirements;
   return result;
 }

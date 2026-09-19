@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-MICROWAVE
+canonical: microwave
+label: Microwave
+domain: thermal
+notes: >-
+  Irradiate with microwaves (e.g. agarose gel melting, rapid heating).

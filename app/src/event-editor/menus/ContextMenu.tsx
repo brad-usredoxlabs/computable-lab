@@ -26,6 +26,20 @@ export function ContextMenu({ open, x, y, items, onClose, title }: ContextMenuPr
   const menuRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState({ x, y })
 
+  // Mount inside the themed app root, NOT document.body. Every `--cl-*`
+  // token (background, text, borders) is declared on `.cl-app`, so a menu
+  // portaled to body resolves them to nothing — a transparent panel with
+  // invisible items in dark mode. Portaling into the app root keeps the menu
+  // on the token cascade in both themes, instead of freezing a dark-only
+  // palette into fallbacks. `.cl-app` is `position: fixed` with `overflow:
+  // hidden` but no transform, so a fixed-position child is neither clipped
+  // nor re-anchored. Body remains the fallback for standalone routes that
+  // render without AppShell (e.g. the labware-editor fixture screen).
+  const container =
+    typeof document === 'undefined'
+      ? null
+      : document.querySelector('.cl-app') ?? document.body
+
   useLayoutEffect(() => {
     if (!open) return
     const menu = menuRef.current
@@ -64,7 +78,7 @@ export function ContextMenu({ open, x, y, items, onClose, title }: ContextMenuPr
     }
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !container) return null
 
   return createPortal(
     <div
@@ -99,6 +113,6 @@ export function ContextMenu({ open, x, y, items, onClose, title }: ContextMenuPr
         )
       ))}
     </div>,
-    document.body,
+    container,
   )
 }

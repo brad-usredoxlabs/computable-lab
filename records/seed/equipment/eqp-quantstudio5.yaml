@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-QUANTSTUDIO5
+name: QuantStudio 5
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-QUANTSTUDIO5
+keywords:
+  - quantstudio
+  - qpcr
+  - real-time pcr
+  - thermocycler
+notes: >-
+  The lab's QuantStudio 5. This instance's serial number and asset tag are not
+  yet recorded and are deliberately absent — do not invent them. Acceptance
+  (a 384-well plate of the Thermo design family) lives in ECP-QUANTSTUDIO5.

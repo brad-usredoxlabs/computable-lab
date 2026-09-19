@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-ROCK
+canonical: rock
+label: Rock
+domain: sample_prep
+notes: >-
+  Gentle see-saw agitation (a rocker). Same mixing family as shake — the motion differs, the intent (mixing) does not.

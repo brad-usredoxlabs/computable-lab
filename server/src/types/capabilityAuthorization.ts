@@ -1,5 +1,5 @@
 import type { PolicyDecisionDisposition, PolicySettingOrigin, ResolvedPolicyProfile } from '../policy/types.js';
-import type { RecordRef } from './ref.js';
+import type { RecordRef, Ref } from './ref.js';
 
 export type PersonStatus = 'active' | 'inactive' | 'contractor' | 'suspended';
 export type EquipmentStatus = 'active' | 'out_of_service' | 'retired' | 'maintenance';
@@ -92,7 +92,12 @@ export interface EquipmentPayload {
   kind: 'equipment';
   id: string;
   name: string;
-  equipmentClassRef?: RecordRef;
+  /**
+   * The class this instance realizes: an `EQC-` record for an evidenced vendor
+   * model, or a `CL:` CURIE for a generic kind (`CL:water_bath`) — generic kinds
+   * are registry definitions (schema/registry/equipment-kinds), not records.
+   */
+  equipmentClassRef?: Ref;
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
@@ -130,7 +135,8 @@ export interface EquipmentCapabilityPayload {
   id: string;
   status: CapabilityRecordStatus;
   equipmentRef?: RecordRef;
-  equipmentClassRef?: RecordRef;
+  /** `EQC-` record or a `CL:` generic-kind CURIE (see EquipmentPayload). */
+  equipmentClassRef?: Ref;
   capabilities: EquipmentCapabilityItem[];
   notes?: string;
 }

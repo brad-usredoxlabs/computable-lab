@@ -1,0 +1,22 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-HEAT-BLOCK
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:heat_block
+  namespace: CL
+  label: Heat block
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-HEAT }
+    constraints:
+      seat: slots
+      addressing: grid
+      accepts:
+        mode: by_class
+        tube_size_class: any
+    notes: >-
+      A heat block is a TUBE seat: it has fixed addressed positions for tubes and
+      takes no labware. Its positions are SEAT addresses (which tube is in which
+      position), never liquid wells. The block's size (how many positions) is a
+      per-model fact and is intentionally not asserted here.

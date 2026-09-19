@@ -24,7 +24,7 @@ import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
 import { pdfSelectionToSurfaceContext, stepSelectionToSurfaceContext } from './toSurfaceContext'
-import type { AiClarificationAnswer, AiClarificationRequest, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
@@ -275,6 +275,7 @@ export function AiTabPanel() {
       const events = (result.events ?? []) as PlateEvent[]
       const labwareAdditions = (result.labwareAdditions ?? []) as AiLabwareAddition[]
       const labwareRequirements = (result.labwareRequirements ?? []) as AiLabwareRequirement[]
+      const equipmentRequirements = (result.equipmentRequirements ?? []) as AiEquipmentRequirement[]
       const platform = getPlatformManifest(state.platforms, state.platformId)
       const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
       const { preview, skips } = buildPreviewFromDraft({
@@ -283,6 +284,7 @@ export function AiTabPanel() {
         events,
         labwareAdditions,
         labwareRequirements,
+        equipmentRequirements,
         existingLabwares: state.labwares,
         existingPlacements: state.placements,
         activeDeckScope,
@@ -309,6 +311,7 @@ export function AiTabPanel() {
         sourcePrompt: prompt,
         labwareRequirements: [...labwareRequirements],
         labwareAdditions: [...labwareAdditions],
+        ...(equipmentRequirements.length > 0 ? { equipmentRequirements: [...equipmentRequirements] } : {}),
         ...(skips.length > 0 ? { sourceSkips: skips } : {}),
         ...(result.ontologyBindings?.length
           ? { ontologyBindings: result.ontologyBindings as never }

@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-STIR
+canonical: stir
+label: Stir
+domain: sample_prep
+notes: >-
+  Agitate a liquid with a stir bar. A mixing verb like shake/rock; the vessel sits in/on the equipment rather than being clamped.

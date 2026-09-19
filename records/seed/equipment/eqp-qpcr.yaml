@@ -3,6 +3,10 @@ kind: equipment
 id: EQP-QPCR
 name: Real-Time qPCR Instrument
 status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-QPCR
 keywords:
   - qPCR
   - real-time pcr

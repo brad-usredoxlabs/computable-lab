@@ -17,7 +17,10 @@ import {
   type LabwareRecordPayload,
 } from '../../../types/labware'
 import { createLabwareFromRequirement } from '../../../types/labwareRequirement'
-import type { AiActiveDeckScope, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import { createEquipmentFromRequirement } from '../../../types/equipmentRequirement'
+import type { Equipment } from '../../../types/equipment'
+import { equipmentFootprintMm, labwareFootprintMm } from '../../../types/labwareFootprint'
+import type { AiActiveDeckScope, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlatformManifest, PlatformVariantManifest } from '../../../types/platformRegistry'
 import { assignVisibleLabwareHandle } from '../../labwareHandles'
 import { resolveOrientation, validatePlacement } from '../../lib/placementRules'
@@ -79,6 +82,8 @@ export interface BuildPreviewArgs {
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
   labwareRequirements: AiLabwareRequirement[]
+  /** Bench equipment the draft wants placed on the bench (never a deck slot). */
+  equipmentRequirements?: AiEquipmentRequirement[]
   existingLabwares: Record<string, Labware>
   activeDeckScope?: AiActiveDeckScope
   existingPlacements?: EventEditorPlacement[]
@@ -102,51 +107,64 @@ function scopeSkipReason(label: string, location: PlacementLocation, scope: AiAc
     + ' is locked to ' + scope.platformId + '/' + scope.variantId + ' (allowed slots: ' + slots + ')'
 }
 
-// Physical tile footprint (mm) — matches LawnSurface.tsx constants.
-// Labware tiles render at fixed pixel size, but positions are in real-world mm.
-const TILE_MM_W = 127
-const TILE_MM_H = 85
-const TILE_MM_W_PORTRAIT = 85
-const TILE_MM_H_PORTRAIT = 127
+// Physical tile footprint (mm) — resolved per-labware via
+// types/labwareFootprint.ts (stamped → definition → pitch derivation →
+// legacy SBS fallback; matches LawnSurface.tsx). Labware tiles render at
+// fixed pixel size, but positions are in real-world mm.
+const LAWN_FALLBACK_STEP_W_MM = 127
+const LAWN_FALLBACK_STEP_H_MM = 85
 // Minimum gap between adjacent lawn tiles (mm) so new items don't land on
 // existing ones when the AI omits explicit positions.
 const LAWN_GAP_MM = 16
 
-/** Estimate tile footprint for a labware that will land on a lawn surface. */
-function lawnTileDimensions(labware: Labware): { wMm: number; hMm: number } {
-  if (labware.layoutFamily === 'tube') return { wMm: TILE_MM_W_PORTRAIT, hMm: TILE_MM_H_PORTRAIT }
-  // Portrait when rows > columns (e.g. 1x8 reservoir), otherwise landscape.
+/** Footprint of a labware as it will sit on a lawn surface (orientation-aware). */
+function lawnTileFootprint(labware: Labware): { wMm: number; hMm: number } {
   const addr = labware.addressing
   const portrait = addr && addr.rows && addr.columns && addr.rows > addr.columns
-  return portrait
-    ? { wMm: TILE_MM_W_PORTRAIT, hMm: TILE_MM_H_PORTRAIT }
-    : { wMm: TILE_MM_W, hMm: TILE_MM_H }
+  const fp = labwareFootprintMm(labware, portrait ? 'portrait' : 'landscape')
+  return { wMm: fp.length, hMm: fp.width }
+}
+
+/** Resolve the footprint of an EXISTING lawn placement, if its labware is known. */
+function existingFootprintFor(
+  placement: EventEditorPlacement,
+  labwaresById: Record<string, Labware>,
+): { wMm: number; hMm: number } {
+  const labware = labwaresById[placement.labwareId]
+  if (labware) {
+    const fp = labwareFootprintMm(labware, placement.orientation === 'portrait' ? 'portrait' : 'landscape')
+    return { wMm: fp.length, hMm: fp.width }
+  }
+  // No labware payload for this placement — legacy landscape tile as a safe
+  // over-estimate.
+  return { wMm: LAWN_FALLBACK_STEP_W_MM, hMm: LAWN_FALLBACK_STEP_H_MM }
 }
 
 /**
  * Compute a non-overlapping lawn position for a new labware.
  * Scans existing lawn placements plus placements we've already positioned
- * in this batch, then returns the next free grid slot.
+ * in this batch, then returns the next free grid slot. Occupied rects and the
+ * candidate grid both use RESOLVED physical footprints (see labwareFootprint).
  */
 function nextLawnPosition(
-  labware: Labware,
+  footprint: { wMm: number; hMm: number },
   existing: EventEditorPlacement[],
   placed: Array<{ x: number; y: number; w: number; h: number }>,
+  labwaresById: Record<string, Labware>,
 ): { kind: 'lawn'; xMm: number; yMm: number } {
-  const { wMm, hMm } = lawnTileDimensions(labware)
+  const { wMm, hMm } = footprint
 
   // Collect all occupied rectangles (existing + items we already placed).
   const occupied: Array<{ x: number; y: number; w: number; h: number }> = []
 
   for (const p of existing) {
     if (p.location.kind === 'lawn') {
-      // We don't have labware info for existing placements, so use the
-      // standard landscape tile as a safe over-estimate.
+      const fp = existingFootprintFor(p, labwaresById)
       occupied.push({
         x: p.location.xMm,
         y: p.location.yMm,
-        w: TILE_MM_W,
-        h: TILE_MM_H,
+        w: fp.wMm,
+        h: fp.hMm,
       })
     }
   }
@@ -160,8 +178,8 @@ function nextLawnPosition(
   const startY = LAWN_GAP_MM
   for (let col = 0; col < 20; col += 1) {
     for (let row = 0; row < 20; row += 1) {
-      const x = startX + col * (TILE_MM_W + LAWN_GAP_MM)
-      const y = startY + row * (TILE_MM_H + LAWN_GAP_MM)
+      const x = startX + col * (wMm + LAWN_GAP_MM)
+      const y = startY + row * (hMm + LAWN_GAP_MM)
       const candidate = { x, y, w: wMm, h: hMm }
       const overlap = occupied.some((o) => {
         return (
@@ -177,7 +195,7 @@ function nextLawnPosition(
     }
   }
   // Fallback: last resort position (shouldn't happen in practice).
-  return { kind: 'lawn', xMm: TILE_MM_W + LAWN_GAP_MM + placed.length * (TILE_MM_W + LAWN_GAP_MM), yMm: TILE_MM_H + LAWN_GAP_MM }
+  return { kind: 'lawn', xMm: LAWN_FALLBACK_STEP_W_MM + LAWN_GAP_MM + placed.length * (LAWN_FALLBACK_STEP_W_MM + LAWN_GAP_MM), yMm: LAWN_FALLBACK_STEP_H_MM + LAWN_GAP_MM }
 }
 
 export function buildPreviewFromDraft({
@@ -186,19 +204,34 @@ export function buildPreviewFromDraft({
   events,
   labwareAdditions,
   labwareRequirements,
+  equipmentRequirements = [],
   existingLabwares,
   activeDeckScope,
   existingPlacements = [],
 }: BuildPreviewArgs): BuildPreviewResult {
   const previewLabwares: Record<string, Labware> = {}
+  const previewEquipments: Record<string, Equipment> = {}
   const allocatedLabwares: Labware[] = Object.values(existingLabwares)
   const previewPlacements: EventEditorPlacement[] = []
   const skips: string[] = []
   // Track lawn rectangles we've placed in this batch for collision avoidance.
   const lawnPlaced: Array<{ x: number; y: number; w: number; h: number }> = []
 
+  // A misfiled equipment request must never collapse into labware (the silent
+  // `tubeset_24` fallback in labwareRequirement.ts). Equipment kinds, `EQP-`
+  // instances and `EQC-` classes all belong in `equipmentRequirements`.
+  const isEquipmentToken = (token: string | undefined): boolean =>
+    !!token && (/^equipment:/i.test(token) || /^EQ[PC]-/i.test(token))
+  const usableLabwareRequirements = labwareRequirements.filter((requirement) => {
+    if (!isEquipmentToken(requirement.classCurie)) return true
+    skips.push(
+      `${requirement.classCurie}: bench equipment, not labware — it belongs in equipmentRequirements`,
+    )
+    return false
+  })
+
   const proposedLabware = [
-    ...labwareRequirements.map((requirement) => ({
+    ...usableLabwareRequirements.map((requirement) => ({
       label: requirement.classCurie,
       deckSlot: requirement.deckSlot,
       labware: createLabwareFromRequirement(requirement),
@@ -227,8 +260,8 @@ export function buildPreviewFromDraft({
     } else if (implicitSingleSlot) {
       location = { kind: 'slot', slotId: implicitSingleSlot }
     } else {
-      location = nextLawnPosition(labware, existingPlacements, lawnPlaced)
-      const { wMm, hMm } = lawnTileDimensions(labware)
+      location = nextLawnPosition(lawnTileFootprint(labware), existingPlacements, lawnPlaced, existingLabwares)
+      const { wMm, hMm } = lawnTileFootprint(labware)
       lawnPlaced.push({ x: location.xMm, y: location.yMm, w: wMm, h: hMm })
     }
 
@@ -257,9 +290,39 @@ export function buildPreviewFromDraft({
     })
   }
 
+  // Bench equipment: minted as Equipment (never labware geometry) and placed on
+  // the bench. Equipment is bench-only by construction — a deck slot is not a
+  // valid destination even under a locked run scope, because the reducer refuses
+  // to slot-promote equipment (EventEditorContext place_equipment guard).
+  for (const requirement of equipmentRequirements) {
+    const label = requirement.handle ?? requirement.recordId ?? requirement.classCurie ?? 'equipment'
+    const token = requirement.classCurie ?? requirement.recordId
+    if (!token) {
+      skips.push(`${label}: no equipment record or class given`)
+      continue
+    }
+    const equipment = createEquipmentFromRequirement(token, requirement.handle, requirement.settings)
+    const footprint = equipmentFootprintMm(equipment, 'landscape')
+    const lawnRect = { wMm: footprint.length, hMm: footprint.width }
+    const location = nextLawnPosition(lawnRect, existingPlacements, lawnPlaced, existingLabwares)
+    lawnPlaced.push({ x: location.xMm, y: location.yMm, w: lawnRect.wMm, h: lawnRect.hMm })
+    previewEquipments[equipment.equipmentId] = equipment
+    previewPlacements.push({
+      placementId: nextPreviewPlacementId(),
+      entityKind: 'equipment',
+      equipmentId: equipment.equipmentId,
+      // Existing id-based consumers (focus, removal, persisted records) key off
+      // labwareId, so the equipment id travels in both fields.
+      labwareId: equipment.equipmentId,
+      location,
+      orientation: 'landscape',
+    })
+  }
+
   return {
     preview: {
       previewLabwares,
+      previewEquipments,
       previewPlacements,
       // Expand any compact well ranges the AI emitted ("A1:H12") into literal
       // wells, so committed events keep the existing per-well format.

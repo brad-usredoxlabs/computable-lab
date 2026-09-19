@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-HEAT
+canonical: heat
+label: Heat
+domain: thermal
+notes: >-
+  Apply heat to raise and hold an item at a target temperature while it is on the equipment. The SETTING (temperature) is recorded on the instance and snapshotted into the placement/`set` event — never read back from the machine's current state.

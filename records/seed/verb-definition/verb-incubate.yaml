@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-INCUBATE
+canonical: incubate
+label: Incubate
+domain: thermal
+notes: >-
+  Hold an item at a controlled temperature for a duration. Distinct from `heat`: incubate implies a dwell period, which is why the timed incubations of a water bath or incubator are captured as incubate.

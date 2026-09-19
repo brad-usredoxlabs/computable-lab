@@ -17,7 +17,7 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
-import type { AiGraphLemurRevisionEntry, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
+import type { AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
@@ -62,8 +62,11 @@ export interface EventEditorGraphLemurSource {
 export interface EventEditorPreview {
   previewLabwares: Record<string, Labware>
   /** First-class bench equipment proposed by a draft — ghosted as instrument
-   *  silhouettes on the lawn, never labware geometry. */
-  previewEquipments: Record<string, Equipment>
+   *  silhouettes on the lawn, never labware geometry. OPTIONAL: most previews
+   *  propose no equipment, and requiring every preview constructor (and every
+   *  test) to spell `{}` is noise — absent means "no equipment proposed". Read it
+   *  as `preview.previewEquipments?.[id]`. */
+  previewEquipments?: Record<string, Equipment>
   previewPlacements: EventEditorPlacement[]
   previewEvents: PlateEvent[]
   /**
@@ -80,6 +83,8 @@ export interface EventEditorPreview {
   sourceSkips?: string[]
   /** Proposed generic/constrained labware requirements that produced preview labware. */
   labwareRequirements?: AiLabwareRequirement[]
+  /** Bench equipment the draft proposed (bench-only; never a deck slot). */
+  equipmentRequirements?: AiEquipmentRequirement[]
   /** Proposed concrete labware additions that produced preview labware. */
   labwareAdditions?: AiLabwareAddition[]
   /** Ontology terms proposed during draft compile; draftOnly entries materialize on Accept. */
@@ -858,7 +863,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
-        equipments: { ...state.equipments, ...preview.previewEquipments },
+        equipments: { ...state.equipments, ...(preview.previewEquipments ?? {}) },
         placements: [...state.placements, ...preview.previewPlacements],
         events: [...state.events, ...(action.previewEvents ?? preview.previewEvents)],
         eventGraphId: action.eventGraphId ?? state.eventGraphId,

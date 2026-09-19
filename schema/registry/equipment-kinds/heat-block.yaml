@@ -1,0 +1,14 @@
+kind: equipment-kind
+id: CL:heat_block
+name: Heat block
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: heater_shaker
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+notes: >-
+  Generic heat block. Source: the lab's own description (2026-09-19) — a heater with fixed tube slots that takes tubes and no labware. How many positions a given block has is a per-model fact and is deliberately NOT asserted here. Acceptance (seat `slots`, tube-only) lives in ECP-HEAT-BLOCK.

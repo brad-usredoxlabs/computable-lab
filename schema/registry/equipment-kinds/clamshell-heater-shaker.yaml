@@ -1,0 +1,22 @@
+kind: equipment-kind
+id: CL:clamshell_heater_shaker
+name: Clamshell heater-shaker
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: heater_shaker
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+  - key: rpm
+    label: Shake speed
+    valueType: number
+    unit: rpm
+  - key: timer_sec
+    label: Timer
+    valueType: duration_sec
+    unit: s
+notes: >-
+  Generic clamshell heater-shaker at the lab. Source: the lab's own description (2026-09-19) — closes like a clamshell, heats from TOP and BOTTOM, takes up to 4 SBS plates (normal height or deepwell), and has temperature, RPM and timer settings. The manufacturer and model are NOT recorded yet: a generic kind stays generic until the vendor model is evidenced, at which point it becomes an EQC- record. Acceptance (seat `bay`, capacity 4, SBS standard|deepwell, heat from top+bottom) lives in ECP-CLAMSHELL-HEATER-SHAKER.

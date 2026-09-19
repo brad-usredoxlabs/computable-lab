@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-QPCR
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-QPCR
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-READ }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        well_counts: [96]
+    notes: >-
+      The generic qPCR class takes a single 96-well PCR plate in its bay. This
+      replaces the flat `acceptsLabware: [plate_96]` list on the class: a
+      well-count match is a physical fact, whereas a labware-id list could not
+      express height, design family, or an open seat (D2 rev 2, 2026-09-19).

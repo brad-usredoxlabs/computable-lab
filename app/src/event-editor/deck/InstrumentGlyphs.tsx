@@ -27,6 +27,8 @@ export function InstrumentGlyph({ kind, color }: InstrumentGlyphProps) {
       return <HeaterShakerSvg color={color} />
     case 'vortex':
       return <VortexSvg color={color} />
+    case 'water_bath':
+      return <WaterBathSvg color={color} />
     default:
       return <GenericInstrumentSvg color={color} />
   }
@@ -130,6 +132,31 @@ function VortexSvg({ color }: { color: string }) {
       <circle key="knob" cx={33} cy={29} r={2.4} fill={color} opacity={0.5} />,
       // rotation hint
       <path key="spin" d="M 25 20 A 3 3 0 1 1 0" fill="none" stroke={color} strokeWidth={0.9} opacity={0.5} />,
+    ]} />
+  )
+}
+
+/**
+ * Water bath: a wide open tank with a liquid line, a floating tube rack, and a
+ * setpoint display. Deliberately *not* a well grid — a bath has no wells; what it
+ * takes (tubes, bottles, floats) is acceptance data, not geometry.
+ */
+function WaterBathSvg({ color }: { color: string }) {
+  return (
+    <SvgRoot children={[
+      // tank body
+      <rect key="tank" x={6} y={24} width={38} height={18} rx={2.5} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.4} />,
+      // liquid surface line
+      <line key="water" x1={8} y1={29} x2={42} y2={29} stroke={color} strokeWidth={1.1} opacity={0.7} />,
+      // floating rack (tubes ride a float in a real bath)
+      <rect key="float" x={22} y={23} width={16} height={6} rx={1.5} fill={color} fillOpacity={0.3} stroke={color} strokeWidth={1.1} />,
+      // tubes in the float
+      <line key="t1" x1={26} y1={23} x2={26} y2={18} stroke={color} strokeWidth={1.4} />,
+      <line key="t2" x1={30} y1={23} x2={30} y2={18} stroke={color} strokeWidth={1.4} />,
+      <line key="t3" x1={34} y1={23} x2={34} y2={18} stroke={color} strokeWidth={1.4} />,
+      // setpoint display + knob on the front rail
+      <rect key="disp" x={10} y={34} width={12} height={4} rx={1} fill={color} opacity={0.6} />,
+      <circle key="knob" cx={39} cy={36} r={2.2} fill={color} opacity={0.5} />,
     ]} />
   )
 }

@@ -1,0 +1,32 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-CLAMSHELL-HEATER-SHAKER
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:clamshell_heater_shaker
+  namespace: CL
+  label: Clamshell heater-shaker
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-HEAT }
+    constraints:
+      seat: bay
+      capacity: 4
+      accepts:
+        mode: by_class
+        footprint: sbs
+        height_class: [standard, deepwell]
+      heat:
+        from: [top, bottom]
+    notes: >-
+      Closes like a clamshell and heats from top AND bottom; takes up to 4 SBS
+      plates, normal height or deepwell. Manufacturer/model not yet recorded — do
+      not fill in a vendor or SKU that has not been verified.
+  - verbRef: { kind: record, type: verb-definition, id: VERB-SHAKE }
+    constraints:
+      seat: bay
+      capacity: 4
+      accepts:
+        mode: by_class
+        footprint: sbs
+        height_class: [standard, deepwell]

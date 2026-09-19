@@ -66,3 +66,50 @@ describe('buildWellMenuItems plate-level actions', () => {
     expect(items[0].id).toBe('aspirate')
   })
 })
+
+describe('buildWellMenuItems plate-scoped menu (no wells)', () => {
+  const plate = () => createLabware('plate_96', 'plate')
+
+  it('emits only the labware-wide actions when nothing is selected', () => {
+    const labware = plate()
+    const states = computeLabwareStates([], new Map([[labware.labwareId, labware]]))
+
+    const { title, items } = buildWellMenuItems({
+      labware,
+      labwareStates: states,
+      targetWells: [],
+      plateOnly: true,
+      tip: { kind: 'empty' },
+      actions: noopActions(),
+      onClearSelection: vi.fn(),
+      onRotate: vi.fn(),
+      onReadPlate: vi.fn(),
+    })
+
+    expect(items.map((i) => i.id)).toEqual(['plate-rotate', 'plate-read'])
+    // No well-scoped entry may survive: there is no well to act on.
+    const wellOnly = ['aspirate', 'dispense', 'add-material', 'mix', 'inspect', 'clear-selection']
+    expect(items.some((i) => wellOnly.includes(i.id))).toBe(false)
+    // Title names the plate, never a fabricated "0 wells (undefined…undefined)".
+    expect(title).toContain('plate')
+    expect(title).not.toContain('undefined')
+  })
+
+  it('stands a disabled row in when no plate callbacks are wired', () => {
+    const labware = plate()
+    const states = computeLabwareStates([], new Map([[labware.labwareId, labware]]))
+
+    const { items } = buildWellMenuItems({
+      labware,
+      labwareStates: states,
+      targetWells: [],
+      plateOnly: true,
+      tip: { kind: 'empty' },
+      actions: noopActions(),
+      onClearSelection: vi.fn(),
+    })
+
+    expect(items).toHaveLength(1)
+    expect(items[0].disabled).toBe(true)
+  })
+})

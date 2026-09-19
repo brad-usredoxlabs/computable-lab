@@ -1,0 +1,23 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-CLAMSHELL-HEATER-SHAKER
+name: Clamshell Heater-Shaker
+status: active
+# Generic physical kind (a CURIE): the lab's clamshell closes like a clamshell and
+# heats from top and bottom, but its manufacturer/model has not been recorded, so
+# it stays generic. It becomes an EQC- record when the vendor model is evidenced.
+equipmentClassRef:
+  kind: ontology
+  id: CL:clamshell_heater_shaker
+  namespace: CL
+  label: Clamshell heater-shaker
+keywords:
+  - heater shaker
+  - clamshell
+  - heater
+  - shaker
+notes: >-
+  The lab's clamshell heater-shaker: takes up to 4 SBS plates (normal height or
+  deepwell), heats from top and bottom, and has temperature, RPM and timer
+  settings. Manufacturer and model are NOT recorded (do not fill in an
+  unverified vendor or SKU); acceptance lives in ECP-CLAMSHELL-HEATER-SHAKER.

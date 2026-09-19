@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-SET
+canonical: set
+label: Set
+domain: other
+notes: >-
+  Set a piece of equipment to a value — the lab's own phrasing: "Set the heater shaker to 70C". A settings CHANGE is its own event: the placement records what the equipment was set at while the item was on it, so changing 55C to 70C must not rewrite history.

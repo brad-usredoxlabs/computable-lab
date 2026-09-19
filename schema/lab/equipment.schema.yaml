@@ -27,13 +27,24 @@ properties:
     type: string
     minLength: 1
 
+  # The class this instance is an instance OF. An `EQC-` record for an evidenced
+  # vendor model, or a `CL:` CURIE for a generic physical kind (`CL:water_bath`) —
+  # generic kinds are registry definitions (schema/registry/equipment-kinds), and
+  # `EQC-` is reserved for models the lab can evidence.
   equipmentClassRef:
     allOf:
     - $ref: "./datatypes/ref.schema.yaml"
-    - type: object
-      properties:
-        kind: { const: record }
-        type: { const: equipment-class }
+    - oneOf:
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: equipment-class }
+      - type: object
+        properties:
+          kind: { const: ontology }
+          id:
+            type: string
+            pattern: "^CL:"
 
   instrumentRef:
     description: "Optional link to instrument record when this equipment is also a measuring device."
@@ -62,6 +73,16 @@ properties:
   status:
     type: string
     enum: [ active, out_of_service, retired, maintenance ]
+
+  # Concrete configuration for this instance, keyed by the linked class's
+  # settingsDefinition (e.g. `{ temperature_c: 55 }` for a water bath). Structural
+  # validation is deliberately open — the KEYS are the class's business, and the
+  # class-keyed check lives in lint (plan 2026-09-19_130430, Task 1.5.1/1.5.4).
+  # Without this property an EQP- record could not legally carry the setting its
+  # class declares (unevaluatedProperties: false rejected it).
+  settings:
+    type: object
+    additionalProperties: true
 
   executionBackends:
     type: array

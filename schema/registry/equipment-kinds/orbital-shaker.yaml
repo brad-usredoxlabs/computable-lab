@@ -1,0 +1,14 @@
+kind: equipment-kind
+id: CL:orbital_shaker
+name: Orbital shaker
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: heater_shaker
+settingsDefinition:
+  - key: rpm
+    label: Shake speed
+    valueType: number
+    unit: rpm
+notes: >-
+  Generic orbital shaker. Source: the lab's own description (2026-09-19) — a flat surface on which you can put any combination of flasks/plates/tubes, mixing without heating. It does NOT heat: that is why it carries only an rpm setting and its capability record has no VERB-HEAT. Motion (orbital vs linear) is a property of the shake, not of the seat.

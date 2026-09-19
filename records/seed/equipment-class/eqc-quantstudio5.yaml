@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml
+kind: equipment-class
+id: EQC-QUANTSTUDIO5
+name: QuantStudio 5
+manufacturer: Thermo Fisher Scientific
+model: QuantStudio 5
+settingsDefinition:
+  - key: anneal_temperature_c
+    label: Anneal temperature
+    valueType: number
+    unit: "°C"
+  - key: cycling_program
+    label: Cycling program
+    valueType: profile
+notes: >-
+  A specific evidenced model, so it is an EQC- record (generic physical kinds are
+  CURIEs instead — CL:heat_block, CL:orbital_shaker). Acceptance lives in its
+  capability record (ECP-QUANTSTUDIO5): seat `bay`, one 384-well PCR plate of the
+  Thermo design family. The lab's own serial number and asset tag are not yet
+  recorded and are deliberately left absent.

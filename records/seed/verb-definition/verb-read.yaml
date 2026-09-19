@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-READ
+canonical: read
+label: Read
+domain: analytical_readout
+notes: >-
+  Measure a plate on an instrument (qPCR/plate reader). The measurement context, not the analysis.

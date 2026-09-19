@@ -194,6 +194,30 @@ export interface AiLabwareAddition {
   deckSlot?: string
 }
 
+/**
+ * A request for BENCH EQUIPMENT (water bath, heat block, shaker, vortex, qPCR
+ * machine…). Equipment is NOT labware: it has no wells and no addressing, and it
+ * lives at its own bench position — never in a deck slot.
+ *
+ * Naming rules (mirrored in the server tool description):
+ *   - `recordId` — an `EQP-` id for real lab-owned equipment (records-first).
+ *   - `classCurie` — `equipment:<kind>` for a generic kind (`equipment:water_bath`)
+ *     or an `EQC-` id for a specific evidenced model. A minted `CL:` class CURIE
+ *     is DERIVED from `equipment:<kind>` on the client — the model never invents one.
+ *   - `settings` — keyed by the class's `settingsDefinition`
+ *     (e.g. `{ temperature_c: 55 }`), the value the equipment is set to.
+ */
+export interface AiEquipmentRequirement {
+  recordId?: string
+  classCurie?: string
+  handle?: string
+  reason?: string
+  /** Concrete settings for this instance, keyed by the class settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: where this model came from (user description, Exa, record…). */
+  source?: string
+}
+
 export type ExecutionScaleLevel =
   | 'manual_tubes'
   | 'bench_plate_multichannel'
@@ -330,6 +354,8 @@ export interface AiAgentResult {
   error?: string
   labwareAdditions?: AiLabwareAddition[]
   labwareRequirements?: AiLabwareRequirement[]
+  /** Bench equipment the draft wants on the deck (never labware, never a slot). */
+  equipmentRequirements?: AiEquipmentRequirement[]
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   ontologyBindings?: DraftOntologyBinding[]

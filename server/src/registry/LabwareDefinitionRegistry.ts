@@ -47,6 +47,26 @@ export const LabwareDefinitionSchema = z.object({
     max_well_volume_uL: z.number(),
     min_working_volume_uL: z.number().optional(),
   }),
+  // Passthrough fields so the loader/search hit carries everything the client
+  // needs to build an instance with its topology intact (spec decision 6).
+  // Zod stripping is NOT validation — Ajv (schema/workflow/
+  // labware-definition.schema.yaml) remains the record validation authority.
+  // render_hints/physical_geometry stay string/shape-open: the Ajv schema
+  // keeps them permissive (additionalProperties: true / vendor sheets);
+  // narrowing them here would make zod a de-facto second validator.
+  specificity: z.string().optional(),
+  legacy_labware_types: z.array(z.string()).optional(),
+  render_hints: z
+    .object({
+      profile: z.string().optional(),
+      linear_well_style: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
+  /** Physical facts equipment acceptance matches on (see labware-definition.schema.yaml). */
+  height_class: z.enum(['standard', 'deepwell', 'tall']).optional(),
+  design_family: z.string().optional(),
+  physical_geometry: z.record(z.string(), z.unknown()).optional(),
   aspiration_hints: z
     .object({
       single_well_multichannel_source: z.boolean().optional(),

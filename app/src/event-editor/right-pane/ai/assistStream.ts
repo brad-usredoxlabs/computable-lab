@@ -52,6 +52,18 @@ export interface AssistDraftResult {
   notes?: string[]
   labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
   labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
+  /**
+   * Bench equipment the draft proposes (water bath, heat block, shaker…).
+   * Equipment is NOT labware and never occupies a deck slot.
+   */
+  equipmentRequirements?: Array<{
+    recordId?: string
+    classCurie?: string
+    handle?: string
+    reason?: string
+    settings?: Record<string, unknown>
+    source?: string
+  }>
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string

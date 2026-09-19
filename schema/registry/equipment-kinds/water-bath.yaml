@@ -1,0 +1,16 @@
+kind: equipment-kind
+id: CL:water_bath
+name: Water bath
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: water_bath
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+    min: 0
+    max: 99
+notes: >-
+  Generic bench water bath. Source: the lab's own description (2026-09-19) — a water bath takes any size tube, reagent bottle, or flask that fits and floats, usually with tubes in a float (CL:tube_float), and can even have a deepwell plate floated in it. `settingsDefinition` is here because a generic kind IS the class: before this registry existed, a CL: kind had nowhere to declare the settings keys its instances may set. Acceptance (seat `immerse`, `open`) lives in the capability record ECP-WATER-BATH, not here.

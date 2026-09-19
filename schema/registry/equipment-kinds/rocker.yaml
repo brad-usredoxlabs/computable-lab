@@ -1,0 +1,14 @@
+kind: equipment-kind
+id: CL:rocker
+name: Rocker
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: heater_shaker
+settingsDefinition:
+  - key: rpm
+    label: Rock speed
+    valueType: number
+    unit: rpm
+notes: >-
+  Generic rocking platform. Source: the lab's own description (2026-09-19) — rockers mix but don't heat, and are a different motion from an orbital shaker (VERB-ROCK, not VERB-SHAKE).

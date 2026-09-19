@@ -541,6 +541,23 @@ export interface AgentLabwareAddition {
   deckSlot?: string;
 }
 
+/**
+ * Bench equipment requested by the model (plan 2026-09-19_130430, Phase 4).
+ * Equipment is NOT labware: no wells, no addressing, never a deck slot.
+ * `recordId` (an `EQP-` id) is records-first; `classCurie` is `equipment:<kind>`
+ * for a generic kind or an `EQC-` id for a specific evidenced model. `settings`
+ * are keyed by the class's `settingsDefinition`.
+ */
+export interface AgentEquipmentRequirement {
+  recordId?: string;
+  classCurie?: string;
+  handle?: string;
+  reason?: string;
+  settings?: Record<string, unknown>;
+  /** Attribution: user description, Exa search, existing record… */
+  source?: string;
+}
+
 export interface AgentResult {
   /** Whether the agent completed successfully. */
   success: boolean;
@@ -562,6 +579,8 @@ export interface AgentResult {
   labwareAdditions?: AgentLabwareAddition[];
   /** Proposed generic/constrained labware requirements to ghost before concrete binding. */
   labwareRequirements?: AgentLabwareRequirement[];
+  /** Bench equipment the draft wants on the bench (never a deck slot). */
+  equipmentRequirements?: AgentEquipmentRequirement[];
   /** Token usage for observability. */
   usage?: {
     promptTokens: number;

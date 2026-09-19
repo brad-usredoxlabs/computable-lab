@@ -6,9 +6,10 @@ import { buildCompositionStyles, wellCompositionSignature, type WellHueStyle } f
 import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware, tubeWellsForLabware } from './wellStateProjection'
 import type { Labware } from '../../types/labware'
 import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS, isTubeRack } from '../../types/labware'
+import { labwareFootprintAspect } from '../../types/labwareFootprint'
 import { generateEventId } from '../../types/events'
 import type { WellId } from '../../types/plate'
-import { WellGrid } from './WellGrid'
+import { WellGrid, wellIdFromContextMenuEvent } from './WellGrid'
 import { WellTooltip } from './WellTooltip'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
 import { findLabwareNameConflict } from '../labwareHandles'
@@ -59,7 +60,7 @@ export function LabwareFocus() {
   // capabilities pane instead of a blank focus.
   const equipment = placement?.entityKind === 'equipment'
     ? state.equipments[placement.equipmentId ?? placement.labwareId]
-      ?? state.preview?.previewEquipments[placement.equipmentId ?? placement.labwareId]
+      ?? state.preview?.previewEquipments?.[placement.equipmentId ?? placement.labwareId]
       ?? null
     : null
   const labware: Labware | null = placement
@@ -130,7 +131,7 @@ export function LabwareFocus() {
 
   useEffect(() => {
     const el = stageRef.current
-    if (!el) return
+    if (!el || !labware) return
     const update = () => {
       const cs = window.getComputedStyle(el)
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
@@ -138,7 +139,11 @@ export function LabwareFocus() {
       const w = el.clientWidth - padX
       const h = el.clientHeight - padY
       if (w <= 0 || h <= 0) return
-      const frameAspect = 127 / 85
+      // Fit the object's REAL proportions into the stage (long-edge ratio from
+      // the resolved physical footprint), not a hardcoded SBS plate. Otherwise
+      // the zoom-in frame would be 127:85 for every labware — a 220×77 mm tube
+      // rack included — and the object would visibly change shape on click.
+      const frameAspect = labwareFootprintAspect(labware)
       const long = focusOrientation === 'portrait'
         ? Math.min(h, w * frameAspect)
         : Math.min(w, h * frameAspect)
@@ -149,7 +154,7 @@ export function LabwareFocus() {
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [focusOrientation])
+  }, [focusOrientation, labware])
 
   const activePipette = useMemo(
     () => resolveActivePipette(state.toolTypeId, state.assistPipetteId),
@@ -329,6 +334,42 @@ export function LabwareFocus() {
     [actions, activePipette, labware, placement, state.selection, moveTubeFrom],
   )
 
+  // One opener shared by every route into the plate menu (right-click on a
+  // well, right-click on the plate, or the header Actions button), so the
+  // "what does this menu act on" rule lives in exactly one place:
+  //   well under the pointer that is already selected → the whole selection
+  //   any other well under the pointer              → just that well
+  //   no well at all                                → the current selection
+  const openWellMenu = useCallback(
+    (clientX: number, clientY: number, wellId: WellId | null) => {
+      const targetWells = wellId
+        ? selectedSet.has(wellId)
+          ? Array.from(selectedSet)
+          : [wellId]
+        : Array.from(selectedSet)
+      setMenu({ open: true, x: clientX, y: clientY, targetWells })
+    },
+    [selectedSet],
+  )
+
+  // Right-click anywhere on the plate opens the menu. WellGrid already handles
+  // the exact-well case (and touch long-press); this stage-level handler is
+  // what stops a near-miss — the gap between wells, the frame, the plate
+  // background — from falling through to the browser's own context menu while
+  // a selection is standing. With no well and no selection the menu is
+  // plate-scoped (rotate / read).
+  const handleStageContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      openWellMenu(
+        event.clientX,
+        event.clientY,
+        wellIdFromContextMenuEvent(event, stageRef.current),
+      )
+    },
+    [openWellMenu],
+  )
+
   if (!placement) return null
 
   function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>) {
@@ -464,13 +505,25 @@ export function LabwareFocus() {
           </div>
           <button
             type="button"
+            className="focus__btn"
+            data-testid="focus-actions"
+            disabled={selectedSet.size === 0}
+            title={selectedSet.size === 0 ? 'Select wells for well actions · right-click the plate for plate actions' : `Actions for ${selectedSet.size} selected well${selectedSet.size === 1 ? '' : 's'}`}
+            onClick={(event) => {
+              if (selectedSet.size === 0) return
+              const rect = event.currentTarget.getBoundingClientRect()
+              openWellMenu(rect.left, rect.bottom + 4, null)
+            }}
+          >Actions ▾</button>
+          <button
+            type="button"
             className="focus__btn focus__btn--ghost"
             onClick={() => actions.setFocus(null)}
             title="Close (Esc)"
           >Close</button>
         </header>
         <div className="focus__body">
-        <div className="focus__stage" ref={stageRef}>
+        <div className="focus__stage" ref={stageRef} onContextMenu={handleStageContextMenu}>
           <WellGrid
             labware={labware}
             orientation={placement.orientation}
@@ -495,10 +548,7 @@ export function LabwareFocus() {
             onWellClick={handleWellClick}
             onWellRangeSelect={handleWellRangeSelect}
             onWellContextMenu={(wellId, event) => {
-              const targetWells = selectedSet.has(wellId)
-                ? Array.from(selectedSet)
-                : [wellId]
-              setMenu({ open: true, x: event.clientX, y: event.clientY, targetWells })
+              openWellMenu(event.clientX, event.clientY, wellId)
             }}
           />
           {hover && wellState ? (
@@ -511,6 +561,7 @@ export function LabwareFocus() {
               labware,
               labwareStates,
               targetWells: menu.targetWells,
+              plateOnly: menu.targetWells.length === 0,
               tip: state.tipState,
               actions,
               onClearSelection: () => actions.clearSelection(),

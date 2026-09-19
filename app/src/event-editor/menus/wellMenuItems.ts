@@ -30,6 +30,14 @@ interface BuildArgs {
   /** Plate-level actions (labware-wide, not well-specific): rotate + read. */
   onRotate?: () => void
   onReadPlate?: () => void
+  /**
+   * Build the menu for the plate itself rather than for specific wells — used
+   * when the user right-clicks the plate away from any well and nothing is
+   * selected. Every well-specific entry (aspirate/dispense/add material/mix/
+   * tube/inspect/clear) is omitted because there are no wells to act on; only
+   * the labware-wide block is emitted.
+   */
+  plateOnly?: boolean
 }
 
 export function buildWellMenuItems({
@@ -44,8 +52,29 @@ export function buildWellMenuItems({
   onBeginMoveTube,
   onRotate,
   onReadPlate,
+  plateOnly = false,
 }: BuildArgs): { title: string; items: ContextMenuItem[] } {
   const labwareId = labware.labwareId
+
+  // ---- Plate-level actions (labware-wide, before any well-specific items) ----
+  // The compact plate view gives the whole focus to the plate; plate-wide
+  // commands (rotate, read) live here in the right-click menu instead of a
+  // header toolbar.
+  const plateActions: ContextMenuItem[] = []
+  if (onRotate) plateActions.push({ id: 'plate-rotate', label: 'Rotate', icon: '⟲', onSelect: onRotate })
+  if (onReadPlate) plateActions.push({ id: 'plate-read', label: 'Read plate…', icon: '📖', onSelect: onReadPlate })
+
+  // Plate-scoped menu: the caller right-clicked the plate away from any well
+  // and holds no selection. No well entries apply — an empty menu would read
+  // as "the menu is broken", so an explicit disabled row stands in its place.
+  if (plateOnly) {
+    const plateItems: ContextMenuItem[] =
+      plateActions.length > 0
+        ? plateActions
+        : [{ id: 'plate-none', label: 'No plate actions available', icon: '∅', disabled: true }]
+    return { title: `${labware.name} · plate`, items: plateItems }
+  }
+
   const single = targetWells.length === 1
   const title = single
     ? `Well ${targetWells[0]}`
@@ -76,13 +105,6 @@ export function buildWellMenuItems({
 
   const items: ContextMenuItem[] = []
 
-  // ---- Plate-level actions (labware-wide, before any well-specific items) ----
-  // The compact plate view gives the whole focus to the plate; plate-wide
-  // commands (rotate, read) live here in the right-click menu instead of a
-  // header toolbar.
-  const plateActions: ContextMenuItem[] = []
-  if (onRotate) plateActions.push({ id: 'plate-rotate', label: 'Rotate', icon: '⟲', onSelect: onRotate })
-  if (onReadPlate) plateActions.push({ id: 'plate-read', label: 'Read plate…', icon: '📖', onSelect: onReadPlate })
   if (plateActions.length > 0) {
     items.push(...plateActions)
     items.push({ id: 'sep-plate', label: '', separator: true })

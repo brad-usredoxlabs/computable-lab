@@ -25,3 +25,9 @@ capacity:
   min_working_volume_uL: 50
 render_hints:
   profile: plate
+
+height_class: deepwell
+physical_geometry:
+  overall_dimensions_mm:
+    length: 127
+    width: 85

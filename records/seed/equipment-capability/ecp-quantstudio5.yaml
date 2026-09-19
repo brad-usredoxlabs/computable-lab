@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-QUANTSTUDIO5
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-QUANTSTUDIO5
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-READ }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        well_counts: [384]
+        design_family: CL:thermo_384_pcr_design
+    notes: >-
+      The instrument draws a plate into its bay, and it takes 384-well PCR plates
+      of the Thermo plate design specifically — so acceptance is keyed on the
+      design family, not on a well count alone.

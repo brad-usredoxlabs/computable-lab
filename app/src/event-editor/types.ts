@@ -19,6 +19,20 @@ export type PlacementLocation =
 
 export interface EventEditorPlacement {
   placementId: string
+  /**
+   * What this placement puts on the bench. Absent (or 'labware') ⇒ `labwareId`
+   * resolves in `state.labwares`. `'equipment'` ⇒ it resolves in
+   * `state.equipments` (or the preview's `previewEquipments`) by `equipmentId`:
+   * first-class bench equipment is NOT labware — no wells, no geometry — so the
+   * deck must never render a well grid for it.
+   */
+  entityKind?: 'labware' | 'equipment'
+  /** Set for `entityKind: 'equipment'` — the Equipment entity's id. */
+  equipmentId?: string
+  /**
+   * The labware id for labware placements; for equipment placements the reducer
+   * stamps the equipmentId here too so existing id-based consumers keep working.
+   */
   labwareId: string
   location: PlacementLocation
   orientation: LabwareOrientation

@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-ROCKER
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:rocker
+  namespace: CL
+  label: Rocker
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-ROCK }
+    constraints:
+      seat: platform
+      capacity: unbounded
+      accepts: { mode: open }

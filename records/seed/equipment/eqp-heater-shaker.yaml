@@ -3,6 +3,10 @@ kind: equipment
 id: EQP-HEATER-SHAKER
 name: Heater-Shaker
 status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-HEATER-SHAKER
 keywords:
   - heater shaker
   - heater

@@ -1,7 +1,7 @@
 /**
  * EquipmentFirstClass — equipment is a first-class record kind, NOT a labware
  * type. The type-level capability lives on `equipment-class` (settingsDefinition
- * + acceptsLabware); the instance (`equipment`, EQP-) carries concrete
+ * + settingsDefinition); the instance (`equipment`, EQP-) carries concrete
  * `settings` and a class ref. This proves Ajv accepts the declarative shape,
  * including the water-bath temperature setting and qPCR-accepts-plate_96.
  */
@@ -47,7 +47,6 @@ describe('first-class equipment model', () => {
       id: 'EQC-WATER-BATH',
       name: 'Water Bath',
       settingsDefinition: [{ key: 'temperature_c', label: 'Target temperature', valueType: 'number', unit: '°C', min: 0, max: 99 }],
-      acceptsLabware: [],
     }, EQUIPMENT_CLASS_SCHEMA);
     expect(out.valid).toBe(true);
   });
@@ -59,7 +58,6 @@ describe('first-class equipment model', () => {
       id: 'EQC-QPCR',
       name: 'qPCR Machine',
       settingsDefinition: [{ key: 'anneal_temperature_c', label: 'Anneal temperature', valueType: 'number', unit: '°C' }],
-      acceptsLabware: ['plate_96'],
     }, EQUIPMENT_CLASS_SCHEMA);
     expect(out.valid).toBe(true);
   });
@@ -95,7 +93,6 @@ describe('first-class equipment model', () => {
       id: 'EQC-TC',
       name: 'Thermocycler',
       settingsDefinition: [{ key: 'cycling_program', label: 'Cycling program', valueType: 'profile' }],
-      acceptsLabware: ['plate_96'],
     }, EQUIPMENT_CLASS_SCHEMA);
     expect(out.valid).toBe(true);
   });
@@ -124,7 +121,6 @@ describe('first-class equipment model', () => {
           },
         },
       ],
-      acceptsLabware: ['plate_96'],
     }, EQUIPMENT_CLASS_SCHEMA);
     expect(out.valid).toBe(true);
   });

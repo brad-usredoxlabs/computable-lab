@@ -15,12 +15,19 @@ import { settingsChipText } from '../deck/EquipmentTile'
  * instrument's CAPABILITIES as declared data:
  *   - concrete settings on this instance (e.g. `temperature_c: 55` → "55 °C")
  *   - the linked equipment-class record (settingsDefinition labels/units/range)
- *   - what labware types it accepts (acceptsLabware — only those may be placed
- *     onto it)
+ *   - what it takes for each verb it can do, from its CAPABILITY records
+ *     (seat + physical-class acceptance) — never a hardcoded labware list
  * Opts out of a well grid entirely; a Close button returns to the bench.
  */
 
 const EQUIPMENT_CLASS_KIND = 'equipment-class'
+const EQUIPMENT_CAPABILITY_KIND = 'equipment-capability'
+
+/** One verb this equipment can do, with what its seat takes — capability data. */
+interface CapabilityView {
+  verbLabel: string
+  description: string
+}
 
 interface EquipmentClassRecord {
   id?: string
@@ -35,7 +42,6 @@ interface EquipmentClassRecord {
     enum?: string[]
     profileDefinition?: CyclingProfileDefinition
   }>
-  acceptsLabware?: string[]
   notes?: string
 }
 
@@ -81,9 +87,11 @@ interface EquipmentFocusProps {
   onUpdateSettings?: (equipmentId: string, settings: Record<string, unknown>) => void
 }
 
-/** Best-effort load the linked equipment-class record for settings/accepts.
- *  The ref id may be a real record id (EQC-) or a minted CURIE; on a miss we
- *  fall back to a kind-aware class search so the pane is never blank. */
+/**
+ * Best-effort load the linked equipment-class record for its settings definitions.
+ * The ref id may be a real record id (EQC-) or a minted CURIE; on a miss we
+ * fall back to a kind-aware class search so the pane is never blank.
+ */
 function fetchEquipmentClass(equipment: Equipment): Promise<EquipmentClassRecord | null> {
   const ref = equipment.equipmentClassRef
   if (!ref) return Promise.resolve(null)
@@ -97,6 +105,78 @@ function fetchEquipmentClass(equipment: Equipment): Promise<EquipmentClassRecord
       .catch(() => searchClassByKind(equipment.instrumentKind))
   }
   return searchClassByKind(equipment.instrumentKind)
+}
+
+/**
+ * What this equipment can do and take — from its capability records (ECP-), which
+ * are ordinary records: the equipment's own plus its class's. Deliberately
+ * DEFENSIVE and best-effort (a client without the listings method, or a store with
+ * no capability records, yields "not recorded" rather than an exception): missing
+ * acceptance data must surface as a gap, never as an invented claim.
+ */
+async function fetchEquipmentCapabilities(equipment: Equipment): Promise<CapabilityView[]> {
+  const api = apiClient as unknown as {
+    listRecordsByKind?: (kind: string, limit?: number) => Promise<{ records: unknown[] }>
+  }
+  if (typeof api.listRecordsByKind !== 'function') return []
+  try {
+    const { records } = await api.listRecordsByKind.call(apiClient, EQUIPMENT_CAPABILITY_KIND, 200)
+    const classId = equipment.equipmentClassRef?.id
+    const out: CapabilityView[] = []
+    for (const entry of records) {
+      // The records API returns envelopes (`{ recordId, payload }`); tolerate a
+      // bare payload too so a caller that unwraps early still works.
+      const payload = ((entry as { payload?: unknown }).payload ?? entry) as {
+        kind?: string
+        id?: string
+        status?: string
+        equipmentRef?: { id?: string }
+        equipmentClassRef?: { id?: string }
+        capabilities?: Array<{ verbRef?: { id?: string }; constraints?: Record<string, unknown>; notes?: string }>
+      }
+      if (payload?.kind !== EQUIPMENT_CAPABILITY_KIND || payload.status !== 'active') continue
+      const applies = payload.equipmentRef?.id === equipment.equipmentId
+        || (!!classId && payload.equipmentClassRef?.id === classId)
+      if (!applies) continue
+      for (const capability of payload.capabilities ?? []) {
+        const verbId = capability.verbRef?.id
+        if (!verbId) continue
+        out.push({
+          verbLabel: verbId.replace(/^VERB-/, '').toLowerCase().replace(/_/g, ' '),
+          description: describeAcceptance(capability.constraints),
+        })
+      }
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/** One line of prose from a seat's constraints. */
+function describeAcceptance(constraints: Record<string, unknown> | undefined): string {
+  const seat = typeof constraints?.seat === 'string' ? constraints.seat : undefined
+  const accepts = constraints?.accepts as
+    | { mode?: string; footprint?: string; height_class?: string[]; well_counts?: number[]; tube_size_class?: string; flask?: boolean; design_family?: string }
+    | undefined
+  const parts: string[] = []
+  if (accepts?.mode === 'none') parts.push('takes nothing')
+  else if (accepts?.mode === 'open') parts.push('anything that physically fits')
+  else if (accepts?.mode === 'by_class') {
+    if (accepts.tube_size_class) parts.push(accepts.tube_size_class === 'any' ? 'tubes' : `${accepts.tube_size_class} tubes`)
+    if (accepts.footprint === 'sbs') parts.push('SBS-format items')
+    else if (accepts.footprint && accepts.footprint !== 'any') parts.push(`${accepts.footprint} mm items`)
+    if (accepts.height_class?.length) parts.push(`${accepts.height_class.join(' or ')} height`)
+    if (accepts.well_counts?.length) parts.push(`${accepts.well_counts.join('/')}-well`)
+    if (accepts.flask) parts.push('flasks')
+    if (accepts.design_family) parts.push(`design family ${accepts.design_family}`)
+  }
+  if (typeof constraints?.capacity === 'number') parts.push(`up to ${constraints.capacity}`)
+  const heat = constraints?.heat as { from?: string[] } | undefined
+  const suffix = heat?.from?.length ? ` (heats from ${heat.from.join(' and ')})` : ''
+  const seatPhrase = seat ? ` on its ${seat} seat` : ''
+  if (parts.length === 0) return `not recorded${suffix}`
+  return `${parts.join(', ')}${seatPhrase}${suffix}`
 }
 
 function searchClassByKind(kind: InstrumentKind): Promise<EquipmentClassRecord | null> {
@@ -279,6 +359,16 @@ export function ProfileEditor({ defKey, profile, onProfile }: ProfileEditorProps
 }
 
 export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSettings }: EquipmentFocusProps) {
+  const [capabilities, setCapabilities] = useState<CapabilityView[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void fetchEquipmentCapabilities(equipment).then((rows) => {
+      if (!cancelled) setCapabilities(rows)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [equipment])
   const [cls, setCls] = useState<EquipmentClassRecord | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -291,7 +381,7 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
   }, [equipment])
 
   const settings = equipment.settings ?? {}
-  const accepts = cls?.acceptsLabware ?? []
+  const capabilityViews = capabilities
   const chip = settingsChipText(equipment)
 
   // Editable draft: a working copy of the settings for the class-defined keys.
@@ -432,14 +522,20 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
           </div>
 
           <div className="focus__equipment-section" data-testid="focus-equipment-accepts">
-            <h4 className="focus__equipment-section-title">Accepts labware</h4>
-            {accepts.length === 0 ? (
+            <h4 className="focus__equipment-section-title">What it takes</h4>
+            {capabilityViews.length === 0 ? (
               <div className="focus__equipment-empty">
-                This instrument accepts no plate/tube labware placed onto it.
+                Not recorded — no capability data for this equipment yet. What it can
+                take is declared in its equipment-capability record (seat + physical
+                class), so nothing here is assumed.
               </div>
             ) : (
               <ul className="focus__equipment-accepts-list">
-                {accepts.map((t) => <li key={t}>{t}</li>)}
+                {capabilityViews.map((view) => (
+                  <li key={view.verbLabel}>
+                    <strong>{view.verbLabel}</strong> — {view.description}
+                  </li>
+                ))}
               </ul>
             )}
           </div>

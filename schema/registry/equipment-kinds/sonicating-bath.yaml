@@ -1,0 +1,14 @@
+kind: equipment-kind
+id: CL:sonicating_bath
+name: Sonicating bath
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: water_bath
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+notes: >-
+  Generic sonicating water bath. Source: Brad's verb list (2026-09-19) — `sonicate` disrupts or mixes with ultrasound, and a sonicating bath is the bench form of it. Same immerse/open seat family as a plain water bath; the verb differs.

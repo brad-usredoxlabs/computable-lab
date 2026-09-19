@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-WATER-BATH
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-WATER-BATH
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-HEAT }
+    constraints:
+      seat: immerse
+      capacity: unbounded
+      accepts: { mode: open }
+  - verbRef: { kind: record, type: verb-definition, id: VERB-INCUBATE }
+    constraints:
+      seat: immerse
+      capacity: unbounded
+      accepts: { mode: open }
+    notes: >-
+      A water bath takes any size tube, reagent bottle, or flask that fits and
+      floats — hence `open`, not a labware list. Tubes usually travel in a float
+      (CL:tube_float) so they stay upright; a deepwell plate can be floated too.
+      `open` means "anything that physically fits", never "listed in accepts".

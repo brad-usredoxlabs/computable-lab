@@ -15,5 +15,4 @@ settingsDefinition:
     label: Shake speed
     valueType: number
     unit: rpm
-acceptsLabware: []
 notes: heater-shaker — heats and shakes; temperature, duration, and rpm are the configurable run parameters (declarative settingsDefinition).

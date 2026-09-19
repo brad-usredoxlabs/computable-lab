@@ -109,10 +109,28 @@ properties:
         type: number
         minimum: 0
 
+  # Physical facts equipment acceptance keys on (equipment-capability
+  # `constraints.accepts`). Height is what separates a standard plate from a
+  # deepwell plate in a clamshell; the design family is what makes a plate the
+  # RIGHT 384-well plate for a QuantStudio 5 — a well count alone cannot say that.
+  height_class:
+    type: string
+    enum: [ standard, deepwell, tall ]
+    description: >-
+      How tall the vessel sits. A clamshell heater-shaker takes standard or
+      deepwell SBS plates; a tall vessel fouls its lid.
+
+  design_family:
+    type: string
+    description: >-
+      CURIE of the vendor plate design, when the vessel's drawing matters
+      (e.g. CL:thermo_384_pcr_design). Optional: most labware matches on footprint,
+      height and well count alone.
+
   physical_geometry:
     type: object
     additionalProperties: false
-    description: >
+    description: >-
       Optional physical geometry extracted from vendor or platform-native
       definitions. These fields are used for rendering, platform conversion,
       collision/clearance checks, and review. Omit unknown values rather than

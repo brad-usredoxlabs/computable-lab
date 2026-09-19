@@ -1,0 +1,19 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-ORBITAL-SHAKER
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:orbital_shaker
+  namespace: CL
+  label: Orbital shaker
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-SHAKE }
+    constraints:
+      seat: platform
+      capacity: unbounded
+      accepts: { mode: open }
+    notes: >-
+      A flat orbital platform: any combination of flasks/plates/tubes that fits,
+      so acceptance is `open` and the seat is `platform`. Motion (orbital vs
+      linear) is a property of the shake, not of the seat.

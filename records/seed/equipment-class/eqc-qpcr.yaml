@@ -21,10 +21,9 @@ settingsDefinition:
             duration_sec: 5
           - temperature_c: 60
             duration_sec: 30
-acceptsLabware:
-  - plate_96
 notes: >-
-  qPCR accepts a 96-well PCR plate — compatibility is data (acceptsLabware), so
-  a tube or water bath placement onto it is rejected. Its run is a multi-step
+  qPCR takes a 96-well PCR plate in its bay — acceptance is capability data
+  (ECP-QPCR: seat `bay`, one 96-well plate), so a tube or a 384-well plate is
+  rejected. Its run is a multi-step
   cycling program (declared in profileDefinition): an initial hold, then N cycles
   each with a denature + anneal/extend step.

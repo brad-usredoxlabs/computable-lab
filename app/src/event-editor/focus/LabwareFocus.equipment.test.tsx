@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   openAddMaterial: vi.fn(),
   getRecord: vi.fn(),
   searchRecords: vi.fn(),
+  listRecordsByKind: vi.fn(),
   updateEquipmentSettings: vi.fn(),
 }))
 
@@ -26,7 +27,11 @@ vi.mock('./FocusModalsProvider', () => ({
 }))
 
 vi.mock('../../shared/api/client', () => ({
-  apiClient: { getRecord: mocks.getRecord, searchRecords: mocks.searchRecords },
+  apiClient: {
+    getRecord: mocks.getRecord,
+    searchRecords: mocks.searchRecords,
+    listRecordsByKind: mocks.listRecordsByKind,
+  },
 }))
 
 function waterBath(equipmentId: string, name: string, temperature_c: number): Equipment {
@@ -127,6 +132,9 @@ beforeEach(() => {
   mocks.getRecord.mockReset()
   mocks.searchRecords.mockReset()
   mocks.updateEquipmentSettings.mockReset()
+  mocks.listRecordsByKind.mockReset()
+  // Default: no capability records — acceptance must read as "not recorded".
+  mocks.listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
   // Default: focus can always fetch the linked equipment-class (settings + accepts).
   mocks.getRecord.mockResolvedValue({
     payload: {
@@ -207,6 +215,72 @@ describe('LabwareFocus — first-class equipment tap', () => {
     expect(text).toContain('55 °C')
     // Same temperature text appears in the chip.
     expect(screen.getByTestId('focus-equipment-chip').textContent).toContain('55 °C')
+  })
+
+  it('shows what the equipment takes from its CAPABILITY record, not a class list', async () => {
+    const eq = waterBath('eqp-1', 'Water bath 1', 55)
+    mocks.state = makeState({
+      focusPlacementId: 'pl-eq',
+      labwares: {},
+      equipments: { 'eqp-1': eq },
+      placements: [{
+        placementId: 'pl-eq',
+        entityKind: 'equipment',
+        equipmentId: 'eqp-1',
+        labwareId: 'eqp-1',
+        location: { kind: 'lawn', xMm: 10, yMm: 10 },
+        orientation: 'landscape',
+      }],
+    })
+    mocks.listRecordsByKind.mockResolvedValue({
+      records: [{
+        payload: {
+          kind: 'equipment-capability',
+          id: 'ECP-WATER-BATH',
+          status: 'active',
+          equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-WATER-BATH' },
+          capabilities: [
+            {
+              verbRef: { kind: 'record', type: 'verb-definition', id: 'VERB-HEAT' },
+              constraints: { seat: 'immerse', capacity: 'unbounded', accepts: { mode: 'open' } },
+            },
+          ],
+        },
+      }],
+      total: 1,
+    })
+
+    render(<LabwareFocus />)
+    await waitFor(() => {
+      expect(screen.getByTestId('focus-equipment-accepts').textContent).toContain('heat')
+    })
+    const text = screen.getByTestId('focus-equipment-accepts').textContent ?? ''
+    expect(text).toContain('anything that physically fits')
+    expect(text).toContain('immerse seat')
+    // The retired flat list is gone: nothing reads `acceptsLabware`.
+    expect(text).not.toContain('this instrument accepts no plate/tube labware placed onto it')
+  })
+
+  it('says "not recorded" when there is no capability data — never invents acceptance', async () => {
+    const eq = waterBath('eqp-1', 'Water bath 1', 55)
+    mocks.state = makeState({
+      focusPlacementId: 'pl-eq',
+      labwares: {},
+      equipments: { 'eqp-1': eq },
+      placements: [{
+        placementId: 'pl-eq',
+        entityKind: 'equipment',
+        equipmentId: 'eqp-1',
+        labwareId: 'eqp-1',
+        location: { kind: 'lawn', xMm: 10, yMm: 10 },
+        orientation: 'landscape',
+      }],
+    })
+    render(<LabwareFocus />)
+    await waitFor(() => {
+      expect(screen.getByTestId('focus-equipment-accepts').textContent).toContain('Not recorded')
+    })
+    expect(screen.getByTestId('focus-equipment-accepts').textContent).not.toContain('anything')
   })
 
   it('Close exits the equipment focus back to the bench', async () => {

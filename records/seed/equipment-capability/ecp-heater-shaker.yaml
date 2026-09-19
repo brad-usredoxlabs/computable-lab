@@ -1,0 +1,29 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-HEATER-SHAKER
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-HEATER-SHAKER
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-HEAT }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        footprint: sbs
+    notes: >-
+      Opentrons heater-shaker: heats the plate that sits in (or on) it. The
+      acceptance is 1:n by CONFIGURATION — the fitted top decides whether it takes
+      a 96-well deepwell plate or a flat 384-well plate. Author one ECP- per
+      adapter/top via `methodIds`/`subModule` when the adapter names are known;
+      the vendor adapter part names are NOT recorded here and must not be invented.
+  - verbRef: { kind: record, type: verb-definition, id: VERB-SHAKE }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        footprint: sbs

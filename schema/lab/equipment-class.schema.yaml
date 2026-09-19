@@ -51,8 +51,11 @@ properties:
   # First-class equipment capability (declarative): the PRODUCED-parameters this
   # class exposes (e.g. a water bath's temperature_c), and the LABWARE it accepts
   # (e.g. a qPCR machine accepts a plate_96). Instances set concrete `settings`
-  # keyed by these definitions; only `acceptsLabware` instruments may receive
-  # labware placed onto them. Empty/absent acceptsLabware = accepts none.
+  # keyed by these definitions. What the equipment can TAKE is not declared here:
+  # acceptance is capability data (`equipment-capability.constraints.accepts`, seat
+  # + physical class), because a flat list of labware ids cannot express an open
+  # seat (a water bath), a height class, or a plate design family. Retired
+  # 2026-09-19 (plan 2026-09-19_130430, Task 1.5.2b).
   settingsDefinition:
     type: array
     description: >-
@@ -104,15 +107,6 @@ properties:
                     properties:
                       temperature_c: { type: number }
                       duration_sec: { type: number }
-
-  acceptsLabware:
-    type: array
-    description: >-
-      Labware types this equipment accepts, e.g. qPCR accepts `plate_96`. Only
-      instruments that declare a type here may have that labware placed onto
-      them. Empty/absent = accepts no labware.
-    uniqueItems: true
-    items: { type: string }
 
   notes:
     type: string

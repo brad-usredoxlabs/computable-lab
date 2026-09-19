@@ -36,13 +36,25 @@ properties:
         kind: { const: record }
         type: { const: equipment }
 
+  # The class this capability belongs to. Either an `EQC-` equipment-class record
+  # (a specific, evidenced vendor model) or a CURIE for a generic computable-lab
+  # physical kind (`CL:water_bath`, `CL:heat_block`, `CL:orbital_shaker`, …) — per
+  # the namespace ruling of 2026-09-19, `EQC-` records are reserved for models the
+  # lab can evidence, and everything generic is a CL: term.
   equipmentClassRef:
     allOf:
     - $ref: "./datatypes/ref.schema.yaml"
-    - type: object
-      properties:
-        kind: { const: record }
-        type: { const: equipment-class }
+    - oneOf:
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: equipment-class }
+      - type: object
+        properties:
+          kind: { const: ontology }
+          id:
+            type: string
+            pattern: "^CL:"
 
   capabilities:
     type: array
@@ -69,11 +81,87 @@ properties:
           uniqueItems: true
         constraints:
           type: object
+          # Acceptance keys are DECLARED below and strict (a bogus seat pose or an
+          # unknown acceptance mode must fail). Other keys stay open on purpose:
+          # machine limits and vendor/backend hints (`rpmMax`, …) are facts about a
+          # specific instrument that must not require a schema change to record.
           additionalProperties: true
+          # What this capability can physically take, and how. Declared here (not on
+          # equipment-class) so acceptance travels WITH the verb it belongs to — a
+          # heater-shaker's `heat` and `shake` can have different seats. Brad's D2
+          # rev 2 rulings, 2026-09-19: acceptance by PHYSICAL CLASS, never a list of
+          # labware-definition ids; equipment may have seat addresses (a heat block's
+          # tube positions are seat addresses, not wells).
           properties:
+            seat:
+              type: string
+              enum: [ platform, bay, slots, immerse ]
+              description: >-
+                The pose: `platform` = flat surface, anything that fits (orbital
+                shaker); `bay` = a compartment/tray that receives an item (clamshell,
+                QuantStudio); `slots` = fixed addressed positions for tubes (heat
+                block); `immerse` = a liquid bath (water bath).
+            addressing:
+              type: string
+              enum: [ none, grid, linear ]
+              default: none
+              description: >-
+                Seat addresses when the host has discrete positions (heat block).
+                SEAT addresses — never liquid wells.
+            capacity:
+              oneOf:
+                - type: integer
+                  minimum: 1
+                - const: unbounded
+              description: "How many items the seat holds: 4 for the clamshell, `unbounded` for a bath or a flat platform."
+            accepts:
+              type: object
+              additionalProperties: false
+              required: [ mode ]
+              properties:
+                mode:
+                  type: string
+                  enum: [ none, open, by_class ]
+                  description: >-
+                    `none` = takes nothing (balance, freezer); `open` = anything that
+                    physically fits (bath, flat platform); `by_class` = matched on the
+                    physical facts below.
+                footprint:
+                  type: string
+                  description: "`sbs` | `any` | explicit `lengthxwidth` in mm (e.g. `127x85`). The SBS half is already data via physical_geometry.overall_dimensions_mm."
+                height_class:
+                  type: array
+                  items:
+                    type: string
+                    enum: [ standard, deepwell, tall ]
+                  uniqueItems: true
+                well_counts:
+                  type: array
+                  items: { type: integer }
+                  uniqueItems: true
+                tube_size_class:
+                  type: string
+                  description: "`any`, or a size literal such as `1.5ml` — a tube-only seat (heat block) declares this and NO labware facts."
+                flask:
+                  type: boolean
+                design_family:
+                  type: string
+                  description: "CURIE of the vendor plate design the item must belong to (e.g. CL:thermo_384_pcr_design) — the QuantStudio case."
+            heat:
+              type: object
+              additionalProperties: false
+              properties:
+                from:
+                  type: array
+                  items:
+                    type: string
+                    enum: [ top, bottom, ambient ]
+                  uniqueItems: true
+                  description: "The clamshell heats from top AND bottom — a method detail, not a verb."
             acceptedLabware:
               type: array
-              description: "Labware formats this capability can accept. If omitted, no labware constraint is enforced."
+              deprecated: true
+              description: "DEPRECATED (2026-09-19): labware-definition id lists cannot express physical-class acceptance. Migrate to `accepts` + `seat`."
               items:
                 type: object
                 additionalProperties: false

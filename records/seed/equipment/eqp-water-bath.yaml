@@ -3,6 +3,10 @@ kind: equipment
 id: EQP-WATER-BATH
 name: Water Bath
 status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-WATER-BATH
 keywords:
   - water bath
   - heated water bath

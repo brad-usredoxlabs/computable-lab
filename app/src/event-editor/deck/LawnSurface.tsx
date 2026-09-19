@@ -2,7 +2,9 @@ import { useCallback, useMemo, useRef, useState, type DragEvent, type MouseEvent
 import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
+import { equipmentFootprintMm, labwareFootprintMm, LAWN_TILE_LANDSCAPE_PX, LAWN_TILE_PORTRAIT_PX, MM_PER_PIXEL_PRIMARY, MM_PER_PIXEL_SIDE } from '../../types/labwareFootprint'
 import { AddToDeckDialog } from './AddToDeckDialog'
+import { EquipmentTile } from './EquipmentTile'
 import { LabwareTile } from './LabwareTile'
 import {
   buildPreviewWellIndex,
@@ -21,21 +23,19 @@ interface LawnSurfaceProps {
   surfaceId?: LawnSurfaceId
 }
 
-const MM_PER_PIXEL_PRIMARY = 1.6
-const MM_PER_PIXEL_SIDE = 1.4
-// Physical footprint (mm) used for placement math — clamping into the lawn and
-// collision/validation. Kept in mm because positions are real-world.
-const TILE_MM_WIDTH = 127 // SBS footprint approx
-const TILE_MM_HEIGHT = 85
-const TILE_MM_HEIGHT_PORTRAIT = TILE_MM_WIDTH
-const TILE_MM_WIDTH_PORTRAIT = TILE_MM_HEIGHT
+// Physical footprint (mm) for placement math comes from
+// types/labwareFootprint.ts (stamped dims → definition vendor dims → pitch
+// derivation → documented legacy SBS fallback). Positions are real-world mm;
+// tiles themselves are NOT an SBS plate by definition anymore.
 // Lawn/bench tiles *render* at the same fixed pixel footprint as robot-deck
 // slot tiles (LabwareTile SLOT_* sizes) so the labware schematics stay equally
 // legible on freeform surfaces. Only the tile position is scaled to physical
 // mm (left/top below); the tile size is not, otherwise a fit-the-bench scale
 // shrinks them to ~half the deck tiles and 96- vs 384-well becomes unreadable.
-const LAWN_TILE_LANDSCAPE = { w: 126, h: 80 }
-const LAWN_TILE_PORTRAIT = { w: 80, h: 126 }
+// Tile geometry + mm-per-pixel live in types/labwareFootprint.ts so the deck and
+// the preview/drag math cannot disagree about how big a tile is.
+const LAWN_TILE_LANDSCAPE = LAWN_TILE_LANDSCAPE_PX
+const LAWN_TILE_PORTRAIT = LAWN_TILE_PORTRAIT_PX
 
 export function LawnSurface({ widthMm, heightMm, title, primary = false, surfaceId = DEFAULT_LAWN_SURFACE_ID }: LawnSurfaceProps) {
   const { state, actions } = useEventEditor()
@@ -113,25 +113,27 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
 
   function handlePick(picked: Labware) {
     if (!platform || !variant) return
-    const tileW = picked.layoutFamily === 'tube' ? TILE_MM_HEIGHT : TILE_MM_WIDTH
-    const tileH = picked.layoutFamily === 'tube' ? TILE_MM_HEIGHT : TILE_MM_HEIGHT
-    const clamped = clampToLawn(
-      dialogState.xMm - tileW / 2,
-      dialogState.yMm - tileH / 2,
-      tileW,
-      tileH,
-    )
-    const validation = validatePlacement({
+    // Lawn validation is position-independent (no-op); resolve the placement
+    // orientation FIRST so the clamp can reserve the footprint as it will
+    // actually sit (portrait swaps the axes, non-SBS labware its real size).
+    const preliminary = validatePlacement({
       platform,
       variant,
-      location: lawnLoc(clamped.xMm, clamped.yMm),
+      location: lawnLoc(dialogState.xMm, dialogState.yMm),
       labware: picked,
     })
-    if (!validation.ok) {
-      setError(validation.errors.join(' '))
+    if (!preliminary.ok) {
+      setError(preliminary.errors.join(' '))
       return
     }
-    const orientation = resolveOrientation(validation, undefined, picked)
+    const orientation = resolveOrientation(preliminary, undefined, picked)
+    const fp = labwareFootprintMm(picked, orientation)
+    const clamped = clampToLawn(
+      dialogState.xMm - fp.length / 2,
+      dialogState.yMm - fp.width / 2,
+      fp.length,
+      fp.width,
+    )
     actions.placeNewLabware(
       picked,
       lawnLoc(clamped.xMm, clamped.yMm),
@@ -161,14 +163,27 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
     if (!placementId) return
     const moving = state.placements.find((p) => p.placementId === placementId)
     if (!moving) return
-    const movingLabware = state.labwares[moving.labwareId]
-    if (!movingLabware) return
     const coords = screenToLawnMm(event.clientX, event.clientY)
     if (!coords) return
-    const isPortrait = moving.orientation === 'portrait'
-    const tileW = isPortrait ? TILE_MM_WIDTH_PORTRAIT : TILE_MM_WIDTH
-    const tileH = isPortrait ? TILE_MM_HEIGHT_PORTRAIT : TILE_MM_HEIGHT
-    const clamped = clampToLawn(coords.xMm - tileW / 2, coords.yMm - tileH / 2, tileW, tileH)
+    // Equipment carries settings, not vendor dimensions yet, so its bench
+    // footprint resolves through equipmentFootprintMm (stamped class dims, else
+    // the rendered tile as an explicit screen stand-in) — the same helper the
+    // preview uses, so a drag and a draft agree on where things fit.
+    if (moving.entityKind === 'equipment') {
+      const equipment = state.equipments[moving.equipmentId ?? moving.labwareId]
+      if (!equipment) return
+      const fp = equipmentFootprintMm(equipment, moving.orientation, primary ? 'primary' : 'side')
+      const clamped = clampToLawn(coords.xMm - fp.length / 2, coords.yMm - fp.width / 2, fp.length, fp.width)
+      actions.movePlacement(moving.placementId, lawnLoc(clamped.xMm, clamped.yMm), moving.orientation)
+      setError(null)
+      return
+    }
+    const movingLabware = state.labwares[moving.labwareId]
+    if (!movingLabware) return
+    // Clamp against the footprint the placement actually occupies — stamped
+    // vendor dims, definition data, or pitch derivation (see labwareFootprint).
+    const fp = labwareFootprintMm(movingLabware, moving.orientation === 'portrait' ? 'portrait' : 'landscape')
+    const clamped = clampToLawn(coords.xMm - fp.length / 2, coords.yMm - fp.width / 2, fp.length, fp.width)
     const validation = validatePlacement({
       platform,
       variant,
@@ -216,6 +231,35 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
           </div>
         ) : null}
         {lawnPlacements.map((placement) => {
+          // First-class bench equipment is NOT labware: no wells, no geometry.
+          // It resolves from `state.equipments` and renders the instrument tile.
+          if (placement.entityKind === 'equipment') {
+            const equipment = state.equipments[placement.equipmentId ?? placement.labwareId]
+            if (!equipment) return null
+            const isPortrait = placement.orientation === 'portrait'
+            const tileSize = isPortrait ? LAWN_TILE_PORTRAIT : LAWN_TILE_LANDSCAPE
+            return (
+              <div
+                key={placement.placementId}
+                className="lawn__tile-anchor"
+                style={{
+                  left: Math.round(placement.location.xMm / scale),
+                  top: Math.round(placement.location.yMm / scale),
+                }}
+              >
+                <EquipmentTile
+                  equipment={equipment}
+                  placement={placement}
+                  orientation={placement.orientation}
+                  variant="lawn"
+                  width={tileSize.w}
+                  height={tileSize.h}
+                  onRemove={() => actions.removePlacement(placement.placementId)}
+                  onFocus={() => actions.setFocus(placement.placementId)}
+                />
+              </div>
+            )
+          }
           const labware = state.labwares[placement.labwareId]
           if (!labware) return null
           const isPortrait = placement.orientation === 'portrait'
@@ -264,6 +308,35 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false, surface
           )
         })}
         {ghostLawnPlacements.map((placement) => {
+          // A proposed equipment ghost (AI draft) renders the instrument tile
+          // marked "Proposed", never a well grid.
+          if (placement.entityKind === 'equipment') {
+            const equipment = state.preview?.previewEquipments?.[placement.equipmentId ?? placement.labwareId]
+            if (!equipment) return null
+            const isPortrait = placement.orientation === 'portrait'
+            const tileSize = isPortrait ? LAWN_TILE_PORTRAIT : LAWN_TILE_LANDSCAPE
+            return (
+              <div
+                key={`ghost-${placement.placementId}`}
+                className="lawn__tile-anchor"
+                style={{
+                  left: Math.round(placement.location.xMm / scale),
+                  top: Math.round(placement.location.yMm / scale),
+                }}
+              >
+                <EquipmentTile
+                  equipment={equipment}
+                  placement={placement}
+                  orientation={placement.orientation}
+                  variant="lawn"
+                  width={tileSize.w}
+                  height={tileSize.h}
+                  ghost
+                  onFocus={() => actions.setFocus(placement.placementId)}
+                />
+              </div>
+            )
+          }
           const labware = state.preview?.previewLabwares[placement.labwareId]
             ?? state.labwares[placement.labwareId]
             ?? null

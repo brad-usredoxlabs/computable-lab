@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-SHAKE
+canonical: shake
+label: Shake
+domain: sample_prep
+notes: >-
+  Agitate an item on a moving platform. `orbit` (orbital vs linear) and the rate (rpm) are properties of the shake, not verbs: an orbital shaker and a rocker are both shaking, in different motions.

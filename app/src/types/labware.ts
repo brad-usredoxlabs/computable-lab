@@ -15,6 +15,7 @@ import {
   validateLabwareDefinition,
   type LabwareDefinition,
 } from './labwareDefinition'
+import { deriveGridFootprintMm } from './labwareFootprint'
 
 function alphaRowLabels(count: number): string[] {
   return Array.from({ length: count }, (_, index) => {
@@ -43,13 +44,22 @@ export type InstrumentKind =
   | 'plate_reader'
   | 'heater_shaker'
   | 'vortex'
+  | 'water_bath'
   | 'generic'
 
+/**
+ * Render hints, NOT the vocabulary. Which instruments exist is declared as data
+ * (instrument-definition records in `schema/registry/instruments/`, and
+ * equipment-class / equipment-capability records); this list only says which
+ * silhouettes the app knows how to draw. Adding a kind here without a matching
+ * record kind buys a glyph, not a capability (D1, plan 2026-09-19_130430).
+ */
 export const INSTRUMENT_KINDS: readonly InstrumentKind[] = [
   'qpcr',
   'plate_reader',
   'heater_shaker',
   'vortex',
+  'water_bath',
   'generic',
 ]
 
@@ -58,6 +68,7 @@ export const INSTRUMENT_KIND_LABELS: Record<InstrumentKind, string> = {
   plate_reader: 'Plate reader',
   heater_shaker: 'Heater-shaker',
   vortex: 'Vortex',
+  water_bath: 'Water bath',
   generic: 'Other / generic',
 }
 
@@ -72,6 +83,10 @@ export function inferInstrumentKind(label: string): InstrumentKind {
   if (/\b(plate\s*reader|microplate\s*reader|multimode\s*reader|reader)\b/.test(t)) return 'plate_reader'
   if (/\b(thermomixer|heater\s*shaker|heater\-?shaker|heat\s*block|shaker\s*with\s*heat|thermo\s*shaker|shaking\s*incubator)\b/.test(t)) return 'heater_shaker'
   if (/\b(vortex|vortexer)\b/.test(t)) return 'vortex'
+  // A bath is a bath whether it circulates, shakes, or sonicates — the
+  // *capability* (heat / sonicate) lives in the equipment-capability record,
+  // not in the glyph kind.
+  if (/\b(water[_\s-]*bath|waterbath|circulating[_\s-]*bath|sonicating[_\s-]*bath|bath)\b/.test(t)) return 'water_bath'
   return 'generic'
 }
 
@@ -141,6 +156,11 @@ export type LabwareType =
   | 'tiprack_assist_125_384'
   | 'tiprack_assist_300'
   | 'tiprack_assist_1250'
+  // Definition-driven sentinel: a labware instance built from a labware-definition
+  // record whose legacy_labware_types name no enum member (arbitrary topology).
+  // Rendered by its definition display_name, never squashed into plate_96.
+  // Contained escape hatch only — wholesale enum retirement is task #13.
+  | 'definition'
 
 /**
  * Labware type display names
@@ -197,6 +217,7 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   tiprack_assist_125_384: 'Assist Tip Rack 125 uL (384)',
   tiprack_assist_300: 'Assist Tip Rack 300 uL (96)',
   tiprack_assist_1250: 'Assist Tip Rack 1250 uL (96)',
+  definition: 'Labware (definition-driven)',
 }
 
 /**
@@ -254,6 +275,7 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   tiprack_assist_125_384: '🪡',
   tiprack_assist_300: '🪡',
   tiprack_assist_1250: '🪡',
+  definition: '🧬',
 }
 
 /**
@@ -313,6 +335,9 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   tiprack_assist_125_384: 'tiprack',
   tiprack_assist_300: 'tiprack',
   tiprack_assist_1250: 'tiprack',
+  // Arbitrary-topology sentinel; has no real category. Grouped with 'tube'
+  // (labware tab); the add-deck catalog enumerates labels but SKIPS this key.
+  definition: 'tube',
 }
 
 /**
@@ -403,6 +428,16 @@ export interface Labware {
   /** Optional per-well geometry overrides for heterogeneous labware (e.g., mixed tube racks) */
   wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' | 'cylindrical' }>
   /**
+   * Physical footprint in mm (landscape axes: length = X long edge, width = Y),
+   * stamped at build time from the labware definition's
+   * physical_geometry.overall_dimensions_mm, or derived from grid topology
+   * via deriveGridFootprintMm (see types/labwareFootprint).
+   * Lawn clamp/collision reads this first; absent → documented legacy
+   * SBS fallback. Never invented — omitted when the definition is honest about
+   * not knowing and the topology can't derive it.
+   */
+  physicalFootprintMm?: { length: number; width: number }
+  /**
    * When true, this labware may only be placed on a freeform bench surface
    * (a lawn), never an automation deck slot — it's bench equipment that doesn't
    * fit a robot deck. Enforced by validatePlacement and the add-labware palette.
@@ -425,6 +460,16 @@ export interface Labware {
  * Standard labware configurations
  */
 export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'name' | 'notes'>> = {
+  // Sentinel entry exists ONLY to satisfy Record<LabwareType, …> exhaustiveness.
+  // createLabware() throws before it is ever read; a definition-driven instance
+  // carries its real addressing/geometry from the definition record, never here.
+  definition: {
+    labwareType: 'definition',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 0, minVolume_uL: 0, wellShape: 'round' },
+    layoutFamily: 'sbs_plate',
+    orientationPolicy: 'fixed_columns',
+  },
   plate_96: {
     labwareType: 'plate_96',
     addressing: {
@@ -1218,6 +1263,15 @@ export function generateLabwareId(): string {
  * Create a new labware instance from a type
  */
 export function createLabware(labwareType: LabwareType, name?: string): Labware {
+  if (labwareType === 'definition') {
+    // The arbitrary-topology sentinel is only meaningful alongside a real
+    // labware-definition record. Mint it via createLabwareFromDefinitionPayload
+    // (the dialog's lab-db tier) — never standalone from the enum.
+    throw new Error(
+      'createLabware: the "definition" sentinel requires a labware-definition payload; ' +
+      'use createLabwareFromDefinition() with the definition, not the enum.',
+    )
+  }
   const definition = getLabwareDefinitionByLegacyType(labwareType)
   if (definition) {
     return createLabwareFromDefinition(definition, labwareType, name)
@@ -1274,6 +1328,101 @@ function createLabwareFromDefinition(definition: LabwareDefinition, labwareType:
     linearWellStyle: definition.render_hints?.linear_well_style,
     linearAxis: definition.topology.linear_axis || 'x',
     ...(definitionWarnings.length > 0 ? { definitionWarnings } : {}),
+  }
+}
+
+/**
+ * A labware-definition search hit as returned by
+ * POST /labware-definitions/search (server unions the vendored registry dir
+ * with record-store definitions; see server/src/api/labwareDefinitionSearch.ts).
+ * Optional fields are present exactly when the source definition declares them.
+ */
+export interface LabwareDefinitionSearchHit {
+  recordId: string
+  label: string
+  kind: 'labware-definition'
+  /** Canonical definition id; differs from recordId for vendored copies. */
+  definitionId?: string
+  topology?: LabwareDefinition['topology']
+  capacity?: LabwareDefinition['capacity']
+  render_hints?: LabwareDefinition['render_hints']
+  physical_geometry?: LabwareDefinition['physical_geometry']
+  legacy_labware_types?: string[]
+}
+
+/** Runtime membership test against the legacy enum's config table. */
+function isLegacyLabwareType(value: string): value is LabwareType {
+  return value !== 'definition' && Object.prototype.hasOwnProperty.call(LABWARE_CONFIGS, value)
+}
+
+/**
+ * Build an editor Labware from a definition search hit WITH ITS TOPOLOGY
+ * INTACT (spec decision 1). This is the lab-db placement path: arbitrary
+ * rows × columns × pitch survive because the definition record — not
+ * pickEditorLabwareType's legacy collapse — is the source of truth.
+ *
+ * labwareType is set from `legacy_labware_types[0]` when it names a real enum
+ * member; otherwise the widened 'definition' sentinel, rendered by the hit's
+ * display_name. A hit without topology/capacity fails LOUD — the caller keeps
+ * the legacy record-mapper for topology-less payloads (the exa tier); nothing
+ * is silently fabricated.
+ */
+export function createLabwareFromDefinitionPayload(
+  hit: LabwareDefinitionSearchHit,
+  name?: string,
+): Labware {
+  if (!hit.topology || !hit.capacity) {
+    throw new Error(
+      `createLabwareFromDefinitionPayload: definition hit "${hit.recordId}" lacks topology/capacity — ` +
+      `cannot place without topology. Legacy records with no definition belong in labwareRecordToEditorLabware.`,
+    )
+  }
+  const definitionId = hit.definitionId ?? (hit.recordId.startsWith('def:') ? hit.recordId.slice(4) : hit.recordId)
+  const legacyTypes = hit.legacy_labware_types ?? []
+  const resolvedType: LabwareType = legacyTypes.find(isLegacyLabwareType) ?? 'definition'
+
+  const definition: LabwareDefinition = {
+    id: definitionId,
+    display_name: hit.label,
+    legacy_labware_types: legacyTypes.length > 0 ? legacyTypes : [resolvedType],
+    topology: hit.topology,
+    capacity: hit.capacity,
+    ...(hit.render_hints ? { render_hints: hit.render_hints } : {}),
+    ...(hit.physical_geometry ? { physical_geometry: hit.physical_geometry } : {}),
+  }
+
+  const base = createLabwareFromDefinition(definition, resolvedType, name?.trim() || hit.label)
+
+  // Stamp the physical footprint from DATA (spec decision 3): vendor
+  // overall_dimensions_mm wins; else derive from grid pitch geometry; else
+  // leave absent (labwareFootprintMm then falls back to the documented legacy
+  // SBS constant at consumption time — never invented here).
+  const vendor = hit.physical_geometry?.overall_dimensions_mm
+  let footprint: Labware['physicalFootprintMm'] | undefined
+  if (vendor && typeof vendor.length === 'number' && typeof vendor.width === 'number') {
+    footprint = { length: vendor.length, width: vendor.width }
+  } else if (
+    hit.topology.addressing === 'grid'
+    && typeof hit.topology.rows === 'number'
+    && typeof hit.topology.columns === 'number'
+  ) {
+    const pitch =
+      hit.topology.well_pitch_mm
+      ?? (hit.topology.row_pitch_mm === hit.topology.col_pitch_mm ? hit.topology.row_pitch_mm : undefined)
+      ?? hit.topology.row_pitch_mm
+    if (typeof pitch === 'number' && pitch > 0) {
+      footprint = deriveGridFootprintMm(hit.topology.rows, hit.topology.columns, pitch)
+    }
+  }
+
+  return {
+    ...base,
+    labwareType: resolvedType,
+    name: name?.trim() || hit.label || definition.display_name,
+    definitionId,
+    definitionSource: 'registry',
+    sourceRecordId: hit.recordId,
+    ...(footprint ? { physicalFootprintMm: footprint } : {}),
   }
 }
 
@@ -1555,6 +1704,16 @@ export function pickEditorLabwareType(record: LabwareRecordPayload): LabwareType
   // couldn't load full payload).
   const countMatch = haystack.match(/(\d+)\s*[-\s]?\s*(?:well|channel|chan|position)/)
   const namedCount = countMatch ? Number(countMatch[1]) : undefined
+
+  // Controlled vocabulary WINS: when `labwareType` is already an enum member
+  // (LABWARE_CONFIGS key — e.g. a labware-definition payload's
+  // legacy_labware_types[0]), honor it verbatim. Substring heuristics below
+  // used to degrade such records ('tubeset_24' contains 'tube' → a single-well
+  // tube lost 23 wells of topology; tip racks lost their real types to
+  // plate_96). The sentinel is excluded — records never mint it (decision 1).
+  if (isLegacyLabwareType(record.labwareType ?? '')) {
+    return record.labwareType as LabwareType
+  }
 
   // Reservoirs
   if (kind.includes('reservoir') || haystack.includes('reservoir')) {

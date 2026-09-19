@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import type { Labware } from '../../types/labware'
 import { isTipRackType } from '../../types/labware'
+import { labwareFootprintMm } from '../../types/labwareFootprint'
 import type { WellId } from '../../types/plate'
 import type { LabwareOrientation } from '../types'
 import { useLongPress } from '../lib/useLongPress'
@@ -59,10 +60,14 @@ interface WellGridProps {
   onWellRangeSelect?: (anchorWellId: WellId, targetWellId: WellId, event: React.PointerEvent) => void
 }
 
-// SBS labware long edge ≈ 127 mm, short edge ≈ 85 mm. We model the canvas
-// in mm space then scale to pixels via `size`.
-const FRAME_LONG_MM = 127
-const FRAME_SHORT_MM = 85
+// The focus frame is the labware's RESOLVED PHYSICAL FOOTPRINT (see
+// types/labwareFootprint.ts: stamped dims → bound definition vendor dims →
+// grid pitch derivation → legacy SBS fallback), modelled in mm and scaled to
+// pixels via `size` (the long edge). A non-SBS object — a 5×16 tube rack is
+// 220×77 mm — therefore keeps its real proportions when you zoom in, instead
+// of every labware collapsing to the 127:85 SBS plate frame. Only the fallback
+// branch (topology-less labware) can still yield SBS numbers, and it carries
+// that legacy constant alone.
 const DEFAULT_FRAME_PADDING_MM = 8
 const GRID_FRAME_PADDING_MM = 3.5
 
@@ -87,7 +92,9 @@ export function WellGrid({
 }: WellGridProps) {
   const layout = useMemo(() => computeLayout(labware, orientation), [labware, orientation])
 
-  const pxPerMm = size / FRAME_LONG_MM
+  // `size` is the long edge; scale mm → px off the LONG edge so a wide-short
+  // rack and a plate both fill the stage along their dominant axis.
+  const pxPerMm = size / Math.max(layout.width, layout.height)
   const widthPx = layout.width * pxPerMm
   const heightPx = layout.height * pxPerMm
 
@@ -329,8 +336,13 @@ export function WellGrid({
 
 function computeLayout(labware: Labware, orientation: LabwareOrientation): ComputedWellLayout {
   const isPortrait = orientation === 'portrait'
-  const width = isPortrait ? FRAME_SHORT_MM : FRAME_LONG_MM
-  const height = isPortrait ? FRAME_LONG_MM : FRAME_SHORT_MM
+  // Frame = the physical object. Landscape footprint is the base; portrait
+  // swaps the axes (see labwareFootprintMm) so the frame is the object as it
+  // actually sits. Wells then fill the frame interior — a pitch-derived
+  // footprint (columns·pitch + 2·edge margin) puts them on their real spacing.
+  const frame = labwareFootprintMm(labware, isPortrait ? 'portrait' : 'landscape')
+  const width = frame.length
+  const height = frame.width
   const addressing = labware.addressing
   const isTipRack = isTipRackType(labware.labwareType)
   const framePadding = addressing.type === 'grid' && !isTipRack
@@ -419,6 +431,37 @@ function wellIdFromEventTarget(target: EventTarget | null): WellId | null {
   return node?.getAttribute('data-well-id') ?? null
 }
 
+/**
+ * Resolve the well under a viewport point. Used by the focus pane's
+ * stage-level context-menu handler so a right-click that lands between wells
+ * (or on the frame) still acts on the well the user aimed at, instead of
+ * falling through to the browser's own context menu.
+ */
+export function wellIdAtClientPoint(
+  clientX: number,
+  clientY: number,
+  root: Element | null,
+): WellId | null {
+  const hit = document.elementFromPoint(clientX, clientY)
+  if (!hit) return null
+  if (root && !root.contains(hit)) return null
+  return wellIdFromEventTarget(hit)
+}
+
+/**
+ * Resolve the well a context-menu gesture aimed at: the well the event was
+ * dispatched on when it hit one, otherwise the well under the viewport point.
+ * Keeping both steps in one resolver means the per-well handler and the
+ * stage-level handler always agree on the target, so a bubbled right-click
+ * cannot clobber the well-scoped menu with a plate-scoped one.
+ */
+export function wellIdFromContextMenuEvent(
+  event: { target: EventTarget | null; clientX: number; clientY: number },
+  root: Element | null,
+): WellId | null {
+  return wellIdFromEventTarget(event.target) ?? wellIdAtClientPoint(event.clientX, event.clientY, root)
+}
+
 function wellIdFromPointerEvent(
   event: React.PointerEvent<SVGSVGElement> | PointerEvent,
   svg: SVGSVGElement,
@@ -426,7 +469,5 @@ function wellIdFromPointerEvent(
   const direct = wellIdFromEventTarget(event.target)
   if (direct) return direct
 
-  const hit = document.elementFromPoint(event.clientX, event.clientY)
-  if (!hit || !svg.contains(hit)) return null
-  return wellIdFromEventTarget(hit)
+  return wellIdAtClientPoint(event.clientX, event.clientY, svg)
 }
