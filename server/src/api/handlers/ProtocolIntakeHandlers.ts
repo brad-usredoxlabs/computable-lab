@@ -23,6 +23,8 @@ import {
   type IngestPdfResult,
 } from '../../protocol-intake/ProtocolIntakeService.js';
 import { resolveReviewTree } from '../../protocol-intake/resolveReviewDocument.js';
+import { reviewRolesFromCandidate, reviewStepsFromCandidate } from '../../protocol-intake/reviewSteps.js';
+import { readCandidateArtifact } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
 import type { RunChatbotCompileResult } from '../../ai/runChatbotCompile.js';
 
@@ -227,6 +229,16 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
         const treePayload = (treeEnvelope?.payload ?? {}) as unknown as Record<string, unknown>;
         const proposals = await proposalsFor(match.treeRecordId);
         const artifactFile = (payload['file'] ?? {}) as Record<string, unknown>;
+
+        // The steps the reviewer edits are the SAME extraction the tree gates
+        // on — never a second candidate of the same PDF (its step ids would not
+        // match the tree's then_stepIds). Loading is best-effort: a candidate
+        // that was never persisted yields null, and the surface falls back.
+        const documentId =
+          typeof treePayload['documentId'] === 'string' ? (treePayload['documentId'] as string) : match.documentId;
+        const candidate = await readCandidateArtifact(ctx.workspaceRoot, documentId);
+        const axes = Array.isArray(treePayload['axes']) ? (treePayload['axes'] as Array<Record<string, unknown>>) : [];
+
         reply.status(200);
         return {
           success: true,
@@ -243,6 +255,14 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
             scaleAxis: treePayload['scaleAxis'] ?? { question: '', options: [] },
             notes: treePayload['notes'],
           },
+          candidate: candidate
+            ? {
+                documentId,
+                title: candidate.title,
+                steps: reviewStepsFromCandidate({ steps: candidate.steps, axes }),
+                roles: reviewRolesFromCandidate(candidate),
+              }
+            : null,
           proposals,
         };
       } catch (err) {

@@ -126,3 +126,22 @@ describe('deriveBranchAxes — cross-step grouping', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b))
   })
 })
+describe('step ids come from the candidate, never re-derived', () => {
+  it('gates the candidate\'s OWN step id (the vendor extractor emits `id`)', () => {
+    // Regression: the vendor candidate carries `id` ('step-7'), while the
+    // derivation read only `stepId` and silently fell back to a padded
+    // `step-007` — so every tree gated step ids that do not exist on the
+    // document, and `resolveBranchAxes` selected nothing.
+    const axes = deriveBranchAxes([
+      { id: 'step-7', stepNumber: 7, branches: ['a. Bacteria', 'b. Mammalian cells'] },
+      { id: 'step-9', stepNumber: 9, branches: ['a. Bacteria', 'b. Mammalian cells'] },
+    ])
+    expect(axes).toHaveLength(1)
+    expect(axes[0]!.conditions[0]!.then_stepIds).toEqual(['step-7', 'step-9'])
+  })
+
+  it('still pads a step that carries no id at all', () => {
+    const axes = deriveBranchAxes([{ stepNumber: 3, branches: ['a. X', 'b. Y'] }])
+    expect(axes[0]!.conditions[0]!.then_stepIds).toEqual(['step-003'])
+  })
+})

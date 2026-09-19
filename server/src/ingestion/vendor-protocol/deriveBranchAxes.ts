@@ -31,6 +31,14 @@ import type { BranchAxisLike } from '../../protocol/BranchResolver.js';
 
 export interface VendorStepBranchesLike {
   stepId?: unknown;
+  /**
+   * The vendor-protocol candidate's own field for a step id — the extractor
+   * emits `id` ('step-7'), NOT `stepId`. Reading only `stepId` silently
+   * renumbered every step in the derived tree (`step-007`), so the tree gated
+   * ids that exist nowhere on the document and branch resolution selected
+   * nothing. Both spellings are honoured; padding is a last resort.
+   */
+  id?: unknown;
   stepNumber?: unknown;
   branches?: unknown;
 }
@@ -135,7 +143,13 @@ function sharedAxisId(optionKeys: string[]): string {
 }
 
 function stepIdOf(step: VendorStepBranchesLike, index: number): string {
-  if (typeof step.stepId === 'string' && step.stepId.trim().length > 0) return step.stepId.trim();
+  // The candidate's own id wins (`id` is the extractor's field; `stepId` is the
+  // normalizer's). Only a step with neither is renumbered, and then it is
+  // padded so the fallback stays distinguishable from a real document id.
+  for (const key of ['stepId', 'id'] as const) {
+    const value = step[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
   if (typeof step.stepNumber === 'number') return `step-${String(step.stepNumber).padStart(3, '0')}`;
   return `step-${String(index + 1).padStart(3, '0')}`;
 }

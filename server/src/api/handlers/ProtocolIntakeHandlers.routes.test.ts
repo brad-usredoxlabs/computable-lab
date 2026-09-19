@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Fastify from 'fastify';
-import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createProtocolIntakeHandlers } from './ProtocolIntakeHandlers.js';
@@ -376,5 +376,60 @@ describe('GET /protocol-ide/intake/review/:artifactId', () => {
     expect(missing.statusCode).toBe(404);
     expect(missing.json().error).toBe('ARTIFACT_NOT_FOUND');
     await app.close();
+  });
+});
+
+describe('GET /protocol-ide/intake/review/:artifactId — the steps the tree gates on', () => {
+  it('returns the vendor candidate steps (same step ids the tree gates), with their gating questions', async () => {
+    // A real workspace slice: the extractor's candidate artifact as it lands on disk.
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'cl-review-steps-'));
+    try {
+      const candidateDir = join(workspaceRoot, 'artifacts', 'foundry', 'protocol-candidates');
+      await mkdir(candidateDir, { recursive: true });
+      await writeFile(
+        join(candidateDir, 'vendor-protocol-doc-1.json'),
+        JSON.stringify({
+          kind: 'vendor-protocol-candidate',
+          source: { documentId: 'vendor-protocol:doc-1', title: 'Kit', pageCount: 3 },
+          title: 'Kit',
+          materials: [{ label: 'Lysis Solution' }],
+          labware: [{ label: 'BashingBead Lysis Rack' }],
+          equipment: [],
+          steps: [
+            { id: 'step-001', stepNumber: 1, sourceText: 'Add sample using the table below:', branches: ['a. rack'], provenance: { documentId: 'd', pageStart: 2 } },
+            { id: 'step-002', stepNumber: 2, sourceText: 'Centrifuge.', provenance: { documentId: 'd', pageStart: 3 } },
+          ],
+          tables: [],
+          diagnostics: [],
+        }),
+        'utf-8',
+      );
+
+      const { store } = makeMockStore([
+        makeEnvelope({ ...vendorPdfPayload, recordId: 'VPDF-ROUTE02' }, 'vendor-pdf'),
+        makeEnvelope(
+          {
+            ...treePayload,
+            recordId: 'PDT-route-steps',
+            documentId: 'vendor-protocol:doc-1',
+            sourcePdf: { sha256: vendorPdfPayload.file.sha256 },
+          },
+          PROTOCOL_DECISION_TREE_SCHEMA_ID,
+        ),
+      ]);
+      const app = await buildApp(store, workspaceRoot);
+      const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE02' });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.candidate.steps.map((s: { stepId: string }) => s.stepId)).toEqual(['step-001', 'step-002']);
+      // step 1 carries the tree's question; step 2 is unconditional
+      expect(body.candidate.steps[0].gatedByQuestions).toEqual(['What is the DNA source?']);
+      expect(body.candidate.steps[1].gatedByAxisIds).toEqual([]);
+      expect(body.candidate.steps[0].provenancePages).toEqual([2]);
+      expect(body.candidate.roles.materials).toEqual(['Lysis Solution']);
+      await app.close();
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });

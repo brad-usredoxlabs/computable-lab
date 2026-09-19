@@ -127,6 +127,31 @@ async function writeCandidateArtifact(
   return relative(workspaceRoot, path);
 }
 
+/** Workspace-relative path of the stored candidate for a document (one rule). */
+export function candidateArtifactRelPath(documentId: string): string {
+  return join('artifacts', 'foundry', 'protocol-candidates', `${safeFileName(documentId)}.json`);
+}
+
+/**
+ * Read back the vendor-protocol candidate the extractor already persisted for a
+ * document. The review surface renders the SAME steps the decision tree gates
+ * on, so it must not re-extract them through another path (the AI extraction
+ * candidate has different step ids). Returns null when no candidate was stored.
+ */
+export async function readCandidateArtifact(
+  workspaceRoot: string,
+  documentId: string,
+): Promise<ProtocolCandidate | null> {
+  const path = resolve(workspaceRoot, candidateArtifactRelPath(documentId));
+  try {
+    const raw = await readFile(path, 'utf-8');
+    const parsed = JSON.parse(raw) as ProtocolCandidate;
+    return parsed && parsed.kind === 'vendor-protocol-candidate' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveInsidePdfArtifacts(workspaceRoot: string, path: string): string {
   const artifactRoot = resolve(workspaceRoot, 'artifacts', 'foundry', 'pdfs');
   const resolved = resolve(workspaceRoot, path);

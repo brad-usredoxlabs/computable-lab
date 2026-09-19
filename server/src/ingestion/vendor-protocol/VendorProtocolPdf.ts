@@ -541,7 +541,14 @@ function extractProtocolSteps(document: VendorProtocolDocument): ProtocolStepCan
     const temperatures = extractQuantities(sourceText, 'temperature');
     const speeds = extractQuantities(sourceText, 'speed');
     steps.push({
-      id: `step-${stepNumber}`,
+      // Document-order id: several vendor manuals number more than one list
+      // from 1 inside the same protocol section (ZymoBIOMICS Quick-DNA: a main
+      // protocol, then "For samples collected in DNA/RNA Shield..." restarting
+      // at 1). Keying the id on the MANUAL's number made ids collide within one
+      // document, so branch gating and step selection pointed at two steps at
+      // once. The manual's own number stays on `stepNumber` (the reader's
+      // cross-reference); the id is the document's position.
+      id: `step-${steps.length + 1}`,
       stepNumber,
       sourceText,
       actions: extractActionCandidates(sourceText, provenance),

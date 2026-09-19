@@ -34,6 +34,8 @@ export interface DocumentTableLike {
 
 export interface DocumentTableStepLike {
   stepId?: unknown;
+  /** The vendor candidate's own step id field (`id`, e.g. 'step-7'). */
+  id?: unknown;
   stepNumber?: unknown;
   sourceText?: unknown;
   actions?: unknown;
@@ -118,7 +120,9 @@ function stepText(step: DocumentTableStepLike): string {
 }
 
 function stepIdOf(step: DocumentTableStepLike, index: number): string {
-  const id = asString(step.stepId).trim();
+  // Same rule as deriveBranchAxes: the candidate's own id wins, so a gating
+  // condition can never point at a step id that does not exist on the document.
+  const id = asString(step.stepId).trim() || asString(step.id).trim();
   if (id.length > 0) return id;
   const n = typeof step.stepNumber === 'number' ? step.stepNumber : index + 1;
   return `step-${String(n).padStart(3, '0')}`;
