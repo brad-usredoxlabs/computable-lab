@@ -250,6 +250,9 @@ export class ProtocolIntakeService {
       documentId: docSlug,
       steps: candidate.steps,
       tables: candidate.tables,
+      // Which protocol of the document each step implements: a handbook that
+      // prints several is a choice, and that choice is a question.
+      protocolSections: candidate.sections,
       scaleOptions,
       sourcePdf: {
         ...(input.artifactPath ? { artifactPath: input.artifactPath } : {}),

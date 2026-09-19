@@ -90,4 +90,54 @@ Sample Collection
     )
     expect(document.sections.some((s) => s.kind === 'protocol')).toBe(false)
   })
+
+  it('reads Qiagen-style "Protocol: <name>" headings and skips the contents page', () => {
+    // The DNeasy handbook writes its protocol headings with a colon and its
+    // contents page prints the same lines with a dot leader and page number.
+    // Matching only a bare "Protocol" found nothing in a 69-page handbook, so
+    // the whole document yielded zero steps and zero questions.
+    const HANDBOOK = `Contents
+Protocol: Purification of Total DNA from Animal Blood or Cells (Spin-Column Protocol) ..... 29
+Protocol: Purification of Total DNA from Animal Tissues (Spin-Column Protocol) .......... 33
+
+Protocol: Purification of Total DNA from Animal
+Blood or Cells (Spin-Column Protocol)
+This protocol is designed for purification of total DNA from animal blood.
+
+Procedure
+1. For blood with non-nucleated erythrocytes, follow step 1a; for blood with nucleated
+   erythrocytes, follow step 1b; for cultured cells, follow step 1c.
+   1a. Non-nucleated: Pipet 20 µl Proteinase K into a tube.
+   1b. Nucleated: Pipet 20 µl Proteinase K and add 5–10 µl blood.
+   1c. Cultured cells: Centrifuge the cells.
+2. Add 200 µl Buffer AL and incubate at 56°C.
+
+Protocol: Purification of Total DNA from Animal
+Tissues (Spin-Column Protocol)
+1. Cut up to 25 mg tissue and add 180 µl Buffer ATL.
+`
+    const document = createVendorProtocolDocumentFromText(HANDBOOK, { filename: 'dneasy.pdf', documentId: 'doc-dneasy' })
+    const protocols = document.sections.filter((s) => s.kind === 'protocol')
+
+    // One section per protocol, named the way the contents page names them.
+    expect(protocols.map((s) => s.title)).toEqual([
+      'Purification of Total DNA from Animal Blood or Cells (Spin-Column Protocol)',
+      'Purification of Total DNA from Animal Tissues (Spin-Column Protocol)',
+    ])
+    // The contents page is NOT the protocol body.
+    expect(protocols[0]!.sourceText).not.toContain('..... 29')
+    expect(protocols[0]!.sourceText).toContain('For blood with non-nucleated erythrocytes')
+
+    const candidate = extractVendorProtocolCandidate(document)
+    // Steps keep the manual's own sub-labels and the section they came from.
+    expect(candidate.steps.map((s) => `${s.id}:${s.stepNumber}${s.substep ?? ''}`)).toEqual([
+      'step-1:1',
+      'step-2:1a',
+      'step-3:1b',
+      'step-4:1c',
+      'step-5:2',
+      'step-6:1',
+    ])
+    expect(new Set(candidate.steps.map((s) => s.sectionId)).size).toBe(2)
+  })
 })

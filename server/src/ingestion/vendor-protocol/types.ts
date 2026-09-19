@@ -122,6 +122,13 @@ export interface ProtocolStepCandidate {
   id: string;
   stepNumber: number;
   substep?: string;
+  /**
+   * The protocol SECTION this step belongs to. A vendor handbook holds several
+   * protocols side by side (DNeasy: blood / tissue / cells × spin-column /
+   * DNeasy 96 / pretreatment); the section is which one, so the intake can ask
+   * the reader to choose a protocol instead of concatenating all of them.
+   */
+  sectionId?: string;
   sourceText: string;
   actions: ProtocolActionCandidate[];
   conditions: {

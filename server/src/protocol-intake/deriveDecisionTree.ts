@@ -14,7 +14,9 @@
  */
 
 import { deriveBranchAxes, slugify } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
+import { deriveStepVariantAxes } from '../ingestion/vendor-protocol/deriveStepVariantAxes.js';
 import { deriveSampleSourceAxis } from './deriveDocumentTableAxis.js';
+import { deriveProtocolChoiceAxis } from './deriveProtocolChoiceAxis.js';
 import type { BranchAxisLike, BranchConditionLike } from '../protocol/BranchResolver.js';
 
 export interface QuestionEvidence {
@@ -27,7 +29,7 @@ export interface DecisionTreeAxis {
   axisId: string;
   question: string;
   choiceKey: string;
-  origin: 'document_branch' | 'document_table' | 'ai_suggested';
+  origin: 'document_branch' | 'document_table' | 'document_section' | 'ai_suggested';
   evidence?: QuestionEvidence[];
   conditions: NonNullable<BranchAxisLike['conditions']>;
 }
@@ -63,7 +65,17 @@ export interface DeriveDecisionTreeInput {
     /** Step text — used to find steps that point at a document table (3b). */
     sourceText?: unknown;
     actions?: unknown;
+    /** The protocol section the step belongs to (which protocol of the
+     *  document it implements). */
+    sectionId?: unknown;
+    /** The manual's own sub-label for a variant step ("a" of "1a"). */
+    substep?: unknown;
+    /** The vendor candidate's own id field. */
+    id?: unknown;
   }>;
+  /** The document's protocol sections — more than one means the document
+   *  presents a CHOICE of protocols, which is a question. */
+  protocolSections?: unknown;
   /** Document tables verbatim — the sample table is a question (Phase 3b). */
   tables?: unknown;
   /** Caller passes registry levels — NEVER hardcoded here. */
@@ -102,13 +114,42 @@ function buildQuestion(axis: BranchAxisLike): string {
 }
 
 export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDecisionTree {
-  const axes: DecisionTreeAxis[] = deriveBranchAxes(input.steps).map((a) => ({
-    axisId: a.axisId,
-    question: buildQuestion(a),
-    choiceKey: 'branchSelection',
-    origin: 'document_branch' as const,
-    conditions: rebindPredicatePath(a.conditions ?? [], a.axisId),
-  }));
+  const axes: DecisionTreeAxis[] = [];
+
+  // The document's own protocol list (Phase 3c). A handbook that prints eight
+  // protocols — DNeasy: {blood or cells, tissues} × {spin column, DNeasy 96} —
+  // is not one protocol; the choice between them is the document's top-level
+  // if/then, so this axis comes FIRST.
+  let protocolNote: string | undefined;
+  const protocolAxis = deriveProtocolChoiceAxis({
+    protocolSections: input.protocolSections,
+    steps: input.steps,
+  });
+  if (protocolAxis.axis) {
+    const a = protocolAxis.axis;
+    axes.push({
+      axisId: a.axisId,
+      question: a.question,
+      choiceKey: a.choiceKey,
+      origin: 'document_section' as const,
+      conditions: rebindPredicatePath(
+        a.conditions as unknown as NonNullable<BranchAxisLike['conditions']>,
+        a.axisId,
+      ),
+    });
+  } else if (protocolAxis.reason && protocolAxis.reason !== 'single_protocol' && protocolAxis.reason !== 'no_protocol_sections') {
+    protocolNote = `protocol_choice_axis_not_derived: ${protocolAxis.reason}`;
+  }
+
+  for (const a of deriveBranchAxes(input.steps)) {
+    axes.push({
+      axisId: a.axisId,
+      question: buildQuestion(a),
+      choiceKey: 'branchSelection',
+      origin: 'document_branch' as const,
+      conditions: rebindPredicatePath(a.conditions ?? [], a.axisId),
+    });
+  }
 
   for (const q of input.aiQuestions ?? []) {
     if (axes.some((a) => a.choiceKey === q.choiceKey)) continue;
@@ -120,6 +161,24 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
       origin: 'ai_suggested' as const,
       evidence: q.evidence,
       conditions: rebindPredicatePath(q.conditions, axisId),
+    });
+  }
+
+  // Variant dispatches (Phase 3c): a step that says "For <condition>, follow
+  // step 1a … 1b … 1c" is the document stating if/then logic in prose, and the
+  // variants it names are steps of their own. Each option gates the step it
+  // names.
+  for (const a of deriveStepVariantAxes(input.steps, input.protocolSections)) {
+    if (axes.some((existing) => existing.axisId === a.axisId)) continue;
+    axes.push({
+      axisId: a.axisId,
+      question: a.question,
+      choiceKey: a.choiceKey,
+      origin: 'document_branch' as const,
+      conditions: rebindPredicatePath(
+        a.conditions as unknown as NonNullable<BranchAxisLike['conditions']>,
+        a.axisId,
+      ),
     });
   }
 
@@ -144,7 +203,9 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
     tableNote = `sample_source_axis_not_derived: ${tableAxis.reason}`;
   }
 
-  const notes = [input.notes, tableNote].filter((n): n is string => typeof n === 'string' && n.length > 0);
+  const notes = [input.notes, protocolNote, tableNote].filter(
+    (n): n is string => typeof n === 'string' && n.length > 0,
+  );
 
   return {
     kind: 'protocol-decision-tree',

@@ -77,7 +77,11 @@ properties:
         stepNumber:
           type: integer
           minimum: 1
+        # The manual's own sub-label for a variant step ("1a", "1b").
         substep: { type: string }
+        # Which protocol of the document this step belongs to — a handbook
+        # holds several short protocols side by side.
+        sectionId: { type: string }
         sourceText: { type: string }
         actions:
           type: array

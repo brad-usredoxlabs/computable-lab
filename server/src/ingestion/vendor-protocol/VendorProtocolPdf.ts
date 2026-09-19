@@ -92,19 +92,116 @@ const ALL_SOURCE_TERMS = {
 /**
  * The pattern for one section heading.
  *
- * A heading is the title ALONE on its line, or the title followed by a WIDE gap
- * (>= 2 spaces/tabs) and the page's margin furniture. ZymoBIOMICS DNA Miniprep
- * (D4300T) page 4 reads `Protocol                    For Technical Assistance:`
- * — a `^Protocol$` pattern found no protocol section at all, so that manual
- * yielded ZERO steps and no sample table, and every downstream question was
- * impossible. The wide-gap rule keeps prose out: a sentence continues after a
- * SINGLE space ('Protocol steps were reviewed…') and a clause after punctuation
- * ('Protocol, Supplier Q1, and …'), neither of which is a heading.
+ * Heading forms seen in real manuals:
+ *  - the title ALONE on its line ("Protocol", "Procedure");
+ *  - the title followed by a WIDE gap and the page's margin furniture
+ *    ("Protocol                    For Technical Assistance:");
+ *  - "Title: subtitle", which is how Qiagen writes its handbooks
+ *    ("Protocol: Purification of Total DNA from Animal Blood or Cells
+ *    (Spin-Column Protocol)") — the colon form is why a 69-page DNeasy
+ *    handbook yielded ZERO steps and therefore zero questions.
+ * Prose is still excluded: a sentence continues after a SINGLE space
+ * ("Protocol steps were reviewed…") or punctuation that is not the colon form.
  */
 function headingPattern(title: string): RegExp {
   const escaped = title.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return new RegExp(`^${escaped}(?:\\s*$|[ \t]{2,}\\S[^\n]*$)`, 'im');
+  return new RegExp(`^${escaped}\\b(?::[ \\t]*\\S|[^\\S\\n]*$|[ \\t]{2,}\\S)`, 'im');
 }
+
+/**
+ * A table-of-contents entry looks exactly like a heading but ends in a dot
+ * leader and a page number ("Protocol: … (Spin-Column Protocol) ..... 29").
+ * Matching one would start the protocol section inside the contents page, so
+ * the sectioner skips such matches and keeps looking.
+ */
+const TOC_ENTRY = /\.{2,}\s*\d+\s*$/;
+
+/** Every NON-table-of-contents heading match, in document order. */
+export function findAllHeadingIndexes(pattern: RegExp, text: string): number[] {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const re = new RegExp(pattern.source, flags);
+  const indexes: number[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const lineEnd = text.indexOf('\n', match.index);
+    const line = text.slice(match.index, lineEnd === -1 ? text.length : lineEnd);
+    if (!TOC_ENTRY.test(line)) indexes.push(match.index);
+    if (re.lastIndex === match.index) re.lastIndex += 1;
+  }
+  return indexes;
+}
+
+/** Index of the first non-table-of-contents match, or undefined. */
+export function findHeadingIndex(pattern: RegExp, text: string): number | undefined {
+  return findAllHeadingIndexes(pattern, text)[0];
+}
+
+/**
+ * The heading's own words — the label a reader uses to CHOOSE a protocol.
+ *
+ * A manual prints the protocol's name after the colon ("Protocol: Purification
+ * of Total DNA from Animal Blood or Cells (Spin-Column Protocol)"), while a
+ * bare title keeps the page's margin furniture beside it on the same line
+ * ("Protocol              For Technical Assistance:"). Only the words before
+ * the first wide gap belong to the heading. Headings WRAP, so this is often
+ * only the name's first line; {@link resolveWrappedTitles} completes it from
+ * the contents page.
+ */
+function headingTitleAt(text: string, index: number, patternTitle: string): string {
+  const lineEnd = text.indexOf('\n', index);
+  const line = text.slice(index, lineEnd === -1 ? text.length : lineEnd);
+  const heading = (line.split(/[ \t]{2,}/u)[0] ?? '').trim();
+  const colon = heading.indexOf(':');
+  if (colon > 0) {
+    const head = heading.slice(0, colon).trim();
+    const rest = heading.slice(colon + 1).trim();
+    if (rest && head.toLowerCase().startsWith(patternTitle.toLowerCase())) {
+      return rest;
+    }
+  }
+  return patternTitle;
+}
+
+/**
+ * Complete the wrapped headings from the contents page.
+ *
+ * Four DNeasy protocols print the SAME first line ("Protocol: Purification of
+ * Total DNA from Animal") and differ only on the line below it, so the printed
+ * name alone cannot tell the reader which protocol they are choosing. The
+ * contents page prints every name in full and in document order, so the nth
+ * heading with a given printed name takes the nth matching contents entry.
+ */
+function resolveWrappedTitles<T extends { title: string }>(matches: T[], contents: string[]): T[] {
+  const consumed = new Map<string, number>();
+  return matches.map((match) => {
+    const key = match.title.toLowerCase();
+    const candidates = contents.filter(
+      (title) => title.toLowerCase().startsWith(key) && title.trim().length > match.title.length,
+    );
+    const position = consumed.get(key) ?? 0;
+    const resolved = candidates[position];
+    if (candidates.length > 0) {
+      consumed.set(key, position + 1);
+    }
+    return resolved ? { ...match, title: resolved } : match;
+  });
+}
+
+/**
+ * Every name the document's own contents page prints in full, with the
+ * dot-leader and page number removed ("Protocol: … (DNeasy 96 Protocol) ..... 43").
+ */
+function contentsTitles(text: string): string[] {
+  return text
+    .split('\n')
+    .filter((line) => TOC_ENTRY.test(line))
+    .map((line) => line.replace(TOC_ENTRY, '').trim())
+    // "Protocol: Purification of …" — the kind label in front is not part of
+    // the protocol's name.
+    .map((line) => line.replace(/^[A-Za-z][A-Za-z ]{0,30}:\s*/u, '').trim())
+    .filter((line) => line.length > 0);
+}
+
 
 const SECTION_HEADINGS: Array<{ kind: VendorProtocolSectionKind; title: string; pattern: RegExp }> = [
   { kind: 'table_of_contents', title: 'Table of Contents', pattern: headingPattern('Table of Contents') },
@@ -276,13 +373,30 @@ export function sectionVendorProtocolDocument(input: {
   pages: VendorProtocolPage[];
 }): VendorProtocolSection[] {
   const searchableText = input.text.replace(/\f/gu, '\n');
-  const matches = SECTION_HEADINGS
-    .map((heading) => {
-      const match = heading.pattern.exec(searchableText);
-      return match?.index !== undefined ? { ...heading, index: match.index } : undefined;
-    })
-    .filter((match): match is NonNullable<typeof match> => Boolean(match))
-    .sort((a, b) => a.index - b.index);
+  // EVERY heading is a section boundary, not just the first one of each kind.
+  // A vendor handbook is a MATRIX of short protocols — DNeasy Blood & Tissue
+  // prints one per sample source and method ("Purification of Total DNA from
+  // Animal Blood or Cells (Spin-Column Protocol)", "… (DNeasy 96 Protocol)",
+  // "… from Animal Tissues (Spin-Column Protocol)", pretreatments …). Taking
+  // only the first "Protocol" heading stretched ONE section across all of them,
+  // so the document read as a single 72-step protocol and the choice between
+  // them — the document's own if/then logic — was invisible.
+  const titles = contentsTitles(searchableText);
+  const matches = resolveWrappedTitles(
+    SECTION_HEADINGS
+      .flatMap((heading) =>
+        findAllHeadingIndexes(heading.pattern, searchableText).map((index) => ({
+          kind: heading.kind,
+          patternTitle: heading.title,
+          title: headingTitleAt(searchableText, index, heading.title),
+          index,
+        })),
+      )
+      .sort((a, b) => a.index - b.index)
+      // Two patterns can describe the same line; the line is one heading.
+      .filter((match, position, all) => position === 0 || match.index !== all[position - 1]?.index),
+    titles,
+  );
 
   const sections: VendorProtocolSection[] = [];
   const firstHeadingIndex = matches[0]?.index ?? input.text.length;
@@ -299,13 +413,24 @@ export function sectionVendorProtocolDocument(input: {
     }
   }
 
+  const sectionIds = new Map<string, number>();
   matches.forEach((match, index) => {
     const next = matches[index + 1]?.index ?? input.text.length;
     const sourceText = input.text.slice(match.index, next).trim();
+    if (!sourceText) {
+      return;
+    }
+    // Several protocols in one handbook share the pattern title ("Protocol")
+    // but differ in their printed name, so the printed name is the id. When
+    // even that repeats (two "Troubleshooting" sections), a suffix keeps the
+    // ids unique — branch conditions point at sections by id.
+    const baseId = `section-${slug(match.title)}`;
+    const seen = (sectionIds.get(baseId) ?? 0) + 1;
+    sectionIds.set(baseId, seen);
     const pageStart = pageForOffset(input.pages, match.index);
     const pageEnd = pageForOffset(input.pages, Math.max(match.index, next - 1));
     sections.push({
-      id: `section-${slug(match.title)}`,
+      id: seen === 1 ? baseId : `${baseId}-${seen}`,
       kind: match.kind,
       title: match.title,
       sourceText,
@@ -539,65 +664,142 @@ function extractBranches(stepText: string): string[] {
     .filter(Boolean);
 }
 
-function extractProtocolSteps(document: VendorProtocolDocument): ProtocolStepCandidate[] {
-  const protocol = document.sections.find((section) => section.kind === 'protocol');
-  if (!protocol) {
-    return [];
+/**
+ * Where a step's label begins.
+ *
+ * Vendor text wraps mid-sentence, so a bare number-dot at the start of a line
+ * is NOT automatically a step label: "… before continuing with step\n 2." is a
+ * CROSS-REFERENCE whose number happens to land at a line start. Two shapes must
+ * both survive:
+ *   - a label with its text on the same line ("1a. Non-nucleated: Pipet …");
+ *   - a label alone on its line, text on the next ("3.\n Add 200 µl …" — the
+ *     ZymoBIOMICS manual writes several steps this way).
+ * The discriminator is what PRECEDES the label: a real step follows a finished
+ * sentence (a terminator or a blank line), while a wrapped cross-reference
+ * follows a word ("… with step\n 2.").
+ */
+const STEP_LABEL = /(?:^|\n)\s*(\d{1,2})([a-z])?\.(?=[ \t\n]|$)[ \t]*/gu;
+
+/**
+ * Does the character before a label end a sentence?
+ *
+ * Anything that is not a letter or a digit qualifies: a full stop, a bracket, a
+ * colon — and a PAGE BREAK, since a vendor handbook starts steps on a fresh
+ * page (the ZymoBIOMICS kit's steps 3 and 12 follow "\f", and requiring a "."
+ * dropped them). A letter or digit does not: "… continuing with step\n 2." is
+ * mid-sentence.
+ */
+function endsSentence(previous: string | undefined): boolean {
+  if (previous === undefined || previous.length === 0) {
+    return true;
   }
-  const stepRegex = /(?:^|\n)\s*(\d{1,2})\.\s+([\s\S]*?)(?=(?:\n\s*\d{1,2}\.\s+)|$)/gu;
-  const steps: ProtocolStepCandidate[] = [];
-  for (const match of protocol.sourceText.matchAll(stepRegex)) {
-    const stepNumber = Number.parseInt(match[1] ?? '', 10);
-    const sourceText = (match[2] ?? '').trim();
-    if (!Number.isFinite(stepNumber) || !sourceText) {
+  return !/[\p{L}\p{N}]/u.test(previous);
+}
+
+export interface StepLabel {
+  labelStart: number;
+  textStart: number;
+  stepNumber: number;
+  substep?: string;
+}
+
+export function findStepLabels(text: string): StepLabel[] {
+  const labels: StepLabel[] = [];
+  for (const match of text.matchAll(STEP_LABEL)) {
+    const raw = match[0];
+    const labelStart = match.index + (raw.startsWith('\n') ? 1 : 0);
+    const textStart = match.index + raw.length;
+    const before = text.slice(0, labelStart).replace(/[ \t]+$/u, '');
+    const previous = before.slice(-1);
+    if (!endsSentence(previous)) {
       continue;
     }
-    const page = findPageForText(document.pages, sourceText, protocol.provenance.pageStart);
-    const spanStart = (match.index ?? 0) + protocol.provenance.spanStart!;
-    const provenance = makeProvenance(
-      document.source.documentId,
-      page,
-      protocol.id,
-      undefined,
-      spanStart,
-      spanStart + match[0].length,
-    );
-    const volumes = extractQuantities(sourceText, 'volume');
-    const durations = extractQuantities(sourceText, 'duration');
-    const temperatures = extractQuantities(sourceText, 'temperature');
-    const speeds = extractQuantities(sourceText, 'speed');
-    steps.push({
-      // Document-order id: several vendor manuals number more than one list
-      // from 1 inside the same protocol section (ZymoBIOMICS Quick-DNA: a main
-      // protocol, then "For samples collected in DNA/RNA Shield..." restarting
-      // at 1). Keying the id on the MANUAL's number made ids collide within one
-      // document, so branch gating and step selection pointed at two steps at
-      // once. The manual's own number stays on `stepNumber` (the reader's
-      // cross-reference); the id is the document's position.
-      id: `step-${steps.length + 1}`,
-      stepNumber,
-      sourceText,
-      actions: extractActionCandidates(sourceText, provenance),
-      conditions: {
-        ...(volumes.length > 0 ? { volumes } : {}),
-        ...(durations.length > 0 ? { durations } : {}),
-        ...(temperatures.length > 0 ? { temperatures } : {}),
-        ...(speeds.length > 0 ? { speeds } : {}),
-      },
-      materials: uniqueStrings([
-        ...labelsInText(ALL_SOURCE_TERMS.materials, sourceText),
-        ...extractGenericMaterialMentions(sourceText),
-      ]),
-      labware: uniqueStrings([
-        ...labelsInText(ALL_SOURCE_TERMS.labware, sourceText),
-        ...extractGenericLabwareMentions(sourceText),
-      ]),
-      equipment: labelsInText(ALL_SOURCE_TERMS.equipment, sourceText),
-      notes: extractNotes(sourceText),
-      branches: extractBranches(sourceText),
-      provenance,
-      confidence: 0.9,
-    });
+    const stepNumber = Number.parseInt(match[1] ?? '', 10);
+    if (!Number.isFinite(stepNumber)) {
+      continue;
+    }
+    const substep = match[2];
+    labels.push({ labelStart, textStart, stepNumber, ...(substep ? { substep } : {}) });
+  }
+  return labels;
+}
+
+function extractProtocolSteps(document: VendorProtocolDocument): ProtocolStepCandidate[] {
+  // Steps belong to the protocol they came from: a handbook holds several, and
+  // the choice between them is the question the intake must ask. Concatenating
+  // them all produced one long protocol with no way to know which steps belong
+  // to "blood, spin column" versus "tissue, DNeasy 96".
+  const protocols = document.sections.filter((section) => section.kind === 'protocol');
+  // Vendor manuals write a step's VARIANTS as sub-numbered steps that follow
+  // the dispatching step: "1. For blood with non-nucleated erythrocytes, follow
+  // step 1a; … 1b; … 1c." then "1a. Non-nucleated: …", "1b. Nucleated: …".
+  // The label therefore carries an optional trailing letter. Matching only
+  // `\d+\.` folded the variants into the parent step and mis-split the steps
+  // that followed them (a real DNeasy handbook produced 72 mangled "steps" and
+  // no variants), so the letter is captured and kept on `substep` — the
+  // reader's own cross-reference, resolved by the branch deriver.
+  const steps: ProtocolStepCandidate[] = [];
+  for (const protocol of protocols) {
+    const labels = findStepLabels(protocol.sourceText);
+    for (const [position, label] of labels.entries()) {
+      const nextLabel = labels[position + 1];
+      const sourceText = protocol.sourceText
+        .slice(label.textStart, nextLabel ? nextLabel.labelStart : protocol.sourceText.length)
+        .trim();
+      const stepNumber = label.stepNumber;
+      const substep = label.substep;
+      if (!Number.isFinite(stepNumber) || !sourceText) {
+        continue;
+      }
+      const page = findPageForText(document.pages, sourceText, protocol.provenance.pageStart);
+      const spanStart = label.labelStart + protocol.provenance.spanStart!;
+      const provenance = makeProvenance(
+        document.source.documentId,
+        page,
+        protocol.id,
+        undefined,
+        spanStart,
+        spanStart + sourceText.length,
+      );
+      const volumes = extractQuantities(sourceText, 'volume');
+      const durations = extractQuantities(sourceText, 'duration');
+      const temperatures = extractQuantities(sourceText, 'temperature');
+      const speeds = extractQuantities(sourceText, 'speed');
+      steps.push({
+        // Document-order id: several vendor manuals number more than one list
+        // from 1 inside the same protocol section (ZymoBIOMICS Quick-DNA: a main
+        // protocol, then "For samples collected in DNA/RNA Shield..." restarting
+        // at 1). Keying the id on the MANUAL's number made ids collide within one
+        // document, so branch gating and step selection pointed at two steps at
+        // once. The manual's own number stays on `stepNumber` (the reader's
+        // cross-reference); the id is the document's position.
+        id: `step-${steps.length + 1}`,
+        stepNumber,
+        ...(substep ? { substep } : {}),
+        sectionId: protocol.id,
+        sourceText,
+        actions: extractActionCandidates(sourceText, provenance),
+        conditions: {
+          ...(volumes.length > 0 ? { volumes } : {}),
+          ...(durations.length > 0 ? { durations } : {}),
+          ...(temperatures.length > 0 ? { temperatures } : {}),
+          ...(speeds.length > 0 ? { speeds } : {}),
+        },
+        materials: uniqueStrings([
+          ...labelsInText(ALL_SOURCE_TERMS.materials, sourceText),
+          ...extractGenericMaterialMentions(sourceText),
+        ]),
+        labware: uniqueStrings([
+          ...labelsInText(ALL_SOURCE_TERMS.labware, sourceText),
+          ...extractGenericLabwareMentions(sourceText),
+        ]),
+        equipment: labelsInText(ALL_SOURCE_TERMS.equipment, sourceText),
+        notes: extractNotes(sourceText),
+        branches: extractBranches(sourceText),
+        provenance,
+        confidence: 0.9,
+      });
+    }
   }
   return steps;
 }
