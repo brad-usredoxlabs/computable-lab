@@ -1,0 +1,16 @@
+# Data file: what the nightly corpus crawl searches for.
+# Consumed by: npm run corpus:intake -w server (server/src/tools/corpusIntake.ts)
+# Business logic is data — the runner never hardcodes topics.
+version: 1
+search:
+  category: research paper
+  numResults: 5
+  includeDomains: []            # empty = open web
+  contentMode: highlights
+topics:
+  - id: adipocyte-differentiation
+    query: "adipocyte differentiation assay protocol kit manufacturer manual PDF"
+  - id: oxidative-stress-ros
+    query: "intracellular ROS detection assay protocol kit manual PDF"
+  - id: dna-purification-microbiome
+    query: "microbial DNA purification kit protocol manual PDF"
