@@ -1,8 +1,0 @@
-kind: protocol-worker-report
-protocolId: bulletin-6816
-variant: robot_deck
-generated_at: 2026-05-09T06:01:42.661Z
-status: blocked
-coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
-touchedFiles: []
-message: no meaningful files touched

@@ -1,7 +1,0 @@
-kind: protocol-foundry-patch-spec-index
-protocolId: cayman-immuno-oncology
-variant: bench_plate_multichannel
-patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-resolver-wiring.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-scale-verb-expander.yaml

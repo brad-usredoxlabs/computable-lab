@@ -1,8 +1,0 @@
-kind: protocol-worker-report
-protocolId: bulletin-6816
-variant: bench_plate_multichannel
-generated_at: 2026-05-09T05:33:47.293Z
-status: blocked
-coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
-touchedFiles: []
-message: no meaningful files touched

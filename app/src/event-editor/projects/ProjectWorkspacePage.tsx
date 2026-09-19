@@ -121,9 +121,17 @@ function WorkspaceShellHost({
   // Ensure the CURRENT project tab exists for this study (deep-links, direct
   // navigation, refresh) — in the current tab (browser model), never a separate
   // re-activated tab. Idempotent when the active tab is already this project.
+  //
+  // Deps are the STABLE `navigateActiveTab` callback (memoized in
+  // OpenTabsProvider), NOT the context object: that object gets a fresh identity
+  // on every provider render, so depending on it here made this effect re-fire
+  // on every dispatch it caused — an unbounded update loop
+  // ("Maximum update depth exceeded"). Same trap as RunWorkspacePage.
+  const navigateActiveTab = openTabs?.navigateActiveTab
   useEffect(() => {
-    openTabs?.navigateActiveTab({ id: projectTabId(studyId), kind: 'project', studyId, title: studyTitle ?? studyId })
-  }, [studyId, studyTitle, openTabs])
+    if (!navigateActiveTab) return
+    navigateActiveTab({ id: projectTabId(studyId), kind: 'project', studyId, title: studyTitle ?? studyId })
+  }, [studyId, studyTitle, navigateActiveTab])
 
   // Phase 10 deep-link: open a deck tab for the named event graph.
   const openedRef = useRef<string | null>(null)

@@ -105,6 +105,21 @@ export function forwardTargetId(state: OpenTabsState): string | null {
   return c < state.history.length ? state.history[c] : null
 }
 
+/**
+ * Shallow payload equality for two tab values of the same entity — the test the
+ * no-op navigation guard uses. Deliberately compares every own key (title,
+ * runId, eventGraphId, ...) so a genuinely enriched tab (e.g. a run whose
+ * methodEventGraphId just resolved) is NOT treated as unchanged.
+ */
+function sameTabPayload(a: WorkspaceTab, b: WorkspaceTab): boolean {
+  const keysA = Object.keys(a).sort()
+  const keysB = Object.keys(b).sort()
+  if (keysA.length !== keysB.length || keysA.some((k, i) => k !== keysB[i])) return false
+  const ra = a as unknown as Record<string, unknown>
+  const rb = b as unknown as Record<string, unknown>
+  return keysA.every((k) => ra[k] === rb[k])
+}
+
 /** Create a fresh tab state entry; its current content is the history's first entry. */
 function newOpenTabState(tab: WorkspaceTab, seedBreadcrumb?: BreadcrumbItem[]): OpenTabState {
   return {
@@ -178,6 +193,16 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
         // id (which may be a freshly-minted one) so we never collide with an
         // already-open tab carrying the base id. Keep content + crumb + trail.
         const keptTab = { ...tab, id: activeTabId as string }
+        const entry = state.tabs[idx]!
+        // NO-OP GUARD. Host pages re-register their tab on mount (and whenever
+        // their context object changes identity), so this action is dispatched
+        // repeatedly with the same payload. Returning a brand-new state object
+        // for a non-change made that a feedback loop: new state → new context
+        // identity → effect re-fires → dispatch → "Maximum update depth
+        // exceeded" (WorkspaceShellHost). A no-op must return the SAME state.
+        if (!crumb && sameTabPayload(entry.tab, keptTab)) {
+          return state
+        }
         const nextTabs = state.tabs.map((entry, i) =>
           i === idx
             ? {
