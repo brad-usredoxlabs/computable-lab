@@ -17,6 +17,16 @@ export interface RunDeckLock {
   lockedAt: string
 }
 
+/**
+ * The run's remembered deck — a mutable memory of the platform/variant the
+ * user last left the run on. NOT the authoritative lock (that is
+ * methodDeckLock, enforced at graph save); this only drives reload UX.
+ */
+export interface RunDeckMemory {
+  platformId: string
+  variantId: string
+}
+
 export interface AcceptedEventGraphPayload {
   events: PlateEvent[]
   labwares: Labware[]
@@ -228,6 +238,33 @@ export async function ensureRunDeckLock(
   })
   return lock
 }
+
+/**
+ * Persist the run's current deck (platform/variant) back to the run record so
+ * a reload remembers where the user left it — deliberately NOT a lock, just
+ * deck memory (see RunDeckMemory). Reads the record first and merges, so
+ * unrelated run fields survive; skips the write when the record already
+ * remembers this exact deck. Assumes platform/variant are valid (the switcher
+ * only offers manifest variants).
+ */
+export async function writeRunDeckMemory(
+  input: { runId: string | null } & RunDeckMemory,
+  getRecord: GetRecordFn = apiClient.getRecord,
+  updateRecord: UpdateRecordFn = apiClient.updateRecord,
+): Promise<void> {
+  if (!input.runId || !input.platformId || !input.variantId) return
+  const run = await getRecord(input.runId)
+  const payload = (run.payload ?? {}) as Record<string, unknown>
+  if (payload.methodPlatform === input.platformId && payload.methodVariantId === input.variantId) {
+    return
+  }
+  await updateRecord(input.runId, {
+    ...payload,
+    methodPlatform: input.platformId,
+    methodVariantId: input.variantId,
+  })
+}
+
 export function buildAcceptedEventGraphPayload(input: Omit<PersistAcceptedEventGraphInput, 'eventGraphId'>): AcceptedEventGraphPayload {
   const runId = input.runId || undefined
   return {

@@ -140,6 +140,10 @@ properties:
     type: string
     description: "Execution platform lock for the active run method."
 
+  methodVariantId:
+    type: string
+    description: "Deck variant the run was last left on (deck memory; the authoritative lock is methodDeckLock)."
+
   methodDeckLock:
     type: object
     description: "Authoritative deck layout lock for event-editor AI/compiler drafting in this run."

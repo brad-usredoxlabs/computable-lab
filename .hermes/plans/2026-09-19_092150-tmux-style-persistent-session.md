@@ -1708,3 +1708,72 @@ Definition of done:
 2. Live multi-attach streaming (SSE or a `BroadcastChannel` + a server-sent version counter) — worth it only if two devices editing simultaneously turns out to be real usage.
 3. The `knowledge` surface declares `path: "/knowledge"` but `app/src/App.tsx` has no `/knowledge` route (it has `/claims`, `/record/:recordId`, `/literature`). Either add the route or drop `path` from that entry — decide with Brad, since it changes navigation semantics.
 4. Should a session survive the user switching identity in the same browser? Today `CurrentUserProvider` reloads the page on switch, and the per-user storage key means each identity gets their own session. Probably right; confirm.
+
+---
+
+## Implementation status — EXECUTED 2026-09-19 (all tasks landed)
+
+Commits (oldest first):
+
+| Commit | What |
+|---|---|
+| `bbd94351` | the e2e gate itself (RED before the fix: 2 failed) |
+| `b435ac90` | sync hydration + persist gate + per-user storage keys (+ jsdom localStorage shim) |
+| `60a0742f` | surfaces: real route patterns + declarative `params`; Ajv membership; `surfaceRoute()` |
+| `4f76d08f` | `GET/PUT /api/session` + `WorkspaceSessionStore` + `lab-session.schema.yaml` |
+| `acb128b0` | session document + `useSessionSync` attach + `openSurface` |
+| `c81be164`, `9d2a8521` | e2e hygiene (serial mode, clean session slate) |
+
+### Verification (real output, not adjectives)
+
+```
+app/e2e/session-persistence.spec.ts --project=chromium     → 3 passed
+app vitest src/shared/{shell,session,surfaces}             → 15 files / 78 tests passed
+server vitest src/{surfaces,workspace-session,schema}      → all green except the stale
+                                                             surfacesAjv.test.ts (below)
+npm run typecheck -w server                                → exit 0
+npm run typecheck -w app                                   → 46 pre-existing errors, NONE in
+                                                             the files this plan touched
+```
+
+Live drive on :5174 (browser, after the fix):
+
+```
+1) fresh load at "/"   → url /runs/RUN-2026-09-19-run-ez6g (the active tab), 3 tabs, storage intact
+2) reload             → url unchanged, 3 tabs, storage 3
+3) fresh device       → adopts the server session (3 tabs) and lands on the same active route
+```
+`GET /api/session` round-trips; an unknown tab kind returns 400 (Ajv).
+
+### Deviations from the plan (and why)
+
+1. **Routes come from `tabPath`, not from the registry.** The session document stores
+   tabs (kind + ids); the URL is derived by the existing exhaustive `tabPath()`.
+   `surfaceRoute()` (registry → URL) is used for AI/"open-surface" targets instead.
+   One route table, not two (DRY).
+2. **`params` is the deep-linkability flag**, and the registry `id` vocabulary is an
+   Ajv `enum` — this contradicts the untracked `server/src/surfaces/surfacesAjv.test.ts`,
+   which encodes an older 8-surface design (`event-editor`, `materials`,
+   `formulations`, `ingestion`, …) and an "arbitrary 9th surface" requirement that
+   cannot coexist with the closed `SurfaceId` union. That file was already RED before
+   this work (5 failures) and still is (5 failures); none of them are about the
+   session/tab work. Decide: widen `SurfaceId` to `string`, or delete that spec.
+3. **Tests run serially** (`test.describe.configure({ mode: 'serial' })`) because the
+   session is per-user server state; parallel tests adopted each other's session.
+4. **`useSessionSync` takes an `onAdopt` callback** rather than calling
+   `useNavigate()` itself, so the hook stays router-free and unit-testable; `App.tsx`
+   wires the navigation.
+5. **A test-env fix was necessary and is included**: jsdom under Node 26 leaves
+   `window.localStorage` undefined, which silently broke every storage-backed unit
+   test. `app/vitest.config.ts` now sets a jsdom url and `app/src/test/setup.ts`
+   installs an in-memory `Storage` when the environment provides none.
+
+### Known follow-ups (not done here)
+
+- `openSurface()` is implemented + tested but not yet wired to the AI action channel
+  (`agent-action.schema.yaml` `open-surface`). Next slice.
+- Multi-tab **detach** (per-device sessions with an explicit attach gesture): the
+  store already takes an arbitrary id, so this is 1 path segment + a device id.
+- Backend was restarted manually (tsx `--watch` had not picked up `server.ts`); the
+  new backend is a Hermes background process, and `.run/backend.pid` still holds the
+  old PID. `./start-app.sh` cleans that up on its next run.

@@ -10,6 +10,7 @@ import {
   ensureRunDeckLock,
   persistAcceptedEventGraph,
   RunDeckLockConflictError,
+  writeRunDeckMemory,
 } from './eventGraphPersistence'
 
 const event: PlateEvent = {
@@ -323,5 +324,50 @@ describe('event-editor accepted event graph persistence', () => {
       await Promise.resolve()
       expect(warn).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('writeRunDeckMemory', () => {
+  it('writes the deck onto the run payload, preserving other fields', async () => {
+    const getRecord = vi.fn().mockResolvedValue({
+      payload: { kind: 'run', recordId: 'RUN-1', title: 'R', methodPlatform: 'manual' },
+    })
+    const updateRecord = vi.fn().mockResolvedValue({ ok: true })
+    await writeRunDeckMemory(
+      { runId: 'RUN-1', platformId: 'manual', variantId: 'manual_freeform' },
+      getRecord,
+      updateRecord,
+    )
+    expect(updateRecord).toHaveBeenCalledWith('RUN-1', expect.objectContaining({
+      kind: 'run',
+      title: 'R',
+      methodPlatform: 'manual',
+      methodVariantId: 'manual_freeform',
+    }))
+  })
+
+  it('is a no-op when the record already remembers this deck', async () => {
+    const getRecord = vi.fn().mockResolvedValue({
+      payload: { kind: 'run', recordId: 'RUN-1', methodPlatform: 'manual', methodVariantId: 'manual_freeform' },
+    })
+    const updateRecord = vi.fn()
+    await writeRunDeckMemory(
+      { runId: 'RUN-1', platformId: 'manual', variantId: 'manual_freeform' },
+      getRecord,
+      updateRecord,
+    )
+    expect(updateRecord).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op without a runId', async () => {
+    const getRecord = vi.fn()
+    const updateRecord = vi.fn()
+    await writeRunDeckMemory(
+      { runId: null, platformId: 'manual', variantId: 'manual_freeform' },
+      getRecord,
+      updateRecord,
+    )
+    expect(getRecord).not.toHaveBeenCalled()
+    expect(updateRecord).not.toHaveBeenCalled()
   })
 })
