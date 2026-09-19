@@ -13,6 +13,7 @@ import type {
 } from '../../types/kernel'
 import type { UISpec, UISpecResponse, RecordWithUIResponse, EditorProjectionResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
+import type { LabwareDefinitionSearchHit } from '../../types/labware'
 import type {
   ConfigResponse,
   ConfigPatchResponse,
@@ -54,6 +55,16 @@ import type {
 import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
 import { API_BASE, getCurrentUserId, getSessionToken, setSessionToken } from './base'
+
+/** The persisted workspace session (GET/PUT /api/session). */
+export interface WorkspaceSessionPayload {
+  version: 1
+  userId: string
+  /** WorkspaceTab payloads minus their slot ids (see shared/session/tabId.ts). */
+  tabs: unknown[]
+  activeTabId: string | null
+  updatedAt: string
+}
 
 export interface ProtocolContextResponse {
   projectTemplates: RecordEnvelope[]
@@ -2076,6 +2087,22 @@ export const apiClient = {
     return request(`/surfaces`)
   },
 
+  /** GET /api/session — the persisted workspace session for the request user. */
+  async getSession(): Promise<{ session: WorkspaceSessionPayload }> {
+    return request(`/session`)
+  },
+
+  /** PUT /api/session — upsert the workspace session (last writer wins). */
+  async putSession(session: {
+    tabs: unknown[]
+    activeTabId: string | null
+  }): Promise<{ session: WorkspaceSessionPayload }> {
+    return request(`/session`, {
+      method: 'PUT',
+      body: JSON.stringify(session),
+    })
+  },
+
   /** GET /api/storage/devices — external storage devices (S3/NAS/USB). */
   async listStorageDevices(): Promise<{
     devices: Array<{ id: string; label: string; kind: string; default: boolean }>;
@@ -2569,7 +2596,7 @@ export const apiClient = {
   async searchLabwareDefinitions(body: {
     q?: string
     limit?: number
-  }): Promise<{ hits: Array<{ recordId: string; label: string; kind: 'labware-definition' }>; total: number }> {
+  }): Promise<{ hits: LabwareDefinitionSearchHit[]; total: number }> {
     return request('/labware-definitions/search', {
       method: 'POST',
       body: JSON.stringify(body),

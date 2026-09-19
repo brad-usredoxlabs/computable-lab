@@ -24,7 +24,7 @@
  */
 
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
@@ -32,6 +32,7 @@ import { OpenTabsProvider } from './shared/shell/OpenTabsContext'
 import { useMentionNavigation } from './shared/taptab/slashMenu'
 import { Slot } from './extensions'
 import { useRecordHistory } from './shared/shell/useRecordHistory'
+import { useSessionSync } from './shared/session/useSessionSync'
 import './shared/styles/tokens.css'
 
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
@@ -86,6 +87,19 @@ function RecordHistoryListener(): null {
   return null
 }
 
+/** Attaches the tab store to the persisted, cross-device workspace session. */
+function SessionSync(): null {
+  const navigate = useNavigate()
+  useSessionSync({
+    onAdopt: (path) => {
+      // Attached to a session from another device (or from storage) — go where
+      // that session is instead of staying on the launcher.
+      if (path) navigate(path)
+    },
+  })
+  return null
+}
+
 function NotFoundRoute() {
   return (
     <main style={{ padding: '2rem' }} data-testid="not-found-route">
@@ -111,6 +125,7 @@ export function App() {
             <BrowserRouter>
               <MentionNavigator />
               <RecordHistoryListener />
+              <SessionSync />
               <Routes>
               {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
                   by the ProjectCollectionView). */}
