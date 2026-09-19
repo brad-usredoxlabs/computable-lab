@@ -24,6 +24,13 @@ import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
 import type { ExtractionOptions, ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
 import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
 import { clampZoom, fitWidthScale, MIN_ZOOM, MAX_ZOOM, steppedZoom } from './pdfZoom'
+import {
+  DEFAULT_SPLIT_PCT,
+  MAX_SPLIT_PCT,
+  MIN_SPLIT_PCT,
+  nudgeSplitPct,
+  splitPctFromDrag,
+} from './splitGeometry'
 import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
 import {
   reviewCandidateToProtocolPayload,
@@ -107,7 +114,8 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [saveAsTitle, setSaveAsTitle] = useState('')
   // Resizable split — default 40:60 (PDF : editor).
-  const [leftPct, setLeftPct] = useState(40)
+  const [leftPct, setLeftPct] = useState(DEFAULT_SPLIT_PCT)
+  const [splitDragging, setSplitDragging] = useState(false)
   // PDF zoom. Default is FIT: the preview used to render at a fixed 1.4 scale,
   // which is wider than this pane on a laptop, so the document scrolled off the
   // window sideways with no way back out.
@@ -116,7 +124,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [paneWidth, setPaneWidth] = useState(0)
   const [basePageWidth, setBasePageWidth] = useState(0)
   const pagesRef = useRef<HTMLDivElement | null>(null)
-  const splitDragRef = useRef<{ startX: number; startPct: number } | null>(null)
+  const splitDragRef = useRef<{ pointerId: number; startX: number; startPct: number; panelWidth: number } | null>(null)
   const splitPanelRef = useRef<HTMLDivElement | null>(null)
 
   // Fetch the protocol editor projection once (create mode) so TapTab can render.
@@ -585,24 +593,67 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   }, [])
 
   // Split-drag handlers.
-  const handleSplitPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    splitDragRef.current = { startX: e.clientX, startPct: leftPct }
-  }, [leftPct])
+  /**
+   * Drag the divider. The pointer is CAPTURED on pointerdown: without that the
+   * drag dies the moment the pointer leaves the handle (it is a few pixels
+   * wide), which is why the split felt broken rather than merely fiddly.
+   */
+  const handleSplitPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const panel = splitPanelRef.current
+      if (!panel) return
+      const rect = panel.getBoundingClientRect()
+      if (rect.width === 0) return
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      splitDragRef.current = { pointerId: e.pointerId, startX: e.clientX, startPct: leftPct, panelWidth: rect.width }
+      setSplitDragging(true)
+    },
+    [leftPct],
+  )
 
-  const handleSplitPointerMove = useCallback((e: React.PointerEvent) => {
+  const handleSplitPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const drag = splitDragRef.current
-    if (!drag) return
-    const panel = splitPanelRef.current
-    if (!panel) return
-    const rect = panel.getBoundingClientRect()
-    if (rect.width === 0) return
-    const deltaPct = ((e.clientX - drag.startX) / rect.width) * 100
-    setLeftPct(Math.min(70, Math.max(20, drag.startPct + deltaPct)))
+    if (!drag || drag.pointerId !== e.pointerId) return
+    setLeftPct(
+      splitPctFromDrag({
+        startPct: drag.startPct,
+        startX: drag.startX,
+        clientX: e.clientX,
+        panelWidth: drag.panelWidth,
+      }),
+    )
   }, [])
 
-  const handleSplitPointerUp = useCallback(() => {
+  const handleSplitPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = splitDragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
     splitDragRef.current = null
+    setSplitDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
+  // Keyboard path for the same control (a divider you can only drag with a
+  // mouse is unusable on a trackpad with a tired hand, and untestable).
+  const handleSplitKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setLeftPct((pct) => nudgeSplitPct(pct, -1))
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setLeftPct((pct) => nudgeSplitPct(pct, 1))
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setLeftPct(MIN_SPLIT_PCT)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setLeftPct(MAX_SPLIT_PCT)
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setLeftPct(DEFAULT_SPLIT_PCT)
+    }
   }, [])
 
   if (loadError) {
@@ -627,7 +678,10 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const showText = pdfView === 'text' || (pdfView === 'pdf' && !pdfDoc)
 
   return (
-    <div className="vpdf-review" data-testid="vpdf-review">
+    <div
+      className={`vpdf-review${splitDragging ? ' vpdf-review--split-dragging' : ''}`}
+      data-testid="vpdf-review"
+    >
       <header className="vpdf-review__header">
         {embedded ? null : (
           <button
@@ -774,12 +828,22 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
         {/* Split handle */}
         <div
-          className="vpdf-review__split"
+          className={`vpdf-review__split${splitDragging ? ' vpdf-review__split--dragging' : ''}`}
           data-testid="vpdf-split-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the PDF pane"
+          aria-valuenow={Math.round(leftPct)}
+          aria-valuemin={MIN_SPLIT_PCT}
+          aria-valuemax={MAX_SPLIT_PCT}
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
           onPointerDown={handleSplitPointerDown}
           onPointerMove={handleSplitPointerMove}
           onPointerUp={handleSplitPointerUp}
           onPointerCancel={handleSplitPointerUp}
+          onKeyDown={handleSplitKeyDown}
+          onDoubleClick={() => setLeftPct(DEFAULT_SPLIT_PCT)}
         >
           <span>PDF · Editor</span>
         </div>
