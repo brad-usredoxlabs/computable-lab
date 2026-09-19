@@ -1520,10 +1520,33 @@ export interface IntakeTreeDetailResponse {
   proposals: IntakeProposal[]
 }
 
+/** One step of the vendor candidate — the id the tree's conditions gate. */
+export interface IntakeReviewStep {
+  stepId: string
+  ordinal: number
+  label: string
+  description: string
+  /** Axis ids whose conditions gate this step (empty = always runs). */
+  gatedByAxisIds: string[]
+  gatedByQuestions: string[]
+  branches: string[]
+  provenancePages: number[]
+  provenanceSectionId?: string
+}
+
+/** The extraction the questions gate — the body the reviewer edits. */
+export interface IntakeReviewCandidate {
+  documentId: string
+  title: string
+  steps: IntakeReviewStep[]
+  roles: { materials: string[]; labware: string[]; equipment: string[] }
+}
+
 /**
  * The review read model for one vendor-PDF ARTIFACT: the artifact, the tree
  * derived from that same document (joined by content hash / stored file name),
- * and every proposal under it. `matchVia` says which join rule matched.
+ * the candidate whose steps the tree gates, and every proposal under it.
+ * `matchVia` says which join rule matched.
  */
 export interface IntakeReviewDetailResponse extends IntakeTreeDetailResponse {
   matchVia: 'sha256' | 'stored_path_basename'
@@ -1533,6 +1556,8 @@ export interface IntakeReviewDetailResponse extends IntakeTreeDetailResponse {
     storedPath: string | null
     sha256: string | null
   }
+  /** null when the extraction was never persisted for this document. */
+  candidate: IntakeReviewCandidate | null
 }
 
 /** The join found no tree for this artifact — a gap, with what it did see. */
@@ -4316,6 +4341,7 @@ export const apiClient = {
       return {
         matchVia: response.matchVia,
         artifact: response.artifact,
+        candidate: response.candidate ?? null,
         tree: response.tree,
         proposals: response.proposals,
       }

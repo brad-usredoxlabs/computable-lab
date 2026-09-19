@@ -5,20 +5,18 @@
  * The vendor PDF already states them: lettered a./b. branches in the step text
  * and tables its steps point at ("Add sample ... using the table below"). The
  * intake engine lifts them into a decision tree and enumerates one subgraph
- * proposal per answer combination. This panel shows them for the artifact the
- * reviewer has open, resolves the reviewer's answers to the matching proposal,
- * and reports which steps that branch activates.
+ * proposal per answer combination. This panel shows them, resolves the
+ * reviewer's answers to the matching proposal, and reports which steps that
+ * branch activates.
  *
- * It never invents a question: no attributable tree means the panel says so and
- * stays quiet (see `getIntakeReview` returning null on a gap).
+ * Presentational by design: its owner (the review page) loads the review read
+ * model once and hands down `axes` + `proposals`, so the questions and the step
+ * list cannot drift apart or be fetched twice. It never invents a question — an
+ * empty axis list renders the owner's `gap` sentence and nothing else.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
-import type {
-  IntakeAxis,
-  IntakeProposal,
-  IntakeReviewDetailResponse,
-} from '../../shared/api/client'
+import type { IntakeAxis, IntakeProposal } from '../../shared/api/client'
 
 export interface ResolvedReviewBranch {
   axes: IntakeAxis[]
@@ -31,9 +29,13 @@ export interface ResolvedReviewBranch {
 }
 
 export interface BranchQuestionsPanelProps {
-  /** The vendor-pdf artifact record the reviewer has open (VPDF-...). */
-  artifactId: string
+  axes: IntakeAxis[]
+  proposals: IntakeProposal[]
+  /** Shown when the document has no answerable questions (never a guess). */
+  gap?: string | null
   onResolved?: (resolved: ResolvedReviewBranch | null) => void
+  /** Fired after a redraft lands, so the owner can reload the review. */
+  onRedrafted?: () => void
 }
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -42,73 +44,36 @@ const ORIGIN_LABEL: Record<string, string> = {
   ai_suggested: 'raised by the AI pass (document evidence attached)',
 }
 
-export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQuestionsPanelProps) {
-  const [review, setReview] = useState<IntakeReviewDetailResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+export default function BranchQuestionsPanel({
+  axes,
+  proposals,
+  gap,
+  onResolved,
+  onRedrafted,
+}: BranchQuestionsPanelProps) {
   const [choices, setChoices] = useState<Record<string, string>>({})
   const [prompt, setPrompt] = useState('')
   const [redrafting, setRedrafting] = useState(false)
   const [redraftNote, setRedraftNote] = useState<string | null>(null)
   const [redraftError, setRedraftError] = useState<string | null>(null)
-  const [reloadToken, setReloadToken] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!artifactId) {
-      setReview(null)
-      return
-    }
-    setLoading(true)
-    setLoadError(null)
-    apiClient
-      .getIntakeReview(artifactId)
-      .then((res) => {
-        if (cancelled) return
-        setReview(res)
-        setChoices((prev) => {
-          // Keep the reviewer's answers across a reload when they still apply.
-          const next: Record<string, string> = {}
-          for (const axis of res?.tree.axes ?? []) {
-            const chosen = prev[axis.axisId]
-            if (chosen && axis.conditions.some((c) => c.id === chosen)) next[axis.axisId] = chosen
-          }
-          return next
-        })
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        setReview(null)
-        setLoadError(err instanceof Error ? err.message : 'Could not load the document’s questions')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [artifactId, reloadToken])
-
-  const axes = useMemo<IntakeAxis[]>(() => review?.tree.axes ?? [], [review])
 
   const answeredAll = axes.length > 0 && axes.every((a) => typeof choices[a.axisId] === 'string')
 
   const matchedProposal = useMemo<IntakeProposal | null>(() => {
-    if (!review || !answeredAll) return null
+    if (!answeredAll) return null
     return (
-      review.proposals.find(
+      proposals.find(
         (p) =>
           p.branchPath.length === axes.length &&
           p.branchPath.every((entry) => choices[entry.axisId] === entry.conditionId),
       ) ?? null
     )
-  }, [review, axes, choices, answeredAll])
+  }, [proposals, axes, choices, answeredAll])
 
-  const activeStepIds = useMemo<string[]>(() => {
-    if (!matchedProposal) return []
-    if (Array.isArray(matchedProposal.activeStepIds)) return matchedProposal.activeStepIds
-    return []
-  }, [matchedProposal])
+  const activeStepIds = useMemo<string[]>(
+    () => (matchedProposal && Array.isArray(matchedProposal.activeStepIds) ? matchedProposal.activeStepIds : []),
+    [matchedProposal],
+  )
 
   useEffect(() => {
     if (!onResolved) return
@@ -125,8 +90,8 @@ export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQ
 
   /**
    * Send an instruction back to the AI for THIS branch realization: attach the
-   * prompt to the proposal, run the redraft, then reload the review so the new
-   * revision's graph is what the reviewer sees next.
+   * prompt to the proposal, run the redraft, then let the owner reload the
+   * review so the new revision's graph is what the reviewer sees next.
    */
   const handleRedraft = useCallback(async () => {
     const proposalId = matchedProposal?.recordId
@@ -139,40 +104,19 @@ export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQ
       const result = await apiClient.redraftIntakeProposal(proposalId)
       setRedraftNote(`Redrafted ${result.proposalRecordIds.join(', ') || proposalId}.`)
       setPrompt('')
-      setReloadToken((n) => n + 1)
+      onRedrafted?.()
     } catch (err) {
       setRedraftError(err instanceof Error ? err.message : 'Redraft failed')
     } finally {
       setRedrafting(false)
     }
-  }, [matchedProposal, prompt])
+  }, [matchedProposal, prompt, onRedrafted])
 
-  if (!artifactId) return null
-
-  if (loading) {
-    return (
-      <section className="branch-questions" data-testid="branch-questions">
-        <p className="branch-questions__muted">Reading the document’s questions…</p>
-      </section>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <section className="branch-questions" data-testid="branch-questions">
-        <p className="branch-questions__error" role="alert">
-          {loadError}
-        </p>
-      </section>
-    )
-  }
-
-  if (!review || axes.length === 0) {
+  if (axes.length === 0) {
     return (
       <section className="branch-questions" data-testid="branch-questions">
         <p className="branch-questions__muted">
-          This document states no if/then questions that the intake engine could derive
-          {review ? ' (its steps carry no branches and no table its steps point at)' : ' (no decision tree is attributable to it yet)'}.
+          {gap ?? 'This document states no if/then questions that the intake engine could derive.'}
         </p>
       </section>
     )
@@ -183,9 +127,8 @@ export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQ
       <header className="branch-questions__header">
         <h3 className="branch-questions__title">This document asks</h3>
         <p className="branch-questions__subtitle">
-          {review.tree.axisCount} question{review.tree.axisCount === 1 ? '' : 's'} →{' '}
-          {review.tree.proposalCount} branch realization{review.tree.proposalCount === 1 ? '' : 's'}
-          {review.matchVia === 'sha256' ? ' · matched to this PDF by content hash' : ''}
+          {axes.length} question{axes.length === 1 ? '' : 's'} → {proposals.length} branch realization
+          {proposals.length === 1 ? '' : 's'}
         </p>
       </header>
 
@@ -216,9 +159,7 @@ export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQ
 
       <footer className="branch-questions__footer" data-testid="branch-questions-result">
         {!answeredAll ? (
-          <p className="branch-questions__muted">
-            Answer every question to see which steps this branch runs.
-          </p>
+          <p className="branch-questions__muted">Answer every question to see which steps this branch runs.</p>
         ) : matchedProposal ? (
           <p className="branch-questions__resolved">
             This branch runs <strong>{activeStepIds.length}</strong> step
@@ -228,8 +169,8 @@ export default function BranchQuestionsPanel({ artifactId, onResolved }: BranchQ
           </p>
         ) : (
           <p className="branch-questions__error" role="alert">
-            No realization was enumerated for this combination — the branch product was capped. Say so
-            rather than guessing.
+            No realization was enumerated for this combination — the branch product was capped. Say so rather
+            than guessing.
           </p>
         )}
 

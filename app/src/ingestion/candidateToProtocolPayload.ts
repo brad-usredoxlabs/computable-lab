@@ -255,3 +255,82 @@ export function treeAxesToBranchAxes(
         })),
     }))
 }
+/** One step row from the intake review read model (the vendor candidate's own
+ *  steps, carrying the ids the decision tree gates on). */
+export interface ReviewCandidateStep {
+  stepId: string
+  ordinal: number
+  label: string
+  description: string
+  gatedByAxisIds?: string[]
+  gatedByQuestions?: string[]
+  branches?: string[]
+  provenancePages?: number[]
+  provenanceSectionId?: string
+}
+
+export interface ReviewCandidate {
+  documentId: string
+  title: string
+  steps: ReviewCandidateStep[]
+  roles?: { materials?: string[]; labware?: string[]; equipment?: string[] }
+}
+
+/**
+ * Build the protocol payload the reviewer edits FROM THE SAME EXTRACTION the
+ * questions gate (the vendor candidate), not from a second AI extraction of the
+ * same PDF. Step ids therefore match the tree's `then_stepIds` — the panel can
+ * say "this branch runs step-001, step-004" and the editor shows exactly those
+ * rows.
+ *
+ * Conditional steps carry their gating questions as `notes` so a reader of the
+ * promoted protocol can see which branch each conditional step belongs to.
+ * Pure and side-effect-free.
+ */
+export function reviewCandidateToProtocolPayload(
+  candidate: ReviewCandidate,
+  recordId: string,
+  humanStepsText?: string,
+): MappedProtocolPayload {
+  // The review candidate carries plain labels (no normalized ids yet), so each
+  // label becomes its own role — same shape the AI mapper emits for an
+  // ungrounded item.
+  const roleOf = (label: string) => ({ roleId: slugId(label), description: label })
+
+  const steps: MappedProtocolStep[] = candidate.steps.map((step) => {
+    const conditional = (step.gatedByQuestions ?? []).filter((q) => q.trim().length > 0)
+    const prose = [
+      ...conditional.map((q) => `Runs only for the selected branch of: ${q}`),
+      ...(step.branches && step.branches.length > 0 ? [`Document branches: ${step.branches.join(' | ')}`] : []),
+    ]
+    const anchors: MappedProvenanceAnchor[] = (step.provenancePages ?? []).map((page, idx) => ({
+      anchorId: `src-${step.stepId}-${idx + 1}`,
+      pageNumber: page,
+      ...(step.provenanceSectionId ? { sectionId: step.provenanceSectionId } : {}),
+    }))
+    return {
+      stepId: step.stepId,
+      ordinal: step.ordinal,
+      // The extractor does not classify steps into the structured kinds; the
+      // biologist reclassifies in the editor (same rule as the AI mapper).
+      kind: 'other' as ProtocolStepKind,
+      label: step.label,
+      description: step.description,
+      ...(prose.length > 0 ? { notes: prose.join('\n') } : {}),
+      ...(anchors.length > 0 ? { provenance: anchors } : {}),
+    }
+  })
+
+  return {
+    kind: 'protocol',
+    recordId,
+    title: candidate.title?.trim() ? candidate.title.trim() : 'Untitled protocol',
+    steps,
+    roles: {
+      materialRoles: dedupeById((candidate.roles?.materials ?? []).map(roleOf)),
+      labwareRoles: dedupeById((candidate.roles?.labware ?? []).map(roleOf)),
+      instrumentRoles: dedupeById((candidate.roles?.equipment ?? []).map(roleOf)),
+    },
+    ...(humanStepsText?.trim() ? { humanStepsText } : {}),
+  }
+}

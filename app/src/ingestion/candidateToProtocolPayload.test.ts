@@ -3,6 +3,7 @@ import {
   candidateToProtocolPayload,
   normalizeProtocolPayload,
   treeAxesToBranchAxes,
+  reviewCandidateToProtocolPayload,
 } from './candidateToProtocolPayload'
 import type { AiProtocolCandidateSummary } from '../types/ai'
 
@@ -160,5 +161,71 @@ describe('treeAxesToBranchAxes (promotion carries the document\'s questions)', (
     ])
     expect(payload.branch_axes).toEqual([{ axisId: 'axis-sample-type', label: 'Which Sample Type?', conditions: [] }])
     expect(candidateToProtocolPayload(sampleCandidate(), 'PRT-x').branch_axes).toBeUndefined()
+  })
+})
+
+describe('reviewCandidateToProtocolPayload (the step ids the questions gate)', () => {
+  const reviewCandidate = {
+    documentId: 'vendor-protocol:zymobiomics-96-magbead-dna-kit-pdf',
+    title: 'ZymoBIOMICS 96 MagBead DNA Kit',
+    roles: { materials: ['ZymoBIOMICS Lysis Solution'], labware: ['BashingBead Lysis Rack'], equipment: ['Bead beater'] },
+    steps: [
+      {
+        stepId: 'step-001',
+        ordinal: 1,
+        label: 'Add sample to the BashingBead™ Lysis Module using the table below:',
+        description: 'Add sample to the BashingBead™ Lysis Module using the table below:',
+        gatedByAxisIds: ['branch-axis-lysis', 'axis-sample-type'],
+        gatedByQuestions: ['Which branch applies: rack / tubes?', 'Which Sample Type?'],
+        branches: ['a. If using ZymoBIOMICS BashingBead Lysis Rack (0.1 & 0.5 mm, D6002-96-7), add 550 µl.'],
+        provenancePages: [2],
+        provenanceSectionId: 'protocol',
+      },
+      {
+        stepId: 'step-004',
+        ordinal: 4,
+        label: 'Centrifuge at ≥ 4,000 x g for 5 minutes.',
+        description: 'Centrifuge at ≥ 4,000 x g for 5 minutes.',
+        gatedByAxisIds: ['branch-axis-lysis'],
+        gatedByQuestions: ['Which branch applies: rack / tubes?'],
+        branches: [],
+        provenancePages: [3],
+      },
+    ],
+  }
+
+  it('keeps the candidate step ids so the editor and the questions agree', () => {
+    const payload = reviewCandidateToProtocolPayload(reviewCandidate, 'PRT-x')
+    expect(payload.steps.map((s) => s.stepId)).toEqual(['step-001', 'step-004'])
+    expect(payload.steps.map((s) => s.ordinal)).toEqual([1, 4])
+    expect(payload.title).toBe('ZymoBIOMICS 96 MagBead DNA Kit')
+  })
+
+  it('records which branch each conditional step belongs to, as step notes', () => {
+    const payload = reviewCandidateToProtocolPayload(reviewCandidate, 'PRT-x')
+    expect(payload.steps[0]!.notes).toContain('Runs only for the selected branch of: Which Sample Type?')
+    expect(payload.steps[0]!.notes).toContain('Document branches: a. If using ZymoBIOMICS')
+    expect(payload.steps[1]!.notes).toContain('Runs only for the selected branch of: Which branch applies')
+    expect(payload.steps[1]!.notes).not.toContain('Which Sample Type?')
+  })
+
+  it('anchors every step to its PDF page and maps the candidate roles', () => {
+    const payload = reviewCandidateToProtocolPayload(reviewCandidate, 'PRT-x')
+    expect(payload.steps[0]!.provenance).toEqual([{ anchorId: 'src-step-001-1', pageNumber: 2, sectionId: 'protocol' }])
+    expect(payload.steps[1]!.provenance).toEqual([{ anchorId: 'src-step-004-1', pageNumber: 3 }])
+    expect(payload.roles.materialRoles).toEqual([
+      { roleId: 'zymobiomics-lysis-solution', description: 'ZymoBIOMICS Lysis Solution' },
+    ])
+    expect(payload.roles.labwareRoles[0]!.roleId).toBe('bashingbead-lysis-rack')
+    expect(payload.roles.instrumentRoles[0]!.roleId).toBe('bead-beater')
+  })
+
+  it('leaves an unconditional step with no notes', () => {
+    const payload = reviewCandidateToProtocolPayload(
+      { documentId: 'd', title: 't', steps: [{ stepId: 'step-002', ordinal: 2, label: 'Centrifuge.', description: 'Centrifuge.' }] },
+      'PRT-x',
+    )
+    expect(payload.steps[0]!.notes).toBeUndefined()
+    expect(payload.roles.materialRoles).toEqual([])
   })
 })

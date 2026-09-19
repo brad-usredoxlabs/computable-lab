@@ -22,8 +22,13 @@ import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
+import type { IntakeReviewDetailResponse } from '../shared/api/client'
 import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
-import { treeAxesToBranchAxes, type MappedBranchAxis } from './candidateToProtocolPayload'
+import {
+  reviewCandidateToProtocolPayload,
+  treeAxesToBranchAxes,
+  type MappedBranchAxis,
+} from './candidateToProtocolPayload'
 import { candidateToProtocolPayload, normalizeProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
 import './VendorPdfReviewPage.css'
 
@@ -75,6 +80,13 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   // The document's if/then questions, answered by the reviewer (branch panel).
   const [reviewBranch, setReviewBranch] = useState<ResolvedReviewBranch | null>(null)
+  // The intake read model for this artifact: which questions the document asks,
+  // and the candidate whose step ids they gate. Loaded ONCE here (not per
+  // panel) so the questions and the step list cannot drift or double-fetch.
+  const [review, setReview] = useState<IntakeReviewDetailResponse | null>(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [reviewToken, setReviewToken] = useState(0)
   const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -127,6 +139,31 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       cancelled = true
     }
   }, [recordId])
+
+  // Load the intake review for THIS artifact (questions + the gated steps).
+  // A 404 (no attributable tree) is a gap, not an error: the panel says so.
+  useEffect(() => {
+    if (!recordId) return
+    let cancelled = false
+    setReviewLoading(true)
+    setReviewError(null)
+    apiClient
+      .getIntakeReview(recordId)
+      .then((res) => {
+        if (!cancelled) setReview(res)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setReview(null)
+        setReviewError(err instanceof Error ? err.message : 'Could not load the document’s questions')
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [recordId, reviewToken])
 
   // Load the stored PDF once we have a blob URL. If it fails (no stored file
   // / 404), fall back to the extracted-text pane.
@@ -227,6 +264,22 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       setExtracting(false)
     }
   }, [extractedText, title])
+
+  /**
+   * Build the editable protocol from the extraction the QUESTIONS gate (the
+   * vendor candidate), instead of asking the AI for a second candidate of the
+   * same PDF. Step ids then match the tree's then_stepIds, so "this branch runs
+   * step-001, step-004" and the editor show the same rows. No AI round trip.
+   */
+  const handleUseExtractedProtocol = useCallback(() => {
+    const extracted = review?.candidate
+    if (!extracted) return
+    setCandidate(null)
+    setProtocolPayload(reviewCandidateToProtocolPayload(extracted, 'DRAFT-' + recordId))
+    setSavedRecordId(null)
+    setSaveError(null)
+    setSaveNote(null)
+  }, [review, recordId])
 
   const handleToggleStep = useCallback((key: string, enabled: boolean) => {
     setSkippedSteps((prev) => {
@@ -490,16 +543,28 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
         {/* Right: extracted protocol */}
         <div className="vpdf-review__right" style={{ flex: 1 }}>
-          {!candidate && !extracting && (
-            <button
-              type="button"
-              className="vpdf-review__extract"
-              onClick={() => void handleExtract()}
-              disabled={!extractedText || extractedText.length === 0}
-              data-testid="vpdf-extract"
-            >
-              Extract Protocol
-            </button>
+          {!protocolPayload && !extracting && (
+            <>
+              {review?.candidate ? (
+                <button
+                  type="button"
+                  className="vpdf-review__extract"
+                  onClick={handleUseExtractedProtocol}
+                  data-testid="vpdf-use-extracted"
+                >
+                  Use the extracted protocol ({review.candidate.steps.length} steps)
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="vpdf-review__extract"
+                onClick={() => void handleExtract()}
+                disabled={!extractedText || extractedText.length === 0}
+                data-testid="vpdf-extract"
+              >
+                Extract Protocol (AI)
+              </button>
+            </>
           )}
           {extracting && (
             <p className="vpdf-review__hint" data-testid="vpdf-extracting">
@@ -513,11 +578,29 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           )}
           {recordId ? (
             <div className="vpdf-review__questions">
-              <BranchQuestionsPanel artifactId={recordId} onResolved={handleReviewResolved} />
+              {reviewLoading ? (
+                <p className="vpdf-review__hint">Reading the document’s questions…</p>
+              ) : reviewError ? (
+                <p className="vpdf-review__error" role="alert">
+                  {reviewError}
+                </p>
+              ) : (
+                <BranchQuestionsPanel
+                  axes={review?.tree.axes ?? []}
+                  proposals={review?.proposals ?? []}
+                  gap={
+                    review
+                      ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
+                      : 'No decision tree is attributable to this PDF yet — run intake on it first.'
+                  }
+                  onResolved={handleReviewResolved}
+                  onRedrafted={() => setReviewToken((n) => n + 1)}
+                />
+              )}
             </div>
           ) : null}
           {/* TapTab protocol surface once we have a candidate + projection. */}
-          {candidate && protocolPayload && projection ? (
+          {protocolPayload && projection ? (
             <div className="vpdf-review__taptab" data-testid="vpdf-taptab">
               <ProjectionTapTabEditor
                 blocks={projection.blocks}
