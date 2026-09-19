@@ -1,22 +1,19 @@
 /**
- * SourcesStrip — chip-style row of context the AI tab is reading from,
- * plus a "+ Add source" affordance to ingest a vendor PDF inline.
+ * SourcesStrip — the sources the AI tab is reading from, plus the "+ Add source"
+ * affordance to ingest a vendor PDF inline.
  *
- * Two categories of chips render here:
- *   1. **Auto-attached** (Study + active viewer) — derived from props,
- *      not click-able. These reflect what the AI's per-message context
- *      already carries.
- *   2. **Recently added** (this session) — PDFs the user ingested via
- *      the "+ Add source" picker. These ARE click-able: clicking opens
- *      the artifact in the viewer, which puts it in the auto-attached
- *      slot on the next message. We do not pretend the chip itself
- *      attaches to the AI context — it's a session shortcut.
+ * It shows ONLY sources the user attached in this session (clicking one opens
+ * the artifact in the viewer). It deliberately does NOT render non-interactive
+ * "auto-attached" chips for the study / deck / overview: they were not
+ * clickable, duplicated the top-level surface indicator ("where am I" already
+ * lives in the shell), and consumed the AI panel's scarcest real estate.
  *
- * Pure presentation — state, the modal, and the openTab plumbing live
- * in AiTabPanel.
+ * The study/active-viewer context still flows to the model — per message, via
+ * the structured SurfaceContextPayload — it just does not need a chip here.
+ *
+ * Pure presentation — state, the modal, and the openTab plumbing live in
+ * AiTabPanel.
  */
-
-import type { WorkspaceTab } from '../../workspace/types'
 
 export interface AddedSource {
   artifactId: string
@@ -24,8 +21,6 @@ export interface AddedSource {
 }
 
 export interface SourcesStripProps {
-  studyId: string
-  activeTab: WorkspaceTab | null
   /** PDFs ingested via the "+ Add source" button in this session. */
   addedSources: AddedSource[]
   /** Open the "+ Add source" picker. */
@@ -35,57 +30,12 @@ export interface SourcesStripProps {
 }
 
 export function SourcesStrip({
-  studyId,
-  activeTab,
   addedSources,
   onAddSource,
   onOpenSource,
 }: SourcesStripProps) {
-  const autoChips: Array<{ id: string; label: string; sub: string }> = []
-
-  autoChips.push({
-    id: 'study',
-    label: 'Study',
-    sub: studyId,
-  })
-
-  if (activeTab) {
-    if (activeTab.kind === 'deck') {
-      autoChips.push({
-        id: 'deck',
-        label: 'Deck',
-        sub: activeTab.eventGraphId || '(unsaved draft)',
-      })
-    } else if (activeTab.kind === 'pdf' || activeTab.kind === 'document') {
-      autoChips.push({
-        id: activeTab.kind,
-        label: activeTab.kind === 'pdf' ? 'PDF' : 'Document',
-        sub: activeTab.artifactId,
-      })
-    } else if (activeTab.kind === 'project-details') {
-      autoChips.push({
-        id: 'project-details',
-        label: 'Overview',
-        sub: 'project tree + artifacts',
-      })
-    }
-  }
-
-  const hasOnlyStudy = autoChips.length === 1 && addedSources.length === 0
-
   return (
     <div className="sources-strip" data-testid="sources-strip">
-      {autoChips.map((c) => (
-        <span
-          key={c.id}
-          className="sources-strip__chip"
-          data-testid={`sources-chip-${c.id}`}
-          title={`${c.label}: ${c.sub}`}
-        >
-          <span className="sources-strip__chip-label">{c.label}</span>
-          <span className="sources-strip__chip-sub">{c.sub}</span>
-        </span>
-      ))}
       {addedSources.map((src) => (
         <button
           key={src.artifactId}
@@ -108,7 +58,7 @@ export function SourcesStrip({
       >
         + Add source
       </button>
-      {hasOnlyStudy ? (
+      {addedSources.length === 0 ? (
         <span className="sources-strip__hint">
           Open a viewer in <strong>Find</strong>, or add a vendor PDF, to
           attach more context.

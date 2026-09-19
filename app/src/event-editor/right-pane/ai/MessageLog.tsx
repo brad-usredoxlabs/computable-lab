@@ -79,8 +79,8 @@ export function MessageLog({ state }: MessageLogProps) {
     >
       {empty ? (
         <p className="message-log__hint">
-          Send a message to start. The agent sees the chips above as
-          context; the system prompt depends on the active viewer.
+          Send a message to start. The agent sees where you are (the surface
+          chip above) and whatever sources you attach.
         </p>
       ) : null}
       {state.messages.map((m) => (

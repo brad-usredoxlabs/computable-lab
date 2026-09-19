@@ -2,7 +2,7 @@
  * AiTabPanel — workspace AI chat. Phase 7b replaces the Phase 7
  * placeholder with the real composition:
  *   - header with the selected per-viewer system prompt label
- *   - SourcesStrip (auto-attached chips for study + active viewer)
+ *   - SourcesStrip (the sources the user attached this session)
  *   - MessageLog (streaming chat history)
  *   - RunInEventEditorButton (visible for non-deck viewers)
  *   - ChatInput (textarea + send/stop)
@@ -585,8 +585,6 @@ export function AiTabPanel() {
 
       <section className="ai-tab__section ai-tab__section--sources">
         <SourcesStrip
-          studyId={ws.state.studyId}
-          activeTab={activeTab}
           addedSources={addedSources}
           onAddSource={() => setAddSourceOpen(true)}
           onOpenSource={handleOpenSource}

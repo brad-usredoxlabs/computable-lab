@@ -1,27 +1,26 @@
 /**
- * SourcesStrip tests — covers the auto-attached chips, the added-source
- * chip click behavior, and the "+ Add source" button.
+ * SourcesStrip tests.
+ *
+ * Contract after 2026-09-19: the strip NO LONGER renders non-interactive
+ * auto-attached chips (Study / Deck / Overview). They duplicated the top-level
+ * surface indicator, were not clickable, and burned the AI panel's scarcest real
+ * estate ("If even I don't know what they're for, no biologist will").
+ *
+ * What remains: the sources the user actually attached this session (clickable,
+ * opens the artifact in the viewer) and the "+ Add source" affordance.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
-import type { WorkspaceTab } from '../../workspace/types'
 
 afterEach(() => cleanup())
 
-function renderStrip(overrides: {
-  activeTab?: WorkspaceTab | null
-  addedSources?: AddedSource[]
-  onAddSource?: () => void
-  onOpenSource?: (artifactId: string) => void
-} = {}) {
-  const onAddSource = overrides.onAddSource ?? vi.fn()
-  const onOpenSource = overrides.onOpenSource ?? vi.fn()
+function renderStrip(overrides: { addedSources?: AddedSource[] } = {}) {
+  const onAddSource = vi.fn()
+  const onOpenSource = vi.fn()
   render(
     <SourcesStrip
-      studyId="STU-000001"
-      activeTab={overrides.activeTab ?? null}
       addedSources={overrides.addedSources ?? []}
       onAddSource={onAddSource}
       onOpenSource={onOpenSource}
@@ -31,42 +30,43 @@ function renderStrip(overrides: {
 }
 
 describe('SourcesStrip', () => {
-  it('renders the Study chip and the + Add source button when no other context', () => {
+  it('renders no auto-attached chips at all', () => {
     renderStrip()
-    expect(screen.getByTestId('sources-chip-study').textContent).toContain(
-      'STU-000001',
-    )
+    expect(screen.queryByTestId('sources-chip-study')).toBeNull()
+    expect(screen.queryByTestId('sources-chip-deck')).toBeNull()
+    expect(screen.queryByTestId('sources-chip-pdf')).toBeNull()
+    expect(screen.queryByTestId('sources-chip-document')).toBeNull()
+    expect(screen.queryByTestId('sources-chip-project-details')).toBeNull()
+  })
+
+  it('keeps the + Add source affordance and the guidance hint', () => {
+    renderStrip()
     expect(screen.getByTestId('sources-strip-add')).toBeTruthy()
     // Hint reads "Find", not "Browse" — Phase 12 rename followed through.
     expect(screen.getByText(/Find/)).toBeTruthy()
     expect(screen.queryByText(/Browse/)).toBeNull()
   })
 
-  it('hides the hint once a viewer chip is attached', () => {
-    renderStrip({
-      activeTab: { id: 't', kind: 'pdf', artifactId: 'ART-1', title: 'X' },
-    })
-    expect(screen.getByTestId('sources-chip-pdf')).toBeTruthy()
-    expect(screen.queryByText(/attach more context/)).toBeNull()
-  })
-
-  it('renders added-source chips after auto chips and routes clicks to onOpenSource', () => {
-    const onOpenSource = vi.fn()
-    renderStrip({
+  it('renders added-source chips and routes clicks to onOpenSource', () => {
+    const { onOpenSource } = renderStrip({
       addedSources: [
         { artifactId: 'ART-ADD-1', title: 'Vendor PDF 1' },
         { artifactId: 'ART-ADD-2', title: 'Vendor PDF 2' },
       ],
-      onOpenSource,
     })
+    expect(screen.getByTestId('sources-chip-added-ART-ADD-1')).toBeTruthy()
     fireEvent.click(screen.getByTestId('sources-chip-added-ART-ADD-1'))
     expect(onOpenSource).toHaveBeenCalledWith('ART-ADD-1')
   })
 
-  it('clicking + Add source fires onAddSource', () => {
-    const onAddSource = vi.fn()
-    renderStrip({ onAddSource })
+  it('hides the hint once a source is attached', () => {
+    renderStrip({ addedSources: [{ artifactId: 'ART-ADD-1', title: 'Vendor PDF 1' }] })
+    expect(screen.queryByText(/attach more context/)).toBeNull()
+  })
+
+  it('routes the + Add source button to onAddSource', () => {
+    const { onAddSource } = renderStrip()
     fireEvent.click(screen.getByTestId('sources-strip-add'))
-    expect(onAddSource).toHaveBeenCalledTimes(1)
+    expect(onAddSource).toHaveBeenCalledOnce()
   })
 })
