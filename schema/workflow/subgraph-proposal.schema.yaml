@@ -1,0 +1,125 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/subgraph-proposal.schema.yaml"
+title: "SubgraphProposal"
+description: >
+  One deterministic branch-realization of a source protocol: the chosen
+  answers to every decision-tree question (logical branches + execution
+  scale), the active step set BranchResolver produced, and a pointer to the
+  draft event graph proposal Brad reviews in the deck editor. Proposals are
+  reviewables, never accepted knowledge.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- treeRef
+- documentId
+- branchPath
+- scaleLevel
+- eventGraphRef
+- state
+- generatedAt
+
+properties:
+  kind:
+    const: "subgraph-proposal"
+
+  recordId:
+    type: string
+    # Mixed-case ok: ids embed slugs of source document ids (XDR-style alphabet).
+    pattern: "^SGP-[A-Za-z0-9][A-Za-z0-9_-]*$"
+
+  treeRef:
+    type: object
+    additionalProperties: false
+    required: [kind, id, type]
+    properties:
+      kind:
+        const: record
+      id:
+        type: string
+        pattern: "^PDT-"
+      type:
+        const: protocol-decision-tree
+
+  documentId:
+    type: string
+
+  branchPath:
+    type: array
+    description: >
+      The answered question trail: axis + chosen condition per logical axis,
+      in tree order. conditionId '*' marks a non-gating / always-active axis.
+    items:
+      type: object
+      additionalProperties: false
+      required: [axisId, conditionId]
+      properties:
+        axisId: { type: string }
+        conditionId: { type: string }
+        label: { type: string }
+
+  scaleLevel:
+    type: string
+    enum: [manual_tubes, bench_plate_multichannel, robot_deck]
+
+  deckProfileRef:
+    type: object
+    additionalProperties: false
+    description: "The execution-scale-profile record carrying the bench/deck configuration for this scale."
+    properties:
+      kind:
+        const: record
+      id:
+        type: string
+      type:
+        const: execution-scale-profile
+
+  choices:
+    type: object
+    additionalProperties: true
+    description: "The exact localization choices object fed to BranchResolver (reproducibility)."
+
+  activeStepIds:
+    type: array
+    items: { type: string }
+    description: "BranchResolver output: shared ∪ matching branches' then_stepIds."
+
+  eventGraphRef:
+    type: object
+    additionalProperties: false
+    required: [kind, id, type]
+    properties:
+      kind:
+        const: record
+      id:
+        type: string
+      type:
+        const: event-graph
+
+  compileStatus:
+    type: string
+    enum: [not_run, complete, gap, error]
+
+  reviewPrompt:
+    type: string
+    description: "Reviewer redraft instruction attached to this subgraph; fed into the next draft compile prompt."
+
+  state:
+    type: string
+    enum: [proposed, needs_prompt, redrafted, accepted, rejected]
+    default: proposed
+
+  revision:
+    type: integer
+    minimum: 1
+    default: 1
+
+  generatedAt:
+    type: string
+    format: date-time
+
+  notes:
+    type: string

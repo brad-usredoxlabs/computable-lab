@@ -1,0 +1,137 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/protocol-decision-tree.schema.yaml"
+title: "ProtocolDecisionTree"
+description: >
+  The complete if/then question set of one source protocol document:
+  logical branch axes lifted from the document (sample source, kit version,
+  labware) plus the execution-scale axis. Each axis is a question with
+  machine-resolvable options; enumeration of the option product is what
+  makes the subgraph set deterministic. Questions are derived from document
+  evidence (provenance) — never invented.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- documentId
+- axes
+- scaleAxis
+- generatedAt
+
+properties:
+  kind:
+    const: "protocol-decision-tree"
+
+  recordId:
+    type: string
+    # Mixed-case ok: ids are slugs of source document ids (XDR-style alphabet).
+    pattern: "^PDT-[A-Za-z0-9][A-Za-z0-9_-]*$"
+
+  documentId:
+    type: string
+    description: "Vendor protocol candidate source documentId (stable id from candidate extraction)."
+
+  sourcePdf:
+    type: object
+    additionalProperties: false
+    description: "Provenance of the source PDF the tree was derived from."
+    properties:
+      artifactPath: { type: string }
+      sha256: { type: string }
+      url: { type: string }
+      title: { type: string }
+      vendor: { type: string }
+
+  axes:
+    type: array
+    description: >
+      Logical question axes derived from document branches (source type,
+      kit version, labware, ...) plus optional AI-suggested questions that
+      still carry document evidence spans. Predicates target
+      `$.branchSelection.<axisId>` so multiple axes resolve independently
+      over one nested choices object.
+    items:
+      type: object
+      additionalProperties: false
+      required: [axisId, question, choiceKey, origin, conditions]
+      properties:
+        axisId:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+          description: "Stable axis id (e.g. 'branch-axis-step-001', 'axis-dnasource')."
+        question:
+          type: string
+          minLength: 1
+          description: "Reviewer-facing if/then question (e.g. 'What is the DNA source?')."
+        choiceKey:
+          type: string
+          description: "Key in the localization choices object (branch axes share 'branchSelection'; the path is namespaced by axisId)."
+        origin:
+          type: string
+          enum: [document_branch, ai_suggested]
+          description: "document_branch = lifted from lettered branches in the PDF text; ai_suggested = raised by the AI question pass (still requires document evidence spans)."
+        evidence:
+          type: array
+          description: "Document evidence supporting this question."
+          items:
+            type: object
+            additionalProperties: false
+            required: [quote]
+            properties:
+              quote: { type: string }
+              page: { type: integer, minimum: 1 }
+              stepNumber: { type: integer, minimum: 1 }
+        conditions:
+          type: array
+          minItems: 1
+          description: >
+            Disjoint branch options; ids converge with the BranchCondition
+            datatype so BranchResolver evaluates them with the SAME predicate
+            language as lint rules (DRY).
+          items:
+            # NOTE: '../' because the condition datatype $id lives under
+            # .../computable-lab/datatypes/... (not under workflow/).
+            $ref: "../datatypes/condition.schema.yaml#/$defs/BranchCondition"
+
+  scaleAxis:
+    type: object
+    additionalProperties: false
+    description: >
+      The execution-scale decision: the same protocol run in tubes by hand,
+      on plates with a multichannel, or on a pipetting robot deck. Levels
+      are the registry's ExecutionScaleLevels — deck/bench configuration
+      lives in the referenced execution-scale-profile records, never here.
+    required: [question, options]
+    properties:
+      question:
+        type: string
+        description: "e.g. 'At what execution scale should this protocol run?'"
+      options:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [level]
+          properties:
+            level:
+              description: "ExecutionScaleLevel values from the registry."
+              type: string
+              enum: [manual_tubes, bench_plate_multichannel, robot_deck]
+            profileId:
+              type: string
+              description: "execution-scale-profile/<id> registry id carrying the deck/bench configuration."
+
+  status:
+    type: string
+    enum: [proposed, reviewed, superseded]
+    default: proposed
+
+  generatedAt:
+    type: string
+    format: date-time
+
+  notes:
+    type: string

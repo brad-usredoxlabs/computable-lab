@@ -1,0 +1,54 @@
+# UI specification for ProtocolDecisionTree records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-decision-tree.schema.yaml"
+
+display:
+  titleField: "$.recordId"
+  subtitleField: "$.documentId"
+  icon: "decision-tree"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.documentId"
+      widget: "text"
+      label: "Source document"
+    - path: "$.sourcePdf"
+      widget: "object"
+      label: "Source PDF"
+      description: "Provenance of the PDF this question set was derived from."
+  - title: "Questions"
+    fields:
+    - path: "$.axes"
+      widget: "object"
+      label: "Logical question axes"
+      description: "If/then questions lifted from the document (plus evidenced AI-suggested ones)."
+    - path: "$.scaleAxis"
+      widget: "object"
+      label: "Execution-scale axis"
+      description: "manual_tubes / bench_plate_multichannel / robot_deck with deck profile refs."
+  - title: "Review"
+    fields:
+    - path: "$.status"
+      widget: "text"
+      label: "Status"
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "200px"
+  - path: "$.documentId"
+    label: "Document"
+  - path: "$.status"
+    label: "Status"
+    width: "110px"

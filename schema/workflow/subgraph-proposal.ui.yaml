@@ -1,0 +1,69 @@
+# UI specification for SubgraphProposal records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/subgraph-proposal.schema.yaml"
+
+display:
+  titleField: "$.recordId"
+  subtitleField: "$.state"
+  icon: "subgraph-proposal"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Decision"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.documentId"
+      widget: "text"
+      label: "Source document"
+    - path: "$.branchPath"
+      widget: "object"
+      label: "Branch path"
+      description: "Chosen condition per logical axis, in tree order."
+    - path: "$.scaleLevel"
+      widget: "text"
+      label: "Execution scale"
+  - title: "Target"
+    fields:
+    - path: "$.eventGraphRef"
+      widget: "object"
+      label: "Draft event graph"
+      description: "Open this record in the deck editor to inspect the subgraph."
+    - path: "$.deckProfileRef"
+      widget: "object"
+      label: "Deck profile"
+    - path: "$.compileStatus"
+      widget: "text"
+      label: "Compile status"
+  - title: "Review"
+    fields:
+    - path: "$.state"
+      widget: "text"
+      label: "Review state"
+    - path: "$.revision"
+      widget: "text"
+      label: "Revision"
+    - path: "$.reviewPrompt"
+      widget: "textarea"
+      label: "Redraft prompt"
+      description: "Instruction attached to this subgraph for the next draft."
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "180px"
+  - path: "$.documentId"
+    label: "Document"
+  - path: "$.scaleLevel"
+    label: "Scale"
+    width: "160px"
+  - path: "$.state"
+    label: "State"
+    width: "110px"

@@ -1,0 +1,32 @@
+# Lint rules for ProtocolDecisionTree records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-decision-tree.schema.yaml"
+
+rules:
+  - id: decision-tree-has-scale-axis
+    title: "Decision tree declares its execution-scale axis"
+    description: >
+      Every decision tree must carry the scale decision (manual tubes ->
+      bench plates -> robot deck); without it the subgraph enumeration is
+      incomplete. Severity: error.
+    severity: error
+    scope: record
+    assert:
+      op: exists
+      path: "$.scaleAxis"
+    message:
+      template: "Protocol decision tree is missing its execution-scale axis"
+
+  - id: decision-tree-axes-have-questions
+    title: "Every logical axis asks a question"
+    description: >
+      Axes exist to surface if/then questions to the reviewer; an axis with
+      an empty question is a silent drop. Severity: error (schema minLength
+      backstops the empty string; this rule keeps the intent declarative).
+    severity: error
+    scope: record
+    assert:
+      op: exists
+      path: "$.axes"
+    message:
+      template: "Protocol decision tree must enumerate its logical question axes"
