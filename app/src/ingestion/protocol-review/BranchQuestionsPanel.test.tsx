@@ -169,3 +169,56 @@ describe('BranchQuestionsPanel — send a branch back to the AI', () => {
     await waitFor(() => expect(screen.getByTestId('redraft-error').textContent).toContain('compile runner unavailable'))
   })
 })
+describe('BranchQuestionsPanel — why a compile failed', () => {
+  it('shows the compile status and the first diagnostic for the matched branch', () => {
+    const withCompile = {
+      ...proposalFor('branch-2', 'option-1'),
+      activeStepIds: ['step-001', 'step-004'],
+      compileStatus: 'error' as const,
+      compileDiagnostics: [
+        { severity: 'error' as const, code: 'EXTRACTION_ERROR', message: 'draft_assemble pass produced no output', passId: 'extract_entities' },
+      ],
+    }
+    render(
+      <BranchQuestionsPanel
+        axes={[AXIS_BRANCH, AXIS_SAMPLE]}
+        proposals={[proposalFor('branch-1', 'option-1'), proposalFor('branch-1', 'option-2'), withCompile, proposalFor('branch-2', 'option-2')]}
+      />,
+    )
+    fireEvent.click(screen.getByLabelText('Feces'))
+    fireEvent.click(screen.getByLabelText('ZR BashingBead Lysis Tubes (0.1 & 0.5 mm)'))
+    const line = screen.getByTestId('branch-questions-compile').textContent ?? ''
+    expect(line).toContain('Compile: error')
+    expect(line).toContain('EXTRACTION_ERROR: draft_assemble pass produced no output')
+  })
+
+  it('says nothing about the compile when it completed', () => {
+    const ok = { ...proposalFor('branch-1', 'option-1'), compileStatus: 'complete' as const }
+    render(<BranchQuestionsPanel axes={[AXIS_BRANCH, AXIS_SAMPLE]} proposals={[ok, proposalFor('branch-1', 'option-2'), proposalFor('branch-2', 'option-1'), proposalFor('branch-2', 'option-2')]} />)
+    fireEvent.click(screen.getByLabelText('Feces'))
+    fireEvent.click(screen.getByLabelText('ZymoBIOMICS BashingBead Lysis Rack (0.1 & 0.5 mm, D6002-96-7)'))
+    expect(screen.queryByTestId('branch-questions-compile')).toBeNull()
+  })
+})
+
+describe('BranchQuestionsPanel — the compile reason prefers the error', () => {
+  it('reports the ERROR even when warnings came first', () => {
+    const proposal = {
+      ...proposalFor('branch-2', 'option-1'),
+      compileStatus: 'error' as const,
+      compileDiagnostics: [
+        { severity: 'warning' as const, code: 'ungrounded_reference', message: 'Ungrounded reference "mixer"' },
+        { severity: 'error' as const, code: 'EXTRACTION_ERROR', message: 'draft_assemble pass produced no output', passId: 'extract_entities' },
+      ],
+    }
+    render(
+      <BranchQuestionsPanel
+        axes={[AXIS_BRANCH, AXIS_SAMPLE]}
+        proposals={[proposalFor('branch-1', 'option-1'), proposalFor('branch-1', 'option-2'), proposal, proposalFor('branch-2', 'option-2')]}
+      />,
+    )
+    fireEvent.click(screen.getByLabelText('Feces'))
+    fireEvent.click(screen.getByLabelText('ZR BashingBead Lysis Tubes (0.1 & 0.5 mm)'))
+    expect(screen.getByTestId('branch-questions-compile').textContent).toContain('EXTRACTION_ERROR')
+  })
+})

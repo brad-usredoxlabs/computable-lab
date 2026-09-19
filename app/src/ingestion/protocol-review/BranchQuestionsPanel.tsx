@@ -38,6 +38,14 @@ export interface BranchQuestionsPanelProps {
   onRedrafted?: () => void
 }
 
+/** The diagnostic that explains the outcome: the first ERROR, else the first. */
+function compileReason(
+  diagnostics: Array<{ severity: 'error' | 'warning'; code: string; message: string }>,
+): string {
+  const worst = diagnostics.find((d) => d.severity === 'error') ?? diagnostics[0];
+  return worst ? `${worst.code}: ${worst.message}` : 'no diagnostics recorded';
+}
+
 const ORIGIN_LABEL: Record<string, string> = {
   document_branch: 'from the document’s branch text',
   document_table: 'from a table in the document',
@@ -173,6 +181,17 @@ export default function BranchQuestionsPanel({
             than guessing.
           </p>
         )}
+
+        {matchedProposal && matchedProposal.compileStatus && matchedProposal.compileStatus !== 'complete' ? (
+          <p className="branch-questions__muted" data-testid="branch-questions-compile">
+            Compile: {matchedProposal.compileStatus}
+            {matchedProposal.compileDiagnostics && matchedProposal.compileDiagnostics.length > 0
+              ? ` — ${compileReason(matchedProposal.compileDiagnostics)}`
+              : matchedProposal.compileStatus === 'not_run'
+                ? ' (no compile runner configured)'
+                : ' (no diagnostics recorded)'}
+          </p>
+        ) : null}
 
         {matchedProposal ? (
           <div className="branch-questions__redraft" data-testid="branch-questions-redraft">

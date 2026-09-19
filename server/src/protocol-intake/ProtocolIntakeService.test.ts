@@ -343,3 +343,41 @@ describe('ProtocolIntakeService question gate', () => {
     });
   });
 });
+
+describe('compile diagnostics ride on the proposal (why, not just "error")', () => {
+  it('stores the error/warning diagnostics that ended the compile', async () => {
+    await withWorkspace(async (workspaceRoot) => {
+      const { store, records } = makeMockStore();
+      const failingCompileRunner = async (): Promise<RunChatbotCompileResult> =>
+        ({
+          outcome: 'error',
+          events: [],
+          labwareAdditions: [],
+          unresolvedRefs: [],
+          diagnostics: [
+            { pass_id: 'extract_entities', severity: 'error', code: 'EXTRACTION_ERROR', message: 'draft_assemble pass produced no output' },
+            { pass_id: 'validate', severity: 'warning', code: 'ungrounded_reference', message: 'Ungrounded reference "mixer"' },
+            { pass_id: 'validate', severity: 'info', code: 'noise', message: 'not worth storing' },
+          ],
+          terminalArtifacts: { events: [], directives: [], gaps: [] },
+          passOutputs: {},
+        }) as unknown as RunChatbotCompileResult;
+
+      const service = new ProtocolIntakeService({
+        workspaceRoot,
+        store,
+        compileRunner: failingCompileRunner as never,
+        scaleOptions: [{ level: 'manual_tubes', profileId: 'execution-scale-profile/manual-tubes' }],
+      });
+      await service.ingestDocument({ text: BRANCHY_PROTOCOL, fileName: 'example.txt', documentId: 'example-dia', now: FIXED_NOW });
+
+      const proposal = [...records.values()].find((e) => e.payload['kind'] === 'subgraph-proposal');
+      expect(proposal!.payload['compileStatus']).toBe('error');
+      // errors and warnings, with the failing pass; info noise dropped
+      expect(proposal!.payload['compileDiagnostics']).toEqual([
+        { severity: 'error', code: 'EXTRACTION_ERROR', message: 'draft_assemble pass produced no output', passId: 'extract_entities' },
+        { severity: 'warning', code: 'ungrounded_reference', message: 'Ungrounded reference "mixer"', passId: 'validate' },
+      ]);
+    });
+  });
+});

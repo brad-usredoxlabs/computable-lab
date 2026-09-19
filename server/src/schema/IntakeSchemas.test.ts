@@ -191,3 +191,31 @@ describe('subgraph-proposal schema contract', () => {
     expect(out.valid).toBe(false);
   });
 });
+
+describe('subgraph-proposal compile diagnostics', () => {
+  it('accepts the error/warning diagnostics that explain a failed compile', async () => {
+    const validator = await intakeValidator();
+    const out = validator.validate(
+      {
+        ...minimalProposal,
+        compileStatus: 'error',
+        compileDiagnostics: [
+          { severity: 'error', code: 'EXTRACTION_ERROR', message: 'draft_assemble pass produced no output', passId: 'extract_entities' },
+          { severity: 'warning', code: 'ungrounded_reference', message: 'Ungrounded reference "mixer"' },
+        ],
+      },
+      PROPOSAL_SCHEMA,
+    );
+    expect(out.errors ?? []).toEqual([]);
+    expect(out.valid).toBe(true);
+  });
+
+  it('rejects a diagnostic with no message (an unexplained failure)', async () => {
+    const validator = await intakeValidator();
+    const out = validator.validate(
+      { ...minimalProposal, compileDiagnostics: [{ severity: 'error', code: 'X' }] },
+      PROPOSAL_SCHEMA,
+    );
+    expect(out.valid).toBe(false);
+  });
+});

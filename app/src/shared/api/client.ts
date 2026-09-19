@@ -1507,6 +1507,8 @@ export interface IntakeProposal {
   activeStepIds?: string[]
   eventGraphRef: { kind: 'record'; id: string; type: 'event-graph' }
   compileStatus?: 'not_run' | 'complete' | 'gap' | 'error'
+  /** Why the compile ended as it did (errors + warnings, with the pass). */
+  compileDiagnostics?: Array<{ severity: 'error' | 'warning'; code: string; message: string; passId?: string }>
   reviewPrompt?: string
   state: IntakeProposalState
   revision?: number

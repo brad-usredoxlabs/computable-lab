@@ -103,6 +103,25 @@ properties:
     type: string
     enum: [not_run, complete, gap, error]
 
+  compileDiagnostics:
+    type: array
+    maxItems: 8
+    description: >
+      Why the compile pass ended the way it did — the error/warning diagnostics
+      from the draft compile (code + message, and the pass when the runner
+      reports one). Stored so the review surface can say WHY a draft failed;
+      a bare `compileStatus: error` with no reason is a dead end for the
+      reviewer and hides real pipeline faults.
+    items:
+      type: object
+      additionalProperties: false
+      required: [severity, code, message]
+      properties:
+        severity: { type: string, enum: [error, warning] }
+        code: { type: string }
+        message: { type: string }
+        passId: { type: string }
+
   reviewPrompt:
     type: string
     description: "Reviewer redraft instruction attached to this subgraph; fed into the next draft compile prompt."

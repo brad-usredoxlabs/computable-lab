@@ -514,6 +514,19 @@ export class ProtocolIntakeService {
     // visible; we never hide the decision trail behind a fabrication.
     const eventGraphRecordId = promote.recordId;
 
+    // WHY the compile ended as it did. A bare `compileStatus: error` tells the
+    // reviewer nothing and hides real pipeline faults (live: 'draft_assemble
+    // pass produced no output'), so the error/warning diagnostics ride along.
+    const compileDiagnostics = ((draft.compile?.diagnostics ?? []) as unknown as Array<Record<string, unknown>>)
+      .filter((d) => d['severity'] === 'error' || d['severity'] === 'warning')
+      .slice(0, 8)
+      .map((d) => ({
+        severity: d['severity'] as 'error' | 'warning',
+        code: String(d['code'] ?? 'unknown'),
+        message: String(d['message'] ?? ''),
+        ...(typeof d['pass_id'] === 'string' ? { passId: d['pass_id'] } : {}),
+      }));
+
     const generatedAt = args.now ?? new Date().toISOString();
     const proposalPayload: Record<string, unknown> = {
       kind: 'subgraph-proposal',
@@ -529,6 +542,7 @@ export class ProtocolIntakeService {
       activeStepIds,
       eventGraphRef: { kind: 'record', id: eventGraphRecordId, type: 'event-graph' },
       compileStatus: draft.compileStatus,
+      ...(compileDiagnostics.length > 0 ? { compileDiagnostics } : {}),
       state: args.updateExistingProposal ? 'redrafted' : 'proposed',
       revision,
       generatedAt,
