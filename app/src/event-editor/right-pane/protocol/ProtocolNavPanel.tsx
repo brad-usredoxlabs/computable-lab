@@ -42,6 +42,11 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
   const stepGraphs = sel?.stepGraphs ?? {}
   const visibleSteps = sel?.visibleSteps ?? new Set<string>()
   const [tip, setTip] = useState<StepTip | null>(null)
+  // The rail owns BOTH attach (empty state) and change (footer, D4) — the
+  // right-pane Protocol tab's picker is retired, so this is the only place a
+  // protocol can be swapped once one is attached.
+  const canChange = Boolean(runId && studyId)
+  const [changing, setChanging] = useState(false)
   // Hold the anchor element so keyboard focus we can recompute the rect when
   // the rail scrolls (reposition), and so we can ignore stale mouse events.
   const anchorRef = useRef<HTMLElement | null>(null)
@@ -99,6 +104,25 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
     )
   }
 
+  // Change-protocol mode: reuse the same find-&-attach surface, in replace mode.
+  if (changing && runId && studyId) {
+    return (
+      <aside className="protocol-nav" data-testid="protocol-nav">
+        {title ? <header className="protocol-nav__head">{title}</header> : null}
+        <AttachProtocolPanel
+          runId={runId}
+          studyId={studyId}
+          alreadyAttached
+          onCancel={() => setChanging(false)}
+          onAttached={() => {
+            setChanging(false)
+            window.dispatchEvent(new CustomEvent('cl:records-changed'))
+          }}
+        />
+      </aside>
+    )
+  }
+
   return (
     <aside className="protocol-nav" data-testid="protocol-nav">
       {title ? <header className="protocol-nav__head">{title}</header> : null}
@@ -138,6 +162,19 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
           )
         })}
       </ol>
+      {canChange ? (
+        <footer className="protocol-nav__footer">
+          <button
+            type="button"
+            className="protocol-nav__change"
+            data-testid="protocol-nav-change"
+            onClick={() => setChanging(true)}
+            title="Attach a different protocol to this run"
+          >
+            Change protocol
+          </button>
+        </footer>
+      ) : null}
       {tip ? (
         <div
           id="protocol-nav-tooltip"

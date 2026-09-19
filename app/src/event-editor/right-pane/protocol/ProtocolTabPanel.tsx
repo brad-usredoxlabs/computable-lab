@@ -25,7 +25,6 @@ import { updateExecutionState } from '../../../shared/api/execution'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
-import { ProtocolSelector } from './ProtocolSelector'
 import { StepInvestigationPanel, type LocalProtocolSetupRows } from './StepInvestigationPanel'
 import { StepChipPrompt } from './StepChipPrompt'
 import { StepIndicator } from './StepIndicator'
@@ -979,14 +978,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // The protocol id whose steps we show (run → plannedRunRef → protocolRef) —
   // needed to commit a step's realization (patchStepSubgraph) by protocol.
   const [stepsProtocolId, setStepsProtocolId] = useState<string | null>(null)
-  // Search box on the Protocol tab for finding protocols / PDFs to attach.
-  const [protocolQuery, setProtocolQuery] = useState('')
-  // Change-protocol flow: when true, the ProtocolSelector is shown even though
-  // a protocol IS attached, so the user can preview and switch while planning.
-  const [changingProtocol, setChangingProtocol] = useState(false)
-  // The run's lifecycle status ('planned' | 'in_progress' | ...) — used to gate
-  // switching: only planned (or unknown) runs may change their protocol.
-  const [runStatus, setRunStatus] = useState<string | null>(null)
+  // (The protocol picker used to live here: a search box + ProtocolSelector.
+  // It is retired — plan 2026-09-19_121028 D4: attach and change belong to the
+  // run workspace's left Protocol rail. This panel edits the ATTACHED protocol.)
   // Plate-setting sections declared on the run's local protocol (if the
   // attached protocol is an LPR-*). Rendered above the step chips and fed to
   // each StepLocalizationPane as read-only localization context.
@@ -1097,7 +1091,6 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       try {
         const runEnv = await apiClient.getRecord(runId)
         const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
-        setRunStatus(typeof rp?.status === 'string' ? (rp.status as string) : null)
         const plr = rp?.plannedRunRef as { id?: string } | undefined
         if (plr?.id) {
           const plrEnv = await apiClient.getRecord(plr.id)
@@ -1250,29 +1243,6 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     void fetchSteps()
     return () => { cancelled = true }
   }, [runId, refetchTrigger])
-
-  // Debounced search across the protocol context (protocols, run methods, and
-  // ingested vendor PDFs) — the server filters via getProtocolContext's `q`.
-  useEffect(() => {
-    if (!studyId) return
-    const trimmed = protocolQuery.trim()
-    let cancelled = false
-    const handle = window.setTimeout(() => {
-      apiClient
-        .getProtocolContext({ studyId, q: trimmed || undefined })
-        .then((ctx) => {
-          if (!cancelled) setProtocolContext(ctx)
-        })
-        .catch(() => {
-          // Keep the current context on a failed search; the selector still
-          // shows its empty state.
-        })
-    }, 250)
-    return () => {
-      cancelled = true
-      window.clearTimeout(handle)
-    }
-  }, [protocolQuery, studyId])
 
   // Initialize visibleSteps when steps are first loaded — all steps
   // default to visible so their events ghost onto the canvas. Also publish
@@ -1614,55 +1584,37 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     }
   }, [runId, steps, operatorName, mode, setExecStep])
 
-  // Opening the change-protocol flow from an attached protocol: ensure the
-  // selector has context (it is normally only fetched on the no-protocol path).
-  const openChangeProtocol = async () => {
-    setChangingProtocol(true)
-    if (!protocolContext) {
-      try {
-        const ctx = await apiClient.getProtocolContext({ studyId })
-        setProtocolContext(ctx)
-      } catch {
-        // The selector shows its own empty state when context is unavailable.
-      }
-    }
-  }
-
-  if (noProtocol || changingProtocol) {
+  if (noProtocol) {
+    // This branch used to BE the protocol picker (search + ProtocolSelector).
+    // The picker is retired (plan 2026-09-19_121028 D4): attach and change live
+    // in the run workspace's left Protocol rail, which is a rail the harness
+    // actually renders. Two pickers with different semantics is what made the
+    // flow confusing; this tab stays a protocol RECORD editor.
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%' }}>
-        <input
-          type="search"
-          placeholder="Search protocols and PDFs…"
-          value={protocolQuery}
-          onChange={(e) => setProtocolQuery(e.target.value)}
-          data-testid="protocol-search-input"
-          style={{
-            margin: '12px 12px 0',
-            padding: '6px 8px',
-            borderRadius: '6px',
-            border: '1px solid var(--cl-border)',
-            background: 'var(--cl-bg-elev)',
-            color: 'var(--cl-text)',
-            fontSize: '13px',
-          }}
-        />
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          <ProtocolSelector
-            runId={runId}
-            studyId={studyId}
-            context={protocolContext}
-            // In change mode a protocol IS attached — attaching here replaces it.
-            alreadyAttached={changingProtocol && !noProtocol}
-            onCancel={changingProtocol && !noProtocol ? () => setChangingProtocol(false) : undefined}
-            onOpenIngestedPdf={(id) => navigate(`/ingestion/vendor-pdf/${encodeURIComponent(id)}`)}
-            onAttached={() => {
-              setNoProtocol(false)
-              setChangingProtocol(false)
-              setRefetchTrigger((n) => n + 1)
+      <div className="protocol-tab__no-protocol" data-testid="protocol-no-protocol">
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--cl-text-dim)', lineHeight: 1.5 }}>
+          No protocol is attached to this run. Attach or change one from the run
+          workspace&rsquo;s <strong>Protocol</strong> rail.
+        </p>
+        {runId ? (
+          <button
+            type="button"
+            data-testid="protocol-open-run"
+            onClick={() => navigate(`/runs/${encodeURIComponent(runId)}`)}
+            style={{
+              marginTop: 8,
+              padding: '6px 10px',
+              background: 'transparent',
+              border: '1px solid var(--cl-border)',
+              borderRadius: 6,
+              color: 'var(--cl-text-dim)',
+              fontSize: 12,
+              cursor: 'pointer',
             }}
-          />
-        </div>
+          >
+            Open the run workspace
+          </button>
+        ) : null}
       </div>
     )
   }  if (isLoading) return <LoadingState />
@@ -1738,29 +1690,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         onPlayAll={handlePlayAll}
       />
 
-      {/* While still in the planning phase, let the user change which
-          protocol this run uses — re-opens the preview-then-commit selector. */}
-      {!noProtocol && !changingProtocol && (runStatus === null || runStatus === 'planned') ? (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            data-testid="change-protocol"
-            onClick={() => void openChangeProtocol()}
-            style={{
-              padding: '6px 10px',
-              background: 'transparent',
-              border: '1px solid var(--cl-border)',
-              borderRadius: '6px',
-              color: 'var(--cl-text-dim)',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Change protocol
-          </button>
-        </div>
-      ) : null}
+      {/* Changing the protocol lives in the run workspace's left Protocol rail
+          (D4) — this right-pane tab edits the ATTACHED protocol record, it does
+          not pick one. */}
 
       {/* One-shot protocol localization (chat-first) — primary load path for a
           run attached to a UNIVERSAL protocol. Open by default (not collapsed)

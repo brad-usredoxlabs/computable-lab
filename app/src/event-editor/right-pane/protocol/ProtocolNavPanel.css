@@ -37,6 +37,30 @@
   gap: 2px;
 }
 
+/* Change-protocol entry: the rail's only protocol-swap affordance once a
+   protocol is attached (the right-pane picker is retired — D4). */
+.protocol-nav__footer {
+  margin-top: 4px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.protocol-nav__change {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.protocol-nav__change:hover {
+  color: var(--cl-text);
+  border-color: var(--cl-accent);
+}
+
 .protocol-nav__item--active .protocol-nav__step {
   background: color-mix(in srgb, var(--cl-accent) 18%, transparent);
   border-color: color-mix(in srgb, var(--cl-accent) 60%, var(--cl-border));
