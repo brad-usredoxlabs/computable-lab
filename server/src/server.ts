@@ -255,7 +255,37 @@ export interface AppContext {
   jsonLdProjector: JsonLdProjector;
   graphQueryService?: GraphQueryService;
   extractionRunner?: ExtractionRunnerService;
+  /** Shared metrics instance owned by extractionRunner; read by extract handlers. */
+  extractionMetrics?: ExtractionMetrics;
   storageService: StorageService;
+}
+
+/**
+ * Build the ExtractionRunnerService for a booted AppContext. Lives in one
+ * place so EVERY entry point that calls initializeApp (HTTP server, MCP
+ * stdio, the corpus-intake CLI) gets the same compile edge. Profile comes
+ * from config.yaml ai.extractor — missing/disabled ⇒ nullExtractor
+ * (declared failure; never a fabricated runner).
+ */
+function buildExtractionRunner(ctx: AppContext): { runner: ExtractionRunnerService; metrics: ExtractionMetrics } {
+  const extractorProfile = ctx.appConfig?.ai?.extractor;
+  const extractorFactory = (_targetKind: string): ExtractorAdapter => {
+    if (!extractorProfile || !extractorProfile.enabled) {
+      return nullExtractor('extractor profile missing or disabled');
+    }
+    return new OpenAICompatibleExtractor({ config: extractorProfile });
+  };
+  const populator = new MentionCandidatePopulator({ store: ctx.store });
+  const metrics = new ExtractionMetrics();
+  const runner = new ExtractionRunnerService({
+    extractorFactory,
+    populator,
+    pipelinePath: join(ctx.schemaDir, 'registry/compile-pipelines/extraction-compile.yaml'),
+    libraryMatcher: (fileName, content) =>
+      findMatchingLibraryExtractor({ fileName, contentPreview: content }),
+    metrics,
+  });
+  return { runner, metrics };
 }
 
 /**
@@ -578,7 +608,7 @@ export async function initializeApp(
 
   console.log(`App initialized`);
 
-  return {
+  const ctx: AppContext = {
     schemaRegistry,
     validator,
     lintEngine,
@@ -608,6 +638,14 @@ export async function initializeApp(
     ...(graphQueryService ? { graphQueryService } : {}),
     storageService: new StorageService(appConfig?.storageDevices ?? []),
   };
+
+  // The compile edge lives here, not in createServer, so that EVERY
+  // initializeApp consumer (HTTP, MCP stdio, corpus-intake CLI) gets it.
+  const { runner: extractionRunner, metrics: extractionMetrics } = buildExtractionRunner(ctx);
+  ctx.extractionRunner = extractionRunner;
+  ctx.extractionMetrics = extractionMetrics;
+
+  return ctx;
 }
 
 /**
@@ -779,28 +817,11 @@ export async function createServer(
   const graphSearchHandlers = createGraphSearchHandlers(graphQueryService);
   ctx.graphQueryService = graphQueryService;
 
-  // Build extraction infrastructure: extractor factory, populator, runner
-  const extractorProfile = ctx.appConfig?.ai?.extractor;
-  const extractorFactory = (_targetKind: string): ExtractorAdapter => {
-    if (!extractorProfile || !extractorProfile.enabled) {
-      return nullExtractor('extractor profile missing or disabled');
-    }
-    return new OpenAICompatibleExtractor({
-      config: extractorProfile,
-    });
-  };
-  const populator = new MentionCandidatePopulator({ store: ctx.store });
-  const metrics = new ExtractionMetrics();
-  const runner = new ExtractionRunnerService({
-    extractorFactory,
-    populator,
-    pipelinePath: join(ctx.schemaDir, 'registry/compile-pipelines/extraction-compile.yaml'),
-    libraryMatcher: (fileName, content) =>
-      findMatchingLibraryExtractor({ fileName, contentPreview: content }),
-    metrics,
-  });
-  ctx.extractionRunner = runner;
-  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, metrics);
+  // Extraction infrastructure (runner + metrics) is built in initializeApp
+  // so the compile edge exists for every boot path; here we only bind the
+  // HTTP handlers to it.
+  const runner = ctx.extractionRunner!;
+  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!);
 
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,
