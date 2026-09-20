@@ -35,9 +35,23 @@ import {
   AGENT_INTENT_TOOL_NAME,
   AGENT_INTENT_TOOL_DEF,
   parseAgentIntentArgs,
+  parseAlsoPlace,
+  parseRecordCreations,
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
+import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
+import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
+import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
+import { followUpForLayer } from './materialFollowUp.js';
+import { repairMintedLabelsAgainstUserWords } from './mintLabelFidelity.js';
+import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.js';
+import { enrichMaterialDomains } from './enrichMaterialDomains.js';
+import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
+import { draftTermManifest } from './draftTermManifest.js';
+import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
+import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
 import {
   clarificationRequestFromLegacy,
@@ -221,15 +235,39 @@ function appendClarificationAnswersToPrompt(
  * is what caused the clarification to loop. The model then sees the material as
  * grounded and stops re-asking.
  */
+/**
+ * The agent's output budget. Falls back to a documented legacy value when the
+ * profile does not declare one, and says so once — the failure mode of a small
+ * budget is invisible (the model is cut off mid-thought and emits an empty tool
+ * call), so the absence must not be silent.
+ */
+const warnedMissingMaxTokens = new Set<string>();
+function resolveAgentMaxTokens(configured: number | undefined, model: string): number {
+  if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) return configured;
+  if (!warnedMissingMaxTokens.has(model)) {
+    warnedMissingMaxTokens.add(model);
+    console.warn(
+      `[agent] no ai.inference.maxTokens for model ${model}; using 4096. ` +
+        'A reasoning model needs far more — it will be cut off mid-draft (see config.example.yaml).',
+    );
+  }
+  return 4096;
+}
+
 function resolvedMentionsFromAnswers(
   answers: AgentRequest['clarificationAnswers'],
 ): ResolvedMention[] {
   if (!Array.isArray(answers)) return [];
   const out: ResolvedMention[] = [];
   for (const answer of answers) {
-    const ref = answer.ref as Record<string, unknown> | undefined;
-    const id = ref && typeof ref.id === 'string' ? ref.id : undefined;
-    if (!ref || !id) continue;
+    // An answer may carry only its mention token (e.g. one typed back in prose).
+    // Reading just `answer.ref` dropped those, so the pick never became a
+    // resolved mention and the material looked ungrounded all over again.
+    const resolvedRef = refFromAnswer(answer);
+    if (!resolvedRef) continue;
+    const ref = resolvedRef.ref;
+    const id = typeof ref.id === 'string' ? ref.id : undefined;
+    if (!id) continue;
     const refType = typeof ref.type === 'string' ? ref.type : undefined;
     const kind: ResolvedMention['kind'] =
       refType === 'labware' || ref.kind === 'labware'
@@ -238,9 +276,13 @@ function resolvedMentionsFromAnswers(
           ? 'equipment'
           : refType === 'material-spec'
             ? 'material-spec'
-            : refType === 'aliquot'
-              ? 'aliquot'
-              : 'material';
+            : refType === 'material-instance'
+              ? 'material-instance'
+              : refType === 'vendor-product'
+                ? 'vendor-product'
+                : refType === 'aliquot'
+                  ? 'aliquot'
+                  : 'material';
     out.push({
       raw: answer.mentionToken ?? `[[${kind}:${id}]]`,
       kind,
@@ -318,23 +360,62 @@ const LOCAL_RECORD_ID = /^(?:local:)?(?:MAT|MSP|ALQ|VND|LBW)-/i;
 export function normalizeDraftMaterialRefs<T>(events: T[], resolved: readonly ResolvedMention[]): T[] {
   if (!Array.isArray(events) || events.length === 0) return events;
   const byId = new Map<string, ResolvedMention>();
-  for (const m of resolved) if (m.id) byId.set(m.id, m);
+  const byLabel = new Map<string, ResolvedMention>();
+  for (const m of resolved) {
+    if (m.id) byId.set(m.id, m);
+    const label = typeof m.label === 'string' ? m.label.trim().toLowerCase() : '';
+    if (label && !byLabel.has(label)) byLabel.set(label, m);
+  }
+
+  /**
+   * Every name a draft ref might be carrying. A MINTED ref has no id at all —
+   * its label (or the `mint:<label>` id suffix, or a nested `mint.label`) is the
+   * identity the user answers about. Reading only `id` is what stranded the
+   * user's pick and looped the clarification.
+   */
+  const labelCandidates = (ref: Record<string, unknown>): string[] => {
+    const out: string[] = [];
+    const push = (v: unknown) => {
+      if (typeof v !== 'string') return;
+      const value = v.trim();
+      if (value) out.push(value.toLowerCase());
+    };
+    push(ref.label);
+    push(ref.name);
+    const id = typeof ref.id === 'string' ? ref.id.trim() : '';
+    if (id.startsWith('mint:')) push(id.slice('mint:'.length));
+    const mint = ref.mint;
+    if (mint && typeof mint === 'object' && !Array.isArray(mint)) push((mint as Record<string, unknown>).label);
+    if (mint && typeof mint === 'object' && !Array.isArray(mint)) push((mint as Record<string, unknown>).name);
+    return out;
+  };
+
+  const clean = (match: ResolvedMention, fallbackLabel: string): Record<string, unknown> => ({
+    kind: 'record',
+    id: match.id,
+    // Prefer the resolved record's own type: a mention's kind is a coarse bucket,
+    // and losing `material-spec` here re-opens the very gate that asked for the
+    // concentration of a formulation.
+    type: (typeof match.resolved?.type === 'string' && match.resolved.type) || match.kind,
+    label: match.label || fallbackLabel || match.id,
+  });
 
   const repair = (ref: Record<string, unknown>): Record<string, unknown> | null => {
     const id = typeof ref.id === 'string' ? ref.id.trim() : '';
-    if (!id) return null;
-    const match = byId.get(id);
-    if (match) {
-      return {
-        kind: 'record',
-        id,
-        type: match.kind,
-        label: match.label || (typeof ref.label === 'string' ? ref.label : '') || id,
-      };
+    if (id) {
+      const match = byId.get(id);
+      if (match) return clean(match, typeof ref.label === 'string' ? ref.label.trim() : '');
+      if (ref.kind === 'ontology' && LOCAL_RECORD_ID.test(id)) {
+        const label = typeof ref.label === 'string' ? ref.label.trim() : '';
+        return { kind: 'record', id, type: 'material', label: label && label !== id ? label : id };
+      }
+      return null;
     }
-    if (ref.kind === 'ontology' && LOCAL_RECORD_ID.test(id)) {
-      const label = typeof ref.label === 'string' ? ref.label.trim() : '';
-      return { kind: 'record', id, type: 'material', label: label && label !== id ? label : id };
+    // No id (a minted/draft ref): bind by the name it carries, if the user's
+    // resolution names the same thing. Never invents an id.
+    for (const candidate of labelCandidates(ref)) {
+      const match = byLabel.get(candidate);
+      if (match) return clean(match, candidate);
     }
     return null;
   };
@@ -351,6 +432,33 @@ export function normalizeDraftMaterialRefs<T>(events: T[], resolved: readonly Re
     const repaired = repair(mr as Record<string, unknown>);
     return repaired ? ({ ...e, details: { ...d, material_ref: repaired } } as T) : ev;
   });
+}
+
+/**
+ * Turn a named well pattern into literal wells, exactly like a range string.
+ * The `wells_pattern` key is consumed (removed), so every consumer downstream —
+ * deck rendering, per-well materialization, the gate — sees wells and only wells.
+ */
+function expandWellPatternEvent<T>(event: T): T {
+  if (!event || typeof event !== 'object') return event;
+  const e = event as Record<string, unknown>;
+  const details = e['details'];
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return event;
+  const d = details as Record<string, unknown>;
+  const pattern = wellPatternFromDetails(d);
+  if (!pattern) return event;
+  const expanded = expandWellPattern(pattern);
+  const nextDetails: Record<string, unknown> = { ...d };
+  delete nextDetails['wells_pattern'];
+  if (expanded.length > 0) {
+    // A pattern and explicit wells must agree if both are present; the explicit
+    // list wins (the model was more specific), otherwise the pattern fills in.
+    const explicit = Array.isArray(d['wells'])
+      ? (d['wells'] as unknown[]).filter((w): w is string => typeof w === 'string' && w.trim().length > 0)
+      : [];
+    if (explicit.length === 0) nextDetails['wells'] = expanded;
+  }
+  return { ...e, details: nextDetails } as T;
 }
 
 function stampDraftProvenance<T>(events: T[]): T[] {
@@ -377,11 +485,14 @@ export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_graph" and fill the event/labware fields.',
   '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
+  '- An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.',
+  '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
   '- ALWAYS return the events for an add-materials request (with {mint} for unknowns). NEVER return "events": [] for such a request, and never ask the user to confirm a volume or concentration they already stated.',
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
+  '- THREE intents, ONE call. `event_graph` drafts events onto the deck; `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
   '- For operations, use canonical operation names when possible: dispense, transfer, mix, shake, incubate, centrifuge, wash, read, seed, harvest, etc. The system normalizes verbs automatically.',
@@ -608,7 +719,8 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 }
 
 /** Top-level keys that mark a bare forced-draft argument object. */
-const DRAFT_ARG_KEYS = ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'clarificationRequests', 'unresolvedRefs', 'notes'];
+// DRAFT_ARG_KEYS lives in draftArgDiagnostics.ts — one source, so the guard
+// below and the unknown-field diagnostic can never disagree.
 
 /**
  * Recover forced-draft tool arguments from a response that arrived as plain
@@ -748,6 +860,13 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * the precompile runs. Optional — omitted ⇒ mentions pass through unchanged.
    */
   store?: import('../store/types.js').RecordStore;
+  /**
+   * Material profile registry. Its declarative `clarification` policy decides
+   * what a pick at a layer still owes (a formulation owes a volume; an aliquot
+   * nothing), so the follow-up question is derived from data instead of a
+   * hardcoded branch. Optional — without it no follow-up is derived.
+   */
+  materialProfiles?: import('../materials/MaterialProfileRegistry.js').MaterialProfileRegistry;
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
   /**
@@ -887,6 +1006,15 @@ export function createAgentOrchestrator(
       // Instrumentation tracking
       const turnStats: TurnStats[] = [];
       let totalToolCalls = 0;
+      /**
+       * Was a turn cut off at the output budget? A truncated turn is NOT a
+       * finished thought: the model is mid-sentence and the tool call it managed
+       * to emit carries no usable arguments (observed 2026-09-20: 1839 chars of
+       * reasoning, agent_intent with NO fields, and the run reported success with
+       * zero events — the biologist got no proposal and no explanation).
+       * Run-scoped because the flag is read when the final result is assembled.
+       */
+      let truncatedToolCall = false;
       let resolvedMentionsCount = 0;
 
       // 1. Build the message array
@@ -1213,7 +1341,11 @@ export function createAgentOrchestrator(
             model: inferenceConfig.model,
             messages,
             temperature: inferenceConfig.temperature ?? 0.1,
-            max_tokens: inferenceConfig.maxTokens ?? 4096,
+            // No maxTokens in the profile: 4096 is the legacy fallback and is
+            // routinely too small for a model that reasons before it drafts. Say
+            // so once per process instead of silently truncating (see
+            // config.example.yaml — `ai.inference.maxTokens` is the real knob).
+            max_tokens: resolveAgentMaxTokens(inferenceConfig.maxTokens, model),
             // Routes this request to the slot holding the background-warmed
             // prefix for this editor context (llama.cpp fork; no-op elsewhere).
             cache_key: deriveContextCacheKey(surface, context),
@@ -1235,6 +1367,7 @@ export function createAgentOrchestrator(
             args?: string;
           }>();
           let finishReason: 'stop' | 'tool_calls' | 'length' | null = null;
+          truncatedToolCall = false;
           let lastId = '';
 
           const modelStart = Date.now();
@@ -1451,23 +1584,38 @@ export function createAgentOrchestrator(
           // Fast path: the appliance usually returns the tool call as plain
           // content (its tool-call parser is off). Parse those args directly so
           // the common case costs ONE inference call, not two.
-          const inlineArgs = coerceDraftArgsFromContent(assistantMsg.content);
+          const rawInlineArgs = coerceDraftArgsFromContent(assistantMsg.content);
+          // The forced flow ships `agent_intent` as the terminal tool, so recovered
+          // args must be callable AS that tool. Wrapping them as the compile-draft
+          // tool produced a call no branch handled and the draft vanished with no
+          // diagnostic (observed live 2026-09-20: a perfect 32-well HepG2 payload
+          // returned as prose, no proposal). `coerceToAgentIntentArgs` keeps a valid
+          // discriminator, infers the obvious one, and returns null rather than
+          // handing the tool args it cannot honour.
+          const inlineArgs = rawInlineArgs
+            ? (forceDraftTool ? coerceToAgentIntentArgs(rawInlineArgs) : rawInlineArgs)
+            : null;
           if (inlineArgs) {
+            const inlineToolName = forceDraftTool
+              ? AGENT_INTENT_TOOL_NAME
+              : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME;
             assistantMsg.content = null;
             assistantMsg.tool_calls = [{
               id: `call-inline-${Date.now().toString(36)}`,
               type: 'function',
               function: {
-                name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+                name: inlineToolName,
                 arguments: JSON.stringify(inlineArgs),
               },
             }];
             choice.finish_reason = 'tool_calls';
             onEvent?.({
               type: 'status',
-              message: `Parsed the draft from the response; invoking ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`,
+              message: `Parsed the draft from the model's text (it did not emit a tool call); invoking ${inlineToolName}…`,
             });
-            console.log(`[agent ${tid}] recovered forced-draft args from content; skipped the second call`);
+            console.log(
+              `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
+            );
           } else {
           onEvent?.({
             type: 'status',
@@ -1483,7 +1631,10 @@ export function createAgentOrchestrator(
                   { role: 'user', content: buildForcedDraftJsonPrompt(prompt) },
                 ],
                 temperature: 0,
-                max_tokens: Math.min(inferenceConfig.maxTokens ?? 4096, 2048),
+                // No silent ceiling: a draft JSON for a whole selected plate is
+                // exactly what an arbitrary 2048-token cap truncated (observed:
+                // a 72-well request produced an unparseable, empty tool call).
+                max_tokens: inferenceConfig.maxTokens ?? 4096,
                 ...(enableThinking !== undefined ? { enableThinking } : {}),
               }),
               3000,
@@ -1652,10 +1803,15 @@ export function createAgentOrchestrator(
         );
         if (submitCall) {
           let submitArgs: Record<string, unknown>;
+          const rawToolArguments = typeof submitCall.function.arguments === 'string' ? submitCall.function.arguments.trim() : '';
           try {
-            submitArgs = JSON.parse(submitCall.function.arguments) as Record<string, unknown>;
+            submitArgs = rawToolArguments ? (JSON.parse(rawToolArguments) as Record<string, unknown>) : {};
           } catch {
+            // A tool call whose arguments do not parse (typically because the
+            // model was cut off mid-JSON) is a failure to report, never an empty
+            // draft to pass off as a finished thought.
             submitArgs = {};
+            truncatedToolCall = true;
           }
           onEvent?.({ type: 'tool_call', toolName: submitCall.function.name, args: submitArgs });
 
@@ -1665,6 +1821,51 @@ export function createAgentOrchestrator(
           // result the client applies to the live editor + persists.
           if (submitCall.function.name === AGENT_INTENT_TOOL_NAME) {
             const agentIntent = parseAgentIntentArgs(submitArgs);
+
+            // intent=create_record: AUTHOR records (equipment/material/labware) the lab
+            // does not have yet. Distinct from drafting events, and it writes nothing
+            // itself — the client proposes the records and Accept materializes them
+            // (records-first, so an existing one is reused with a warning). `alsoPlace`
+            // is the explicit second decision: put what was created on the bench.
+            if (agentIntent.intent === 'create_record') {
+              const creations = parseRecordCreations(submitArgs.records);
+              const alsoPlace = parseAlsoPlace(submitArgs.alsoPlace);
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: creations.length > 0, durationMs: 0 });
+              const elapsed = Date.now() - t0;
+              const creationResult: AgentResult = creations.length > 0
+                ? {
+                  success: true,
+                  notes: Array.isArray(submitArgs.notes) ? (submitArgs.notes as string[]) : [],
+                  recordCreations: creations,
+                  ...(alsoPlace ? { alsoPlace } : {}),
+                }
+                : {
+                  success: false,
+                  error: 'create_record requires at least one entry in `records` with a `kind` (equipment | material | labware) and a `name`.',
+                };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: creationResult.success,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              if (creationResult.error) summary.error = creationResult.error;
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done create_record success=${creationResult.success} records=${creations.map((c) => c.kind).join(',') || '(none)'} elapsedMs=${elapsed}`);
+              return creationResult;
+            }
+
             if (agentIntent.intent === 'deck_layout') {
               const variantId = agentIntent.variantId;
               const platformId = agentIntent.platformId ?? context.activeDeckScope?.platformId ?? 'manual';
@@ -1698,11 +1899,91 @@ export function createAgentOrchestrator(
             }
           }
 
-          const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
+          // Instruments the USER named this turn (`[[equipment:EQP-…]]`) outrank
+          // whatever the draft reached for.
+          const namedEquipmentIds: string[] = [];
+          const namedEquipmentLabels: Record<string, string> = {};
+          for (const match of effectivePrompt.matchAll(/\[\[equipment:([^|\]]+)(?:\|([^\]]*))?\]\]/gi)) {
+            const id = match[1]?.trim();
+            if (!id) continue;
+            if (!namedEquipmentIds.includes(id)) namedEquipmentIds.push(id);
+            const label = match[2]?.trim();
+            if (label) namedEquipmentLabels[id] = label;
+          }
+          const parsed = parseSubmitSuggestionArgs(
+            submitArgs,
+            totalUsage,
+            turn + 1,
+            totalToolCalls,
+            { namedEquipmentIds, namedEquipmentLabels },
+          );
+          // Name any drafted field the tool does not accept. A silently dropped
+          // field is a contract mismatch the model repeats forever (observed:
+          // `materials:[{ref:'MSP-…'}]` at the top level, ignored by everything,
+          // so the material stayed "ungrounded" and the card came back).
+          // Recover what an invented field legitimately carries BEFORE anything
+          // reads the draft: the DOSE often lives in a top-level
+          // `materials: [{count, ref}]` array no schema accepts, and losing it
+          // made a quantity-less concept out of "10,000 HepG2 cells".
+          const recovered = recoverInventedMaterialFields((parsed.events ?? []) as unknown[]);
+          parsed.events = recovered.events as NonNullable<typeof parsed.events>;
+          if (recovered.notes.length > 0) {
+            for (const line of recovered.notes) console.warn(`[agent ${tid}] ${line}`);
+            parsed.notes = [...(parsed.notes ?? []), ...recovered.notes];
+          }
+
+          // Read each grounded material's TYPE from its own record. The per-type
+          // rules are selected by `domain`, and neither the model's ref nor the
+          // wire reliably carries one — so a grounded HepG2 pick kept the chemical
+          // rule ("what volume?") instead of the cell rule ("how many?").
+          const domainEnrichment = await enrichMaterialDomains((parsed.events ?? []) as unknown[], deps.store);
+          parsed.events = domainEnrichment.events as NonNullable<typeof parsed.events>;
+          if (domainEnrichment.enriched.length > 0) {
+            console.log(`[agent ${tid}] read the material type from the record(s): ${domainEnrichment.enriched.join(', ')}`);
+          }
+
+          const draftArgNotes = draftArgDiagnostics(submitArgs);
+
+          // Nothing produced is a FAILURE with a cause, never a silent success.
+          // Observed 2026-09-20: the model spent its budget reasoning, was cut
+          // off (finish_reason "length"), emitted agent_intent with NO fields, and
+          // the run reported success=true / events=0 — the panel showed only
+          // "agent_intent · no fields" and the biologist got no proposal at all.
+          // Reaching this line means the draft path: the create_record and
+          // deck_layout intents return earlier.
+          const draftProducedNothing =
+            !(parsed.events?.length ?? 0) &&
+            !(parsed.clarificationRequests?.length ?? 0) &&
+            !parsed.error;
+          if (draftProducedNothing) {
+            parsed.error = emptyDraftMessage({
+              truncated: truncatedToolCall,
+              hadArguments: Object.keys(submitArgs).length > 0,
+            });
+            console.warn(`[agent ${tid}] ${parsed.error}`);
+          }
+          for (const line of draftArgNotes) console.warn(`[agent ${tid}] ${line}`);
+          if (draftArgNotes.length > 0) {
+            parsed.notes = [...(parsed.notes ?? []), ...draftArgNotes];
+          }
           if (parsed.events?.length) {
+            // The names in a draft belong to the biologist. A minted label that
+            // is a near-miss of their own words (observed: "HepG23" for "HepG2")
+            // is replaced by THEIR phrase — otherwise the clarification asks about
+            // a name that exists nowhere and the picker searches a typo.
+            const mintRepair = repairMintedLabelsAgainstUserWords(parsed.events, [effectivePrompt]);
+            parsed.events = mintRepair.events;
+            if (mintRepair.notes.length > 0) {
+              for (const line of mintRepair.notes) console.warn(`[agent ${tid}] ${line}`);
+              parsed.notes = [...(parsed.notes ?? []), ...mintRepair.notes];
+            }
             // Expand compact well ranges ("A1:H12") the model emits into literal
             // wells, so every dock gets the existing per-well format.
             parsed.events = parsed.events.map(expandEventWells);
+            // …and the SAME for a named pattern ("checkerboard across A2:D8"),
+            // which is otherwise ~35 wells the model has to enumerate by hand.
+            // Expanded here, at the boundary: nothing downstream sees a pattern.
+            parsed.events = parsed.events.map(expandWellPatternEvent);
             parsed.events = await enrichAddMaterialRefs(
               normalizeDraftLabwareRefs(parsed.events, context),
               createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
@@ -1712,6 +1993,35 @@ export function createAgentOrchestrator(
             // record stuffed into an ontology-kind ref) against the resolved
             // mentions, so a confirmed pick renders as the clean record it is.
             parsed.events = normalizeDraftMaterialRefs(parsed.events, resolvedMentions);
+
+            // BIND the user's picks onto the events they answer, before the gate
+            // looks at them. The pick is already resolved data (the client
+            // grounds it); requiring the MODEL to re-emit it was the loop: a
+            // small model kept emitting `material_ref:{mint:{label}}`, which no
+            // repair can bind, so the same card returned forever. The
+            // clarification request id (`material-<eventIndex+1>`) is the join.
+            const materialBinding = bindMaterialAnswersToEvents(
+              parsed.events as unknown as Record<string, unknown>[],
+              clarificationAnswers,
+            );
+            parsed.events = materialBinding.events as unknown as typeof parsed.events;
+            if (materialBinding.bound.length > 0) {
+              console.log(
+                `[agent ${tid}] bound ${materialBinding.bound.length} material pick(s): ` +
+                  materialBinding.bound
+                    .map((b) => `event[${b.eventIndex}].${b.field}=${String((b.ref as Record<string, unknown>).id)} (${b.source})`)
+                    .join(', '),
+              );
+            }
+            if (materialBinding.unbound.length > 0) {
+              // Never guess. An unplaceable pick is reported so the surface can
+              // say "I could not tell which material this answers" instead of
+              // silently dropping it and re-asking.
+              console.warn(
+                `[agent ${tid}] ${materialBinding.unbound.length} clarification answer(s) could not be bound to an event: ` +
+                  materialBinding.unbound.map((a) => a.requestId).join(', '),
+              );
+            }
 
             // Force a /m clarification for any ungrounded material. In draft
             // mode the `resolve` tool is off and the post-tool re-compile (the
@@ -1730,14 +2040,84 @@ export function createAgentOrchestrator(
                 if (typeof cid === 'string' && cid) resolvedCuries.add(cid);
               }
             }
+            // What a pick owes depends on the material's TYPE (a cell line is
+            // counted; a chemical is dosed). The registry declares it; the gate
+            // stays pure and receives it.
+            const materialProfiles = deps.materialProfiles;
+            const requirementsFor = materialProfiles
+              ? (layer: import('./materialRefFields.js').MaterialLayer, domain?: string) => {
+                  const profile = materialProfiles.profileForDomain(domain);
+                  const entry = materialProfiles.clarificationForLayer(layer, profile?.id);
+                  if (!entry) return null;
+                  return {
+                    requires: entry.requires,
+                    ...(entry.question ? { question: entry.question } : {}),
+                  };
+                }
+              : undefined;
             const materialNet = forceMaterialClarifications(
               parsed.events as unknown as Record<string, unknown>[],
               // Police unconfirmed CURIEs only in forced-tool mode: there the
               // compiler re-compile (which would otherwise validate them) is
               // skipped, so this net is the last gate. Other modes re-compile.
-              { resolvedCuries, policeUnverifiedCuries: draftFlowMode === 'forced-tool' },
+              {
+                resolvedCuries,
+                policeUnverifiedCuries: draftFlowMode === 'forced-tool',
+                ...(requirementsFor ? { requirementsFor } : {}),
+              },
             );
-            if (materialNet.clarificationRequests.length > 0) {
+            // What does each BOUND pick still owe? The registry's layer policy
+            // answers (formulation → volume; aliquot → nothing), so the question
+            // is derived from the hierarchy rather than hardcoded. The question
+            // that looped asked for "a volume and a concentration" of a material
+            // whose NAME was a concentration — no answer could satisfy it.
+            const layerPolicy = deps.materialProfiles?.clarificationPolicy();
+            const followUpRequests: (typeof materialNet.clarificationRequests)[number][] = [];
+            // ONLY when the gate asked nothing. The gate's own quantity question
+            // (and its "which material?") already covers a concept's
+            // requirements, and asking again in different words produced TWO
+            // cards for one requirement (observed: "I need a volume and a
+            // concentration…" beside "Which material is… I still need
+            // concentration and volume…"). The follow-up exists for the case the
+            // gate TRUSTS — a formulation, which still owes a volume.
+            if (layerPolicy && materialNet.clarificationRequests.length === 0) {
+              for (const binding of materialBinding.bound) {
+                const event = parsed.events[binding.eventIndex] as unknown as Record<string, unknown>;
+                const details = (event?.details ?? {}) as Record<string, unknown>;
+                const wells = Array.isArray(details.wells) ? details.wells : [];
+                const firstWellRaw = wells.find((w) => typeof w === 'string' && (w as string).trim().length > 0);
+                const label = typeof binding.ref.label === 'string' && binding.ref.label.trim().length > 0
+                  ? binding.ref.label.trim()
+                  : String(binding.ref.id ?? '');
+                // The TYPE's requirements, not the global default: a cell line
+                // owes a count and never a volume (the default demanded one).
+                const boundLayer = materialLayerOfRef(binding.ref);
+                const boundDomain = typeof binding.ref.domain === 'string' ? binding.ref.domain.trim() : undefined;
+                const boundProfile = boundDomain ? deps.materialProfiles?.profileForDomain(boundDomain) : null;
+                const typeRequirements = boundProfile
+                  ? deps.materialProfiles?.requirementsForLayer(boundLayer, boundProfile.id) ?? null
+                  : null;
+                const boundWells = binding.eventIndexes.flatMap((index) => {
+                  const boundEvent = (parsed.events ?? [])[index] as unknown as Record<string, unknown>;
+                  const boundDetails = (boundEvent?.details ?? {}) as Record<string, unknown>;
+                  const wellList = Array.isArray(boundDetails.wells) ? boundDetails.wells : [];
+                  return wellList.filter((w): w is string => typeof w === 'string' && w.trim().length > 0);
+                });
+                const request = followUpForLayer({
+                  policy: layerPolicy,
+                  layer: boundLayer,
+                  label,
+                  ...(typeof firstWellRaw === 'string' ? { well: firstWellRaw.trim() } : {}),
+                  ...(boundWells.length > 1 ? { wells: [...new Set(boundWells)] } : {}),
+                  details,
+                  ...(typeRequirements ? { requirements: typeRequirements } : {}),
+                  requestId: `material-${binding.eventIndex + 1}`,
+                });
+                if (request) followUpRequests.push(request);
+              }
+            }
+            const pendingRequests = [...materialNet.clarificationRequests, ...followUpRequests];
+            if (pendingRequests.length > 0) {
               // Ask per-material UP FRONT: when any material needs confirming,
               // hold the WHOLE draft (not just the ungrounded subset) and show a
               // named card for each ambiguous material. This avoids "mixing" — a
@@ -1747,14 +2127,63 @@ export function createAgentOrchestrator(
               parsed.events = [] as unknown as typeof parsed.events;
               parsed.clarificationRequests = [
                 ...(parsed.clarificationRequests ?? []),
-                ...materialNet.clarificationRequests,
+                ...pendingRequests,
               ];
               if (!parsed.clarification) {
                 const legacy = legacyClarificationFromRequests(parsed.clarificationRequests);
                 if (legacy) parsed.clarification = legacy;
               }
+              // An identical question a second time is a MODEL-SHAPE failure, not
+              // a fresh question: say so instead of showing a third card. The
+              // pick still works (answers are bound deterministically), so the
+              // loop is escapable; it just stops masquerading as a question.
+              const loop = detectClarificationLoop({
+                requests: pendingRequests,
+                history,
+              });
+              if (loop.looped) {
+                parsed.error = clarificationLoopMessage(loop.repeated);
+                console.warn(`[agent ${tid}] ${parsed.error}`);
+              }
             }
           }
+          // The harness ENFORCES what the draft tool's instructions tell the model:
+          // materials are never a clarification the model authors, and never to
+          // confirm an amount the user already stated. Observed violation: a
+          // seeding draft asked "What is the desired final volume per well and
+          // the cell suspension concentration (cells/uL)…" for a CELL line, whose
+          // type owes only a count and whose adherent cells may have zero volume.
+          // Such a question is dropped, and the drop is reported.
+          {
+            const firstMaterialDomain = (() => {
+              for (const ev of (parsed.events ?? []) as unknown[]) {
+                const event = ev && typeof ev === 'object' ? (ev as Record<string, unknown>) : null;
+                const details = event && typeof event['details'] === 'object' ? (event['details'] as Record<string, unknown>) : null;
+                if (!details) continue;
+                for (const field of ['material_spec_ref', 'material_instance_ref', 'aliquot_ref', 'vendor_product_ref', 'material_ref']) {
+                  const ref = details[field];
+                  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) continue;
+                  const domain = (ref as Record<string, unknown>)['domain'];
+                  if (typeof domain === 'string' && domain.trim()) return domain.trim();
+                }
+              }
+              return undefined;
+            })();
+            const draftProfile = firstMaterialDomain ? deps.materialProfiles?.profileForDomain(firstMaterialDomain) : null;
+            const declared = draftProfile
+              ? deps.materialProfiles?.requirementsForLayer('material', draftProfile.id) ?? null
+              : null;
+            const filtered = filterForbiddenAmountQuestions(parsed.clarificationRequests, declared);
+            if (filtered.notes.length > 0) {
+              parsed.clarificationRequests = filtered.requests;
+              for (const line of filtered.notes) console.warn(`[agent ${tid}] ${line}`);
+              parsed.notes = [...(parsed.notes ?? []), ...filtered.notes];
+              if (parsed.clarification && filterForbiddenAmountQuestions([clarificationRequestFromLegacy(parsed.clarification, 0)], declared).requests.length === 0) {
+                delete parsed.clarification;
+              }
+            }
+          }
+
           // Forced-draft mode: the model has no resolve tool, so any options it
           // authored on a clarification are fabricated (invented CURIEs like
           // XCO:0000988 / mint-pseudo-ids). Strip them so only the live /m and
@@ -1847,6 +2276,28 @@ export function createAgentOrchestrator(
                 'Compiler returned no ghostable artifacts for the structured draft; showing the validated structured proposal.',
               ];
             }
+
+            // Wherever this draft came from — the tool call, a coerced JSON
+            // answer, or the compiler preflight — an EMPTY result is a failure
+            // with a cause, never a silent success. The coerced/compile path
+            // could end `success=true` with zero events and no explanation
+            // (observed live 2026-09-20), the same silence the draft path was
+            // fixed for.
+            const emptyResult =
+              !(result.events?.length ?? 0) &&
+              !(result.clarificationRequests?.length ?? 0) &&
+              !result.error &&
+              !(result.labwareAdditions?.length ?? 0) &&
+              !(result.labwareRequirements?.length ?? 0) &&
+              !(result.recordCreations?.length ?? 0) &&
+              !result.deckLayout;
+            if (emptyResult) {
+              result = {
+                ...result,
+                error: emptyDraftMessage({ truncated: truncatedToolCall, hadArguments: true }),
+              };
+              console.warn(`[agent ${tid}] ${result.error}`);
+            }
           }
 
           const elapsed = Date.now() - t0;
@@ -1880,6 +2331,12 @@ export function createAgentOrchestrator(
           console.log(
             `[agent ${tid}] done success=${result.success} via ${submitCall.function.name} turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
           );
+          // The terms this draft used, classified ONCE, here: what each matched
+          // (local record / ontology / vendor item / not yet in the lab) and where it
+          // appeared. The review dialogue's term panel renders this verbatim — the
+          // client never re-derives it, so the panel and the harness cannot disagree
+          // about what a term IS.
+          result = { ...result, termManifest: draftTermManifest(result.events) };
           return result;
         }
 
@@ -1925,6 +2382,7 @@ export function createAgentOrchestrator(
 
         // 5. If finish_reason is 'length', warn and continue
         if (choice.finish_reason === 'length') {
+          truncatedToolCall = true;
           onEvent?.({ type: 'status', message: 'Response truncated, continuing...' });
         }
 

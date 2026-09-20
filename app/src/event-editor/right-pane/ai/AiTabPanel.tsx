@@ -31,8 +31,11 @@ import { SourcesStrip, type AddedSource } from './SourcesStrip'
 import { MessageLog } from './MessageLog'
 import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
+import { changesFromDraftEvents } from './draftChanges'
 import { InterpretationPanel } from './InterpretationPanel'
 import { ChangesPanel } from './ChangesPanel'
+import type { TermClarification, TermConfirmation } from './TermPanel'
+import { termClarifyPrompt, termConfirmPrompt } from './termFollowUpPrompt'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -263,10 +266,23 @@ export function AiTabPanel() {
       // draft has no preview events (e.g. forceMaterialClarifications held
       // the whole draft because of an ungrounded material).
       const draftId = `draft-${Date.now()}`
+      const draftedEvents = (result.events ?? []) as unknown[]
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
         sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
       } else {
-        sidebarDispatch({ type: 'draft-ready', draftId, interpretation: { operations: [] }, changes: [], warnings: [] })
+        // Describe what will be applied. This used to pass `changes: []`, so
+        // "Apply to run" sat above an empty list — the biologist was asked to
+        // accept something they could not see. A draft that needs NO
+        // clarification is now the common case, so the row must be real.
+        sidebarDispatch({
+          type: 'draft-ready',
+          draftId,
+          interpretation: { operations: [] },
+          changes: changesFromDraftEvents(draftedEvents),
+          warnings: [],
+          // Classified server-side (draftTermManifest); absent on older payloads.
+          terms: result.termManifest ?? [],
+        })
       }
 
       if (!editor) return
@@ -457,6 +473,24 @@ export function AiTabPanel() {
       await chat.send(text, { enableThinking: false })
     },
     [chat],
+  )
+
+  // The term panel's rows send ordinary turns: a confirmed term is expressed as the
+  // mention the loop already understands, and a clarified term is a redraft request
+  // carrying the biologist's sentence. No private channel, so grounding, binding and
+  // the material gate all apply to these exactly as they do to typed input.
+  const handleTermConfirm = useCallback(
+    async (confirmation: TermConfirmation) => {
+      await handleSend(termConfirmPrompt(confirmation))
+    },
+    [handleSend],
+  )
+
+  const handleTermClarify = useCallback(
+    async (clarification: TermClarification) => {
+      await handleSend(termClarifyPrompt(clarification))
+    },
+    [handleSend],
   )
 
   const handleClarificationsSubmit = useCallback(
@@ -728,6 +762,9 @@ export function AiTabPanel() {
           <ChangesPanel
             changes={sidebar.changes}
             warnings={sidebar.warnings}
+            terms={sidebar.terms}
+            onTermConfirm={(confirmation) => void handleTermConfirm(confirmation)}
+            onTermClarify={(clarification) => void handleTermClarify(clarification)}
             onApply={() => {
               sidebarDispatch({ type: 'commit' })
               editor?.actions.commitPreview()

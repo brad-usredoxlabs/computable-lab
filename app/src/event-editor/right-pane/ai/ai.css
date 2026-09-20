@@ -119,6 +119,141 @@
   flex-direction: column;
 }
 
+/*
+ * The questions tab scrolls exactly like the chat log.
+ *
+ * Reported 2026-09-20: with a run of clarifications (a per-well range) the cards
+ * ran off the bottom of the pane and there was no way to reach the Answer
+ * buttons — the panel was unstyled, and `.ai-tab__section`'s base rule is
+ * `flex-shrink: 0`, so it could neither shrink nor scroll.
+ */
+.ai-tab__section--questions {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.questions-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Header and footer stay put; only the list moves. */
+.questions-panel__header {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.questions-panel__count {
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.questions-panel__hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--cl-text-dim, var(--cl-text));
+  opacity: 0.8;
+}
+
+.questions-panel__progress {
+  flex: 0 0 auto;
+  height: 3px;
+  background: var(--cl-border);
+}
+
+.questions-panel__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.questions-panel__actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.questions-panel__card {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  padding: 8px 10px;
+}
+
+.questions-panel__card--active {
+  border-color: var(--cl-accent);
+}
+
+.questions-panel__card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--cl-text-dim, var(--cl-text));
+  opacity: 0.85;
+}
+
+.questions-panel__prompt {
+  margin: 6px 0 0;
+  color: var(--cl-text);
+}
+
+.questions-panel__snippet {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--cl-text-dim, var(--cl-text));
+  opacity: 0.75;
+}
+
+.questions-panel__answered {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--cl-accent);
+  font-size: 12px;
+}
+
+.questions-panel__btn,
+.questions-panel__change-btn {
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.questions-panel__btn--primary {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent);
+  color: #fff; /* --cl-bg is not defined in either theme; white reads on both accents */
+}
+
+.questions-panel__btn--primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .ai-tab__section--actions {
   padding: 6px 12px;
   border-top: 1px solid var(--cl-border);
@@ -812,4 +947,121 @@
 .ai-tab__input-cancel:hover {
   color: var(--cl-text);
   border-color: var(--cl-border-strong);
+}
+
+
+/* ── Term panel ────────────────────────────────────────────────────────────────
+   Sits inside the review dialogue, under the change list, above Accept/Discard.
+   Inline block (not a full-height surface): it is a place to fix names, not a
+   destination of its own, and it must never push the actions off-screen. */
+.term-panel {
+  flex: 0 0 auto;
+  margin: 8px 0;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.term-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--cl-surface-2, transparent);
+  border: none;
+  color: var(--cl-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.term-panel__caret { opacity: 0.7; }
+.term-panel__title { font-weight: 600; }
+
+.term-panel__rows {
+  display: flex;
+  flex-direction: column;
+  /* Long drafts use many terms: scroll the rows rather than grow the dialogue. */
+  max-height: 260px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.term-panel__row {
+  padding: 6px 10px;
+  border-top: 1px solid var(--cl-border);
+  font-size: 12px;
+}
+
+.term-panel__row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.term-panel__label { font-weight: 600; }
+
+.term-panel__provenance {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.term-panel__provenance--minted { color: var(--cl-warn, #b45309); }
+.term-panel__provenance--ontology { color: var(--cl-accent, #1d4ed8); }
+.term-panel__provenance--vendor-product { color: var(--cl-muted, #6b7280); }
+
+.term-panel__row-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.term-panel__btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.term-panel__btn--primary {
+  border-color: var(--cl-accent, #1d4ed8);
+}
+
+.term-panel__suggestions {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.term-panel__suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-panel__suggestion-text { font-size: 11px; opacity: 0.9; }
+
+.term-panel__search,
+.term-panel__clarify {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.term-panel__search-input,
+.term-panel__clarify-input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text);
 }

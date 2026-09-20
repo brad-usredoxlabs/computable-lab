@@ -7,6 +7,7 @@
 
 import type { ExecutionScalePlan, InstrumentApplianceJob } from '../compiler/pipeline/CompileContracts.js';
 import type { AssuranceResult } from './assurance.js';
+import type { DraftTermUse } from './draftTermManifest.js';
 
 // ============================================================================
 // OpenAI-compatible inference types
@@ -653,6 +654,13 @@ export interface AgentResult {
   instrumentApplianceJobs?: InstrumentApplianceJob[];
   /** Ontology terms bound during draft compile; draftOnly entries materialize on human accept. */
   ontologyBindings?: DraftOntologyBinding[];
+  /**
+   * What each term in this draft matched, for the review dialogue's term panel:
+   * a local record, an ontology term, a vendor item, or something the lab does not
+   * have yet. Classified once, server-side (draftTermManifest) — the client never
+   * re-derives it.
+   */
+  termManifest?: DraftTermUse[];
   /** Deck layout switch requested via agent_intent (intent: deck_layout). The
    *  client applies this to the live editor; nothing is drafted. */
   deckLayout?: { platformId: string; variantId: string };

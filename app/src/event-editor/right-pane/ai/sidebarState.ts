@@ -1,4 +1,5 @@
 import type { AiClarificationRequest, AiClarificationAnswer } from '../../../types/ai'
+import type { DraftTermRow } from './TermPanel'
 
 export interface InterpretationStep {
   label: string
@@ -48,6 +49,12 @@ export type AiSidebarState =
       interpretation: SemanticInterpretation
       changes: EventGraphChange[]
       warnings: ValidationGap[]
+      /**
+       * The terms this draft used, as the server classified them (term panel).
+       * Optional: an older payload carries none, and a draft with no material refs
+       * has nothing to show — the panel renders itself away either way.
+       */
+      terms?: DraftTermRow[]
     }
   | { mode: 'committing'; draftId: string }
 
@@ -68,6 +75,7 @@ export type SidebarAction =
       interpretation: SemanticInterpretation
       changes: EventGraphChange[]
       warnings: ValidationGap[]
+      terms?: DraftTermRow[]
     }
   | { type: 'commit' }
   | { type: 'cancel' }
@@ -119,6 +127,7 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         interpretation: action.interpretation,
         changes: action.changes,
         warnings: action.warnings,
+        terms: action.terms,
       }
 
     case 'commit':

@@ -18,6 +18,7 @@
 
 import { API_BASE } from '../../../shared/api/base'
 import type { AiClarificationAnswer, AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
+import type { DraftTermRow } from './TermPanel'
 
 export interface AssistStreamRequest {
   prompt: string
@@ -49,6 +50,12 @@ export interface AssistStreamRequest {
 export interface AssistDraftResult {
   success?: boolean
   events?: unknown[]
+  /**
+   * What each term in the draft matched (local record / ontology / vendor /
+   * not yet in the lab), classified server-side for the term panel. Absent on
+   * older payloads — the panel simply does not render.
+   */
+  termManifest?: DraftTermRow[]
   notes?: string[]
   labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
   labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
