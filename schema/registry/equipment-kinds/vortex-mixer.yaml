@@ -1,0 +1,18 @@
+kind: equipment-kind
+id: CL:vortex_mixer
+name: Vortex mixer
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: vortex
+settingsDefinition:
+  - key: rpm
+    label: Speed
+    valueType: number
+    unit: rpm
+  - key: duration_sec
+    label: Duration
+    valueType: duration_sec
+    unit: s
+notes: >-
+  Generic vortex mixer: agitates a single tube held in its cup, no heat. Its verb is `shake` (the mixing family — vortex is a motion, not a verb). Acceptance is a tube-only seat (ECP-VORTEX-MIXER): a plate does not fit a vortex cup.

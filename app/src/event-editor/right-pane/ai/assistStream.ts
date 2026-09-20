@@ -64,6 +64,23 @@ export interface AssistDraftResult {
     settings?: Record<string, unknown>
     source?: string
   }>
+  /** Records the draft wants CREATED (the add; nothing is written until Accept). */
+  recordCreations?: Array<{
+    kind?: 'equipment' | 'material' | 'labware'
+    name?: string
+    handle?: string
+    classKind?: string
+    classRecordId?: string
+    curie?: string
+    domain?: string
+    labwareType?: string
+    format?: { rows?: number; cols?: number; wellCount?: number }
+    settings?: Record<string, unknown>
+    source?: string
+    reason?: string
+  }>
+  /** Place the created record on the bench in the same turn (explicit). */
+  alsoPlace?: { surface?: 'lawn' | 'slot'; slotId?: string }
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string
@@ -121,6 +138,22 @@ export function summarizeDraftResult(result: AssistDraftResult | undefined): str
   }
   for (const add of result.labwareAdditions ?? []) {
     lines.push(`Proposed labware addition: ${add.recordId ?? 'unknown record'}${add.deckSlot ? ` in slot ${add.deckSlot}` : ''}.`)
+  }
+  // Equipment is not labware and has its own bucket: without this the panel told
+  // the user "(no response)" for a draft that DID propose an instrument.
+  for (const req of result.equipmentRequirements ?? []) {
+    const what = req.handle ?? req.recordId ?? req.classCurie ?? 'equipment'
+    const settings = req.settings && Object.keys(req.settings).length > 0
+      ? ` (${Object.entries(req.settings).map(([k, v]) => `${k.replace(/_/g, ' ')} ${String(v)}`).join(', ')})`
+      : ''
+    lines.push(`Proposed equipment on the bench: ${what}${settings}.`)
+  }
+  // Records the draft wants authored: an equipment-only (or material/labware-only)
+  // draft used to summarize to `undefined`, so the panel said "(no response)" for a
+  // turn that DID propose something.
+  for (const creation of result.recordCreations ?? []) {
+    const source = creation.source ? `source: ${creation.source}` : 'no source stated'
+    lines.push(`New ${creation.kind ?? 'record'} to create: ${creation.name ?? 'unnamed'} (${source}).`)
   }
   for (const note of result.notes ?? []) lines.push(note)
   return lines.length > 0 ? lines.join('\n') : undefined

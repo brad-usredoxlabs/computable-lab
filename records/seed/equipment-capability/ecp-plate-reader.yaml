@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-PLATE-READER
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:plate_reader
+  namespace: CL
+  label: Plate reader
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-READ }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        footprint: sbs
+    notes: >-
+      A microplate reader takes an SBS-footprint microplate. Which READOUT it can
+      take is not acceptance — it is the readout definitions the instrument
+      declares (INSTDEF-GENERIC-PLATE_READER), kept in one place on purpose.

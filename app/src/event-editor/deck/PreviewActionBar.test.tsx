@@ -161,6 +161,23 @@ describe('PreviewActionBar Accept persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
   }
 
+  it('never lets an equipment ADD block the accept', async () => {
+    // The add is materialized before the durable save. With no records API in the
+    // jsdom environment the lookup fails — the accept must still complete (the
+    // failure is a warning, not a veto), because the placement is the user's
+    // primary intent and the missing record is reported.
+    mocks.state = makeState({
+      preview: {
+        ...preview,
+        recordCreations: [{ kind: 'equipment', name: 'Benchmark Incu-Mixer MP4', source: 'user-description' }],
+      },
+    } as never)
+    renderBar()
+    approveTerms()
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    await waitFor(() => expect(mocks.commitPreview).toHaveBeenCalled())
+  })
+
   it('materializes draft bindings, saves the full graph, commits rewritten events, and replaces the URL', async () => {
     renderBar()
 

@@ -20,7 +20,7 @@ import { createLabwareFromRequirement } from '../../../types/labwareRequirement'
 import { createEquipmentFromRequirement } from '../../../types/equipmentRequirement'
 import type { Equipment } from '../../../types/equipment'
 import { equipmentFootprintMm, labwareFootprintMm } from '../../../types/labwareFootprint'
-import type { AiActiveDeckScope, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiActiveDeckScope, AiAlsoPlace, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement, AiRecordCreation } from '../../../types/ai'
 import type { PlatformManifest, PlatformVariantManifest } from '../../../types/platformRegistry'
 import { assignVisibleLabwareHandle } from '../../labwareHandles'
 import { resolveOrientation, validatePlacement } from '../../lib/placementRules'
@@ -84,6 +84,10 @@ export interface BuildPreviewArgs {
   labwareRequirements: AiLabwareRequirement[]
   /** Bench equipment the draft wants placed on the bench (never a deck slot). */
   equipmentRequirements?: AiEquipmentRequirement[]
+  /** Records the draft wants CREATED (written only on Accept). */
+  recordCreations?: AiRecordCreation[]
+  /** Place the created record on the bench in the same turn (explicit). */
+  alsoPlace?: AiAlsoPlace
   existingLabwares: Record<string, Labware>
   activeDeckScope?: AiActiveDeckScope
   existingPlacements?: EventEditorPlacement[]
@@ -198,6 +202,48 @@ function nextLawnPosition(
   return { kind: 'lawn', xMm: LAWN_FALLBACK_STEP_W_MM + LAWN_GAP_MM + placed.length * (LAWN_FALLBACK_STEP_W_MM + LAWN_GAP_MM), yMm: LAWN_FALLBACK_STEP_H_MM + LAWN_GAP_MM }
 }
 
+/**
+ * A labware ghost for a record the draft wants created. It carries only what the
+ * proposal stated — the id is minted for the editor, and `proposedRecord` marks it so
+ * the review pane (and Accept) can tell it from something the lab owns.
+ */
+function createLabwareFromCreation(creation: AiRecordCreation): Labware {
+  const wellCount = creation.format?.wellCount
+    ?? ((creation.format?.rows && creation.format?.cols) ? creation.format.rows * creation.format.cols : undefined)
+  const rows = creation.format?.rows ?? (wellCount === 96 ? 8 : wellCount === 384 ? 16 : 1)
+  const columns = creation.format?.cols ?? (wellCount === 96 ? 12 : wellCount === 384 ? 24 : wellCount ?? 1)
+  const labwareId = `lbw-proposed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  const labware = {
+    labwareId,
+    labwareType: (creation.labwareType ?? 'plate') as Labware['labwareType'],
+    name: creation.name,
+    recordId: undefined,
+    proposedRecord: true,
+    attribution: creation.source,
+    addressing: { type: 'grid' as const, rows, columns },
+    geometry: { wellSpacing_mm: 9 },
+    definitionId: undefined,
+  } as unknown as Labware
+  return labware
+}
+
+/**
+ * Where a created record lands when the draft asked for `alsoPlace`. A slot placement
+ * is honoured verbatim; otherwise the bench packs it like any other ghost.
+ */
+function placementForAlsoPlace(
+  alsoPlace: AiAlsoPlace,
+  footprint: { wMm: number; hMm: number },
+  existing: EventEditorPlacement[],
+  placed: Array<{ x: number; y: number; w: number; h: number }>,
+  labwaresById: Record<string, Labware>,
+): PlacementLocation | null {
+  if (alsoPlace.surface === 'slot' && alsoPlace.slotId) {
+    return { kind: 'slot', slotId: alsoPlace.slotId }
+  }
+  return nextLawnPosition(footprint, existing, placed, labwaresById)
+}
+
 export function buildPreviewFromDraft({
   platform,
   variant,
@@ -205,6 +251,8 @@ export function buildPreviewFromDraft({
   labwareAdditions,
   labwareRequirements,
   equipmentRequirements = [],
+  recordCreations = [],
+  alsoPlace,
   existingLabwares,
   activeDeckScope,
   existingPlacements = [],
@@ -296,7 +344,8 @@ export function buildPreviewFromDraft({
   // to slot-promote equipment (EventEditorContext place_equipment guard).
   for (const requirement of equipmentRequirements) {
     const label = requirement.handle ?? requirement.recordId ?? requirement.classCurie ?? 'equipment'
-    const token = requirement.classCurie ?? requirement.recordId
+    // A record the user named beats a generic kind: the stand-in must never win.
+    const token = requirement.recordId ?? requirement.classCurie
     if (!token) {
       skips.push(`${label}: no equipment record or class given`)
       continue
@@ -319,10 +368,78 @@ export function buildPreviewFromDraft({
     })
   }
 
+  // The ADD: records the lab does not have yet. Nothing is written here — each is
+  // minted as a ghost flagged `proposedRecord` (with its attribution) and is
+  // materialized into a record only when the user accepts. A creation is PLACED only
+  // when the draft asked for it (`alsoPlace`): creating and placing are two decisions.
+  for (const creation of recordCreations) {
+    if (creation.kind === 'material') {
+      // A material has no bench position, so it is never placed: it is a record
+      // proposal, shown in the review pane and materialized on Accept.
+      continue
+    }
+    if (creation.kind === 'labware') {
+      // A new vessel: mint the labware the deck can ghost, flagged as a proposal.
+      const labware = createLabwareFromCreation(creation)
+      const footprint = lawnTileFootprint(labware)
+      const location = alsoPlace
+        ? placementForAlsoPlace(alsoPlace, footprint, existingPlacements, lawnPlaced, existingLabwares)
+        : null
+      if (!location) {
+        // The record is still proposed (it is the user's ask); only the PLACEMENT is
+        // withheld, and the review pane says so.
+        previewLabwares[labware.labwareId] = { ...labware, proposedRecord: true } as Labware
+        continue
+      }
+      if (location.kind === 'lawn') {
+        lawnPlaced.push({ x: location.xMm, y: location.yMm, w: footprint.wMm, h: footprint.hMm })
+      }
+      previewLabwares[labware.labwareId] = { ...labware, proposedRecord: true } as Labware
+      previewPlacements.push({
+        placementId: nextPreviewPlacementId(),
+        labwareId: labware.labwareId,
+        location,
+        orientation: 'landscape',
+      })
+      continue
+    }
+    // No kind and no class record is legitimate: the user may have named an
+    // instrument we know nothing else about, and inventing a kind would be worse than
+    // an honest "class unknown" proposal.
+    // Same rule for a creation: an existing class RECORD beats a generic kind.
+    const token = creation.classRecordId ?? creation.classKind
+    const equipment = createEquipmentFromRequirement(token, creation.name, creation.settings)
+    const minted: Equipment = {
+      ...equipment,
+      proposedRecord: true,
+      ...(creation.source ? { attribution: creation.source } : {}),
+    }
+    previewEquipments[minted.equipmentId] = minted
+    const footprint = equipmentFootprintMm(minted, 'landscape')
+    const lawnRect = { wMm: footprint.length, hMm: footprint.width }
+    const location = alsoPlace
+      ? placementForAlsoPlace(alsoPlace, lawnRect, existingPlacements, lawnPlaced, existingLabwares)
+      : null
+    if (!location) continue
+    if (location.kind === 'lawn') {
+      lawnPlaced.push({ x: location.xMm, y: location.yMm, w: lawnRect.wMm, h: lawnRect.hMm })
+    }
+    previewPlacements.push({
+      placementId: nextPreviewPlacementId(),
+      entityKind: 'equipment',
+      equipmentId: minted.equipmentId,
+      labwareId: minted.equipmentId,
+      location,
+      orientation: 'landscape',
+    })
+  }
+
   return {
     preview: {
       previewLabwares,
       previewEquipments,
+      ...(recordCreations.length > 0 ? { recordCreations } : {}),
+      ...(alsoPlace ? { alsoPlace } : {}),
       previewPlacements,
       // Expand any compact well ranges the AI emitted ("A1:H12") into literal
       // wells, so committed events keep the existing per-well format.

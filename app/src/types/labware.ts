@@ -78,10 +78,17 @@ export const INSTRUMENT_KIND_LABELS: Record<InstrumentKind, string> = {
  * default from the vendor name so the tile looks right even before they edit.
  */
 export function inferInstrumentKind(label: string): InstrumentKind {
+  // Equipment requirements arrive as TOKENS (`equipment:heater_shaker`,
+  // `CL:plate_reader`), where `_` is part of the word — a `\b`-anchored pattern
+  // sees no boundary after "heater" and falls through to `generic` (a generated
+  // equipment then drew the generic glyph). Normalize the token form to words
+  // first; plain display labels are unaffected by a no-op replace.
   const t = label.trim().toLowerCase()
+    .replace(/^(?:equipment|eqp|eqc|cl):/, '')
+    .replace(/[_-]+/g, ' ')
   if (/\b(qpcr|qrt\-?pcr|thermocycler|thermal\s*cycler|cycler|real\s*-?time\s*(pcr)?)\b/.test(t)) return 'qpcr'
   if (/\b(plate\s*reader|microplate\s*reader|multimode\s*reader|reader)\b/.test(t)) return 'plate_reader'
-  if (/\b(thermomixer|heater\s*shaker|heater\-?shaker|heat\s*block|shaker\s*with\s*heat|thermo\s*shaker|shaking\s*incubator)\b/.test(t)) return 'heater_shaker'
+  if (/\b(thermomixer|heater\s*shaker|heater\-?shaker|heat\s*block|shaker\s*with\s*heat|thermo\s*shaker|shaking\s*incubator|orbital\s*shaker|plate\s*shaker|rocker)\b/.test(t)) return 'heater_shaker'
   if (/\b(vortex|vortexer)\b/.test(t)) return 'vortex'
   // A bath is a bath whether it circulates, shakes, or sonicates — the
   // *capability* (heat / sonicate) lives in the equipment-capability record,
@@ -378,6 +385,11 @@ export interface LabwareGeometry {
 export interface Labware {
   /** Unique identifier for this labware instance */
   labwareId: string
+  /**
+   * The durable record this vessel is (an `lbw-…` id) once one exists. A vessel the
+   * draft proposed has none until Accept creates it — see `proposedRecord`.
+   */
+  recordId?: string
   /** Type of labware */
   labwareType: LabwareType
   /** User-friendly name (e.g., "Source Plate", "Cell Plate 1") */
@@ -437,6 +449,13 @@ export interface Labware {
    * not knowing and the topology can't derive it.
    */
   physicalFootprintMm?: { length: number; width: number }
+  /**
+   * Set on a draft-minted vessel that does not exist as a record yet. Accept
+   * materializes it and clears this; until then the review pane must say so.
+   */
+  proposedRecord?: true
+  /** Attribution for a `proposedRecord`: `user-description` | `exa:<url>` | `record:<id>`. */
+  attribution?: string
   /**
    * When true, this labware may only be placed on a freeform bench surface
    * (a lawn), never an automation deck slot — it's bench equipment that doesn't

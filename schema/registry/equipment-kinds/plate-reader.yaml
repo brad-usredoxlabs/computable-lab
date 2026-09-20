@@ -1,0 +1,11 @@
+kind: equipment-kind
+id: CL:plate_reader
+name: Plate reader
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: plate_reader
+settingsDefinition:
+  []
+notes: >-
+  Generic microplate reader. It declares NO settings keys on purpose: what a plate reader is configured WITH is its readout (channels, filters, wavelengths), which lives in readout-definitions (RDEF-*) and the instrument-definition registry (INSTDEF-GENERIC-PLATE_READER lists its supported readouts) — inventing `wavelength_nm` here would be a second, empty home for the same fact. Acceptance is a microplate bay (ECP-PLATE-READER).

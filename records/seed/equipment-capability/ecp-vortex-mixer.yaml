@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-VORTEX-MIXER
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:vortex_mixer
+  namespace: CL
+  label: Vortex mixer
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-SHAKE }
+    constraints:
+      seat: slots
+      capacity: 1
+      accepts:
+        mode: by_class
+        tube_size_class: any
+    notes: >-
+      A vortex cup holds ONE tube and nothing else — the same tube-only rule that
+      keeps a plate off a heat block keeps a plate out of a vortex. `shake` is the
+      verb because vortexing is a mixing motion, not a verb of its own.

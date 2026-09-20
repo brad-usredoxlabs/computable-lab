@@ -37,5 +37,13 @@ export interface Equipment {
    * `equipmentFootprintMm`), which is a screen stand-in, not a specification.
    */
   physicalFootprintMm?: FootprintMm
+  /**
+   * Set on a draft-minted instrument that does NOT exist as a record yet. Accept
+   * materializes it (creating the `EQP-` record) and clears this; until then the
+   * review surface must say so rather than implying the lab owns it.
+   */
+  proposedRecord?: true
+  /** Attribution for a `proposedRecord`: `user-description` | `exa:<url>` | `record:<id>`. */
+  attribution?: string
   notes?: string
 }

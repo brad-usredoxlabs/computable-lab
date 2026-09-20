@@ -1,0 +1,24 @@
+kind: equipment-kind
+id: CL:heater_shaker
+name: Heater-shaker
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: heater_shaker
+classRealizations:
+  - EQC-HEATER-SHAKER
+settingsDefinition:
+  - key: temperature_c
+    label: Target temperature
+    valueType: number
+    unit: "°C"
+  - key: duration_sec
+    label: Duration
+    valueType: duration_sec
+    unit: s
+  - key: rpm
+    label: Shake speed
+    valueType: number
+    unit: rpm
+notes: >-
+  Generic heater-shaker. Settings keys mirror the class the lab already had (EQC-HEATER-SHAKER: temperature, duration, rpm). The acceptance declared in ECP-HEATER-SHAKER-KIND is the GENERIC default — a flat top that takes plates or tube blocks — because a generic kind must not pretend to know a specific model's seat; the moment the vendor model is evidenced it becomes an EQC- record whose capability narrows this (e.g. the Opentrons adapter: 96-well deepwell OR flat 384-well, one or the other by configuration).

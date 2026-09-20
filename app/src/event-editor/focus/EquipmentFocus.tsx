@@ -454,7 +454,7 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
           <div className="focus__title-block">
             <div className="focus__name">{equipment.name}</div>
             <div className="focus__meta">
-              {INSTRUMENT_KIND_LABELS[equipment.instrumentKind]} · {locationLabel} · equipment
+              {eqClassLabel(cls, equipment)} · {locationLabel} · equipment
             </div>
           </div>
           <button
@@ -469,7 +469,7 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
             <InstrumentGlyph kind={equipment.instrumentKind} color="#ff922b" />
           </div>
           <div className="focus__equipment-kind" data-testid="focus-equipment-kind">
-            {INSTRUMENT_KIND_LABELS[equipment.instrumentKind]}
+            {eqClassLabel(cls, equipment)}
           </div>
           {equipment.recordId ? (
             <div className="focus__instrument-id" data-testid="focus-equipment-record">
@@ -485,7 +485,7 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
           <div className="focus__equipment-section" data-testid="focus-equipment-settings">
             <h4 className="focus__equipment-section-title">Settings</h4>
             {defs.length === 0 ? (
-              <div className="focus__equipment-empty">No settings configured for this {INSTRUMENT_KIND_LABELS[equipment.instrumentKind].toLowerCase()}.</div>
+              <div className="focus__equipment-empty">No settings configured for this {eqClassLabel(cls, equipment).toLowerCase()}.</div>
             ) : (
               <div className="focus__equipment-settings-list">
                 {defs.map((def) => (
@@ -544,7 +544,7 @@ export function EquipmentFocus({ equipment, locationLabel, onClose, onUpdateSett
             <div className="focus__instrument-notes">{cls.notes}</div>
           ) : null}
           <div className="focus__instrument-hint">
-            {INSTRUMENT_KIND_LABELS[equipment.instrumentKind]} is bench equipment, not well-addressable
+            {cls?.name ?? equipment.name} is bench equipment, not well-addressable
             labware — there are no wells to inspect. Its capability (settings + accepted labware)
             is declared data on the linked equipment-class record.
           </div>

@@ -12,6 +12,7 @@
  * the arguments to an AgentResult (see parseSubmitSuggestionArgs).
  */
 
+import { gateEquipmentPlacementEvents, preferNamedEquipment } from './equipmentPlacementGate.js';
 import type {
   AgentResult,
   AgentClarification,
@@ -19,6 +20,9 @@ import type {
   AgentClarificationRequest,
   AgentLabwareAddition,
   AgentLabwareRequirement,
+  AgentAlsoPlace,
+  AgentRecordCreation,
+  AgentRecordCreationKind,
   AgentEquipmentRequirement,
   GroundedMaterial,
   OntologyRefProposal,
@@ -197,7 +201,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
         },
         clarificationRequests: {
           type: 'array',
-          description: 'Atomic follow-up questions for ambiguous materials, labware, concentrations, or wells — including a named material/cell line/reagent you cannot confidently ground. Use one request per ambiguity. Use menuProvider /m for named material/ontology choices and /l for labware choices. Do not ask for aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly requested a physical source.',
+          description: 'Atomic follow-up questions for ambiguous materials, labware, equipment, concentrations, or wells — including a named material/cell line/reagent/instrument you cannot confidently ground. Use one request per ambiguity. Use menuProvider /m for named material/ontology choices, /l for labware choices, and /e for equipment (instruments): ask with /e whenever the user names an instrument you cannot resolve to a record — the app searches your laboratory records AND the web, so the user picks a REAL instrument instead of you inventing one. Any options you list must be candidates taken from the provided context (a recordId you were given) — never invent an option id, and never offer an entity you made up; if you have no grounded candidate, omit options and let the app search. Do not ask for aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly requested a physical source.',
           items: {
             type: 'object',
             required: ['id', 'kind', 'prompt'],
@@ -206,7 +210,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
               kind: { type: 'string', enum: ['material', 'aliquot', 'labware', 'vendor-product', 'ontology', 'parameter', 'well-selection', 'sequence', 'general'] },
               prompt: { type: 'string' },
               entityType: { type: 'string' },
-              menuProvider: { type: 'string', enum: ['/m', '/l', 'choice'] },
+              menuProvider: { type: 'string', enum: ['/m', '/l', '/e', 'choice'] },
               query: { type: 'string' },
               roleId: { type: 'string' },
               slot: { type: 'string' },
@@ -264,7 +268,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
           description:
             'Bench EQUIPMENT to place on the bench (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader). Equipment is NOT labware: it has no wells and no addressing, and it is never placed in a deck slot — say that plainly instead of refusing in prose. '
             + 'Records-first: if the lab already owns it, use `recordId` (an EQP- id from the provided context) and warn if the user asks to create something that already exists. '
-            + 'Otherwise use `classCurie`, spelled `equipment:<kind>` for a generic kind (equipment:water_bath, equipment:heat_block, equipment:heater_shaker, equipment:orbital_shaker, equipment:rocker, equipment:vortex, equipment:qpcr, equipment:plate_reader) or an EQC- id for a specific evidenced model — never invent a CL: class CURIE (it is derived). '
+            + 'Otherwise use `classCurie`, spelled `equipment:<kind>` for a generic kind (equipment:water_bath, equipment:heat_block, equipment:heater_shaker, equipment:orbital_shaker, equipment:rocker, equipment:vortex_mixer, equipment:qpcr, equipment:plate_reader) or an EQC- id for a specific evidenced model — never invent a CL: class CURIE (it is derived). '
             + '`settings` carries the values the equipment is set to, keyed by the class settingsDefinition (e.g. {"temperature_c":55} for a water bath, {"temperature_c":70,"rpm":300} for a heater-shaker); settings the user states belong here, and a later change of setting is its own event, not a rewrite of this one. '
             + 'Do not describe what the equipment accepts — acceptance is decided by the capability/seat data, not by the model. Never emit a seat relationship (seatOn/placedIn): the editor cannot render it yet.',
           items: {
@@ -288,6 +292,76 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
               },
               source: { type: 'string', description: 'Attribution: where this model came from (user description, Exa search, existing record).' },
             },
+          },
+        },
+        records: {
+          type: 'array',
+          minItems: 1,
+          description:
+            'Records the lab does NOT have yet, which the user wants added — the AUTHORING act, for intent "create_record". This is not a placement: putting something you already have on the bench is equipmentRequirements / labwareRequirements inside intent "event_graph", and a record the lab already owns must be PLACED, not re-created. '
+            + 'Nothing is written when you emit this: the user reviews the proposal and Accept creates the record, warning instead of duplicating if the lab turns out to have it. '
+            + 'One entry per record, with `kind` naming what it is: "equipment" (an instrument — water bath, heater-shaker, incubator, plate reader), "material" (a reagent, chemical, cell line, medium) or "labware" (a plate, reservoir, tube, rack). '
+            + 'NEVER downgrade a named product into a generic kind: if the user names a specific model you cannot resolve (e.g. "the lab\'s Benchmark Incu-Mixer MP4"), ask with an /e clarification, or state where the specification came from in `source` — classKind alone is only for a kind the user actually spoke generically ("add a water bath"). '
+            + 'ALWAYS set `source` to the attribution: "user-description" for the user\'s own words, "exa:<url>" for a web-grounded specification, "record:<id>" when reusing a record you were given. An entry with no source is still recorded, but it is flagged as ungrounded for the user to fix. '
+            + 'Do not claim facts no source stated: omit `settings`/`format` rather than guessing, and say what is unknown in `reason`.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'name'],
+            properties: {
+              kind: { type: 'string', enum: ['equipment', 'material', 'labware'] },
+              name: { type: 'string', description: 'The name as the lab/user says it, e.g. "Benchmark Incu-Mixer MP4".' },
+              handle: { type: 'string', description: 'Optional short handle used to refer to it in later turns.' },
+              classKind: {
+                type: 'string',
+                description: 'equipment only: the generic kind as equipment:<kind> (equipment:water_bath, equipment:heater_shaker, …) — only when the user spoke generically. Never a CL: CURIE.',
+              },
+              classRecordId: {
+                type: 'string',
+                description: 'equipment only: an EQC- equipment-class record id when a matching class already exists locally (records-first).',
+              },
+              curie: {
+                type: 'string',
+                description: 'material only: an ontology id (CHEBI:/CL:/NCBITaxon:…) when the material IS that known entity, and it appeared in <resolved_context>.',
+              },
+              domain: {
+                type: 'string',
+                enum: ['chemical', 'cell_line', 'organism', 'reagent', 'other'],
+                description: 'material only: what kind of material this is.',
+              },
+              labwareType: {
+                type: 'string',
+                enum: ['plate', 'deepwell', 'reservoir', 'tube', 'tiprack', 'rack'],
+                description: 'labware only: the vessel type.',
+              },
+              format: {
+                type: 'object',
+                additionalProperties: false,
+                description: 'labware only: the well layout when it is known (e.g. 96 = 8 rows x 12 cols).',
+                properties: {
+                  rows: { type: 'number' },
+                  cols: { type: 'number' },
+                  wellCount: { type: 'number' },
+                },
+              },
+              settings: {
+                type: 'object',
+                additionalProperties: true,
+                description: 'equipment only: values stated by the source, keyed by the class settingsDefinition (temperature_c, rpm, …). Omit what was not stated.',
+              },
+              source: { type: 'string', description: 'Attribution: "user-description" | "exa:<url>" | "record:<id>".' },
+              reason: { type: 'string', description: 'Why this is being added, and what remains unknown/for the user to confirm.' },
+            },
+          },
+        },
+        alsoPlace: {
+          type: 'object',
+          additionalProperties: false,
+          description:
+            'intent "create_record" only, and only for equipment or labware (a material has no bench position): put the record you just created on the bench in this same turn. Creating and placing are two decisions — leaving this out means the record is created and NOT placed.',
+          properties: {
+            surface: { type: 'string', enum: ['lawn', 'slot'] },
+            slotId: { type: 'string', description: 'Required when surface is "slot" (e.g. B2).' },
           },
         },
         labwareAdditions: {
@@ -352,7 +426,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout'],
+          enum: ['event_graph', 'deck_layout', 'create_record'],
           description:
             'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty.',
         },
@@ -371,6 +445,8 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         clarificationRequests: DRAFT_ARGS_PROPERTIES['clarificationRequests'],
         labwareRequirements: DRAFT_ARGS_PROPERTIES['labwareRequirements'],
         equipmentRequirements: DRAFT_ARGS_PROPERTIES['equipmentRequirements'],
+        records: DRAFT_ARGS_PROPERTIES['records'],
+        alsoPlace: DRAFT_ARGS_PROPERTIES['alsoPlace'],
         labwareAdditions: DRAFT_ARGS_PROPERTIES['labwareAdditions'],
       },
     },
@@ -378,7 +454,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'unknown';
   platformId?: string;
   variantId?: string;
 }
@@ -386,7 +462,7 @@ export interface AgentIntentArgs {
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -496,7 +572,7 @@ function parseClarification(raw: unknown): AgentClarification | undefined {
   if (typeof c.prompt === 'string' && typeof c.entityType === 'string' && Array.isArray(c.options)) {
     const result: AgentClarification = { prompt: c.prompt, entityType: c.entityType, options };
     if (typeof c.id === 'string') result.id = c.id;
-    if (c.menuProvider === '/m' || c.menuProvider === '/l' || c.menuProvider === 'choice') result.menuProvider = c.menuProvider;
+    if (c.menuProvider === '/m' || c.menuProvider === '/l' || c.menuProvider === '/e' || c.menuProvider === 'choice') result.menuProvider = c.menuProvider;
     if (typeof c.query === 'string') result.query = c.query;
     if (typeof c.roleId === 'string') result.roleId = c.roleId;
     if (typeof c.slot === 'string') result.slot = c.slot;
@@ -676,6 +752,93 @@ function parseEquipmentRequirements(raw: unknown): AgentEquipmentRequirement[] {
   return out;
 }
 
+/**
+ * Equipment the draft wants AUTHORED (the add, as opposed to a placement of
+ * something that exists). An entry without a name is dropped — a nameless
+ * instrument cannot be created honestly.
+ */
+/** Every field the emission contract recognises. Anything else is reported back. */
+const KNOWN_SUBMISSION_KEYS = new Set([
+  'intent', 'platformId', 'variantId',
+  'events', 'notes', 'unresolvedRefs', 'clarification', 'clarificationRequests',
+  'labwareRequirements', 'labwareAdditions', 'equipmentRequirements',
+  'records', 'alsoPlace',
+]);
+
+export function parseRecordCreations(raw: unknown): AgentRecordCreation[] {
+  if (!Array.isArray(raw)) return [];
+  const str = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  /** A class token must look like one: `equipment:<kind>` or an EQ[PC]- id. */
+  const classToken = (value: unknown): string | undefined => {
+    const token = str(value);
+    return token && /^(equipment:|EQ[PC]-)/i.test(token) ? token : undefined;
+  };
+  const out: AgentRecordCreation[] = [];
+  for (const item of raw) {
+    const r = asRecord(item);
+    if (!r) continue;
+    // Local models do not always use our exact key names. The contract's job is to
+    // capture the intent, so the obvious spellings are accepted — and anything still
+    // unusable is REPORTED (see the empty-submission note) rather than dropped in
+    // silence.
+    const name = str(r.name) ?? str(r.equipmentName) ?? str(r.label) ?? str(r.title);
+    if (!name) continue;
+    const kind = creationKind(r.kind ?? r.recordKind ?? r.type);
+    if (!kind) continue;
+    const entry: AgentRecordCreation = { kind, name };
+    if (typeof r.handle === 'string') entry.handle = r.handle;
+    const classKind = classToken(r.classKind) ?? classToken(r.class);
+    if (classKind) entry.classKind = classKind;
+    const classRecordId = str(r.classRecordId) ?? str(r.classId);
+    if (classRecordId) entry.classRecordId = classRecordId;
+    const curie = str(r.curie) ?? str(r.ontologyId);
+    if (curie) entry.curie = curie;
+    const domain = str(r.domain);
+    if (domain) entry.domain = domain;
+    const labwareType = str(r.labwareType) ?? str(r.type_);
+    if (labwareType) entry.labwareType = labwareType;
+    const format = asRecord(r.format);
+    if (format) {
+      // Pick the fields the contract declares, so a stray key cannot ride along.
+      const picked: NonNullable<AgentRecordCreation['format']> = {};
+      if (typeof format.rows === 'number') picked.rows = format.rows;
+      if (typeof format.cols === 'number') picked.cols = format.cols;
+      if (typeof format.wellCount === 'number') picked.wellCount = format.wellCount;
+      if (Object.keys(picked).length > 0) entry.format = picked;
+    }
+    if (typeof r.source === 'string') entry.source = r.source;
+    if (typeof r.reason === 'string') entry.reason = r.reason;
+    const settings = asRecord(r.settings);
+    if (settings) entry.settings = settings;
+    out.push(entry);
+  }
+  return out;
+}
+
+/** The creation kinds, tolerantly (a record `kind` is sometimes the only cue). */
+function creationKind(value: unknown): AgentRecordCreationKind | undefined {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (raw === 'equipment' || raw === 'instrument' || raw === 'device') return 'equipment';
+  if (raw === 'material' || raw === 'reagent' || raw === 'chemical' || raw === 'cell_line') return 'material';
+  if (raw === 'labware' || raw === 'plate' || raw === 'reservoir' || raw === 'tube' || raw === 'rack') return 'labware';
+  return undefined;
+}
+
+/** `alsoPlace` — the explicit "put what you just created on the bench". */
+export function parseAlsoPlace(raw: unknown): AgentAlsoPlace | undefined {
+  const r = asRecord(raw);
+  if (!r) return undefined;
+  const surface = typeof r.surface === 'string' ? r.surface.trim().toLowerCase() : '';
+  const slotId = typeof r.slotId === 'string' ? r.slotId.trim() : undefined;
+  if (surface !== 'lawn' && surface !== 'slot' && !slotId) return undefined;
+  const placement: AgentAlsoPlace = {};
+  if (surface === 'lawn' || surface === 'slot') placement.surface = surface;
+  else if (slotId) placement.surface = 'slot';
+  if (slotId) placement.slotId = slotId;
+  return placement;
+}
+
 /** True for the equipment spelling: `equipment:<kind>` (or `EQP-`/`EQC-` ids). */
 function isEquipmentToken(token: unknown): boolean {
   return typeof token === 'string' && /^(equipment:|EQ[PC]-)/i.test(token);
@@ -691,6 +854,12 @@ export function parseSubmitSuggestionArgs(
   usage: { promptTokens: number; completionTokens: number },
   turns: number,
   toolCalls: number,
+  /**
+   * `namedEquipmentIds` are the instruments the USER named this turn (an
+   * `[[equipment:EQP-…]]` mention). They are ground truth: if the draft references
+   * an instrument as if it were labware, the named one wins.
+   */
+  options: { namedEquipmentIds?: string[]; namedEquipmentLabels?: Record<string, string> } = {},
 ): AgentResult {
   const events = parseEvents(args.events);
   const notes = Array.isArray(args.notes) ? args.notes.filter((n): n is string => typeof n === 'string') : [];
@@ -732,10 +901,30 @@ export function parseSubmitSuggestionArgs(
     }),
   ];
 
+  // An instrument is never an event: convert a draft that references one from a
+  // tube/transfer event into the placement channel, and say so (see
+  // equipmentPlacementGate). Runs before the result is built so every downstream
+  // consumer sees the corrected shape.
+  const gated = gateEquipmentPlacementEvents(events as Array<{
+    eventId?: string;
+    event_type?: string;
+    verb?: string;
+    details?: Record<string, unknown>;
+    notes?: string;
+  }>, options);
+  const acceptedEvents = gated.events as typeof events;
+  // The instruments the user NAMED outrank a generic stand-in the draft reached for.
+  const preferred = preferNamedEquipment(
+    [...gated.equipmentRequirements, ...equipmentRequirements],
+    options,
+  );
+  const allEquipmentRequirements = preferred.equipmentRequirements;
+  const allNotes = [...notes, ...gated.notes, ...preferred.notes];
+
   const result: AgentResult = {
     success: true,
-    events,
-    notes,
+    events: acceptedEvents,
+    notes: allNotes,
     unresolvedRefs: Array.isArray(args.unresolvedRefs) ? (args.unresolvedRefs as OntologyRefProposal[]) : [],
     usage: {
       ...usage,
@@ -751,6 +940,31 @@ export function parseSubmitSuggestionArgs(
   }
   if (labwareAdditions.length > 0) result.labwareAdditions = labwareAdditions;
   if (labwareRequirements.length > 0) result.labwareRequirements = labwareRequirements;
-  if (equipmentRequirements.length > 0) result.equipmentRequirements = equipmentRequirements;
+  if (allEquipmentRequirements.length > 0) result.equipmentRequirements = allEquipmentRequirements;
+
+  // A submission that proposes NOTHING must say so. Reported failure (2026-09-19):
+  // the user answered the assistant's question, the model called agent_intent with
+  // no usable fields, and the panel showed a bare "(no response)" — which reads as a
+  // crash rather than "the model proposed nothing, here is what it sent".
+  const proposedSomething =
+    acceptedEvents.length > 0
+    || allNotes.length > 0
+    || labwareAdditions.length > 0
+    || labwareRequirements.length > 0
+    || allEquipmentRequirements.length > 0
+    || clarificationRequests.length > 0
+    || clarification !== undefined
+    || labwareClarificationRequirement !== null;
+  if (!proposedSomething) {
+    const unknownKeys = Object.keys(args).filter((key) => !KNOWN_SUBMISSION_KEYS.has(key));
+    const detail = unknownKeys.length > 0
+      ? `Unrecognized fields: ${unknownKeys.join(', ')}. `
+      : '';
+    result.notes = [
+      ...(result.notes ?? []),
+      `The model called ${AGENT_INTENT_TOOL_NAME} but proposed nothing this turn. ${detail}`
+      + 'Nothing was placed: answer it, or rephrase the request so it can emit a field.',
+    ];
+  }
   return result;
 }

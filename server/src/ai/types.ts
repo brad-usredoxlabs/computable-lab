@@ -146,7 +146,7 @@ export interface ToolExecutionResult {
 
 export interface ResolvedMention {
   raw: string;                              // the original [[...]] token
-  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'equipment' | 'selection';
+  kind: 'material-spec' | 'aliquot' | 'material' | 'material-instance' | 'vendor-product' | 'labware' | 'equipment' | 'selection';
   id: string;
   label: string;
   resolved?: Record<string, unknown>;       // entity data, if lookup succeeded
@@ -511,6 +511,13 @@ export interface AgentClarificationRequest {
   sourceSpan?: { start?: number; end?: number };
   options: AgentClarificationOption[];
   allowCreateLocal?: boolean;
+  /**
+   * Which material LAYER this question is about. The answer's options must be
+   * drawn from that layer only — offering a bare concept beside a formulation and
+   * an instance (the old flat /m menu) left the biologist guessing which kind of
+   * thing they were choosing. Set by the gate, consumed by the picker.
+   */
+  materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product';
 }
 
 export interface AgentClarificationAnswer {
@@ -548,6 +555,51 @@ export interface AgentLabwareAddition {
  * for a generic kind or an `EQC-` id for a specific evidenced model. `settings`
  * are keyed by the class's `settingsDefinition`.
  */
+export type AgentRecordCreationKind = 'equipment' | 'material' | 'labware';
+
+/**
+ * A record the draft wants AUTHORED — the add, as opposed to placing something that
+ * already exists. One shape for all three kinds: the ACT is the same (the lab does
+ * not have this yet; author it, draft-first), only the kind-specific facts differ.
+ *
+ * Nothing is written on emission. The user reviews the proposal, and Accept is what
+ * materializes it — with a records-first duplicate check, because "create" must never
+ * quietly become "create a second copy".
+ */
+export interface AgentRecordCreation {
+  kind: AgentRecordCreationKind;
+  /** The name as the lab/user says it. */
+  name: string;
+  handle?: string;
+  /** equipment: `equipment:<kind>` for a GENERIC kind — only when the user spoke generically. */
+  classKind?: string;
+  /** equipment: an `EQC-` class record that already exists locally (records-first). */
+  classRecordId?: string;
+  /** material: an ontology id when it IS a known chemical/cell line. */
+  curie?: string;
+  /** material: chemical | cell_line | organism | reagent | other. */
+  domain?: string;
+  /** labware: plate | deepwell | reservoir | tube | tiprack | rack. */
+  labwareType?: string;
+  /** labware: the well layout, when it is known. */
+  format?: { rows?: number; cols?: number; wellCount?: number };
+  /** equipment: values stated by the source, keyed by the class settingsDefinition. */
+  settings?: Record<string, unknown>;
+  /** Attribution: "user-description" | "exa:<url>" | "record:<id>". */
+  source?: string;
+  reason?: string;
+}
+
+/**
+ * Put what was just created (or an existing record) on the bench, in the SAME turn.
+ * Explicit on purpose: creating a record and placing it are two decisions, so the
+ * placement is asked for by name rather than being a side effect of creating.
+ */
+export interface AgentAlsoPlace {
+  surface?: 'lawn' | 'slot';
+  slotId?: string;
+}
+
 export interface AgentEquipmentRequirement {
   recordId?: string;
   classCurie?: string;
@@ -581,6 +633,10 @@ export interface AgentResult {
   labwareRequirements?: AgentLabwareRequirement[];
   /** Bench equipment the draft wants on the bench (never a deck slot). */
   equipmentRequirements?: AgentEquipmentRequirement[];
+  /** Records the draft wants CREATED (the add; nothing is written until Accept). */
+  recordCreations?: AgentRecordCreation[];
+  /** Place the created record on the bench in the same turn (explicit, never implied). */
+  alsoPlace?: AgentAlsoPlace;
   /** Token usage for observability. */
   usage?: {
     promptTokens: number;

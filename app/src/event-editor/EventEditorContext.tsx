@@ -17,7 +17,7 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
-import type { AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
+import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
@@ -85,6 +85,10 @@ export interface EventEditorPreview {
   labwareRequirements?: AiLabwareRequirement[]
   /** Bench equipment the draft proposed (bench-only; never a deck slot). */
   equipmentRequirements?: AiEquipmentRequirement[]
+  /** Records the draft proposed to CREATE (materialized on Accept). */
+  recordCreations?: AiRecordCreation[]
+  /** Place the created record on the bench in the same turn (explicit). */
+  alsoPlace?: AiAlsoPlace
   /** Proposed concrete labware additions that produced preview labware. */
   labwareAdditions?: AiLabwareAddition[]
   /** Ontology terms proposed during draft compile; draftOnly entries materialize on Accept. */

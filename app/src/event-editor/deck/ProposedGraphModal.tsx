@@ -107,6 +107,19 @@ function ReplacePicker({
   )
 }
 
+/**
+ * Compact settings summary for a proposed instrument ("temperature c 70"), so the
+ * review pane shows WHY the equipment was configured as it was. Units are the
+ * class's business (settingsDefinition); this is a review hint, not a claim.
+ */
+function settingsSummary(settings?: Record<string, unknown>): string {
+  if (!settings) return ''
+  const parts = Object.entries(settings)
+    .slice(0, 3)
+    .map(([key, value]) => `${key.replace(/_/g, ' ')} ${String(value)}`)
+  return parts.length > 0 ? ` (${parts.join(', ')})` : ''
+}
+
 export function ProposedGraphModal({
   preview,
   onClose,
@@ -114,6 +127,16 @@ export function ProposedGraphModal({
   onDecisionsChange,
 }: ProposedGraphModalProps) {
   const { previewPlacements: placements, previewEvents: events } = preview
+
+  // Equipment is NOT labware (no wells, no geometry) and it resolves from its own
+  // preview bucket. Splitting the list here is what stops a proposed instrument
+  // from rendering through the labware path, which printed "unknown type".
+  const equipmentPlacements = placements.filter((p) => p.entityKind === 'equipment')
+  const labwarePlacements = placements.filter((p) => p.entityKind !== 'equipment')
+
+  // Records the draft wants AUTHORED (create_record). They are proposals: nothing is
+  // written until Accept, which is why they are listed separately from what is placed.
+  const creations = preview.recordCreations ?? []
 
   const bindings = preview.ontologyBindings ?? []
   const decisionNeeded = useMemo(() => bindings.filter(bindingNeedsDecision), [bindings])
@@ -140,6 +163,7 @@ export function ProposedGraphModal({
     {
       events: preview.previewEvents,
       labwares: preview.previewLabwares,
+      equipments: preview.previewEquipments ?? {},
       placements: preview.previewPlacements,
       ontologyBindings: preview.ontologyBindings ?? [],
       labwareRequirements: preview.labwareRequirements ?? [],
@@ -158,7 +182,8 @@ export function ProposedGraphModal({
         <header className="ee-dialog__header">
           <span className="ee-dialog__title">Proposed changes</span>
           <span className="ee-dialog__context">
-            {placements.length} labware · {events.length} event{events.length === 1 ? '' : 's'}
+            {labwarePlacements.length} labware · {equipmentPlacements.length} equipment ·{' '}
+            {events.length} event{events.length === 1 ? '' : 's'}
           </span>
           <button className="ee-dialog__close" onClick={onClose} aria-label="Close">×</button>
         </header>
@@ -270,7 +295,62 @@ export function ProposedGraphModal({
             </section>
           ) : null}
 
-          {placements.length > 0 ? (
+          {creations.length > 0 ? (
+            <section className="proposed-graph__section" data-testid="proposed-records-section">
+              <h4 className="proposed-graph__heading">New records</h4>
+              <ul className="proposed-graph__lw-list">
+                {creations.map((creation, index) => (
+                  <li
+                    key={`${creation.kind}-${creation.name}-${index}`}
+                    className="proposed-graph__lw"
+                    data-testid="proposed-record-row"
+                  >
+                    <span className="proposed-graph__lw-name">{creation.name}</span>
+                    <span className="proposed-graph__muted">
+                      {creation.kind}
+                      {creation.source ? ` · source: ${creation.source}` : ' · no source stated'}
+                      {creation.kind === 'material' ? ' · no bench position' : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {equipmentPlacements.length > 0 ? (
+            <section className="proposed-graph__section" data-testid="proposed-equipment-section">
+              <h4 className="proposed-graph__heading">New equipment</h4>
+              <ul className="proposed-graph__lw-list">
+                {equipmentPlacements.map((p) => {
+                  // Equipment is not labware: it resolves from the preview's
+                  // equipment bucket, never from `previewLabwares` — the old
+                  // labware-only lookup is what printed "unknown type" for a
+                  // proposed instrument.
+                  const eq = preview.previewEquipments?.[p.equipmentId ?? p.labwareId]
+                  const where = p.location.kind === 'slot' ? `slot ${p.location.slotId}` : 'bench'
+                  return (
+                    <li
+                      key={p.placementId}
+                      className="proposed-graph__lw"
+                      data-testid="proposed-equipment-row"
+                    >
+                      <span className="proposed-graph__lw-name">
+                        {eq?.name ?? p.equipmentId ?? p.labwareId}
+                      </span>
+                      <span className="proposed-graph__muted">
+                        {eq?.proposedRecord
+                          ? `new — will be created${eq.attribution ? ` (source: ${eq.attribution})` : ' (no source stated)'}`
+                          : 'equipment'}
+                        {settingsSummary(eq?.settings)} · {where} · {p.orientation}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          {labwarePlacements.length > 0 ? (
             <section className="proposed-graph__section">
               <h4 className="proposed-graph__heading">New labware</h4>
               <ul className="proposed-graph__lw-list">

@@ -1,0 +1,19 @@
+kind: equipment-kind
+id: CL:qpcr
+name: qPCR machine
+# Render hint only (which glyph the deck draws) — the capability data decides
+# what the item can actually do. Generic physical kinds are registry
+# definitions, not EQC- records: EQC- is reserved for evidenced vendor models.
+instrumentKind: qpcr
+classRealizations:
+  - EQC-QPCR
+settingsDefinition:
+  - key: anneal_temperature_c
+    label: Anneal temperature
+    valueType: number
+    unit: "°C"
+  - key: cycling_program
+    label: Cycling program
+    valueType: profile
+notes: >-
+  Generic qPCR machine. Settings keys and the 96-well bay acceptance mirror the class the lab already had (EQC-QPCR / ECP-QPCR). A 384-well instrument is a different class (EQC-QUANTSTUDIO5) keyed on the plate design family — the generic kind must not claim to read both.

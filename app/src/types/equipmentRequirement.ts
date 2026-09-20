@@ -62,19 +62,30 @@ export function equipmentClassRefForRequirement(classCurie: string): Ref | undef
   }
 }
 
+/**
+ * `classCurie` may be absent: a user can name an instrument we know nothing else
+ * about ("some incu-mixer"), and minting it class-less with `generic` glyph is more
+ * honest than inventing a kind. It still gets a stable entity id.
+ */
 export function createEquipmentFromRequirement(
-  classCurie: string,
+  classCurie: string | undefined,
   name?: string,
   settings?: Record<string, unknown>,
 ): Equipment {
-  const kind = inferInstrumentKind(classCurie) as InstrumentKind
-  const classRef = equipmentClassRefForRequirement(classCurie)
-  const classId = classRef?.id ?? classCurie.trim()
+  const token = (classCurie ?? '').trim()
+  const kind = inferInstrumentKind(token) as InstrumentKind
+  const classRef = equipmentClassRefForRequirement(token)
+  const classId = classRef?.id ?? token
+  // An `EQP-` token names an INSTANCE record, not a class: bind the entity to that
+  // record so the deck's equipment IS the lab's instrument (and Accept must not try
+  // to create it again).
+  const instanceRecordId = /^EQP-/i.test(token) ? token : undefined
   return {
     equipmentId: `eqp:${classId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`,
     name: name && name.trim().length > 0 ? name.trim() : INSTRUMENT_KIND_LABELS[kind],
     instrumentKind: kind,
     settings: settings ?? {},
+    ...(instanceRecordId ? { recordId: instanceRecordId } : {}),
     ...(classRef ? { equipmentClassRef: classRef } : {}),
   }
 }

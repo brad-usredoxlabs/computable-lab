@@ -10,6 +10,7 @@ import {
   rewriteAcceptedOntologyRefs,
   type TermDecision,
 } from './acceptedOntologyBindings'
+import { materializeAcceptedRecordCreations } from './acceptedRecordCreations'
 
 /** A proposed ontology term that requires the scientist's sign-off (gate on Accept). */
 function bindingNeedsDecision(b: { minted?: boolean; requiresReview?: boolean; draftOnly?: boolean }): boolean {
@@ -81,6 +82,18 @@ export function PreviewActionBar() {
     setAcceptError(null)
     setAccepting(true)
     try {
+      // The ADDs first: records the lab does not have become real records here —
+      // equipment, material or labware alike (records-first: an existing match is
+      // reused with a warning), so an accepted placement points at a record rather
+      // than at a ghost.
+      const creations = await materializeAcceptedRecordCreations(
+        activePreview.recordCreations,
+        {
+          equipments: activePreview.previewEquipments ?? {},
+          labwares: activePreview.previewLabwares,
+        },
+      )
+      for (const warning of creations.warnings) console.warn(`[record creation] ${warning}`)
       const materialized = await materializeAcceptedOntologyBindings(
         activePreview.ontologyBindings,
         undefined,

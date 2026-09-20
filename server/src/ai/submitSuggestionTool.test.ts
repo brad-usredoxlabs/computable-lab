@@ -266,12 +266,14 @@ describe('parseSubmitSuggestionArgs', () => {
 });
 
 describe('agent_intent — the constrained emission menu', () => {
-  it('exposes a single forced tool with an intent enum (event_graph | deck_layout)', () => {
+  it('exposes a single forced tool with a three-intent menu (event_graph | deck_layout | create_record)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters;
     expect(params).toHaveProperty('required', ['intent']);
     const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
     expect(props.intent?.type).toBe('string');
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout']);
+    // Third intent added 2026-09-20: authoring records (equipment/material/labware) is
+    // an ACT with its own review, not a field hidden inside event_graph.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

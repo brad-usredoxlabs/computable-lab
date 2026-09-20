@@ -38,6 +38,14 @@ export const EquipmentKindSchema = z.object({
   /** Display-only hint for the deck glyph (D1: render hints are not the vocabulary). */
   instrumentKind: z.string().optional(),
   settingsDefinition: z.array(SettingDefinition).default([]),
+  /**
+   * The local `EQC-` class records that ARE this kind (an evidenced model, the
+   * same concept at higher specificity — e.g. `EQC-WATER-BATH` realizes
+   * `CL:water_bath`). One concept, one capability record: acceptance declared on
+   * either the kind or a realization applies to both, so a freshly minted
+   * `CL:water_bath` is not "unknown" while the lab's `EQC-WATER-BATH` is known.
+   */
+  classRealizations: z.array(z.string()).default([]),
   physical_geometry: z.record(z.string(), z.unknown()).optional(),
   compatibility_tags: z.array(z.string()).optional(),
   notes: z.string().optional(),

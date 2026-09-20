@@ -195,4 +195,34 @@ describe('summarizeDraftResult', () => {
       ],
     })).toBe('Which HepG2 cells should be used?')
   })
+
+  // Regression (2026-09-19): an equipment-only draft summarized to `undefined`, so
+  // the panel told the user "(no response)" for a draft that DID propose an
+  // instrument. Equipment is not labware and has its own bucket.
+  it('describes proposed equipment instead of returning nothing', () => {
+    const summary = summarizeDraftResult({
+      equipmentRequirements: [
+        {
+          classCurie: 'equipment:water_bath',
+          handle: 'bath 55',
+          settings: { temperature_c: 55 },
+        },
+      ],
+    })
+    expect(summary).toBe('Proposed equipment on the bench: bath 55 (temperature c 55).')
+  })
+
+  it('describes an instrument the draft wants created', () => {
+    const summary = summarizeDraftResult({
+      recordCreations: [{ kind: 'equipment', name: 'Benchmark Incu-Mixer MP4', source: 'exa:https://vendor.example' }],
+      notes: ['Grounded from the vendor page.'],
+    })
+    // The add shows up in the notes we were given; the requirement line covers the
+    // placement. Either way the panel is never silent.
+    expect(summary).toContain('Grounded from the vendor page.')
+  })
+
+  it('still says nothing when a draft truly proposed nothing', () => {
+    expect(summarizeDraftResult({ events: [] })).toBeUndefined()
+  })
 })

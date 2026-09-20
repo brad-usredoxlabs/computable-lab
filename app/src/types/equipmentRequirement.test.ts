@@ -56,6 +56,15 @@ describe('equipmentRequirement', () => {
     expect(equipmentClassRefForRequirement('equipment:heater_shaker')?.id).toBe('CL:heater_shaker')
   })
 
+  it('binds an EQP- instance requirement to its RECORD (not to a class)', () => {
+    // "use [[equipment:EQP-…]]" names the lab's instrument: the entity must carry
+    // that recordId, and the token is an instance id — never a class ref.
+    const eq = createEquipmentFromRequirement('EQP-EPPENDORF-THERMOMIXER-C-3776', 'Eppendorf ThermoMixer C')
+    expect(eq.recordId).toBe('EQP-EPPENDORF-THERMOMIXER-C-3776')
+    expect(eq.equipmentClassRef).toBeUndefined()
+    expect(eq.name).toBe('Eppendorf ThermoMixer C')
+  })
+
   it('returns no class ref for a token that is neither a CURIE nor a record id', () => {
     expect(equipmentClassRefForRequirement('a grey box on the bench')).toBeUndefined()
     expect(equipmentClassRefForRequirement('')).toBeUndefined()

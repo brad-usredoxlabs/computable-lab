@@ -50,6 +50,58 @@ export function mentionTokenForOption(
   return undefined
 }
 
+/**
+ * What the model actually put in the tool call — the difference between "the model
+ * proposed nothing" and "the panel lost it". A bare `Tool: agent_intent` hid a real
+ * failure (2026-09-19): a turn whose call carried no fields looked identical to a
+ * successful one.
+ */
+function describeToolArgs(args: Record<string, unknown> | undefined): string {
+  const a = args ?? {}
+  const intent = typeof a.intent === 'string' ? a.intent : undefined
+  const keys = Object.keys(a).filter((key) => key !== 'intent')
+  const fieldNote = keys.length === 0
+    ? 'no fields'
+    : `${keys.length} field${keys.length === 1 ? '' : 's'}: ${keys.slice(0, 6).join(', ')}${keys.length > 6 ? `, +${keys.length - 6} more` : ''}`
+  if (!intent) return ` · ${fieldNote}`
+
+  // The intent is the single most informative thing the call carries, and it used to
+  // be filtered out of this line (2026-09-19): authoring records, drafting events and
+  // switching the deck all rendered as "Tool: agent_intent". Say what it decided, and
+  // say it from the ARGS — never from a guess about what the model meant.
+  const parts: string[] = [intent]
+  if (intent === 'create_record') {
+    const records = Array.isArray(a.records) ? a.records : []
+    const described = records.map((raw) => {
+      const record = (raw ?? {}) as Record<string, unknown>
+      const kind = typeof record.kind === 'string' ? record.kind : 'record'
+      const name = typeof record.name === 'string' ? record.name : '(unnamed)'
+      return `${kind} “${name}”`
+    })
+    parts.push(records.length === 0 ? 'no records' : `create ${records.length}: ${described.join(', ')}`)
+    const place = (a.alsoPlace ?? null) as Record<string, unknown> | null
+    if (place && typeof place.surface === 'string') {
+      const slot = typeof place.slotId === 'string' ? ` (${place.slotId})` : ''
+      parts.push(`also place on ${place.surface}${slot}`)
+    }
+  } else if (intent === 'event_graph') {
+    const events = Array.isArray(a.events) ? a.events.length : 0
+    parts.push(`${events} event${events === 1 ? '' : 's'}`)
+    for (const [key, label] of [
+      ['equipmentRequirements', 'equipment'],
+      ['labwareRequirements', 'labware'],
+      ['equipmentAdditions', 'equipment add'],
+      ['labwareAdditions', 'labware add'],
+    ] as const) {
+      const list = Array.isArray(a[key]) ? a[key].length : 0
+      if (list > 0) parts.push(`${list} ${label}`)
+    }
+  } else if (intent === 'deck_layout' && typeof a.variantId === 'string') {
+    parts.push(a.variantId)
+  }
+  return ` · ${parts.join(' · ')} · ${fieldNote}`
+}
+
 export function MessageLog({ state }: MessageLogProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   // Auto-scroll on every message change. jsdom doesn't ship scrollTo, so
@@ -130,7 +182,7 @@ export function MessageLog({ state }: MessageLogProps) {
               )}
               <span className="message-log__trace-text">
                 {t.kind === 'tool_call' ? (
-                  <>Tool: {t.toolName}</>
+                  <>Tool: {t.toolName}{describeToolArgs(t.args)}</>
                 ) : t.kind === 'tool_result' ? (
                   <>{t.toolName} {t.success === false ? 'failed' : 'ok'}{t.durationMs ? ` · ${t.durationMs}ms` : ''}</>
                 ) : t.kind === 'draft' ? (

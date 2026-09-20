@@ -1221,3 +1221,215 @@ cleared 7 type errors in files this plan does not own).
   rects" is RED — untouched by this work (another session's labware-glyph edits).
 - Brad's cleanup: a stray `server/server/` directory (my path typo) is deleted; the
   real test lives at `server/src/schema/EquipmentCapabilityData.test.ts`.
+
+
+## 12. The "add vs placement" seam — three rules awaiting a ruling (2026-09-19)
+
+Brad's prompt *"I want to add the labs benchmark incu mixer to the deck"* produced a
+generic `CL:heater_shaker` with no search and no question, and the review pane called
+it "unknown type". Diagnosis and the defects fixed immediately are in §11's follow-up;
+what follows is the design question he raised — **"if I tell it to add something to the
+deck that isn't already local, that is an add and a placement"** — which changes the
+emission contract and overlaps the other session's event-graph `Equipment` `$def`
+work, so it is recorded here for a ruling before it is built.
+
+**R1 — a named product is never silently downgraded to a generic kind.**
+Today the contract offers `equipment:<kind>` to anything it cannot resolve, so
+"the lab's Benchmark Incu-Mixer" collapses into `heater_shaker`. Rule: `equipment:<kind>`
+is legal only when the USER spoke generically ("add a water bath"). For a named
+product the model must take one of three resolves — (i) records-first: an existing
+`EQP-`/`EQC-` record in context; (ii) Exa/product search; (iii) ask the user — and if
+it takes none, the emission is invalid. Enforcement: the tool description + the
+forced-draft bullet, plus an invariant the server can check on the parsed
+`equipmentRequirements` (a `handle` that names a product, with no `recordId` and no
+`source`, is a question, not a placement).
+
+**R2 — the add is a distinct act from the placement, with its own review.**
+A placement acts on an entity that exists. Authoring one carries obligations the
+placement does not: attribution (the user's exact words), evidence (Exa grounding),
+a duplicate check against the local inventory, and draft-first semantics (nothing is
+written before Accept — O3). Proposal: the draft may carry BOTH, but they are separate
+proposals in the review surface — a placement row and an "author this instrument"
+proposal (class + capability + instance) — so approving the deck change is not
+silently approving a new record. Note the parallel with the material path: `{mint}`
+material proposals already work this way, and `previewEquipments` is the instrument
+twin of that.
+
+**R3 — an add that does not persist is not an add.**
+Verified gap (`§11`): `client.saveEventGraph`'s payload and
+`schema/workflow/event-graph.schema.yaml` carry `labwares` and no equipment, so a minted
+instrument lives only in `state.equipments` and is gone on reload — while the LOAD path
+(`EventEditorContext.tsx:1276`) already reads `graph.equipments`. The persistence half
+belongs with the other session's untracked, RED
+`server/src/schema/EventGraphEquipmentSchema.test.ts` (an `Equipment` `$def` +
+`kind:equipment` entries), and `patchStepSubgraph` already accepts `equipments?`.
+Do not fork that design: land the deck save on it, and make Accept write the instance
+(or refuse to) rather than leaving a placement pointing at nothing.
+
+**Fixed now, from the same diagnosis (no ruling needed):**
+
+- **The advertised vocabulary is data.** `server/src/ai/equipmentVocabulary.test.ts`
+  parses every `equipment:<kind>` out of the tool description, the `agent_intent`
+  schema and the forced-draft instruction, and requires each to be a registry
+  definition with a render hint AND a capability record. It immediately caught four
+  advertised-but-undefined kinds (`heater_shaker`, `vortex`, `qpcr`, `plate_reader`)
+  — now authored, with their acceptance data — and one deeper hole: a **minted**
+  `CL:water_bath` had no capability record (acceptance lived only on
+  `EQC-WATER-BATH`), so a fresh AI mint answered `unknown`. Fixed by letting a kind
+  declare `classRealizations` (the `EQC-` records that ARE that kind) and having the
+  capability inventory resolve that closure in both directions — one concept, one
+  capability record, answerable from either entry point.
+- **Equipment tokens resolve to real glyphs.** `inferInstrumentKind` normalizes
+  `equipment:heater_shaker` / `CL:plate_reader` before matching (a `\b` sees no
+  boundary before `_`, so every minted instrument fell through to `generic`), and the
+  shaker family explicitly covers `rocker` / `orbital shaker` / `plate shaker` while
+  leaving "shaking water bath" a bath. Pinned in `labware.instrumentKind.test.ts`.
+- **The review pane knows equipment exists.** `ProposedGraphModal` splits
+  equipment from labware (`New equipment` section, resolved from `previewEquipments`,
+  settings summarised), so a proposed instrument no longer renders through the labware
+  path — which is where "unknown type" came from. The count line and the raw JSON view
+  now include equipment too.
+- **Identity labels stop calling a rocker a heater-shaker.** `EquipmentFocus` used
+  `INSTRUMENT_KIND_LABELS[inferred kind]` for the header, the kind line and the
+  empty-settings sentence; it now uses the class label (or the instance name). The
+  inferred kind remains what it is — a glyph hint.
+
+
+## 13. Add-equipment implemented (2026-09-19, Brad: "Implement a, b and c")
+
+Brad's ruling on the diagnosis: **there was no Accept banner** after the model answered
+his equipment mention — so the second turn genuinely emitted nothing. Then: implement
+(a), (b), (c), because "we need the AI to be able to add equipments, materials and
+labwares".
+
+**(a) The panel can no longer be silent about equipment.**
+`summarizeDraftResult` had no equipment branch, so an equipment-only draft returned
+`undefined` and the chat reducer printed the literal `(no response)`
+(`chatReducer.ts:146` ← `useChatThread.ts:158`). It now describes
+`equipmentRequirements` (handle/record/kind + settings) — `assistStream.test.ts` pins
+both the described case and that a genuinely empty draft still says nothing.
+
+**(b) The equipment clarification menu is reachable, and options must be real.**
+The provier plumbing already worked (`menuProviderForKind('equipment') === '/e'`,
+`parseClarificationRequests` accepts it, `ClarificationPicker` resolves real records +
+Exa hits), but the **emission schema forbade it** — `menuProvider` was capped at
+`['/m','/l','choice']` while `AgentClarificationMenuProvider` already included `/e`.
+Now `/e` is legal and the description spells out: ask with `/e` when the user names an
+instrument you cannot resolve, list only candidates you were given, never invent an
+option id, omit `options` when you have no grounded candidate. That is what produced
+"Generic heater-shaker currently on the bench" — a minted ghost offered as a choice.
+
+**(c) Adding equipment is its own act.**
+- **Emission**: `equipmentAdditions[]` on `submit_suggestion` *and* `agent_intent` —
+  `{ name, handle?, classKind? | classRecordId?, settings?, source?, reason? }`, with
+  the rules in the description: this is the ADD (placing something that exists is
+  `equipmentRequirements`), nothing is written until Accept, Accept warns instead of
+  duplicating, **never downgrade a named product into a generic kind** (ask with `/e`
+  or ground it in `source`), and do not claim settings no source stated. Parser,
+  `AgentResult`, and a forced-draft bullet to match. `classKind` alone is for a kind
+  the user actually spoke generically.
+- **Preview**: an addition mints an entity flagged `proposedRecord: true` plus its
+  `attribution`, ghosted on the bench like any other equipment, and the proposal list
+  rides on the preview (`preview.equipmentAdditions`) the way labware requirements do.
+  A class-less proposal is allowed (an instrument we know nothing else about) — and is
+  flagged, not given an invented kind.
+- **Review**: the pane says `new — will be created (source: …)` / `(no source stated)`
+  so an approval is never confused with something the lab owns.
+- **Accept**: `materializeAcceptedEquipmentAdditions` creates the `EQP-` record
+  (attribution carried into `notes`) and stamps the committed entity with its
+  `recordId`; **records-first** — a name matching an existing instrument reuses that
+  record and warns instead of creating a duplicate (O19). A failed create reports
+  "the placement has no record behind it" rather than pretending. It runs before the
+  durable save and can never block Accept.
+- Parity note: materials already materialize on accept (the `{mint}` path) and labware
+  has its auto-create path server-side; equipment now has the client-side equivalent.
+
+**Suite status**: server typecheck clean; app typecheck has no errors in the touched
+files. Tests: equipment/clarification/capability/registry/schema suites all green
+(40/40 for the equipment AI group; 228 for capabilities+registry+schema+equipment-AI);
+app 291/293 across `deck/`, `right-pane/ai/`, `focus/`, `types/`. The 2 app failures and
+~20 server failures in the pre-existing set are the concurrent session's in-flight
+areas (LabwareGlyph, `deck_layout` client half, compiler-bypass/golden/inference-client)
+— none touch equipment or clarifications.
+
+**Still open** (unchanged from §12 unless noted):
+- **R3 persistence**: the deck's event-graph save still carries only `events`/`labwares`
+  (`client.saveEventGraph`, `schema/workflow/event-graph.schema.yaml`), so a placed
+  instrument survives as a *record* (created above) but the placement itself is not yet
+  saved with the graph. That is the other session's `EventGraphEquipmentSchema` `$def`
+  work — do not fork it.
+- **Class/capability authoring** (Phase 8): an addition can name a new vendor model, but
+  nothing yet authors the `EQC-` class and its `ECP-` capability from Exa evidence, so a
+  brand-new product lands as an instance bound to a generic kind (or class-less) until
+  that lands. This is the next slice, and it is also what makes "the AI authors lab
+  equipment" true.
+- **Re-marking on a fresh draft**: a previously minted ghost can still be offered as a
+  clarification option by the model (it sees editor context); the option-guard in (b)
+  forbids *inventing* ids, but excluding editor ghosts from that context is a separate
+  cleanup.
+
+
+## 14. The third intent: `create_record` (2026-09-20, Brad: "add a third real type of tool emission")
+
+Ruling: yes to a third emission type — and *as an intent on the single forced tool*, not a
+second tool. `tool_choice` forces exactly one tool and the request advertises exactly one
+(`AgentOrchestrator.test.ts` pins both), so a second tool would make the model *choose a
+tool* — the reliability the design buys. One more row in a menu it already reads costs
+nothing structurally. Brad also ruled: **`alsoPlace`** for the same-turn placement, and
+**all three kinds minted through this pass** ("for purity of workflow"), which is what
+landed.
+
+    intent: 'event_graph' | 'deck_layout' | 'create_record'
+
+**`create_record`** carries `records: [{ kind: 'equipment'|'material'|'labware', name, handle?,
+classKind?|classRecordId? (equipment), curie?|domain? (material), labwareType?|format?
+(labware), settings? (equipment), source, reason? }]` and optional
+`alsoPlace: { surface: 'lawn'|'slot', slotId? }`.
+
+Contract rules written into the tool description and the forced-draft bullet:
+
+- **Nothing is written on emission.** The user reviews; Accept creates the record — and
+  warns instead of duplicating if the lab turns out to have it.
+- **Never downgrade a named product to a generic kind.** Ask with `/e` or ground it.
+- **`source` on every creation** (`user-description` | `exa:<url>` | `record:<id>`); an
+  ungrounded creation is still created, and flagged.
+- **Do not claim facts no source stated** — omit `settings`/`format` rather than guessing.
+- **`alsoPlace` is explicit.** Creating a record and placing it are two decisions; a
+  placement is never an implied side effect.
+- **A material has no bench position**, so `alsoPlace` (and any placement) covers only
+  equipment and labware.
+
+Why this is better than the field it replaces: `equipmentAdditions` was a *sub-field of
+the wrong intent* with no verb in its name — which is exactly why the model minted a
+generic stand-in as if it were a placement, then borrowed `place_tube` and pasted an
+instrument id into a tube event. Naming the act gives it a verb, gives the review surface
+an honest shape, and collapses three authoring paths into one pass.
+
+What landed (server): the intent enum and `records`/`alsoPlace` in the tool def;
+`parseRecordCreations` (tolerant spelling included, unusable entries dropped *and*
+reported) and `parseAlsoPlace`; the orchestrator's `create_record` branch returning
+`recordCreations`/`alsoPlace` and refusing an empty creation turn with a reason;
+`equipmentAdditions` deleted from the contract and from the event_graph path, with a
+retirement test pinning it. `createRecordIntent.test.ts` (11) covers the menu, the rules,
+the three kinds, `alsoPlace` and both orchestrator paths.
+
+What landed (client — the half that must ship together, per the `deck_layout` lesson):
+`AiRecordCreation`/`AiAlsoPlace` types; the preview mints a ghost per creation (equipment →
+`previewEquipments`, labware → `previewLabwares`, material → proposal only) and places it
+**only** when `alsoPlace` says so (slot honoured verbatim, otherwise bench packing);
+`recordCreations`/`alsoPlace` ride on the preview; the review pane lists them under **New
+records** with kind, source and "no bench position" for materials; Accept calls the new
+`materializeAcceptedRecordCreations`, which dispatches per kind — `EQP-` instance,
+`MAT-` material (the same payload shape the ontology mint writes), `LBW-` labware — with
+per-kind records-first duplicate checks and attribution carried into the record.
+`acceptedEquipmentAdditions.ts` is now a thin adapter over it (its tests kept).
+
+Verification: server typecheck clean; 41 server AI tests green on the changed suites
+(incl. `createRecordIntent` 11, gate 11, vocabulary 4); app 298/300 in the touched dirs
+with the two failures being the known pre-existing `LabwareGlyph` and `deckLayout` ones;
+app typecheck shows no errors in any file this work touches.
+
+Still open after this: **R3 persistence** (the deck's event-graph save still carries no
+equipment — the other session's `Equipment` `$def` seam) and the Exa-grounded authoring
+of a *class + capability* for a brand-new vendor model (a creation can name one; nothing
+yet authors `EQC-`+`ECP-` from evidence).

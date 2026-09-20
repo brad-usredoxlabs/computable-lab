@@ -164,6 +164,11 @@ export interface AiClarificationRequest {
   sourceSpan?: { start?: number; end?: number }
   options: AiClarificationOption[]
   allowCreateLocal?: boolean
+  /**
+   * Which material LAYER this question is about — the picker scopes its options
+   * to it (see SlashResolverContext.materialLayer). Set by the server's gate.
+   */
+  materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
 }
 
 export interface AiClarificationAnswer {
@@ -207,6 +212,48 @@ export interface AiLabwareAddition {
  *   - `settings` — keyed by the class's `settingsDefinition`
  *     (e.g. `{ temperature_c: 55 }`), the value the equipment is set to.
  */
+export type AiRecordCreationKind = 'equipment' | 'material' | 'labware'
+
+/**
+ * A record the draft wants AUTHORED — the add, as opposed to placing something that
+ * already exists. One shape for three kinds (the act is the same; the kind-specific
+ * facts differ). Nothing is written on emission: the user reviews the proposal and
+ * Accept materializes it, records-first (an existing match is reused with a warning).
+ */
+export interface AiRecordCreation {
+  kind: AiRecordCreationKind
+  name: string
+  handle?: string
+  /** equipment: `equipment:<kind>` for a GENERIC kind (user spoke generically). */
+  classKind?: string
+  /** equipment: an `EQC-` class record that already exists locally. */
+  classRecordId?: string
+  /** material: an ontology id when it IS that known entity. */
+  curie?: string
+  /** material: chemical | cell_line | organism | reagent | other. */
+  domain?: string
+  /** labware: plate | deepwell | reservoir | tube | tiprack | rack. */
+  labwareType?: string
+  /** labware: the well layout, when known. */
+  format?: { rows?: number; cols?: number; wellCount?: number }
+  /** equipment: values stated by the source, keyed by the settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: `user-description` | `exa:<url>` | `record:<id>`. */
+  source?: string
+  reason?: string
+}
+
+/**
+ * Put what was just created on the bench, in the same turn. Explicit: creating a
+ * record and placing it are two decisions, so a placement is asked for by name and is
+ * never a side effect of creating. Only equipment/labware can be placed — a material
+ * has no bench position.
+ */
+export interface AiAlsoPlace {
+  surface?: 'lawn' | 'slot'
+  slotId?: string
+}
+
 export interface AiEquipmentRequirement {
   recordId?: string
   classCurie?: string
@@ -356,6 +403,10 @@ export interface AiAgentResult {
   labwareRequirements?: AiLabwareRequirement[]
   /** Bench equipment the draft wants on the deck (never labware, never a slot). */
   equipmentRequirements?: AiEquipmentRequirement[]
+  /** Records the draft wants CREATED (the add; written only on Accept). */
+  recordCreations?: AiRecordCreation[]
+  /** Place the created record on the bench in the same turn (explicit, never implied). */
+  alsoPlace?: AiAlsoPlace
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   ontologyBindings?: DraftOntologyBinding[]

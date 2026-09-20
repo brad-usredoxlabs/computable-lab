@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-HEATER-SHAKER-KIND
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:heater_shaker
+  namespace: CL
+  label: Heater-shaker
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-HEAT }
+    constraints:
+      seat: platform
+      capacity: unbounded
+      accepts: { mode: open }
+    notes: >-
+      GENERIC default: a flat heater-shaker top takes a plate or a tube block, so
+      acceptance is `open` (anything that physically fits). This is deliberately
+      looser than a specific model's seat — EQC-HEATER-SHAKER/ECP-HEATER-SHAKER
+      narrows it to the Opentrons adapter's one SBS plate.
+  - verbRef: { kind: record, type: verb-definition, id: VERB-SHAKE }
+    constraints:
+      seat: platform
+      capacity: unbounded
+      accepts: { mode: open }

@@ -24,7 +24,7 @@ import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
 import { pdfSelectionToSurfaceContext, stepSelectionToSurfaceContext } from './toSurfaceContext'
-import type { AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiAlsoPlace, AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
@@ -33,7 +33,6 @@ import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
 import { InterpretationPanel } from './InterpretationPanel'
 import { ChangesPanel } from './ChangesPanel'
-import { ModelSwitcher } from './ModelSwitcher'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -276,6 +275,11 @@ export function AiTabPanel() {
       const labwareAdditions = (result.labwareAdditions ?? []) as AiLabwareAddition[]
       const labwareRequirements = (result.labwareRequirements ?? []) as AiLabwareRequirement[]
       const equipmentRequirements = (result.equipmentRequirements ?? []) as AiEquipmentRequirement[]
+      // Creations arrive on the create_record intent; they are proposals until Accept.
+      const recordCreations = (result.recordCreations ?? []).filter(
+        (creation): creation is AiRecordCreation => !!creation?.kind && !!creation?.name,
+      )
+      const alsoPlace = result.alsoPlace as AiAlsoPlace | undefined
       const platform = getPlatformManifest(state.platforms, state.platformId)
       const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
       const { preview, skips } = buildPreviewFromDraft({
@@ -285,6 +289,8 @@ export function AiTabPanel() {
         labwareAdditions,
         labwareRequirements,
         equipmentRequirements,
+        recordCreations,
+        ...(alsoPlace ? { alsoPlace } : {}),
         existingLabwares: state.labwares,
         existingPlacements: state.placements,
         activeDeckScope,
@@ -312,6 +318,8 @@ export function AiTabPanel() {
         labwareRequirements: [...labwareRequirements],
         labwareAdditions: [...labwareAdditions],
         ...(equipmentRequirements.length > 0 ? { equipmentRequirements: [...equipmentRequirements] } : {}),
+        ...(recordCreations.length > 0 ? { recordCreations: [...recordCreations] } : {}),
+        ...(alsoPlace ? { alsoPlace } : {}),
         ...(skips.length > 0 ? { sourceSkips: skips } : {}),
         ...(result.ontologyBindings?.length
           ? { ontologyBindings: result.ontologyBindings as never }
@@ -583,7 +591,6 @@ export function AiTabPanel() {
           {headerLabel(sidebar)}
         </span>
         {warm ? <WarmIndicator status={warm.status} /> : null}
-        <ModelSwitcher />
       </section>
 
       <section className="ai-tab__section ai-tab__section--sources">

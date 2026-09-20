@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-QPCR-KIND
+status: active
+equipmentClassRef:
+  kind: ontology
+  id: CL:qpcr
+  namespace: CL
+  label: qPCR machine
+capabilities:
+  - verbRef: { kind: record, type: verb-definition, id: VERB-READ }
+    constraints:
+      seat: bay
+      capacity: 1
+      accepts:
+        mode: by_class
+        well_counts: [96]
+    notes: >-
+      Generic qPCR: one 96-well PCR plate in the bay. Mirrors the class the lab
+      already had (EQC-QPCR). A 384-well instrument of a specific design family is
+      EQC-QUANTSTUDIO5 — not this generic kind.

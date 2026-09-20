@@ -262,7 +262,113 @@ describe('buildPreviewFromDraft equipment requirements', () => {
     expect(result.skips.join(' ')).toContain('bench equipment')
   })
 
-  it('reports a skip when an equipment requirement names neither a record nor a class', () => {
+  // The field bug: the deck ghosted a generic `CL:heater_shaker` wearing the named
+  // record's label, so Accept had to guess which instrument it was.
+  it('binds the ghost to the RECORD when the draft also names a generic kind', () => {
+    const result = buildPreviewFromDraft({
+      platform: freeformPlatform,
+      variant: freeformVariant,
+      events: [],
+      labwareAdditions: [],
+      labwareRequirements: [],
+      equipmentRequirements: [
+        { recordId: 'EQP-EPPENDORF-THERMOMIXER-C-3776', classCurie: 'equipment:heater_shaker', handle: 'Eppendorf ThermoMixer® C' },
+      ],
+      existingLabwares: {},
+    })
+    const ghost = Object.values(result.preview.previewEquipments ?? {})[0]
+    expect(ghost?.recordId).toBe('EQP-EPPENDORF-THERMOMIXER-C-3776')
+    expect(ghost?.equipmentClassRef).toBeUndefined()
+    expect(ghost?.name).toBe('Eppendorf ThermoMixer® C')
+  })
+
+  it('proposes a record WITHOUT placing it when the draft did not ask (alsoPlace)', () => {
+    const result = buildPreviewFromDraft({
+      platform: freeformPlatform,
+      variant: freeformVariant,
+      events: [],
+      labwareAdditions: [],
+      labwareRequirements: [],
+      recordCreations: [
+        { kind: 'material', name: 'fenofibrate', domain: 'chemical', source: 'user-description' },
+        { kind: 'equipment', name: 'Benchmark Incu-Mixer MP4', source: 'user-description' },
+      ],
+      existingLabwares: {},
+    })
+    // The proposals ride on the preview (the review pane lists them)…
+    expect(result.preview.recordCreations).toHaveLength(2)
+    // …but an instrument the user did not ask to place is a GHOST, not a placement,
+    // and a material has no bench position at all.
+    expect(result.preview.previewPlacements).toEqual([])
+    expect(Object.values(result.preview.previewEquipments ?? {})[0]?.proposedRecord).toBe(true)
+  })
+
+  it('places a created LABWARE only when alsoPlace asks, and can write it to a slot', () => {
+    const result = buildPreviewFromDraft({
+      platform,
+      variant: singlePlateVariant,
+      events: [],
+      labwareAdditions: [],
+      labwareRequirements: [],
+      recordCreations: [
+        { kind: 'labware', name: '96-well low-binding plate', labwareType: 'plate', format: { rows: 8, cols: 12, wellCount: 96 }, source: 'user-description' },
+      ],
+      alsoPlace: { surface: 'slot', slotId: 'PLATE' },
+      existingLabwares: {},
+    })
+    expect(result.preview.previewPlacements[0]?.location).toEqual({ kind: 'slot', slotId: 'PLATE' })
+    expect(Object.values(result.preview.previewLabwares)[0]?.proposedRecord).toBe(true)
+  })
+
+  it('mints an ADD as a flagged proposal (nothing written until Accept)', () => {
+    const result = buildPreviewFromDraft({
+      platform: freeformPlatform,
+      variant: freeformVariant,
+      events: [],
+      labwareAdditions: [],
+      labwareRequirements: [],
+      recordCreations: [
+        {
+          kind: 'equipment',
+          name: 'Benchmark Incu-Mixer MP4',
+          classKind: 'equipment:heater_shaker',
+          source: 'exa:https://benchmarkscientific.com/incu-mixer-mp4',
+        },
+      ],
+      // Creating and placing are two decisions: without this the record is proposed
+      // and NOT put on the bench.
+      alsoPlace: { surface: 'lawn' },
+      existingLabwares: {},
+    })
+
+    const equipments = Object.values(result.preview.previewEquipments ?? {})
+    expect(equipments).toHaveLength(1)
+    expect(equipments[0]?.name).toBe('Benchmark Incu-Mixer MP4')
+    // The review surface must be able to tell a proposal from something the lab owns.
+    expect(equipments[0]?.proposedRecord).toBe(true)
+    expect(equipments[0]?.attribution).toBe('exa:https://benchmarkscientific.com/incu-mixer-mp4')
+    expect(result.preview.previewPlacements).toHaveLength(1)
+    expect(result.preview.previewPlacements[0]?.entityKind).toBe('equipment')
+  })
+
+  it('mints an ADD with no class at all rather than inventing a kind', () => {
+    const result = buildPreviewFromDraft({
+      platform: freeformPlatform,
+      variant: freeformVariant,
+      events: [],
+      labwareAdditions: [],
+      labwareRequirements: [],
+      recordCreations: [{ kind: 'equipment', name: 'Some Incu-Mixer', source: 'user-description' }],
+      alsoPlace: { surface: 'lawn' },
+      existingLabwares: {},
+    })
+    const equipments = Object.values(result.preview.previewEquipments ?? {})
+    expect(equipments).toHaveLength(1)
+    expect(equipments[0]?.equipmentClassRef).toBeUndefined()
+    expect(equipments[0]?.proposedRecord).toBe(true)
+  })
+
+  it('reports a skip when an equipment requirement names neither a record nor a class', async () => {
     const result = buildPreviewFromDraft({
       platform: freeformPlatform,
       variant: freeformVariant,
