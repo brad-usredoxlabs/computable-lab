@@ -211,7 +211,13 @@ repositories:
 #     baseUrl: http://appliance-2:8000/v1
 #     model: qwen3.6-35b-a3b
 #     temperature: 0
-#     max_tokens: 4096
+#     # MUST fit the model's own window together with the prompt. A compile of a
+#     # long vendor protocol asks for a large candidates answer; a small cap cuts
+#     # it off mid-JSON, which surfaces as "the extractor returned unparseable
+#     # content" and looks like a broken model rather than a self-inflicted
+#     # limit. Set it well under the server's max_model_len (the extractor now
+#     # reports a length-truncated answer as exactly that).
+#     max_tokens: 65536
 #   # Background KV-context warming ("compiled contexts") — llama.cpp servers
 #   # only. After an event-graph Accept or edit, the server re-prefills the
 #   # (system prompt + graph) prefix on the idle GPU so the next draft prompt
