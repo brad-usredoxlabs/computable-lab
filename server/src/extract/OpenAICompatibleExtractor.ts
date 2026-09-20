@@ -31,6 +31,54 @@ function rawResponseDetails(rawText: string): Record<string, unknown> {
 }
 
 /**
+ * Pull a JSON object out of what a model actually wrote.
+ *
+ * A model answers a "produce JSON" prompt with JSON *usually*: it may wrap it in
+ * a ```json fence, or open with a sentence. Both are parseable by a human and
+ * neither is parseable by JSON.parse, and the failure then reads as "the
+ * extractor is broken" when the model simply formatted its answer. Returns null
+ * when there is no JSON object in the text at all.
+ */
+export function extractJsonObject(text: string): string | null {
+  const trimmed = text.trim();
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/iu.exec(trimmed);
+  const fencedBody = fenced?.[1]?.trim();
+  const candidate = fencedBody && /^[[{]/.test(fencedBody) ? fencedBody : trimmed;
+
+  // Always walk the braces: an answer that STARTS with "{" but stops mid-object
+  // (a token-limited reply) must not be handed on as if it were complete JSON.
+  const opening = candidate.search(/[[{]/u);
+  if (opening < 0) {
+    return null;
+  }
+  const open = candidate[opening]!;
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = opening; i < candidate.length; i += 1) {
+    const char = candidate[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === open) depth += 1;
+    else if (char === close) {
+      depth -= 1;
+      if (depth === 0) return candidate.slice(opening, i + 1);
+    }
+  }
+  // Unbalanced: the answer was cut off mid-object.
+  return null;
+}
+
+/**
  * OpenAI-compatible extractor implementation.
  * 
  * Sends extraction requests to an OpenAI-compatible endpoint and parses
@@ -302,21 +350,33 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
       };
     }
 
-    // Parse the content as JSON
+    // Parse the content as JSON. A model may fence its JSON or precede it with a
+    // sentence; a token-limited answer arrives cut off mid-object, which is the
+    // difference between "fix the prompt" and "raise the token budget".
+    const finishReason =
+      typeof (firstChoice as Record<string, unknown>).finish_reason === 'string'
+        ? ((firstChoice as Record<string, unknown>).finish_reason as string)
+        : undefined;
+    const jsonText = extractJsonObject(content) ?? content;
     let parsedContent: unknown;
     try {
-      parsedContent = JSON.parse(content);
+      parsedContent = JSON.parse(jsonText);
     } catch (parseError) {
-      const existingDetails: Record<string, unknown> = parseError instanceof Error
-        ? { parse_error: parseError.message }
-        : {};
+      const truncated = finishReason === 'length';
+      const existingDetails: Record<string, unknown> = {
+        ...(parseError instanceof Error ? { parse_error: parseError.message } : {}),
+        ...(finishReason ? { finish_reason: finishReason } : {}),
+        contentSample: content.slice(0, 400),
+      };
       return {
         candidates: [],
         diagnostics: [
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Failed to parse extractor content as JSON',
+            message: truncated
+              ? 'Failed to parse extractor content as JSON — the model stopped at its token limit mid-answer; raise the extractor max_tokens'
+              : 'Failed to parse extractor content as JSON',
             details: { ...existingDetails, ...rawResponseDetails(rawText) }
           }
         ]

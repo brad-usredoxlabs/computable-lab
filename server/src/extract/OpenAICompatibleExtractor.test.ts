@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { OpenAICompatibleExtractor } from './OpenAICompatibleExtractor.js';
+import { OpenAICompatibleExtractor, extractJsonObject } from './OpenAICompatibleExtractor.js';
 import type { ExtractorProfileConfig } from '../config/types.js';
 
 describe('OpenAICompatibleExtractor', () => {
@@ -900,5 +900,93 @@ describe('OpenAICompatibleExtractor', () => {
       expect(typeof details?.rawResponse).toBe('string');
       expect((details!.rawResponse as string).length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('extractJsonObject — what a model actually wrote', () => {
+  it('returns plain JSON untouched', () => {
+    expect(extractJsonObject('{"candidates":[]}')).toBe('{"candidates":[]}');
+  });
+
+  it('unwraps a ```json fence', () => {
+    const fenced = '```json\n{"candidates":[{"target_kind":"protocol-action"}]}\n```';
+    expect(JSON.parse(extractJsonObject(fenced)!)).toEqual({ candidates: [{ target_kind: 'protocol-action' }] });
+  });
+
+  it('finds the object after a sentence of preamble', () => {
+    const chatty = 'Here is the extraction you asked for:\n{"candidates":[]}';
+    expect(JSON.parse(extractJsonObject(chatty)!)).toEqual({ candidates: [] });
+  });
+
+  it('returns null when the answer was cut off mid-object (token limit)', () => {
+    // The shape a max_tokens-truncated answer arrives in: unbalanced braces.
+    expect(extractJsonObject('{"candidates":[{"target_kind":"protocol-action","draft":{"verb":"Pipet"')).toBeNull();
+  });
+
+  it('returns null when there is no JSON in the answer at all', () => {
+    expect(extractJsonObject('I could not find any candidates in this text.')).toBeNull();
+  });
+
+  it('does not mistake a brace inside a string for structure', () => {
+    const tricky = '{"candidates":[{"sourceText":"transfer to the {tube} rack"}]}';
+    expect(JSON.parse(extractJsonObject(tricky)!)).toEqual({
+      candidates: [{ sourceText: 'transfer to the {tube} rack' }],
+    });
+  });
+});
+
+describe('OpenAICompatibleExtractor — a fenced or truncated answer', () => {
+  const config = {
+    enabled: true,
+    provider: 'openai-compatible',
+    baseUrl: 'http://localhost:8889/v1',
+    model: 'qwen3.5-9b',
+    temperature: 0.1,
+    max_tokens: 4096,
+  } as const;
+
+  it('accepts a fenced JSON answer the model formatted for a human', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '```json\n{"candidates":[{"target_kind":"protocol-action","draft":{"verb":"Pipet"},"confidence":0.9}]}\n```',
+              },
+            },
+          ],
+        }),
+    };
+    const extractor = new OpenAICompatibleExtractor({ config: config as never, fetchImpl: async () => mockResponse as unknown as Response });
+    const result = await extractor.extract({ text: 'Pipet 20 ul.' });
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('says the answer hit the token limit when the model stopped for length', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'length',
+              message: { content: '{"candidates":[{"target_kind":"protocol-action","draft":{"verb":"Pipet"' },
+            },
+          ],
+        }),
+    };
+    const extractor = new OpenAICompatibleExtractor({ config: config as never, fetchImpl: async () => mockResponse as unknown as Response });
+    const result = await extractor.extract({ text: 'Pipet 20 ul.' });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.diagnostics[0]?.message).toContain('token limit');
+    // The reviewer must be able to see WHAT arrived, not just that it failed.
+    expect(JSON.stringify(result.diagnostics[0]?.details)).toContain('contentSample');
   });
 });

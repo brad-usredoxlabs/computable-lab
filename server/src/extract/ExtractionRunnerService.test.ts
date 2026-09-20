@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { ExtractionRunnerService } from './ExtractionRunnerService.js';
+import { ExtractionRunnerService, describePipelineFailure } from './ExtractionRunnerService.js';
 import type { ExtractorAdapter, ExtractionRequest, ExtractionResult } from './ExtractorAdapter.js';
 import type { ResolutionCandidate } from './MentionResolver.js';
 import type { MentionCandidatePopulator } from './MentionCandidatePopulator.js';
@@ -253,5 +253,44 @@ describe('ExtractionRunnerService', () => {
     expect((errorEvent as { target_kind: string }).target_kind).toBe('material');
     expect((errorEvent as { source_id: string }).source_id).toBe('test-source-1');
     expect((errorEvent as { error: string }).error).toContain('draft_assemble');
+  });
+});
+
+describe('describePipelineFailure', () => {
+  it('names the pass, the code, and the message that stopped the pipeline', () => {
+    // Live: a 44k-character vendor manual stopped at mention_resolve and the
+    // only thing the reviewer could see was "draft_assemble pass produced no
+    // output" — the reason was thrown away.
+    const reason = describePipelineFailure([
+      { pass_id: 'mention_resolve', severity: 'error', code: 'NO_CANDIDATES', message: 'no candidate matched' },
+    ]);
+
+    expect(reason).toBe('mention_resolve: NO_CANDIDATES no candidate matched');
+  });
+
+  it('keeps warnings and drops info, so the message stays about the failure', () => {
+    const reason = describePipelineFailure([
+      { pass_id: 'a', severity: 'info', code: 'NOTE', message: 'fyi' },
+      { pass_id: 'b', severity: 'warning', code: 'SPARSE', message: 'few mentions' },
+      { pass_id: 'c', severity: 'error', code: 'BOOM', message: 'failed' },
+    ]);
+
+    expect(reason).toBe('b: SPARSE few mentions | c: BOOM failed');
+  });
+
+  it('caps the message at four reasons', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      pass_id: `p${i}`,
+      severity: 'error' as const,
+      code: `C${i}`,
+      message: 'x',
+    }));
+
+    expect(describePipelineFailure(many).split(' | ')).toHaveLength(4);
+  });
+
+  it('is empty when the pipeline reported nothing (no invented cause)', () => {
+    expect(describePipelineFailure(undefined)).toBe('');
+    expect(describePipelineFailure([])).toBe('');
   });
 });

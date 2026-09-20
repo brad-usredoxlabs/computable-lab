@@ -126,7 +126,12 @@ export function deriveProtocolChoiceAxis(input: {
       return { reason: 'steps_not_attributed' };
     }
     conditions.push({
-      id: slug(title),
+      // The SECTION id is the condition id, so "this answer selects that
+      // protocol" is an exact match rather than a naming convention: the review
+      // surface uses it to ask the chosen protocol's own nested questions, and
+      // only those. The PREDICATE keeps the slug of the printed name, because
+      // that is the value the localization choices carry.
+      id: section.id,
       label: title,
       predicate: { op: 'equals', path: '$.branchSelection', value: slug(title) },
       then_stepIds: sectionSteps,
@@ -136,9 +141,12 @@ export function deriveProtocolChoiceAxis(input: {
     return { reason: 'steps_not_attributed' };
   }
 
-  const distinct = new Set(conditions.map((condition) => condition.id));
-  if (distinct.size !== conditions.length) {
-    // Two protocols printing the same name cannot be told apart in a choice.
+  // Ids are section ids (unique by construction); the LABELS are what the
+  // reviewer chooses between, so two protocols printing the same name remain a
+  // refusal: an ambiguous choice is not a choice.
+  const ids = new Set(conditions.map((condition) => condition.id));
+  const labels = new Set(conditions.map((condition) => condition.label));
+  if (ids.size !== conditions.length || labels.size !== conditions.length) {
     return { reason: 'unnamed_protocols' };
   }
 

@@ -24,6 +24,7 @@ import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
 import type { ExtractionOptions, ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
 import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
 import { clampZoom, fitWidthScale, MIN_ZOOM, MAX_ZOOM, steppedZoom } from './pdfZoom'
+import { isCancelledRender } from './pdfRenderCancellation'
 import {
   DEFAULT_SPLIT_PCT,
   MAX_SPLIT_PCT,
@@ -204,6 +205,22 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     }
   }, [recordId, reviewToken])
 
+  // Build the branch the reviewer answered, when the eager pass never
+  // enumerated it (the branch product is capped). The draft happens on the
+  // server; the reload brings the new realization in through the normal
+  // review payload, so the panel needs no special case.
+  const buildBranchForChoices = useCallback(
+    async (choices: Record<string, string>) => {
+      const treeId = review?.tree?.recordId
+      if (!treeId) {
+        throw new Error('This document has no decision tree to build from yet.')
+      }
+      await apiClient.realizeIntakeBranch(treeId, { choices })
+      setReviewToken((n) => n + 1)
+    },
+    [review],
+  )
+
   // Which thinking levels this deployment offers for an extraction (config).
   useEffect(() => {
     let cancelled = false
@@ -330,9 +347,30 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   )
   const fitToWidth = useCallback(() => setZoomMode('fit'), [])
 
+  // pdf.js paints by applying the viewport transform to the context. For these
+  // pages that transform is [1, 0, 0, -1, 0, H] — a pure y-flip — so a page
+  // painted TWICE overlaps into an upside-down page. Two renders overlap
+  // whenever a new scale arrives while the previous pass is still painting
+  // (69 pages in a loop, then the pane measures, the split moves, or the
+  // extraction payload lands and re-triggers the effect), which is why the
+  // preview flips at the END of an ingestion and not on a first quiet load.
+  const renderTasks = useRef<Map<number, { promise: Promise<void>; cancel: () => void }>>(new Map())
+
   const renderPage = useCallback(
     async (pageNumber: number) => {
       if (!pdfDoc) return
+      const previous = renderTasks.current.get(pageNumber)
+      if (previous) {
+        // A newer paint supersedes the old one: stop it, then wait for it to
+        // unwind so two renders never touch the same canvas at once.
+        try {
+          previous.cancel()
+        } catch {
+          // Already finished — nothing to stop.
+        }
+        await previous.promise.catch(() => undefined)
+      }
+      let task: { promise: Promise<void>; cancel: () => void } | undefined
       try {
         const page: PDFPageProxy = await pdfDoc.getPage(pageNumber)
         const canvas = canvasRefs.current.get(pageNumber)
@@ -346,9 +384,21 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         // is drawn at the zoom the reviewer chose (and stays crisp).
         canvas.style.width = `${Math.round(viewport.width)}px`
         canvas.style.height = `${Math.round(viewport.height)}px`
-        await page.render({ canvas, canvasContext: context, viewport }).promise
+        // A cancelled paint can stop mid-page; start from the identity so this
+        // page is never drawn on top of a half-finished one.
+        context.setTransform(1, 0, 0, 1, 0, 0)
+        task = page.render({ canvas, canvasContext: context, viewport })
+        renderTasks.current.set(pageNumber, task)
+        await task.promise
       } catch (err) {
-        console.error(`Failed to render page ${pageNumber}:`, err)
+        if (!isCancelledRender(err)) {
+          console.error(`Failed to render page ${pageNumber}:`, err)
+        }
+      } finally {
+        // Only clear the entry if nobody newer claimed this page meanwhile.
+        if (task && renderTasks.current.get(pageNumber) === task) {
+          renderTasks.current.delete(pageNumber)
+        }
       }
     },
     [pdfDoc, scale],
@@ -898,6 +948,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                   }
                   onResolved={handleReviewResolved}
                   onRedrafted={() => setReviewToken((n) => n + 1)}
+                  {...(review?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
                 />
               )}
             </div>

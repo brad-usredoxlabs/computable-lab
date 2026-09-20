@@ -116,6 +116,7 @@ async function buildApp(store: RecordStore, workspaceRoot = '/tmp') {
     instance.get('/protocol-ide/intake/trees', handlers.listTrees.bind(handlers));
     instance.get('/protocol-ide/intake/trees/:treeId', handlers.getTree.bind(handlers));
     instance.get('/protocol-ide/intake/review/:artifactId', handlers.getReviewByArtifact.bind(handlers));
+    instance.post('/protocol-ide/intake/trees/:treeId/realize', handlers.realizeBranch.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/prompt', handlers.setProposalPrompt.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/redraft', handlers.redraftProposal.bind(handlers));
   }, { prefix: '/api' });
@@ -432,4 +433,154 @@ describe('GET /protocol-ide/intake/review/:artifactId — the steps the tree gat
       await rm(workspaceRoot, { recursive: true, force: true });
     }
   });
+});
+
+
+describe('POST /protocol-ide/intake/trees/:treeId/realize', () => {
+  it('refuses an incomplete answer and names the axis that is missing', async () => {
+    const { store } = makeMockStore([
+      { recordId: treePayload.recordId, schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID, payload: treePayload },
+    ]);
+    const app = await buildApp(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/protocol-ide/intake/trees/${treePayload.recordId}/realize`,
+      payload: { choices: { 'some-other-axis': 'x' } },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { diagnostics: Array<{ code: string; message: string }> };
+    expect(body.diagnostics[0]?.code).toBe('branch_selection_incomplete');
+    expect(body.diagnostics[0]?.message).toContain('branch-axis-step-001');
+    await app.close();
+  });
+
+  it('refuses a scale level the tree does not offer', async () => {
+    const { store } = makeMockStore([
+      { recordId: treePayload.recordId, schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID, payload: treePayload },
+    ]);
+    const app = await buildApp(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/protocol-ide/intake/trees/${treePayload.recordId}/realize`,
+      payload: { choices: { 'branch-axis-step-001': 'branch-1' }, scaleLevel: 'space_station' },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { diagnostics: Array<{ code: string; message: string }> };
+    expect(body.diagnostics[0]?.code).toBe('scale_level_unknown');
+    expect(body.diagnostics[0]?.message).toContain('manual_tubes');
+    await app.close();
+  });
+
+  it('reuses the realization the eager pass already built instead of drafting it twice', async () => {
+    const { store, records } = makeMockStore([
+      { recordId: treePayload.recordId, schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID, payload: treePayload },
+      { recordId: proposalPayload.recordId, schemaId: SUBGRAPH_PROPOSAL_SCHEMA_ID, payload: proposalPayload },
+    ]);
+    const app = await buildApp(store);
+    const before = records.size;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/protocol-ide/intake/trees/${treePayload.recordId}/realize`,
+      payload: { choices: { 'branch-axis-step-001': 'branch-1' }, scaleLevel: 'manual_tubes' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { proposalRecordIds: string[]; eventGraphRecordIds: string[]; diagnostics: Array<{ code: string }> };
+    expect(body.proposalRecordIds).toEqual([proposalPayload.recordId]);
+    expect(body.eventGraphRecordIds).toEqual(['EVG-PDT-route-doc-b0-s0']);
+    expect(body.diagnostics.some((d) => d.code === 'proposal_exists')).toBe(true);
+    expect(records.size).toBe(before);
+    await app.close();
+  });
+
+  it('404s on a tree that does not exist, and 400s on a body with no answers', async () => {
+    const { store } = makeMockStore([
+      { recordId: treePayload.recordId, schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID, payload: treePayload },
+    ]);
+    const app = await buildApp(store);
+
+    const missing = await app.inject({ method: 'POST', url: '/api/protocol-ide/intake/trees/PDT-nope/realize', payload: { choices: { a: 'b' } } });
+    expect(missing.statusCode).toBe(404);
+
+    const empty = await app.inject({ method: 'POST', url: `/api/protocol-ide/intake/trees/${treePayload.recordId}/realize`, payload: {} });
+    expect(empty.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('end-to-end: a CAPPED branch product still builds the branch the reviewer picked', async () => {
+    // The reviewer's reported dead end: the tree asks 2 questions, the eager
+    // pass caps the product, and their combination has no realization. The tree
+    // is cheap; the draft is not — so it is built here, for that branch only.
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'intake-realize-'));
+    try {
+      await mkdir(join(workspaceRoot, 'artifacts', 'foundry', 'pdfs'), { recursive: true });
+      await copyFile(zymoPdfPath, join(workspaceRoot, 'artifacts', 'foundry', 'pdfs', 'zymo-magbead.pdf'));
+
+      const { store, records } = makeMockStore();
+      const service = new ProtocolIntakeService({
+        workspaceRoot,
+        store: store as unknown as RecordStoreImpl,
+        compileRunner: compileStub,
+        scaleOptions: [{ level: 'manual_tubes', profileId: 'execution-scale-profile/manual-tubes' }],
+      });
+      // Cap the eager pass at ONE realization, so almost every combination is
+      // missing — exactly the situation the reviewer hit.
+      const ingested = await service.ingestDocument({
+        artifactPath: 'artifacts/foundry/pdfs/zymo-magbead.pdf',
+        documentId: 'zymo-realize',
+        maxProposals: 1,
+      });
+      expect(ingested.proposalRecordIds).toHaveLength(1);
+
+      const tree = records.get(ingested.treeRecordId)!.payload as {
+        axes: Array<{ axisId: string; conditions: Array<{ id: string }> }>;
+      };
+      expect(tree.axes.length).toBeGreaterThanOrEqual(2);
+      // Answer every axis with its LAST option: the deepest point of the
+      // product, which the cap never reached.
+      const choices: Record<string, string> = {};
+      let expectedIndex = 0;
+      for (const axis of tree.axes) {
+        const last = axis.conditions[axis.conditions.length - 1]!;
+        choices[axis.axisId] = last.id;
+        expectedIndex = expectedIndex * axis.conditions.length + (axis.conditions.length - 1);
+      }
+
+      const handlers = createProtocolIntakeHandlers(makeMockCtx(store, workspaceRoot), { compileRunner: compileStub });
+      const app = Fastify();
+      await app.register((instance) => {
+        instance.post('/protocol-ide/intake/trees/:treeId/realize', handlers.realizeBranch.bind(handlers));
+      }, { prefix: '/api' });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/protocol-ide/intake/trees/${ingested.treeRecordId}/realize`,
+        payload: { choices },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { success: boolean; proposalRecordIds: string[] };
+      expect(body.success).toBe(true);
+      expect(body.proposalRecordIds).toHaveLength(1);
+      // The id is the one the eager pass WOULD have used for this combination.
+      expect(body.proposalRecordIds[0]).toBe(`SGP-zymo-realize-b${expectedIndex}-s0`);
+
+      const proposal = records.get(body.proposalRecordIds[0]!)!.payload as {
+        branchPath: Array<{ axisId: string; conditionId: string }>;
+        activeStepIds?: string[];
+      };
+      expect(proposal.branchPath.map((step) => [step.axisId, step.conditionId])).toEqual(
+        tree.axes.map((axis) => [axis.axisId, choices[axis.axisId]]),
+      );
+      expect((proposal.activeStepIds ?? []).length).toBeGreaterThan(0);
+      await app.close();
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

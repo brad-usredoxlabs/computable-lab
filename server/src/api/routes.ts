@@ -899,6 +899,7 @@ export function registerRoutes(
     fastify.get('/protocol-ide/intake/trees', protocolIntakeHandlers.listTrees.bind(protocolIntakeHandlers));
     fastify.get('/protocol-ide/intake/trees/:treeId', protocolIntakeHandlers.getTree.bind(protocolIntakeHandlers));
     fastify.get('/protocol-ide/intake/review/:artifactId', protocolIntakeHandlers.getReviewByArtifact.bind(protocolIntakeHandlers));
+    fastify.post('/protocol-ide/intake/trees/:treeId/realize', protocolIntakeHandlers.realizeBranch.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/prompt', protocolIntakeHandlers.setProposalPrompt.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/redraft', protocolIntakeHandlers.redraftProposal.bind(protocolIntakeHandlers));
   }

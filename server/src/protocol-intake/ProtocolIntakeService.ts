@@ -25,11 +25,14 @@ import {
 import type { ProtocolCandidate } from '../ingestion/vendor-protocol/types.js';
 import {
   deriveDecisionTree,
+  type DecisionTreeAxis,
   type DecisionTreeScaleOption,
   type ProtocolDecisionTree,
 } from './deriveDecisionTree.js';
 import {
   enumerateChoiceBindings,
+  bindingIndexFor,
+  relevantChoices,
   type ChoiceBinding,
 } from './enumerateChoiceBindings.js';
 import { resolveBranchAxes } from '../protocol/BranchResolver.js';
@@ -73,6 +76,15 @@ export interface ProtocolIntakeDeps {
 
 export interface IngestDocumentInput {
   artifactPath?: string;
+  /**
+   * Re-derive the decision tree even when one is already stored.
+   *
+   * Records are the truth, so an existing tree is normally reused. But a
+   * derivation fix (a heading pattern the document writes differently, a
+   * question that should be nested inside its protocol) must be able to reach a
+   * document that was already ingested — deliberately, never as a side effect.
+   */
+  refresh?: boolean;
   /** Test/offline path: raw protocol text instead of a stored PDF. */
   text?: string;
   fileName?: string;
@@ -185,6 +197,38 @@ function proposalIdFor(treeRecordId: string, bindingIndex: number, scaleIndex: n
 
 const PROPOSAL_ID_REGEX = /^SGP-(.+)-b(\d+)-s(\d+)(?:-r(\d+))?$/;
 
+/**
+ * Build the branch binding for the answers actually given.
+ *
+ * Same shape as enumerateChoiceBindings (branchPath in axis order, choices as
+ * the nested { axisId: predicate value } object the rebound predicates resolve
+ * against), but it does not invent answers for the questions that were not
+ * asked: a nested question for a protocol the reviewer did not choose stays
+ * absent, so BranchResolver contributes none of its steps.
+ */
+function bindingFromAnswers(axes: DecisionTreeAxis[], answers: Record<string, string>): ChoiceBinding {
+  const branchPath: ChoiceBinding['branchPath'] = [];
+  const selection: Record<string, unknown> = {};
+  for (const axis of axes) {
+    const chosen = answers[axis.axisId];
+    if (typeof chosen !== 'string' || chosen.length === 0) continue;
+    const condition = axis.conditions.find((candidate) => candidate.id === chosen);
+    if (!condition) continue;
+    branchPath.push({
+      axisId: axis.axisId,
+      conditionId: condition.id,
+      ...(condition.label ? { label: condition.label } : {}),
+    });
+    const predicate = condition.predicate;
+    const value =
+      predicate && typeof predicate === 'object' && !Array.isArray(predicate)
+        ? (predicate as Record<string, unknown>).value
+        : undefined;
+    selection[axis.axisId] = typeof value === 'string' ? value : '*';
+  }
+  return { branchPath, choices: { branchSelection: selection } };
+}
+
 interface PersistedProposalPayload {
   recordId: string;
   treeRef: { id: string };
@@ -197,6 +241,8 @@ interface PersistedProposalPayload {
   revision?: number;
   state?: string;
   notes?: string;
+  /** Where the drafted event graph lives (the proposal's own reference). */
+  eventGraphRef?: { id?: string };
   [key: string]: unknown;
 }
 
@@ -268,7 +314,7 @@ export class ProtocolIntakeService {
 
     // 4. Persist the tree (idempotent). The effective tree is the STORED
     //    payload when one already exists — records are the truth.
-    const effectiveTree = await this.persistTree(tree, diagnostics);
+    const effectiveTree = await this.persistTree(tree, diagnostics, { ...(input.refresh ? { refresh: true } : {}) });
     if (!effectiveTree) {
       return { documentId, treeRecordId: tree.recordId, proposalRecordIds: [], eventGraphRecordIds: [], diagnostics };
     }
@@ -406,10 +452,171 @@ export class ProtocolIntakeService {
     };
   }
 
-  private async persistTree(tree: ProtocolDecisionTree, diagnostics: IntakeDiagnostic[]): Promise<ProtocolDecisionTree | null> {
+  /**
+   * Build ONE branch realization on demand.
+   *
+   * The eager pass enumerates the whole branch product and caps it (a handbook
+   * answering 2 questions with 10 options each, at 3 scales, is 60
+   * realizations). Capping dead-ends the reviewer: "No realization was
+   * enumerated for this combination — the branch product was capped". The tree
+   * is cheap; a draft is not. So a reviewer answers the questions and only the
+   * combination they actually run gets drafted here — with the SAME id the
+   * eager pass would have used, so a combination that WAS enumerated is reused
+   * rather than drafted twice.
+   */
+  async realizeBinding(input: {
+    treeRecordId: string;
+    choices: Record<string, string>;
+    scaleLevel?: string;
+    now?: string;
+  }): Promise<IngestPdfResult> {
+    const diagnostics: IntakeDiagnostic[] = [];
+    const { store, workspaceRoot } = this.deps;
+
+    const treeEnvelope = await store.get(input.treeRecordId);
+    if (!treeEnvelope) {
+      throw new Error(`Decision tree not found: ${input.treeRecordId}`);
+    }
+    const tree = treeEnvelope.payload as unknown as ProtocolDecisionTree;
+
+    // A nested question belongs to the protocol that raised it: answers to the
+    // OTHER protocols' nested questions are not part of this realization (they
+    // would union another protocol's steps into the branch), so they are dropped
+    // rather than demanded.
+    const answers = relevantChoices(tree.axes, input.choices);
+    const unansweredTopLevel = tree.axes
+      .filter((axis) => !axis.sectionId && axis.conditions.length > 0)
+      .filter((axis) => !answers[axis.axisId])
+      .map((axis) => axis.axisId);
+    if (unansweredTopLevel.length > 0) {
+      // Name what is missing rather than guessing a combination.
+      return {
+        documentId: tree.documentId,
+        treeRecordId: tree.recordId,
+        proposalRecordIds: [],
+        eventGraphRecordIds: [],
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'branch_selection_incomplete',
+            message: `Every question that is not nested inside a protocol must be answered with one of its options; missing or unknown: ${unansweredTopLevel.join(', ')}`,
+          },
+        ],
+      };
+    }
+
+    const bindingIndex = bindingIndexFor(tree.axes, answers);
+    if (bindingIndex === null) {
+      return {
+        documentId: tree.documentId,
+        treeRecordId: tree.recordId,
+        proposalRecordIds: [],
+        eventGraphRecordIds: [],
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'branch_selection_incomplete',
+            message: 'No answer was usable: each answer must be one of its question’s options',
+          },
+        ],
+      };
+    }
+
+    const scaleIndex = input.scaleLevel
+      ? tree.scaleAxis.options.findIndex((option) => option.level === input.scaleLevel)
+      : 0;
+    const scaleOption = tree.scaleAxis.options[scaleIndex];
+    if (!scaleOption) {
+      return {
+        documentId: tree.documentId,
+        treeRecordId: tree.recordId,
+        proposalRecordIds: [],
+        eventGraphRecordIds: [],
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'scale_level_unknown',
+            message: `Scale level "${input.scaleLevel ?? ''}" is not one of: ${tree.scaleAxis.options.map((option) => option.level).join(', ')}`,
+          },
+        ],
+      };
+    }
+
+    const recordId = proposalIdFor(tree.recordId, bindingIndex, scaleIndex);
+    const existing = await store.get(recordId);
+    if (existing) {
+      diagnostics.push({
+        severity: 'info',
+        code: 'proposal_exists',
+        message: `Realization ${recordId} already exists; reusing it`,
+      });
+      const payload = existing.payload as unknown as PersistedProposalPayload;
+      return {
+        documentId: tree.documentId,
+        treeRecordId: tree.recordId,
+        proposalRecordIds: [recordId],
+        eventGraphRecordIds: payload.eventGraphRef?.id ? [payload.eventGraphRef.id] : [],
+        diagnostics,
+      };
+    }
+
+    // The binding carries exactly the answers given (nested-and-unreached
+    // questions stay unanswered so they contribute no steps), in axis order,
+    // with the same shape and predicate values the eager pass builds.
+    const binding = bindingFromAnswers(tree.axes, answers);
+
+    const sourceArtifact =
+      typeof tree.sourcePdf?.['artifactPath'] === 'string' ? (tree.sourcePdf['artifactPath'] as string) : undefined;
+    if (!sourceArtifact) {
+      return {
+        documentId: tree.documentId,
+        treeRecordId: tree.recordId,
+        proposalRecordIds: [],
+        eventGraphRecordIds: [],
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'candidate_source_unavailable',
+            message: 'tree carries no sourcePdf.artifactPath; cannot re-extract the candidate to draft this branch',
+          },
+        ],
+      };
+    }
+    const extraction = await extractVendorProtocolCandidateFromInput({
+      workspaceRoot,
+      artifactPath: sourceArtifact,
+      persist: false,
+    });
+
+    const outcome = await this.draftOneProposal({
+      tree,
+      candidate: extraction.candidate,
+      binding,
+      bindingIndex,
+      scaleOption,
+      scaleIndex,
+      revision: 1,
+      ...(input.now ? { now: input.now } : {}),
+    });
+    if (outcome.diagnostic) diagnostics.push(outcome.diagnostic);
+
+    return {
+      documentId: tree.documentId,
+      treeRecordId: tree.recordId,
+      proposalRecordIds: outcome.proposalRecordId ? [outcome.proposalRecordId] : [],
+      eventGraphRecordIds: outcome.eventGraphRecordId ? [outcome.eventGraphRecordId] : [],
+      diagnostics,
+    };
+  }
+
+  private async persistTree(
+    tree: ProtocolDecisionTree,
+    diagnostics: IntakeDiagnostic[],
+    options: { refresh?: boolean } = {},
+  ): Promise<ProtocolDecisionTree | null> {
     const { store, validator } = this.deps;
     const existing = await store.get(tree.recordId);
-    if (existing) {
+    if (existing && !options.refresh) {
       diagnostics.push({ severity: 'info', code: 'tree_exists', message: `Decision tree ${tree.recordId} already exists; reusing` });
       return (existing.payload as unknown as ProtocolDecisionTree) ?? tree;
     }
@@ -428,6 +635,24 @@ export class ProtocolIntakeService {
     if (!envelope) {
       diagnostics.push({ severity: 'error', code: 'tree_envelope_failed', message: 'Could not build envelope for decision tree' });
       return null;
+    }
+    if (existing) {
+      // Deliberate re-derivation: the stored tree is replaced by the newly
+      // derived one (same recordId, so proposals keep pointing at it).
+      const updated = await store.update({
+        envelope,
+        message: `intake: re-derive decision tree ${tree.recordId}`,
+      });
+      if (!updated.success) {
+        diagnostics.push({ severity: 'error', code: 'tree_update_failed', message: updated.error ?? 'store.update failed' });
+        return null;
+      }
+      diagnostics.push({
+        severity: 'info',
+        code: 'tree_refreshed',
+        message: `Decision tree ${tree.recordId} re-derived (${tree.axes.length} question(s))`,
+      });
+      return tree;
     }
     const created = await store.create({ envelope, message: `intake: decision tree ${tree.recordId}` });
     if (!created.success) {
@@ -473,14 +698,19 @@ export class ProtocolIntakeService {
       }
     }
 
-    // Resolve the branch selection (fail loud on unresolved axes).
+    // Resolve the branch selection. Only the axes this realization ANSWERS are
+    // resolved: a question nested inside a protocol the reviewer did not choose
+    // was never asked, so it is not "unresolved" — it simply contributes
+    // nothing. Demanding an answer would make every nested selection undraftable.
     let activeStepIds: string[];
-    if (tree.axes.length === 0) {
+    const selection = (binding.choices as { branchSelection?: Record<string, unknown> }).branchSelection ?? {};
+    const answeredAxes = tree.axes.filter((axis) => typeof selection[axis.axisId] === 'string');
+    if (answeredAxes.length === 0) {
       // Degenerate protocol: no branches to select — the whole linear run.
       activeStepIds = candidate.steps.map((step) => step.id);
     } else {
       const resolution = resolveBranchAxes({
-        branchAxes: tree.axes,
+        branchAxes: answeredAxes,
         // Choices are a slug-only map by construction (enumerateChoiceBindings).
         choices: binding.choices as Record<string, string | number | boolean | null>,
       });

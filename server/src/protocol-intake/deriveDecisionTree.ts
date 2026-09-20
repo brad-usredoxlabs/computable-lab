@@ -30,6 +30,15 @@ export interface DecisionTreeAxis {
   question: string;
   choiceKey: string;
   origin: 'document_branch' | 'document_table' | 'document_section' | 'ai_suggested';
+  /**
+   * The protocol section this question belongs to, when the question is NESTED
+   * inside one protocol. A handbook asks the same sub-question in several
+   * protocols (DNeasy asks "which variant of step 1?" in the spin-column
+   * protocol and again in the DNeasy 96 protocol); nested means the review
+   * surface asks it once, once that protocol is chosen, instead of listing it
+   * beside the protocol choice as a near-duplicate.
+   */
+  sectionId?: string;
   evidence?: QuestionEvidence[];
   conditions: NonNullable<BranchAxisLike['conditions']>;
 }
@@ -116,6 +125,26 @@ function buildQuestion(axis: BranchAxisLike): string {
 export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDecisionTree {
   const axes: DecisionTreeAxis[] = [];
 
+  // A protocol's own questions are derived BEFORE the choice between
+  // protocols, because they decide what the choice gates: "1a" and "1b" are
+  // alternatives WITHIN a protocol, so the protocol option must not carry them
+  // (the union of a protocol's steps and its chosen variant would otherwise run
+  // every variant at once).
+  const variantAxes = deriveStepVariantAxes(input.steps, input.protocolSections);
+  const variantStepsBySection = new Map<string, Set<string>>();
+  for (const axis of variantAxes) {
+    if (!axis.sectionId) continue;
+    const set = variantStepsBySection.get(axis.sectionId) ?? new Set<string>();
+    for (const condition of axis.conditions) {
+      // The condition objects carry the schema's own key (`then_stepIds`), not the
+      // camelCase of BranchConditionLike: Ajv validates the stored tree.
+      for (const stepId of ((condition as unknown as Record<string, unknown>)['then_stepIds'] as string[] | undefined) ?? []) {
+        set.add(stepId);
+      }
+    }
+    variantStepsBySection.set(axis.sectionId, set);
+  }
+
   // The document's own protocol list (Phase 3c). A handbook that prints eight
   // protocols — DNeasy: {blood or cells, tissues} × {spin column, DNeasy 96} —
   // is not one protocol; the choice between them is the document's top-level
@@ -133,7 +162,13 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
       choiceKey: a.choiceKey,
       origin: 'document_section' as const,
       conditions: rebindPredicatePath(
-        a.conditions as unknown as NonNullable<BranchAxisLike['conditions']>,
+        a.conditions.map((condition) => {
+          const variantSteps = variantStepsBySection.get(condition.id);
+          if (!variantSteps) return condition;
+          const existing = ((condition as unknown as Record<string, unknown>)['then_stepIds'] as string[] | undefined) ?? [];
+          const own = existing.filter((stepId) => !variantSteps.has(stepId));
+          return { ...condition, 'then_stepIds': own };
+        }) as unknown as NonNullable<BranchAxisLike['conditions']>,
         a.axisId,
       ),
     });
@@ -168,13 +203,14 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
   // step 1a … 1b … 1c" is the document stating if/then logic in prose, and the
   // variants it names are steps of their own. Each option gates the step it
   // names.
-  for (const a of deriveStepVariantAxes(input.steps, input.protocolSections)) {
+  for (const a of variantAxes) {
     if (axes.some((existing) => existing.axisId === a.axisId)) continue;
     axes.push({
       axisId: a.axisId,
       question: a.question,
       choiceKey: a.choiceKey,
       origin: 'document_branch' as const,
+      ...(a.sectionId ? { sectionId: a.sectionId } : {}),
       conditions: rebindPredicatePath(
         a.conditions as unknown as NonNullable<BranchAxisLike['conditions']>,
         a.axisId,

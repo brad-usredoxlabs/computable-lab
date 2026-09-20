@@ -1470,6 +1470,12 @@ export interface IntakeAxis {
   question: string
   choiceKey?: string
   origin?: string
+  /**
+   * The protocol section this question is nested inside, when it is one
+   * protocol's own question (a handbook asks "which variant of step 1?" in
+   * several protocols, so it is asked once that protocol is chosen).
+   */
+  sectionId?: string
   conditions: IntakeAxisCondition[]
 }
 
@@ -4351,6 +4357,22 @@ export const apiClient = {
       if (ApiError.isApiError(err) && err.status === 404) return null
       throw err
     }
+  },
+
+  /**
+   * Build ONE branch realization for the reviewer's answers.
+   *
+   * The eager pass caps the branch product, so a combination outside the cap
+   * has no proposal; this drafts that single branch on demand.
+   */
+  async realizeIntakeBranch(
+    treeRecordId: string,
+    body: { choices: Record<string, string>; scaleLevel?: string },
+  ): Promise<{ proposalRecordIds: string[]; eventGraphRecordIds: string[] }> {
+    return request<{ success: true; proposalRecordIds: string[]; eventGraphRecordIds: string[] }>(
+      `/protocol-ide/intake/trees/${encodeURIComponent(treeRecordId)}/realize`,
+      { method: 'POST', body: JSON.stringify(body) },
+    )
   },
 
   /** Attach a reviewer redraft instruction to one subgraph proposal. */

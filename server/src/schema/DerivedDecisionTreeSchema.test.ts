@@ -137,9 +137,20 @@ describe('the derived tree satisfies the tree schema', () => {
     expect(choice?.conditions.map((condition) => condition.label)).toEqual(
       PROTOCOL_SECTIONS.map((section) => section.title),
     );
-    expect(choice?.conditions[0]?.then_stepIds).toEqual(['step-1', 'step-2', 'step-3', 'step-4']);
+    // The protocol option gates the protocol's own steps MINUS the variant steps
+    // its nested question decides: 1a/1b/1c are alternatives, so gating all
+    // three here would run every variant at once.
+    expect(choice?.conditions[0]?.then_stepIds).toEqual(['step-1']);
     expect(choice?.conditions[1]?.then_stepIds).toEqual(['step-5']);
     expect(choice?.conditions[2]?.then_stepIds).toEqual(['step-6']);
+
+    const variant = tree.axes.find((axis) => axis.axisId === 'axis-step-1-variant');
+    expect(variant?.sectionId).toBe(SPIN_COLUMN);
+    expect(variant?.conditions.map((condition) => condition.then_stepIds)).toEqual([
+      ['step-2'],
+      ['step-3'],
+      ['step-4'],
+    ]);
   });
 
   it('records a refusal instead of inventing a protocol axis when steps are unattributed', () => {

@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { deriveProtocolChoiceAxis } from './deriveProtocolChoiceAxis.js';
 
+const SPIN_COLUMN_ID = 'section-purification-of-total-dna-from-animal-blood-or-cells-spin-column-protocol'
+
 const SECTIONS = [
   { id: 'section-purification-…-spin-column-protocol', kind: 'protocol', title: 'Purification of Total DNA from Animal Blood or Cells (Spin-Column Protocol)' },
   { id: 'section-purification-…-tissues-spin-column-protocol', kind: 'protocol', title: 'Purification of Total DNA from Animal Tissues (Spin-Column Protocol)' },
@@ -39,6 +41,9 @@ describe('deriveProtocolChoiceAxis', () => {
     ]);
     // Non-protocol sections (troubleshooting) are not protocols to choose.
     expect(axis?.conditions.some((condition) => condition.label === 'Troubleshooting')).toBe(false);
+    // Each option's id IS the protocol section's id, so the review surface can
+    // match the chosen answer to that protocol's own nested questions.
+    expect(axis?.conditions.map((condition) => condition.id)).toEqual(SECTIONS.slice(0, 4).map((section) => section.id));
   });
 
   it('gates each protocol’s OWN steps, in the order the reader walks them', () => {

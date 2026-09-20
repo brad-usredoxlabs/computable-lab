@@ -49,6 +49,8 @@ export interface StepVariantAxis {
   axisId: string;
   question: string;
   choiceKey: string;
+  /** The protocol section whose own question this is (nested, asked once). */
+  sectionId?: string;
   conditions: StepVariantAxisCondition[];
 }
 
@@ -175,6 +177,7 @@ export function deriveStepVariantAxes(steps: unknown, protocolSections?: unknown
     const sectionTitle = section ? sectionTitles.get(section) : undefined;
     axes.push({
       axisId: `axis-${id}-variant`,
+      ...(section ? { sectionId: section } : {}),
       question: sectionTitle
         ? `Which variant applies for step ${manualLabel(step) ?? id} in ${sectionTitle}?`
         : `Which variant applies for step ${manualLabel(step) ?? id}?`,

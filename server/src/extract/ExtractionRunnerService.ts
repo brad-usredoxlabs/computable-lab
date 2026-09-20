@@ -14,6 +14,7 @@ import type { ExtractionDraftBody } from './ExtractionDraftBuilder.js';
 import { runExtractionPipeline } from '../compiler/pipeline/extractionPipelineRun.js';
 import { MentionCandidatePopulator } from './MentionCandidatePopulator.js';
 import type { ExtractionMetrics } from './ExtractionMetrics.js';
+import type { PassDiagnostic } from '../compiler/pipeline/types.js';
 
 /**
  * Arguments for running the extraction service.
@@ -61,6 +62,21 @@ const defaultLogger: ExtractionLogger = {
   info: (o: object) => console.log(JSON.stringify(o)),
   error: (o: object) => console.error(JSON.stringify(o)),
 };
+
+/**
+ * The pipeline's own diagnostics as one line, for a failure message.
+ *
+ * A bare "draft_assemble pass produced no output" tells the reviewer nothing
+ * and hides the pass that actually failed; these strings ride along in the
+ * thrown error and in the extraction_error event.
+ */
+export function describePipelineFailure(diagnostics: PassDiagnostic[] | undefined): string {
+  return (diagnostics ?? [])
+    .filter((d) => d.severity === 'error' || d.severity === 'warning')
+    .slice(0, 4)
+    .map((d) => `${d.pass_id}: ${d.code} ${d.message}`.trim())
+    .join(' | ');
+}
 
 /**
  * Service that wraps the extraction pipeline with adapter selection and artifact loading.
@@ -121,7 +137,13 @@ export class ExtractionRunnerService {
       });
       const draftAssembleOutput = result.outputs.get('draft_assemble');
       if (!draftAssembleOutput) {
-        throw new Error('ExtractionRunnerService: draft_assemble pass produced no output');
+        // WHY the pipeline stopped: the pass diagnostics say what actually went
+        // wrong (live: compiling a 44k-character vendor manual stopped at
+        // mention_resolve and the review surface could only report the pass id).
+        const reasons = describePipelineFailure(result.diagnostics);
+        throw new Error(
+          `ExtractionRunnerService: draft_assemble pass produced no output${reasons ? ` — ${reasons}` : ''}`,
+        );
       }
       
       // Emit extraction_finish event

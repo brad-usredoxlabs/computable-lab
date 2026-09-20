@@ -77,6 +77,16 @@ properties:
           type: string
           enum: [document_branch, document_table, ai_suggested, document_section]
           description: "document_branch = lifted from lettered branches in the PDF text; document_table = lifted from a table the document's own steps point at (e.g. the sample-type table); document_section = lifted from the document's own protocol headings (a handbook that prints several protocols states a choice); ai_suggested = raised by the AI question pass (still requires document evidence spans)."
+        sectionId:
+          type: string
+          description: >
+            The protocol section this question BELONGS to. A handbook asks the
+            same sub-question inside several protocols (DNeasy: "which variant
+            of step 1?" appears in the spin-column protocol and again in the
+            DNeasy 96 protocol), so the question is NESTED: the review surface
+            asks it once, after the reader has chosen that protocol, instead of
+            listing it beside the protocol choice where it reads as a duplicate
+            that misses the point. Absent = a top-level question.
         evidence:
           type: array
           description: "Document evidence supporting this question."

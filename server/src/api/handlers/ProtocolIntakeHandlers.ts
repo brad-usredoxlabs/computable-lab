@@ -335,6 +335,60 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
         return { error: 'INTAKE_REDRAFT_FAILED', message: err instanceof Error ? err.message : String(err) };
       }
     },
+    /**
+     * POST /protocol-ide/intake/trees/:treeId/realize
+     *
+     * Build ONE branch realization for the answers the reviewer picked. The
+     * eager pass caps the branch product, so a combination outside the cap has
+     * no proposal; this drafts that single branch (same id the eager pass would
+     * have used, so an already-enumerated combination is reused, not rebuilt).
+     */
+    async realizeBranch(
+      request: FastifyRequest<{
+        Params: { treeId: string };
+        Body: { choices?: unknown; scaleLevel?: unknown };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown> {
+      try {
+        const treeEnvelope = await ctx.store.get(request.params.treeId);
+        if (!treeEnvelope || treeEnvelope.schemaId !== PROTOCOL_DECISION_TREE_SCHEMA_ID) {
+          reply.status(404);
+          return { error: 'TREE_NOT_FOUND', message: `Decision tree not found: ${request.params.treeId}` };
+        }
+        const body = request.body ?? {};
+        const choices: Record<string, string> = {};
+        if (body.choices && typeof body.choices === 'object' && !Array.isArray(body.choices)) {
+          for (const [axisId, value] of Object.entries(body.choices as Record<string, unknown>)) {
+            if (typeof value === 'string' && value.trim().length > 0) {
+              choices[axisId] = value.trim();
+            }
+          }
+        }
+        if (Object.keys(choices).length === 0) {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'choices must map at least one axisId to a condition id' };
+        }
+
+        const result: IngestPdfResult = await intakeService().realizeBinding({
+          treeRecordId: treeEnvelope.recordId,
+          choices,
+          ...(typeof body.scaleLevel === 'string' && body.scaleLevel.trim().length > 0
+            ? { scaleLevel: body.scaleLevel.trim() }
+            : {}),
+        });
+        const failed = result.diagnostics.filter((d) => d.severity === 'error');
+        if (failed.length > 0) {
+          reply.status(422);
+          return { success: false, diagnostics: result.diagnostics };
+        }
+        reply.status(200);
+        return { success: true, ...result };
+      } catch (err) {
+        reply.status(500);
+        return { error: 'INTAKE_REALIZE_FAILED', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
   };
 }
 

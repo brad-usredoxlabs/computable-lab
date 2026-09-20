@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import type { IntakeAxis, IntakeProposal } from '../../shared/api/client'
+import { compactAxisLabels, isAxisVisible } from './axisLabels'
 
 export interface ResolvedReviewBranch {
   axes: IntakeAxis[]
@@ -36,6 +37,13 @@ export interface BranchQuestionsPanelProps {
   onResolved?: (resolved: ResolvedReviewBranch | null) => void
   /** Fired after a redraft lands, so the owner can reload the review. */
   onRedrafted?: () => void
+  /**
+   * Build the answers' branch when the eager pass never enumerated it (the
+   * branch product is capped). The owner drafts it on the server and reloads
+   * the review, so the new realization arrives through the normal `proposals`
+   * prop instead of being patched in here.
+   */
+  onBuildBranch?: (choices: Record<string, string>) => Promise<void>
 }
 
 /** The diagnostic that explains the outcome: the first ERROR, else the first. */
@@ -58,25 +66,58 @@ export default function BranchQuestionsPanel({
   gap,
   onResolved,
   onRedrafted,
+  onBuildBranch,
 }: BranchQuestionsPanelProps) {
   const [choices, setChoices] = useState<Record<string, string>>({})
   const [prompt, setPrompt] = useState('')
   const [redrafting, setRedrafting] = useState(false)
   const [redraftNote, setRedraftNote] = useState<string | null>(null)
   const [redraftError, setRedraftError] = useState<string | null>(null)
+  const [building, setBuilding] = useState(false)
+  const [buildError, setBuildError] = useState<string | null>(null)
 
-  const answeredAll = axes.length > 0 && axes.every((a) => typeof choices[a.axisId] === 'string')
+  // A chosen protocol raises its OWN questions. The other protocols' questions
+  // are the same textual ones (a handbook asks "which variant of step 1?" inside
+  // each), so listing them all side by side reads as duplicates that miss the
+  // point — they are asked only once their protocol is chosen.
+  const protocolAxisIds = useMemo(
+    () => axes.filter((a) => a.origin === 'document_section').map((a) => a.axisId),
+    [axes],
+  )
+  const visibleAxes = useMemo(
+    () => axes.filter((a) => isAxisVisible(a, choices, protocolAxisIds)),
+    [axes, choices, protocolAxisIds],
+  )
 
+  const answeredAll =
+    visibleAxes.length > 0 && visibleAxes.every((a) => typeof choices[a.axisId] === 'string')
+
+  // The realization for THIS selection: exactly the visible questions, so a
+  // pre-built combination from another protocol's questions cannot be mistaken
+  // for it (its steps would be that protocol's).
   const matchedProposal = useMemo<IntakeProposal | null>(() => {
     if (!answeredAll) return null
     return (
       proposals.find(
         (p) =>
-          p.branchPath.length === axes.length &&
-          p.branchPath.every((entry) => choices[entry.axisId] === entry.conditionId),
+          p.branchPath.length === visibleAxes.length &&
+          visibleAxes.every((axis) => choices[axis.axisId] === p.branchPath.find((e) => e.axisId === axis.axisId)?.conditionId),
       ) ?? null
     )
-  }, [proposals, axes, choices, answeredAll])
+  }, [proposals, visibleAxes, choices, answeredAll])
+
+  const buildBranch = useCallback(async () => {
+    if (!onBuildBranch) return
+    setBuilding(true)
+    setBuildError(null)
+    try {
+      await onBuildBranch(choices)
+    } catch (err) {
+      setBuildError(err instanceof Error ? err.message : 'Could not build this branch.')
+    } finally {
+      setBuilding(false)
+    }
+  }, [onBuildBranch, choices])
 
   const activeStepIds = useMemo<string[]>(
     () => (matchedProposal && Array.isArray(matchedProposal.activeStepIds) ? matchedProposal.activeStepIds : []),
@@ -135,35 +176,44 @@ export default function BranchQuestionsPanel({
       <header className="branch-questions__header">
         <h3 className="branch-questions__title">This document asks</h3>
         <p className="branch-questions__subtitle">
-          {axes.length} question{axes.length === 1 ? '' : 's'} → {proposals.length} branch realization
-          {proposals.length === 1 ? '' : 's'}
+          {visibleAxes.length} question{visibleAxes.length === 1 ? '' : 's'} → {proposals.length} branch
+          realization{proposals.length === 1 ? '' : 's'}
         </p>
       </header>
 
-      {axes.map((axis) => (
-        <fieldset key={axis.axisId} className="branch-questions__axis" data-testid={`axis-${axis.axisId}`}>
-          <legend className="branch-questions__legend">
-            {axis.question}
-            {axis.origin ? (
-              <span className="branch-questions__origin"> — {ORIGIN_LABEL[axis.origin] ?? axis.origin}</span>
-            ) : null}
-          </legend>
-          <div className="branch-questions__options">
-            {axis.conditions.map((cond) => (
-              <label key={cond.id} className="branch-questions__option">
-                <input
-                  type="radio"
-                  name={axis.axisId}
-                  value={cond.id}
-                  checked={choices[axis.axisId] === cond.id}
-                  onChange={() => choose(axis.axisId, cond.id)}
-                />
-                <span>{cond.label ?? cond.id}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ))}
+      {visibleAxes.map((axis) => {
+        // A handbook names every protocol with the same boilerplate; the options
+        // read as "sample type × method" only once the shared words are gone.
+        const labels = compactAxisLabels(axis.conditions.map((cond) => cond.label ?? cond.id))
+        return (
+          <fieldset
+            key={axis.axisId}
+            className={`branch-questions__axis${axis.sectionId ? ' branch-questions__axis--nested' : ''}`}
+            data-testid={`axis-${axis.axisId}`}
+          >
+            <legend className="branch-questions__legend">
+              {axis.question}
+              {axis.origin ? (
+                <span className="branch-questions__origin"> — {ORIGIN_LABEL[axis.origin] ?? axis.origin}</span>
+              ) : null}
+            </legend>
+            <div className="branch-questions__options">
+              {axis.conditions.map((cond, index) => (
+                <label key={cond.id} className="branch-questions__option">
+                  <input
+                    type="radio"
+                    name={axis.axisId}
+                    value={cond.id}
+                    checked={choices[axis.axisId] === cond.id}
+                    onChange={() => choose(axis.axisId, cond.id)}
+                  />
+                  <span title={cond.label ?? cond.id}>{labels[index] ?? cond.label ?? cond.id}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )
+      })}
 
       <footer className="branch-questions__footer" data-testid="branch-questions-result">
         {!answeredAll ? (
@@ -176,10 +226,33 @@ export default function BranchQuestionsPanel({
             <strong>{matchedProposal.scaleLevel.replace(/_/g, ' ')}</strong> scale.
           </p>
         ) : (
-          <p className="branch-questions__error" role="alert">
-            No realization was enumerated for this combination — the branch product was capped. Say so rather
-            than guessing.
-          </p>
+          <div className="branch-questions__unbuilt" data-testid="branch-questions-unbuilt">
+            <p className="branch-questions__muted">
+              No realization exists for this selection yet — the intake drafts an eager, capped product, and a branch
+              nested under a protocol you just chose is drafted on demand.
+            </p>
+            {onBuildBranch ? (
+              <>
+                <button
+                  type="button"
+                  className="branch-questions__build"
+                  data-testid="build-branch"
+                  onClick={() => void buildBranch()}
+                  disabled={building}
+                >
+                  {building ? 'Building this branch…' : 'Build this branch'}
+                </button>
+                <p className="branch-questions__muted">
+                  Drafting one branch runs the compile pass — expect a minute or two.
+                </p>
+              </>
+            ) : null}
+            {buildError ? (
+              <p className="branch-questions__error" role="alert">
+                {buildError}
+              </p>
+            ) : null}
+          </div>
         )}
 
         {matchedProposal && matchedProposal.compileStatus && matchedProposal.compileStatus !== 'complete' ? (
