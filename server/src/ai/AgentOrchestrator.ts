@@ -27,7 +27,6 @@ import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage
 import { resolveMentionsForPrompt, buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
-  SUBMIT_SUGGESTION_TOOL_NAME,
   COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF,
   COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
   SUBMIT_SUGGESTION_INSTRUCTION,
@@ -50,6 +49,8 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { selectSubmitCall } from './selectSubmitCall.js';
+import type { SubmitCallLike } from './selectSubmitCall.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
@@ -1807,9 +1808,21 @@ export function createAgentOrchestrator(
         // 3b. Terminal via submit_suggestion (#8): the agent finalized through
         // the structured output tool. Capture its args as the result directly —
         // no regex parse, grounded by the tool schema.
-        const submitCall = assistantMsg.tool_calls.find(
-          (tc) => tc.function.name === AGENT_INTENT_TOOL_NAME || tc.function.name === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME || tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
-        );
+        const extraSubmissionNotes: string[] = [];
+        // ONE call is the contract ("call the agent_intent tool exactly once"),
+        // and models break it: observed live, a turn carrying [create_record,
+        // event_graph] lost the draft because the first match won and the rest
+        // vanished without a word. A call that carries draft EVENTS now wins, and
+        // whatever else came along is reported rather than dropped.
+        const submitSelection = selectSubmitCall(assistantMsg.tool_calls as SubmitCallLike[] | undefined);
+        const submitCall = submitSelection.chosen;
+        if (submitSelection.ignored.length > 0) {
+          const detail = submitSelection.ignored.map((call) => `${call.name} (${call.reason})`).join(', ');
+          console.warn(`[agent ${tid}] the model emitted ${submitSelection.ignored.length + 1} submit calls; using ${submitCall?.function.name} and ignoring ${detail}`);
+          extraSubmissionNotes.push(
+            `The model called the draft tool more than once this turn; I used ${submitCall?.function.name} and ignored ${detail}.`,
+          );
+        }
         if (submitCall) {
           let submitArgs: Record<string, unknown>;
           const rawToolArguments = typeof submitCall.function.arguments === 'string' ? submitCall.function.arguments.trim() : '';
@@ -2364,7 +2377,15 @@ export function createAgentOrchestrator(
           // appeared. The review dialogue's term panel renders this verbatim — the
           // client never re-derives it, so the panel and the harness cannot disagree
           // about what a term IS.
-          result = { ...result, termManifest: draftTermManifest(result.events) };
+          result = {
+            ...result,
+            termManifest: draftTermManifest(result.events),
+            // Never drop a fact silently: if the model emitted extra submit calls,
+            // the biologist is told which one was used.
+            ...(extraSubmissionNotes.length > 0
+              ? { notes: [...(result.notes ?? []), ...extraSubmissionNotes] }
+              : {}),
+          };
           return result;
         }
 

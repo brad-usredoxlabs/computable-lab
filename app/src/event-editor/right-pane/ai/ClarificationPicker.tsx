@@ -34,6 +34,32 @@ function resolverFor(request: AiClarificationRequest): SlashResolver | null {
   return null
 }
 
+/**
+ * Does this question have anything to PICK? A parameter question ("what volume?")
+ * has no menu on purpose — it is answered by typing — so the panel must render
+ * the free-text box instead of this picker. Without this distinction the card
+ * showed the question and no way to answer it (reported 2026-09-20).
+ */
+export function requestHasPicker(request: AiClarificationRequest): boolean {
+  return resolverFor(request) !== null
+}
+
+/**
+ * How each material layer is said out loud. The biologist should never have to
+ * infer, from a list of mixed records, that "formulation" means "the prepared
+ * solution" — the placeholder states what this question is asking for.
+ */
+const LAYER_PLACEHOLDER: Record<
+  NonNullable<AiClarificationRequest['materialLayer']>,
+  string
+> = {
+  material: 'Search compounds, reagents, cell lines…',
+  'material-spec': 'Search prepared solutions and saved stocks…',
+  'material-instance': 'Search preparations in the lab…',
+  aliquot: 'Search aliquots in the lab…',
+  'vendor-product': 'Search vendor catalog items…',
+}
+
 function safeMentionPart(value: string): string {
   return value.replace(/[\]\n\r]/g, '').trim()
 }
@@ -143,8 +169,34 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
 
   const resolver = resolverFor(request)
 
+  /**
+   * A NEW question must never inherit the previous one's search. The questions
+   * panel reuses this component across clarifications (the id is the question's
+   * identity), so without this the rows shown for a new material were the
+   * previous material's — observed 2026-09-20: "add 1 million HepG2 cells"
+   * answered with clofibrate options.
+   */
+  useEffect(() => {
+    setQuery(request.query ?? '')
+    setItems([])
+  }, [request.id, request.query])
+
   useEffect(() => {
     if (!resolver) return
+    // A MATERIAL search with no words shows nothing. Observed 2026-09-20: a card
+    // whose question named no material ("Which material should be added to A2?")
+    // ran the /m resolver with '', and the seeds came back looking like ANOTHER
+    // material's options — read by the biologist as the agent being stuck on the
+    // last thing they asked about (clofibrate). A materials question with no name
+    // is asking them to SEARCH; it is not a catalog to browse.
+    //
+    // Deliberately NOT applied to /l and /e: "which plate?" with no words is a
+    // legitimate browse of the lab's inventory, and listing it is the answer.
+    if (query.trim().length === 0 && request.menuProvider === '/m') {
+      setItems([])
+      setLoading(false)
+      return
+    }
     const controller = new AbortController()
     let active = true
     setLoading(true)
@@ -153,6 +205,10 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       resolver(query, {
         selection: null,
         signal: controller.signal,
+        // Scope the menu to the layer the QUESTION is about: a "which prepared
+        // solution?" question must not offer a bare compound. Absent for the
+        // general /m menu (there the biologist browses everything on purpose).
+        ...(request.materialLayer ? { materialLayer: request.materialLayer } : {}),
         onUpdate: (more) => {
           if (active) setItems((prev) => merge(prev, more))
         },
@@ -171,7 +227,9 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       controller.abort()
       clearTimeout(timer)
     }
-  }, [query, resolver])
+    // `request.id` matters: with the same resolver (both are /m questions) a new
+    // question would otherwise reuse the cached search result.
+  }, [query, resolver, request.id])
 
   if (!resolver) return null
 
@@ -191,11 +249,17 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     })()
   }
 
-  const placeholder = resolver === resolveLabware
-    ? 'Search labware…'
-    : resolver === resolveEquipment
-      ? 'Search equipment…'
-      : 'Search materials or mint a local term…'
+  // The question's own layer decides the wording; only an unscoped menu (or a
+  // concept question) invites minting, because a mint creates a concept — which
+  // is never a valid answer to "which aliquot?".
+  const layerPlaceholder = request.materialLayer ? LAYER_PLACEHOLDER[request.materialLayer] : undefined
+  const placeholder = layerPlaceholder
+    ?? (resolver === resolveLabware
+      ? 'Search labware…'
+      : resolver === resolveEquipment
+        ? 'Search equipment…'
+        : 'Search materials or mint a local term…')
+  const canMint = !request.materialLayer || request.materialLayer === 'material'
 
   return (
     <div className="message-log__clarification-picker">
@@ -217,7 +281,7 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
         ref={listRef}
         items={items}
         loading={loading}
-        emptyLabel={query ? 'No matches — keep typing to mint a local term' : 'Type to search'}
+        emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
         command={command}
       />
     </div>

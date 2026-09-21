@@ -186,3 +186,83 @@ describe('ClarificationPicker', () => {
     expect(resolveLabware).not.toHaveBeenCalled()
   })
 })
+
+describe('a NEW question must not show the PREVIOUS material’s options', () => {
+  // Brad (2026-09-20): "add 1 million HepG2 cells" — the reasoning was right, but
+  // every option in the picker was about clofibrate, the material from the
+  // previous question. The picker seeded its query/items once and its search
+  // effect did not depend on the request, so a reused instance kept the stale
+  // list until the user typed.
+  const clofibrateRow: SlashSuggestion = {
+    key: 'material-spec:MSP-CLOF',
+    label: '1 mM Clofibrate in DMSO',
+    badge: 'Formulation',
+    mention: { type: 'material', entityKind: 'material-spec', id: 'MSP-CLOF', label: '1 mM Clofibrate in DMSO' },
+  }
+  const hepg2Row: SlashSuggestion = {
+    key: 'material:MAT-HEPG2',
+    label: 'HepG2',
+    badge: 'Ontology',
+    mention: { type: 'material', entityKind: 'material', id: 'MAT-HEPG2', label: 'HepG2' },
+  }
+
+  it('re-searches for the new request instead of keeping the old rows', async () => {
+    resolveMaterial.mockImplementation(async (q: string) =>
+      String(q).toLowerCase().includes('clofibrate') ? [clofibrateRow] : [hepg2Row],
+    )
+    const clofibrateRequest: AiClarificationRequest = {
+      id: 'clar-1',
+      kind: 'material',
+      prompt: 'Which material should be added to A2?',
+      menuProvider: '/m',
+      query: 'clofibrate',
+      options: [],
+      materialLayer: 'material',
+    }
+    // The PREVIOUS question: a stateful parent (QuestionsPanel) reuses this
+    // component for the next question rather than remounting it.
+    const { rerender } = render(<ClarificationPicker request={clofibrateRequest} onPick={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('1 mM Clofibrate in DMSO')).toBeTruthy())
+
+    const hepg2Request: AiClarificationRequest = {
+      id: 'clar-2',
+      kind: 'material',
+      prompt: 'Which material should be added to A2?',
+      menuProvider: '/m',
+      query: 'HepG2',
+      options: [],
+      materialLayer: 'material',
+    }
+    rerender(<ClarificationPicker request={hepg2Request} onPick={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('HepG2')).toBeTruthy())
+    // …and the previous material is gone, not merged alongside it.
+    expect(screen.queryByText('1 mM Clofibrate in DMSO')).toBeNull()
+  })
+});
+
+describe('a material question with no words does not show another material', () => {
+  // Observed live 2026-09-20: "Which material should be added to A2?" (no material
+  // named) rendered clofibrate formulations — the previous question's material —
+  // because the /m resolver ran with an empty query and listed the workspace.
+  it('does not call the material resolver when the question names no material', async () => {
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, id: 'material-9', prompt: 'Which material should be added to A2?', query: '' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await new Promise((r) => setTimeout(r, 250))
+    expect(resolveMaterial).not.toHaveBeenCalled()
+  })
+
+  it('still lets a labware question browse an empty query — that IS the answer', async () => {
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, kind: 'labware', menuProvider: '/l', query: '' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
+  })
+})
