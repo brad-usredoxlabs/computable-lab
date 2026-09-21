@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isMintRef, mintLabel, resolveDraftMaterials } from './resolveDraftMaterials.js';
+import { isMintRef, mintLabel, resolveDraftMaterials, singularizeLastWord } from './resolveDraftMaterials.js';
 import type { SpineCandidate, SpineLike } from './resolveDraftMaterials.js';
 
 const candidate = (over: Partial<SpineCandidate>): SpineCandidate => ({
@@ -28,6 +28,19 @@ const eventWith = (ref: Record<string, unknown>) => ({
 });
 
 describe('resolve the biologist\'s verbatim term with the spine', () => {
+  it('resolves `{kind:"local", label}` — the words a model actually emits', async () => {
+    const spine = spineReturning({
+      'HepG2 cells': [candidate({ curie: 'MAT-MESH-D056945', label: 'HepG2 Cell', tier: 1, level: 'concept', source: 'local-record' })],
+    });
+    const out = await resolveDraftMaterials(
+      [{ event_type: 'add_material', details: { wells: ['A2'], material_ref: { kind: 'local', label: 'HepG2 cells' } } }],
+      spine,
+    );
+    const details = (out.events[0] as { details: Record<string, unknown> }).details;
+    expect(details['material_ref']).toEqual({ kind: 'record', id: 'MAT-MESH-D056945', label: 'HepG2 cells', type: 'material' });
+    expect(out.bound[0]).toMatchObject({ label: 'HepG2 cells', resolvedLabel: 'HepG2 Cell', tier: 1 });
+  });
+
   it('binds a tier-0 alias hit and keeps the verbatim words on the ref', async () => {
     const spine = spineReturning({ 'F praus': [candidate({ curie: 'TERM-fpraus-9z8y' })] });
     const out = await resolveDraftMaterials([eventWith({ kind: 'draft', id: 'mint:F praus', label: 'F praus' })], spine);
@@ -97,6 +110,9 @@ describe('resolve the biologist\'s verbatim term with the spine', () => {
     expect(isMintRef({ mint: { label: 'DMEM' } })).toBe(true);
     expect(isMintRef({ id: 'mint:DMEM' })).toBe(true);
     expect(isMintRef({ kind: 'record', id: 'MSP-1' })).toBe(false);
+    // The live shape: the biologist's words, a 'local' claim, and no id.
+    expect(isMintRef({ kind: 'local', label: 'HepG2 cells' })).toBe(true);
+    expect(isMintRef({ kind: 'local', label: 'HepG2 cells', id: 'MAT-1' })).toBe(false);
 
     expect(mintLabel({ mint: { label: 'HepG2 cells' } })).toBe('HepG2 cells');
     expect(mintLabel({ id: 'mint:DMEM' })).toBe('DMEM');
@@ -121,5 +137,50 @@ describe('resolve the biologist\'s verbatim term with the spine', () => {
     expect(spine.calls).toEqual([]);
     expect(out.events).toEqual(events);
     expect(await resolveDraftMaterials(undefined, spine)).toEqual({ events: [], bound: [], proposed: [] });
+  });
+});
+describe('the plural the spine cannot fold', () => {
+  it('singularizes the last word only, and only when it is safe', () => {
+    expect(singularizeLastWord('HepG2 cells')).toBe('HepG2 cell');
+    expect(singularizeLastWord('HEK293 lysates')).toBe('HEK293 lysate');
+    expect(singularizeLastWord('HepG2')).toBeNull();       // one word: nothing to infer
+    expect(singularizeLastWord('glass')).toBeNull();       // ss
+    expect(singularizeLastWord('TBS')).toBeNull();         // not a plural marker
+  });
+
+  it('retries once and binds the lab\'s term, recording what actually matched', async () => {
+    const calls: string[] = [];
+    const spine: SpineLike = {
+      resolve: async (term: string) => {
+        calls.push(term);
+        if (term === 'HepG2 cell') {
+          return [candidate({ curie: 'MAT-MESH-D056945', label: 'HepG2 Cell', tier: 1, level: 'concept', source: 'local-record' })];
+        }
+        return [candidate({ curie: '', label: 'Create local term', tier: 5, level: 'concept', source: 'mint' })];
+      },
+    };
+    const out = await resolveDraftMaterials(
+      [{ event_type: 'add_material', details: { wells: ['A2'], material_ref: { kind: 'local', label: 'HepG2 cells' } } }],
+      spine,
+    );
+    expect(calls).toEqual(['HepG2 cells', 'HepG2 cell']);
+    const details = (out.events[0] as { details: Record<string, unknown> }).details;
+    expect(details['material_ref']).toMatchObject({ id: 'MAT-MESH-D056945', label: 'HepG2 cells' });
+    expect(out.bound[0]).toMatchObject({ label: 'HepG2 cells', resolvedLabel: 'HepG2 Cell', matchedOn: 'HepG2 cell' });
+  });
+
+  it('does not retry when the first lookup already found the lab\'s own term', async () => {
+    const calls: string[] = [];
+    const spine: SpineLike = {
+      resolve: async (term: string) => {
+        calls.push(term);
+        return [candidate({ curie: 'MAT-1', tier: 1, source: 'local-record' })];
+      },
+    };
+    await resolveDraftMaterials(
+      [{ event_type: 'add_material', details: { wells: ['A2'], material_ref: { kind: 'local', label: 'HepG2 cells' } } }],
+      spine,
+    );
+    expect(calls).toEqual(['HepG2 cells']);
   });
 });

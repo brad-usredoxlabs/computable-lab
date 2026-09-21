@@ -61,6 +61,12 @@ export interface BoundTerm {
   source: string;
   /** The details field the ref now lives in. */
   field: string;
+  /**
+   * The form that actually matched, when a light normalization was needed
+   * (`HepG2 cells` matching the lab's `HepG2 Cell`). Absent when the biologist's
+   * words matched as written.
+   */
+  matchedOn?: string;
 }
 
 export interface ProposedTerm {
@@ -81,11 +87,22 @@ function isDict(value: unknown): value is Dict {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Is this ref a MINT — something nobody has resolved yet? */
+/**
+ * Is this ref something nobody has resolved yet — i.e. the biologist's verbatim
+ * words, or an explicit mint?
+ *
+ * The third case matters most in practice: models emit
+ * `material_ref: { kind: 'local', label: 'HepG2 cells' }` — no id, no mint
+ * wrapper, just the words and a claim that they are local. Observed live
+ * 2026-09-20; before this it fell through the resolver entirely and the material
+ * gate asked a question the spine could have answered.
+ */
 export function isMintRef(ref: Dict): boolean {
   const kind = typeof ref['kind'] === 'string' ? ref['kind'].trim().toLowerCase() : '';
   const id = typeof ref['id'] === 'string' ? ref['id'].trim() : '';
-  return kind === 'draft' || id.toLowerCase().startsWith('mint:') || isDict(ref['mint']);
+  if (kind === 'draft' || id.toLowerCase().startsWith('mint:') || isDict(ref['mint'])) return true;
+  if (id) return false; // it names something — leave it alone
+  return typeof ref['label'] === 'string' && ref['label'].trim().length > 0;
 }
 
 /** The words the biologist used, as carried by a mint ref. */
@@ -107,6 +124,26 @@ function fieldForCandidate(candidate: SpineCandidate): string {
   return MATERIAL_LAYER_FIELD[materialLayerOf(recordType)];
 }
 
+/**
+ * The spine's matching is lexical, so `HepG2 cells` misses the lab's `HepG2 Cell`
+ * by one letter (observed 2026-09-20: no tier-0/1 hit, so the material gate asked
+ * a question the lab could already answer). This is the smallest correction that
+ * closes that gap without inventing vocabulary: retry once with a plural marker
+ * dropped from the FINAL word only, and only when the phrase has more than one
+ * word. "HepG2 cells" → "HepG2 cell" → a tier-1 substring hit.
+ *
+ * A shared fix belongs in the term provider, where every consumer would get it;
+ * this stays at the boundary until then, and the verbatim spelling is recorded as
+ * an alias on confirm so the next lookup is exact.
+ */
+export function singularizeLastWord(term: string): string | null {
+  const words = term.trim().split(/\s+/);
+  if (words.length < 2) return null;
+  const last = words[words.length - 1]!;
+  if (!/^[A-Za-z]{4,}s$/.test(last) || /ss$/i.test(last)) return null;
+  return [...words.slice(0, -1), last.slice(0, -1)].join(' ');
+}
+
 export async function resolveDraftMaterials(
   events: readonly unknown[] | undefined,
   spine: SpineLike,
@@ -118,7 +155,7 @@ export async function resolveDraftMaterials(
   const proposed: ProposedTerm[] = [];
   // Cache the PROMISE, not the result: events are processed concurrently, so a
   // 32-well draft that shares one material must still make exactly one spine call.
-  const byLabel = new Map<string, Promise<{ best: SpineCandidate | null; others: SpineCandidate[] }>>();
+  const byLabel = new Map<string, Promise<{ best: SpineCandidate | null; others: SpineCandidate[]; matchedOn: string }>>();
 
   /** One spine call per distinct spelling, however many wells use it. */
   const lookup = (label: string) => {
@@ -130,13 +167,25 @@ export async function resolveDraftMaterials(
   };
 
   const lookupUncached = async (label: string) => {
-    const candidates = await spine.resolve(label, { localOnly });
+    let candidates = await spine.resolve(label, { localOnly });
+    let matchedOn = label;
+    if (!candidates.some((candidate) => LOCAL_TIERS.includes(candidate.tier) && typeof candidate.curie === 'string' && candidate.curie)) {
+      const retry = singularizeLastWord(label);
+      if (retry) {
+        const retried = await spine.resolve(retry, { localOnly });
+        if (retried.some((candidate) => LOCAL_TIERS.includes(candidate.tier) && typeof candidate.curie === 'string' && candidate.curie)) {
+          candidates = retried;
+          matchedOn = retry;
+        }
+      }
+    }
+
     const locals = candidates
       .filter((candidate) => LOCAL_TIERS.includes(candidate.tier) && typeof candidate.curie === 'string' && candidate.curie)
       .sort((a, b) => (b.tier === a.tier ? 0 : a.tier - b.tier));
     const best = locals.length > 0 ? locals[0]! : null;
     const others = best ? [] : candidates.filter((c) => typeof c.curie === 'string' && c.curie).slice(0, suggestionLimit);
-    return { best, others };
+    return { best, others, matchedOn };
   };
 
   const nextEvents = await Promise.all(
@@ -155,7 +204,7 @@ export async function resolveDraftMaterials(
         const label = mintLabel(ref);
         if (!label) continue;
 
-        const { best, others } = await lookup(label);
+        const { best, others, matchedOn } = await lookup(label);
         delete nextDetails[field];
         touched = true;
 
@@ -178,6 +227,7 @@ export async function resolveDraftMaterials(
               tier: best.tier,
               source: best.source ?? 'canonical-term',
               field: targetField,
+              ...(matchedOn !== label ? { matchedOn } : {}),
             });
           }
         } else {
