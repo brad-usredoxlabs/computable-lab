@@ -39,6 +39,7 @@ import {
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
+import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
 import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
@@ -1952,6 +1953,34 @@ export function createAgentOrchestrator(
           if (recovered.notes.length > 0) {
             for (const line of recovered.notes) console.warn(`[agent ${tid}] ${line}`);
             parsed.notes = [...(parsed.notes ?? []), ...recovered.notes];
+          }
+
+          // Reconcile the QUANTITY KIND against the unit the biologist spoke.
+          // Observed (2026-09-21): "Add 200 µL of DMEM" ghosted as 200 *counts*
+          // of DMEM — the model dropped the unit and filed the amount as `count`
+          // because the materials[] schema had no `volume` slot. The biologist's
+          // words (prompt + the event note, which routinely preserves "Adding
+          // 200 µL…") carry the unit; heal a misfiled draft from them rather
+          // than trusting the field the model happened to reach for.
+          {
+            const reconcileNotes: string[] = [];
+            const eventNotes = (parsed.events ?? []).map((ev) => {
+              if (!ev || typeof ev !== 'object') return '';
+              const note = (ev as { notes?: unknown }).notes;
+              return typeof note === 'string' ? note.trim() : '';
+            });
+            const quantityResolution = reconcileDraftQuantities(
+              (parsed.events ?? []) as unknown[],
+              [effectivePrompt, ...eventNotes].filter((s): s is string => typeof s === 'string' && s.length > 0),
+            );
+            if (quantityResolution.notes.length > 0) {
+              parsed.events = quantityResolution.events as NonNullable<typeof parsed.events>;
+              for (const line of quantityResolution.notes) {
+                reconcileNotes.push(line);
+                console.warn(`[agent ${tid}] ${line}`);
+              }
+              parsed.notes = [...(parsed.notes ?? []), ...reconcileNotes];
+            }
           }
 
           // Read each grounded material's TYPE from its own record. The per-type

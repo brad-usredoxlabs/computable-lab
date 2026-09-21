@@ -152,6 +152,16 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
                     slot: { type: 'string', description: 'e.g. "source", "target", "reagent".' },
                     role: { type: 'string', description: 'Composition role, e.g. cells, buffer_component, additive, solute, solvent, other.' },
                     count: { type: 'number', description: 'Absolute material count when the user specifies one, e.g. 10000 cells.' },
+                    volume: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['value', 'unit'],
+                      description: 'Amount to add when the user specified a VOLUME (e.g. "200 µL"). Use this for media/reagent/solvent additions — do NOT file a volume as `count`.',
+                      properties: {
+                        value: { type: 'number' },
+                        unit: { type: 'string', description: 'e.g. uL, mL, L.' },
+                      },
+                    },
                     concentration: {
                       type: 'object',
                       additionalProperties: false,
@@ -501,6 +511,8 @@ function parseMaterials(raw: unknown): GroundedMaterial[] {
       if (typeof r.slot === 'string') m.slot = r.slot;
       if (typeof r.role === 'string') m.role = r.role;
       if (typeof r.count === 'number' && Number.isFinite(r.count)) m.count = r.count;
+      const volume = parseQuantityObject(r.volume);
+      if (volume) m.volume = volume;
       const concentration = parseConcentrationValue(r.concentration);
       if (concentration) m.concentration = concentration;
       out.push(m);
@@ -513,6 +525,8 @@ function parseMaterials(raw: unknown): GroundedMaterial[] {
         if (typeof r.slot === 'string') m.slot = r.slot;
         if (typeof r.role === 'string') m.role = r.role;
         if (typeof r.count === 'number' && Number.isFinite(r.count)) m.count = r.count;
+        const volume = parseQuantityObject(r.volume);
+        if (volume) m.volume = volume;
         const concentration = parseConcentrationValue(r.concentration);
         if (concentration) m.concentration = concentration;
         out.push(m);
@@ -520,6 +534,23 @@ function parseMaterials(raw: unknown): GroundedMaterial[] {
     }
   }
   return out;
+}
+
+/** Read `{value,unit}` (with optional commas) from a draft volume object. */
+function parseQuantityObject(raw: unknown): { value: number; unit: string } | undefined {
+  const record = asRecord(raw);
+  if (!record) return undefined;
+  const value = typeof record.value === 'number' && Number.isFinite(record.value) ? record.value
+    : typeof record.value === 'string' && record.value.trim() ? parseCommaNumber(record.value) : NaN;
+  if (!Number.isFinite(value)) return undefined;
+  if (typeof record.unit !== 'string' || record.unit.trim().length === 0) return undefined;
+  return { value, unit: record.unit.trim() };
+}
+
+function parseCommaNumber(text: string): number {
+  const cleaned = text.replace(/[,\s]/g, '');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 let agCounter = 0;

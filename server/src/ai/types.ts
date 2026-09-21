@@ -705,6 +705,8 @@ export interface GroundedMaterial {
   role?: string;
   /** Optional component concentration/contribution, e.g. fetal bovine serum at 10%. */
   concentration?: { value: number; unit: string; basis?: string };
+  /** Optional volume to add (media/reagent/solvent additions), e.g. 200 µL. */
+  volume?: { value: number; unit: string };
   /** Optional absolute count for cell/material additions, e.g. 10,000 cells. */
   count?: number;
   ref: { curie: string } | { mint: { label: string; domain?: string } };
