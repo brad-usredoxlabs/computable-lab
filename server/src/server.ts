@@ -1003,6 +1003,13 @@ export async function createServer(
         ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
         residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store, labProfileFor(ctx, appConfig)),
         store: ctx.store,
+        // The declarative material-layer policy: what a pick at a layer still
+        // owes (a formulation owes a volume, an aliquot nothing) lives in the
+        // registry, so the follow-up question is derived from data.
+        materialProfiles: ctx.materialProfileRegistry,
+        // The identity spine: lets a biologist's own words be resolved by the same
+        // alias-first tier-0 lookup the UI and the compiler use.
+        resolveSpine,
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       

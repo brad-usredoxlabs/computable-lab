@@ -50,6 +50,7 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -867,6 +868,14 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * hardcoded branch. Optional — without it no follow-up is derived.
    */
   materialProfiles?: import('../materials/MaterialProfileRegistry.js').MaterialProfileRegistry;
+  /**
+   * The lab's identity spine (ResolveSpine). When present, a material the model
+   * named in the biologist's OWN WORDS is resolved here instead of being left as a
+   * mint for the gate to interrogate: tier 0/1 (canonical terms, workspace records)
+   * binds silently, and anything unresolved stays a proposed local term with its
+   * remote candidates offered to the review dialogue's term panel.
+   */
+  resolveSpine?: import('./resolveDraftMaterials.js').SpineLike;
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
   /**
@@ -2005,6 +2014,25 @@ export function createAgentOrchestrator(
               clarificationAnswers,
             );
             parsed.events = materialBinding.events as unknown as typeof parsed.events;
+
+            // RESOLVE the biologist's verbatim term with the lab's identity spine —
+            // the same spine the UI and the compiler use, so all three agree on what
+            // a term IS. The model no longer chooses a ref field or a CURIE; it emits
+            // the words the biologist used, and tier 0 (canonical terms, alias-first)
+            // turns "Methanol" into the one local term instead of a new entity.
+            // LOCAL TIERS ONLY: tier 0/1 are synchronous, so this never makes the
+            // snappy path wait on OLS4 or Exa.
+            if (deps.resolveSpine) {
+              const spineResolution = await resolveDraftMaterials(parsed.events, deps.resolveSpine);
+              parsed.events = spineResolution.events as unknown as typeof parsed.events;
+              if (spineResolution.bound.length > 0) {
+                console.log(
+                  `[agent ${tid}] spine bound ${spineResolution.bound
+                    .map((b) => `"${b.label}"→${b.id}@t${b.tier}(${b.field})`)
+                    .join(', ')}`,
+                );
+              }
+            }
             if (materialBinding.bound.length > 0) {
               console.log(
                 `[agent ${tid}] bound ${materialBinding.bound.length} material pick(s): ` +

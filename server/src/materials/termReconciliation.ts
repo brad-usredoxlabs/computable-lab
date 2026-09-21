@@ -7,17 +7,19 @@
  * fuzzy comparison can see they are probably the same thing, and only a human can
  * decide.
  *
- * Hence the split this module enforces:
+ * LINKING IS NOT THIS MODULE'S JOB. The lab's identity spine (`ResolveSpine`,
+ * tier 0 canonical terms + tier 1 records) is alias-first and is the same code the
+ * UI, the compiler and the agent use — so an exact-or-alias match is resolved by
+ * `resolveDraftMaterials`, in one place, by the thing that owns the fact.
  *
- *   pickExistingTerm   exact match on the preferred label or any alias → LINK
- *                      automatically (case/space-insensitive).
- *   suggestExistingTerms  bounded edit distance (default ≤2) → SUGGEST in the
- *                      review dialogue. Never applied automatically; the accepted
- *                      spelling is appended to `aliases`, so the next occurrence
- *                      matches exactly and links by itself.
+ * What the spine deliberately does NOT do is guess at a TYPO: `f praus` and
+ * `f pruas` are two strings to an exact matcher, and no alias basket contains the
+ * second until someone confirms it. That is the only thing left here — a bounded
+ * edit-distance suggestion for the review dialogue, never applied automatically.
  *
- * `aliases` is already declared in `schema/core/term.schema.yaml:48` and, as of
- * 2026-09-20, nothing in `server/src` reads it — this is the first consumer.
+ * `aliasToAppend` is the write side: when the biologist confirms a link, the
+ * draft's spelling joins `aliases` (`schema/core/term.schema.yaml:48`) and the
+ * NEXT occurrence is a tier-0 exact hit with no dialogue at all.
  */
 
 export interface TermLike {
@@ -46,15 +48,16 @@ export function editDistance(a: string, b: string, max: number): number {
   return previous[b.length]!;
 }
 
-/** The term this spelling already IS (label or alias), or null. */
-export function pickExistingTerm(query: string, terms: readonly TermLike[]): TermLike | null {
+/**
+ * Does this spelling already match the term exactly (label or alias)? A private
+ * predicate, not a linker: the spine decides links, this only keeps the panel from
+ * offering a suggestion for something that is already an exact match.
+ */
+function matchesExactly(query: string, term: TermLike): boolean {
   const wanted = normalizeTermName(query);
-  if (!wanted) return null;
-  for (const term of terms) {
-    if (normalizeTermName(term.preferredLabel) === wanted) return term;
-    if ((term.aliases ?? []).some((alias) => normalizeTermName(alias) === wanted)) return term;
-  }
-  return null;
+  if (!wanted) return false;
+  if (normalizeTermName(term.preferredLabel) === wanted) return true;
+  return (term.aliases ?? []).some((alias) => normalizeTermName(alias) === wanted);
 }
 
 export interface TermSuggestion {
@@ -72,9 +75,9 @@ export function suggestExistingTerms(
 ): TermSuggestion[] {
   const wanted = normalizeTermName(query);
   if (!wanted) return [];
-  // An exact match is a LINK, not a decision to offer — suggesting it would put a
-  // pointless row in front of the biologist.
-  if (pickExistingTerm(query, terms)) return [];
+  // An exact match is a LINK (and the spine resolves it) — suggesting it would put
+  // a pointless row in front of the biologist.
+  if (terms.some((term) => matchesExactly(query, term))) return [];
   const out: TermSuggestion[] = [];
   for (const term of terms) {
     const candidates = [term.preferredLabel, ...(term.aliases ?? [])];

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  aliasToAppend,
-  editDistance,
-  normalizeTermName,
-  pickExistingTerm,
-  suggestExistingTerms,
-} from './termReconciliation.js';
+import { aliasToAppend, editDistance, normalizeTermName, suggestExistingTerms } from './termReconciliation.js';
 
 /** Brad's canonical failure: one organism, four spellings. */
 const terms = [
@@ -19,12 +13,12 @@ describe('term reconciliation: link on a match, SUGGEST on a near miss', () => {
     expect(normalizeTermName('ETHYL  ALCOHOL')).toBe('ethyl alcohol');
   });
 
-  it('links an exact preferred-label or alias match', () => {
-    expect(pickExistingTerm('F Prausnitzii', terms)?.id).toBe('TERM-fpraus-9z8y');
-    expect(pickExistingTerm('fpraus', terms)?.id).toBe('TERM-fpraus-9z8y');
-    expect(pickExistingTerm('EtOH', terms)?.id).toBe('TERM-ethanol-1a2b');
-    expect(pickExistingTerm('unobtainium', terms)).toBeNull();
-    expect(pickExistingTerm('', terms)).toBeNull();
+  it('offers nothing when the spelling already matches exactly — the spine links that', () => {
+    expect(suggestExistingTerms('F Prausnitzii', terms)).toEqual([]);
+    expect(suggestExistingTerms('fpraus', terms)).toEqual([]);
+    expect(suggestExistingTerms('EtOH', terms)).toEqual([]);
+    expect(suggestExistingTerms('unobtainium', terms)).toEqual([]);
+    expect(suggestExistingTerms('', terms)).toEqual([]);
   });
 
   it('SUGGESTS the existing term for the typo the normalizer cannot fold', () => {
@@ -58,20 +52,16 @@ describe('term reconciliation: link on a match, SUGGEST on a near miss', () => {
     expect(aliasToAppend(terms[0]!, '   ')).toBeNull();
   });
 
-  it('the four spellings converge on ONE term after confirmation', () => {
-    // Simulate the review dialogue answering for each spelling in turn.
+  it('the typo converges on ONE term once the biologist confirms it', () => {
+    // The spine resolves FPRAUS and F praus (they are aliases). Only the typo
+    // reaches the dialogue, and confirming it appends the spelling.
     let term = terms[0]!;
-    for (const spelling of ['FPRAUS', 'F praus', 'f pruas']) {
-      const linked = pickExistingTerm(spelling, [term]);
-      if (linked) continue;                       // exact/alias → nothing to add
-      const suggestion = suggestExistingTerms(spelling, [term])[0];
-      expect(suggestion?.term.id).toBe(term.id);
-      const alias = aliasToAppend(term, spelling); // the biologist chose "use existing"
-      if (alias) term = { ...term, aliases: [...(term.aliases ?? []), alias] };
-    }
-    expect(term.id).toBe('TERM-fpraus-9z8y');
+    expect(suggestExistingTerms('f pruas', [term])[0]!.term.id).toBe(term.id);
+    const alias = aliasToAppend(term, 'f pruas');
+    expect(alias).toBe('f pruas');
+    term = { ...term, aliases: [...(term.aliases ?? []), alias!] };
     expect(term.aliases).toEqual(['FPRAUS', 'F praus', 'f pruas']);
-    // …and the next occurrence links with no dialogue at all
-    expect(pickExistingTerm('f pruas', [term])?.id).toBe('TERM-fpraus-9z8y');
+    // …and with the alias recorded, nothing is suggested (the spine now has it).
+    expect(suggestExistingTerms('f pruas', [term])).toEqual([]);
   });
 });
