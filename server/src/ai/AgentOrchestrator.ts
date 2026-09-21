@@ -2104,6 +2104,14 @@ export function createAgentOrchestrator(
               {
                 resolvedCuries,
                 policeUnverifiedCuries: draftFlowMode === 'forced-tool',
+                // Draft-friction (2026-09-20): on the event-editor surface a
+                // NAMED-but-ungrounded material is ACCEPTED as a proposed local
+                // term and confirmed in the review dialogue, because the
+                // resolution spine already ran here — its only non-bindings are
+                // terms the lab does not have locally, and re-asking the
+                // biologist up front (the blocking card) defeated the whole
+                // draft-to-review flow. Ingestion/protocol surfaces stay strict.
+                acceptUngrounded: draftFlowMode === 'forced-tool',
                 ...(requirementsFor ? { requirementsFor } : {}),
               },
             );

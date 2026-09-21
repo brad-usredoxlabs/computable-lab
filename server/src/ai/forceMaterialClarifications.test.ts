@@ -372,3 +372,264 @@ describe('forceMaterialClarifications', () => {
     expect(clarificationRequests[0]).toMatchObject({ kind: 'general', menuProvider: 'choice' });
   });
 });
+
+describe('a well-ready layer is trusted wherever it is carried (E1/E2)', () => {
+  it('does NOT re-ask for a material-spec carried in material_ref', () => {
+    // The observed loop: the repair wrote a grounded material-spec into
+    // `material_ref`, and the gate — which only trusted `material_spec_ref` —
+    // asked "I need a volume and a concentration for '1 mM Clofibrate in DMSO'."
+    // A label that IS a concentration. It asked forever.
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A1'],
+        material_ref: {
+          kind: 'record',
+          id: 'MSP-API-mu50x5z7',
+          type: 'material-spec',
+          label: '1 mM Clofibrate in DMSO',
+        },
+      }),
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests).toHaveLength(0);
+    expect(kept).toHaveLength(1);
+  });
+
+  it('does NOT re-ask for an aliquot carried in material_ref', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A1'],
+        material_ref: { kind: 'record', id: 'ALQ-abc', type: 'aliquot', label: 'clofibrate aliquot' },
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  it('still asks for a quantity when the ref is only a bare CONCEPT', () => {
+    // The hierarchy must not be collapsed: a concept is not a formulation.
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A1'],
+        material_ref: { kind: 'record', id: 'MAT-clofibrate', type: 'material', label: 'clofibrate' },
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]).toMatchObject({ kind: 'parameter' });
+    expect(clarificationRequests[0]!.prompt).toContain('volume and a concentration');
+  });
+
+  it('does not trust a layer claim with no identity (no id grounds nothing)', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A1'],
+        material_ref: { kind: 'record', type: 'material-spec', label: '1 mM Clofibrate' },
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests.length).toBeGreaterThan(0);
+  });
+});
+
+describe('acceptUngrounded — a named-but-ungrounded material is ACCEPTED, not blocked (draft-friction, 2026-09-20)', () => {
+  // Brad: "Add 200uL of DMEM" must ghost events onto the deck for review, with
+  // the term confirmed in the accept/reject/redraft dialogue — never a blocking
+  // pre-draft "which material?" card. The spine ran (resolveDraftMaterials),
+  // DMEM had no LOCAL hit so it stayed a mint; the gate must keep it and let
+  // the term panel confirm it, not re-interrogate the biologist.
+  it('keeps a minted material in the draft and raises no question when acceptUngrounded', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A2'],
+        material_ref: { kind: 'draft', id: 'mint:DMEM', label: 'DMEM' },
+      }),
+    ]
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, { acceptUngrounded: true })
+    expect(clarificationRequests).toHaveLength(0)
+    expect(kept).toHaveLength(1)
+    // the mint survives so the term manifest can show it as unmatched/new
+    expect((kept[0]!.details as Record<string, unknown>).material_ref).toMatchObject({ label: 'DMEM' })
+  })
+
+  it('keeps a free-text string material when acceptUngrounded (needs-quantity is deferred to accept)', () => {
+    const events = [addMaterial({ labwareId: 'lw-1', wells: ['A2'], material_ref: 'DMEM' })]
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, { acceptUngrounded: true })
+    expect(clarificationRequests).toHaveLength(0)
+    expect(kept).toHaveLength(1)
+  })
+
+  it('STILL asks when nothing names the material — even under acceptUngrounded', () => {
+    const events = [addMaterial({ labwareId: 'lw-1', wells: ['A2'] })]
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, { acceptUngrounded: true })
+    expect(kept).toHaveLength(0)
+    expect(clarificationRequests).toHaveLength(1)
+    expect(clarificationRequests[0]!.prompt).toContain('A2')
+  })
+
+  it('does NOT change behaviour when acceptUngrounded is off (default stays strict)', () => {
+    const events = [
+      addMaterial({ labwareId: 'lw-1', wells: ['A2'], material_ref: { mint: { label: 'DMEM' } } }),
+    ]
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events)
+    expect(kept).toHaveLength(0)
+    expect(clarificationRequests).toHaveLength(1)
+    expect(clarificationRequests[0]!).toMatchObject({ kind: 'material', menuProvider: '/m' })
+  })
+
+  it('capability gaps still ask regardless of acceptUngrounded', () => {
+    const events = [{ event_type: 'mix', details: { labwareId: 'lw-1', mode: 'orbital_shaking', rpm: 5000 } }]
+    const { clarificationRequests } = forceMaterialClarifications(events, { acceptUngrounded: true })
+    expect(clarificationRequests).toHaveLength(1)
+  })
+});
+
+describe('each question names the LAYER it is about (the picker scopes to it)', () => {
+  it('a "which compound?" question is the concept layer', () => {
+    const events = [
+      addMaterial({ labwareId: 'lw-1', wells: ['A1'], material_ref: { mint: { label: 'unobtainium' } } }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests[0]!.materialLayer).toBe('material');
+  });
+
+  it('a "how much?" question is about the formulation being built', () => {
+    const events = [
+      addMaterial({ labwareId: 'lw-1', wells: ['A1'], material_ref: { kind: 'record', id: 'MAT-x', type: 'material' } }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests[0]!.materialLayer).toBe('material-spec');
+  });
+
+  it('an instance question (tracked mode) is the instance layer', () => {
+    const events = [
+      addMaterial({ labwareId: 'lw-1', wells: ['A1'], material_ref: { kind: 'record', id: 'MAT-x', type: 'material' }, concentration: { value: 1, unit: 'uM' } }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events, { materialTrackingMode: 'tracked' });
+    expect(clarificationRequests[0]!.materialLayer).toBe('material-instance');
+    expect(clarificationRequests[0]!.prompt).toContain('preparation or lot');
+  });
+
+  it('a capability question claims no material layer', () => {
+    const events = [
+      { event_type: 'mix', details: { wells: ['A1'], mode: 'orbital_shaking', rpm: 4000 } },
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests[0]!.materialLayer).toBeUndefined();
+  });
+});
+
+describe('what is owed depends on the TYPE (material rules per type)', () => {
+  const cellLinePolicy = (layer: string, domain?: string) =>
+    layer === 'material' && domain === 'cell_line'
+      ? { requires: ['count'], question: 'How many "{label}" per well?' }
+      : layer === 'material'
+        ? { requires: ['concentration', 'volume'] }
+        : null;
+
+  it('a CELL LINE asks for a count — never a concentration', () => {
+    // Brad's case: an adherent layer after the medium is aspirated is legitimately
+    // zero-volume, so demanding a concentration asks a meaningless question.
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A2', 'B2'],
+        material_ref: { kind: 'record', id: 'MAT-MESH-D056945', type: 'material', label: 'HepG2 Cell', domain: 'cell_line' },
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events, { requirementsFor: cellLinePolicy });
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]!.prompt).toContain('count');
+    expect(clarificationRequests[0]!.prompt).toContain('HepG2 Cell');
+    expect(clarificationRequests[0]!.prompt).not.toContain('concentration');
+    // the range is still named
+    expect(clarificationRequests[0]!.prompt).toContain('A2');
+  });
+
+  it('a CHEMICAL still asks for a volume and a concentration', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A2'],
+        material_ref: { kind: 'record', id: 'MAT-x', type: 'material', label: 'clofibrate', domain: 'chemical' },
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events, { requirementsFor: cellLinePolicy });
+    // the wording follows the registry's own order (concentration, volume)
+    expect(clarificationRequests[0]!.prompt).toContain('a concentration and a volume');
+  });
+
+  it('a cell count is a complete addition — nothing is asked', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A2'],
+        material_ref: { kind: 'record', id: 'MAT-MESH-D056945', type: 'material', label: 'HepG2 Cell', domain: 'cell_line' },
+        count: 10000,
+      }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events, { requirementsFor: cellLinePolicy });
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  it('without a registry the gate keeps its own default wording', () => {
+    const events = [
+      addMaterial({ labwareId: 'lw-1', wells: ['A2'], material_ref: { kind: 'record', id: 'MAT-x', type: 'material' } }),
+    ];
+    const { clarificationRequests } = forceMaterialClarifications(events);
+    expect(clarificationRequests[0]!.prompt).toContain('a volume and a concentration');
+  });
+});
+
+describe('an adherent cell addition is complete as the biologist said it (Brad, 2026-09-20)', () => {
+  // "We are trying to capture what happened in a way that is least encumbering.
+  //  If they want to say 'add 10,000 HepG2 cells in 72 uL of DMEM' we should
+  //  accept their volume. If they say 'this plate has 10,000 adhered HepG2 cells'
+  //  then we allow THAT."
+  const cellPolicy = (layer: string, domain?: string) =>
+    layer === 'material' && domain === 'cell_line'
+      ? { requires: ['count'], question: 'How many "{label}" per well?' }
+      : layer === 'material'
+        ? { requires: ['concentration', 'volume'] }
+        : null;
+  const cells = (extra: Record<string, unknown>) => [
+    addMaterial({
+      labwareId: 'lw-1',
+      wells: ['A2'],
+      material_ref: { kind: 'record', id: 'MAT-MESH-D056945', type: 'material', label: 'HepG2 Cell', domain: 'cell_line' },
+      ...extra,
+    }),
+  ];
+
+  it('ACCEPTS "add 10,000 HepG2 cells in 72 uL of DMEM" — the volume is taken as given', () => {
+    const { events, clarificationRequests } = forceMaterialClarifications(
+      cells({ count: 10000, volume: { value: 72, unit: 'uL' } }),
+      { requirementsFor: cellPolicy },
+    );
+    expect(clarificationRequests).toHaveLength(0);
+    const details = (events[0] as { details: Record<string, unknown> }).details;
+    expect(details.count).toBe(10000);
+    expect(details.volume).toEqual({ value: 72, unit: 'uL' });   // never rewritten
+  });
+
+  it('ACCEPTS "add 10,000 HepG2 cells" — an adhered layer has ZERO volume', () => {
+    const { events, clarificationRequests } = forceMaterialClarifications(cells({ count: 10000 }), {
+      requirementsFor: cellPolicy,
+    });
+    expect(clarificationRequests).toHaveLength(0);
+    expect((events[0] as { details: Record<string, unknown> }).details.volume).toBeUndefined();
+  });
+
+  it('NEVER asks a cell addition for a volume', () => {
+    const { clarificationRequests } = forceMaterialClarifications(cells({}), { requirementsFor: cellPolicy });
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]!.prompt).toContain('count');
+    expect(clarificationRequests[0]!.prompt).not.toContain('volume');
+    expect(clarificationRequests[0]!.prompt).not.toContain('concentration');
+  });
+});

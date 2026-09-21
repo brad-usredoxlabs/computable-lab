@@ -140,6 +140,25 @@ export interface ForceClarificationsOptions {
    * Defaults to 'relaxed' (no instance tracking).
    */
   materialTrackingMode?: 'tracked' | 'relaxed';
+  /**
+   * When true, a material that is NAMED but not yet bound to a specific term —
+   * a mint, a free-text string, a draft ref — is ACCEPTED into the draft as a
+   * *proposed local term* instead of raising a blocking "which material?"
+   * card. The biologist confirms the term in the accept/reject/redraft review
+   * dialogue (the term manifest + term panel), never up front.
+   *
+   * This is the draft-friction ruling (2026-09-20): "Add 200uL of DMEM" should
+   * ghost events onto the deck for review because the resolution spine already
+   * ran (resolveDraftMaterials) — DMEM simply had no LOCAL hit, so the spine
+   * kept it as a mint. Re-interrogating the biologist in this case re-asks a
+   * question the review dialogue answers better.
+   *
+   * Only a material that is ABSENT ENTIRELY — no ref at all, no label anywhere —
+   * still surfaces a clarification, because there is nothing to review.
+   * Bespoke to the event-editor draft surface; ingestion/protocol surfaces keep
+   * the strict gate. Capability gaps are unaffected.
+   */
+  acceptUngrounded?: boolean;
 }
 
 function allWells(details: Dict): string[] {
@@ -170,6 +189,19 @@ function firstWell(details: Dict): string {
   const wells = Array.isArray(details.wells) ? details.wells : [];
   const first = wells.find((w) => typeof w === 'string' && w.trim().length > 0);
   return typeof first === 'string' ? first.trim() : '';
+}
+
+/**
+ * Does the material ref carry ANY naming signal — a non-empty string, or a dict
+ * with a label/name/id/mint? Used by acceptUngrounded to decide whether there
+ * is something the biologist (or the review dialogue) can be pointed at.
+ */
+function materialNamesSomething(mr: unknown): boolean {
+  if (typeof mr === 'string') return mr.trim().length > 0;
+  const ref = asDict(mr);
+  if (!ref) return false;
+  if (['label', 'name', 'id'].some((key) => asString(ref[key]))) return true;
+  return asDict(ref['mint']) !== null;
 }
 
 /**
@@ -233,6 +265,7 @@ function classifyEvent(
   policeUnverifiedCuries: boolean,
   materialTrackingMode: 'tracked' | 'relaxed',
   requirementsFor?: ForceClarificationsOptions['requirementsFor'],
+  acceptUngrounded?: boolean,
 ): MaterialGap | null {
   const details = eventDetails(e);
   // Already a well-ready material (formulation / instance / aliquot / vendor).
@@ -267,6 +300,16 @@ function classifyEvent(
   // (typically in `note`). We can't reconstruct which term it is, so ask.
   if (mr === undefined || mr === null || mr === '') {
     return gap('no-ref', '');
+  }
+
+  // acceptUngrounded (draft-friction): a material that IS named — a mint, a
+  // free-text string, a draft ref — after the resolution spine already ran and
+  // found no local/well-ready hit is ACCEPTED as a proposed local term rather
+  // than interrogated up front. The biologist confirms the term (and any amount
+  // the draft left out) in the accept/reject/redraft review dialogue. Only an
+  // entirely-absent material (handled above) still surfaces a question.
+  if (acceptUngrounded && materialNamesSomething(mr)) {
+    return null;
   }
 
   // String material_ref: a bare CURIE follows the ontology rules below;
@@ -531,6 +574,7 @@ export function forceMaterialClarifications<T extends Dict>(
   }
   const policeUnverifiedCuries = options.policeUnverifiedCuries ?? false;
   const materialTrackingMode = options.materialTrackingMode ?? 'relaxed';
+  const acceptUngrounded = options.acceptUngrounded ?? false;
 
   const kept: T[] = [];
   const clarificationRequests: AgentClarificationRequest[] = [];
@@ -556,7 +600,7 @@ export function forceMaterialClarifications<T extends Dict>(
       kept.push(ev);
       return;
     }
-    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries, materialTrackingMode, options.requirementsFor);
+    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries, materialTrackingMode, options.requirementsFor, acceptUngrounded);
     if (!gap) {
       kept.push(ev);
       return;
