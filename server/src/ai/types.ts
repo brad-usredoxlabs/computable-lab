@@ -503,6 +503,14 @@ export interface AgentClarificationRequest {
   id: string;
   kind: AgentClarificationKind;
   prompt: string;
+  /**
+   * WHO authored this question. `harness` = the system (the material gate, the
+   * layer follow-up); `model` = the draft tool. The harness's own cards are
+   * authoritative and must never be filtered out by a rule aimed at the model —
+   * doing so held the draft AND deleted the question, leaving the biologist with
+   * nothing (observed live 2026-09-20: "success=true events=0", no card, no ghost).
+   */
+  origin?: 'harness' | 'model';
   entityType?: string;
   menuProvider: AgentClarificationMenuProvider;
   query?: string;

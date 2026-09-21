@@ -36,6 +36,8 @@
  * clicks; only a missing concentration or an unconfirmed term interrupts.
  */
 import type { AgentClarificationRequest } from './types.js';
+import { MATERIAL_REF_FIELDS, isWellReadyRef, type MaterialLayer } from './materialRefFields.js';
+import { eventMaterialIdentity } from './materialIdentity.js';
 
 type Dict = Record<string, unknown>;
 
@@ -69,7 +71,16 @@ function draftLabel(ref: Dict): string {
   const fromLabel = asString(ref.label);
   if (fromLabel) return fromLabel;
   const id = asString(ref.id);
-  return id.startsWith('mint:') ? id.slice('mint:'.length).trim() : '';
+  if (id.startsWith('mint:')) return id.slice('mint:'.length).trim();
+  // `{mint: {label}}` — the shape small models actually emit. Missing this made
+  // the gap label empty, which both defeated the per-material dedup (one card per
+  // well) and left the question unable to name the material.
+  const mint = asDict(ref['mint']);
+  if (mint) {
+    const minted = asString(mint['label']) || asString(mint['name']);
+    if (minted) return minted;
+  }
+  return '';
 }
 
 export type MaterialGapReason =
@@ -92,9 +103,20 @@ export interface MaterialGap {
   snippet: string;
   /** RPM value for capability-gap (orbital_shaking) prompts. */
   rpm?: number;
+  /** The amounts this TYPE still owes (from the material profile registry). */
+  requiredFields?: string[];
+  /** The type's own question template, when it declares one. */
+  question?: string;
 }
 
 export interface ForceClarificationsOptions {
+  /**
+   * What a pick at `layer` still owes IN THIS TYPE (domain). Supplied by the
+   * caller from the material profile registry, so a cell line asks for a COUNT
+   * while a chemical asks for a concentration and a volume. Absent ⇒ the gate's
+   * own default wording.
+   */
+  requirementsFor?: (layer: MaterialLayer, domain?: string) => { requires: string[]; question?: string } | null;
   /** CURIEs/ids the user explicitly resolved (echoed in <resolved_context>). */
   resolvedCuries?: Iterable<string>;
   /**
@@ -120,27 +142,63 @@ export interface ForceClarificationsOptions {
   materialTrackingMode?: 'tracked' | 'relaxed';
 }
 
+function allWells(details: Dict): string[] {
+  const wells = Array.isArray(details.wells) ? details.wells : [];
+  return wells
+    .filter((w): w is string => typeof w === 'string' && w.trim().length > 0)
+    .map((w) => w.trim());
+}
+
+/**
+ * Say WHICH wells the question covers. One material going into A2:H2 is one lab
+ * act: naming the single first well ("...added to A2?") reads as if only A2 were
+ * meant, which is exactly how a range got answered well-by-well.
+ *
+ * A per-well question (a volume, in a serial dilution) names its own well too —
+ * otherwise three identical prompts are indistinguishable to the biologist and
+ * to the repeat-ask detector.
+ */
+function withWellScope(prompt: string, wells: readonly string[]): string {
+  if (wells.length === 0) return prompt;
+  if (prompt.includes(wells[0]!)) return prompt;
+  if (wells.length === 1) return `${prompt} (${wells[0]})`;
+  const range = wells.length > 2 ? `${wells[0]}–${wells[wells.length - 1]} (${wells.length} wells)` : wells.join(' and ');
+  return `${prompt} (${range})`;
+}
+
 function firstWell(details: Dict): string {
   const wells = Array.isArray(details.wells) ? details.wells : [];
   const first = wells.find((w) => typeof w === 'string' && w.trim().length > 0);
   return typeof first === 'string' ? first.trim() : '';
 }
 
-/** Does the event already carry a grounding that IS a well-ready material — a
- * formulation (material-spec), a concrete instance (aliquot / material-instance),
- * or a catalog item (vendor-product)? Those need no concentration prompt: a
- * spec already fixes a concentration, an instance/aliquot a quantity, a
- * vendor-product a catalog identity. (A bare `material_ref` concept does NOT
- * count — it's the thing the concentration gate below polices.) */
+/**
+ * Does the event already carry a well-ready material — a formulation
+ * (material-spec), a concrete instance (material-instance / aliquot), or a
+ * catalog item (vendor-product)? Those need no concentration prompt: a spec
+ * already fixes a concentration, an instance/aliquot a quantity, a
+ * vendor-product a catalog identity.
+ *
+ * Two ways a ref can declare its layer, and BOTH are honoured here (the bug this
+ * closes: the repair path writes a grounded pick into `material_ref`, so trusting
+ * only the layer-specific field names re-asked for a material the user had just
+ * picked — "I need a volume and a concentration for '1 mM Clofibrate in DMSO'",
+ * a label that IS a concentration, forever):
+ *   1. the field it sits in (`material_spec_ref`, `aliquot_ref`, …) — the field
+ *      name is itself the declaration; or
+ *   2. the ref's own `type` wherever it sits (`{kind:'record', type:'material-spec'}`
+ *      in `material_ref`).
+ * A bare `material_ref` with no layer claim stays a concept and is policed below.
+ */
 function hasTrustedSpecOrAliquot(details: Dict): boolean {
-  for (const key of [
-    'aliquot_ref',
-    'material_spec_ref',
-    'material_instance_ref',
-    'vendor_product_ref',
-  ] as const) {
+  for (const key of MATERIAL_REF_FIELDS) {
     const ref = asDict(details[key]);
-    if (ref && asString(ref.kind) === 'record' && asString(ref.id)) return true;
+    if (!ref) continue;
+    const id = asString(ref.id);
+    // (1) carried in a layer-specific field: the field declares the layer.
+    if (key !== 'material_ref' && asString(ref.kind) === 'record' && id) return true;
+    // (2) the ref names its own layer wherever it sits.
+    if (isWellReadyRef(ref)) return true;
   }
   return false;
 }
@@ -174,6 +232,7 @@ function classifyEvent(
   resolved: Set<string>,
   policeUnverifiedCuries: boolean,
   materialTrackingMode: 'tracked' | 'relaxed',
+  requirementsFor?: ForceClarificationsOptions['requirementsFor'],
 ): MaterialGap | null {
   const details = eventDetails(e);
   // Already a well-ready material (formulation / instance / aliquot / vendor).
@@ -190,8 +249,19 @@ function classifyEvent(
   // compound at a concentration is a formulation; cells at a count are an
   // instance — accept-time materializes those. Without any quantity there's
   // nothing to build, so ask the biologist for one (plain language, no picker).
-  const conceptGap = (label: string): MaterialGap | null =>
-    quantity ? null : gap('needs-quantity', label);
+  const conceptGap = (label: string): MaterialGap | null => {
+    if (quantity) return null;
+    // What this TYPE owes: a cell line owes a count; a chemical a concentration
+    // and a volume. Supplied by the registry — never assumed here.
+    const domain = asString(asDict(mr)?.['domain']) || undefined;
+    const policy = requirementsFor?.('material', domain) ?? null;
+    const out = gap('needs-quantity', label);
+    if (policy) {
+      out.requiredFields = [...policy.requires];
+      if (policy.question) out.question = policy.question;
+    }
+    return out;
+  };
 
   // No material reference at all — the material survived only as free text
   // (typically in `note`). We can't reconstruct which term it is, so ask.
@@ -241,14 +311,18 @@ function classifyEvent(
   // material this is — a minted label is ungrounded by definition, even
   // if the event carries a quantity (e.g. "100,000 MatLyLu cells"). The
   // user needs to confirm the identity before the event is trusted.
-  if (kind === 'draft' || id.startsWith('mint:')) {
-    return gap('no-ref', draftLabel(ref));
+  // Minted: the `{mint:{label}}` wrapper has no kind and no id, so it must be
+  // recognised by its own key — otherwise the gap label came back empty, the
+  // per-material grouping had nothing to group by (one card per well), and the
+  // question could not say which material it was about.
+  if (kind === 'draft' || id.startsWith('mint:') || asDict(ref['mint'])) {
+    return gap('no-ref', draftLabel(ref) || label);
   }
 
   // kind 'local', empty/unknown kind, or label-only — free-text concept.
   // Like mint refs, these are ungrounded — always ask which material,
   // even if a quantity is present.
-  return gap('no-ref', label || id);
+  return gap('no-ref', label || draftLabel(ref) || id);
 }
 
 /**
@@ -281,13 +355,62 @@ function detectCapabilityGap(e: Dict, eventIndex: number): MaterialGap | null {
   return null;
 }
 
+/**
+ * Which LAYER each question is about, and how to say it in the biologist's own
+ * words. The layer is what the picker scopes its options to, so a question about
+ * a prepared solution can never offer a bare compound (and vice versa).
+ *
+ * A formulation question is answered in plain chat (a concentration is typed,
+ * not picked), so its layer is declarative only.
+ */
+/** How the owed amounts are said out loud ("a cell count", "a volume and a concentration"). */
+const REQUIREMENT_WORDS: Record<string, string> = {
+  count: 'a cell count',
+  concentration: 'a concentration',
+  volume: 'a volume',
+  'concentration_range': 'a concentration range',
+  composition_snapshot: 'the composition',
+};
+
+function describeRequirements(keys: readonly string[] | undefined): string {
+  const words = (keys && keys.length > 0 ? keys : ['volume', 'concentration']).map(
+    (key) => REQUIREMENT_WORDS[key] ?? key,
+  );
+  if (words.length === 1) return words[0]!;
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+function layerForGapReason(reason: MaterialGapReason): AgentClarificationRequest['materialLayer'] {
+  switch (reason) {
+    case 'needs-quantity':
+      return 'material-spec';       // building a formulation: how much of what
+    case 'instance-gap':
+      return 'material-instance';   // which preparation / lot / tube
+    case 'capability-gap':
+      return undefined;             // not a material question at all
+    default:
+      return 'material';            // which compound/concept is this?
+  }
+}
+
+/** The layer field, omitted entirely when the question is not about a material
+ *  layer (exactOptionalPropertyTypes: absent, never `undefined`). */
+function layerField(reason: MaterialGapReason): Pick<AgentClarificationRequest, 'materialLayer'> | Record<string, never> {
+  const layer = layerForGapReason(reason);
+  return layer ? { materialLayer: layer } : {};
+}
+
 function promptForGap(gap: MaterialGap): string {
-  // Missing quantity: the material is clear, the concentration/volume isn't.
-  // Ask in the biologist's own terms — no jargon, no picker.
+  // Missing quantity: the material is clear, the amount isn't. What is owed
+  // depends on the TYPE — a chemical is dosed (concentration + volume), a cell
+  // line is counted (and volume is legitimately zero once the medium is
+  // aspirated), so the requirement list comes from the material profile registry
+  // via `gap.requiredFields` rather than being assumed here.
   if (gap.reason === 'needs-quantity') {
-    if (gap.label) return `I need a volume and a concentration for "${gap.label}".`;
-    if (gap.well) return `I need a volume and a concentration for the material added to ${gap.well}.`;
-    return 'I need a volume and a concentration for that material.';
+    const owed = describeRequirements(gap.requiredFields);
+    const subject = gap.label ? `"${gap.label}"` : gap.well ? `the material added to ${gap.well}` : 'that material';
+    if (gap.question) return `${gap.question} ${owed} for ${subject}.`;
+    return `I need ${owed} for ${subject}.`;
   }
   // Instance gap: the material is a known concept but no concrete instance
   // (preparation, lot, aliquot) was specified. Ask which one to use.
@@ -311,7 +434,7 @@ function promptForGap(gap: MaterialGap): string {
   return 'Which material should be added? Pick an ontology term or create a local record.';
 }
 
-function requestForGap(gap: MaterialGap): AgentClarificationRequest {
+function requestForGap(gap: MaterialGap, wells: readonly string[] = []): AgentClarificationRequest {
   // needs-quantity is answered in plain chat ("10 µL of 1 µM"), not with the /m
   // material picker — so it's a parameter clarification with no menu. The
   // client renders a no-options 'choice' request as an "Answer in chat" prompt.
@@ -319,10 +442,11 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
     const request: AgentClarificationRequest = {
       id: `material-${gap.eventIndex + 1}`,
       kind: 'parameter',
-      prompt: promptForGap(gap),
+      prompt: withWellScope(promptForGap(gap), wells),
       entityType: 'parameter',
       menuProvider: 'choice',
       options: [],
+      ...layerField(gap.reason),
     };
     if (gap.snippet) request.snippet = gap.snippet;
     return request;
@@ -334,7 +458,7 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
     const request: AgentClarificationRequest = {
       id: `material-${gap.eventIndex + 1}`,
       kind: 'general',
-      prompt: promptForGap(gap),
+      prompt: withWellScope(promptForGap(gap), wells),
       entityType: 'general',
       menuProvider: 'choice',
       options: [],
@@ -349,11 +473,13 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
     const request: AgentClarificationRequest = {
       id: `material-${gap.eventIndex + 1}`,
       kind: 'material',
-      prompt: promptForGap(gap),
+      prompt: withWellScope(promptForGap(gap), wells),
       entityType: 'material',
       menuProvider: '/m',
       allowCreateLocal: true,
+      origin: 'harness',
       options: [],
+      ...layerField(gap.reason),
     };
     if (gap.label) request.query = gap.label;
     if (gap.snippet) request.snippet = gap.snippet;
@@ -363,11 +489,13 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
   const request: AgentClarificationRequest = {
     id: `material-${gap.eventIndex + 1}`,
     kind: 'material',
-    prompt: promptForGap(gap),
+    prompt: withWellScope(promptForGap(gap), wells),
     entityType: 'material',
     menuProvider: '/m',
     allowCreateLocal: true,
+    origin: 'harness',
     options: [],
+    ...layerField(gap.reason),
   };
   if (gap.label) request.query = gap.label;
   // If the gap has no label (e.g. no-ref with empty label), try the
@@ -406,10 +534,14 @@ export function forceMaterialClarifications<T extends Dict>(
 
   const kept: T[] = [];
   const clarificationRequests: AgentClarificationRequest[] = [];
-  // Track which labels we've already asked about — if two events have the
-  // same ungrounded material, only ask once (not two pickers for the same
-  // search term). Dedup by case-insensitive label.
-  const askedLabels = new Set<string>();
+  /**
+   * One question per MATERIAL, not per event: the model routinely drafts one
+   * event per well (a selected range expands to N events), and asking N times
+   * made a single lab act look like N different decisions — observed: eight
+   * wells, eight cards, one of them offering to mint while the others found
+   * saved formulations, and an answer that bound only the first well.
+   */
+  const groups = new Map<string, { gap: MaterialGap; wells: string[] }>();
 
   events.forEach((ev, index) => {
     const e = ev as Dict;
@@ -424,22 +556,36 @@ export function forceMaterialClarifications<T extends Dict>(
       kept.push(ev);
       return;
     }
-    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries, materialTrackingMode);
+    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries, materialTrackingMode, options.requirementsFor);
     if (!gap) {
       kept.push(ev);
       return;
     }
-    // Dedup: if we already asked about this label, skip the clarification
-    // and keep the event (it will be re-drafted when the user answers the
-    // first clarification).
-    const dedupKey = gap.label.trim().toLowerCase();
-    if (dedupKey && askedLabels.has(dedupKey)) {
-      kept.push(ev);
+    // Group: everything that is the same material, asked the same way, on the
+    // same labware becomes ONE question carrying every well it covers.
+    //
+    // EXCEPT a quantity question: "I need a volume for X" is a PER-WELL fact.
+    // A serial dilution down a column is the same material with a different
+    // amount in every well, so collapsing those into one question would decide
+    // the biologist's dilution for them.
+    if (gap.reason === 'needs-quantity') {
+      clarificationRequests.push(requestForGap(gap, allWells(eventDetails(e))));
       return;
     }
-    if (dedupKey) askedLabels.add(dedupKey);
-    clarificationRequests.push(requestForGap(gap));
+    const identity = eventMaterialIdentity(e);
+    const groupKey = `${identity.key}|${gap.reason}|${asString(eventDetails(e)['labwareId'])}`;
+    const wells = allWells(eventDetails(e));
+    const group = groups.get(groupKey);
+    if (group) {
+      group.wells.push(...wells.filter((w) => !group.wells.includes(w)));
+      return;
+    }
+    groups.set(groupKey, { gap, wells });
   });
+
+  for (const { gap, wells } of groups.values()) {
+    clarificationRequests.push(requestForGap(gap, wells));
+  }
 
   return { events: kept, clarificationRequests };
 }
