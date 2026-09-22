@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SlashSuggestionList } from '../../../shared/taptab/slashMenu/SlashSuggestionList'
 import type { SlashSuggestionListHandle } from '../../../shared/taptab/slashMenu/SlashSuggestionList'
-import { resolveMaterial } from '../../../shared/taptab/slashMenu/resolvers'
+import { resolveEquipment, resolveLabware, resolveMaterial } from '../../../shared/taptab/slashMenu/resolvers'
 import type {
   SlashMention,
   SlashResolver,
@@ -30,6 +30,7 @@ import type {
 } from '../../../shared/taptab/slashMenu/types'
 
 export type TermSource = 'local-record' | 'ontology' | 'vendor-product' | 'minted'
+export type TermKind = 'material' | 'labware' | 'equipment'
 
 /** The words the biologist reads. One map, so the panel and any future surface agree. */
 export const TERM_SOURCE_LABEL: Record<TermSource, string> = {
@@ -37,6 +38,21 @@ export const TERM_SOURCE_LABEL: Record<TermSource, string> = {
   ontology: 'ontology term',
   'vendor-product': 'vendor item',
   minted: 'unmatched · new',
+}
+
+/** The three kinds a step can add, and the section header the rows live under. */
+export const TERM_KIND_SECTION: Record<TermKind, string> = {
+  material: 'Materials',
+  labware: 'Labware',
+  equipment: 'Equipment',
+}
+
+/** The DEFAULT slash resolver a row of each kind opens — the panel must not offer
+ *  a beverage catalogue when the row is a water bath. */
+const KIND_RESOLVER: Record<TermKind, SlashResolver> = {
+  material: resolveMaterial,
+  labware: resolveLabware,
+  equipment: resolveEquipment,
 }
 
 export interface TermSuggestionRow {
@@ -54,6 +70,8 @@ export interface DraftTermRow {
   id: string
   field?: string
   eventIndex?: number
+  /** What kind of thing this row is — drives grouping and the search resolver. */
+  kind?: TermKind
   vendor?: string
   catalogNumber?: string
   aliases?: string[]
@@ -95,6 +113,182 @@ function provenanceText(row: DraftTermRow): string {
   return base
 }
 
+/** The render props the row bullets need from the panel's state. */
+interface TermItemsRender {
+  searching: number | null
+  clarifying: number | null
+  query: string
+  clarifyText: string
+  listRef: React.MutableRefObject<SlashSuggestionListHandle | null>
+  items: SlashSuggestion[]
+  loading: boolean
+  setSearching: (n: number | null) => void
+  setQuery: (s: string) => void
+  setItems: (items: SlashSuggestion[]) => void
+  setClarifying: (n: number | null) => void
+  setClarifyText: (s: string) => void
+  onConfirm?: TermPanelProps['onConfirm']
+  onClarify?: TermPanelProps['onClarify']
+}
+
+/**
+ * Render the rows grouped by KIND (Materials / Labware / Equipment), with a
+ * section header before the first row of each kind. The rows keep a GLOBAL index
+ * (the panel's `searching`/`clarifying` work in the global space), so the
+ * data-testid is stable and a single active search can span sections.
+ */
+function renderTermItems(terms: DraftTermRow[], r: TermItemsRender): React.ReactNode[] {
+  const kinds: TermKind[] = ['material', 'labware', 'equipment']
+  const nodes: React.ReactNode[] = []
+  let globalIndex = 0
+
+  for (const kind of kinds) {
+    const section = terms.filter((t) => (t.kind ?? 'material') === kind)
+    if (section.length === 0) continue
+
+    nodes.push(
+      <div key={`section-${kind}`} className="term-panel__section-header" data-testid={`term-section-${kind}`}>
+        {TERM_KIND_SECTION[kind]}
+      </div>,
+    )
+
+    section.forEach((row) => {
+      const index = globalIndex++
+      nodes.push(termRow(row, index, r))
+    })
+  }
+
+  return nodes
+}
+
+/** One collapsible row: provenance, Search / Accept / Clarify, and the inline panels. */
+function termRow(row: DraftTermRow, index: number, r: TermItemsRender): React.ReactElement {
+  return (
+    <div className="term-panel__row" key={`${row.label}-${row.id}-${index}`} data-testid={`term-row-${index}`}>
+      <div className="term-panel__row-head">
+        <span className="term-panel__label">{row.label}</span>
+        <span
+          className={`term-panel__provenance term-panel__provenance--${row.source}`}
+          data-testid={`term-provenance-${index}`}
+        >
+          {provenanceText(row)}
+        </span>
+        <span className="term-panel__row-actions">
+          <button
+            type="button"
+            className="term-panel__btn"
+            onClick={() => {
+              r.setSearching(r.searching === index ? null : index)
+              r.setQuery('')
+              r.setItems([])
+            }}
+            data-testid={`term-search-${index}`}
+          >
+            {r.searching === index ? 'Cancel' : 'Search'}
+          </button>
+          <button
+            type="button"
+            className="term-panel__btn"
+            onClick={() => r.onConfirm?.({ label: row.label, existingTermId: row.id })}
+            data-testid={`term-accept-${index}`}
+          >
+            Accept
+          </button>
+          <button
+            type="button"
+            className="term-panel__btn"
+            onClick={() => {
+              r.setClarifying(r.clarifying === index ? null : index)
+              r.setClarifyText('')
+            }}
+            data-testid={`term-clarify-${index}`}
+          >
+            Clarify…
+          </button>
+        </span>
+      </div>
+
+      {row.suggestions && row.suggestions.length > 0 ? (
+        <div className="term-panel__suggestions" data-testid={`term-suggestions-${index}`}>
+          {row.suggestions.map((suggestion) => (
+            <div className="term-panel__suggestion" key={suggestion.id}>
+              <span className="term-panel__suggestion-text">
+                Use existing “{suggestion.preferredLabel}”
+                {suggestion.aliases && suggestion.aliases.length > 0
+                  ? ` (aliases: ${suggestion.aliases.join(', ')})`
+                  : ''}
+              </span>
+              <button
+                type="button"
+                className="term-panel__btn term-panel__btn--primary"
+                onClick={() => r.onConfirm?.({ label: row.label, existingTermId: suggestion.id })}
+                data-testid={`term-use-existing-${index}-${suggestion.id}`}
+              >
+                Use this term
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {r.searching === index ? (
+        <div className="term-panel__search">
+          <input
+            type="text"
+            className="term-panel__search-input"
+            value={r.query}
+            placeholder={`Search a local, ontology or vendor match for “${row.label}”`}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => r.setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (r.listRef.current?.onKeyDown(event.nativeEvent)) event.preventDefault()
+            }}
+            data-testid={`term-search-input-${index}`}
+          />
+          <SlashSuggestionList
+            ref={r.listRef}
+            items={r.items}
+            loading={r.loading}
+            emptyLabel={r.query ? 'No matches' : 'Type to search'}
+            command={(item) => {
+              r.onConfirm?.({ label: row.label, mention: item.mention })
+              r.setSearching(null)
+              r.setItems([])
+            }}
+          />
+        </div>
+      ) : null}
+
+      {r.clarifying === index ? (
+        <div className="term-panel__clarify">
+          <textarea
+            className="term-panel__clarify-input"
+            value={r.clarifyText}
+            rows={2}
+            placeholder={`What is “${row.label}”? The redraft is sent with your sentence.`}
+            onChange={(event) => r.setClarifyText(event.target.value)}
+            data-testid={`term-clarify-input-${index}`}
+          />
+          <button
+            type="button"
+            className="term-panel__btn term-panel__btn--primary"
+            disabled={r.clarifyText.trim().length === 0}
+            onClick={() => {
+              r.onClarify?.({ label: row.label, text: r.clarifyText.trim() })
+              r.setClarifying(null)
+              r.setClarifyText('')
+            }}
+            data-testid={`term-clarify-send-${index}`}
+          >
+            Clarify and redraft
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function TermPanel({ terms, onConfirm, onClarify, search, defaultOpen = false }: TermPanelProps) {
   const [open, setOpen] = useState(defaultOpen)
   const [searching, setSearching] = useState<number | null>(null)
@@ -105,8 +299,12 @@ export function TermPanel({ terms, onConfirm, onClarify, search, defaultOpen = f
   const [clarifyText, setClarifyText] = useState('')
   const listRef = useRef<SlashSuggestionListHandle | null>(null)
 
-  const resolve = useMemo(
-    () => search ?? resolveMaterial,
+  // A row's search runs against the resolver for ITS KIND (material / labware /
+  // equipment) — never the material resolver for a water bath. The `search` prop
+  // overrides only material (back-compat for injected/material-only callers).
+  const resolveForKind = useMemo(
+    () => (kind: TermKind): SlashResolver =>
+      kind === 'material' && search ? search : KIND_RESOLVER[kind],
     [search],
   )
 
@@ -119,6 +317,8 @@ export function TermPanel({ terms, onConfirm, onClarify, search, defaultOpen = f
       setLoading(false)
       return
     }
+    const kind: TermKind = terms[searching]?.kind ?? 'material'
+    const resolve = resolveForKind(kind)
     const controller = new AbortController()
     setLoading(true)
     const context: SlashResolverContext = { selection: null, signal: controller.signal }
@@ -133,7 +333,7 @@ export function TermPanel({ terms, onConfirm, onClarify, search, defaultOpen = f
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [searching, query, resolve])
+  }, [searching, query, resolveForKind, terms])
 
   if (terms.length === 0) return null
 
@@ -155,130 +355,7 @@ export function TermPanel({ terms, onConfirm, onClarify, search, defaultOpen = f
 
       {open ? (
         <div className="term-panel__rows">
-          {terms.map((row, index) => (
-            <div className="term-panel__row" key={`${row.label}-${row.id}-${index}`} data-testid={`term-row-${index}`}>
-              <div className="term-panel__row-head">
-                <span className="term-panel__label">{row.label}</span>
-                <span
-                  className={`term-panel__provenance term-panel__provenance--${row.source}`}
-                  data-testid={`term-provenance-${index}`}
-                >
-                  {provenanceText(row)}
-                </span>
-                <span className="term-panel__row-actions">
-                  <button
-                    type="button"
-                    className="term-panel__btn"
-                    onClick={() => {
-                      setSearching(searching === index ? null : index)
-                      setQuery('')
-                      setItems([])
-                    }}
-                    data-testid={`term-search-${index}`}
-                  >
-                    {searching === index ? 'Cancel' : 'Search'}
-                  </button>
-                  <button
-                    type="button"
-                    className="term-panel__btn"
-                    onClick={() => onConfirm?.({ label: row.label, existingTermId: row.id })}
-                    data-testid={`term-accept-${index}`}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    className="term-panel__btn"
-                    onClick={() => {
-                      setClarifying(clarifying === index ? null : index)
-                      setClarifyText('')
-                    }}
-                    data-testid={`term-clarify-${index}`}
-                  >
-                    Clarify…
-                  </button>
-                </span>
-              </div>
-
-              {row.suggestions && row.suggestions.length > 0 ? (
-                <div className="term-panel__suggestions" data-testid={`term-suggestions-${index}`}>
-                  {row.suggestions.map((suggestion) => (
-                    <div className="term-panel__suggestion" key={suggestion.id}>
-                      <span className="term-panel__suggestion-text">
-                        Use existing “{suggestion.preferredLabel}”
-                        {suggestion.aliases && suggestion.aliases.length > 0
-                          ? ` (aliases: ${suggestion.aliases.join(', ')})`
-                          : ''}
-                      </span>
-                      <button
-                        type="button"
-                        className="term-panel__btn term-panel__btn--primary"
-                        onClick={() => onConfirm?.({ label: row.label, existingTermId: suggestion.id })}
-                        data-testid={`term-use-existing-${index}-${suggestion.id}`}
-                      >
-                        Use this term
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              {searching === index ? (
-                <div className="term-panel__search">
-                  <input
-                    type="text"
-                    className="term-panel__search-input"
-                    value={query}
-                    placeholder={`Search a local, ontology or vendor match for “${row.label}”`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => setQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (listRef.current?.onKeyDown(event.nativeEvent)) event.preventDefault()
-                    }}
-                    data-testid={`term-search-input-${index}`}
-                  />
-                  <SlashSuggestionList
-                    ref={listRef}
-                    items={items}
-                    loading={loading}
-                    emptyLabel={query ? 'No matches' : 'Type to search'}
-                    command={(item) => {
-                      onConfirm?.({ label: row.label, mention: item.mention })
-                      setSearching(null)
-                      setItems([])
-                    }}
-                  />
-                </div>
-              ) : null}
-
-              {clarifying === index ? (
-                <div className="term-panel__clarify">
-                  <textarea
-                    className="term-panel__clarify-input"
-                    value={clarifyText}
-                    rows={2}
-                    placeholder={`What is “${row.label}”? The redraft is sent with your sentence.`}
-                    onChange={(event) => setClarifyText(event.target.value)}
-                    data-testid={`term-clarify-input-${index}`}
-                  />
-                  <button
-                    type="button"
-                    className="term-panel__btn term-panel__btn--primary"
-                    disabled={clarifyText.trim().length === 0}
-                    onClick={() => {
-                      onClarify?.({ label: row.label, text: clarifyText.trim() })
-                      setClarifying(null)
-                      setClarifyText('')
-                    }}
-                    data-testid={`term-clarify-send-${index}`}
-                  >
-                    Clarify and redraft
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ))}
+          {renderTermItems(terms, { searching, clarifying, query, clarifyText, listRef, items, loading, setSearching, setQuery, setItems, setClarifying, setClarifyText, onConfirm, onClarify })}
         </div>
       ) : null}
     </div>

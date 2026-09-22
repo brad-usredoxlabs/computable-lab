@@ -988,6 +988,18 @@
   min-height: 0;
 }
 
+/* A kind section header (Materials / Labware / Equipment) above its rows. */
+.term-panel__section-header {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cl-muted, #6b7280);
+  border-top: 1px solid var(--cl-border);
+}
+.term-panel__section-header:first-child { border-top: none; }
+
 .term-panel__row {
   padding: 6px 10px;
   border-top: 1px solid var(--cl-border);
