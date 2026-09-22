@@ -8,7 +8,14 @@
  * had no way to say "this one is unmatched" without re-deriving the rules.
  *
  * This module is the single classification of that fact. It is pure: it reads the
- * draft's own events and nothing else.
+ * draft's own events and the labware/equipment requirement arrays, and nothing else.
+ *
+ * It covers the three kinds a step can add:
+ *   - MATERIAL terms (from event details refs) — local-record / ontology / vendor / minted
+ *   - LABWARE terms (from labwareAdditions[] and labwareRequirements[])
+ *   - EQUIPMENT terms (from equipmentRequirements[])
+ * Each carries a `kind` so the review panel can group rows and scope its search to
+ * the right resolver (material / labware / equipment).
  */
 
 type Dict = Record<string, unknown>;
@@ -24,6 +31,8 @@ const MATERIAL_REF_FIELDS = [
 
 export type TermSource = 'local-record' | 'ontology' | 'vendor-product' | 'minted';
 
+export type TermKind = 'material' | 'labware' | 'equipment';
+
 export interface DraftTermUse {
   /** The spelling the draft used. */
   label: string;
@@ -34,8 +43,17 @@ export interface DraftTermUse {
   field: string;
   /** Which event (index into the draft's events). */
   eventIndex: number;
+  kind: TermKind;
   vendor?: string;
   catalogNumber?: string;
+}
+
+/** The whole draft a manifest is built from (events + the requirement arrays). */
+export interface DraftTermInput {
+  events?: readonly unknown[];
+  labwareRequirements?: ReadonlyArray<{ classCurie?: string; handle?: string; reason?: string }>;
+  labwareAdditions?: ReadonlyArray<{ recordId?: string; reason?: string }>;
+  equipmentRequirements?: ReadonlyArray<{ recordId?: string; classCurie?: string; handle?: string; reason?: string }>;
 }
 
 function asDict(value: unknown): Dict | null {
@@ -74,42 +92,97 @@ function labelOf(ref: Dict): string {
 }
 
 /**
- * Every term the draft uses, deduped by `label|source|id` so a material going into
+ * Every term the draft uses, deduped by `label|source|kind` so a material going into
  * forty wells is ONE row in the panel (its wells are the draft's business, not the
- * term's).
+ * term's). The `kind` is part of the key so a material and a labware that share a
+ * label are NEVER collapsed — the provenance hierarchy must not be flattened.
  */
-export function draftTermManifest(events: readonly unknown[] | undefined): DraftTermUse[] {
+function isDraftTermInput(value: unknown): value is DraftTermInput {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function draftTermManifest(input: DraftTermInput | readonly unknown[] | undefined): DraftTermUse[] {
+  const source: DraftTermInput = isDraftTermInput(input)
+    ? input
+    : Array.isArray(input)
+      ? { events: input }
+      : {};
   const out: DraftTermUse[] = [];
   const seen = new Set<string>();
-  if (!Array.isArray(events)) return out;
+  if (Array.isArray(source.events)) {
+    source.events.forEach((rawEvent, eventIndex) => {
+      const event = asDict(rawEvent);
+      const details = event ? asDict(event['details']) : null;
+      if (!details) return;
+      for (const field of MATERIAL_REF_FIELDS) {
+        const ref = asDict(details[field]);
+        if (!ref) continue;
+        const label = labelOf(ref);
+        const id = asString(ref['id']);
+        if (!label && !id) continue;
+        const termSource = classify(field, ref);
+        const key = `${label}|${termSource}|${id}|material`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const vendor = asString(ref['vendor']) || asString(asDict(ref['mint'])?.['vendor']);
+        const catalogNumber = asString(ref['catalogNumber']) || asString(ref['catalog_number']);
+        out.push({
+          label: label || id,
+          source: termSource,
+          id: id || label,
+          field,
+          eventIndex,
+          kind: 'material',
+          ...(vendor ? { vendor } : {}),
+          ...(catalogNumber ? { catalogNumber } : {}),
+        });
+      }
+    });
+  }
 
-  events.forEach((rawEvent, eventIndex) => {
-    const event = asDict(rawEvent);
-    const details = event ? asDict(event['details']) : null;
-    if (!details) return;
-    for (const field of MATERIAL_REF_FIELDS) {
-      const ref = asDict(details[field]);
-      if (!ref) continue;
-      const label = labelOf(ref);
-      const id = asString(ref['id']);
-      if (!label && !id) continue;
-      const source = classify(field, ref);
-      const key = `${label}|${source}|${id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const vendor = asString(ref['vendor']) || asString(asDict(ref['mint'])?.['vendor']);
-      const catalogNumber = asString(ref['catalogNumber']) || asString(ref['catalog_number']);
-      out.push({
-        label: label || id,
-        source,
-        id: id || label,
-        field,
-        eventIndex,
-        ...(vendor ? { vendor } : {}),
-        ...(catalogNumber ? { catalogNumber } : {}),
-      });
-    }
-  });
+  const pushReq = (row: Omit<DraftTermUse, 'eventIndex'> & { eventIndex?: number }) => {
+    const key = `${row.label}|${row.source}|${row.id}|${row.kind}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ eventIndex: 0, ...row });
+  };
+
+  // Labware additions are concrete records the lab owns → local-record.
+  for (const req of source.labwareAdditions ?? []) {
+    const id = asString((req as Dict)['recordId']);
+    if (!id) continue;
+    pushReq({ label: id, source: 'local-record', id, field: 'labwareAdditions', kind: 'labware' });
+  }
+
+  // Labware requirements are requested classes (a definition), not yet inventory → ontology.
+  for (const req of source.labwareRequirements ?? []) {
+    const curie = asString((req as Dict)['classCurie']);
+    if (!curie) continue;
+    const label = asString((req as Dict)['handle']) || curie;
+    pushReq({
+      label,
+      source: isCurieShaped(curie) ? 'ontology' : 'minted',
+      id: curie,
+      field: 'labwareRequirements',
+      kind: 'labware',
+    });
+  }
+
+  // Equipment with a recordId the lab owns → local-record; a generic classCurie → ontology.
+  for (const req of source.equipmentRequirements ?? []) {
+    const recordId = asString((req as Dict)['recordId']);
+    const curie = asString((req as Dict)['classCurie']);
+    const label = asString((req as Dict)['handle']) || recordId || curie;
+    if (!recordId && !curie) continue;
+    pushReq({
+      label,
+      source: recordId ? 'local-record' : isCurieShaped(curie) ? 'ontology' : 'minted',
+      id: recordId || curie,
+      field: 'equipmentRequirements',
+      kind: 'equipment',
+    });
+  }
+
   return out;
 }
 

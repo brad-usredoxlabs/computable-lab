@@ -87,3 +87,61 @@ describe('draftTermManifest — what each term matched, and where', () => {
     expect(draftTermManifest([])).toEqual([]);
   });
 });
+
+describe('labware and equipment appear in the manifest, kind-tagged', () => {
+  const wholeDraft = {
+    events: [
+      { event_type: 'add_material', details: { wells: ['A1'], material_ref: { kind: 'draft', id: 'mint:clofibrate', label: 'clofibrate' } } },
+    ],
+    labwareRequirements: [{ classCurie: 'CL:96_well_plate' }],
+    labwareAdditions: [{ recordId: 'LBW-7X2Q' }],
+    equipmentRequirements: [{ recordId: 'EQP-thermocycler-1', handle: 'cycler 1' }],
+  };
+
+  it('classifies a requested labware class (definition) as a labware ontology term', () => {
+    const row = draftTermManifest(wholeDraft).find((t) => t.kind === 'labware' && t.label === 'CL:96_well_plate')!;
+    expect(row.kind).toBe('labware');
+    expect(row.source).toBe('ontology');
+    expect(row.id).toBe('CL:96_well_plate');
+  });
+
+  it('classifies a concrete labware addition as a local-record', () => {
+    const row = draftTermManifest(wholeDraft).find((t) => t.id === 'LBW-7X2Q')!;
+    expect(row.source).toBe('local-record');
+    expect(row.kind).toBe('labware');
+  });
+
+  it('classifies equipment with a recordId as a local-record', () => {
+    const row = draftTermManifest(wholeDraft).find((t) => t.id === 'EQP-thermocycler-1')!;
+    expect(row.source).toBe('local-record');
+    expect(row.kind).toBe('equipment');
+    expect(row.label).toBe('cycler 1'); // prefer handle/name over the id
+  });
+
+  it('treats a generic equipment classCurie (no record) as an equipment ontology term', () => {
+    const m = draftTermManifest({
+      events: [],
+      equipmentRequirements: [{ classCurie: 'equipment:water_bath', handle: 'bath 55' }],
+    });
+    const row = m.find((t) => t.kind === 'equipment')!;
+    expect(row.label).toBe('bath 55');
+    expect(row.id).toBe('equipment:water_bath');
+    expect(row.source).toBe('ontology');
+  });
+
+  it('dedupes across events and requirements by label|source|kind without flattening kinds', () => {
+    const m = draftTermManifest({
+      events: [{ event_type: 'add_material', details: { wells: ['A1'], material_ref: { kind: 'draft', id: 'mint:clofibrate', label: 'clofibrate' } } }],
+      labwareAdditions: [{ recordId: 'LBW-7X2Q' }],
+    });
+    expect(m.filter((t) => t.id === 'LBW-7X2Q')).toHaveLength(1);
+    // a material and a labware with the same label are NOT collapsed
+    const both = draftTermManifest({
+      events: [{ event_type: 'add_material', details: { wells: ['A1'], material_ref: { kind: 'record', id: 'MAT-96well', label: '96 well plate' } } }],
+      labwareRequirements: [{ classCurie: 'CL:96_well_plate', handle: '96 well plate' }],
+    });
+    expect(both.filter((t) => t.label === '96 well plate')).toHaveLength(2);
+    expect(both.filter((t) => t.label === '96 well plate').map((t) => t.kind).sort())
+      .toEqual(['labware', 'material']);
+  });
+});
