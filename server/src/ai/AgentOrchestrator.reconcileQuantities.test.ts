@@ -168,4 +168,81 @@ describe('draft-friction: a volume the model misfiled as a count is healed (2026
     expect(details.count).toBe(10000);
     expect(details.volume).toBeUndefined();
   });
+
+  it('carries equipment and labware requirements onto the termManifest (kind-tagged)', async () => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'no extractor', pass_id: 'extract_entities' }],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'error',
+    });
+
+    const completeStream = vi.fn(async function* (_request: unknown) {
+      yield {
+        id: 'resp-eq',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-eq',
+              type: 'function',
+              function: {
+                name: AGENT_INTENT_TOOL_NAME,
+                arguments: JSON.stringify({
+                  intent: 'event_graph',
+                  events: [],
+                  equipmentRequirements: [
+                    { recordId: 'EQP-water-bath-1', handle: 'bath 55' },
+                    { classCurie: 'equipment:heater_shaker', handle: 'shaker' },
+                  ],
+                  labwareAdditions: [{ recordId: 'LBW-7X2Q' }],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+
+    const inferenceClient: InferenceClient = { complete: vi.fn(), completeStream };
+    const orchestrator = createAgentOrchestrator(
+      inferenceClient,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'forced-tool' },
+    );
+
+    const result = await orchestrator.run({
+      prompt: 'add a water bath (bath 55), a heater-shaker, and load labware LBW-7X2Q',
+      forceDraftTool: true,
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['transfer'],
+      },
+    });
+
+    // The draft places an owned water bath, a generic heater-shaker, and a labware
+    // addition — all three must be visible to the term panel, kind-tagged.
+    expect(result.termManifest).toBeDefined();
+    const equipmentRows = result.termManifest!.filter((t) => t.kind === 'equipment');
+    expect(equipmentRows.map((t) => t.id)).toEqual(
+      expect.arrayContaining(['EQP-water-bath-1', 'equipment:heater_shaker']),
+    );
+    // Owned record → local-record; generic classCurie → ontology.
+    const bath = equipmentRows.find((t) => t.id === 'EQP-water-bath-1')!;
+    expect(bath.source).toBe('local-record');
+    const shaker = equipmentRows.find((t) => t.id === 'equipment:heater_shaker')!;
+    expect(shaker.source).toBe('ontology');
+    // The labware addition is a labware-kind local-record.
+    const lw = result.termManifest!.find((t) => t.id === 'LBW-7X2Q')!;
+    expect(lw.kind).toBe('labware');
+    expect(lw.source).toBe('local-record');
+  });
 });

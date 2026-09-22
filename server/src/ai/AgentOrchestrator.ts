@@ -2416,7 +2416,15 @@ export function createAgentOrchestrator(
           // about what a term IS.
           result = {
             ...result,
-            termManifest: draftTermManifest(result.events),
+            // Classify the WHOLE draft — events plus the labware and equipment
+            // requirement arrays — so the term panel shows every thing this step
+            // adds (materials, labwares, equipments), not just the materials.
+            termManifest: draftTermManifest({
+              events: (result.events ?? []) as readonly unknown[],
+              ...(result.labwareAdditions?.length ? { labwareAdditions: result.labwareAdditions } : {}),
+              ...(result.labwareRequirements?.length ? { labwareRequirements: result.labwareRequirements } : {}),
+              ...(result.equipmentRequirements?.length ? { equipmentRequirements: result.equipmentRequirements } : {}),
+            }),
             // Never drop a fact silently: if the model emitted extra submit calls,
             // the biologist is told which one was used.
             ...(extraSubmissionNotes.length > 0
