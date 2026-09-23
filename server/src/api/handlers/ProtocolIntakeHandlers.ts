@@ -22,7 +22,7 @@ import {
   SUBGRAPH_PROPOSAL_SCHEMA_ID,
   type IngestPdfResult,
 } from '../../protocol-intake/ProtocolIntakeService.js';
-import { resolveReviewTree } from '../../protocol-intake/resolveReviewDocument.js';
+import { resolveReviewTrees } from '../../protocol-intake/reviewDocuments.js';
 import { reviewRolesFromCandidate, reviewStepsFromCandidate } from '../../protocol-intake/reviewSteps.js';
 import { readCandidateArtifact } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
@@ -210,7 +210,7 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
         }
 
         const trees = await ctx.store.list({ kind: 'protocol-decision-tree' });
-        const match = resolveReviewTree({
+        const match = resolveReviewTrees({
           file: (payload['file'] ?? null) as { stored_path?: unknown; sha256?: unknown } | null,
           trees: trees.map((e) => e.payload as unknown as Record<string, unknown>),
         });
@@ -225,45 +225,68 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
           };
         }
 
-        const treeEnvelope = await ctx.store.get(match.treeRecordId);
-        const treePayload = (treeEnvelope?.payload ?? {}) as unknown as Record<string, unknown>;
-        const proposals = await proposalsFor(match.treeRecordId);
+        // One vendor PDF can be a HANDBOOK: the intake section split derives one
+        // tree per protocol section, all sharing the artifact's sha256. The
+        // read model covers EVERY match — a handbook must never silently hide
+        // 7 of its 8 protocols behind the first tree.
         const artifactFile = (payload['file'] ?? {}) as Record<string, unknown>;
+        const perTree: Array<{
+          tree: Record<string, unknown>;
+          candidate: Record<string, unknown> | null;
+          proposals: unknown[];
+        }> = [];
+        for (const m of match.matches) {
+          const treeEnvelope = await ctx.store.get(m.treeRecordId);
+          const treePayload = (treeEnvelope?.payload ?? {}) as unknown as Record<string, unknown>;
+          const proposals = await proposalsFor(m.treeRecordId);
 
-        // The steps the reviewer edits are the SAME extraction the tree gates
-        // on — never a second candidate of the same PDF (its step ids would not
-        // match the tree's then_stepIds). Loading is best-effort: a candidate
-        // that was never persisted yields null, and the surface falls back.
-        const documentId =
-          typeof treePayload['documentId'] === 'string' ? (treePayload['documentId'] as string) : match.documentId;
-        const candidate = await readCandidateArtifact(ctx.workspaceRoot, documentId);
-        const axes = Array.isArray(treePayload['axes']) ? (treePayload['axes'] as Array<Record<string, unknown>>) : [];
+          // The steps the reviewer edits are the SAME extraction the tree gates
+          // on — never a second candidate of the same PDF (its step ids would not
+          // match the tree's then_stepIds). Loading is best-effort: a candidate
+          // that was never persisted yields null, and the surface falls back.
+          const documentId =
+            typeof treePayload['documentId'] === 'string' ? (treePayload['documentId'] as string) : m.documentId;
+          const candidate = await readCandidateArtifact(ctx.workspaceRoot, documentId);
+          const axes = Array.isArray(treePayload['axes']) ? (treePayload['axes'] as Array<Record<string, unknown>>) : [];
 
+          perTree.push({
+            tree: {
+              ...toSummary(treePayload, proposals.length),
+              axes: treePayload['axes'] ?? [],
+              scaleAxis: treePayload['scaleAxis'] ?? { question: '', options: [] },
+              ...(treePayload['notes'] !== undefined ? { notes: treePayload['notes'] } : {}),
+            },
+            candidate: candidate
+              ? {
+                  documentId,
+                  title: candidate.title,
+                  steps: reviewStepsFromCandidate({ steps: candidate.steps, axes }),
+                  roles: reviewRolesFromCandidate(candidate),
+                }
+              : null,
+            proposals,
+          });
+        }
+
+        const first = perTree[0]!;
         reply.status(200);
         return {
           success: true,
           matchVia: match.matchVia,
+          /** How many trees share this artifact's bytes (>1 = handbook split). */
+          count: perTree.length,
           artifact: {
             recordId: artifactId,
             title: payload['title'] ?? null,
             storedPath: artifactFile['stored_path'] ?? null,
             sha256: artifactFile['sha256'] ?? null,
           },
-          tree: {
-            ...toSummary(treePayload, proposals.length),
-            axes: treePayload['axes'] ?? [],
-            scaleAxis: treePayload['scaleAxis'] ?? { question: '', options: [] },
-            notes: treePayload['notes'],
-          },
-          candidate: candidate
-            ? {
-                documentId,
-                title: candidate.title,
-                steps: reviewStepsFromCandidate({ steps: candidate.steps, axes }),
-                roles: reviewRolesFromCandidate(candidate),
-              }
-            : null,
-          proposals,
+          trees: perTree,
+          // Compat: singular fields mirror the FIRST tree so pre-handbook
+          // consumers keep working. New consumers read `trees` + `count`.
+          tree: first.tree,
+          candidate: first.candidate,
+          proposals: first.proposals,
         };
       } catch (err) {
         reply.status(500);

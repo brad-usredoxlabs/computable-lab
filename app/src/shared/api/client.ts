@@ -1566,6 +1566,19 @@ export interface IntakeReviewDetailResponse extends IntakeTreeDetailResponse {
   }
   /** null when the extraction was never persisted for this document. */
   candidate: IntakeReviewCandidate | null
+  /**
+   * Handbook support: one PDF's bytes can back MANY trees (the intake section
+   * split derives one tree per protocol section). `trees` covers every match
+   * in recordId order; the singular `tree`/`candidate`/`proposals` fields
+   * (from IntakeTreeDetailResponse + candidate) mirror trees[0] for compat.
+   * `count > 1` means the reviewer must choose which protocol to review.
+   */
+  count?: number
+  trees?: Array<{
+    tree: IntakeTreeDetail
+    candidate: IntakeReviewCandidate | null
+    proposals: IntakeProposal[]
+  }>
 }
 
 /** The join found no tree for this artifact — a gap, with what it did see. */

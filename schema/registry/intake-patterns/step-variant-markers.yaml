@@ -1,0 +1,49 @@
+# Step-variant-marker patterns (intake registry)
+#
+# Vendor PDF extractors with small literal models transcribe dispatch sentences
+# verbatim into step.sourceText but leave step.branches empty. The tree engine
+# needs branches[] filled to derive axes. The patterns below are the DATA; the
+# TS module (server/src/ingestion/vendor-protocol/stepVariantMarkers.ts) is a
+# dumb interpreter. Add/adjust patterns HERE, not in code.
+#
+# Regex dialect: JavaScript RegExp source (named groups are (?<name>...), NOT
+# the Python/PCRE (?P<name>...) form — JS throws on the latter). Every regex is
+# compiled at load time; a registry that does not compile fails loudly.
+#
+# Role semantics:
+#   dispatch    — repeated 'For <condition>, follow step <variant>' clauses
+#                 declare the variant set of the step the sentence lives on.
+#                 Only dispatch matches ever FILL branches, and only when a
+#                 step yields >= 2 of them (one option is never a question).
+#   marker      — a leading lettered marker ('a.' / 'b)' / '(c)') is this
+#                 step's variant letter within its dispatch family. Markers
+#                 alone never create branches; they are corroborating evidence
+#                 only.
+#   conditional — sentence-leading 'If <condition>, ...' on a lone step. A
+#                 single conditional option is never enough for an axis by
+#                 itself; alone it never creates branches.
+version: 1
+patterns:
+  - id: dispatch-conditional
+    description: >-
+      'For <condition>, follow step <lettered step>' — repeated clauses
+      declare the variant set of the step the sentence lives on.
+    regex: 'for\s+(?<condition>[^,;.]+?),\s*follow\s+steps?\s+(?<variant>\d+[a-z])'
+    flags: gi
+    role: dispatch
+
+  - id: lettered-marker
+    description: >-
+      leading a. / b) / (c) marker = this step's variant letter within its
+      dispatch family.
+    regex: '^\s*\(?([a-z])[.)]\s+'
+    flags: ''
+    role: marker
+
+  - id: leading-conditional
+    description: >-
+      'If <condition>, ...' sentence-leading conditional on a lone step
+      (single option — never enough for an axis by itself).
+    regex: '^\s*if\s+(.{4,80}?)[,.]\s'
+    flags: i
+    role: conditional

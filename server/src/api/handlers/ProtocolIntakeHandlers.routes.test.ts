@@ -335,6 +335,60 @@ describe('GET /protocol-ide/intake/review/:artifactId', () => {
     await app.close();
   });
 
+  it('returns EVERY tree when the artifact is a handbook (same sha, several section trees)', async () => {
+    const handbookTreeA = {
+      ...shaLinkedTreePayload,
+      recordId: 'PDT-dneasy__blood-spin',
+      documentId: 'vendor-protocol:dneasy-blood__blood-spin',
+    };
+    const handbookTreeB = {
+      ...shaLinkedTreePayload,
+      recordId: 'PDT-dneasy__tissue-96',
+      documentId: 'vendor-protocol:dneasy-blood__tissue-96',
+    };
+    const { store } = makeMockStore([
+      makeEnvelope(vendorPdfPayload, 'vendor-pdf'),
+      makeEnvelope(handbookTreeA, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+      makeEnvelope(handbookTreeB, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+      makeEnvelope({ ...shaLinkedProposalPayload, recordId: 'SGP-blood-b0-s0', treeRef: { kind: 'record', id: 'PDT-dneasy__blood-spin', type: 'protocol-decision-tree' } }, SUBGRAPH_PROPOSAL_SCHEMA_ID),
+      makeEnvelope({ ...shaLinkedProposalPayload, recordId: 'SGP-tissue-b0-s0', treeRef: { kind: 'record', id: 'PDT-dneasy__tissue-96', type: 'protocol-decision-tree' } }, SUBGRAPH_PROPOSAL_SCHEMA_ID),
+    ]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE01' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.matchVia).toBe('sha256');
+    // One artifact, both protocols — neither hidden behind the other.
+    expect(body.count).toBe(2);
+    expect(body.trees.map((t: { tree: { recordId: string } }) => t.tree.recordId)).toEqual([
+      'PDT-dneasy__blood-spin',
+      'PDT-dneasy__tissue-96',
+    ]);
+    expect(body.trees[0].proposals.map((p: { recordId: string }) => p.recordId)).toEqual(['SGP-blood-b0-s0']);
+    expect(body.trees[1].proposals.map((p: { recordId: string }) => p.recordId)).toEqual(['SGP-tissue-b0-s0']);
+    // Compat: singular fields mirror the first tree (pre-handbook consumers).
+    expect(body.tree.recordId).toBe('PDT-dneasy__blood-spin');
+    expect(body.proposals.map((p: { recordId: string }) => p.recordId)).toEqual(['SGP-blood-b0-s0']);
+    await app.close();
+  });
+
+  it('single-tree artifacts gain count:1 with the identical legacy shape', async () => {
+    const { store } = makeMockStore([
+      makeEnvelope(vendorPdfPayload, 'vendor-pdf'),
+      makeEnvelope(shaLinkedTreePayload, PROTOCOL_DECISION_TREE_SCHEMA_ID),
+      makeEnvelope(shaLinkedProposalPayload, SUBGRAPH_PROPOSAL_SCHEMA_ID),
+    ]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'GET', url: '/api/protocol-ide/intake/review/VPDF-ROUTE01' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.count).toBe(1);
+    expect(body.trees).toHaveLength(1);
+    expect(body.trees[0].tree).toEqual(body.tree);
+    expect(body.trees[0].proposals).toEqual(body.proposals);
+    await app.close();
+  });
+
   it('falls back to the stored file name for trees derived before the sha was recorded', async () => {
     const legacyTree = {
       ...treePayload,

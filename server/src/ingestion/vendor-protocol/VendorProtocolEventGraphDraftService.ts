@@ -10,6 +10,8 @@ export interface VendorProtocolEventGraphDraftInput {
   workspaceRoot: string;
   candidate?: ProtocolCandidate;
   candidatePath?: string;
+  /** When present, the compile prompt covers only these steps (and their entities). */
+  activeStepIds?: readonly string[];
   compile?: boolean;
   deterministicOnly?: boolean;
   persist?: boolean;
@@ -73,7 +75,7 @@ export async function draftVendorProtocolEventGraph(
   input: VendorProtocolEventGraphDraftInput,
 ): Promise<VendorProtocolEventGraphDraftResult> {
   const candidate = await loadCandidate(input);
-  const compilePrompt = buildVendorProtocolCompilePrompt(candidate);
+  const compilePrompt = buildVendorProtocolCompilePrompt(candidate, input.activeStepIds);
   const shouldCompile = input.compile === true || Boolean(input.compileRunner && input.compile !== false);
   const sourceProtocolRef = compact({
     documentId: candidate.source.documentId,
@@ -138,11 +140,28 @@ export async function draftVendorProtocolEventGraph(
   return result;
 }
 
-export function buildVendorProtocolCompilePrompt(candidate: ProtocolCandidate): string {
-  const materials = labels(candidate.materials);
-  const labware = labels(candidate.labware);
-  const equipment = labels(candidate.equipment);
-  const steps = candidate.steps
+export function buildVendorProtocolCompilePrompt(
+  candidate: ProtocolCandidate,
+  activeStepIds?: readonly string[],
+): string {
+  const activeSteps = activeStepIds
+    ? candidate.steps.filter((step) => activeStepIds.includes(step.id))
+    : candidate.steps;
+  const activeLabels = new Set<string>();
+  const activeSectionIds = new Set<string>();
+  for (const step of activeSteps) {
+    for (const label of step.materials) activeLabels.add(label.trim());
+    for (const label of step.labware) activeLabels.add(label.trim());
+    for (const label of step.equipment) activeLabels.add(label.trim());
+    if (step.sectionId) activeSectionIds.add(step.sectionId);
+  }
+  const isActiveEntity = (item: { label: string; provenance: { sectionId?: string } }): boolean =>
+    activeLabels.has(item.label.trim())
+    || (item.provenance.sectionId !== undefined && activeSectionIds.has(item.provenance.sectionId));
+  const materials = labels(activeStepIds ? candidate.materials.filter(isActiveEntity) : candidate.materials);
+  const labware = labels(activeStepIds ? candidate.labware.filter(isActiveEntity) : candidate.labware);
+  const equipment = labels(activeStepIds ? candidate.equipment.filter(isActiveEntity) : candidate.equipment);
+  const steps = activeSteps
     .slice()
     .sort((a, b) => a.stepNumber - b.stepNumber || (a.substep ?? '').localeCompare(b.substep ?? ''))
     .map((step) => `${step.stepNumber}${step.substep ? step.substep : ''}. ${normalizeLine(step.sourceText)}`);

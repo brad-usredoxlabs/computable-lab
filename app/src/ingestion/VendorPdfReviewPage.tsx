@@ -10,7 +10,7 @@
  * Route: /ingestion/vendor-pdf/:recordId
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
@@ -21,7 +21,7 @@ import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
-import type { ExtractionOptions, ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
+import type { ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
 import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
 import { clampZoom, fitWidthScale, MIN_ZOOM, MAX_ZOOM, steppedZoom } from './pdfZoom'
 import { isCancelledRender } from './pdfRenderCancellation'
@@ -82,9 +82,9 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
   // Live extraction progress: the reviewer must be able to tell a long run from
-  // a dead one, and to choose how hard the model thinks before starting.
-  const [extractOptions, setExtractOptions] = useState<ExtractionOptions | null>(null)
-  const [thinkingLevel, setThinkingLevel] = useState('')
+  // a dead one. WHICH model (and how hard it thinks) is a deployment setting
+  // (settings → AI), not a per-extraction choice, so this page holds no
+  // thinking/model control.
   const [extractStage, setExtractStage] = useState<string | null>(null)
   const [extractLog, setExtractLog] = useState<ExtractionLogLine[]>([])
   const [extractElapsedMs, setExtractElapsedMs] = useState(0)
@@ -104,6 +104,10 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   // and the candidate whose step ids they gate. Loaded ONCE here (not per
   // panel) so the questions and the step list cannot drift or double-fetch.
   const [review, setReview] = useState<IntakeReviewDetailResponse | null>(null)
+  // Handbook artifacts back several trees (one per protocol section, same
+  // sha256). The reviewer picks which protocol to work through; singular
+  // review fields then mirror that choice.
+  const [reviewTreeIndex, setReviewTreeIndex] = useState(0)
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [reviewToken, setReviewToken] = useState(0)
@@ -205,40 +209,42 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     }
   }, [recordId, reviewToken])
 
+  /**
+   * The tree the reviewer is working through. A handbook artifact backs one
+   * tree per protocol section (`review.trees`, same sha256); the index selects
+   * one, and this derived view presents the chosen tree with the SAME shape as
+   * the singular compat fields, so every consumer below is tree-agnostic.
+   * Single-tree documents are exactly trees[0] — no behavior change.
+   */
+  const activeReview = useMemo(() => {
+    if (!review) return null
+    const entry = review.trees?.[reviewTreeIndex]
+    if (!entry) return review
+    return {
+      ...review,
+      tree: entry.tree,
+      candidate: entry.candidate,
+      proposals: entry.proposals,
+    } satisfies IntakeReviewDetailResponse
+  }, [review, reviewTreeIndex])
+
   // Build the branch the reviewer answered, when the eager pass never
   // enumerated it (the branch product is capped). The draft happens on the
   // server; the reload brings the new realization in through the normal
   // review payload, so the panel needs no special case.
   const buildBranchForChoices = useCallback(
     async (choices: Record<string, string>) => {
-      const treeId = review?.tree?.recordId
+      // The tree the reviewer is LOOKING at (a handbook may back several).
+      const treeId = activeReview?.tree?.recordId
       if (!treeId) {
         throw new Error('This document has no decision tree to build from yet.')
       }
       await apiClient.realizeIntakeBranch(treeId, { choices })
       setReviewToken((n) => n + 1)
     },
-    [review],
+    [activeReview],
   )
 
-  // Which thinking levels this deployment offers for an extraction (config).
-  useEffect(() => {
-    let cancelled = false
-    apiClient
-      .getExtractionOptions()
-      .then((opts) => {
-        if (cancelled) return
-        setExtractOptions(opts)
-        setThinkingLevel((current) => current || (opts?.defaultThinkingLevel ?? ''))
-      })
-      .catch(() => {
-        // The picker simply does not render; extraction still works at the
-        // endpoint's own default.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // Liveness clock: "last event Ns ago" is what separates a thinking model
   // from a dead connection, so it must tick even when no event arrives.
@@ -459,7 +465,6 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           text: sourceText,
           ...(recordId ? { documentId: recordId } : {}),
           ...(typeof vendor === 'string' && vendor.trim() ? { vendor: vendor.trim() } : {}),
-          ...(thinkingLevel ? { thinkingLevel } : {}),
         },
         {
           signal: controller.signal,
@@ -473,7 +478,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                   ...log,
                   {
                     kind: 'note',
-                    text: `${event.model} · ${event.chunks} chunk(s) · thinking: ${event.thinkingLevel || 'endpoint default'}\n`,
+                    text: `${event.model} · ${event.chunks} chunk(s)\n`,
                   },
                 ])
                 break
@@ -520,7 +525,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       setExtracting(false)
       extractAbortRef.current = null
     }
-  }, [extractedText, recordId, thinkingLevel, vendor])
+  }, [extractedText, recordId, vendor])
 
   const handleCancelExtraction = useCallback(() => {
     extractAbortRef.current?.abort()
@@ -533,14 +538,14 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
    * step-001, step-004" and the editor show the same rows. No AI round trip.
    */
   const handleUseExtractedProtocol = useCallback(() => {
-    const extracted = review?.candidate
+    const extracted = activeReview?.candidate
     if (!extracted) return
     setCandidate(null)
     setProtocolPayload(reviewCandidateToProtocolPayload(extracted, 'DRAFT-' + recordId))
     setSavedRecordId(null)
     setSaveError(null)
     setSaveNote(null)
-  }, [review, recordId])
+  }, [activeReview, recordId])
 
   const handleToggleStep = useCallback((key: string, enabled: boolean) => {
     setSkippedSteps((prev) => {
@@ -902,20 +907,17 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         <div className="vpdf-review__right" style={{ flex: 1 }}>
           {!protocolPayload ? (
             <>
-              {review?.candidate ? (
+              {activeReview?.candidate ? (
                 <button
                   type="button"
                   className="vpdf-review__extract"
                   onClick={handleUseExtractedProtocol}
                   data-testid="vpdf-use-extracted"
                 >
-                  Use the extracted protocol ({review.candidate.steps.length} steps)
+                  Use the extracted protocol ({activeReview.candidate.steps.length} steps)
                 </button>
               ) : null}
               <ExtractionProgressPanel
-                options={extractOptions}
-                level={thinkingLevel}
-                onLevelChange={setThinkingLevel}
                 running={extracting}
                 stage={extractStage}
                 log={extractLog}
@@ -938,18 +940,40 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                   {reviewError}
                 </p>
               ) : (
-                <BranchQuestionsPanel
-                  axes={review?.tree.axes ?? []}
-                  proposals={review?.proposals ?? []}
-                  gap={
-                    review
-                      ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
-                      : 'No decision tree is attributable to this PDF yet — run intake on it first.'
-                  }
-                  onResolved={handleReviewResolved}
-                  onRedrafted={() => setReviewToken((n) => n + 1)}
-                  {...(review?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
-                />
+                <>
+                  {/* Handbook artifacts back one tree per protocol section —
+                      pick the protocol to review before answering its
+                      questions. Single-tree documents render no selector. */}
+                  {review && (review.count ?? 1) > 1 ? (
+                    <label className="vpdf-review__tree-select">
+                      <span>Protocol </span>
+                      <select
+                        value={reviewTreeIndex}
+                        onChange={(e) => setReviewTreeIndex(Number(e.target.value))}
+                        data-testid="vpdf-tree-select"
+                      >
+                        {(review.trees ?? []).map((entry, i) => (
+                          <option key={entry.tree.recordId} value={i}>
+                            {entry.tree.documentId.split('__').pop() ?? entry.tree.recordId}
+                            {' '}({entry.proposals.length} proposal{entry.proposals.length === 1 ? '' : 's'})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <BranchQuestionsPanel
+                    axes={activeReview?.tree.axes ?? []}
+                    proposals={activeReview?.proposals ?? []}
+                    gap={
+                      activeReview
+                        ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
+                        : 'No decision tree is attributable to this PDF yet — run intake on it first.'
+                    }
+                    onResolved={handleReviewResolved}
+                    onRedrafted={() => setReviewToken((n) => n + 1)}
+                    {...(activeReview?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
+                  />
+                </>
               )}
             </div>
           ) : null}

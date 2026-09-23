@@ -13,8 +13,9 @@
  * when blocked, so the reviewer sees the gap) -> persist SGP proposal.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { RecordStoreImpl } from '../store/RecordStoreImpl.js';
 import type { AjvValidator } from '../validation/AjvValidator.js';
 import { createEnvelope } from '../types/RecordEnvelope.js';
@@ -39,6 +40,45 @@ import { resolveBranchAxes } from '../protocol/BranchResolver.js';
 import { draftVendorProtocolEventGraph } from '../ingestion/vendor-protocol/VendorProtocolEventGraphDraftService.js';
 import { promoteVendorProtocolEventGraph } from '../ingestion/vendor-protocol/VendorProtocolEventGraphPromotionService.js';
 import { getExecutionScaleProfileRegistry } from '../registry/ExecutionScaleProfileRegistry.js';
+import {
+  annotateStepVariants,
+  loadStepVariantPatterns,
+  type StepVariantPattern,
+} from '../ingestion/vendor-protocol/stepVariantMarkers.js';
+import {
+  splitHandbookSections,
+  childCandidateFrom,
+  type HandbookChild,
+} from './splitHandbookSections.js';
+import { slugify } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
+
+/**
+ * The branch-marker pattern registry (YAML data; this module only interprets).
+ * Every *.yaml under schema/registry/intake-patterns is read ONCE per process
+ * (same schema-dir resolve convention as ExecutionScaleProfileRegistry) and
+ * cached forever. Missing directory => NO patterns: the spine no-ops and
+ * extraction semantics never depend on it. A malformed file throws loudly at
+ * first use — a broken registry is a data bug, not a silent degradation.
+ */
+const _schemaDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../../schema');
+let spinePatternsCache: StepVariantPattern[] | undefined;
+async function spinePatterns(): Promise<StepVariantPattern[]> {
+  if (spinePatternsCache) return spinePatternsCache;
+  const dir = join(_schemaDir, 'registry', 'intake-patterns');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const patterns: StepVariantPattern[] = [];
+  for (const name of names.filter((n) => /\.ya?ml$/.test(n)).sort()) {
+    const text = await readFile(join(dir, name), 'utf8');
+    patterns.push(...loadStepVariantPatterns(text));
+  }
+  spinePatternsCache = patterns;
+  return patterns;
+}
 
 export const PROTOCOL_DECISION_TREE_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/workflow/protocol-decision-tree.schema.yaml';
@@ -189,6 +229,36 @@ function sanitizeIdSegment(value: string): string {
 }
 const extLikeSegment = /\.[A-Za-z0-9]{1,5}$/;
 
+/**
+ * Collapse the per-child ingest results of a handbook fan-out into the ONE
+ * IngestPdfResult every caller (HTTP handler, corpus runner, report) expects.
+ * documentId stays the PARENT's; the singular treeRecordId is the first
+ * child's (compat mirror — the review join's `trees` array is the real
+ * multi-tree answer). Diagnostics concatenate spine/split first, children
+ * after, so severity scans see everything.
+ */
+export function mergeHandbookResults(
+  parentDocumentId: string,
+  leadDiagnostics: IntakeDiagnostic[],
+  results: IngestPdfResult[],
+): IngestPdfResult {
+  const diagnostics = [...leadDiagnostics];
+  const proposalRecordIds: string[] = [];
+  const eventGraphRecordIds: string[] = [];
+  for (const r of results) {
+    diagnostics.push(...r.diagnostics);
+    proposalRecordIds.push(...r.proposalRecordIds);
+    eventGraphRecordIds.push(...r.eventGraphRecordIds);
+  }
+  return {
+    documentId: parentDocumentId,
+    treeRecordId: results[0]?.treeRecordId ?? '',
+    proposalRecordIds,
+    eventGraphRecordIds,
+    diagnostics,
+  };
+}
+
 function proposalIdFor(treeRecordId: string, bindingIndex: number, scaleIndex: number, revision?: number): string {
   const docSlug = treeRecordId.startsWith('PDT-') ? treeRecordId.slice(4) : treeRecordId;
   const base = `SGP-${docSlug}-b${bindingIndex}-s${scaleIndex}`;
@@ -262,6 +332,8 @@ export class ProtocolIntakeService {
     }
 
     // 1. Deterministic candidate extraction (document truth + provenance).
+    //    The persisted extraction artifact is the MODEL's output, verbatim —
+    //    the spine below annotates the IN-MEMORY candidate only.
     const extraction = await extractVendorProtocolCandidateFromInput({
       workspaceRoot,
       ...(input.artifactPath ? { artifactPath: input.artifactPath } : {}),
@@ -271,9 +343,23 @@ export class ProtocolIntakeService {
       ...(input.documentId ? { documentId: input.documentId } : {}),
       persist: true,
     });
-    const candidate = extraction.candidate;
-    const documentId = candidate.source.documentId;
-    const docSlug = sanitizeIdSegment(input.documentId ?? documentId);
+    const documentId = extraction.candidate.source.documentId;
+
+    // 1b. Branch-marker spine (deterministic, patterns in YAML data): a
+    //     literal-minded extractor transcribes "For X, follow step 1a; for Y,
+    //     follow step 1b" verbatim but leaves branches[] empty. The spine
+    //     FILLS empty branches only — model-supplied branches are never
+    //     modified, and every annotated step is declared by diagnostic.
+    const patterns = await spinePatterns();
+    const spine = annotateStepVariants(extraction.candidate.steps, patterns);
+    const annotatedCandidate: ProtocolCandidate = { ...extraction.candidate, steps: spine.steps };
+    if (spine.annotatedStepIds.length > 0) {
+      diagnostics.push({
+        severity: 'info',
+        code: 'branch_variants_from_spine',
+        message: `cl:branch-marker-spine filled branches on ${spine.annotatedStepIds.length} step(s) the extractor left branchless: ${spine.annotatedStepIds.join(', ')}`,
+      });
+    }
 
     // 2. Scale options from the registry unless the caller pinned them.
     const scaleOptions = this.deps.scaleOptions ?? scaleOptionsFromRegistry();
@@ -283,13 +369,70 @@ export class ProtocolIntakeService {
         treeRecordId: '',
         proposalRecordIds: [],
         eventGraphRecordIds: [],
-        diagnostics: [{
+        diagnostics: [...diagnostics, {
           severity: 'error',
           code: 'scale_registry_empty',
           message: 'execution-scale-profile registry yielded no scale levels; refusing to fabricate a scale axis',
         }],
       };
     }
+
+    // 2b. Handbook split (cl:handbook-section-split): a candidate with >=2
+    //     protocol sections is a MANUAL, not a protocol — fan out one child
+    //     document per protocol section BEFORE tree derivation, so each child
+    //     gets its own tree from ONLY its own steps. A single-protocol kit
+    //     returns zero children and takes the identical whole-document path.
+    const children = splitHandbookSections(annotatedCandidate);
+    if (children.length >= 2) {
+      diagnostics.push({
+        severity: 'info',
+        code: 'handbook_section_split',
+        message: `cl:handbook-section-split: ${children.length} protocol sections detected; fanning out per-section children instead of one flattened tree`,
+      });
+      const results: IngestPdfResult[] = [];
+      for (const child of children) {
+        results.push(await this.ingestHandbookChild({
+          parent: annotatedCandidate,
+          child,
+          documentId,
+          extraction,
+          input,
+          scaleOptions,
+        }));
+      }
+      return mergeHandbookResults(documentId, diagnostics, results);
+    }
+
+    const docSlug = sanitizeIdSegment(input.documentId ?? documentId);
+    const single = await this.ingestWholeDocument({
+      candidate: annotatedCandidate,
+      documentId,
+      docSlug,
+      extraction,
+      input,
+      scaleOptions,
+    });
+    // Prepend the spine diagnostics (they describe the whole ingest).
+    return { ...single, diagnostics: [...diagnostics, ...single.diagnostics] };
+  }
+
+  /**
+   * The original whole-document pipeline: tree -> gate -> enumerate -> draft.
+   * Shared verbatim by single-protocol ingests and per-handbook-child ingests
+   * (a child IS a document, scoped to its section before it gets here).
+   */
+  private async ingestWholeDocument(args: {
+    candidate: ProtocolCandidate;
+    documentId: string;
+    docSlug: string;
+    extraction: { source: { sha256?: string } };
+    input: IngestDocumentInput;
+    scaleOptions: DecisionTreeScaleOption[];
+    childNote?: string;
+    reportExtra?: Record<string, unknown>;
+  }): Promise<IngestPdfResult> {
+    const { candidate, documentId, docSlug, extraction, input, scaleOptions } = args;
+    const diagnostics: IntakeDiagnostic[] = [];
 
     // 3. Derive the decision tree.
     const tree = deriveDecisionTree({
@@ -310,6 +453,7 @@ export class ProtocolIntakeService {
         ...(candidate.source.version ? { version: candidate.source.version } : {}),
       },
       ...(input.now ? { now: input.now } : {}),
+      ...(args.childNote ? { notes: args.childNote } : {}),
     });
 
     // 4. Persist the tree (idempotent). The effective tree is the STORED
@@ -330,13 +474,27 @@ export class ProtocolIntakeService {
       return { documentId, treeRecordId: effectiveTree.recordId, proposalRecordIds: [], eventGraphRecordIds: [], diagnostics };
     }
 
-    // 5. Enumerate the deterministic binding set.
-    const enumRes = enumerateChoiceBindings(effectiveTree.axes, input.maxProposals ?? 12);
+    // 5. Enumerate the deterministic binding set. An explicit non-positive /
+    //    non-integer cap must NOT silently produce zero proposals (`?? 12`
+    //    does not fire for `maxProposals: 0`) — declare it and fall back.
+    let effectiveCap = 12;
+    if (input.maxProposals !== undefined) {
+      if (!Number.isInteger(input.maxProposals) || input.maxProposals < 1) {
+        diagnostics.push({
+          severity: 'warning',
+          code: 'invalid_max_proposals',
+          message: `maxProposals=${JSON.stringify(input.maxProposals)} is not a positive integer; using default 12.`,
+        });
+      } else {
+        effectiveCap = input.maxProposals;
+      }
+    }
+    const enumRes = enumerateChoiceBindings(effectiveTree.axes, effectiveCap);
     if (enumRes.truncated) {
       diagnostics.push({
         severity: 'warning',
         code: 'branch_product_truncated',
-        message: `branch product is ${enumRes.productSize}; capped at ${enumRes.bindings.length}. Raise maxProposals to cover the full set.`,
+        message: `branch product is ${enumRes.productSize}; capped at ${enumRes.bindings.length}; maxProposals=${effectiveCap}.`,
       });
     }
 
@@ -369,8 +527,45 @@ export class ProtocolIntakeService {
       ...result,
       productSize: enumRes.productSize,
       truncated: enumRes.truncated,
+      ...(args.reportExtra ?? {}),
     });
     return result;
+  }
+
+  /**
+   * One handbook child = one document. The parent candidate (already
+   * spine-annotated) is scoped to the child's protocol section + attached
+   * pretreatments; the child gets its own candidate artifact, tree, bindings,
+   * drafts, and report — the sha256 stays the PARENT's, which is what lets
+   * the review join answer the handbook artifact with all its trees.
+   * Idempotency is inherited: the child obeys the same tree_exists /
+   * proposal_exists skips, and the child documentId is title-deterministic.
+   */
+  private async ingestHandbookChild(args: {
+    parent: ProtocolCandidate;
+    child: HandbookChild;
+    documentId: string;
+    extraction: { source: { sha256?: string } };
+    input: IngestDocumentInput;
+    scaleOptions: DecisionTreeScaleOption[];
+  }): Promise<IngestPdfResult> {
+    const { parent, child, documentId, extraction, input, scaleOptions } = args;
+    const childDocumentId = `${documentId}__${slugify(child.sectionTitle)}`;
+    const childCandidate = childCandidateFrom(parent, child, childDocumentId);
+    const attached = child.attachedSectionIds.length > 0
+      ? `; attached sections: ${child.attachedSectionIds.join(', ')}`
+      : '';
+    const childNote = `cl:handbook-section-split child of ${documentId}; section: ${child.sectionTitle}${attached}`;
+    return this.ingestWholeDocument({
+      candidate: childCandidate,
+      documentId: childDocumentId,
+      docSlug: sanitizeIdSegment(childDocumentId),
+      extraction,
+      input,
+      scaleOptions,
+      childNote,
+      reportExtra: { parentDocumentId: documentId, sectionId: child.sectionId, sectionTitle: child.sectionTitle },
+    });
   }
 
   /**
@@ -674,8 +869,22 @@ export class ProtocolIntakeService {
     now?: string;
     updateExistingProposal?: { payload: PersistedProposalPayload; recordId: string };
   }): Promise<{ proposalRecordId?: string; eventGraphRecordId?: string; diagnostic?: IntakeDiagnostic }> {
-    const { tree, candidate, binding, bindingIndex, scaleOption, scaleIndex, revision } = args;
+    const { tree, candidate: rawCandidate, binding, bindingIndex, scaleOption, scaleIndex, revision } = args;
     const { workspaceRoot, store, validator } = this.deps;
+
+    // Handbook children are documents cut from a bigger candidate (redraft and
+    // realize RE-EXTRACT the whole parent from the stored PDF). If this tree is
+    // a split child and the candidate is the unsplit parent, scope the
+    // candidate back to the child — deterministically, via the same predicate
+    // that made the split. Without this, a zero-axis child's degenerate
+    // whole-candidate draft would compile the entire handbook again.
+    let candidate = rawCandidate;
+    if (tree.documentId !== candidate.source.documentId) {
+      const child = splitHandbookSections(candidate).find(
+        (c) => `${candidate.source.documentId}__${slugify(c.sectionTitle)}` === tree.documentId,
+      );
+      if (child) candidate = childCandidateFrom(candidate, child, tree.documentId);
+    }
 
     const proposalRecordId = args.updateExistingProposal
       ? args.updateExistingProposal.recordId
@@ -728,6 +937,9 @@ export class ProtocolIntakeService {
     const draft = await draftVendorProtocolEventGraph({
       workspaceRoot,
       candidate,
+      // THE FILTER: the compile prompt is a function of this binding's active
+      // steps — never the whole handbook (2026-09-21 giant-protocol failure).
+      activeStepIds,
       compile: shouldCompile,
       ...(this.deps.compileRunner
         ? { compileRunner: this.deps.compileRunner, deterministicOnly: false }
