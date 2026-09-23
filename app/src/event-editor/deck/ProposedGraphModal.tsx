@@ -4,6 +4,8 @@ import { LABWARE_TYPE_LABELS } from '../../types/labware'
 import type { DraftOntologyBinding } from '../../types/ai'
 import type { TermDecision } from './acceptedOntologyBindings'
 import { useResolveOntology } from '../../editor/hooks/useResolveOntology'
+import { TermPanel } from '../right-pane/ai/TermPanel'
+import type { TermClarification, TermConfirmation } from '../right-pane/ai/TermPanel'
 
 interface ProposedGraphModalProps {
   preview: EventEditorPreview
@@ -15,6 +17,15 @@ interface ProposedGraphModalProps {
    */
   termDecisions?: Record<string, TermDecision>
   onDecisionsChange?: (decisions: Record<string, TermDecision>) => void
+  /**
+   * A term confirmed in the review panel — handed back so the harness can
+   * redraft with the better grounding. The modal does NOT own a chat channel;
+   * its parent (PreviewActionBar) routes this to the shared editor-context
+   * prompt channel that the AI chat consumes.
+   */
+  onTermConfirm?: (confirmation: TermConfirmation) => void
+  /** A term clarified in the review panel — a redraft request with the biologist's words. */
+  onTermClarify?: (clarification: TermClarification) => void
 }
 
 /**
@@ -125,6 +136,8 @@ export function ProposedGraphModal({
   onClose,
   termDecisions = {},
   onDecisionsChange,
+  onTermConfirm,
+  onTermClarify,
 }: ProposedGraphModalProps) {
   const { previewPlacements: placements, previewEvents: events } = preview
 
@@ -389,6 +402,16 @@ export function ProposedGraphModal({
               </ol>
             )}
           </section>
+
+          {preview.termManifest && preview.termManifest.length > 0 ? (
+            <section className="proposed-graph__section" data-testid="term-manifest-section">
+              <TermPanel
+                terms={preview.termManifest}
+                {...(onTermConfirm ? { onConfirm: onTermConfirm } : {})}
+                {...(onTermClarify ? { onClarify: onTermClarify } : {})}
+              />
+            </section>
+          ) : null}
 
           <details className="proposed-graph__raw">
             <summary>Raw JSON</summary>

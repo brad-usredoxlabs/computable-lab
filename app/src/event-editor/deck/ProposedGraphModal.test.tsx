@@ -71,3 +71,42 @@ describe('ProposedGraphModal ontology term review', () => {
     })
   })
 })
+
+describe('ProposedGraphModal — the draft term manifest lives here (not the AI chat pane)', () => {
+  it('renders a collapsible term panel fed by the preview termManifest', () => {
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [{ eventId: 'e1', event_type: 'add_material', details: {} } as PlateEvent],
+      termManifest: [
+        { label: 'DMEM', source: 'minted', id: 'mint:DMEM', kind: 'material' },
+        { label: '95 well plate', source: 'ontology', id: 'CL:96_well_plate', kind: 'labware' },
+        { label: 'bath 55', source: 'local-record', id: 'EQP-bath-1', kind: 'equipment' },
+      ],
+    }
+    render(<ProposedGraphModal preview={preview} onClose={() => undefined} />)
+    // The panel is collapsed by default; the header counts the terms.
+    expect(screen.getByTestId('term-panel-toggle')).toBeTruthy()
+    expect(screen.getByTestId('term-panel-toggle').textContent).toContain('Terms (3)')
+    // expand → the kind sections render
+    fireEvent.click(screen.getByTestId('term-panel-toggle'))
+    expect(screen.getByText('Materials')).toBeTruthy()
+    expect(screen.getByText('Labware')).toBeTruthy()
+    expect(screen.getByText('Equipment')).toBeTruthy()
+    expect(screen.getByText('DMEM')).toBeTruthy()
+  })
+
+  it('reports a term confirm for the redraft through onTermConfirm', () => {
+    const onConfirm = vi.fn()
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [],
+      termManifest: [{ label: 'DMEM', source: 'minted', id: 'mint:DMEM', kind: 'material' }],
+    }
+    render(<ProposedGraphModal preview={preview} onClose={() => undefined} onTermConfirm={onConfirm} />)
+    fireEvent.click(screen.getByTestId('term-panel-toggle'))
+    fireEvent.click(screen.getByTestId('term-accept-0'))
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ label: 'DMEM', existingTermId: 'mint:DMEM' }))
+  })
+})

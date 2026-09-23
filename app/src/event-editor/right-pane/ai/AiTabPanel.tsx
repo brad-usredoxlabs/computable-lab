@@ -34,8 +34,7 @@ import { QuestionsPanel } from './QuestionsPanel'
 import { changesFromDraftEvents } from './draftChanges'
 import { InterpretationPanel } from './InterpretationPanel'
 import { ChangesPanel } from './ChangesPanel'
-import type { TermClarification, TermConfirmation } from './TermPanel'
-import { termClarifyPrompt, termConfirmPrompt } from './termFollowUpPrompt'
+import type { DraftTermRow } from './TermPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -340,6 +339,11 @@ export function AiTabPanel() {
         ...(result.ontologyBindings?.length
           ? { ontologyBindings: result.ontologyBindings as never }
           : {}),
+        // The term manifest travels WITH the preview so the deck's review modal
+        // (Discard / View changes / Accept) can show what this step adds. It used
+        // to ride only the chat-pane's sidebar state; the modal is where a
+        // biologist reviews before accepting, so that is where it belongs.
+        ...((result.termManifest?.length ?? 0) > 0 ? { termManifest: result.termManifest as DraftTermRow[] } : {}),
         ...(sourceProtocolCandidate ? { sourceProtocolCandidate } : {}),
         ...(sourcePdf ? { sourcePdf } : {}),
         ...(graphLemurIngest ? { ingest: graphLemurIngest } : {}),
@@ -475,23 +479,18 @@ export function AiTabPanel() {
     [chat],
   )
 
-  // The term panel's rows send ordinary turns: a confirmed term is expressed as the
-  // mention the loop already understands, and a clarified term is a redraft request
-  // carrying the biologist's sentence. No private channel, so grounding, binding and
-  // the material gate all apply to these exactly as they do to typed input.
-  const handleTermConfirm = useCallback(
-    async (confirmation: TermConfirmation) => {
-      await handleSend(termConfirmPrompt(confirmation))
-    },
-    [handleSend],
-  )
-
-  const handleTermClarify = useCallback(
-    async (clarification: TermClarification) => {
-      await handleSend(termClarifyPrompt(clarification))
-    },
-    [handleSend],
-  )
+  // Term overrides were moved to the deck's review modal (Discard / View changes /
+  // Accept). The modal has no chat channel of its own, so it queues the resulting
+  // redraft prompt through the editor-context seam (`pendingRetryPrompt`) and this
+  // pane — the chat's only consumer — sends it. Plain turn, same grounding/binding
+  // as typed input.
+  useEffect(() => {
+    const pending = editorState?.fixIt?.pendingRetryPrompt
+    if (!pending) return
+    if (!editor?.actions) return
+    editor.actions.consumeRetryPrompt()
+    void handleSend(pending)
+  }, [editorState?.fixIt?.pendingRetryPrompt, editor, handleSend])
 
   const handleClarificationsSubmit = useCallback(
     async (answers: AiClarificationAnswer[], requests: AiClarificationRequest[]) => {
@@ -762,9 +761,6 @@ export function AiTabPanel() {
           <ChangesPanel
             changes={sidebar.changes}
             warnings={sidebar.warnings}
-            terms={sidebar.terms}
-            onTermConfirm={(confirmation) => void handleTermConfirm(confirmation)}
-            onTermClarify={(clarification) => void handleTermClarify(clarification)}
             onApply={() => {
               sidebarDispatch({ type: 'commit' })
               editor?.actions.commitPreview()

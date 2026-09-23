@@ -18,6 +18,7 @@ import type {
 } from './types'
 import type { WellId } from '../types/plate'
 import type { AiAlsoPlace, AiEquipmentRequirement, AiGraphLemurRevisionEntry, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
+import type { DraftTermRow } from './right-pane/ai/TermPanel'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
@@ -64,11 +65,18 @@ export interface EventEditorPreview {
   /** First-class bench equipment proposed by a draft — ghosted as instrument
    *  silhouettes on the lawn, never labware geometry. OPTIONAL: most previews
    *  propose no equipment, and requiring every preview constructor (and every
-   *  test) to spell `{}` is noise — absent means "no equipment proposed". Read it
-   *  as `preview.previewEquipments?.[id]`. */
+   *  test) to spell `{}` is noise — absent means "no equipment proposed". Read
+   *  it as `preview.previewEquipments?.[id]`. */
   previewEquipments?: Record<string, Equipment>
   previewPlacements: EventEditorPlacement[]
   previewEvents: PlateEvent[]
+  /**
+   * The draft's TERM MANIFEST — what each material/labware/equipment it adds
+   * matched (local-record / ontology / vendor / minted), classified server-side
+   * (draftTermManifest). Rendered by the review modal's collapsible term panel.
+   * Absent on older previews → the panel simply does not render.
+   */
+  termManifest?: DraftTermRow[]
   /**
    * The user prompt that produced this preview. Travels with the preview so
    * downstream consumers (Fix-it seed, audit log) don't need to reach back

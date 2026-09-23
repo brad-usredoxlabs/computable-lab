@@ -11,6 +11,8 @@ import {
   type TermDecision,
 } from './acceptedOntologyBindings'
 import { materializeAcceptedRecordCreations } from './acceptedRecordCreations'
+import { termClarifyPrompt, termConfirmPrompt } from '../right-pane/ai/termFollowUpPrompt'
+import type { TermClarification, TermConfirmation } from '../right-pane/ai/TermPanel'
 
 /** A proposed ontology term that requires the scientist's sign-off (gate on Accept). */
 function bindingNeedsDecision(b: { minted?: boolean; requiresReview?: boolean; draftOnly?: boolean }): boolean {
@@ -175,6 +177,16 @@ export function PreviewActionBar() {
           onClose={() => setShowChanges(false)}
           termDecisions={termDecisions}
           onDecisionsChange={setTermDecisions}
+          onTermConfirm={(confirmation: TermConfirmation) => {
+            // Term overrides live in the modal now; the chat channel that turns a
+            // confirm into a fresh draft lives in the editor context (the shared
+            // prompt seam), consumed by the AI pane. Keep the modal open so the
+            // biologist sees the redraft replace the ghosts it reviews.
+            actions.requestRetryPrompt(termConfirmPrompt(confirmation))
+          }}
+          onTermClarify={(clarification: TermClarification) => {
+            actions.requestRetryPrompt(termClarifyPrompt(clarification))
+          }}
         />
       ) : null}
     </div>

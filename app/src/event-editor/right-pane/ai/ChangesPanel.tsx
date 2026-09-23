@@ -1,20 +1,10 @@
 import type { EventGraphChange, ValidationGap } from './sidebarState'
-import { TermPanel } from './TermPanel'
-import type { DraftTermRow, TermClarification, TermConfirmation } from './TermPanel'
 
 export interface ChangesPanelProps {
   changes: EventGraphChange[]
   warnings: ValidationGap[]
   onApply: () => void
   onDiscard: () => void
-  /**
-   * The terms this draft used, as classified by the server (draftTermManifest).
-   * Optional: a draft with no material refs has nothing to show, and the panel is
-   * never a gate — review and accept work with or without term decisions.
-   */
-  terms?: DraftTermRow[]
-  onTermConfirm?: (confirmation: TermConfirmation) => void
-  onTermClarify?: (clarification: TermClarification) => void
 }
 
 export function ChangesPanel({
@@ -22,9 +12,6 @@ export function ChangesPanel({
   warnings,
   onApply,
   onDiscard,
-  terms,
-  onTermConfirm,
-  onTermClarify,
 }: ChangesPanelProps) {
   return (
     <div className="changes-panel" data-testid="changes-panel">
@@ -54,14 +41,6 @@ export function ChangesPanel({
           </div>
         ))}
       </div>
-
-      {terms && terms.length > 0 ? (
-        <TermPanel
-          terms={terms}
-          {...(onTermConfirm ? { onConfirm: onTermConfirm } : {})}
-          {...(onTermClarify ? { onClarify: onTermClarify } : {})}
-        />
-      ) : null}
 
       <div className="changes-panel__actions">
         <button
