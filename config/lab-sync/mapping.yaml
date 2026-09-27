@@ -1,0 +1,36 @@
+# Lab-Sync controlled-vocabulary bridge (test-your-food.com -> Computable Lab)
+#
+# Data, not code: the sync worker resolves every external slug through this
+# file. A slug missing here is a HARD STOP — the worker records an
+# ingestion-style issue and refuses to invent a term (principles §5, §9).
+# New nouns are added here (or proposed as CURIE-style local terms), never
+# hardcoded in TypeScript.
+version: 1
+sourceSystem: test-your-food.com
+
+# Website product slug -> CL service code (lab-sync-api.md §2).
+services:
+  fatty-acid-analysis:
+    code: fatty_acid_profile
+    label: "Fatty acid profile"
+  pesticide-screening:
+    code: pesticide_panel
+    label: "Pesticide screening panel"
+
+# Website sample-type slug (matrix) -> CL controlled matrix term.
+# cf: = local namespace punned to the lab (principles §5). These terms should
+# eventually be minted as lab vocabulary records; the codes are stable now.
+matrices:
+  fat:        { term: cf:fat-matrix,        label: "Fat / lipid" }
+  eggs:       { term: cf:egg-matrix,        label: "Eggs" }
+  meat:       { term: cf:meat-matrix,       label: "Meat" }
+  dairy:      { term: cf:dairy-matrix,      label: "Dairy" }
+  vegetable:  { term: cf:vegetable-matrix,  label: "Vegetable" }
+  grain:      { term: cf:grain-matrix,      label: "Grain" }
+  processed:  { term: cf:processed-matrix,  label: "Processed food" }
+
+# Barcode identifier systems recognized at the lab bench.
+identifiers:
+  tyf-barcode:
+    pattern: "^TYF-[A-Z0-9]{6}$"
+    label: "Test Your Food collection tube barcode"

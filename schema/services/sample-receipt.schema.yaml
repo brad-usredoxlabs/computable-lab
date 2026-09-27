@@ -1,0 +1,82 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sample-receipt.schema.yaml"
+title: "SampleReceipt"
+description: >
+  The laboratory-scan event: a physical tube entered laboratory custody.
+  Distinct from the customer's registration scan (which asserts "this tube is
+  mine" before it ships). The receipt connects barcode -> request -> lab
+  sample record. Immutable after creation — corrections are new receipts.
+  See specs/computable-lab-party-request-schema-spec.md §11.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- identifier
+- receivedAt
+- receivedByRef
+
+properties:
+  kind:
+    const: "sample-receipt"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^RCPT-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., RCPT-2026-00911)."
+
+  identifier:
+    type: object
+    description: "The external identifier scanned at the lab bench."
+    additionalProperties: false
+    required: [system, value]
+    properties:
+      system: { type: string, minLength: 1 }
+      value: { type: string, minLength: 1 }
+
+  requestRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+    description: "The request this receipt resolved (target may be a request or a request specialization such as an order; optional — an unmatched scan receives first, links later)."
+
+  sampleRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: sample }
+    description: "Lab sample record this receipt created or updated."
+
+  receivedAt:
+    type: string
+    format: date-time
+    description: "When the tube entered lab custody."
+
+  receivedByRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Person who took custody."
+
+  condition:
+    type: object
+    description: "Condition assessment on arrival."
+    additionalProperties: false
+    properties:
+      acceptable: { type: boolean }
+      notes: { type: string }
+
+  notes:
+    type: string

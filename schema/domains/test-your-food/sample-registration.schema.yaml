@@ -1,0 +1,75 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/domains/test-your-food/sample-registration.schema.yaml"
+title: "SampleRegistration"
+description: >
+  The customer-scan event, mirrored: "this is the physical tube I used for
+  the sample associated with this order, and here is my description of it."
+  Distinct from the laboratory scan (sample-receipt), which asserts custody.
+  This record preserves customer intent; the lab sample's submittedDescription
+  is derived from it. See party-request spec §11.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../../common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- orderRef
+- identifier
+- registeredAt
+
+properties:
+  kind:
+    const: "sample-registration"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^REG-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., REG-2026-00911)."
+
+  orderRef:
+    allOf:
+    - $ref: "../../datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: order }
+    description: "The order this tube belongs to, per the customer."
+
+  identifier:
+    type: object
+    description: "The barcode on the collection tube."
+    additionalProperties: false
+    required: [system, value]
+    properties:
+      system:
+        type: string
+        const: "tyf-barcode"
+      value:
+        type: string
+        pattern: "^TYF-[A-Z0-9]{6}$"
+        description: "TYF barcode minted by the website."
+
+  customerDescription:
+    type: object
+    description: "What the customer says the sample is (customer intent, not lab truth)."
+    additionalProperties: false
+    properties:
+      matrix:
+        type: string
+        description: "Controlled matrix term (mapped from website slug via config/lab-sync/mapping.yaml)."
+      description:
+        type: string
+      customerLabel:
+        type: string
+
+  registeredAt:
+    type: string
+    format: date-time
+    description: "When the customer scanned/described the tube (advisory; event cursor is authoritative for ordering)."
+
+  notes:
+    type: string

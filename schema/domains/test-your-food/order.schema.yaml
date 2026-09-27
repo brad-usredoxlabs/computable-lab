@@ -1,0 +1,131 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/domains/test-your-food/order.schema.yaml"
+title: "Order"
+description: >
+  Test Your Food order: an IS-A request (order extends request) with the
+  commercial fields the generic request must never carry. Answers "What did
+  the customer request from the laboratory?" — distinct from what the lab
+  did (sample/run/report records). payment/kit blocks are mirrors of
+  website-side state; CL-owned truth is lifecycle status.
+  See party-request spec §9, lab-sync-api spec §4.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../../common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "../../request.schema.yaml#/$defs/RequestShape"
+
+required:
+- kind
+- recordId
+- extends
+- requesterRef
+- lifecycleId
+- status
+- source
+
+properties:
+  kind:
+    const: "order"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^ORD-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., ORD-2026-00427)."
+
+  extends:
+    const: "request"
+    description: "IS-A request. One record, tagged — no parallel REQ record."
+
+  customerRef:
+    allOf:
+    - $ref: "../../datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: customer }
+    description: "Customer (a party specialization) who placed the order."
+
+  source:
+    type: object
+    description: >
+      External order provenance. remoteId = website's stable public reference
+      (tyfored_*), never the numeric DB id. remoteRevision guards order.updated
+      patches (apply only strictly-newer revisions).
+    additionalProperties: false
+    required: [system, remoteId]
+    properties:
+      system: { type: string, minLength: 1 }
+      remoteId: { type: string, minLength: 1 }
+      remoteRevision: { type: integer, minimum: 0 }
+
+  lifecycleId:
+    const: "tyf-order"
+    description: "Lifecycle governing this record's state transitions (forward-only)."
+
+  status:
+    type: string
+    description: >
+      Current tyf-order lifecycle state. Transitions declared in
+      core/lifecycles/tyf-order.lifecycle.yaml.
+    enum:
+    - pending_payment
+    - paid
+    - awaiting_sample
+    - sample_registered
+    - in_transit
+    - sample_received
+    - in_testing
+    - testing_complete
+    - reported
+    - rejected
+    - cancelled
+
+  payment:
+    type: object
+    description: "Payment mirror (website-side authority; CL never captures payment)."
+    additionalProperties: false
+    properties:
+      status:
+        type: string
+        enum: [pending, paid, refunded, not_applicable]
+      capturedAt:
+        type: string
+        format: date-time
+
+  sampleKit:
+    type: object
+    description: "Collection kit mirror (website-side authority)."
+    additionalProperties: false
+    properties:
+      status:
+        type: string
+        enum: [not_shipped, shipped, delivered]
+      shippedAt:
+        type: string
+        format: date-time
+
+  totalAmount:
+    type: number
+    minimum: 0
+    description: "Commercial total (mirrored; CL billing is out of scope)."
+
+  currency:
+    type: string
+    description: "ISO 4217 code (e.g., USD)."
+
+  affiliateCode:
+    type: string
+    description: "Marketing attribution code from the website (e.g., AA-ANGELACRES)."
+
+  cancelRequested:
+    type: object
+    description: "Customer cancel request (website-side signal; CL decides whether to honour it)."
+    additionalProperties: false
+    properties:
+      reason: { type: string }
+      requestedAt: { type: string, format: date-time }
+
+  notes:
+    type: string

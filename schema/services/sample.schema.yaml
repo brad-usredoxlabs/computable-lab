@@ -1,0 +1,129 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sample.schema.yaml"
+title: "Sample"
+description: >
+  A physical sample submitted to (or created within) the laboratory in
+  response to a request. The sample is the provenance-hierarchy root for its
+  physical lineage: aliquots, extracts, and derivatizations downstream are
+  materials referencing this sample. External barcodes (e.g., TYF-XXXXXX from
+  test-your-food.com) live in identifiers[], never as domain-named fields.
+  See specs/computable-lab-party-request-schema-spec.md §12.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- requestRef
+- status
+
+properties:
+  kind:
+    const: "sample"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^SMP-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., SMP-2026-01231)."
+
+  requestRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+    description: "The request this sample answers. Target must be a request record or a request specialization (e.g., kind: order); core cannot enumerate domain kinds, so the type constraint is left open."
+
+  partyRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: party }
+    description: "Party who submitted the physical sample (usually the requester; may differ)."
+
+  identifiers:
+    type: array
+    description: >
+      External identifiers for the physical tube, e.g. system "tyf-barcode"
+      value "TYF-9F7A21". The lab scan resolves the request through the
+      identifier; it remains linked through all lab transformations.
+    items:
+      type: object
+      additionalProperties: false
+      required: [system, value]
+      properties:
+        system: { type: string, minLength: 1 }
+        value: { type: string, minLength: 1 }
+    uniqueItems: true
+
+  submittedDescription:
+    type: object
+    description: "What the submitter says the material is. Customer intent — NOT lab truth."
+    additionalProperties: false
+    properties:
+      matrix:
+        type: string
+        description: "Controlled matrix term (CURIE preferred; mapped via config/lab-sync/mapping.yaml)."
+      description:
+        type: string
+      customerLabel:
+        type: string
+
+  receipt:
+    type: object
+    description: "Laboratory receipt truth (set when sample-receipt record is created)."
+    additionalProperties: false
+    properties:
+      receivedAt:
+        type: string
+        format: date-time
+      receivedByRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: person }
+      conditionAcceptable:
+        type: boolean
+      receiptRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: sample-receipt }
+
+  accessionedAt:
+    type: string
+    format: date-time
+    description: "When the sample entered lab custody under its lab identity."
+
+  labDescription:
+    type: string
+    description: "Lab-side description of what the sample actually is (lab truth, distinct from submittedDescription)."
+
+  lifecycleId:
+    type: string
+    const: "lab-sample"
+    description: "Lifecycle governing this record's state transitions."
+
+  status:
+    type: string
+    description: >
+      Current lifecycle state (lab-sample lifecycle). Declared transitions in
+      core/lifecycles/lab-sample.lifecycle.yaml.
+    enum: [registered, received, accessioned, in_progress, consumed, rejected, archived]
+
+  storageLocation:
+    type: string
+    description: "Where the physical sample sits (freezer/shelf reference)."
+
+  notes:
+    type: string

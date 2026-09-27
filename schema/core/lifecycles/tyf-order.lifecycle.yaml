@@ -1,0 +1,98 @@
+lifecycleVersion: 1
+id: tyf-order
+description: >
+  Test Your Food order lifecycle (domain specialization of service-request).
+  Mirrors the customer-visible status ladder from specs/lab-sync-api.md §4.
+  Forward-only: an inbound event that would move an order backward is stored
+  as an event record but never applied. Website-side fields
+  (payment_status, kit_status) are mirrors; CL-owned transitions
+  (accepted/rejected/in_testing/reported) mint events back to the website.
+
+roles:
+- id: lab-intake
+  label: "Lab Intake"
+  description: "Reviews orders for acceptance/rejection."
+- id: lab-operator
+  label: "Lab Operator"
+  description: "Performs testing and releases reports."
+
+states:
+- id: pending_payment
+  label: "Pending Payment"
+  initial: true
+  description: "Order row committed on the website (stub or awaiting capture)."
+- id: paid
+  label: "Paid"
+  description: "Payment captured (website-side transition, mirrored)."
+- id: awaiting_sample
+  label: "Awaiting Sample"
+  description: "CL accepted the order; kit being prepared/shipped."
+- id: sample_registered
+  label: "Sample Registered"
+  description: "Customer scanned the barcode and described the sample."
+- id: in_transit
+  label: "In Transit"
+  description: "Customer mailed the tube."
+- id: sample_received
+  label: "Sample Received"
+  description: "Tube arrived at the lab (receipt recorded)."
+- id: in_testing
+  label: "In Testing"
+  description: "Analysis running (CL-owned transition)."
+- id: testing_complete
+  label: "Testing Complete"
+  description: "Analysis done; report in preparation/review."
+- id: reported
+  label: "Reported"
+  terminal: true
+  description: "Report released to the customer."
+- id: rejected
+  label: "Rejected"
+  terminal: true
+  description: "Order declined by CL contract review."
+- id: cancelled
+  label: "Cancelled"
+  terminal: true
+  description: "Order cancelled before reporting."
+
+transitions:
+- from: pending_payment
+  to: paid
+  role: lab-intake
+  label: "Payment captured (mirrored from website)"
+- from: [pending_payment, paid]
+  to: awaiting_sample
+  role: lab-intake
+  label: "Accept order (mints order.accepted to website)"
+- from: [pending_payment, paid]
+  to: rejected
+  role: lab-intake
+  label: "Reject order (mints order.rejected to website)"
+- from: awaiting_sample
+  to: sample_registered
+  role: lab-intake
+  label: "Customer registered barcode (mirrored)"
+- from: sample_registered
+  to: in_transit
+  role: lab-intake
+  label: "Customer mailed sample (mirrored)"
+- from: in_transit
+  to: sample_received
+  role: lab-intake
+  label: "Sample receipt recorded (mints sample.received to website)"
+- from: sample_received
+  to: in_testing
+  role: lab-operator
+  label: "Start testing (mints testing.started to website)"
+- from: in_testing
+  to: testing_complete
+  role: lab-operator
+  label: "Finish testing (mints testing.completed to website)"
+- from: testing_complete
+  to: reported
+  role: lab-operator
+  label: "Release report (mints report.released to website)"
+- from: [pending_payment, paid, awaiting_sample, sample_registered, in_transit]
+  to: cancelled
+  role: lab-intake
+  label: "Cancel"

@@ -1,0 +1,29 @@
+# Lint rules for Order records (Test Your Food domain)
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/domains/test-your-food/order.schema.yaml"
+rules:
+  - id: "order-remote-revision-tracked"
+    title: "Orders track the website revision for update guarding"
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "exists"
+      path: "$.source.remoteRevision"
+    message:
+      template: "Order '{{$.recordId}}' has no source.remoteRevision — order.updated patches cannot be staleness-guarded"
+      paths: ["$.recordId"]
+
+  - id: "order-received-has-sample"
+    title: "Orders past sample_received name a sample"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "in"
+      path: "$.status"
+      values: [sample_received, in_testing, testing_complete, reported]
+    assert:
+      op: "nonEmpty"
+      path: "$.sampleRefs"
+    message:
+      template: "Order '{{$.recordId}}' is in status '{{$.status}}' but references no samples — the physical tube is untracked"
+      paths: ["$.recordId", "$.status"]

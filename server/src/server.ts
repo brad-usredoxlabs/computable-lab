@@ -156,6 +156,8 @@ import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from
 import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
 import { StorageService } from './storage/StorageService.js';
+import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
+import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -895,6 +897,24 @@ export async function createServer(
   const executionHandlers = createExecutionHandlers(ctx);
   const measurementHandlers = createMeasurementHandlers(ctx);
 
+  // Lab-sync worker (test-your-food.com event sync). Inert unless
+  // config.labSync.enabled && token (from env substitution) && baseUrl —
+  // never fabricated (principles §9). Auto-start loop when configured.
+  const labSyncCfg = ctx.appConfig?.labSync;
+  const labSyncWorker = isLabSyncConfigured(labSyncCfg) && labSyncCfg
+    ? new LabSyncWorker(ctx, labSyncCfg)
+    : null;
+  const labSyncHandlers = createLabSyncHandlers({ worker: labSyncWorker });
+  if (labSyncWorker) {
+    // Auto-start the loop when configured; stopped via fastify.close().
+    void labSyncWorker.start().catch(err => {
+      console.warn('lab-sync worker failed to start:', err instanceof Error ? err.message : err);
+    });
+    fastify.addHook('onClose', async () => {
+      await labSyncWorker.stop().catch(() => undefined);
+    });
+  }
+
   // Create tool registry for dual-registration (MCP + agent)
   const toolRegistry = new ToolRegistry();
 
@@ -1418,6 +1438,7 @@ export async function createServer(
     routeOpts.chatHandlers = chatHandlers;
     routeOpts.identityHandlers = identityHandlers;
     routeOpts.authHandlers = authHandlers;
+    routeOpts.labSyncHandlers = labSyncHandlers;
     registerRoutes(instance, routeOpts);
     
     // Protocol Steps Routes (CRUD for protocol step sub-graphs, settings, etc.)

@@ -1,0 +1,123 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/request.schema.yaml"
+title: "Request"
+description: >
+  A request for laboratory work from a party. Answers: "What work has someone
+  asked the laboratory to perform?" Carries NO commercial semantics — payment,
+  kit, and shipping state belong to domain specializations (e.g., order).
+  Lifecycle is declared in request.lifecycle.yaml; commercial transitions in
+  the domain lifecycle. See specs/computable-lab-party-request-schema-spec.md.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "#/$defs/RequestShape"
+
+required:
+- kind
+- recordId
+- requesterRef
+- status
+
+properties:
+  kind:
+    const: "request"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^REQ-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., REQ-2026-00427)."
+
+  extends:
+    type: string
+    description: >
+      IS-A declaration for specialized request records (e.g., order extends
+      request). Conceptual specialization only — see party-request spec §17.
+
+  source:
+    type: object
+    description: >
+      Provenance of the request. remoteId is the external system's stable
+      public reference (e.g., tyfored_*), never its internal numeric DB id.
+    additionalProperties: false
+    required: [system, remoteId]
+    properties:
+      system: { type: string, minLength: 1 }
+      remoteId: { type: string, minLength: 1 }
+      remoteRevision: { type: integer, minimum: 0 }
+
+  lifecycleId:
+    type: string
+    const: "service-request"
+    description: "Lifecycle governing this record's state transitions."
+
+  status:
+    type: string
+    description: >
+      Current lifecycle state (service-request lifecycle: submitted, accepted,
+      rejected, in_progress, completed, cancelled). Forward-only; declared
+      transitions live in core/lifecycles/service-request.lifecycle.yaml.
+    enum: [submitted, accepted, rejected, in_progress, completed, cancelled]
+
+$defs:
+  RequestShape:
+    type: object
+    description: >
+      Reusable request field group. Domain specializations $ref this shape
+      and add their own fields.
+    properties:
+      requesterRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+        description: "The party requesting the work. Target may be a party record or a party specialization (e.g., kind: customer); core cannot enumerate domain kinds, so the type constraint is left open. Domain schemas add a typed customerRef-style companion."
+
+      requestedAt:
+        type: string
+        format: date-time
+        description: "When the request was made (advisory; event stream is authoritative for ordering)."
+
+      requestedServices:
+        type: array
+        description: >
+          Work line items. Do not assume 1 request = 1 sample = 1 assay;
+          full requested-service records may also exist and reference back.
+        items:
+          type: object
+          additionalProperties: false
+          required: [service]
+          properties:
+            lineId:
+              type: string
+              description: "External line reference when present (e.g., tyforl_*)."
+            service:
+              type: string
+              description: "Service code from config/lab-sync/mapping.yaml (e.g., fatty_acid_profile). Controlled vocabulary — unknown slugs are rejected at translation, never passed through."
+            matrix:
+              type: string
+              description: "Sample matrix as a controlled term (CURIE preferred, e.g., cf:fat-matrix via mapping.yaml)."
+            sampleCount:
+              type: integer
+              minimum: 1
+            requestedReporting:
+              type: object
+              additionalProperties: true
+
+      sampleRefs:
+        type: array
+        description: "Sample records attached to this request (populated as samples are received/accessioned)."
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: sample }
+        uniqueItems: true
+
+      notes:
+        type: string

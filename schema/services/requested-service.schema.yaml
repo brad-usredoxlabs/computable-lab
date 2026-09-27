@@ -1,0 +1,67 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/requested-service.schema.yaml"
+title: "RequestedService"
+description: >
+  One work line item of a request. First-class record so the cardinality
+  stays honest: 1 request != 1 sample != 1 assay. Requests also embed a
+  lightweight requestedServices[] mirror for display; this record is the
+  authoritative line. See party-request spec §10.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- requestRef
+- service
+
+properties:
+  kind:
+    const: "requested-service"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^RSVC-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., RSVC-2026-00427-01)."
+
+  requestRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+    description: "Parent request (target may be a request or a request specialization such as an order)."
+
+  lineId:
+    type: string
+    description: "External line reference when present (e.g., tyforl_1a2b3c) — dedupe anchor for order.updated."
+
+  service:
+    type: string
+    description: "Service code from config/lab-sync/mapping.yaml controlled vocabulary (e.g., fatty_acid_profile). Unknown external slugs are rejected at translation, never stored."
+
+  matrix:
+    type: string
+    description: "Controlled matrix term (CURIE preferred, e.g., cf:fat-matrix; mapped from external slug via mapping.yaml)."
+
+  sampleCount:
+    type: integer
+    minimum: 1
+    description: "How many samples the requester intends for this line."
+
+  requestedReporting:
+    type: object
+    description: "Reporting requirements for this line (e.g., basis: percent_total_fatty_acids)."
+    additionalProperties: true
+
+  status:
+    type: string
+    description: "Per-line progress (mirrors request lifecycle granularity)."
+    enum: [requested, accepted, rejected, in_progress, completed, cancelled]
+
+  notes:
+    type: string

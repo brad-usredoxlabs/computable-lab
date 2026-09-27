@@ -1,0 +1,80 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/lab-sync-event.schema.yaml"
+title: "LabSyncEvent"
+description: >
+  Append-only durable mirror of a lab-sync domain event, in either direction
+  (website->CL consumed events and CL->website minted events). This is the
+  sync inbox/outbox: dedupe anchor (eventId), crash-replay evidence, and Git
+  history of what crossed the boundary. HTTP synchronizes meaning; Git
+  preserves history — this record IS that history. Never mutated after
+  ack/applied. See specs/lab-sync-api.md.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- eventId
+- direction
+- eventType
+
+properties:
+  kind:
+    const: "lab-sync-event"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^LSYN-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Local identifier (minted at record creation)."
+
+  eventId:
+    type: string
+    pattern: "^evt_(TYF|CL)_[A-Za-z0-9_-]+$"
+    description: "Globally unique event id, minted by the publishing side (evt_TYF_* / evt_CL_*). Dedupe anchor — unique across all lab-sync-event records."
+
+  direction:
+    type: string
+    enum: [inbound, outbound]
+    description: "inbound = website->CL consumed; outbound = CL->website minted."
+
+  cursor:
+    type: integer
+    minimum: 0
+    description: "Website event-table cursor (inbound only; authoritative for ordering). Absent for outbound events."
+
+  eventType:
+    type: string
+    pattern: "^[a-z]+\\.[a-z_]+$"
+    description: "Domain event type (e.g., order.created, report.released). Unknown types are stored verbatim, never dropped."
+
+  occurredAt:
+    type: string
+    format: date-time
+    description: "Publisher's timestamp (advisory; cursor is the ordering authority)."
+
+  payload:
+    type: object
+    description: "Event body, stored verbatim — never dropped, never edited after recording."
+    additionalProperties: true
+
+  processing:
+    type: object
+    description: "Outcome of CL-side processing (inbound) or push (outbound)."
+    additionalProperties: false
+    properties:
+      status:
+        type: string
+        enum: [pending, applied, duplicated, unknown_type, ignored_stale, pushed, push_failed]
+      affectedRecordIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+      error:
+        type: string
+      processedAt:
+        type: string
+        format: date-time

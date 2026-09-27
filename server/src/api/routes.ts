@@ -105,6 +105,7 @@ export interface RouteOptions {
   chatHandlers?: ChatHandlers;
   identityHandlers?: IdentityHandlers;
   authHandlers?: AuthHandlers;
+  labSyncHandlers?: import('./handlers/LabSyncHandlers.js').LabSyncHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
   protocolIdeHandlers?: ProtocolIdeHandlers;
@@ -246,6 +247,17 @@ export function registerRoutes(
   // Identity / groups / sharing (optional - requires identityHandlers)
   const { identityHandlers, authHandlers } = options;
 
+  // Lab-sync (test-your-food.com event sync) admin surface. Mounted whenever
+  // the app is built (handlers always exist); routes report LAB_SYNC_DISABLED
+  // when no worker was configured. Status is safe read-only.
+  const { labSyncHandlers } = options;
+  if (labSyncHandlers) {
+    fastify.get('/lab-sync/status', labSyncHandlers.status.bind(labSyncHandlers));
+    fastify.post('/lab-sync/poll-once', labSyncHandlers.pollOnce.bind(labSyncHandlers));
+    fastify.post('/lab-sync/push-once', labSyncHandlers.pushOnce.bind(labSyncHandlers));
+    fastify.post('/lab-sync/start', labSyncHandlers.start.bind(labSyncHandlers));
+    fastify.post('/lab-sync/stop', labSyncHandlers.stop.bind(labSyncHandlers));
+  }
   if (authHandlers) {
     fastify.post('/auth/login', authHandlers.login.bind(authHandlers));
     fastify.post('/auth/logout', authHandlers.logout.bind(authHandlers));

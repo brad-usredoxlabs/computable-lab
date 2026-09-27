@@ -1,0 +1,73 @@
+lifecycleVersion: 1
+id: lab-sample
+description: >
+  Custody lifecycle for physical laboratory samples: registration (customer
+  claims the tube), receipt (tube arrives), accession (tube enters lab
+  custody as a tracked sample), through consumption. A sample is a provenance
+  hierarchy root — downstream aliquots/extractions are materials, not samples.
+  See specs/computable-lab-party-request-schema-spec.md §11-12.
+
+roles:
+- id: lab-intake
+  label: "Lab Intake"
+  description: "Person receiving physical submissions."
+- id: lab-operator
+  label: "Lab Operator"
+  description: "Person consuming the sample during analysis."
+
+states:
+- id: registered
+  label: "Registered"
+  initial: true
+  description: "Barcode + customer description known; tube not yet in lab custody."
+- id: received
+  label: "Received"
+  description: "Physical tube arrived at the lab (receipt event recorded)."
+- id: accessioned
+  label: "Accessioned"
+  description: "Sample accepted into lab custody under its lab identity."
+- id: in_progress
+  label: "In Progress"
+  description: "Aliquots/transformations derived from this sample are in work."
+- id: consumed
+  label: "Consumed"
+  terminal: true
+  description: "Sample (or its last usable aliquot) is used up."
+- id: rejected
+  label: "Rejected"
+  terminal: true
+  description: "Sample unsuitable (condition on receipt unacceptable, mismatched barcode, etc.)."
+- id: archived
+  label: "Archived"
+  terminal: true
+  description: "Remaining material retired; record kept for history."
+
+transitions:
+- from: registered
+  to: received
+  role: lab-intake
+  label: "Record receipt"
+- from: registered
+  to: rejected
+  role: lab-intake
+  label: "Reject (never arrived / invalid)"
+- from: received
+  to: accessioned
+  role: lab-intake
+  label: "Accession"
+- from: received
+  to: rejected
+  role: lab-intake
+  label: "Reject (condition unacceptable)"
+- from: accessioned
+  to: in_progress
+  role: lab-operator
+  label: "Begin analysis"
+- from: in_progress
+  to: consumed
+  role: lab-operator
+  label: "Consume"
+- from: [registered, received, accessioned, in_progress]
+  to: archived
+  role: lab-intake
+  label: "Archive"

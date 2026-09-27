@@ -1,0 +1,100 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/report.schema.yaml"
+title: "Report"
+description: >
+  The REPORTED layer: what was ultimately communicated back for a request.
+  Distinct from the PERFORMED layer (runs, measurements, analysis records) —
+  a report is the reviewed, revisioned communication artifact. Release is an
+  explicit act; external consumers treat report release as the ONLY trigger
+  for making results customer-visible. See party-request spec §13-14.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- requestRef
+- status
+
+properties:
+  kind:
+    const: "report"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^RPT-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., RPT-2026-00331)."
+
+  requestRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+    description: "The request this report answers (target may be a request or a request specialization such as an order)."
+
+  sampleRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: sample }
+    uniqueItems: true
+    description: "Samples whose results are in this report."
+
+  runRefs:
+    type: array
+    description: "PERFORMED-layer provenance: runs/analysis that produced the results."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  revision:
+    type: integer
+    minimum: 1
+    description: "Report revision. Corrections produce a new revision; released history is never overwritten."
+
+  status:
+    type: string
+    description: >
+      Report lifecycle: drafted -> technical_review -> approved -> released;
+      released is the only customer-visibility trigger. Corrections after
+      release supersede the revision.
+    enum: [drafted, technical_review, approved, released, superseded, withdrawn]
+
+  approvedByRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Technical reviewer/approver."
+
+  approvedAt:
+    type: string
+    format: date-time
+
+  releasedAt:
+    type: string
+    format: date-time
+    description: "When the report was released (external notification minted from this timestamp)."
+
+  artifactRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: artifact }
+    description: "Artifact record carrying the rendered report (PDF). Artifact ≤ 5 MB is pushed inline on release to external consumers."
+
+  notes:
+    type: string

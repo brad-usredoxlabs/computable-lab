@@ -1,0 +1,65 @@
+lifecycleVersion: 1
+id: service-request
+description: >
+  Generic lifecycle for laboratory work requests (party -> request). No
+  commercial semantics. Domain specializations (e.g., test-your-food order)
+  use their own lifecycle and may mirror this one's accepted/rejected/cancelled
+  states. See specs/computable-lab-party-request-schema-spec.md §4.
+
+roles:
+- id: lab-intake
+  label: "Lab Intake"
+  description: "Person/agent reviewing incoming requests for acceptance."
+- id: lab-operator
+  label: "Lab Operator"
+  description: "Person performing the requested work."
+
+states:
+- id: submitted
+  label: "Submitted"
+  initial: true
+  description: "Request received by the laboratory; not yet reviewed."
+- id: accepted
+  label: "Accepted"
+  description: "Request review passed; the lab commits to performing the work."
+- id: rejected
+  label: "Rejected"
+  terminal: true
+  description: "Request declined (contract review failed, sample type unsupported, etc.)."
+- id: in_progress
+  label: "In Progress"
+  description: "Laboratory work on the request has started."
+- id: completed
+  label: "Completed"
+  terminal: true
+  description: "All requested work is done and reported."
+- id: cancelled
+  label: "Cancelled"
+  terminal: true
+  description: "Request withdrawn by the requester before completion."
+
+transitions:
+- from: submitted
+  to: accepted
+  role: lab-intake
+  label: "Accept request"
+- from: submitted
+  to: rejected
+  role: lab-intake
+  label: "Reject request"
+- from: accepted
+  to: in_progress
+  role: lab-operator
+  label: "Start work"
+- from: accepted
+  to: cancelled
+  role: lab-intake
+  label: "Cancel (requester withdrawal)"
+- from: in_progress
+  to: completed
+  role: lab-operator
+  label: "Complete work"
+- from: in_progress
+  to: cancelled
+  role: lab-intake
+  label: "Cancel (requester withdrawal)"

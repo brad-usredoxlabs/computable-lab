@@ -22,6 +22,7 @@ export interface AppConfig {
   execution?: ExecutionConfig;
   lab?: LabConfig;
   integrations?: IntegrationsConfig;
+  labSync?: LabSyncConfig;
   ontology?: OntologyConfig;
   corpus?: CorpusConfig;
 }
@@ -89,10 +90,12 @@ export interface IntegrationsConfig {
 
 /**
  * test-your-food.com <-> Computable Lab event sync configuration
+ * (specs/lab-sync-api.md). HTTP synchronizes meaning, Git preserves history.
  * The worker is disabled unless `enabled` is true AND `token` resolves to a
  * non-empty value (the ${TYF_LAB_TOKEN} substitution yields '' when unset —
  * the shared secret never lives in config.yaml or code).
  */
+export interface LabSyncConfig {
   enabled?: boolean;
   /** Website API base URL (e.g. https://test-your-food.com/api). */
   baseUrl?: string;

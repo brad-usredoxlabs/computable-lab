@@ -1,0 +1,35 @@
+# Lint rules for Sample records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/sample.schema.yaml"
+rules:
+  - id: "sample-has-identifier"
+    title: "A submitted sample carries at least one external identifier"
+    severity: "warning"
+    scope: "record"
+    when:
+      op: "not"
+      not:
+        op: "equals"
+        path: "$.status"
+        value: "rejected"
+    assert:
+      op: "nonEmpty"
+      path: "$.identifiers"
+    message:
+      template: "Sample '{{$.recordId}}' has no identifiers — the lab scan cannot resolve it back to a request"
+      paths: ["$.recordId"]
+
+  - id: "sample-receipt-truth-recorded"
+    title: "Samples past 'received' record receipt truth"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "in"
+      path: "$.status"
+      values: [received, accessioned, in_progress, consumed]
+    assert:
+      op: "exists"
+      path: "$.receipt.receivedAt"
+    message:
+      template: "Sample '{{$.recordId}}' is in status '{{$.status}}' but has no receipt.receivedAt — custody truth missing"
+      paths: ["$.recordId", "$.status"]

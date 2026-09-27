@@ -1,0 +1,42 @@
+# Lint rules for Request records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/request.schema.yaml"
+rules:
+  - id: "request-has-service-lines"
+    title: "A request states at least one requested service"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.requestedServices"
+    message:
+      template: "Request '{{$.recordId}}' has no requestedServices — the lab cannot know what work was asked for"
+      paths: ["$.recordId"]
+
+  - id: "request-service-code-present"
+    title: "Requested service lines state a service code"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "exists"
+      path: "$.requestedServices[0]"
+    assert:
+      op: "nonEmpty"
+      path: "$.requestedServices[0].service"
+    message:
+      template: "Request '{{$.recordId}}' has a service line without a controlled service code (values come from config/lab-sync/mapping.yaml)"
+      paths: ["$.recordId"]
+
+  - id: "request-remote-source-shaped"
+    title: "External requests carry a stable public remoteId"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "exists"
+      path: "$.source"
+    assert:
+      op: "nonEmpty"
+      path: "$.source.remoteId"
+    message:
+      template: "Request '{{$.recordId}}' source.remoteId must be the external system's stable public reference, never a numeric DB id"
+      paths: ["$.recordId", "$.source"]

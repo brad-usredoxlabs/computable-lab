@@ -1,0 +1,106 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/party.schema.yaml"
+title: "Party"
+description: >
+  A person or organization participating in, requesting, owning, receiving,
+  supplying, or otherwise relating to laboratory work. Generic core record:
+  commercial identities (customer, supplier) are domain specializations that
+  compose $defs.PartyShape rather than inventing parallel identity records.
+  See specs/computable-lab-party-request-schema-spec.md.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "#/$defs/PartyShape"
+
+required:
+- kind
+- recordId
+- name
+- partyType
+- status
+
+properties:
+  kind:
+    const: "party"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^PARTY-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., PARTY-0018)."
+
+  extends:
+    type: string
+    description: >
+      IS-A declaration for specialized party records (e.g., customer extends
+      party). Conceptual specialization only — see party-request spec §17.
+
+  status:
+    type: string
+    enum: [active, inactive, archived]
+    description: "Identity status. Transactional state never lives on a party."
+
+$defs:
+  PartyShape:
+    type: object
+    description: >
+      Reusable party field group. Domain specializations ($ref this shape and
+      add their own fields; they do not duplicate it).
+    properties:
+      name:
+        type: string
+        minLength: 1
+        description: "Canonical display name (person or organization)."
+
+      partyType:
+        type: string
+        enum: [person, organization, research_group, department, institution, company]
+        description: "What kind of entity this party is."
+
+      contacts:
+        type: array
+        description: "Contact channels. At most meaningful identity info; NOT transactional."
+        items:
+          type: object
+          additionalProperties: false
+          required: [channel, value]
+          properties:
+            channel:
+              type: string
+              enum: [email, phone, postal, other]
+            value:
+              type: string
+              minLength: 1
+            label:
+              type: string
+            isPrimary:
+              type: boolean
+
+      addresses:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          properties:
+            street: { type: string }
+            city: { type: string }
+            region: { type: string }
+            postal: { type: string }
+            country: { type: string }
+
+      source:
+        type: object
+        description: >
+          Provenance of the identity itself. remoteId is the external system's
+          stable public reference — never its internal numeric DB id.
+        additionalProperties: false
+        required: [system, remoteId]
+        properties:
+          system: { type: string, minLength: 1 }
+          remoteId: { type: string, minLength: 1 }
+          remoteRevision: { type: integer, minimum: 0 }
+
+      notes:
+        type: string

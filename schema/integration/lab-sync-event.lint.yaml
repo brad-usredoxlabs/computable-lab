@@ -1,0 +1,33 @@
+# Lint rules for LabSyncEvent records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/lab-sync-event.schema.yaml"
+rules:
+  - id: "labsync-inbound-has-cursor"
+    title: "Inbound events record the website cursor"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "equals"
+      path: "$.direction"
+      value: "inbound"
+    assert:
+      op: "exists"
+      path: "$.cursor"
+    message:
+      template: "Inbound lab-sync event '{{$.eventId}}' has no cursor — ordering/ack resume is impossible"
+      paths: ["$.eventId"]
+
+  - id: "labsync-processed-names-records"
+    title: "Applied events name the records they created/changed"
+    severity: "warning"
+    scope: "record"
+    when:
+      op: "equals"
+      path: "$.processing.status"
+      value: "applied"
+    assert:
+      op: "nonEmpty"
+      path: "$.processing.affectedRecordIds"
+    message:
+      template: "lab-sync event '{{$.eventId}}' claims applied but names no affected records"
+      paths: ["$.eventId"]

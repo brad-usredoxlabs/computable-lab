@@ -1,0 +1,57 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/domains/test-your-food/customer.schema.yaml"
+title: "Customer"
+description: >
+  Test Your Food customer: an IS-A party (customer extends party) carrying the
+  persistent external identity only. Deliberately thin — transactional info
+  (assay requests, shipping, payment) belongs on the order. If the customer
+  record is absent from an install, that install simply has no TYF domain.
+  See party-request spec §8.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../../common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "../../party.schema.yaml#/$defs/PartyShape"
+
+required:
+- kind
+- recordId
+- extends
+- name
+- partyType
+- status
+- source
+
+properties:
+  kind:
+    const: "customer"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    pattern: "^CUST-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., CUST-0018)."
+
+  extends:
+    const: "party"
+    description: "IS-A party. One record, tagged — no parallel PARTY record."
+
+  source:
+    type: object
+    description: >
+      External identity provenance. remoteId is the website's stable public
+      customer reference — never its numeric DB id.
+    additionalProperties: false
+    required: [system, remoteId]
+    properties:
+      system: { type: string, minLength: 1 }
+      remoteId: { type: string, minLength: 1 }
+      remoteRevision: { type: integer, minimum: 0 }
+
+  status:
+    type: string
+    enum: [active, inactive, archived]
+
+  notes:
+    type: string

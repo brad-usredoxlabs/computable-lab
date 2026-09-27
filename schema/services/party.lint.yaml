@@ -1,0 +1,28 @@
+# Lint rules for Party records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/party.schema.yaml"
+rules:
+  - id: "party-has-primary-contact"
+    title: "Party should have at least one contact"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.contacts"
+    message:
+      template: "Party '{{$.recordId}}' has no contacts — laboratory work cannot be communicated back"
+      paths: ["$.recordId"]
+
+  - id: "party-remote-source-shaped"
+    title: "External party identities carry a stable public remoteId"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "exists"
+      path: "$.source"
+    assert:
+      op: "nonEmpty"
+      path: "$.source.remoteId"
+    message:
+      template: "Party '{{$.recordId}}' source.remoteId must be the external system's stable public reference, never a numeric DB id"
+      paths: ["$.recordId", "$.source"]
