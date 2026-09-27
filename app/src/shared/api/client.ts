@@ -3990,13 +3990,14 @@ export const apiClient = {
 
   /**
    * Get valid transitions for a record in a lifecycle.
-   * Calls GET /lifecycle/:lifecycleId/transitions?state=:currentState&actorId=:actorId
+   * Calls GET /lifecycle/:lifecycleId/transitions?recordId=:recordId
+   * The server reads the record's current state from its payload.
    * Returns empty array if endpoint not available (404).
    */
   async getValidTransitions(
-    _recordId: string,
+    recordId: string,
     lifecycleId: string,
-    actorId?: string
+    _actorId?: string
   ): Promise<{
     transitions: Array<{
       event: string
@@ -4006,8 +4007,8 @@ export const apiClient = {
       allowed: boolean
     }>
   }> {
-    const params = new URLSearchParams({ state: 'draft' })
-    if (actorId) params.set('actorId', actorId)
+    const params = new URLSearchParams({ recordId })
+
     
     try {
       const response = await request<{

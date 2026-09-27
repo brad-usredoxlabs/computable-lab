@@ -13,4 +13,5 @@ settings:
   allowExpiredAuthorization: confirm
   allowOutOfCalibrationEquipment: confirm
   allowUnqualifiedEquipment: confirm
+  enforceTransitionRoles: deny
   approvalAuthority: project-owner

@@ -1,0 +1,71 @@
+lifecycleVersion: 1
+id: document-controlled-signing
+description: "Document control lifecycle with 21 CFR Part 11-style e-signature enforcement on approval and release."
+
+roles:
+- id: author
+  label: "Author"
+  description: "The person who created or owns the document."
+- id: reviewer
+  label: "Reviewer"
+  description: "A qualified person who reviews the document for correctness."
+- id: approver
+  label: "Approver"
+  description: "A person with authority to approve the document for use."
+
+states:
+- id: draft
+  label: "Draft"
+  initial: true
+  description: "Document is being authored. Not yet submitted for review."
+- id: in_review
+  label: "In Review"
+  description: "Document has been submitted and is awaiting reviewer assessment."
+- id: approved
+  label: "Approved"
+  description: "Document has been reviewed and approved."
+- id: effective
+  label: "Effective"
+  description: "Document is the current active version in use."
+- id: superseded
+  label: "Superseded"
+  terminal: true
+  description: "Document has been replaced by a newer version."
+- id: archived
+  label: "Archived"
+  terminal: true
+  description: "Document has been retired from use."
+
+transitions:
+- from: draft
+  to: in_review
+  role: author
+  label: "Submit for review"
+- from: in_review
+  to: approved
+  role: reviewer
+  label: "Approve"
+  guards:
+  - type: requires_different_person
+    than: author
+  - type: requires_signature
+    signatureAction: approved
+- from: in_review
+  to: draft
+  role: reviewer
+  label: "Return to draft"
+- from: approved
+  to: effective
+  role: approver
+  label: "Make effective"
+  guards:
+  - type: requires_signature
+    signatureAction: approved
+- from: effective
+  to: superseded
+  role: author
+  label: "Supersede"
+- from: [draft, in_review, approved, effective]
+  to: archived
+  role: approver
+  label: "Archive"

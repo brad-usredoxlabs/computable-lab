@@ -5,6 +5,9 @@ import type { RecordStore } from '../../store/types.js';
 import type { IndexManager } from '../../index/IndexManager.js';
 import type { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
+import type { LocalIdentityService } from '../../security/LocalIdentityService.js';
+import type { RoleResolver } from '../../security/RoleResolver.js';
+import type { PolicyDisposition } from '../../policy/types.js';
 import { toStoredConcentration, type Concentration } from '../../materials/concentration.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
@@ -421,7 +424,16 @@ const MATERIAL_SEARCH_SCHEMA_IDS = [
   'https://computable-lab.com/schema/computable-lab/term.schema.yaml',
 ] as const;
 
-export function createMaterialLifecycleHandlers(store: RecordStore, indexManager?: IndexManager, lifecycleEngine?: LifecycleEngine) {
+export function createMaterialLifecycleHandlers(
+  store: RecordStore,
+  indexManager?: IndexManager,
+  lifecycleEngine?: LifecycleEngine,
+  security?: {
+    identityService?: LocalIdentityService;
+    roleResolver?: RoleResolver;
+    getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition };
+  },
+) {
   async function createDerivationFromBody(
     body: CreateMaterialDerivationBody,
     reply: FastifyReply,
@@ -559,10 +571,27 @@ export function createMaterialLifecycleHandlers(store: RecordStore, indexManager
         status,
       };
       if (lifecycleEngine) {
+        // Actor identity comes from the authenticated session user, never the
+        // spoofable x-actor-id header. No 401 in this path: if no user
+        // resolves, the actor stays 'anonymous'.
+        let actorId = 'anonymous'
+        let userId: string | undefined
+        if (security?.identityService) {
+          const user = await security.identityService.resolveRequestUser(request)
+          actorId = user.userId ?? 'anonymous'
+          userId = user.userId ?? undefined
+        }
+        const nextLifecycleId = (updatedPayload.lifecycleId as string | undefined)
+        const actorRoles = security?.roleResolver && userId
+          ? await security.roleResolver.rolesFor(userId, nextLifecycleId)
+          : []
+        const enforceTransitionRoles = (security?.getPolicySettings?.().enforceTransitionRoles ?? 'allow') === 'deny'
         const lifecycleResult = checkLifecycleTransition(lifecycleEngine, {
           previousPayload: payload,
           nextPayload: updatedPayload,
-          actorId: (request.headers['x-actor-id'] as string) || 'anonymous',
+          actorId,
+          actorRoles,
+          enforceTransitionRoles,
         });
         if (!lifecycleResult.allowed) {
           reply.status(422);

@@ -69,7 +69,11 @@ properties:
                 - requires_active_policy
                 - requires_policy_disposition
                 - requires_authority
+                - requires_role
+                - requires_signature
               field:
+                type: string
+              role:
                 type: string
               than:
                 type: string
@@ -78,6 +82,9 @@ properties:
                 enum: [allowed, needs-confirmation, blocked]
               authority:
                 type: string
+              signatureAction:
+                type: string
+                description: "Required signature action for requires_signature."
         description:
           type: string
   roles:

@@ -1,6 +1,13 @@
 import { type MachineConfig } from 'xstate'
 import type { LifecycleSpec, LifecycleContext, LifecycleEvent } from './types'
 
+/**
+ * NOTE: The compiled XState machine is ADVISORY. All production callers go
+ * through LifecycleEngine.canTransition/getValidTransitions, which read the
+ * spec directly (guards + transition-role enforcement). The compiled guards
+ * mirror the guard DSL semantics so a behavioral cross-check can pin equality
+ * between the two interpretations (see LifecycleEngine.roles.test.ts).
+ */
 export function compileLifecycle(spec: LifecycleSpec): {
   config: MachineConfig<LifecycleContext, LifecycleEvent>
   guards: Record<string, (ctx: { context: LifecycleContext }) => boolean>
@@ -58,11 +65,13 @@ export function compileLifecycle(spec: LifecycleSpec): {
 }
 
 function createGuardFunction(guards: Array<{
-  type: 'requires_different_person' | 'requires_field_set' | 'requires_active_policy' | 'requires_policy_disposition' | 'requires_authority'
+  type: 'requires_different_person' | 'requires_field_set' | 'requires_active_policy' | 'requires_policy_disposition' | 'requires_authority' | 'requires_role' | 'requires_signature'
   field?: string
+  role?: string
   than?: string
   disposition?: 'allowed' | 'needs-confirmation' | 'blocked'
   authority?: string
+  signatureAction?: string
 }>): (ctx: { context: LifecycleContext }) => boolean {
   const guardFns = guards.map(g => {
     switch (g.type) {
@@ -83,6 +92,18 @@ function createGuardFunction(guards: Array<{
       case 'requires_authority':
         return (ctx: { context: LifecycleContext }) =>
           !g.authority || getField(ctx.context.fields, 'approvalAuthority') === g.authority
+      case 'requires_role':
+        return (ctx: { context: LifecycleContext }) =>
+          ctx.context.actorRoles.includes(g.role ?? '')
+            || ctx.context.roleAssignments[g.role ?? ''] === ctx.context.currentActorId
+      case 'requires_signature':
+        return (ctx: { context: LifecycleContext }) => {
+          if (!g.signatureAction) return false // fail closed; role->action mapping lives in YAML only
+          return ctx.context.presentedSignatures.some(s =>
+            s.subjectRecordId === ctx.context.recordId &&
+            s.signedBy === ctx.context.currentActorId &&
+            s.action === g.signatureAction)
+        }
       default:
         return () => true
     }

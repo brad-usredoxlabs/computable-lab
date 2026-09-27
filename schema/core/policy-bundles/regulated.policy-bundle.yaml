@@ -13,4 +13,5 @@ settings:
   allowExpiredAuthorization: deny
   allowOutOfCalibrationEquipment: deny
   allowUnqualifiedEquipment: deny
+  enforceTransitionRoles: deny
   approvalAuthority: qa-reviewer

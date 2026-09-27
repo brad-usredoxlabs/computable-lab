@@ -41,7 +41,18 @@ export class LifecycleEngine {
   private checkEventInSpec(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
     const transition = this.findTransition(lifecycleId, currentState, event)
     if (!transition) return false
-    return this.guardsPass(transition.guards ?? [], context)
+    if (!this.guardsPass(transition.guards ?? [], context)) return false
+    // Transition role enforcement: the required role is satisfied when the
+    // actor HOLDS the role via a QMS role-grant (actorRoles) OR is the
+    // assigned person for that role (roleAssignments). Enforcement is skipped
+    // entirely when enforceTransitionRoles is false (research-mode policy
+    // bundles: POL-SANDBOX / POL-NOTEBOOK resolve it to 'allow').
+    if (context.enforceTransitionRoles) {
+      const satisfied = context.actorRoles.includes(transition.role)
+        || context.roleAssignments[transition.role] === context.currentActorId
+      if (!satisfied) return false
+    }
+    return true
   }
 
   private findTransition(lifecycleId: string, currentState: string, event: string): LifecycleSpec['transitions'][number] | undefined {
@@ -71,6 +82,16 @@ export class LifecycleEngine {
           return !guard.disposition || this.fieldValue(context.fields, 'policyDisposition') === guard.disposition
         case 'requires_authority':
           return !guard.authority || this.fieldValue(context.fields, 'approvalAuthority') === guard.authority
+        case 'requires_role':
+          return context.actorRoles.includes(guard.role ?? '')
+            || context.roleAssignments[guard.role ?? ''] === context.currentActorId
+        case 'requires_signature': {
+          if (!guard.signatureAction) return false // fail closed; role->action mapping lives in YAML only
+          return context.presentedSignatures.some(s =>
+            s.subjectRecordId === context.recordId &&
+            s.signedBy === context.currentActorId &&
+            s.action === guard.signatureAction)
+        }
         default:
           return false
       }

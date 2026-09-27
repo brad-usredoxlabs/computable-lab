@@ -1,0 +1,51 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/audit-event.schema.yaml"
+title: "Audit Event"
+description: >
+  Append-only domain event. Git history records every change; audit events
+  record what changes MEANT. Never edited or deleted.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- actor
+- action
+- subjectType
+- subjectId
+- occurredAt
+
+properties:
+  kind:
+    const: "audit-event"
+
+  recordId:
+    type: string
+    pattern: "^EVT-[A-Z0-9][A-Z0-9_-]*$"
+
+  actor:
+    type: string
+    description: "USR- id or system identity."
+
+  action:
+    type: string
+    pattern: "^[a-z][a-z0-9_]*$"
+
+  subjectType:
+    type: string
+
+  subjectId:
+    type: string
+
+  occurredAt:
+    type: string
+    format: date-time
+
+  data:
+    type: object
+    description: "Event payload, e.g. {from, to, event, lifecycleId, gitCommit}."
+    additionalProperties: true

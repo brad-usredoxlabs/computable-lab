@@ -87,6 +87,23 @@ export interface IntegrationsConfig {
   exa?: ExaConfig;
 }
 
+/**
+ * test-your-food.com <-> Computable Lab event sync configuration
+ * The worker is disabled unless `enabled` is true AND `token` resolves to a
+ * non-empty value (the ${TYF_LAB_TOKEN} substitution yields '' when unset —
+ * the shared secret never lives in config.yaml or code).
+ */
+  enabled?: boolean;
+  /** Website API base URL (e.g. https://test-your-food.com/api). */
+  baseUrl?: string;
+  /** Shared secret for X-LAB-TOKEN. Must come from env substitution. */
+  token?: string;
+  /** Interval between poll cycles when long-polling is not holding (seconds). */
+  pollSeconds?: number;
+  /** Long-poll hold time per request (0-60, website cap). */
+  longPollWaitSeconds?: number;
+}
+
 export type ExaSearchType = 'auto' | 'fast' | 'instant' | 'deep' | 'deep-reasoning';
 export type ExaContentMode = 'highlights' | 'text' | 'summary';
 
@@ -282,6 +299,12 @@ export interface ServerConfig {
   workspaceDir: string;
   /** CORS configuration */
   cors: CorsConfig;
+  /**
+   * Record kinds that can never be updated or deleted through the record API
+   * (append-only). Defaults to governance kinds in DEFAULT_CONFIG; an empty or
+   * absent list simply leaves those kinds unprotected.
+   */
+  appendOnlyKinds?: string[];
 }
 
 /**
@@ -414,6 +437,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       enabled: true,
       origins: ['*'],
     },
+    appendOnlyKinds: ['audit-event', 'signature'],
   },
   schemas: {
     source: 'bundled',

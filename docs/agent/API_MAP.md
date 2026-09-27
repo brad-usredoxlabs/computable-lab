@@ -68,6 +68,8 @@ Flow: `HTTP → Fastify route → handler → RecordStore/Compiler/InferenceClie
 | `GET/PUT /studies/:studyId/workspace` | `WorkspaceHandlers` | Per-study workspace state |
 | `GET /studies/:studyId/artifacts/:artifactId/blob` | `ArtifactBlobHandlers` | Artifact blobs |
 | `POST /labware-definitions/search` | inline | Labware definition search |
+| `GET /lifecycle/:lifecycleId/transitions` | `LifecycleHandlers` | Transition preview for a lifecycle (optional `?recordId=`): `{lifecycleId, state, transitions:[{event,targetState,label,role,allowed}]}`. 401 without session user. Preview is PERMISSIVE (`enforceTransitionRoles: false`, no signatures) — the write path can still deny what it shows allowed |
+| `POST /signatures` | `SignatureHandlers` | Mint e-signature: body `{subject:{recordId,lifecycleId?,targetState?},action,statement?,password}`; password step-up re-auth via CredentialStore (403 `REAUTH_FAILED`); signer ALWAYS from session; binds subject git sha; returns `{success,signatureId,subject}` |
 
 ---
 
@@ -175,13 +177,54 @@ CREATE (POST /records):
 
 UPDATE (PUT /records/:id):
   1. Resolve user + check write access
-  2. normalizeEventGraphMaterialUsage() → checkLifecycleTransition()
-  3. RecordStore.update() → validate → lint → git commit
-  4. If event-graph: onEventGraphMutated() → warm context
+  2. Append-only guard: kind in config server.appendOnlyKinds
+     (default ['audit-event','signature']) → 405 APPEND_ONLY
+  3. normalizeEventGraphMaterialUsage() → checkLifecycleTransition()
+     actor = authenticated session user (x-cl-session); spoofable
+     x-actor-id header no longer feeds lifecycle checks
+     role guard: actorRoles from role-grant records OR roleAssignments
+     from payload ('<role>Ref' keys, createdBy→author); enforced only
+     when active policy bundle enforceTransitionRoles=deny
+     signature guard: signatureRefs from body, each must bind THIS record
+     and be signed by the actor
+  4. RecordStore.update() → validate → lint → git commit
+  5. If event-graph: onEventGraphMutated() → warm context
+     Successful governed transition → audit-event append
+     (action lifecycle_transition, best-effort, never fails the op)
 
 DELETE (DELETE /records/:id):
   1. Resolve user + check write access
   2. RecordStore.delete() → git remove → IndexManager.rebuild()
+```
+
+### Governed Lifecycle Transition (`server/src/lifecycle/lifecycleMiddleware.ts`)
+
+```
+PUT /records/:id (payload.state/status change)
+  → RecordHandlers.updateRecord()
+    1. appendOnlyKinds check → 405 APPEND_ONLY for signature/audit-event
+    2. signatureRefs in body → validate: signature record, subject binds THIS
+       record, signedBy === acting session user
+    3. checkLifecycleTransition(engine, previousPayload, nextPayload, actorId,
+       actorRoles, enforceTransitionRoles, presentedSignatures)
+       └→ LifecycleEngine.getValidTransitions() → guard evaluation:
+          requires_role      actorRoles (role-grant) OR roleAssignments
+                             ('<role>Ref' payload keys, createdBy→author)
+          requires_signature presentedSignatures match guard.signatureAction
+                             (fails closed without signatureAction in YAML)
+          transition.role    checked only when policy bundle
+                             enforceTransitionRoles=deny
+                             (POL-TRACKED/POL-REGULATED deny;
+                             POL-SANDBOX/POL-NOTEBOOK allow)
+    4. denied → 422; allowed → store.update → git commit
+    5. AuditEventService.append lifecycle_transition (best-effort)
+
+POST /signatures → SignatureHandlers.mintSignature()
+  → CredentialStore.verifyPassword (step-up) → store.create SIG-* record
+  → AuditEventService.append signature_applied
+
+Preview: GET /lifecycle/:lifecycleId/transitions?recordId= → LifecycleHandlers
+  (permissive: enforceTransitionRoles=false, presentedSignatures=[])
 ```
 
 ### Workspace State (`server/src/api/handlers/WorkspaceHandlers.ts`)
@@ -216,4 +259,9 @@ PUT /studies/:studyId/workspace → atomic write (tmp + rename)
 | `server/src/api/handlers/ProtocolBuilderHandlers.ts` | — | Protocol extraction/drafting |
 | `server/src/api/handlers/ExecutionHandlers.ts` | — | Execution pipeline |
 | `server/src/api/handlers/RunDraftHandlers.ts` | — | Run-centered workflow |
+| `server/src/api/handlers/LifecycleHandlers.ts` | 73 | Transition preview route |
+| `server/src/api/handlers/SignatureHandlers.ts` | 161 | E-signature minting (password re-auth, git-sha binding) |
+| `server/src/lifecycle/lifecycleMiddleware.ts` | — | `checkLifecycleTransition` + generic `extractRoleAssignments` |
+| `server/src/security/RoleResolver.ts` | — | Resolves actor roles from role-grant records |
+| `server/src/governance/AuditEventService.ts` | — | Append-only audit events (never-fail append) |
 | `app/src/shared/api/client.ts` | 4191 | Frontend API client, 196 methods |

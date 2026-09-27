@@ -27,11 +27,29 @@ import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import type { AuthorizationService } from '../../security/AuthorizationService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
+import type { RoleResolver } from '../../security/RoleResolver.js';
+import type { PolicyDisposition } from '../../policy/types.js';
+import type { AuditEventService } from '../../governance/AuditEventService.js';
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
   authorizationService?: AuthorizationService;
+  roleResolver?: RoleResolver;
+  getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition };
+  /** Best-effort audit trail; appends never fail the business operation. */
+  auditService?: AuditEventService;
+  /**
+   * Kinds that can never be updated or deleted (append-only governance
+   * records). Absent accessor → nothing is protected (system works with the
+   * config ripped out).
+   */
+  getAppendOnlyKinds?: () => string[];
 }
+
+/** Body of an update request extended with optional presented signature refs. */
+type UpdateRecordBodyWithSignatures = UpdateRecordRequest & {
+  signatureRefs?: string[];
+};
 
 function payloadObject(payload: unknown): Record<string, unknown> {
   return payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
@@ -497,7 +515,7 @@ export function createRecordHandlers(
     async updateRecord(
       request: FastifyRequest<{
         Params: { id: string };
-        Body: UpdateRecordRequest;
+        Body: UpdateRecordBodyWithSignatures;
       }>,
       reply: FastifyReply
     ): Promise<RecordMutationResponse | ApiError> {
@@ -532,15 +550,74 @@ export function createRecordHandlers(
           return accessDeniedError(`User ${user.userId} cannot update ${id}`);
         }
         
+        // Append-only governance kinds (audit events, signatures) can never
+        // be mutated through the record API.
+        {
+          const appendOnlyKinds = security?.getAppendOnlyKinds?.() ?? [];
+          const existingKind = payloadKind(existing.payload);
+          if (existingKind && appendOnlyKinds.includes(existingKind)) {
+            reply.status(405);
+            return {
+              error: 'APPEND_ONLY',
+              message: `${existing.recordId} is an append-only ${existingKind} record`,
+            };
+          }
+        }
+
+        // Validate presented signature refs BEFORE the lifecycle check: each
+        // must be a signature record bound to THIS record and signed by the
+        // acting user. The engine's requires_signature guard consumes the
+        // resulting presentedSignatures list.
+        let presentedSignatures: Array<{ id: string; action: string; subjectRecordId: string; signedBy: string }> | undefined;
+        if (lifecycleEngine && Array.isArray((request.body as UpdateRecordBodyWithSignatures).signatureRefs)) {
+          const actorIdForSignatures = user.userId ?? 'anonymous';
+          const refs = (request.body as UpdateRecordBodyWithSignatures).signatureRefs ?? [];
+          const validated: Array<{ id: string; action: string; subjectRecordId: string; signedBy: string }> = [];
+          for (const ref of refs) {
+            const sigRecord = await store.get(ref);
+            const sigPayload = payloadObject(sigRecord?.payload);
+            if (!sigRecord || sigPayload.kind !== 'signature') {
+              reply.status(422);
+              return { error: 'INVALID_SIGNATURE_REF', message: `${ref} is not a signature record` };
+            }
+            const subject = payloadObject(sigPayload.subject);
+            if (subject.recordId !== id) {
+              reply.status(422);
+              return { error: 'SIGNATURE_SUBJECT_MISMATCH', message: `Signature ${ref} is not bound to ${id}` };
+            }
+            if (sigPayload.signedBy !== actorIdForSignatures) {
+              reply.status(422);
+              return { error: 'SIGNATURE_SIGNER_MISMATCH', message: `Signature ${ref} was not signed by the acting user` };
+            }
+            validated.push({
+              id: ref,
+              action: typeof sigPayload.action === 'string' ? sigPayload.action : '',
+              subjectRecordId: String(subject.recordId),
+              signedBy: String(sigPayload.signedBy),
+            });
+          }
+          presentedSignatures = validated;
+        }
+
         // Check lifecycle transition if lifecycleEngine is available
+        let lifecycleTransition: { from: string; to: string; event: string } | undefined;
+        let nextLifecycleId: string | undefined;
         if (lifecycleEngine) {
-          const actorId = (request.headers['x-actor-id'] as string) || 'anonymous'
+          const actorId = user.userId ?? 'anonymous'
           const previousPayload = existing.payload as Record<string, unknown>
           const nextPayload = request.body.payload as Record<string, unknown>
+          nextLifecycleId = (nextPayload.lifecycleId as string | undefined)
+          const actorRoles = security?.roleResolver && user.userId
+            ? await security.roleResolver.rolesFor(user.userId, nextLifecycleId)
+            : []
+          const enforceTransitionRoles = (security?.getPolicySettings?.().enforceTransitionRoles ?? 'allow') === 'deny'
           const lifecycleResult = checkLifecycleTransition(lifecycleEngine, {
             previousPayload,
             nextPayload,
             actorId,
+            actorRoles,
+            enforceTransitionRoles,
+            ...(presentedSignatures !== undefined ? { presentedSignatures } : {}),
           })
           
           if (!lifecycleResult.allowed) {
@@ -550,6 +627,7 @@ export function createRecordHandlers(
               message: lifecycleResult.error || 'Lifecycle transition not allowed',
             }
           }
+          lifecycleTransition = lifecycleResult.transition
         }
         
         // Inject updatedAt in payload (schema-compatible provenance field).
@@ -646,6 +724,25 @@ export function createRecordHandlers(
           } catch (indexErr) {
             console.error('Failed to update index after update:', indexErr);
           }
+        }
+
+        // Record what the transition MEANT (append-only audit trail).
+        // AuditEventService.append swallows its own failures — this never
+        // fails the business operation.
+        if (lifecycleTransition && security?.auditService) {
+          await security.auditService.append({
+            actor: user.userId ?? 'anonymous',
+            action: 'lifecycle_transition',
+            subjectType: payloadKind(existing.payload) ?? 'record',
+            subjectId: id,
+            data: {
+              from: lifecycleTransition.from,
+              to: lifecycleTransition.to,
+              event: lifecycleTransition.event,
+              ...(nextLifecycleId !== undefined ? { lifecycleId: nextLifecycleId } : {}),
+              ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
+            },
+          });
         }
 
         // Graph mutated outside the Accept path (manual edits, drag/drop):
@@ -823,6 +920,20 @@ export function createRecordHandlers(
         if (!(await canAccess(user, requiredAction, existing))) {
           reply.status(403);
           return accessDeniedError(`User ${user.userId} cannot delete ${id}`);
+        }
+
+        // Append-only governance kinds (audit events, signatures) can never
+        // be deleted through the record API.
+        {
+          const appendOnlyKinds = security?.getAppendOnlyKinds?.() ?? [];
+          const existingKind = payloadKind(existing.payload);
+          if (existingKind && appendOnlyKinds.includes(existingKind)) {
+            reply.status(405);
+            return {
+              error: 'APPEND_ONLY',
+              message: `${existing.recordId} is an append-only ${existingKind} record`,
+            };
+          }
         }
         
         // Delete record

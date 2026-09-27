@@ -191,6 +191,7 @@ export class PolicyProfileService {
       allowExpiredAuthorization: defaultOrigin,
       allowOutOfCalibrationEquipment: defaultOrigin,
       allowUnqualifiedEquipment: defaultOrigin,
+      enforceTransitionRoles: defaultOrigin,
       approvalAuthority: defaultOrigin,
     };
     const trace: PolicyResolutionTraceEntry[] = [];

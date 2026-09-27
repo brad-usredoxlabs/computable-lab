@@ -61,6 +61,8 @@ import {
   createSemanticsHandlers,
   createPlatformHandlers,
   createLabSettingsHandlers,
+  createLifecycleHandlers,
+  createSignatureHandlers,
   createVendorSearchHandlers,
   createVendorDocumentHandlers,
   createVendorExaHandlers,
@@ -146,6 +148,8 @@ import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
+import { RoleResolver } from './security/RoleResolver.js';
+import { AuditEventService } from './governance/AuditEventService.js';
 import { CredentialStore } from './security/CredentialStore.js';
 import { SessionStore } from './security/SessionStore.js';
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
@@ -688,6 +692,8 @@ export async function createServer(
   // handlers need a stable callback reference now.
   let requestRunWarm: ((runId: string) => void) | undefined;
 
+  const roleResolver = new RoleResolver(ctx.store);
+  const auditService = new AuditEventService(ctx.store);
   const recordHandlers = createRecordHandlers(
     ctx.store,
     ctx.indexManager,
@@ -698,6 +704,14 @@ export async function createServer(
     {
       identityService: ctx.localIdentityService,
       authorizationService: ctx.authorizationService,
+      roleResolver,
+      auditService,
+      // Live accessor: ctx.appConfig is reassigned at runtime (PATCH /api/config),
+      // so resolve the bundle id per call, same pattern as materialTracking.
+      getPolicySettings: () => ctx.policyBundleService.resolveSettings(
+        ctx.appConfig?.lab?.policyBundleId ?? DEFAULT_APP_CONFIG.lab?.policyBundleId ?? 'POL-SANDBOX'
+      ),
+      getAppendOnlyKinds: () => ctx.appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
@@ -756,7 +770,13 @@ export async function createServer(
   const chemistryHandlers = createChemistryHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
-  const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine);
+  const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine, {
+    identityService: ctx.localIdentityService,
+    roleResolver,
+    getPolicySettings: () => ctx.policyBundleService.resolveSettings(
+      ctx.appConfig?.lab?.policyBundleId ?? DEFAULT_APP_CONFIG.lab?.policyBundleId ?? 'POL-SANDBOX'
+    ),
+  });
   const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
   const extractProtocolHandlers = createExtractProtocolHandlers(ctx.workspaceRoot);
   const aiProfile = ctx.appConfig?.ai ? resolveAiProfile(ctx.appConfig.ai) : undefined;
@@ -793,6 +813,18 @@ export async function createServer(
   const runContextAssembler = new RunContextAssembler(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
+  const lifecycleHandlers = createLifecycleHandlers({
+    engine: ctx.lifecycleEngine,
+    store: ctx.store,
+    roleResolver,
+    resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
+  });
+  const signatureHandlers = createSignatureHandlers({
+    store: ctx.store,
+    credentialStore: ctx.credentialStore,
+    identityService: ctx.localIdentityService,
+    auditService,
+  });
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // AI thread store: per-(user, endpoint) live conversations. Lives outside
@@ -1331,6 +1363,8 @@ export async function createServer(
       runDraftHandlers,
       platformHandlers,
       labSettingsHandlers,
+      lifecycleHandlers,
+      signatureHandlers,
       metaHandlers,
       protocolHandlers,
       protocolIdeHandlers,

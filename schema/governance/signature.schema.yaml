@@ -1,0 +1,76 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/signature.schema.yaml"
+title: "Signature"
+description: >
+  Electronic signature binding a person, an explicit meaning, and the exact
+  git version of the subject record at signing time. Signatures are immutable.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- signedBy
+- action
+- meaning
+- subject
+- signedAt
+- authentication
+
+properties:
+  kind:
+    const: "signature"
+
+  recordId:
+    type: string
+    pattern: "^SIG-[A-Z0-9][A-Z0-9_-]*$"
+
+  signedBy:
+    type: string
+    pattern: "^USR-[A-Z0-9][A-Z0-9_-]*$"
+
+  action:
+    type: string
+    enum: [ executed, reviewed, approved, verified, released, witnessed, acknowledged ]
+
+  meaning:
+    type: object
+    additionalProperties: false
+    required: [ code ]
+    properties:
+      code:
+        type: string
+        enum: [ executed, reviewed, approved, verified, released, witnessed, acknowledged ]
+      statement:
+        type: string
+
+  subject:
+    type: object
+    additionalProperties: false
+    required: [ recordId ]
+    properties:
+      recordId:
+        type: string
+      gitCommit:
+        type: string
+        pattern: "^[a-f0-9]{7,40}$"
+      lifecycleId:
+        type: string
+      targetState:
+        type: string
+
+  signedAt:
+    type: string
+    format: date-time
+
+  authentication:
+    type: object
+    additionalProperties: false
+    required: [ method ]
+    properties:
+      method:
+        type: string
+        enum: [ password_reauthentication ]

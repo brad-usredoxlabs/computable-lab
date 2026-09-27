@@ -12,11 +12,12 @@
 |--------|-------|-------|
 | **workflow/** | 65 | `protocol`, `local-protocol`, `planned-run`, `event-graph`, `plate-event*`, `execution-*`, `graph-component*`, `labware-definition`, `plate-layout-template`, `procurement-manifest`, etc. |
 | **lab/** | 31 | `material`, `material-spec`, `material-instance`, `aliquot`, `labware`, `labware-instance`, `measurement`, `measurement-context`, `well-group`, `well-role-assignment`, `recipe`, `calibration-record`, `instrument`, etc. |
-| **core/** | 18 | `record` (union), `common` (FAIRCommon mixin), `lifecycle.meta`, `datatypes/ref`, `datatypes/plate-event`, `context`, `collection`, `context-snapshot`, `lab-state`, etc. |
+| **core/** | 18 | `record` (union), `common` (FAIRCommon mixin), `lifecycle.meta`, `datatypes/ref`, `datatypes/plate-event`, `context`, `collection`, `context-snapshot`, `lab-state`, etc. Governance DSL also lives here: `core/lifecycles/*.lifecycle.yaml`, `core/policy-bundles/*.policy-bundle.yaml` |
 | **knowledge/** | 7 | `claim`, `assertion`, `evidence`, `context-role`, `mechanism-model`, `conversation`, `derivation-model` |
 | **studies/** | 6 | `study`, `experiment`, `run`, `run-timeline`, `artifact`, `experiment-narrative` |
 | **ingestion/** | 6 | `ingestion-job`, `ingestion-candidate`, `extraction-spec`, etc. |
-| **identity/** | 3 | `user`, `group`, `access-policy` |
+| **identity/** | 4 | `user`, `group`, `access-policy`, `role-grant` |
+| **governance/** | 2 | `signature`, `audit-event` (append-only records) |
 | **bio/** | 2 | `sequence`, `sequence-interval` |
 | **registry/**, **ui/**, **lint/** | 4 | compile-pipeline, derivation, ui-v1, lint-v1 |
 
@@ -48,6 +49,9 @@
 | **MechanismModel** | `knowledge/mechanism-model.schema.yaml` | `id`, `title`, `nodes[]`, `edges[]` | Nodes → typed concepts; Edges → claim_refs |
 | **Labware** | `lab/labware.schema.yaml` | `recordId`, `name`, `labwareType`, `format` | → LabwareInstance |
 | **LabwareInstance** | `lab/labware-instance.schema.yaml` | `recordId`, `labware_ref` | Used in PlannedRun / EventGraph |
+| **RoleGrant** | `identity/role-grant.schema.yaml` | `recordId` (GRANT-), `userId`, `lifecycleId?`, `roles[]`, `grantedBy?` | Governed lifecycle roles for a user; scoped to one lifecycle or global (lifecycleId absent). Not a file ACL — see access-policy for sharing |
+| **Signature** | `governance/signature.schema.yaml` | `recordId` (SIG-), `signedBy`, `action` (executed\|reviewed\|approved\|verified\|released\|witnessed\|acknowledged), `meaning.code`, `subject{recordId, gitCommit, lifecycleId?, targetState?}`, `signedAt`, `authentication.method: password_reauthentication` | Append-only; binds person + meaning + exact git version of subject record |
+| **AuditEvent** | `governance/audit-event.schema.yaml` | `recordId` (EVT-), `actor`, `action`, `subjectType`, `subjectId`, `occurredAt`, `data?` | Append-only domain event: git records what changed, audit events record what it MEANT |
 
 ---
 
@@ -149,3 +153,41 @@ MechanismModel (typed-node graph)
 All records mix in `FAIRCommon` (`core/common.schema.yaml`): `id`, `title`, `description`, `license`, `relatedIdentifiers`, `keywords`, `createdAt`, `createdBy`, `modifiedAt`, `modifiedBy`.
 
 Lifecycle state machines (`core/lifecycle.meta.schema.yaml`): declarative transitions with `states[]` (initial/terminal flags) and `transitions[]` (from/to/role). Records carry `lifecycleId` pointing to a lifecycle definition and `state`/`status` fields as phase-dependent.
+
+---
+
+## QMS Governance Runtime
+
+Transition guards (`core/lifecycle.meta.schema.yaml` `guards[].type`): `requires_role` and `requires_signature` alongside the existing predicates.
+
+```
+guards[].type      requires_role: actorRoles holds the role (role-grant via
+                   RoleResolver) OR actor is the assigned person
+                   (roleAssignments); requires_signature: a presented
+                   signature (update body `signatureRefs`) whose action ===
+                   guard.signatureAction, bound to THIS record and signed by
+                   the acting user. Fails CLOSED unless the transition
+                   declares signatureAction in YAML — no TS role→action
+                   mapping exists. Guards always evaluate.
+transition.role    The declared role on a transition is separately checked
+                   ONLY when the active policy bundle sets
+                   enforceTransitionRoles: deny
+                   (POL-TRACKED / POL-REGULATED deny; POL-SANDBOX /
+                   POL-NOTEBOOK allow — schema/core/policy-bundles/);
+                   satisfied by actorRoles OR roleAssignments.
+roleAssignments    Generic extraction: any payload '<role>Ref' ref-object
+                   maps to snake_case role (qualityManagerRef →
+                   quality_manager); legacy createdBy → author.
+```
+
+```
+document-controlled-signing (schema/core/lifecycles/, 21 CFR Part 11-style)
+  draft → in_review → approved   guard: requires_different_person + requires_signature (approved)
+                   approved → effective  guard: requires_signature (approved)
+  = document-control gates + signature layers on in_review→approved and
+    approved→effective; plain document-control consumers unaffected.
+```
+
+Actor model: lifecycle transitions act as the authenticated session user (`x-cl-session`); the spoofable `x-actor-id` header no longer feeds lifecycle checks. Signature minting (`POST /signatures`) takes the signer from the session, never the body, after password step-up re-auth (CredentialStore).
+
+Append-only kinds: config `server.appendOnlyKinds` (default `['audit-event','signature']`) → `405 APPEND_ONLY` on update/delete. Audit events append best-effort on governed transitions (`action: lifecycle_transition`) and signature application (`signature_applied`) — appends never fail the business operation.

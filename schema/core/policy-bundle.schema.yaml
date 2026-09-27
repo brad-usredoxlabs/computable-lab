@@ -55,6 +55,9 @@ properties:
       allowUnqualifiedEquipment:
         type: string
         enum: [allow, confirm, deny]
+      enforceTransitionRoles:
+        type: string
+        enum: [allow, confirm, deny]
       approvalAuthority:
         type: string
         enum: [none, run-operator, supervisor, project-owner, lab-manager, qa-reviewer, organization-admin]

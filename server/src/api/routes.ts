@@ -41,6 +41,8 @@ import type { ProtocolBuilderHandlers } from './handlers/ProtocolBuilderHandlers
 import type { CheckinHandlers } from './handlers/CheckinHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
+import type { LifecycleHandlers } from './handlers/LifecycleHandlers.js';
+import type { SignatureHandlers } from './handlers/SignatureHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
 import type { VendorDocumentHandlers } from './handlers/VendorDocumentHandlers.js';
 import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
@@ -128,6 +130,8 @@ export interface RouteOptions {
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
+  lifecycleHandlers?: LifecycleHandlers;
+  signatureHandlers?: SignatureHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
   vendorDocumentHandlers?: VendorDocumentHandlers;
   chemistryHandlers?: ChemistryHandlers;
@@ -241,6 +245,7 @@ export function registerRoutes(
 
   // Identity / groups / sharing (optional - requires identityHandlers)
   const { identityHandlers, authHandlers } = options;
+
   if (authHandlers) {
     fastify.post('/auth/login', authHandlers.login.bind(authHandlers));
     fastify.post('/auth/logout', authHandlers.logout.bind(authHandlers));
@@ -570,6 +575,16 @@ export function registerRoutes(
   const { labSettingsHandlers } = options;
   if (labSettingsHandlers) {
     fastify.get('/settings/lab', labSettingsHandlers.getLabSettings.bind(labSettingsHandlers));
+  }
+
+  const { lifecycleHandlers } = options;
+  if (lifecycleHandlers) {
+    fastify.get('/lifecycle/:lifecycleId/transitions', lifecycleHandlers.getTransitions.bind(lifecycleHandlers));
+  }
+
+  const { signatureHandlers } = options;
+  if (signatureHandlers) {
+    fastify.post('/signatures', signatureHandlers.mintSignature.bind(signatureHandlers));
   }
 
   const { platformHandlers } = options;

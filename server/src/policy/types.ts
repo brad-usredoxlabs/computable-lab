@@ -31,6 +31,12 @@ export interface CompilerPolicySettings {
   allowExpiredAuthorization: PolicyDisposition;
   allowOutOfCalibrationEquipment: PolicyDisposition;
   allowUnqualifiedEquipment: PolicyDisposition;
+  /**
+   * 'deny' = lifecycle transition roles are enforced for this bundle.
+   * 'allow' = transition role checks are skipped (research mode).
+   * 'confirm' is valid data, but current consumers only distinguish deny vs not-deny.
+   */
+  enforceTransitionRoles: PolicyDisposition;
   approvalAuthority: ApprovalAuthority;
 }
 
@@ -120,5 +126,6 @@ export const DEFAULT_COMPILER_POLICY_SETTINGS: CompilerPolicySettings = {
   allowExpiredAuthorization: 'deny',
   allowOutOfCalibrationEquipment: 'deny',
   allowUnqualifiedEquipment: 'deny',
+  enforceTransitionRoles: 'allow',
   approvalAuthority: 'project-owner',
 };

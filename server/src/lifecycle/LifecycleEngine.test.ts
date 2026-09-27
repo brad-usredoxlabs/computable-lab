@@ -25,7 +25,10 @@ function context(currentActorId: string, authorId: string): LifecycleContext {
     recordId: 'REC-1',
     currentActorId,
     roleAssignments: { author: authorId },
+    actorRoles: [],
+    enforceTransitionRoles: false,
     fields: {},
+    presentedSignatures: [],
   }
 }
 

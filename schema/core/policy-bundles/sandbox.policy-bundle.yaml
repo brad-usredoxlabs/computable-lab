@@ -13,4 +13,5 @@ settings:
   allowExpiredAuthorization: allow
   allowOutOfCalibrationEquipment: allow
   allowUnqualifiedEquipment: allow
+  enforceTransitionRoles: allow
   approvalAuthority: none

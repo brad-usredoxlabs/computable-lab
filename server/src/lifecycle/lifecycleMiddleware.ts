@@ -5,6 +5,14 @@ export interface LifecycleCheckInput {
   previousPayload: Record<string, unknown>
   nextPayload: Record<string, unknown>
   actorId: string
+  actorRoles: string[]
+  enforceTransitionRoles: boolean
+  presentedSignatures?: Array<{
+    id: string
+    action: string
+    subjectRecordId: string
+    signedBy: string
+  }>
 }
 
 export interface LifecycleCheckResult {
@@ -17,7 +25,7 @@ export function checkLifecycleTransition(
   engine: LifecycleEngine,
   input: LifecycleCheckInput
 ): LifecycleCheckResult {
-  const { previousPayload, nextPayload, actorId } = input
+  const { previousPayload, nextPayload, actorId, actorRoles, enforceTransitionRoles } = input
 
   // If no lifecycleId, not lifecycle-managed - allow
   const lifecycleId = nextPayload.lifecycleId as string | undefined
@@ -35,16 +43,16 @@ export function checkLifecycleTransition(
 
   // Build lifecycle context
   const recordId = (nextPayload.id ?? nextPayload.recordId) as string | undefined
-  const roleAssignments: Record<string, string> = {}
-  if (nextPayload.createdBy) roleAssignments.author = String(nextPayload.createdBy)
-  if (isRefObject(nextPayload.reviewerRef)) roleAssignments.reviewer = String(nextPayload.reviewerRef.id)
-  if (isRefObject(nextPayload.approverRef)) roleAssignments.approver = String(nextPayload.approverRef.id)
+  const roleAssignments = extractRoleAssignments(nextPayload)
 
   const context: LifecycleContext = {
     recordId: recordId ?? 'unknown',
     currentActorId: actorId,
     roleAssignments,
-    fields: nextPayload
+    actorRoles,
+    enforceTransitionRoles,
+    fields: nextPayload,
+    presentedSignatures: input.presentedSignatures ?? []
   }
 
   // Get valid transitions and find matching one
@@ -60,6 +68,32 @@ export function checkLifecycleTransition(
   }
 
   return { allowed: true, transition: { from: previousState || '', to: nextState || '', event: matching.event } }
+}
+
+/**
+ * Generic roleAssignments extraction: any payload key '<role>Ref' whose value
+ * is an object with a string .id maps to roleAssignments[<snake_case role>]
+ * (e.g. qualityManagerRef → 'quality_manager', stewardRef → 'steward').
+ * Legacy compatibility: createdBy → author (reviewerRef/approverRef are
+ * already covered by the generic rule).
+ */
+export function extractRoleAssignments(payload: Record<string, unknown>): Record<string, string> {
+  const roleAssignments: Record<string, string> = {}
+  for (const [key, value] of Object.entries(payload)) {
+    if (!key.endsWith('Ref')) continue
+    const role = key.slice(0, -'Ref'.length)
+    if (!role) continue
+    if (isRefObject(value) && typeof value.id === 'string') {
+      roleAssignments[camelToSnake(role)] = value.id
+    }
+  }
+  // Legacy: createdBy is a bare person id, not a ref object.
+  if (payload.createdBy) roleAssignments.author = String(payload.createdBy)
+  return roleAssignments
+}
+
+function camelToSnake(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
 }
 
 function isRefObject(val: unknown): val is { id: string } {
