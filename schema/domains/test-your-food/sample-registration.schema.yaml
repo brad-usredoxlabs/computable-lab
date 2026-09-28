@@ -71,5 +71,25 @@ properties:
     format: date-time
     description: "When the customer scanned/described the tube (advisory; event cursor is authoritative for ordering)."
 
+  sampleId:
+    type: string
+    pattern: "^[A-Za-z0-9_-]{1,64}$"
+    description: >
+      Website minted sample handle (customer-handoff spec, Identity and
+      events). External identity — kept here and mirrored onto the lab
+      sample's identifiers[] (system tyf-sample-id); core sample has no
+      domain-named field.
+
+  lineId:
+    type: string
+    description: >
+      Website order line ref (tyforl_<order>_<ordinal>). Anchors the tube to
+      its requested-service line.
+
+  slot:
+    type: integer
+    minimum: 1
+    description: "One-based slot: one purchased kit = one slot (commercial concept — domain-only field)."
+
   notes:
     type: string

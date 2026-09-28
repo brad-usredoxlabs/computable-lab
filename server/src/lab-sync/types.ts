@@ -55,6 +55,7 @@ export type ProcessedEventStatus =
   | 'duplicated'
   | 'unknown_type'
   | 'ignored_stale'
+  | 'needs_review'
 
 export interface ProcessedEvent {
   status: ProcessedEventStatus

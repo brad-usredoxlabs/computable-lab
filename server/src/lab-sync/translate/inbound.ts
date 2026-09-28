@@ -70,6 +70,15 @@ function customerRemoteId(email: string): string {
   return `email:${email}`
 }
 
+/** Email matching is case-insensitive and whitespace-tolerant: every email
+ *  comparison in this module normalizes through here. */
+function normalizeEmail(raw: string): string {
+  return raw.trim().toLowerCase()
+}
+
+/** Website-assigned customer identity (customer.identity_assigned / verified). */
+const WEBSITE_CUSTOMER_ID_PATTERN = /^tyfcus_[0-9a-f]{32}$/
+
 class HandlerError extends Error {
   constructor(message: string) {
     super(message)
@@ -165,6 +174,10 @@ export class InboundTranslator {
         return this.customerCreated(event.payload)
       case 'customer.updated':
         return this.customerUpdated(event.payload)
+      case 'customer.identity_assigned':
+        return this.customerIdentityAssigned(event.payload)
+      case 'customer.verified':
+        return this.customerVerified(event.payload, event.occurred_at)
       case 'order.created':
         return this.orderCreated(event.payload)
       case 'order.updated':
@@ -183,13 +196,61 @@ export class InboundTranslator {
 
   // ---------------------------------------------------------------- customers
 
-  /** Find customer by email-derived remoteId. */
-  private async findCustomerByEmail(email: string): Promise<RecordEnvelope | null> {
+  /** Find ALL customers whose email identity matches: source.remoteId derived
+   *  from `email:<normalized>` OR a contacts[] email entry that normalizes to
+   *  the same address. 0 matches = unknown; >=2 = ambiguous (needs_review). */
+  private async findCustomersByEmail(email: string): Promise<RecordEnvelope[]> {
     const customers = await this.store.list({ kind: 'customer' })
-    const want = customerRemoteId(email)
+    const want = customerRemoteId(normalizeEmail(email))
+    const wantEmail = normalizeEmail(email)
+    const matches: RecordEnvelope[] = []
     for (const rec of customers) {
       const src = obj(obj(rec.payload)?.source)
-      if (src && src.remoteId === want) return rec
+      if (src && src.remoteId === want) {
+        matches.push(rec)
+        continue
+      }
+      const contacts = obj(rec.payload)?.contacts
+      if (Array.isArray(contacts)) {
+        for (const c of contacts) {
+          const entry = obj(c)
+          if (
+            entry &&
+            entry.channel === 'email' &&
+            typeof entry.value === 'string' &&
+            normalizeEmail(entry.value) === wantEmail
+          ) {
+            matches.push(rec)
+            break
+          }
+        }
+      }
+    }
+    return matches
+  }
+
+  /** Single-match email lookup: ambiguous matches surface as null at the
+   *  call site's hard stop (callers needing ambiguity handling use
+   *  findCustomersByEmail directly). */
+  private async findCustomerByEmail(email: string): Promise<RecordEnvelope | null> {
+    const matches = await this.findCustomersByEmail(email)
+    return matches.length === 1 ? (matches[0] as RecordEnvelope) : null
+  }
+
+  /** Find customer by website-assigned tyfcus identity: source.remoteId OR
+   *  an aliases[].remoteId. */
+  private async findCustomerByWebsiteId(websiteId: string): Promise<RecordEnvelope | null> {
+    const customers = await this.store.list({ kind: 'customer' })
+    for (const rec of customers) {
+      const src = obj(obj(rec.payload)?.source)
+      if (src && src.remoteId === websiteId) return rec
+      const aliases = obj(rec.payload)?.aliases
+      if (Array.isArray(aliases)) {
+        for (const a of aliases) {
+          const entry = obj(a)
+          if (entry && entry.remoteId === websiteId) return rec
+        }
+      }
     }
     return null
   }
@@ -236,12 +297,16 @@ export class InboundTranslator {
     const email = str(cust?.email)
     if (!email) throw new HandlerError('customer.updated payload missing customer.email')
 
-    const existing = await this.findCustomerByEmail(email)
-    if (!existing) {
+    const matches = await this.findCustomersByEmail(email)
+    if (matches.length === 0) {
       // Simplest defensible choice: an update for an unknown email is not
       // silently minted — it's the same hard-stop class as an unmapped slug.
       return { status: 'unknown_type', affectedRecordIds: [], error: `unknown customer email ${email}` }
     }
+    if (matches.length >= 2) {
+      return { status: 'needs_review', affectedRecordIds: [], error: `ambiguous legacy match for ${email}` }
+    }
+    const existing = matches[0] as RecordEnvelope
 
     const changes = obj(cust?.changes) ?? {}
     const p = { ...(existing.payload as Payload) }
@@ -263,6 +328,83 @@ export class InboundTranslator {
       message: `lab-sync customer.updated ${customerRemoteId(email)}`,
     })
     if (!res.success) throw new Error(`failed to update customer ${existing.recordId}: ${res.error ?? 'unknown'}`)
+    return { status: 'applied', affectedRecordIds: [existing.recordId] }
+  }
+
+  /** Attach the website-assigned tyfcus identity to the email-matched
+   *  customer. Unknown email is a hard stop — identity_assigned NEVER mints
+   *  a customer. Ambiguous matches need a human, never a coin flip. */
+  private async customerIdentityAssigned(payload: Payload): Promise<ProcessedEvent> {
+    const customerId = str(payload.customer_id)
+    if (!customerId || !WEBSITE_CUSTOMER_ID_PATTERN.test(customerId)) {
+      return { status: 'unknown_type', affectedRecordIds: [], error: `malformed customer_id ${customerId ?? '<missing>'} (expected ${WEBSITE_CUSTOMER_ID_PATTERN.source})` }
+    }
+    const email = str(payload.email)
+    if (!email) throw new HandlerError('customer.identity_assigned payload missing email')
+
+    // Already aliased (e.g. remoteId moved to source) — idempotent no-op.
+    const aliased = await this.findCustomerByWebsiteId(customerId)
+    if (aliased) return { status: 'applied', affectedRecordIds: [aliased.recordId] }
+
+    const matches = await this.findCustomersByEmail(email)
+    if (matches.length === 0) {
+      return { status: 'unknown_type', affectedRecordIds: [], error: `unknown customer email ${email}` }
+    }
+    if (matches.length >= 2) {
+      return { status: 'needs_review', affectedRecordIds: [], error: `ambiguous legacy match for ${email}` }
+    }
+    const existing = matches[0] as RecordEnvelope
+
+    // NOTE: a name carried on the event is NOT adopted when the customer has
+    // none — identity_assigned grants identity, it does not author profiles.
+    const p = { ...(existing.payload as Payload) }
+    const aliases = Array.isArray(p.aliases) ? [...(p.aliases as Payload[])] : []
+    if (!aliases.some((a) => obj(a)?.remoteId === customerId)) {
+      aliases.push({ system: this.mapping.sourceSystem, remoteId: customerId })
+      p.aliases = aliases
+    }
+
+    const res = await this.store.update({
+      envelope: { recordId: existing.recordId, schemaId: existing.schemaId, payload: p },
+      message: `lab-sync customer.identity_assigned ${customerId}`,
+    })
+    if (!res.success) throw new Error(`failed to alias customer ${existing.recordId}: ${res.error ?? 'unknown'}`)
+    return { status: 'applied', affectedRecordIds: [existing.recordId] }
+  }
+
+  /** Stamp verifiedAt (first write wins). Resolve by tyfcus identity first,
+   *  fall back to the single-match email rule. */
+  private async customerVerified(payload: Payload, occurredAt?: string): Promise<ProcessedEvent> {
+    const customerId = str(payload.customer_id)
+    const email = str(payload.email)
+
+    let existing: RecordEnvelope | null = null
+    if (customerId) existing = await this.findCustomerByWebsiteId(customerId)
+    if (!existing && email) {
+      const matches = await this.findCustomersByEmail(email)
+      if (matches.length >= 2) {
+        return { status: 'needs_review', affectedRecordIds: [], error: `ambiguous legacy match for ${email}` }
+      }
+      existing = matches[0] ?? null
+    }
+    if (!existing) {
+      return { status: 'unknown_type', affectedRecordIds: [], error: `unknown customer ${customerId ?? email}` }
+    }
+
+    const p = { ...(existing.payload as Payload) }
+    let mutated = true
+    if (p.verifiedAt === undefined) {
+      p.verifiedAt = occurredAt ?? this.now().toISOString()
+    } else {
+      mutated = false // already verified: applied, timestamp unchanged
+    }
+    if (mutated) {
+      const res = await this.store.update({
+        envelope: { recordId: existing.recordId, schemaId: existing.schemaId, payload: p },
+        message: `lab-sync customer.verified ${customerId ?? customerRemoteId(email ?? '')}`,
+      })
+      if (!res.success) throw new Error(`failed to verify customer ${existing.recordId}: ${res.error ?? 'unknown'}`)
+    }
     return { status: 'applied', affectedRecordIds: [existing.recordId] }
   }
 
@@ -434,8 +576,28 @@ export class InboundTranslator {
     // Explicit known-field merge only: status passthrough, payment passthrough,
     // wire `kit` -> record `sampleKit` (website field name differs). Unknown
     // change keys are dropped — the record schema is the contract.
-    const changes = obj(payload.changes) ?? {}
+    const changes = { ...(obj(payload.changes) ?? {}) }
     const p = { ...(order.payload as Payload) }
+
+    // Re-ownership: changes.customer_id re-points the order's refs at the
+    // tyfcus-aliased customer. It is REMOVED from the working copy before the
+    // generic merge so the wire key never lands as a stray record field.
+    const reassignCustomerId = str(changes.customer_id)
+    if (reassignCustomerId !== undefined) {
+      delete changes.customer_id
+      const target = await this.findCustomerByWebsiteId(reassignCustomerId)
+      if (!target) {
+        return {
+          status: 'needs_review',
+          affectedRecordIds: [order.recordId],
+          error: `website identity not yet mirrored: ${reassignCustomerId}`,
+        }
+      }
+      const ref: Payload = { kind: 'record', id: target.recordId, type: 'customer' }
+      p.customerRef = ref
+      p.requesterRef = ref
+    }
+
     const status = str(changes.status)
     if (status) p.status = status
     const payment = obj(changes.payment)
@@ -531,6 +693,12 @@ export class InboundTranslator {
 
     const affected: string[] = []
 
+    // Extended identity fields (shared contract): REG always mirrors them;
+    // the SAMPLE gains a tyf-sample-id identifier alongside the barcode.
+    const sampleId = str(payload.sample_id)
+    const lineId = str(payload.line_id)
+    const slot = num(payload.slot)
+
     // 1. The registration record (customer intent, preserved verbatim).
     const regId = await nextSequentialRecordId(this.store, 'REG-')
     const regPayload: Payload = {
@@ -541,6 +709,9 @@ export class InboundTranslator {
       registeredAt: str(payload.registered_at) ?? this.now().toISOString(),
     }
     if (Object.keys(customerDescription).length > 0) regPayload.customerDescription = customerDescription
+    if (sampleId !== undefined) regPayload.sampleId = sampleId
+    if (lineId !== undefined) regPayload.lineId = lineId
+    if (slot !== undefined) regPayload.slot = slot
     const regRes = await this.store.create({
       envelope: { recordId: regId, schemaId: SCHEMA_IDS.sampleRegistration, payload: regPayload },
       message: `lab-sync sample.registered ${barcode} for ${orderRemoteId}`,
@@ -556,11 +727,13 @@ export class InboundTranslator {
     if (!sample) {
       const year = String(this.now().getUTCFullYear())
       const smpId = await nextSequentialRecordId(this.store, 'SMP-', { datePart: `${year}-` })
+      const identifiers: Payload[] = [{ system: 'tyf-barcode', value: barcode }]
+      if (sampleId !== undefined) identifiers.push({ system: 'tyf-sample-id', value: sampleId })
       const smpPayload: Payload = {
         kind: 'sample',
         recordId: smpId,
         requestRef: { kind: 'record', id: order.recordId, type: 'order' },
-        identifiers: [{ system: 'tyf-barcode', value: barcode }],
+        identifiers,
         lifecycleId: 'lab-sample',
         status: 'registered',
       }
@@ -572,6 +745,20 @@ export class InboundTranslator {
       if (!smpRes.success) throw new Error(`failed to create sample ${barcode}: ${smpRes.error ?? 'unknown'}`)
       affected.push(smpId)
       sample = { recordId: smpId, schemaId: SCHEMA_IDS.sample, payload: smpPayload }
+    } else if (sampleId !== undefined) {
+      // Backfill: a later registration reveals the sample_id the mint lacked.
+      const sp = sample.payload as Payload
+      const ids = Array.isArray(sp.identifiers) ? [...(sp.identifiers as Payload[])] : []
+      if (!ids.some((i) => obj(i)?.system === 'tyf-sample-id')) {
+        ids.push({ system: 'tyf-sample-id', value: sampleId })
+        const updatedSample: Payload = { ...sp, identifiers: ids }
+        const smpUpd = await this.store.update({
+          envelope: { recordId: sample.recordId, schemaId: sample.schemaId, payload: updatedSample },
+          message: `lab-sync sample.registered backfilled sample_id ${sampleId} on ${sample.recordId}`,
+        })
+        if (!smpUpd.success) throw new Error(`failed to backfill sample_id on ${sample.recordId}: ${smpUpd.error ?? 'unknown'}`)
+        affected.push(sample.recordId)
+      }
     }
 
     // 3. Link the sample on the order; forward-only lifecycle advance.

@@ -191,6 +191,97 @@ describe('lab-sync service & domain schemas', () => {
     expect(validator.validate({ ...event, eventId: '123' }, `${BASE}/lab-sync-event.schema.yaml`).valid).toBe(false);
   });
 
+  it('customer carries website-minted aliases and verification without rewriting identity', async () => {
+    const result = await loadServiceSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+
+    const customer = {
+      kind: 'customer',
+      recordId: 'CUST-0018',
+      extends: 'party',
+      name: 'Jane Smith',
+      partyType: 'person',
+      status: 'active',
+      contacts: [{ channel: 'email', value: 'jane@example.com' }],
+      // Legacy email-derived remoteId stays on source; the website handle arrives via aliases.
+      source: { system: 'test-your-food.com', remoteId: 'email:jane@example.com' },
+    };
+    const customerSchemaId = `${BASE}/domains/test-your-food/customer.schema.yaml`;
+
+    const aliased = {
+      ...customer,
+      aliases: [{ system: 'test-your-food.com', remoteId: 'tyfcus_' + '0'.repeat(32) }],
+    };
+    expect(validator.validate(aliased, customerSchemaId).valid).toBe(true);
+
+    // Aliases accept tyfcus_* handles only — an email-derived id must fail the pattern.
+    expect(validator.validate(
+      { ...customer, aliases: [{ system: 'test-your-food.com', remoteId: 'email:x@y.z' }] },
+      customerSchemaId,
+    ).valid).toBe(false);
+
+    // verifiedAt is an optional website-verified email timestamp.
+    expect(validator.validate(
+      { ...aliased, verifiedAt: '2026-09-27T10:00:00-04:00' },
+      customerSchemaId,
+    ).valid).toBe(true);
+  });
+
+  it('sample-registration carries website-minted sampleId, lineId, and slot', async () => {
+    const result = await loadServiceSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+
+    const registration = {
+      kind: 'sample-registration',
+      recordId: 'REG-2026-00911',
+      orderRef: { kind: 'record', id: 'ORD-2026-00427', type: 'order' },
+      identifier: { system: 'tyf-barcode', value: 'TYF-9F7A21' },
+      registeredAt: '2026-09-27T16:18:04-04:00',
+    };
+    const registrationSchemaId = `${BASE}/domains/test-your-food/sample-registration.schema.yaml`;
+
+    expect(validator.validate(
+      { ...registration, sampleId: 'smp_1A2b_3', lineId: 'tyforl_77_01', slot: 2 },
+      registrationSchemaId,
+    ).valid).toBe(true);
+
+    // Slots are one-based: one purchased kit = one slot.
+    expect(validator.validate(
+      { ...registration, slot: 0 },
+      registrationSchemaId,
+    ).valid).toBe(false);
+
+    // sampleId is a URL-safe handle, never free text.
+    expect(validator.validate(
+      { ...registration, sampleId: 'bad id!' },
+      registrationSchemaId,
+    ).valid).toBe(false);
+  });
+
+  it('lab-sync-event accepts needs_review processing status', async () => {
+    const result = await loadServiceSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+
+    const event = {
+      kind: 'lab-sync-event',
+      recordId: 'LSYN-0001',
+      eventId: 'evt_TYF_1',
+      direction: 'inbound',
+      eventType: 'order.created',
+      processing: { status: 'needs_review' },
+    };
+    expect(validator.validate(event, `${BASE}/lab-sync-event.schema.yaml`).valid).toBe(true);
+  });
+
   it('lifecycles for request, sample, and order load and govern their declared states', async () => {
     const engine = new LifecycleEngine();
     const count = loadLifecyclesFromDir(join(process.cwd(), 'schema', 'core', 'lifecycles'), engine);

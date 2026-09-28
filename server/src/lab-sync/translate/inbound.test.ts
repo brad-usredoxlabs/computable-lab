@@ -335,4 +335,330 @@ describe('InboundTranslator', () => {
     expect(store.idsOfKind('lab-sync-event')).toEqual(['LSYN-00001'])
     expect(store.payload('LSYN-00001').eventType).toBe('alien.landed')
   })
+
+  // ------------------------------------------------- B1: customer.identity_assigned
+
+  const WEBSITE_CUSTOMER_ID = `tyfcus_${'ab'.repeat(16)}`
+
+  function customerCreated(overrides: Partial<LabSyncWireEvent> = {}): LabSyncWireEvent {
+    return {
+      event_id: 'evt_TYF_000100',
+      cursor: 100,
+      type: 'customer.created',
+      occurred_at: '2026-09-26T17:00:00-04:00',
+      payload: { customer: { email: 'jane@example.com', name: 'Jane Smith' } },
+      ...overrides,
+    }
+  }
+
+  function identityAssigned(overrides: Partial<LabSyncWireEvent> = {}): LabSyncWireEvent {
+    return {
+      event_id: 'evt_TYF_000110',
+      cursor: 110,
+      type: 'customer.identity_assigned',
+      occurred_at: '2026-09-27T09:00:00-04:00',
+      payload: { customer_id: WEBSITE_CUSTOMER_ID, email: 'jane@example.com' },
+      ...overrides,
+    }
+  }
+
+  it('customer.identity_assigned attaches the tyfcus alias to the one email-matched customer', async () => {
+    await translator.process(customerCreated())
+    const result = await translator.process(identityAssigned())
+    expect(result.status).toBe('applied')
+    expect(result.affectedRecordIds).toEqual(['CUST-00001'])
+
+    // The SAME CUST- record gains the alias — no re-mint, recordId unchanged.
+    expect(store.idsOfKind('customer')).toEqual(['CUST-00001'])
+    const cust = store.payload('CUST-00001')
+    expect(cust.aliases).toEqual([
+      { system: 'test-your-food.com', remoteId: WEBSITE_CUSTOMER_ID },
+    ])
+  })
+
+  it('customer.identity_assigned replay of the same event_id is duplicated', async () => {
+    await translator.process(customerCreated())
+    const first = await translator.process(identityAssigned())
+    const second = await translator.process(identityAssigned())
+    expect(first.status).toBe('applied')
+    expect(second.status).toBe('duplicated')
+    expect(second.affectedRecordIds).toEqual(first.affectedRecordIds)
+    // Still exactly one alias entry, one customer, one mirror for the event.
+    expect(store.payload('CUST-00001').aliases).toEqual([
+      { system: 'test-your-food.com', remoteId: WEBSITE_CUSTOMER_ID },
+    ])
+    expect(store.idsOfKind('customer')).toEqual(['CUST-00001'])
+  })
+
+  it('customer.identity_assigned with two email-matched records is needs_review and mutates neither', async () => {
+    // One customer via source.remoteId, one via a contacts email entry with
+    // different case + trailing whitespace — both normalize to jane@example.com.
+    store.records.set('CUST-00001', {
+      recordId: 'CUST-00001',
+      schemaId: 'customer',
+      payload: {
+        kind: 'customer',
+        recordId: 'CUST-00001',
+        name: 'Jane One',
+        source: { system: 'test-your-food.com', remoteId: 'email:jane@example.com' },
+      },
+    })
+    store.records.set('CUST-00002', {
+      recordId: 'CUST-00002',
+      schemaId: 'customer',
+      payload: {
+        kind: 'customer',
+        recordId: 'CUST-00002',
+        name: 'Jane Two',
+        contacts: [{ channel: 'email', value: 'Jane@Example.com ' }],
+      },
+    })
+
+    const result = await translator.process(identityAssigned())
+    expect(result.status).toBe('needs_review')
+    expect(result.error).toContain('jane@example.com')
+    // NEITHER record mutated.
+    expect(store.payload('CUST-00001').aliases).toBeUndefined()
+    expect(store.payload('CUST-00002').aliases).toBeUndefined()
+  })
+
+  it('customer.identity_assigned with a malformed customer_id is unknown_type naming it', async () => {
+    await translator.process(customerCreated())
+    const result = await translator.process(
+      identityAssigned({ payload: { customer_id: 'email:jane@example.com', email: 'jane@example.com' } }),
+    )
+    expect(result.status).toBe('unknown_type')
+    expect(result.error).toContain('email:jane@example.com')
+    expect(store.payload('CUST-00001').aliases).toBeUndefined()
+  })
+
+  it('customer.identity_assigned for an unknown email is unknown_type — never mint a customer', async () => {
+    const result = await translator.process(
+      identityAssigned({ payload: { customer_id: WEBSITE_CUSTOMER_ID, email: 'ghost@example.com' } }),
+    )
+    expect(result.status).toBe('unknown_type')
+    expect(result.affectedRecordIds).toEqual([])
+    expect(store.idsOfKind('customer')).toEqual([])
+  })
+
+  // ---------------------------------------------------------- B2: customer.verified
+
+  function customerVerified(overrides: Partial<LabSyncWireEvent> = {}): LabSyncWireEvent {
+    return {
+      event_id: 'evt_TYF_000120',
+      cursor: 120,
+      type: 'customer.verified',
+      occurred_at: '2026-09-27T10:00:00-04:00',
+      payload: { customer_id: WEBSITE_CUSTOMER_ID, email: 'jane@example.com' },
+      ...overrides,
+    }
+  }
+
+  it('customer.verified stamps verifiedAt; replay duplicates; already-verified keeps its timestamp', async () => {
+    await translator.process(customerCreated())
+    await translator.process(identityAssigned())
+
+    const result = await translator.process(customerVerified())
+    expect(result.status).toBe('applied')
+    expect(result.affectedRecordIds).toEqual(['CUST-00001'])
+    expect(store.payload('CUST-00001').verifiedAt).toBe('2026-09-27T10:00:00-04:00')
+
+    // Replay of the same event id: dedupe.
+    const replay = await translator.process(customerVerified())
+    expect(replay.status).toBe('duplicated')
+
+    // Already verified, FRESH event id: applied, timestamp unchanged.
+    const again = await translator.process(
+      customerVerified({ event_id: 'evt_TYF_000121', cursor: 121, occurred_at: '2026-10-01T08:00:00-04:00' }),
+    )
+    expect(again.status).toBe('applied')
+    expect(store.payload('CUST-00001').verifiedAt).toBe('2026-09-27T10:00:00-04:00')
+  })
+
+  it('customer.verified for an unknown customer is unknown_type', async () => {
+    const result = await translator.process(
+      customerVerified({ payload: { customer_id: WEBSITE_CUSTOMER_ID, email: 'ghost@example.com' } }),
+    )
+    expect(result.status).toBe('unknown_type')
+    expect(result.affectedRecordIds).toEqual([])
+    expect(store.idsOfKind('customer')).toEqual([])
+  })
+
+  // --------------------------------- B3: order.updated changes.customer_id re-ownership
+
+  it('order.updated changes.customer_id re-owns customerRef and requesterRef via the tyfcus alias', async () => {
+    await translator.process(orderCreated())
+    await translator.process(identityAssigned())
+
+    const result = await translator.process({
+      event_id: 'evt_TYF_000210',
+      cursor: 210,
+      type: 'order.updated',
+      payload: {
+        order_remote_id: 'tyfored_9f3a21',
+        remote_revision: 2,
+        changes: { customer_id: WEBSITE_CUSTOMER_ID },
+      },
+    })
+    expect(result.status).toBe('applied')
+    const order = store.payload('ORD-2026-00001')
+    const ref = { kind: 'record', id: 'CUST-00001', type: 'customer' }
+    expect(order.customerRef).toEqual(ref)
+    expect(order.requesterRef).toEqual(ref)
+    // The wire key never lands as a stray record field.
+    expect(order.customer_id).toBeUndefined()
+  })
+
+  it('order.updated changes.customer_id with an unmirrored identity is needs_review, order untouched', async () => {
+    await translator.process(orderCreated())
+    const before = structuredClone(store.payload('ORD-2026-00001'))
+
+    const result = await translator.process({
+      event_id: 'evt_TYF_000211',
+      cursor: 211,
+      type: 'order.updated',
+      payload: {
+        order_remote_id: 'tyfored_9f3a21',
+        remote_revision: 2,
+        changes: { customer_id: `tyfcus_${'cd'.repeat(16)}` },
+      },
+    })
+    expect(result.status).toBe('needs_review')
+    expect(result.error).toContain('website identity not yet mirrored')
+    expect(store.payload('ORD-2026-00001')).toEqual(before)
+  })
+
+  // ----------------------------------------- B4: sample.registered extended fields
+
+  it('sample.registered sample_id/line_id/slot reach REG and extend SMP identifiers', async () => {
+    await translator.process(orderCreated())
+    await translator.process({
+      event_id: 'evt_TYF_000201',
+      cursor: 201,
+      type: 'order.updated',
+      payload: { order_remote_id: 'tyfored_9f3a21', remote_revision: 2, changes: { status: 'awaiting_sample' } },
+    })
+
+    const result = await translator.process({
+      event_id: 'evt_TYF_000310',
+      cursor: 310,
+      type: 'sample.registered',
+      payload: {
+        order_remote_id: 'tyfored_9f3a21',
+        barcode: 'TYF-9F7A21',
+        sample_id: 'tyfsmp_1A2b3c',
+        line_id: 'tyforl_77_01',
+        slot: 2,
+        customer_sample_description: { type: 'fat', description: 'beef tallow' },
+        registered_at: '2026-09-28T10:00:00-04:00',
+      },
+    })
+    expect(result.status).toBe('applied')
+
+    const reg = store.payload('REG-00001')
+    expect(reg.sampleId).toBe('tyfsmp_1A2b3c')
+    expect(reg.lineId).toBe('tyforl_77_01')
+    expect(reg.slot).toBe(2)
+
+    const smpIds = store.idsOfKind('sample')
+    expect(smpIds.length).toBe(1)
+    expect(store.payload(smpIds[0]).identifiers).toEqual([
+      { system: 'tyf-barcode', value: 'TYF-9F7A21' },
+      { system: 'tyf-sample-id', value: 'tyfsmp_1A2b3c' },
+    ])
+  })
+
+  it('sample.registered backfills tyf-sample-id onto an existing sample that lacked it', async () => {
+    await translator.process(orderCreated())
+    await translator.process({
+      event_id: 'evt_TYF_000201',
+      cursor: 201,
+      type: 'order.updated',
+      payload: { order_remote_id: 'tyfored_9f3a21', remote_revision: 2, changes: { status: 'awaiting_sample' } },
+    })
+    await translator.process({
+      event_id: 'evt_TYF_000311',
+      cursor: 311,
+      type: 'sample.registered',
+      payload: {
+        order_remote_id: 'tyfored_9f3a21',
+        barcode: 'TYF-9F7A21',
+        customer_sample_description: { type: 'fat', description: 'beef tallow' },
+        registered_at: '2026-09-28T10:00:00-04:00',
+      },
+    })
+    const smpIds = store.idsOfKind('sample')
+    expect(smpIds.length).toBe(1)
+    expect(store.payload(smpIds[0]).identifiers).toEqual([{ system: 'tyf-barcode', value: 'TYF-9F7A21' }])
+
+    // A later event for the same order+barcode finally carries sample_id.
+    const result = await translator.process({
+      event_id: 'evt_TYF_000312',
+      cursor: 312,
+      type: 'sample.registered',
+      payload: {
+        order_remote_id: 'tyfored_9f3a21',
+        barcode: 'TYF-9F7A21',
+        sample_id: 'tyfsmp_1A2b3c',
+        customer_sample_description: { type: 'fat', description: 'beef tallow' },
+        registered_at: '2026-09-28T10:05:00-04:00',
+      },
+    })
+    expect(result.status).toBe('applied')
+    expect(store.idsOfKind('sample')).toEqual(smpIds)
+    expect(store.payload(smpIds[0]).identifiers).toEqual([
+      { system: 'tyf-barcode', value: 'TYF-9F7A21' },
+      { system: 'tyf-sample-id', value: 'tyfsmp_1A2b3c' },
+    ])
+  })
+
+  // -------------------------------------- B5: sample.shipped per-tube regression
+
+  it('sample.shipped advances the order once and never means received', async () => {
+    await translator.process(orderCreated())
+    await translator.process({
+      event_id: 'evt_TYF_000201',
+      cursor: 201,
+      type: 'order.updated',
+      payload: { order_remote_id: 'tyfored_9f3a21', remote_revision: 2, changes: { status: 'awaiting_sample' } },
+    })
+    for (const [i, barcode] of ['TYF-AAAA11', 'TYF-AAAA22'].entries()) {
+      const reg = await translator.process({
+        event_id: `evt_TYF_00032${i}`,
+        cursor: 320 + i,
+        type: 'sample.registered',
+        payload: {
+          order_remote_id: 'tyfored_9f3a21',
+          barcode,
+          customer_sample_description: { type: 'fat', description: `tube ${i + 1}` },
+          registered_at: '2026-09-28T10:00:00-04:00',
+        },
+      })
+      expect(reg.status).toBe('applied')
+    }
+
+    const first = await translator.process({
+      event_id: 'evt_TYF_000400',
+      cursor: 400,
+      type: 'sample.shipped',
+      payload: { order_remote_id: 'tyfored_9f3a21', barcode: 'TYF-AAAA11' },
+    })
+    expect(first.status).toBe('applied')
+    expect(store.payload('ORD-2026-00001').status).toBe('in_transit')
+
+    const second = await translator.process({
+      event_id: 'evt_TYF_000401',
+      cursor: 401,
+      type: 'sample.shipped',
+      payload: { order_remote_id: 'tyfored_9f3a21', barcode: 'TYF-AAAA22' },
+    })
+    expect(second.status).toBe('applied')
+    expect(second.affectedRecordIds).toEqual([])
+    expect(store.payload('ORD-2026-00001').status).toBe('in_transit')
+
+    // shipped never means received: both tubes stay registered.
+    for (const id of store.idsOfKind('sample')) {
+      expect(store.payload(id).status).toBe('registered')
+    }
+  })
 })

@@ -49,6 +49,31 @@ properties:
       remoteId: { type: string, minLength: 1 }
       remoteRevision: { type: integer, minimum: 0 }
 
+  aliases:
+    type: array
+    description: >
+      Secondary external identities attached without rewriting the record.
+      The website mints tyfcus_* handles; legacy email-derived remoteIds stay
+      on source.remoteId, the website id arrives here via
+      customer.identity_assigned (customer-handoff spec, Identity section).
+      The Git recordId never changes regardless of identity churn.
+    items:
+      type: object
+      additionalProperties: false
+      required: [system, remoteId]
+      properties:
+        system: { type: string, minLength: 1 }
+        remoteId:
+          type: string
+          pattern: "^tyfcus_[0-9a-f]{32}$"
+          description: "Website public customer handle (never derived from email)."
+    uniqueItems: true
+
+  verifiedAt:
+    type: string
+    format: date-time
+    description: "Set once by customer.verified. Website-verified email; absence = unverified, NOT a failure state."
+
   status:
     type: string
     enum: [active, inactive, archived]

@@ -68,7 +68,7 @@ properties:
     properties:
       status:
         type: string
-        enum: [pending, applied, duplicated, unknown_type, ignored_stale, pushed, push_failed]
+        enum: [pending, applied, duplicated, unknown_type, ignored_stale, needs_review, pushed, push_failed]
       affectedRecordIds:
         type: array
         items: { type: string }
