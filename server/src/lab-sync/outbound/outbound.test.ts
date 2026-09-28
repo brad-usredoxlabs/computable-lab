@@ -18,7 +18,11 @@ import type { IngestTransport, IngestResult, LabSyncWireEvent } from '../types.j
 import { SCHEMA_IDS } from '../types.js'
 import { OutboundMinter } from './mint.js'
 import { OutboundPusher } from './push.js'
-import { buildReportReleasedPayload, MAX_ARTIFACT_BASE64_BYTES } from './reports.js'
+import {
+  buildReportReleasedPayload,
+  MAX_ARTIFACT_BASE64_BYTES,
+  REPORT_RELEASED_EVENT_TYPE,
+} from './reports.js'
 
 // ---------- fake store ----------
 
@@ -390,5 +394,100 @@ describe('buildReportReleasedPayload', () => {
         artifactUrl: 'https://x/y.pdf',
       }),
     ).toThrow()
+  })
+
+  it('carries sample_id, barcode, and the evidence document alongside the core fields', async () => {
+    const evidence = {
+      schema_version: 'tyf.evidence/1' as const,
+      viewer_version: 1,
+      sample_id: 'TYF-SAMPLE-4821',
+      barcode: 'TYF-9F7A21',
+      events: [],
+      records: [],
+      source_revisions: [],
+      artifacts: [],
+    }
+    const p = buildReportReleasedPayload({
+      orderId: 'ORD-2026-00042',
+      reportRecord,
+      sampleId: 'TYF-SAMPLE-4821',
+      barcode: 'TYF-9F7A21',
+      evidence,
+    })
+    expect(p).toEqual({
+      order_remote_id: 'ORD-2026-00042',
+      report_id: 'RPT-2026-00331',
+      revision: 2,
+      released_at: '2026-09-26T11:04:21-04:00',
+      sample_id: 'TYF-SAMPLE-4821',
+      barcode: 'TYF-9F7A21',
+      evidence,
+    })
+  })
+
+  it('omits sample_id/barcode/evidence entirely when absent (exactOptionalPropertyTypes)', async () => {
+    const p = buildReportReleasedPayload({ orderId: 'ORD-1', reportRecord })
+    expect('sample_id' in p).toBe(false)
+    expect('barcode' in p).toBe(false)
+    expect('evidence' in p).toBe(false)
+  })
+
+  it("REPORT_RELEASED_EVENT_TYPE is the wire literal 'report.released'", async () => {
+    expect(REPORT_RELEASED_EVENT_TYPE).toBe('report.released')
+  })
+})
+
+// ---------- pending-evidence re-push (customer-handoff spec) ----------
+
+describe('OutboundPusher pending-evidence re-push', () => {
+  async function seedReleaseMint(store: FakeStore) {
+    const minter = new OutboundMinter({ store, now: () => FIXED_NOW })
+    await minter.mint('report.released', {
+      order_remote_id: 'ORD-1',
+      report_id: 'RPT-1',
+      revision: 1,
+      released_at: FIXED_NOW.toISOString(),
+    })
+  }
+
+  it('report.released answered unknown -> push_failed "evidence pending", re-pushed until applied', async () => {
+    const store = makeFakeStore()
+    await seedReleaseMint(store)
+    const transport = makeFakeTransport(
+      { ok: true, applied: [], duplicated: [], unknown: ['evt_CL_000001'] },
+      { ok: true, applied: ['evt_CL_000001'], duplicated: [], unknown: [] },
+    )
+    const pusher = new OutboundPusher({ store, transport })
+
+    const first = await pusher.pushPending()
+    expect(first.failed).toEqual(['evt_CL_000001'])
+    expect(first.pushed).toEqual([])
+    const rec = eventRecords(store)[0]
+    expect(rec.payload.processing?.status).toBe('push_failed')
+    expect(rec.payload.processing?.error).toContain('evidence pending')
+
+    // Second run: identical payload re-pushed; website now applies it.
+    const second = await pusher.pushPending()
+    expect(second.pushed).toEqual(['evt_CL_000001'])
+    expect(transport.batches[1]).toEqual(transport.batches[0])
+    expect(eventRecords(store)[0].payload.processing?.status).toBe('pushed')
+  })
+
+  it('non-release events answered unknown still count as delivered', async () => {
+    const store = makeFakeStore()
+    const minter = new OutboundMinter({ store, now: () => FIXED_NOW })
+    await minter.mint('order.accepted', { order_remote_id: 'ORD-1' })
+    const transport = makeFakeTransport({
+      ok: true,
+      applied: [],
+      duplicated: [],
+      unknown: ['evt_CL_000001'],
+    })
+    const pusher = new OutboundPusher({ store, transport })
+
+    const result = await pusher.pushPending()
+    expect(result.pushed).toEqual(['evt_CL_000001'])
+    expect(result.failed).toEqual([])
+    expect(eventRecords(store)[0].payload.processing?.status).toBe('pushed')
   })
 })

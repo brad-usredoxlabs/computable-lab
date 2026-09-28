@@ -133,8 +133,12 @@ export class ArtifactClient {
    * from offset 0. Each chunk gets up to CHUNK_ATTEMPTS attempts; a 409
    * offset_mismatch re-queries status and resumes at the durable offset;
    * finish with complete().
+   *
+   * `sampleId` binds the reservation to the website-side sample (init's
+   * sample_id wire key). When absent, the reservation keeps an empty sample
+   * binding — byte-identical to the pre-sample-aware behavior.
    */
-  async uploadFile(id: string, bytes: Buffer): Promise<void> {
+  async uploadFile(id: string, bytes: Buffer, sampleId?: string): Promise<void> {
     assertArtifactId(id)
     if (bytes.length > MAX_ARTIFACT_BYTES) {
       throw new Error(
@@ -142,10 +146,9 @@ export class ArtifactClient {
       )
     }
     const sha256 = artifactSha256(bytes)
-    // sample_id is part of the reservation wire contract; uploadFile has no
-    // sample context, so it reserves with an empty sample binding. Callers
-    // that know the sample pass it through init() directly.
-    await this.init({ id, sampleId: '', size: bytes.length, sha256 })
+    // sample_id is part of the reservation wire contract; callers that know
+    // the website sample pass it, everyone else reserves unbound ('').
+    await this.init({ id, sampleId: sampleId ?? '', size: bytes.length, sha256 })
 
     let offset = 0
     while (offset < bytes.length) {

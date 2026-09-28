@@ -19,6 +19,9 @@ export interface ReportRecordLike {
   }
 }
 
+/** Wire event type literal — single source of truth (push.ts retry rule, release.ts minting). */
+export const REPORT_RELEASED_EVENT_TYPE = 'report.released'
+
 export interface ReportReleasedPayloadInput {
   /** Website-side order id (order record payload.source.remoteId). */
   orderId: string
@@ -27,9 +30,15 @@ export interface ReportReleasedPayloadInput {
   artifactBase64?: string
   /** Alternative link; website never fetches it. Mutually exclusive with base64. */
   artifactUrl?: string
+  /** Website-side sample id (tyf-sample-id identifier). */
+  sampleId?: string
+  /** Customer-facing barcode (tyf-barcode identifier). */
+  barcode?: string
+  /** The serialized tyf.evidence/1 document for this revision. */
+  evidence?: Record<string, unknown>
 }
 
-/** Payload shape for report.released on the wire (spec §3 table). */
+/** Payload shape for report.released on the wire (spec §3 table + customer-handoff extensions). */
 export interface ReportReleasedPayload {
   order_remote_id: string
   report_id: string
@@ -37,6 +46,9 @@ export interface ReportReleasedPayload {
   released_at: string
   artifact_base64?: string
   artifact_url?: string
+  sample_id?: string
+  barcode?: string
+  evidence?: Record<string, unknown>
 }
 
 /**
@@ -66,6 +78,12 @@ export function buildReportReleasedPayload(input: ReportReleasedPayloadInput): R
     revision: p.revision,
     released_at: p.releasedAt,
   }
+
+  // Sample context rides alongside the core fields (customer-handoff spec);
+  // exactOptionalPropertyTypes: absent stays absent, never undefined-on-wire.
+  if (input.sampleId !== undefined) payload.sample_id = input.sampleId
+  if (input.barcode !== undefined) payload.barcode = input.barcode
+  if (input.evidence !== undefined) payload.evidence = input.evidence
 
   if (input.artifactBase64 !== undefined) {
     const decodedBytes = Buffer.byteLength(input.artifactBase64, 'base64')

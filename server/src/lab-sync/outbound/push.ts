@@ -17,6 +17,7 @@
 import type { RecordStore } from '../../store/types.js'
 import type { IngestTransport, LabSyncWireEvent } from '../types.js'
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js'
+import { REPORT_RELEASED_EVENT_TYPE } from './reports.js'
 
 /** Mirrors lab-sync-api.md §3: batch size 1–100. */
 const DEFAULT_MAX_BATCH = 100
@@ -90,11 +91,23 @@ export class OutboundPusher {
       // applied: website acted; duplicated: already had it; unknown: stored
       // verbatim append-only but NOT applied — delivered either way, so the
       // outbox stops retrying. The unhandled-unknown case is called out.
+      //
+      // Exception (customer-handoff spec): a report.released answered
+      // 'unknown' means the website stored it but its evidence is not yet
+      // complete on their side — the event is invisible to the customer.
+      // It must be RE-PUSHED with the identical payload until the website
+      // returns applied/duplicated. The outbox mirror re-serializes the
+      // stored payload verbatim, which is exactly why the byte-equivalent
+      // retry the website's dedupe requires holds across re-pushes.
       const delivered = new Set([...result.applied, ...result.duplicated, ...result.unknown])
       const unknownIds = new Set(result.unknown)
       for (const rec of chunk) {
         const eventId = (rec.payload as OutboundRecordPayload).eventId as string
-        if (delivered.has(eventId)) {
+        const isRelease = (rec.payload as OutboundRecordPayload).eventType === REPORT_RELEASED_EVENT_TYPE
+        if (isRelease && unknownIds.has(eventId)) {
+          await this.markStatus(rec, 'push_failed', 'evidence pending website-side')
+          failed.push(eventId)
+        } else if (delivered.has(eventId)) {
           if (unknownIds.has(eventId)) {
             // eslint-disable-next-line no-console
             console.warn(

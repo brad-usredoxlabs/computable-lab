@@ -26,6 +26,7 @@ const SERVICE_SCHEMA_PATHS = [
   'domains/test-your-food/customer.schema.yaml',
   'domains/test-your-food/order.schema.yaml',
   'domains/test-your-food/sample-registration.schema.yaml',
+  'domains/test-your-food/evidence-document.schema.yaml',
   'integration/lab-sync-event.schema.yaml',
 ] as const;
 
@@ -370,5 +371,105 @@ describe('lab-sync service & domain schemas', () => {
       expect(term.term).toMatch(/^cf:[a-z0-9-]+$/);
     }
     expect(mapping.identifiers['tyf-barcode'].pattern).toBe('^TYF-[A-Z0-9]{6}$');
+  });
+
+  it('tyf.evidence/1 export document validates and pins its wire shape', async () => {
+    const result = await loadServiceSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+    const evidenceSchemaId = `${BASE}/domains/test-your-food/evidence-document.schema.yaml`;
+
+    const sha = (seed: string) => (seed.repeat(32)).slice(0, 64);
+    const document = {
+      schema_version: 'tyf.evidence/1',
+      viewer_version: 1,
+      sample_id: 'smp_1A2b_3',
+      barcode: 'TYF-9F7A21',
+      events: [{
+        id: 'evt_0001',
+        type: 'sample.received',
+        occurred_at: '2026-09-29T09:14:22-04:00',
+        sample_id: 'smp_1A2b_3',
+        record_ids: ['rec_0001'],
+      }],
+      records: [{
+        id: 'rec_0001',
+        type: 'sample',
+        sample_id: 'smp_1A2b_3',
+        data: { matrix: 'cf:fat-matrix' },
+      }],
+      source_revisions: [{ record_id: 'rec_0001', commit: 'a'.repeat(40) }],
+      artifacts: [
+        { id: 'art_graph_1', kind: 'graph', name: 'graph.json', sha256: sha('ab'), size: 1024 },
+        { id: 'art_trace_1', kind: 'trace', name: 'trace.json', sha256: sha('cd'), size: 2048 },
+        { id: 'art_script_1', kind: 'script', name: 'analysis.py', sha256: sha('ef'), size: 512 },
+        { id: 'art_inputs_1', kind: 'inputs', name: 'inputs.zip', sha256: sha('01'), size: 4096 },
+        { id: 'art_zip_1', kind: 'zip', name: 'bundle.zip', sha256: sha('23'), size: 8192 },
+      ],
+    };
+    expect(validator.validate(document, evidenceSchemaId).valid).toBe(true);
+
+    // What the schema CAN pin. The cross-sample EQUALITY rule (every
+    // event/record sample_id must equal the document sample_id) is
+    // cross-instance and not expressible in JSON Schema — it is enforced
+    // by the builder (build.test.ts asserts other-sample strings absent
+    // from serialized output), not here.
+    const { sample_id: _dropSample, ...recordNoScope } = document.records[0];
+    expect(validator.validate(
+      { ...document, records: [recordNoScope] },
+      evidenceSchemaId,
+    ).valid).toBe(false);
+
+    // additionalProperties: false — the document is a closed wire contract.
+    expect(validator.validate(
+      { ...document, extra_key: 'leak' },
+      evidenceSchemaId,
+    ).valid).toBe(false);
+
+    // Artifact kinds are a closed enum.
+    expect(validator.validate(
+      { ...document, artifacts: [...document.artifacts, { id: 'art_exe_1', kind: 'exe', name: 'run.exe', sha256: sha('45'), size: 1 }] },
+      evidenceSchemaId,
+    ).valid).toBe(false);
+
+    // sha256 must be a full 64-hex digest.
+    expect(validator.validate(
+      { ...document, artifacts: [{ ...document.artifacts[0], sha256: sha('ab').slice(0, 63) }, ...document.artifacts.slice(1)] },
+      evidenceSchemaId,
+    ).valid).toBe(false);
+
+    // viewer_version is pinned: the website viewer contract is version 1.
+    expect(validator.validate({ ...document, viewer_version: 2 }, evidenceSchemaId).valid).toBe(false);
+  });
+
+  it('report revisions carry evidenceFiles for the export bundle', async () => {
+    const result = await loadServiceSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+
+    const report = {
+      kind: 'report',
+      recordId: 'RPT-2026-00331',
+      requestRef: { kind: 'record', id: 'ORD-2026-00427', type: 'order' },
+      revision: 1,
+      status: 'approved',
+    };
+    expect(validator.validate(report, `${BASE}/report.schema.yaml`).valid).toBe(true);
+
+    const withEvidence = {
+      ...report,
+      evidenceFiles: [{ id: 'art_graph_1', kind: 'graph', name: 'graph.json', path: '/lab/evidence/graph.json' }],
+    };
+    expect(validator.validate(withEvidence, `${BASE}/report.schema.yaml`).valid).toBe(true);
+
+    // kind is the same closed enum as the evidence document's artifacts.
+    expect(validator.validate(
+      { ...report, evidenceFiles: [{ id: 'art_x_1', kind: 'bogus', name: 'x.bin', path: '/lab/evidence/x.bin' }] },
+      `${BASE}/report.schema.yaml`,
+    ).valid).toBe(false);
   });
 });

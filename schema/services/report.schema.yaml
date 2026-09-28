@@ -96,5 +96,25 @@ properties:
         type: { const: artifact }
     description: "Artifact record carrying the rendered report (PDF). Artifact ≤ 5 MB is pushed inline on release to external consumers."
 
+  evidenceFiles:
+    type: array
+    description: >
+      Source files backing this report revision — the PERFORMED-layer
+      evidence bundle the export builder packages per customer-handoff
+      tyf.evidence/1 (kinds: graph trace script inputs zip; pdf optional
+      legacy). path is a filesystem reference the builder reads; the
+      builder throws listing missing required kinds rather than shipping
+      an incomplete document.
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, path]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" }
+        kind: { type: string, enum: [graph, trace, script, inputs, zip, pdf] }
+        name: { type: string }
+        path: { type: string, minLength: 1 }
+    uniqueItems: true
+
   notes:
     type: string

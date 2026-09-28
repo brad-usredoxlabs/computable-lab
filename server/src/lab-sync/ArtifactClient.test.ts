@@ -248,6 +248,25 @@ describe('ArtifactClient.uploadFile', () => {
     expect(initBody.action).toBe('init')
   })
 
+  it('passes an explicit sampleId through to the init reservation (sample_id wire key)', async () => {
+    const { client, calls } = makeClient(ok)
+
+    await client.uploadFile('art_001', Buffer.from('hello'), 'tyfsmp_x')
+
+    const initBody = bodyOf(calls[0].init)
+    expect(initBody.action).toBe('init')
+    expect(initBody.sample_id).toBe('tyfsmp_x')
+    expect(actions(calls)).toEqual(['init', 'chunk', 'complete'])
+  })
+
+  it("reserves sample_id:'' when no sample is supplied (default behavior unchanged)", async () => {
+    const { client, calls } = makeClient(ok)
+
+    await client.uploadFile('art_001', Buffer.from('hello'))
+
+    expect(bodyOf(calls[0].init).sample_id).toBe('')
+  })
+
   it('retries a failed chunk (max 3 attempts per chunk) and still completes', async () => {
     let firstChunkFailed = false
     const { client, calls } = makeClient((_url, init) => {

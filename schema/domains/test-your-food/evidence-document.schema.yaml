@@ -1,0 +1,74 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/domains/test-your-food/evidence-document.schema.yaml"
+title: "TyfEvidenceDocument"
+description: >
+  Immutable evidence export: one document per sample x report revision
+  (customer-handoff spec). NOT an editable record — materialized per release,
+  uploaded, referenced by sha256. Every event/record/artifact must belong to
+  the exported sample; shared records enter only as redacted copies
+  (config/lab-sync/evidence.yaml policy enforced by the builder BEFORE
+  upload — the website cannot inspect arbitrary scientific files).
+  Validation contract for the builder output; Ajv-authoritative.
+
+type: object
+additionalProperties: false
+required: [schema_version, viewer_version, sample_id, barcode, events, records, source_revisions, artifacts]
+
+properties:
+  schema_version:
+    const: "tyf.evidence/1"
+  viewer_version:
+    const: 1
+  sample_id:
+    type: string
+    pattern: "^[A-Za-z0-9_-]{1,64}$"
+  barcode:
+    type: string
+    pattern: "^TYF-[A-Z0-9]{6}$"
+  events:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, type, occurred_at, sample_id, record_ids]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        sample_id: { type: string }
+        record_ids: { type: array, items: { type: string } }
+  records:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, type, sample_id, data]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        sample_id: { type: string }
+        data: { type: object }
+  source_revisions:
+    type: array
+    description: "Git history citations: commit sha per contributing record revision."
+    items:
+      type: object
+      additionalProperties: false
+      required: [record_id, commit]
+      properties:
+        record_id: { type: string }
+        commit: { type: string, pattern: "^[0-9a-f]{7,40}$" }
+  artifacts:
+    type: array
+    minItems: 1
+    description: "Required kinds graph|trace|script|inputs|zip must all be present; pdf optional. Completeness is enforced by the builder (throws listing missing kinds); this schema pins kinds enum and sha/size shape."
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, sha256, size]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" }
+        kind: { type: string, enum: [graph, trace, script, inputs, zip, pdf] }
+        name: { type: string }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, minimum: 1 }
