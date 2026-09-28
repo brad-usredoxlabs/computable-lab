@@ -1,0 +1,24 @@
+# Evidence export policy (customer-handoff spec: the LAB enforces redaction
+# before upload; the website cannot inspect arbitrary scientific files).
+# Declarative: the builder reads this; no customer-identity logic in TS.
+version: 1
+
+# Record kinds considered "shared batch records" — included only as redacted
+# copies with these paths stripped (dot-free top-level paths into payload).
+shared_kinds:
+  - run
+  - analysis-run
+redact_paths:
+  - customerRef
+  - requesterRef
+  - partyRef
+  - sampleRefs
+
+# Kinds never included, even in redacted form (other customers' identities
+# and commercial context). Anything not in include scope is dropped by
+# default — include-list stance, unknown kinds can never leak.
+drop_kinds:
+  - order
+  - customer
+  - request
+  - sample-registration

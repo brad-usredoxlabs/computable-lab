@@ -51,3 +51,4 @@ scripts/.ontology-cache/*
 
 # Playwright MCP runtime artifacts
 .playwright-mcp/
+app/dist-viewer/
