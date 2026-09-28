@@ -228,4 +228,201 @@ describe('LabSyncWorker E2E (stub website)', () => {
     expect(retry.pushed).toHaveLength(1) // duplicated counts as delivered
     expect(website.ingestedBatches).toHaveLength(2)
   })
+
+  // --- identity / verification / registration lifecycle (wave 1..4) --------
+  // Same harness; pins fetch -> translate -> ack -> cursor for
+  // customer.identity_assigned + sample.registered (extended fields) and the
+  // truthfulness of lab-sync-event mirror processing.status end to end.
+
+  const WEBSITE_CUSTOMER_ID = 'tyfcus_' + 'ab'.repeat(16)
+
+  /** Inbound mirrors currently in the fake store, in creation order. */
+  async function inboundMirrors(): Promise<Array<Record<string, unknown>>> {
+    const events = await store.list({ kind: 'lab-sync-event' })
+    return events
+      .map(e => e.payload as Record<string, unknown>)
+      .filter(p => p.direction === 'inbound')
+  }
+
+  it('identity lifecycle end to end: order -> identity_assigned -> sample.registered', async () => {
+    website.publish('order.created', {
+      order_remote_id: 'tyfored_9f3a21',
+      remote_revision: 1,
+      placed_at: '2026-09-26T17:42:31-04:00',
+      customer: { email: 'jane@example.com', name: 'Jane Smith' },
+      requested_services: [
+        { line_id: 'tyforl_01', service: 'fatty-acid-analysis', matrix: 'fat', sample_count: 1,
+          requested_reporting: { basis: 'percent_total_fatty_acids' } },
+      ],
+      total_amount: 125.0, currency: 'USD',
+    })
+    website.publish('customer.identity_assigned', {
+      customer_id: WEBSITE_CUSTOMER_ID,
+      email: 'jane@example.com',
+    })
+    website.publish('sample.registered', {
+      order_remote_id: 'tyfored_9f3a21',
+      barcode: 'TYF-9F7A21',
+      sample_id: 'tyfsmp_A1B2C3',
+      line_id: 'tyforl_01',
+      slot: 1,
+      customer_sample_description: { type: 'fat', description: 'olive oil' },
+    })
+
+    const summary = await worker.pollOnce()
+    expect(summary.fetched).toBe(3)
+    expect(summary.errors).toHaveLength(0)
+    expect(summary.ackedCursor).toBe(3)
+
+    // Exactly one customer: email identity in source, tyfcus identity aliased.
+    const customers = await store.list({ kind: 'customer' })
+    expect(customers).toHaveLength(1)
+    const cust = customers[0]!.payload as Record<string, unknown>
+    expect((cust.source as Record<string, unknown>).remoteId).toBe('email:jane@example.com')
+    const aliases = cust.aliases as Array<Record<string, unknown>>
+    expect(aliases).toHaveLength(1)
+    expect(aliases[0]!.system).toBe('test-your-food.com')
+    expect(aliases[0]!.remoteId).toBe(WEBSITE_CUSTOMER_ID)
+
+    // Minted sample carries BOTH identifiers: barcode + website sample id.
+    const samples = await store.list({ kind: 'sample' })
+    expect(samples).toHaveLength(1)
+    const identifiers = (samples[0]!.payload as Record<string, unknown>).identifiers as Array<Record<string, unknown>>
+    expect(identifiers).toHaveLength(2)
+    expect(identifiers).toEqual(expect.arrayContaining([
+      { system: 'tyf-barcode', value: 'TYF-9F7A21' },
+      { system: 'tyf-sample-id', value: 'tyfsmp_A1B2C3' },
+    ]))
+
+    // Registration record mirrors the extended identity fields.
+    const regs = await store.list({ kind: 'sample-registration' })
+    expect(regs).toHaveLength(1)
+    const reg = regs[0]!.payload as Record<string, unknown>
+    expect(reg.sampleId).toBe('tyfsmp_A1B2C3')
+    expect(reg.lineId).toBe('tyforl_01')
+    expect(reg.slot).toBe(1)
+
+    // All three inbound mirrors truthfully 'applied'.
+    const mirrors = await inboundMirrors()
+    expect(mirrors).toHaveLength(3)
+    for (const m of mirrors) {
+      expect((m.processing as Record<string, unknown>).status).toBe('applied')
+    }
+
+    // Ack advanced past all three; local cursor agrees.
+    expect(website.ackedCursor).toBe(3)
+    const cursorFile = JSON.parse(await readFile(join(dir, 'var/lab-sync/cursor.json'), 'utf8'))
+    expect(cursorFile.cursor).toBe(3)
+    expect((await worker.status()).cursor).toBe(3)
+  })
+
+  it('ambiguous identity is visible end to end: needs_review mirror, no mutation, worker still acks', async () => {
+    website.publish('customer.created', {
+      customer: { email: 'jane@example.com', name: 'Jane One' },
+      source: { system: 'test-your-food.com' },
+    })
+    await worker.pollOnce() // mints CUST-00001 via source.remoteId email identity
+
+    // Plant a SECOND email match directly in the store (contacts[] entry,
+    // different case + trailing space — normalizes to the same address),
+    // mirroring translate/inbound.test.ts's ambiguity technique.
+    store.records.set('CUST-99999', {
+      recordId: 'CUST-99999',
+      schemaId: 'customer',
+      payload: {
+        kind: 'customer',
+        recordId: 'CUST-99999',
+        name: 'Jane Two',
+        contacts: [{ channel: 'email', value: 'Jane@Example.com ' }],
+      },
+    })
+    website.publish('customer.identity_assigned', {
+      customer_id: WEBSITE_CUSTOMER_ID,
+      email: 'jane@example.com',
+    })
+    const identityEventId = website.table[1]!.event_id
+
+    const summary = await worker.pollOnce()
+    expect(summary.errors).toHaveLength(0) // needs_review is NOT a failure
+
+    const identityMirror = (await inboundMirrors()).find(m => m.eventId === identityEventId)
+    expect(identityMirror).toBeDefined()
+    const processing = identityMirror!.processing as Record<string, unknown>
+    expect(processing.status).toBe('needs_review')
+    expect(String(processing.error)).toContain('jane@example.com')
+
+    // NEITHER candidate mutated.
+    const customers = await store.list({ kind: 'customer' })
+    expect(customers).toHaveLength(2)
+    for (const c of customers) {
+      expect((c.payload as Record<string, unknown>).aliases).toBeUndefined()
+    }
+
+    // needs_review is a TERMINAL processing status (like unknown_type), not a
+    // transport failure: the page was durably handled, so the worker ACKS it
+    // and the cursor advances. Mirrors the worker's unknown_type policy.
+    expect(website.ackedCursor).toBe(2)
+    const cursorFile = JSON.parse(await readFile(join(dir, 'var/lab-sync/cursor.json'), 'utf8'))
+    expect(cursorFile.cursor).toBe(2)
+  })
+
+  it('needs_review does not block later events: subsequent order.updated still applies', async () => {
+    website.publish('order.created', {
+      order_remote_id: 'tyfored_9f3a21',
+      remote_revision: 1,
+      placed_at: '2026-09-26T17:42:31-04:00',
+      customer: { email: 'jane@example.com', name: 'Jane One' },
+      requested_services: [
+        { line_id: 'tyforl_01', service: 'fatty-acid-analysis', matrix: 'fat', sample_count: 1 },
+      ],
+      total_amount: 125.0, currency: 'USD',
+    })
+    await worker.pollOnce() // mints CUST-00001 + the order
+
+    // Recreate the ambiguous-identity situation from the previous test.
+    store.records.set('CUST-99999', {
+      recordId: 'CUST-99999',
+      schemaId: 'customer',
+      payload: {
+        kind: 'customer',
+        recordId: 'CUST-99999',
+        name: 'Jane Two',
+        contacts: [{ channel: 'email', value: 'Jane@Example.com ' }],
+      },
+    })
+    website.publish('customer.identity_assigned', {
+      customer_id: WEBSITE_CUSTOMER_ID,
+      email: 'jane@example.com',
+    })
+    // A later, unrelated event on the SAME page must not be starved by the
+    // needs_review sibling: status change applies, cursor advances past both.
+    website.publish('order.updated', {
+      order_remote_id: 'tyfored_9f3a21',
+      remote_revision: 2,
+      changes: { status: 'awaiting_sample', payment: { status: 'paid' } },
+    })
+
+    const summary = await worker.pollOnce()
+    expect(summary.fetched).toBe(2)
+    expect(summary.errors).toHaveLength(0)
+
+    const mirrors = await inboundMirrors()
+    expect(mirrors).toHaveLength(3)
+    const byType = new Map(mirrors.map(m => [m.eventType as string, (m.processing as Record<string, unknown>).status]))
+    expect(byType.get('customer.identity_assigned')).toBe('needs_review')
+    expect(byType.get('order.updated')).toBe('applied')
+
+    // The order actually moved.
+    const orders = await store.list({ kind: 'order' })
+    expect(orders).toHaveLength(1)
+    const order = orders[0]!.payload as Record<string, unknown>
+    expect(order.status).toBe('awaiting_sample')
+    expect((order.payment as Record<string, unknown>).status).toBe('paid')
+    expect((order.source as Record<string, unknown>).remoteRevision).toBe(2)
+
+    // Ack covers the whole page INCLUDING the needs_review event.
+    expect(website.ackedCursor).toBe(3)
+    const cursorFile = JSON.parse(await readFile(join(dir, 'var/lab-sync/cursor.json'), 'utf8'))
+    expect(cursorFile.cursor).toBe(3)
+  })
 })
