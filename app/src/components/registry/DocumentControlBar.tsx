@@ -150,7 +150,14 @@ export function DocumentControlBar({ record, dirty, onStateChanged }: DocumentCo
         {!loading &&
           transitions.map(
             t =>
-              t.allowed && (
+              // VISIBILITY RULE (QMS-1A permissive preview): the preview
+              // evaluates guards with presentedSignatures: [] (LifecycleHandlers.ts:66),
+              // so a signature-gated transition is ALWAYS allowed:false for every
+              // actor. It is still actionable — the password modal mints the
+              // signature. A transition hidden for a NON-signature reason (missing
+              // role) stays hidden. The distinction is the declarative `requires`
+              // fact, not TS policy.
+              (t.allowed || t.requires?.signatureRequired === true) && (
                 <button
                   key={t.event}
                   onClick={() => handleTransition(t)}
