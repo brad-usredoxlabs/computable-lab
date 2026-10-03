@@ -86,7 +86,7 @@ export default defineConfig({
     allowedHosts: ['computable', 'appliance-01', 'appliance-2', '.ts.net'],
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: process.env.VITE_API_PROXY || 'http://localhost:3001',
         changeOrigin: true,
         timeout: 15 * 60 * 1000,
         proxyTimeout: 15 * 60 * 1000,
@@ -196,7 +196,7 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: process.env.VITE_API_PROXY || 'http://localhost:3001',
         changeOrigin: true,
         timeout: 15 * 60 * 1000,
         proxyTimeout: 15 * 60 * 1000,
