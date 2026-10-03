@@ -98,6 +98,33 @@ describe('apiClient.createSignature', () => {
     expect(result).toEqual(SIG_OK)
   })
 
+  it('returns the primary shape with revisionRef + contentHash (legacy gitCommit kept as optional)', async () => {
+    const primaryResult: SignatureResult = {
+      success: true,
+      signatureId: 'SIG-9F8E7D6C5B4A3210',
+      subject: {
+        recordId: 'DOC-DEMO-SOP',
+        revisionRef: 'rev-003',
+        contentHash: 'sha256:a1b2c3d4e5f6',
+      },
+    }
+    fetchSpy.mockResolvedValueOnce(jsonResponse(200, primaryResult))
+
+    const result: SignatureResult = await apiClient.createSignature({
+      action: 'approved',
+      subjectRecordId: 'DOC-DEMO-SOP',
+      lifecycleId: 'document-controlled-signing',
+      targetState: 'approved',
+      statement: 'I approve this SOP',
+      password: PASSWORD,
+    })
+
+    expect(result).toEqual(primaryResult)
+    expect(result.subject.revisionRef).toBe('rev-003')
+    expect(result.subject.contentHash).toBe('sha256:a1b2c3d4e5f6')
+    expect(result.subject.gitCommit).toBeUndefined()
+  })
+
   it('omits optional keys (lifecycleId/targetState/statement) when absent', async () => {
     fetchSpy.mockResolvedValueOnce(jsonResponse(200, SIG_OK))
 
