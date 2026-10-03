@@ -1,8 +1,8 @@
 # QMS Actor Matrix — QMS-4 (campaign light-qms-records-browser)
 
 Generated 2026-10-03T10:10:17 (spec tick) by the QMS-4 seed work against live `main @ dbb5ba3e`,
-lab policy `POL-SANDBOX`. QMS-6 and QMS-7 consume this table verbatim. The orchestrator promotes
-this file to `docs/qms-actor-matrix.md` after verification.
+lab policy `POL-SANDBOX`. QMS-6 and QMS-7 consume this table verbatim. Canonical path (promoted by
+the orchestrator after verification): `docs/qms-actor-matrix.md`.
 
 Every "expected" below is derived from the declarative sources, not from code policy:
 - lifecycle: `schema/core/lifecycles/document-controlled-signing.lifecycle.yaml` (roles, guards)
