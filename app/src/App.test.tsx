@@ -39,6 +39,10 @@ vi.mock('./settings/SettingsRoute', () => ({
   SettingsRoute: () => <div data-testid="settings-route">settings</div>,
 }))
 
+vi.mock('./pages/RecordRegistryPage', () => ({
+  default: () => <div data-testid="record-registry-page">registry</div>,
+}))
+
 vi.mock('./shell/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
@@ -127,6 +131,13 @@ describe('App router (Phase 12)', () => {
     )
   })
 
+  it('renders RecordRegistryPage at /registry', async () => {
+    visit('/registry')
+    await waitFor(() =>
+      expect(screen.getByTestId('record-registry-page')).toBeTruthy(),
+    )
+  })
+
   // ---- Retired legacy routes render 404 ---------------------------------
 
   for (const url of [
@@ -140,7 +151,6 @@ describe('App router (Phase 12)', () => {
     '/runs/RUN-1',
     '/runs/RUN-1/editor',
     '/runs/RUN-1/editor/canvas',
-    '/registry',
     '/component-library',
     '/formulations',
     '/materials',
