@@ -56,6 +56,70 @@ import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '
 import { ApiError, NetworkError } from './errors'
 import { API_BASE, getCurrentUserId, getSessionToken, setSessionToken } from './base'
 
+/**
+ * === Signature plumbing (QMS-3) ===
+ * Shapes mirror the server exactly — server/src/api/handlers/SignatureHandlers.ts
+ * (POST /signatures) and server/src/api/handlers/RecordHandlers.ts
+ * (PUT /records/:id body-top-level `signatureRefs`). See QMS-1 decisions doc §(d).
+ */
+export interface SignatureSubject {
+  recordId: string
+  lifecycleId?: string
+  targetState?: string
+}
+
+/**
+ * Input for minting a signature. The signer identity ALWAYS comes from the
+ * session user server-side — this type deliberately has NO signer/user field.
+ * `password` is step-up re-auth: it goes in the single /signatures request
+ * body only — never logged, never stashed, never echoed into errors.
+ */
+export interface CreateSignatureInput {
+  action: string
+  subjectRecordId: string
+  lifecycleId?: string
+  targetState?: string
+  statement?: string
+  password: string
+}
+
+/** 200 response of POST /signatures (`gitCommit` present iff the subject's meta.commitSha resolves). */
+export interface SignatureResult {
+  success: true
+  signatureId: string
+  subject: {
+    recordId: string
+    gitCommit?: string
+  }
+}
+
+/**
+ * True exactly for a step-up re-authentication failure. Server truth
+ * (SignatureHandlers.ts:79-83): 403 with a uniform message that deliberately
+ * never says which check missed.
+ *
+ * Two shapes are honoured, both grounded in code, nothing invented:
+ *  1. `code === 'REAUTH_FAILED'` — the predicate the spec names, matching any
+ *     error whose code carries the server's error token.
+ *  2. `message.includes('REAUTH_FAILED')` — the server's ACTUAL wire shape is
+ *     `{ error: 'REAUTH_FAILED', message }` (live-probed 2026-10-03; no `code`
+ *     field). `errors.ts` fromResponse() builds the ApiError message as
+ *     `"<error>: <message>"` and sets code from the absent `body.code`, so the
+ *     token lands in `message` and code degrades to `HTTP_403`. (If the server
+ *     ever emits `code`, branch 1 covers it.)
+ *
+ * Every other rejection stays a plain `ApiError` the caller can still read —
+ * e.g. a 422 `LIFECYCLE_TRANSITION_DENIED` (lifecycle guard denial) or a 401
+ * `UNAUTHENTICATED` — and must NOT be treated as "wrong password".
+ */
+export function isReauthFailure(error: unknown): boolean {
+  return (
+    ApiError.isApiError(error) &&
+    error.status === 403 &&
+    (error.code === 'REAUTH_FAILED' || error.message.includes('REAUTH_FAILED'))
+  )
+}
+
 /** The persisted workspace session (GET/PUT /api/session). */
 export interface WorkspaceSessionPayload {
   version: 1
@@ -2234,15 +2298,48 @@ export const apiClient = {
   },
 
   /**
+   * Mint a signature (password step-up) for a subject record: POST /signatures.
+   * The signer identity ALWAYS comes from the session user — no signer field
+   * is sent (the server would ignore one; SignatureHandlers.ts:43-48,102).
+   * Errors are NOT caught: `ApiError` propagates so callers can read
+   * `status`/`code` (e.g. `isReauthFailure`). The password appears in this one
+   * request body only.
+   */
+  async createSignature(input: CreateSignatureInput): Promise<SignatureResult> {
+    return request<SignatureResult>('/signatures', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: {
+          recordId: input.subjectRecordId,
+          ...(input.lifecycleId ? { lifecycleId: input.lifecycleId } : {}),
+          ...(input.targetState ? { targetState: input.targetState } : {}),
+        },
+        action: input.action,
+        ...(input.statement ? { statement: input.statement } : {}),
+        password: input.password,
+      }),
+    })
+  },
+
+  /**
    * Update an existing record.
+   * `options` merges at the PUT body TOP LEVEL next to `payload` (server
+   * reads `signatureRefs` at RecordHandlers.ts:637-639, not inside payload).
+   * Absent option keys stay out of the body, so two-arg calls are unchanged.
    */
   async updateRecord(
     recordId: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    options?: { signatureRefs?: string[]; message?: string; expectedSha?: string }
   ): Promise<WriteResponse> {
     return request<WriteResponse>(`/records/${encodeURIComponent(recordId)}`, {
       method: 'PUT',
-      body: JSON.stringify({ payload }),
+      body: JSON.stringify({
+        payload,
+        ...(options?.signatureRefs ? { signatureRefs: options.signatureRefs } : {}),
+        ...(options?.message ? { message: options.message } : {}),
+        ...(options?.expectedSha ? { expectedSha: options.expectedSha } : {}),
+      }),
     })
   },
 
@@ -4005,6 +4102,12 @@ export const apiClient = {
       label: string
       role: string
       allowed: boolean
+      /** QMS-1A: declarative guard facts from the lifecycle YAML (present only when the transition declares guards). */
+      requires?: {
+        signatureRequired: boolean
+        signatureAction?: string
+        differentPersonThan?: string
+      }
     }>
   }> {
     const params = new URLSearchParams({ recordId })
@@ -4018,6 +4121,12 @@ export const apiClient = {
           label: string
           role: string
           allowed: boolean
+          /** QMS-1A: declarative guard facts from the lifecycle YAML (present only when the transition declares guards). */
+          requires?: {
+            signatureRequired: boolean
+            signatureAction?: string
+            differentPersonThan?: string
+          }
         }>
       }>(`/lifecycle/${encodeURIComponent(lifecycleId)}/transitions?${params.toString()}`)
       return response
