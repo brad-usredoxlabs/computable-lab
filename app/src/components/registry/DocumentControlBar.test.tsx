@@ -91,7 +91,13 @@ function emptyReceipt() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  // mockReset (not clearAllMocks): clears the queued once-implementations too,
+  // so an unconsumed mockRejectedValueOnce from one test can never leak into
+  // the next test's updateRecord/createSignature calls.
+  mocked.getValidTransitions.mockReset()
+  mocked.updateRecord.mockReset()
+  mocked.createSignature.mockReset()
+  mocked.listRecordsByKind.mockReset()
   mocked.getValidTransitions.mockResolvedValue({ transitions: [] })
   mocked.updateRecord.mockResolvedValue({ record: { recordId: docRecord.recordId, schemaId: 'x', payload: {} }, validation: { valid: true, errors: [] }, lint: { valid: true, violations: [] } })
   mocked.createSignature.mockResolvedValue({
@@ -201,6 +207,70 @@ describe('DocumentControlBar — signature-gated transitions', () => {
     expect(mocked.createSignature).not.toHaveBeenCalled()
     expect(mocked.updateRecord).not.toHaveBeenCalled()
     expect(screen.queryByTestId('signature-password-modal')).toBeNull()
+  })
+})
+
+describe('DocumentControlBar — visibility rule (round-2 fix)', () => {
+  // The permissive preview (LifecycleHandlers.ts:66, presentedSignatures: [])
+  // reports signature-gated transitions allowed:false for EVERY actor. The bar
+  // must still render them — they are actionable via the password modal. The
+  // distinction is the declarative `requires` fact, not TS policy.
+  const gatedButDisallowed = {
+    event: 'APPROVE',
+    targetState: 'approved',
+    label: 'Approve',
+    role: 'reviewer',
+    allowed: false,
+    requires: { signatureRequired: true, signatureAction: 'approved', differentPersonThan: 'author' },
+  }
+
+  it('allowed:false + requires.signatureRequired=true → button MUST render', async () => {
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [gatedButDisallowed] })
+    renderBar()
+
+    const btn = await screen.findByRole('button', { name: 'Approve' })
+    expect(btn).toBeEnabled()
+
+    // And it is actionable: clicking it opens the password modal (not a dead button).
+    fireEvent.click(btn)
+    await screen.findByTestId('signature-password-modal')
+    expect(mocked.updateRecord).not.toHaveBeenCalled() // nothing sent before signing
+  })
+
+  it('allowed:false with no requires (e.g. missing role) → button must NOT render', async () => {
+    mocked.getValidTransitions.mockResolvedValue({
+      transitions: [{ event: 'MAKE_EFFECTIVE', targetState: 'effective', label: 'Make effective', role: 'approver', allowed: false }],
+    })
+    renderBar()
+
+    // Wait until the preview resolves (loading spinner gone), then assert absence.
+    await waitFor(() => expect(mocked.getValidTransitions).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Loading...')).toBeNull())
+    expect(screen.queryByRole('button', { name: 'Make effective' })).toBeNull()
+  })
+
+  it('gated transition denied post-mint (422 LIFECYCLE_TRANSITION_DENIED) → server message, NOT a password error', async () => {
+    // Different-person guard: author signs, PUT is refused. The bar must show
+    // the server's actual message, never a password-related one.
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [gatedButDisallowed] })
+    mocked.updateRecord.mockRejectedValueOnce(
+      new ApiError({
+        status: 422,
+        code: 'HTTP_422',
+        message: 'LIFECYCLE_TRANSITION_DENIED: You do not have the required role for this transition.',
+      })
+    )
+    renderBar()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hunter2' } })
+    fireEvent.click(screen.getByRole('button', { name: /sign/i }))
+
+    await waitFor(() => expect(mocked.createSignature).toHaveBeenCalledTimes(1))
+    const err = await screen.findByTestId('transition-error')
+    expect(err.textContent).toMatch(/You do not have the required role for this transition/)
+    expect(err.textContent).toMatch(/did not change/)
+    expect(document.body.textContent).not.toMatch(/password/i) // modal is closed; no password-error text anywhere
   })
 })
 
