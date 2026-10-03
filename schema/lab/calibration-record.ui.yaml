@@ -1,0 +1,74 @@
+# UI specification for Calibration Record records.
+# Browse/edit/save only — calibration records carry no lifecycle chrome (A6).
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/calibration-record.schema.yaml"
+
+display:
+  titleField: "$.id"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Calibration"
+    fields:
+    - path: "$.equipmentRef"
+      widget: "ref"
+      label: "Equipment"
+      required: true
+      refKind: "equipment"
+    - path: "$.performedAt"
+      widget: "date"
+      label: "Performed At"
+      required: true
+    - path: "$.dueAt"
+      widget: "date"
+      label: "Due At"
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "pass"
+        label: "Pass"
+      - value: "fail"
+        label: "Fail"
+      - value: "adjusted"
+        label: "Adjusted"
+      - value: "limited_use"
+        label: "Limited Use"
+    - path: "$.performedByRef"
+      widget: "ref"
+      label: "Performed By"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.equipmentRef"
+    label: "Equipment"
+  - path: "$.status"
+    label: "Status"
+    width: "110px"
+  - path: "$.performedAt"
+    label: "Performed"
+    width: "140px"
+  - path: "$.dueAt"
+    label: "Due"
+    width: "140px"

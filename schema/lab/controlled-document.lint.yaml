@@ -1,0 +1,8 @@
+# Lint rules for Controlled Document records
+# No business rules beyond what the schema itself enforces (enum + const
+# lifecycleId + pattern constraints). The signing gates live declaratively in
+# schema/core/lifecycles/document-controlled-signing.lifecycle.yaml guards,
+# interpreted by the lifecycle engine — not duplicated here.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/controlled-document.schema.yaml"
+rules: []
