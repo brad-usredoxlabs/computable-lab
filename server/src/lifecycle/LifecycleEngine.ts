@@ -2,18 +2,61 @@ import { createMachine } from 'xstate'
 import { compileLifecycle } from './lifecycleCompiler'
 import type { LifecycleSpec, LifecycleContext } from './types'
 
+/** Declarative guard facts, copied from the lifecycle YAML guards — never inferred in TS. */
+export interface TransitionRequirements {
+  /** A requires_signature guard is present (transition is signature-gated). */
+  signatureRequired: boolean
+  /** The YAML `signatureAction` for that guard. Absent => the engine fails closed today. */
+  signatureAction?: string
+  /** requires_different_person guard: the role whose assignee must differ from the actor. */
+  differentPersonThan?: string
+}
+
 export interface TransitionInfo {
   event: string
   targetState: string
   label: string
   role: string
   allowed: boolean
+  /** Present only when the transition declares guards. Absent otherwise. */
+  requires?: TransitionRequirements
 }
 
 export interface TransitionResult {
   previousState: string
   newState: string
   event: string
+}
+
+/**
+ * Copy declarative guard facts straight out of the lifecycle YAML guards.
+ * Pure pass-through: NO policy is decided here and no guard→action mapping is
+ * invented in TS (the mapping lives in YAML only, matching guardsPass()'s
+ * fail-closed rule). `requires` is returned only when the transition declares
+ * at least one guard; other guard types are intentionally not surfaced yet
+ * (QMS-1A open question 1 — widen when a consumer needs them).
+ */
+function describeGuardFacts(
+  guards: LifecycleSpec['transitions'][number]['guards']
+): TransitionRequirements | undefined {
+  if (!guards || guards.length === 0) return undefined
+
+  const signatureGuard = guards.find(g => g.type === 'requires_signature')
+  const differentPersonGuard = guards.find(g => g.type === 'requires_different_person')
+
+  const requires: TransitionRequirements = {
+    // True whenever a requires_signature guard exists, even without
+    // signatureAction: the client must distinguish "gated but mis-declared"
+    // from "not gated".
+    signatureRequired: signatureGuard !== undefined,
+    ...(signatureGuard?.signatureAction !== undefined
+      ? { signatureAction: signatureGuard.signatureAction }
+      : {}),
+    ...(differentPersonGuard?.than !== undefined
+      ? { differentPersonThan: differentPersonGuard.than }
+      : {})
+  }
+  return requires
 }
 
 export class LifecycleEngine {
@@ -118,12 +161,14 @@ export class LifecycleEngine {
       const eventName = (transition.label || transition.to).toUpperCase().replace(/\s+/g, '_')
       const allowed = this.canTransition(lifecycleId, currentState, eventName, context)
 
+      const requires = describeGuardFacts(transition.guards)
       result.push({
         event: eventName,
         targetState: transition.to,
         label: transition.label || transition.to,
         role: transition.role,
-        allowed
+        allowed,
+        ...(requires ? { requires } : {})
       })
     }
     return result
