@@ -36,6 +36,12 @@ function aiOverlayPlugin(): Plugin {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Per-server dependency cache. Vite's default (node_modules/.vite) is SHARED
+  // whenever several worktrees symlink one node_modules — parallel dev servers
+  // then clobber each other's pre-bundled deps and the browser gets
+  // 504 "Outdated Optimize Dep" + a blank screen. VITE_CACHE_DIR gives each
+  // server its own cache so lanes can run side by side.
+  cacheDir: process.env.VITE_CACHE_DIR || 'node_modules/.vite',
   resolve: {
     alias: {
       '@cla-lab-host': resolve(__dirname, 'src'),
