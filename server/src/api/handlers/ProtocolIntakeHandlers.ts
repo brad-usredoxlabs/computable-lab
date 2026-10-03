@@ -22,6 +22,8 @@ import {
   SUBGRAPH_PROPOSAL_SCHEMA_ID,
   type IngestPdfResult,
 } from '../../protocol-intake/ProtocolIntakeService.js';
+import { materializeBranchCandidate } from '../../protocol-intake/materializeBranchCandidate.js';
+import type { DecisionTreeAxis } from '../../protocol-intake/deriveDecisionTree.js';
 import { resolveReviewTrees } from '../../protocol-intake/reviewDocuments.js';
 import { reviewRolesFromCandidate, reviewStepsFromCandidate } from '../../protocol-intake/reviewSteps.js';
 import { readCandidateArtifact } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
@@ -264,7 +266,19 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
                   roles: reviewRolesFromCandidate(candidate),
                 }
               : null,
-            proposals,
+            proposals: proposals.map((proposal) => {
+              const path = proposal['branchPath'];
+              if (!candidate || !Array.isArray(path)) return proposal;
+              const choices = Object.fromEntries(path.map((entry: { axisId: string; conditionId: string }) => [entry.axisId, entry.conditionId]));
+              try {
+                const resolved = materializeBranchCandidate(candidate, axes as unknown as DecisionTreeAxis[], choices);
+                return { ...proposal, resolvedCandidate: {
+                  documentId, title: resolved.title,
+                  steps: reviewStepsFromCandidate({ steps: resolved.steps }),
+                  roles: reviewRolesFromCandidate(resolved),
+                } };
+              } catch { return proposal; }
+            }),
           });
         }
 
@@ -356,6 +370,40 @@ export function createProtocolIntakeHandlers(ctx: AppContext, deps?: ProtocolInt
       } catch (err) {
         reply.status(500);
         return { error: 'INTAKE_REDRAFT_FAILED', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+    /**
+     * POST /protocol-ide/intake/refresh
+     *
+     * Re-derive the stored decision trees for one source document from its
+     * PERSISTED candidate artifact — no PDF decode, no LLM. Derivation rules
+     * change (degenerate-axis suppression, nesting semantics); the trees are
+     * records, and the fix only reaches the review surface once they are
+     * re-derived. Proposals whose positional ids no longer denote the same
+     * binding are invalidated (accepted/rejected survive). Drafting stays on
+     * demand — refresh produces questions, not compile passes.
+     */
+    async refreshTrees(
+      request: FastifyRequest<{ Body: { documentId?: unknown } }>,
+      reply: FastifyReply,
+    ): Promise<unknown> {
+      const documentId = typeof request.body?.documentId === 'string' ? request.body.documentId.trim() : '';
+      if (!documentId) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'documentId is required' };
+      }
+      try {
+        const result = await intakeService().refreshTree({ documentId });
+        const failed = result.diagnostics.filter((d) => d.severity === 'error');
+        if (failed.length > 0) {
+          reply.status(422);
+          return { success: false, diagnostics: result.diagnostics };
+        }
+        reply.status(200);
+        return { success: true, ...result };
+      } catch (err) {
+        reply.status(500);
+        return { error: 'INTAKE_REFRESH_FAILED', message: err instanceof Error ? err.message : String(err) };
       }
     },
     /**
