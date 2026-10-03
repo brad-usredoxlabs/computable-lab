@@ -23,9 +23,10 @@ It is a delta to QMS-1's decisions doc and it **supersedes QMS-6's planned scope
   NOT an approval (join SIG ↔ lifecycle transition event); a **separate** signature per gated
   transition; use `POST /records/:id/draft-copy` when editing an approved doc; approved/effective
   content is locked at HTTP **and** storage.
-- A new task **QMS-3A** is named in the delta ("Tracked as QMS-3A": surface the three new error
-  tokens in `app/src`). **QMS-3A does not exist in lane 1's task list** — THE LIST has not been
-  reconciled with the delta.
+- **NOTE (correction, see the update block at the foot of this handoff):** by the time this handoff
+  was committed, THE LIST had already been revised (mtime 14:35) to add **QMS-3A** and re-scope
+  QMS-6 to the delta — the concurrent architect write landed mid-tick, after this tick's 14:25 read
+  of the list. QMS-6 remains blocked on Blocker 2 (below), not on the list.
 
 Consequence: dispatching QMS-6 now would build against a superseded contract and collide with
 Brad's in-flight signature-integrity work. **Do not dispatch QMS-6 until THE LIST is revised
