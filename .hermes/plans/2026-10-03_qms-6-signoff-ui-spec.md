@@ -219,3 +219,38 @@ Run: `npx vitest run src/components/registry/DocumentControlBar.test.tsx` (all g
 **Worktree/branch:** `/mnt/vast/home/brad/git/wt/qms-6-fix1-lane1-20261003T1510`, branch
 `wt/qms-6-fix1-lane1-20261003T1510` off `cl/integration-1` (HEAD `dd4f0b4f`). Commit there. Owned
 files: `app/src/components/registry/DocumentControlBar.tsx` + its test only.
+
+---
+
+## ROUND 3 (2026-10-03 tick 20261003T222126) — GATE OBTAINED, VERDICT: fix, and the cause is a PLATFORM GAP → STOP
+
+The independent `cl-browser-reviewer` gate finally ran (appliance-2 endpoint stable). Receipts:
+`/home/brad/.hermes/cl/receipts/QMS-6/20261003T222126/` (`trail.json`, `report.md`, 10 shots).
+
+Accepted by the gate (real receipts): `/registry` + reload; Documents tab + controlled-document tag;
+`draft→in_review` with NO password modal; `Approve` RENDERS in `in_review` (round-2 fix holds) and
+opens exactly ONE modal (action `approved`); Cancel sends nothing; TRR-DEMO-1 has no lifecycle chrome;
+/lab Documents pill resolves; fixture restored to `draft`; no console errors.
+
+The reviewer's 2 defects were re-verified by the orchestrator: **one is a false positive** (CAL-DEMO-GC
+IS listed under Calibrations and renders — API and live both confirm), and **one is REAL and is NOT
+QMS-6's to fix**:
+
+**The document editor renders NO fields for controlled-document.** `GET /api/ui/record/DOC-DEMO-SOP/editor`
+returns every block with `slotIds: []`; the live TipTap node is empty and the payload text appears
+nowhere in the DOM. Cause: `controlled-document.ui.yaml`'s `editor.blocks` declare no `path`, and
+`assignSlotsToBlocks()` (`server/src/ui/EditorProjectionService.ts:105-116`) is the only binding
+mechanism and binds solely by `slot.path.startsWith(block.path)` — skipping blocks without a `path`.
+`buildProjectionDocument` (`app/src/editor/taptab/documentMapper.ts:173-177`) then skips every block.
+There is no declarative way to bind scalar slots to a section block: `EditorBlock` has only `path`
+(documented for repeater/table), `EditorSlot` has no back-reference, and `schema/ui/ui-v1.schema.yaml`
+does not model `editor` at all (`additionalProperties:false`, no `editor` key).
+
+This re-opens QMS-1 (a) — classed **resolved** ("use the `markdown` widget on an `editor.blocks` slot")
+but only ever checked the widget, never the block↔slot binding. QMS-2 authored the ui.yaml on that
+guidance and its test asserted slot presence only.
+
+**QMS-6 is FORBIDDEN to absorb this** (this spec's own rule: a genuine new platform gap goes back to the
+architect as blocked). Remedy options in the handoff. QMS-6 → **blocked**; QMS-7 stays behind it.
+Second blocker unchanged: `USR-LOCAL-ADMIN` has no credential, so the signed rows cannot be exercised
+(Brad's `POST /auth/set-password`).
