@@ -30,7 +30,7 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'labware', label: 'Labware', kind: 'labware' },
   { id: 'equipment', label: 'Instruments & Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
-  { id: 'documents', label: 'Documents', kind: 'document' },
+  { id: 'documents', label: 'Documents', kind: 'controlled-document' },
   { id: 'vendor-pdfs', label: 'Vendor PDFs', kind: 'vendor-pdf' },
 ]
 
@@ -154,8 +154,9 @@ function extractHelperTokens(
       break
     }
 
-    case 'document': {
-      const st = typeof p.status === 'string' ? p.status : undefined
+    case 'controlled-document': {
+      const st =
+        typeof p.state === 'string' ? p.state : typeof p.status === 'string' ? p.status : undefined
       if (st) tokens.push({ text: st, tag: statusVariant(st) })
       if (typeof p.documentType === 'string') tokens.push({ text: p.documentType })
       const desc = typeof p.description === 'string' ? p.description : undefined
