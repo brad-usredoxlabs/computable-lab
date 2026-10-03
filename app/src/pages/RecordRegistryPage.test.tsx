@@ -9,6 +9,8 @@
  * - event-driven dirty tracking via TapTabEditor callback
  * - related-record section renders for existing records
  * - no polling interval is set — only callback-driven dirty tracking
+ * - QMS-6: controlled-document records under the Documents tab; the
+ *   DocumentControlBar mounts for lifecycle-bearing records only
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -37,6 +39,9 @@ const mocked = vi.hoisted(() => ({
     slots: [{ id: 's1', path: 'name', label: 'Name', widget: 'text' }],
     diagnostics: [],
   }),
+  mockGetValidTransitions: vi.fn().mockResolvedValue({ transitions: [] }),
+  mockGetRecord: vi.fn(),
+  mockCreateDraftCopy: vi.fn(),
   mockOnSelect: null as ((record: { recordId: string; schemaId: string; payload: Record<string, unknown>; isNew: boolean }) => void) | null,
   mockOnUpdate: null as ((payload: Record<string, unknown>, dirty: boolean) => void) | null,
 }))
@@ -49,6 +54,10 @@ vi.mock('../shared/api/client', () => ({
     createRecord: vi.fn().mockResolvedValue(undefined),
     getRecordEditorProjection: mocked.mockGetRecordEditorProjection,
     getEditorDraftProjection: mocked.mockGetEditorDraftProjection,
+    getValidTransitions: mocked.mockGetValidTransitions,
+    getRecord: mocked.mockGetRecord,
+    createDraftCopy: mocked.mockCreateDraftCopy,
+    createSignature: vi.fn(),
   },
 }))
 
@@ -179,6 +188,7 @@ describe('RecordRegistryPage — TapTab-default with event-driven dirty tracking
     mocked.mockOnUpdate = null
     mocked.mockGetRecordEditorProjection.mockClear()
     mocked.mockGetEditorDraftProjection.mockClear()
+    mocked.mockGetValidTransitions.mockResolvedValue({ transitions: [] })
     // Set up default mock data
     mocked.mockListRecordsByKind.mockResolvedValue({
       records: [
@@ -405,5 +415,84 @@ describe('RecordRegistryPage — TapTab-default with event-driven dirty tracking
     await waitFor(() => {
       expect(screen.getByText('Editor not available for this record')).toBeTruthy()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// QMS-6 — registry coverage: Documents tab + DocumentControlBar mounting
+// ---------------------------------------------------------------------------
+
+describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
+  const docRecord = {
+    recordId: 'DOC-DEMO-SOP',
+    schemaId: 'controlled-document',
+    payload: {
+      kind: 'controlled-document',
+      recordId: 'DOC-DEMO-SOP',
+      title: 'Demo SOP',
+      lifecycleId: 'document-controlled-signing',
+      state: 'draft',
+    },
+  }
+
+  const trainingRecord = {
+    recordId: 'TRR-DEMO-1',
+    schemaId: 'training-record',
+    payload: {
+      kind: 'training-record',
+      recordId: 'TRR-DEMO-1',
+      name: 'Pipette Training',
+      state: 'completed',
+    },
+  }
+
+  beforeEach(() => {
+    // A previous test armed mockRejectedValue on the projection mock; mockClear
+    // does not remove implementations, so re-arm a resolved projection here.
+    mocked.mockGetRecordEditorProjection.mockResolvedValue({
+      schemaId: 'controlled-document',
+      recordId: 'DOC-DEMO-SOP',
+      title: 'Demo SOP',
+      blocks: [{ id: 'b1', kind: 'section', label: 'Section 1', slotIds: ['s1'] }],
+      slots: [{ id: 's1', path: 'title', label: 'Title', widget: 'text' }],
+      diagnostics: [],
+    })
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [docRecord], total: 1 }
+      if (kind === 'training-record') return { records: [trainingRecord], total: 1 }
+      return { records: [], total: 0 }
+    })
+  })
+
+  it('lists controlled-document records under the Documents tab', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+
+    await waitFor(() =>
+      expect(mocked.mockListRecordsByKind).toHaveBeenCalledWith('controlled-document', 100)
+    )
+    // The list shows the payload title as display name.
+    expect(await screen.findByText('Demo SOP')).toBeInTheDocument()
+  })
+
+  it('mounts the DocumentControlBar for a lifecycle-bearing controlled-document', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    fireEvent.click(await screen.findByText('Demo SOP'))
+
+    await screen.findByTestId('projection-taptab-editor')
+    expect(await screen.findByTestId('document-control-bar')).toBeInTheDocument()
+  })
+
+  it('does NOT mount the DocumentControlBar for a plain training-record', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Training' }))
+    fireEvent.click(await screen.findByText('Pipette Training'))
+
+    await screen.findByTestId('projection-taptab-editor')
+    expect(screen.queryByTestId('document-control-bar')).toBeNull()
   })
 })

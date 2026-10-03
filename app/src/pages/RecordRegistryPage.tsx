@@ -6,6 +6,7 @@ import type { TapTabEditorHandle } from '../editor/taptab/types';
 import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
+import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
 
 const REGISTRY_TABS = [
@@ -17,6 +18,7 @@ const REGISTRY_TABS = [
   { id: 'calibrations', label: 'Calibrations', kinds: ['calibration-record', 'qualification-record'] },
   { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
   { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
+  { id: 'documents', label: 'Documents', kinds: ['controlled-document'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
@@ -177,6 +179,54 @@ export default function RecordRegistryPage() {
     setError(null);
   };
 
+  // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
+  // In-place Save is replaced by a draft-copy; the server issues fresh
+  // authorship (no inherited reviewer/approver/signature assignments).
+  const contentLocked =
+    editorMode === 'edit' &&
+    ((selectedRecord?.payload as { state?: string } | undefined)?.state === 'approved' ||
+      (selectedRecord?.payload as { state?: string } | undefined)?.state === 'effective');
+
+  const handleCreateDraftRevision = async () => {
+    if (!selectedRecord?.recordId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await apiClient.createDraftCopy(selectedRecord.recordId, {});
+      const draft = result.record;
+      const draftData: RecordData = {
+        recordId: draft.recordId,
+        schemaId: draft.schemaId || (draft.payload as { schemaId?: string }).schemaId || selectedRecord.schemaId,
+        payload: draft.payload,
+      };
+      setSelectedRecord(draftData);
+      setDirty(false);
+      await refreshRecords();
+      loadProjectionForRecord(draftData);
+    } catch (err) {
+      // Surface the server's refusal verbatim if the in-place path was refused.
+      setError(err instanceof Error ? err.message : 'Failed to create draft revision');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // After a lifecycle transition (or its failure) show the server's ACTUAL state.
+  const refreshSelectedRecord = async () => {
+    if (!selectedRecord?.recordId) return;
+    try {
+      const fresh = await apiClient.getRecord(selectedRecord.recordId);
+      setSelectedRecord({
+        recordId: fresh.recordId,
+        schemaId: fresh.schemaId,
+        payload: fresh.payload,
+      });
+    } catch {
+      // The list refresh below still reflects what the server has.
+    }
+    await refreshRecords();
+  };
+
   // Event-driven dirty tracking via TapTabEditor callback — no polling
   const handleSerializedChange = useCallback((_payload: Record<string, unknown>, isDirtyFlag: boolean) => {
     setDirty(isDirtyFlag);
@@ -268,13 +318,23 @@ export default function RecordRegistryPage() {
               title={title}
               actions={
                 <>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !dirty}
-                    className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save'}
-                  </button>
+                  {contentLocked ? (
+                    <button
+                      onClick={handleCreateDraftRevision}
+                      disabled={saving}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {saving ? 'Creating...' : 'Create draft revision'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !dirty}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  )}
                   <button
                     onClick={handleCancel}
                     className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
@@ -303,13 +363,20 @@ export default function RecordRegistryPage() {
           }
         >
           <div className="flex-1 overflow-y-auto p-4">
+            {selectedRecord.recordId && editorMode === 'edit' && (
+              <DocumentControlBar
+                record={selectedRecord}
+                dirty={dirty}
+                onStateChanged={refreshSelectedRecord}
+              />
+            )}
             {hasProjection ? (
               <ProjectionTapTabEditor
                 ref={taptabRef}
                 blocks={projection.blocks}
                 slots={projection.slots}
                 data={selectedRecord.payload}
-                disabled={saving}
+                disabled={saving || contentLocked}
                 onUpdate={handleSerializedChange}
               />
             ) : (
