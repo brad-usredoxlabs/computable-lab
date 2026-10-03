@@ -221,6 +221,9 @@ export function registerRoutes(
   fastify.get('/records', recordHandlers.listRecords.bind(recordHandlers));
   
   // Get single record
+  fastify.get('/records/:id/revisions', recordHandlers.listRevisions.bind(recordHandlers));
+  fastify.post('/records/:id/draft-copy', recordHandlers.draftCopy.bind(recordHandlers));
+  fastify.post('/records/:id/accept-graph', recordHandlers.acceptGraph.bind(recordHandlers));
   fastify.get('/records/:id', recordHandlers.getRecord.bind(recordHandlers));
   
   // Create record
@@ -926,6 +929,7 @@ export function registerRoutes(
     fastify.get('/protocol-ide/intake/trees', protocolIntakeHandlers.listTrees.bind(protocolIntakeHandlers));
     fastify.get('/protocol-ide/intake/trees/:treeId', protocolIntakeHandlers.getTree.bind(protocolIntakeHandlers));
     fastify.get('/protocol-ide/intake/review/:artifactId', protocolIntakeHandlers.getReviewByArtifact.bind(protocolIntakeHandlers));
+    fastify.post('/protocol-ide/intake/refresh', protocolIntakeHandlers.refreshTrees.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/trees/:treeId/realize', protocolIntakeHandlers.realizeBranch.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/prompt', protocolIntakeHandlers.setProposalPrompt.bind(protocolIntakeHandlers));
     fastify.post('/protocol-ide/intake/proposals/:proposalId/redraft', protocolIntakeHandlers.redraftProposal.bind(protocolIntakeHandlers));

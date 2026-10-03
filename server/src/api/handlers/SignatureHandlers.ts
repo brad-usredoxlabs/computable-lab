@@ -2,18 +2,20 @@
  * SignatureHandlers — e-signature minting with password re-authentication.
  *
  * A signature binds a person (from the SESSION, never the request body), an
- * explicit meaning, and the exact git version of the subject record at
+ * explicit meaning, and an immutable snapshot of the subject record at
  * signing time. Signatures are append-only governance records.
  *
  * Route registration lives in routes.ts (wired by the server bootstrap).
  */
 
+import { RecordRevisionService, revisionRef, RevisionError } from '../../revisions/RecordRevisionService.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore } from '../../store/types.js';
 import type { CredentialStore } from '../../security/CredentialStore.js';
 import { verifyPassword } from '../../security/CredentialStore.js';
 import type { LocalIdentityService } from '../../security/LocalIdentityService.js';
+import type { AuthorizationService } from '../../security/AuthorizationService.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 
 const SIGNATURE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/signature.schema.yaml';
@@ -23,6 +25,7 @@ export interface SignatureHandlerOptions {
   credentialStore: CredentialStore;
   identityService: LocalIdentityService;
   auditService?: AuditEventService;
+  authorizationService?: AuthorizationService;
 }
 
 export interface MintSignatureBody {
@@ -74,6 +77,10 @@ export function createSignatureHandlers(options: SignatureHandlerOptions) {
           return { error: 'SUBJECT_NOT_FOUND', message: `Subject record not found: ${subjectRecordId}` };
         }
 
+        if (options.authorizationService && !(await options.authorizationService.canAccess(user.userId, 'read', subject))) {
+          reply.status(404); return { error: 'SUBJECT_NOT_FOUND', message: 'Subject record not found' };
+        }
+
         // Step-up re-auth: the password must verify against the CURRENT user's
         // credential. Uniform failure message — never leak which check missed.
         const verifier = await credentialStore.getVerifier(user.userId);
@@ -82,9 +89,11 @@ export function createSignatureHandlers(options: SignatureHandlerOptions) {
           return { error: 'REAUTH_FAILED', message: 'Re-authentication failed' };
         }
 
-        // Bind the signature to the exact git version of the subject at
-        // signing time (RecordStoreImpl stamps meta.commitSha on get()).
-        const gitCommit = asString(subject.meta?.commitSha);
+        // Preserve the signed content independently of repository history.
+        // A legacy meta.commitSha is a content token, not a verified commit.
+        const revision = await new RecordRevisionService(store).capture(subject, user.userId, 'signature');
+        const signedRevision = { revisionRef: revisionRef(revision.recordId), contentHash: revision.payload.contentHash };
+        const gitCommit = revision.payload.gitCommit;
 
         const now = new Date().toISOString();
         const recordId = `SIG-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
@@ -107,6 +116,7 @@ export function createSignatureHandlers(options: SignatureHandlerOptions) {
               },
               subject: {
                 recordId: subjectRecordId,
+                ...signedRevision,
                 ...(gitCommit !== undefined ? { gitCommit } : {}),
                 ...(lifecycleId !== undefined ? { lifecycleId } : {}),
                 ...(targetState !== undefined ? { targetState } : {}),
@@ -146,10 +156,12 @@ export function createSignatureHandlers(options: SignatureHandlerOptions) {
           signatureId: recordId,
           subject: {
             recordId: subjectRecordId,
+                ...signedRevision,
             ...(gitCommit !== undefined ? { gitCommit } : {}),
           },
         };
       } catch (err) {
+        if (err instanceof RevisionError) { reply.status(err.status); return { success: false, error: err.code, message: err.message }; }
         const message = err instanceof Error ? err.message : String(err);
         reply.status(500);
         return { error: 'INTERNAL_ERROR', message: `Failed to create signature: ${message}` };

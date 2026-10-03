@@ -5,6 +5,7 @@
  * This is the backend half of the "Plan execution" handoff from Protocol IDE.
  */
 
+import { RecordRevisionService, revisionRef } from '../revisions/RecordRevisionService.js';
 import { randomUUID } from 'node:crypto';
 import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
@@ -19,6 +20,7 @@ export interface CreatePlannedRunOptions {
   /** Prefix for the recordId; default 'PLR-' */
   recordIdPrefix?: string;
   /** Optional project filing links; defaults to the source local-protocol links. */
+  actor?: string;
   links?: { studyId?: string; experimentId?: string; runId?: string };
 }
 
@@ -88,6 +90,10 @@ export class PlannedRunFromLocalProtocolService {
       ...(options.links?.runId ? { runId: options.links.runId } : {}),
     };
 
+    const revisions = new RecordRevisionService(this.store);
+    const pinnedLocal = await revisions.pinInheritance(localProtocolEnvelope, options.actor ?? 'system');
+    const snapshot = await revisions.capture(pinnedLocal, options.actor ?? 'system', 'derivation');
+
     // Build the envelope
     const envelope: RecordEnvelope = {
       recordId,
@@ -103,11 +109,13 @@ export class PlannedRunFromLocalProtocolService {
           kind: 'record',
           type: 'local-protocol',
           id: localProtocolRef,
+          revisionRef: revisionRef(snapshot.recordId),
         },
         localProtocolRef: {
           kind: 'record',
           type: 'local-protocol',
           id: localProtocolRef,
+          revisionRef: revisionRef(snapshot.recordId),
         },
         ...(Object.keys(links).length > 0 ? { links } : {}),
         state: 'draft',
