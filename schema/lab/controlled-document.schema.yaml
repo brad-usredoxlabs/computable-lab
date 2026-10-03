@@ -1,0 +1,87 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/controlled-document.schema.yaml"
+title: "Controlled Document"
+description: >
+  Canonical controlled document subject of the document-controlled-signing
+  lifecycle (cf:SOP lives here as docType: sop, never as a separate kind).
+  Signature-gated approval and release per 21 CFR Part 11-style document
+  control. Lifecycle-identity role refs carry USR-* authentication ids: the
+  engine compares them against the session actor id (QMS-1 (e)), so PER-*
+  personnel ids do NOT belong in these slots.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- title
+- state
+- lifecycleId
+
+properties:
+  kind:
+    const: "controlled-document"
+
+  id:
+    type: string
+    pattern: "^DOC-[A-Z0-9][A-Z0-9_-]*$"
+
+  title:
+    type: string
+    minLength: 1
+
+  lifecycleId:
+    type: string
+    const: "document-controlled-signing"
+    description: "Lifecycle governing this record's state transitions."
+
+  state:
+    type: string
+    description: "Current lifecycle state. Mirrors document-controlled-signing states exactly. Advanced ONLY via lifecycle-gated record updates, never as a free-form form field."
+    enum: [ draft, in_review, approved, effective, superseded, archived ]
+
+  docType:
+    type: string
+    description: "Controlled document class."
+    enum: [ sop, work-instruction, policy ]
+
+  body:
+    type: string
+    description: "Document body as rich-text HTML authored by the editor surface (RichTextField). Round-trips as an HTML string."
+
+  revision:
+    type: string
+    description: "Human document-revision label (e.g. 'Rev A', 'v2.1'). NOT a git identity — git stays the authoritative revision substrate; a signature's gitCommit binds content cryptographically (QMS-1 (h))."
+
+  authorRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: user }
+        id: { type: string, pattern: "^USR-" }
+    description: "Author role assignment (lifecycle role: author). Must carry a USR-* authentication id so requires_different_person compares like against like."
+
+  reviewerRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: user }
+        id: { type: string, pattern: "^USR-" }
+    description: "Reviewer role assignment (lifecycle role: reviewer). USR-* id; assigned as the flow advances, so not required at draft."
+
+  approverRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: user }
+        id: { type: string, pattern: "^USR-" }
+    description: "Approver role assignment (lifecycle role: approver). USR-* id; assigned as the flow advances, so not required at draft."

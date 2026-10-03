@@ -1,0 +1,153 @@
+# UI specification for Controlled Document records — document-style editor surface.
+# The body slot uses `widget: markdown` on the EDITOR path (declared `editor:`
+# block): the editor slot projection passes any widget through untouched and the
+# frontend renders it as RichTextField (nested TipTap, emits an HTML string).
+# Body must NOT rely on the form.sections fallback, which flags markdown as
+# UNSUPPORTED_WIDGET (EditorProjectionService.ts fallback diagnostics).
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/controlled-document.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.state"
+
+# Document-style editor contract (primary surface)
+editor:
+  mode: "document"
+  blocks:
+    - id: "identity"
+      kind: "section"
+      label: "Identity"
+      help: "Controlled-document identifiers. State advances only via lifecycle transitions, never as a form field."
+    - id: "classification"
+      kind: "section"
+      label: "Classification"
+      help: "Document class, human revision label, and role assignments."
+    - id: "document-body"
+      kind: "section"
+      label: "Body"
+      help: "Rich-text document content. Stored as an HTML string."
+  slots:
+    - id: "id-slot"
+      path: "$.id"
+      label: "ID"
+      widget: "readonly"
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "readonly"
+      help: "Read-only. Transitions are lifecycle-gated (roles + signatures), not editable here."
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+      required: true
+    - id: "doctype-slot"
+      path: "$.docType"
+      label: "Document Type"
+      widget: "select"
+      options:
+        - value: "sop"
+          label: "SOP"
+        - value: "work-instruction"
+          label: "Work Instruction"
+        - value: "policy"
+          label: "Policy"
+    - id: "revision-slot"
+      path: "$.revision"
+      label: "Revision"
+      widget: "text"
+      help: "Human revision label (e.g. Rev A). Git remains the authoritative revision substrate."
+    - id: "author-ref-slot"
+      path: "$.authorRef"
+      label: "Author"
+      widget: "ref"
+      refKind: "user"
+      help: "USR-* authentication identity (lifecycle role: author)."
+    - id: "reviewer-ref-slot"
+      path: "$.reviewerRef"
+      label: "Reviewer"
+      widget: "ref"
+      refKind: "user"
+      help: "USR-* authentication identity (lifecycle role: reviewer)."
+    - id: "approver-ref-slot"
+      path: "$.approverRef"
+      label: "Approver"
+      widget: "ref"
+      refKind: "user"
+      help: "USR-* authentication identity (lifecycle role: approver)."
+    - id: "body-slot"
+      path: "$.body"
+      label: "Body"
+      widget: "markdown"
+      help: "Rich-text body. Round-trips as an HTML string."
+
+# Fallback form for compatibility (non-editor surfaces). Body is `textarea`
+# here — the fallback projection rejects the markdown widget — while the
+# primary editor path above keeps `markdown`. State/lifecycleId are NOT
+# editable rows anywhere: state changes only through lifecycle-gated updates.
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Document"
+    fields:
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+    - path: "$.docType"
+      widget: "select"
+      label: "Document Type"
+      options:
+      - value: "sop"
+        label: "SOP"
+      - value: "work-instruction"
+        label: "Work Instruction"
+      - value: "policy"
+        label: "Policy"
+    - path: "$.revision"
+      widget: "text"
+      label: "Revision"
+    - path: "$.authorRef"
+      widget: "ref"
+      label: "Author"
+      refKind: "user"
+    - path: "$.reviewerRef"
+      widget: "ref"
+      label: "Reviewer"
+      refKind: "user"
+    - path: "$.approverRef"
+      widget: "ref"
+      label: "Approver"
+      refKind: "user"
+    - path: "$.body"
+      widget: "textarea"
+      label: "Body"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.docType"
+    label: "Type"
+    width: "120px"
+  - path: "$.state"
+    label: "State"
+    width: "110px"
+  - path: "$.revision"
+    label: "Revision"
+    width: "100px"

@@ -40,7 +40,10 @@ properties:
     - type: object
       properties:
         kind: { const: record }
-        type: { const: training-material }
+        # QMS-1 (g'): training-record points at the canon. Additive widening —
+        # a training record may reference either a training delivery artifact
+        # (training-material) or a signed controlled document (the SOP canon).
+        type: { enum: [ training-material, controlled-document ] }
 
   trainerRef:
     allOf:
