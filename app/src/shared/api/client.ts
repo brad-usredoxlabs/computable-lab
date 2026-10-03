@@ -83,12 +83,16 @@ export interface CreateSignatureInput {
   password: string
 }
 
-/** 200 response of POST /signatures (`gitCommit` present iff the subject's meta.commitSha resolves). */
+/** 200 response of POST /signatures.
+ * Primary shape carries `revisionRef` + `contentHash`; `gitCommit` is only
+ * present when the subject's meta.commitSha resolves. */
 export interface SignatureResult {
   success: true
   signatureId: string
   subject: {
     recordId: string
+    revisionRef?: string
+    contentHash?: string
     gitCommit?: string
   }
 }
@@ -118,6 +122,21 @@ export function isReauthFailure(error: unknown): boolean {
     error.status === 403 &&
     (error.code === 'REAUTH_FAILED' || error.message.includes('REAUTH_FAILED'))
   )
+}
+
+/** The three server rejections that mean "this signature no longer fits this document". */
+export type SignatureRejection = 'STALE_SIGNATURE' | 'SIGNED_CONTENT_CHANGED' | 'SIGNATURE_TARGET_MISMATCH'
+
+/**
+ * True for a signature/revision rejection. Server truth (RecordHandlers.ts:747,750,753):
+ * the wire shape is `{ error: '<TOKEN>', message }` with NO `code` field, so — exactly as with
+ * REAUTH_FAILED — the token lands in ApiError.message and code degrades to HTTP_409 / HTTP_422.
+ * Both branches are checked so a future server-side `code` also works.
+ */
+export function isSignatureRejection(error: unknown, token?: SignatureRejection): boolean {
+  if (!ApiError.isApiError(error)) return false
+  const all: SignatureRejection[] = ['STALE_SIGNATURE', 'SIGNED_CONTENT_CHANGED', 'SIGNATURE_TARGET_MISMATCH']
+  return (token ? [token] : all).some(t => error.code === t || error.message.includes(t))
 }
 
 /** The persisted workspace session (GET/PUT /api/session). */
