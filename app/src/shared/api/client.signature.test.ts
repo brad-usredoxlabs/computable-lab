@@ -104,7 +104,7 @@ describe('apiClient.createSignature', () => {
       signatureId: 'SIG-9F8E7D6C5B4A3210',
       subject: {
         recordId: 'DOC-DEMO-SOP',
-        revisionRef: 'rev-003',
+        revisionRef: { kind: 'record', type: 'record-revision', id: 'rev-003' },
         contentHash: 'sha256:a1b2c3d4e5f6',
       },
     }
@@ -120,7 +120,7 @@ describe('apiClient.createSignature', () => {
     })
 
     expect(result).toEqual(primaryResult)
-    expect(result.subject.revisionRef).toBe('rev-003')
+    expect(result.subject.revisionRef).toEqual({ kind: 'record', type: 'record-revision', id: 'rev-003' })
     expect(result.subject.contentHash).toBe('sha256:a1b2c3d4e5f6')
     expect(result.subject.gitCommit).toBeUndefined()
   })

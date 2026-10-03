@@ -83,15 +83,15 @@ export interface CreateSignatureInput {
   password: string
 }
 
-/** 200 response of POST /signatures.
+/** 200 response of POST /signatures — bound to an immutable snapshot.
  * Primary shape carries `revisionRef` + `contentHash`; `gitCommit` is only
- * present when the subject's meta.commitSha resolves. */
+ * present when the subject's meta.commitSha resolves (i.e. when verified). */
 export interface SignatureResult {
   success: true
   signatureId: string
   subject: {
     recordId: string
-    revisionRef?: string
+    revisionRef?: { kind: 'record'; type: 'record-revision'; id: string }
     contentHash?: string
     gitCommit?: string
   }
@@ -838,6 +838,16 @@ export interface LabSettings {
    * plant biology).
    */
   searchOntologies?: string[]
+  /**
+   * Policy bundles the server reports as available. The selector renders
+   * these directly — there is no frontend fallback catalog.
+   */
+  availablePolicyBundles?: Array<{
+    id: string
+    label: string
+    level: number
+    description?: string
+  }>
 }
 
 export interface FormulationSummary {
@@ -1586,6 +1596,8 @@ export interface IntakeBranchPathEntry {
 }
 
 export interface IntakeProposal {
+  /** Specialized source steps for this proposal's answers, derived locally. */
+  resolvedCandidate?: IntakeReviewCandidate
   kind: 'subgraph-proposal'
   recordId: string
   documentId: string
@@ -2306,6 +2318,18 @@ export const apiClient = {
    * Create a new record.
    * Payload must include an 'id' or 'recordId' field.
    */
+  async createDraftCopy(recordId: string, input: { recordId?: string; payload?: Record<string, unknown>; expectedSha?: string }): Promise<WriteResponse> {
+    return request<WriteResponse>(`/records/${encodeURIComponent(recordId)}/draft-copy`, { method: 'POST', body: JSON.stringify(input) })
+  },
+
+  async listRecordRevisions(recordId: string): Promise<{ records: RecordEnvelope[] }> {
+    return request(`/records/${encodeURIComponent(recordId)}/revisions`)
+  },
+
+  async acceptProtocolGraph(recordId: string, expectedSha: string): Promise<WriteResponse> {
+    return request(`/records/${encodeURIComponent(recordId)}/accept-graph`, { method: 'POST', body: JSON.stringify({ expectedSha }) })
+  },
+
   async createRecord(
     schemaId: string,
     payload: Record<string, unknown>
@@ -2378,7 +2402,8 @@ export const apiClient = {
       status?: 'inbox' | 'filed' | 'draft'
       deckLayout?: unknown
       editorLayout?: unknown
-    }
+    },
+    acceptProtocolSource = false,
   ): Promise<WriteResponse> {
     const recordId = eventGraphId || generateEventGraphId()
     const body = {
@@ -2392,19 +2417,17 @@ export const apiClient = {
       },
     }
 
-    if (eventGraphId) {
-      // Update existing
-      return request<WriteResponse>(`/records/${encodeURIComponent(eventGraphId)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ payload: body.payload }),
-      })
-    } else {
-      // Create new
-      return request<WriteResponse>('/records', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      })
+    const result = eventGraphId
+      ? await request<WriteResponse>(`/records/${encodeURIComponent(eventGraphId)}`, {
+          method: 'PUT', body: JSON.stringify({ payload: body.payload }),
+        })
+      : await request<WriteResponse>('/records', { method: 'POST', body: JSON.stringify(body) })
+    const saved = result.record
+    if (acceptProtocolSource && (saved?.payload as Record<string, unknown>)?.protocolSource) {
+      await apiClient.acceptProtocolGraph(saved.recordId, saved.meta?.contentSha ?? saved.meta?.commitSha ?? '')
+      return { ...result, record: await apiClient.getRecord(saved.recordId) }
     }
+    return result
   },
 
   /**
@@ -2843,13 +2866,6 @@ export const apiClient = {
 
   async getLabSettings(): Promise<LabSettings> {
     return request<LabSettings>('/settings/lab')
-  },
-
-  async patchLabSettings(patch: Partial<LabSettings>): Promise<LabSettings> {
-    return request<LabSettings>('/settings/lab', {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    })
   },
 
   async listSemanticsInstruments(params: {

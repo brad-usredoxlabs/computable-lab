@@ -25,6 +25,7 @@
  * }
  */
 
+import { RecordRevisionService, type RevisionRef } from '../../../revisions/RecordRevisionService.js';
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
 import type { AjvValidator } from '../../../validation/AjvValidator.js';
@@ -94,7 +95,7 @@ export function createResolveProtocolRefPass(
 
       const inheritsFrom = (
         localProtocol.payload as Record<string, unknown>
-      )['inherits_from'] as { id?: string } | undefined;
+      )['inherits_from'] as { id?: string; revisionRef?: RevisionRef } | undefined;
       const protocolId = inheritsFrom?.id;
 
       if (!protocolId) {
@@ -111,7 +112,7 @@ export function createResolveProtocolRefPass(
         };
       }
 
-      const canonicalProtocol = await deps.recordStore.get(protocolId);
+      const canonicalProtocol = await new RecordRevisionService(deps.recordStore).resolve({ id: protocolId, ...(inheritsFrom?.revisionRef ? { revisionRef: inheritsFrom.revisionRef } : {}) });
       if (!canonicalProtocol) {
         return {
           ok: false,

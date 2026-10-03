@@ -1,3 +1,4 @@
+import { RecordRevisionService, contentHash, revisionRef, token, type RevisionRef } from '../revisions/RecordRevisionService.js';
 import { randomUUID } from 'node:crypto';
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { slugifyRecordLabel } from '../compiler/material/MaterialCompiler.js';
@@ -39,6 +40,7 @@ export interface UseProtocolInRunOptions {
   experimentId?: string;
   title?: string;
   replace?: boolean;
+  actor?: string;
 }
 
 export interface UseProtocolInRunResult {
@@ -48,6 +50,7 @@ export interface UseProtocolInRunResult {
 }
 
 export interface SpecializeForExperimentOptions {
+  actor?: string;
   protocolId: string;
   studyId: string;
   experimentId: string;
@@ -171,14 +174,17 @@ export class ProtocolContextService {
     const filteredPlannedRuns = scoped(plannedRuns);
     const filteredEventGraphs = scoped(eventGraphs);
 
-    // The run-editor Protocol tab offers only APPROVED universal/local
-    // protocols (usable recipes), not raw extraction drafts (which stay
-    // `draft` until Save promotes them).
+    // Research drafts are usable without asserting QMS approval. Controlled
+    // documents retain their lifecycle eligibility requirements.
     const approvedUniversal = filteredProtocols.filter((record) =>
-      ['approved', 'effective', 'accepted', 'superseded'].includes((record.payload as Record<string, unknown> | undefined)?.state as string),
+      !asObject(record.payload).lifecycleId
+        ? !['archived', 'superseded', 'deprecated'].includes(String(asObject(record.payload).state))
+        : asObject(record.payload).state === 'effective',
     );
     const approvedLocal = filteredLocalProtocols.filter((record) =>
-      ['approved', 'effective', 'accepted', 'superseded'].includes((record.payload as Record<string, unknown> | undefined)?.state as string),
+      !asObject(record.payload).lifecycleId
+        ? !['archived', 'superseded', 'deprecated'].includes(String(asObject(record.payload).state))
+        : asObject(record.payload).state === 'effective',
     );
 
     const projectTemplates = query.studyId
@@ -229,7 +235,7 @@ export class ProtocolContextService {
   }
 
   async useProtocolInRun(options: UseProtocolInRunOptions): Promise<UseProtocolInRunResult> {
-    const protocol = await this.store.get(options.protocolId);
+    let protocol = await this.store.get(options.protocolId);
     if (!protocol) throw new ProtocolContextError(404, 'NOT_FOUND', `Protocol not found: ${options.protocolId}`);
     const kind = recordKind(protocol);
     if (kind !== 'protocol' && kind !== 'local-protocol') {
@@ -251,7 +257,16 @@ export class ProtocolContextService {
     const plannedRunId = makeId('PLR-', plannedRunTitle);
     const methodEventGraphId = makeId('EVG-', `${protocolTitle} Method`);
     const now = new Date().toISOString();
-    const protocolRef = refFor(options.protocolId, kind, protocolTitle);
+    const revisions = new RecordRevisionService(this.store);
+    protocol = await revisions.pinInheritance(protocol, options.actor ?? 'system');
+    const sourceRevision = await revisions.capture(protocol, options.actor ?? 'system', 'derivation');
+    const protocolRef = { ...refFor(options.protocolId, kind, protocolTitle), revisionRef: revisionRef(sourceRevision.recordId) };
+    const parentRef = asObject(asObject(protocol.payload).inherits_from);
+    const canonicalSource = kind === 'protocol' ? protocol
+      : typeof parentRef.id === 'string' ? await revisions.resolve({ id: parentRef.id, ...(parentRef.revisionRef ? { revisionRef: parentRef.revisionRef as RevisionRef } : {}) }) : null;
+    const protocolSource = canonicalSource && token(canonicalSource)
+      ? { recordId: canonicalSource.recordId, contentHash: contentHash(canonicalSource.payload), sourceToken: token(canonicalSource)! }
+      : undefined;
     const links = {
       ...(studyId ? { studyId } : {}),
       ...(experimentId ? { experimentId } : {}),
@@ -281,6 +296,7 @@ export class ProtocolContextService {
 
     const eventGraphPayload = {
       kind: 'event-graph',
+      ...(protocolSource ? { protocolSource } : {}),
       id: methodEventGraphId,
       name: `${protocolTitle} Method`,
       events: [],
@@ -361,6 +377,10 @@ export class ProtocolContextService {
     const inheritedRef = kind === 'local-protocol'
       ? asObject(sourcePayload.inherits_from)
       : refFor(options.protocolId, 'protocol', recordTitle(source));
+    if (kind === 'protocol') {
+      const revision = await new RecordRevisionService(this.store).capture(source, options.actor ?? 'system', 'derivation');
+      inheritedRef.revisionRef = revisionRef(revision.recordId);
+    }
     // Seed the plate-setting sections from the inherited universal protocol's
     // abstract roles. Specializing from a universal protocol: roles are on the
     // source payload (already loaded — no extra fetch). Specializing from an
@@ -371,7 +391,7 @@ export class ProtocolContextService {
     } else {
       const parentProtocolId = asObject(sourcePayload.inherits_from).id;
       if (typeof parentProtocolId === 'string') {
-        const parent = await this.store.get(parentProtocolId);
+        const parent = await new RecordRevisionService(this.store).resolve({ id: parentProtocolId, ...(inheritedRef.revisionRef ? { revisionRef: inheritedRef.revisionRef as import('../revisions/RecordRevisionService.js').RevisionRef } : {}) });
         inheritedRoles = asObject(asObject(parent?.payload).roles);
       }
     }
