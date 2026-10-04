@@ -7,8 +7,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { UISpec } from './types.js';
 import { projectRecord, createEditorProjectionService } from './EditorProjectionService.js';
+import { createUISpecLoader } from './UISpecLoader.js';
 
 // ============================================================================
 // Fixtures
@@ -561,6 +565,57 @@ describe('EditorProjectionService', () => {
       expect(upd?.readOnly).toBe(true);
       // Non-provenance fields are unaffected.
       expect(title?.readOnly).toBe(false);
+    });
+  });
+
+  describe('real budget.ui.yaml consumer binding (EDITOR-2)', () => {
+    const BUDGET_UI_PATH = join(
+      fileURLToPath(new URL('.', import.meta.url)),
+      '../../../schema',
+      'workflow',
+      'budget.ui.yaml',
+    );
+
+    it('loads the real spec with zero validation errors and binds every declared slot', async () => {
+      const loader = createUISpecLoader();
+      const content = await readFile(BUDGET_UI_PATH, 'utf-8');
+      const res = loader.load(content, BUDGET_UI_PATH);
+      expect(res.validationErrors ?? []).toEqual([]);
+      expect(res.success).toBe(true);
+
+      const payload: Record<string, unknown> = {
+        kind: 'budget',
+        recordId: 'BUD-TEST-1',
+        title: 'Q1 2026 Reagent Budget',
+        state: 'draft',
+        currency: 'USD',
+        notes: 'Rush order for columns.',
+        lines: [],
+      };
+      const result = projectRecord(
+        res.spec!,
+        payload,
+        res.spec!.schemaId,
+        'BUD-TEST-1',
+      );
+
+      const byId = (id: string) => result.blocks.find(b => b.id === id)!;
+      expect(byId('header-summary').slotIds).toEqual([
+        'title-slot',
+        'state-slot',
+        'currency-slot',
+      ]);
+      expect(byId('line-items').slotIds).toEqual([]);
+      expect(byId('line-items').path).toBe('$.lines');
+      expect(byId('totals').slotIds).toEqual([]);
+      expect(byId('notes').slotIds).toEqual(['notes-slot']);
+
+      // No declared slot is left unclaimed.
+      const union = result.blocks.flatMap(b => b.slotIds);
+      for (const slot of result.slots) {
+        expect(union, `slot ${slot.id} unclaimed`).toContain(slot.id);
+      }
+      expect(union.length).toBe(new Set(union).size);
     });
   });
 });
