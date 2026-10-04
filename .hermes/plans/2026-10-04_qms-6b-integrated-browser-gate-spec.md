@@ -5,6 +5,28 @@ Status at authoring: BLOCKED on OPS-1 (grant retarget to USR-QMS-ADMIN). This sp
 dispatch so the gate can start the moment OPS-1 lands. **Do not dispatch the signed rows until the
 pre-flight below passes.**
 
+## AMENDMENTS 2026-10-04 09:xx (orchestrator; Brad-approved)
+
+- **Isolation was fake; now real.** `CL_DATA_DIR` was never read by the server (`config.yaml:5` pinned
+  `dataDir: ~/.computable-lab`), so `:3092` had been serving `/home/brad/.computable-lab`. Remedy **R1
+  is APPROVED (Brad, scope amendment to OPS-1)** and applied: `config.yaml:5` now reads
+  `dataDir: ${CL_DATA_DIR:-~/.computable-lab}`. The config loader already substitutes `${VAR:-default}`,
+  so Brad's non-`CL_DATA_DIR` stack is unchanged. `config.yaml` is **gitignored** (.gitignore:36) and the
+  lane worktree's copy is a **symlink** to the same file — no commit involved.
+- **Correct isolation proof (replaces pre-flight 2):** the running `:3092` backend log prints
+  `Data dir: /home/brad/.computable-lab-lane1`, AND a lane-only record (e.g. `BUD-DEMO-LANE1`) returns
+  200 through `:3092` while absent from `/home/brad/.computable-lab`. The `/proc/.../environ` check
+  alone is NOT sufficient (it was the invalid witness before R1).
+- **Lane DATA preconditions done by the orchestrator (verified on `:3092`):** `GRANT-DEMO-REVIEWER.userId`
+  = `USR-QMS-ADMIN` (roles reviewer+approver); `ACL-GRANT-DEMO-REVIEWER.ownerUserId` = `USR-QMS-ADMIN`;
+  `USR-QMS-ADMIN.personRef` = `PER-DEMO-REVIEWER`; and `ACL-DOC-DEMO-SOP` now carries a grant
+  `{user USR-QMS-ADMIN, editor}` so the reviewer can read/act on the SOP (it was private-to-author).
+  `BUD-DEMO-LANE1` copied into the lane dir. Brad confirms all this data is TEST data, so the
+  live/lane distinction is not a correctness hazard — only the review surface matters.
+- **set-password payload field is `password`, not `newPassword`** (AuthHandlers.ts:95). Use
+  `-d '{"password":"<lane-demo-value>"}'`.
+
+
 ## Goal
 
 One independent Playwright+vision gate that (a) proves the EDITOR-2 platform fix end-to-end in a user's
@@ -36,8 +58,8 @@ defect.
 ## PRE-FLIGHT (all must pass before the signed rows)
 
 1. `cl-lane-stack.sh 1 status` → backend `:3092` and frontend `:5192` both 200.
-2. Isolation re-verify: `/proc/<pid-of-:3092>/environ` contains
-   `CL_DATA_DIR=/home/brad/.computable-lab-lane1`. (OPS-1 proved it; re-confirm, do not assume.)
+2. Isolation re-verify (see AMENDMENTS): `:3092` backend log shows `Data dir: /home/brad/.computable-lab-lane1`
+   AND `BUD-DEMO-LANE1` returns 200 through `:3092`. Do NOT rely on the `/proc/.../environ` check alone.
 3. Actor matrix + grants (OPS-1 output):
    `curl -s -H 'x-user-id: USR-QMS-ADMIN' http://localhost:3092/api/records/GRANT-DEMO-REVIEWER`
    → `userId: USR-QMS-ADMIN`, roles `[reviewer, approver]`; and `USR-QMS-ADMIN` carries
@@ -49,7 +71,7 @@ defect.
    **resolved** user, so an ordinary user can set its own password. Do this, then log in:
    ```
    curl -s -X POST -H 'x-user-id: USR-QMS-ADMIN' -H 'content-type: application/json' \
-     -d '{"newPassword":"<lane-demo-value>"}' http://localhost:3092/api/auth/set-password
+     -d '{"password":"<lane-demo-value>"}' http://localhost:3092/api/auth/set-password
    curl -s -X POST -H 'content-type: application/json' \
      -d '{"username":"qms-admin","password":"<lane-demo-value>"}' http://localhost:3092/api/auth/login
    ```
