@@ -2,7 +2,130 @@
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/protocol.schema.yaml"
 
-# Intended rules (pending DSL support for cross-array relational checks):
+rules:
+  # R1 — step→role closure: every role reference carried by a step must
+  # resolve to a declared role of the matching category. Covers every
+  # step-kind role-reference location in protocol.schema.yaml:
+  #   steps[*].target.labwareRole  (StepAddMaterial/StepMix/StepWash/
+  #                                 StepIncubate/StepRead, StepTransfer.target)
+  #   steps[*].source.labwareRole  (StepTransfer.source, StepHarvest)
+  #   steps[*].instrumentRole      (StepRead)
+  # (MethodRequirement.instrumentRole is a $defs never referenced from
+  # steps[] — no step path covers it and none is needed.)
+  # Each category branch is `any[ not(nonEmpty refs), allIn(refs, declared) ]`:
+  # no reference of that kind -> vacuous pass; references present -> every one
+  # must resolve, and a missing/unresolvable declared collection fails loudly
+  # (a step referencing roles with no roles block is an error).
+  - id: step-role-closure
+    title: "Every step role reference resolves to a declared role"
+    description: >-
+      Step labwareRole references (target and source) must name a declared
+      roles.labwareRoles[*].roleId; step instrumentRole references must name
+      a declared roles.instrumentRoles[*].roleId. Empty projections pass
+      vacuously; an unresolvable collection fails loudly, so a protocol whose
+      steps reference roles with no declared roles block is an error.
+    severity: error
+    scope: record
+    assert:
+      op: all
+      predicates:
+        - op: any
+          predicates:
+            - op: not
+              not:
+                op: nonEmpty
+                path: steps[*].target.labwareRole
+            - op: allIn
+              path: steps[*].target.labwareRole
+              collectionPath: roles.labwareRoles
+              itemField: roleId
+        - op: any
+          predicates:
+            - op: not
+              not:
+                op: nonEmpty
+                path: steps[*].source.labwareRole
+            - op: allIn
+              path: steps[*].source.labwareRole
+              collectionPath: roles.labwareRoles
+              itemField: roleId
+        - op: any
+          predicates:
+            - op: not
+              not:
+                op: nonEmpty
+                path: steps[*].instrumentRole
+            - op: allIn
+              path: steps[*].instrumentRole
+              collectionPath: roles.instrumentRoles
+              itemField: roleId
+    message:
+      template: "Protocol '{{recordId}}': step role references must resolve to declared roles. step ids: {{steps[*].stepId}}; refs checked at steps[*].target.labwareRole={{steps[*].target.labwareRole}} and steps[*].source.labwareRole={{steps[*].source.labwareRole}} (must be declared in roles.labwareRoles[*].roleId={{roles.labwareRoles[*].roleId}}) and steps[*].instrumentRole={{steps[*].instrumentRole}} (must be declared in roles.instrumentRoles[*].roleId={{roles.instrumentRoles[*].roleId}})."
+
+  # R2 — identity-bearing labware role: a LabwareRole without description OR
+  # without expectedLabwareKinds is not yet identity-bearing (D2: identity-
+  # bearing declared roles are what let the rail show a run's bound instance).
+  # Warning severity so legacy records stay writable. `when` skips the rule
+  # entirely when there is no non-empty labwareRoles collection, so a
+  # protocol with no roles block emits no noise (everyItem would otherwise
+  # fail loudly on the unresolvable collectionPath).
+  - id: labware-role-identity-bearing
+    title: "Declared labware roles should be identity-bearing"
+    description: >-
+      Every entry of roles.labwareRoles should carry both a description and
+      a non-empty expectedLabwareKinds hint. Warning only: legacy records
+      remain writable while the gap is surfaced.
+    severity: warning
+    scope: record
+    when:
+      op: nonEmpty
+      path: roles.labwareRoles
+    assert:
+      op: everyItem
+      collectionPath: roles.labwareRoles
+      assert:
+        op: all
+        predicates:
+          - op: nonEmpty
+            path: description
+          - op: nonEmpty
+            path: expectedLabwareKinds
+    message:
+      template: "Protocol '{{recordId}}': labware role(s) at roles.labwareRoles are not identity-bearing (need description + expectedLabwareKinds); roleIds: {{roles.labwareRoles[*].roleId}}."
+
+  # R3 — cross-category roleId uniqueness: the same roleId declared as BOTH a
+  # labwareRole and an instrumentRole is the PRT-wlj0qm defect class. Warning
+  # so legacy records stay writable. `when` requires both categories to be
+  # present and non-empty (noneIn would otherwise fail loudly on a missing
+  # collectionPath — noise for single-category protocols).
+  - id: role-id-category-unique
+    title: "A roleId must be unique across role categories"
+    description: >-
+      No roleId value may appear in both roles.labwareRoles and
+      roles.instrumentRoles; a shared id makes the category of a step
+      reference ambiguous (PRT-wlj0qm defect class).
+    severity: warning
+    scope: record
+    when:
+      op: all
+      predicates:
+        - op: nonEmpty
+          path: roles.labwareRoles
+        - op: nonEmpty
+          path: roles.instrumentRoles
+    assert:
+      op: noneIn
+      path: roles.labwareRoles[*].roleId
+      collectionPath: roles.instrumentRoles
+      itemField: roleId
+    message:
+      template: "Protocol '{{recordId}}': a roleId appears in BOTH categories — roles.labwareRoles roleIds {{roles.labwareRoles[*].roleId}} overlap roles.instrumentRoles roleIds {{roles.instrumentRoles[*].roleId}}."
+
+# Remaining intended rules (deliberately NOT activated — out of PROTO-AI-4
+# scope; track activation separately. The DSL now carries the generic
+# quantifiers several of them need — allIn/everyItem/noneIn, see
+# schema/lint/lint-v1.schema.yaml — but each still needs its own fixture
+# set before activation):
 #
 #   artifact-step-binding
 #     For every producedArtifacts[i].artifactId, at least one step must
@@ -42,9 +165,5 @@ schemaId: "https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
 #     ^PHASE-[A-Z0-9-]+$. (Cross-record existence of the referenced
 #     phase-template is a separate concern.) Severity: error.
 #
-# These rules require quantification over arrays and path-to-path comparison,
-# which the current predicate DSL (exists/nonEmpty/regex/equals/in/all/any/not)
-# does not yet support. Track DSL extension separately; do not hard-code these
-# checks in TypeScript.
-
-rules: []
+# Do not hard-code these checks in TypeScript; extend the generic DSL
+# (schema/lint/lint-v1.schema.yaml + PredicateEvaluator) instead.

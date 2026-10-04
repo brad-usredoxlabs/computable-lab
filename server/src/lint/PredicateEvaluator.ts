@@ -23,6 +23,8 @@ import type {
   TimeWithinPredicate,
   MentionKindMatchesPredicate,
   AllInPredicate,
+  EveryItemPredicate,
+  NoneInPredicate,
 } from './types.js';
 import { parsePromptMentionMatches } from '../ai/promptMentions.js';
 
@@ -85,6 +87,20 @@ function isInPredicate(p: Predicate): p is InPredicate {
  */
 function isAllInPredicate(p: Predicate): p is AllInPredicate {
   return p.op === 'allIn';
+}
+
+/**
+ * Type guard for noneIn predicate.
+ */
+function isNoneInPredicate(p: Predicate): p is NoneInPredicate {
+  return p.op === 'noneIn';
+}
+
+/**
+ * Type guard for everyItem predicate.
+ */
+function isEveryItemPredicate(p: Predicate): p is EveryItemPredicate {
+  return p.op === 'everyItem';
 }
 
 /**
@@ -305,6 +321,112 @@ function membershipKey(value: unknown): string {
 }
 
 /**
+ * Shared selection core for the membership predicates (`allIn`, `noneIn`).
+ *
+ * Resolves A (the values under test at `path`: scalar, plain array, or
+ * `[*]` projection) and B (the collection at `collectionPath`, optionally
+ * projected to one field per item via `itemField`). Returns either the
+ * resolved pair or a loud failure result naming the offending path.
+ * Semantics are identical for both callers — the only difference between
+ * the two ops is which way the membership check is read.
+ */
+function resolveMembershipOperands(
+  op: 'allIn' | 'noneIn',
+  pred: AllInPredicate | NoneInPredicate,
+  data: unknown,
+):
+  | { ok: false; result: PredicateResult }
+  | { ok: true; selected: unknown[]; allowed: Set<string>; selector: string } {
+  // Structural sanity first: a malformed predicate must fail loudly, not
+  // silently pass. (The lint meta-schema is the primary gate; this is the
+  // interpreter's own guard for specs that bypassed it.)
+  if (typeof pred.collectionPath !== 'string' || pred.collectionPath === '') {
+    return {
+      ok: false,
+      result: {
+        result: false,
+        path: pred.path,
+        reason: `${op} predicate requires a 'collectionPath' string`,
+      },
+    };
+  }
+  if (pred.itemField !== undefined && typeof pred.itemField !== 'string') {
+    return {
+      ok: false,
+      result: {
+        result: false,
+        path: pred.path,
+        reason: `${op} predicate 'itemField' must be a string`,
+      },
+    };
+  }
+
+  // --- Select the values under test (A) ------------------------------------
+  const aResult = resolvePath(data, pred.path);
+  if (!aResult.found) {
+    return {
+      ok: false,
+      result: {
+        result: false,
+        path: pred.path,
+        reason: `${op}: path '${pred.path}' does not resolve (not found)`,
+      },
+    };
+  }
+
+  const selected: unknown[] = Array.isArray(aResult.value)
+    ? (aResult.value as unknown[])
+    : [aResult.value];
+
+  // Resolve the collection (B) before any vacuous shortcut so a broken B
+  // never passes silently just because A happened to be empty.
+  const bResult = resolvePath(data, pred.collectionPath);
+  if (!bResult.found) {
+    return {
+      ok: false,
+      result: {
+        result: false,
+        path: pred.path,
+        reason:
+          `${op}: collectionPath '${pred.collectionPath}' does not resolve ` +
+          `(not found) — cannot check ${selected.length} value(s) from '${pred.path}'`,
+      },
+    };
+  }
+  if (!Array.isArray(bResult.value)) {
+    return {
+      ok: false,
+      result: {
+        result: false,
+        path: pred.path,
+        reason:
+          `${op}: collectionPath '${pred.collectionPath}' does not resolve to an ` +
+          `array/collection (got ${typeof bResult.value}) — cannot check membership of '${pred.path}'`,
+      },
+    };
+  }
+
+  // Build the member set: B items themselves, or one field of each.
+  const allowed = new Set<string>();
+  for (const item of bResult.value as unknown[]) {
+    if (pred.itemField !== undefined) {
+      const fieldResult = resolvePath(item, pred.itemField);
+      if (fieldResult.found) {
+        allowed.add(membershipKey(fieldResult.value));
+      }
+    } else {
+      allowed.add(membershipKey(item));
+    }
+  }
+
+  const selector = pred.itemField !== undefined
+    ? `'${pred.collectionPath}[*].${pred.itemField}'`
+    : `'${pred.collectionPath}'`;
+
+  return { ok: true, selected, allowed, selector };
+}
+
+/**
  * Evaluate an 'allIn' predicate (generic cross-collection membership).
  *
  * Every value selected by `path` (scalar, plain array, or `[*]` projection)
@@ -319,72 +441,9 @@ function membershipKey(value: unknown): string {
  * - `collectionPath` unresolvable or not an array -> loud FAIL naming the path.
  */
 function evalAllIn(pred: AllInPredicate, data: unknown): PredicateResult {
-  // Structural sanity first: a malformed predicate must fail loudly, not
-  // silently pass. (The lint meta-schema is the primary gate; this is the
-  // interpreter's own guard for specs that bypassed it.)
-  if (typeof pred.collectionPath !== 'string' || pred.collectionPath === '') {
-    return {
-      result: false,
-      path: pred.path,
-      reason: `allIn predicate requires a 'collectionPath' string`,
-    };
-  }
-  if (pred.itemField !== undefined && typeof pred.itemField !== 'string') {
-    return {
-      result: false,
-      path: pred.path,
-      reason: `allIn predicate 'itemField' must be a string`,
-    };
-  }
-
-  // --- Select the values under test (A) ------------------------------------
-  const aResult = resolvePath(data, pred.path);
-  if (!aResult.found) {
-    return {
-      result: false,
-      path: pred.path,
-      reason: `allIn: path '${pred.path}' does not resolve (not found)`,
-    };
-  }
-
-  const selected: unknown[] = Array.isArray(aResult.value)
-    ? (aResult.value as unknown[])
-    : [aResult.value];
-
-  // Resolve the allowed collection (B) before the vacuous-pass shortcut so a
-  // broken B never passes silently just because A happened to be empty.
-  const bResult = resolvePath(data, pred.collectionPath);
-  if (!bResult.found) {
-    return {
-      result: false,
-      path: pred.path,
-      reason:
-        `allIn: collectionPath '${pred.collectionPath}' does not resolve ` +
-        `(not found) — cannot check ${selected.length} value(s) from '${pred.path}'`,
-    };
-  }
-  if (!Array.isArray(bResult.value)) {
-    return {
-      result: false,
-      path: pred.path,
-      reason:
-        `allIn: collectionPath '${pred.collectionPath}' does not resolve to an ` +
-        `array/collection (got ${typeof bResult.value}) — cannot check membership of '${pred.path}'`,
-    };
-  }
-
-  // Build the allowed member set: B items themselves, or one field of each.
-  const allowed = new Set<string>();
-  for (const item of bResult.value as unknown[]) {
-    if (pred.itemField !== undefined) {
-      const fieldResult = resolvePath(item, pred.itemField);
-      if (fieldResult.found) {
-        allowed.add(membershipKey(fieldResult.value));
-      }
-    } else {
-      allowed.add(membershipKey(item));
-    }
-  }
+  const operands = resolveMembershipOperands('allIn', pred, data);
+  if (!operands.ok) return operands.result;
+  const { selected, allowed, selector } = operands;
 
   // --- Vacuous pass on an empty selection ----------------------------------
   if (selected.length === 0) {
@@ -396,10 +455,6 @@ function evalAllIn(pred: AllInPredicate, data: unknown): PredicateResult {
   }
 
   // --- Check every selected value ------------------------------------------
-  const selector = pred.itemField !== undefined
-    ? `'${pred.collectionPath}[*].${pred.itemField}'`
-    : `'${pred.collectionPath}'`;
-
   for (const value of selected) {
     if (!allowed.has(membershipKey(value))) {
       return {
@@ -418,6 +473,137 @@ function evalAllIn(pred: AllInPredicate, data: unknown): PredicateResult {
     reason:
       `allIn: all ${selected.length} value(s) selected by '${pred.path}' ` +
       `are members of ${selector}`,
+  };
+}
+
+/**
+ * Evaluate a 'noneIn' predicate (generic cross-collection disjointness).
+ *
+ * Thin symmetric variation of `allIn`: NO value selected by `path` may be a
+ * member of the collection at `collectionPath`. Selection and loud-failure
+ * semantics come from the shared membership core; the empty-selection case
+ * passes vacuously exactly as in `allIn`.
+ */
+function evalNoneIn(pred: NoneInPredicate, data: unknown): PredicateResult {
+  const operands = resolveMembershipOperands('noneIn', pred, data);
+  if (!operands.ok) return operands.result;
+  const { selected, allowed, selector } = operands;
+
+  // --- Vacuous pass on an empty selection ----------------------------------
+  if (selected.length === 0) {
+    return {
+      result: true,
+      path: pred.path,
+      reason: `noneIn: '${pred.path}' selected no values — disjointness from '${pred.collectionPath}' holds vacuously`,
+    };
+  }
+
+  // --- Fail on the first overlapping value ---------------------------------
+  for (const value of selected) {
+    if (allowed.has(membershipKey(value))) {
+      return {
+        result: false,
+        path: pred.path,
+        reason:
+          `noneIn: value ${JSON.stringify(value)} selected by '${pred.path}' ` +
+          `is a member of ${selector} (expected disjoint)`,
+      };
+    }
+  }
+
+  return {
+    result: true,
+    path: pred.path,
+    reason:
+      `noneIn: none of the ${selected.length} value(s) selected by '${pred.path}' ` +
+      `are members of ${selector}`,
+  };
+}
+
+/**
+ * Evaluate an 'everyItem' predicate (generic per-item quantification).
+ *
+ * Every item of the array at `collectionPath` must satisfy `assert`,
+ * evaluated with that item (or the item's `itemField` value when set) as
+ * root data. The interpreter has no knowledge of what the items are.
+ *
+ * Semantics (also documented in schema/lint/lint-v1.schema.yaml):
+ * - empty collection -> PASS vacuously;
+ * - `collectionPath` unresolvable or not an array -> loud FAIL naming the path;
+ * - failure reason names the failing item's index and the sub-reason.
+ */
+function evalEveryItem(pred: EveryItemPredicate, data: unknown): PredicateResult {
+  if (typeof pred.collectionPath !== 'string' || pred.collectionPath === '') {
+    return {
+      result: false,
+      reason: `everyItem predicate requires a 'collectionPath' string`,
+    };
+  }
+  if (pred.assert === undefined || pred.assert === null || typeof pred.assert !== 'object') {
+    return {
+      result: false,
+      path: pred.collectionPath,
+      reason: `everyItem predicate requires an 'assert' predicate`,
+    };
+  }
+  if (pred.itemField !== undefined && typeof pred.itemField !== 'string') {
+    return {
+      result: false,
+      path: pred.collectionPath,
+      reason: `everyItem predicate 'itemField' must be a string`,
+    };
+  }
+
+  const collectionResult = resolvePath(data, pred.collectionPath);
+  if (!collectionResult.found) {
+    return {
+      result: false,
+      path: pred.collectionPath,
+      reason:
+        `everyItem: collectionPath '${pred.collectionPath}' does not resolve (not found)`,
+    };
+  }
+  if (!Array.isArray(collectionResult.value)) {
+    return {
+      result: false,
+      path: pred.collectionPath,
+      reason:
+        `everyItem: collectionPath '${pred.collectionPath}' does not resolve to an ` +
+        `array/collection (got ${typeof collectionResult.value})`,
+    };
+  }
+
+  const items = collectionResult.value as unknown[];
+  if (items.length === 0) {
+    return {
+      result: true,
+      path: pred.collectionPath,
+      reason: `everyItem: '${pred.collectionPath}' has no items — assertion holds vacuously`,
+    };
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    let subject: unknown = items[i];
+    if (pred.itemField !== undefined) {
+      const fieldResult = resolvePath(items[i], pred.itemField);
+      subject = fieldResult.found ? fieldResult.value : undefined;
+    }
+    const subResult = evaluatePredicate(pred.assert, subject);
+    if (!subResult.result) {
+      return {
+        result: false,
+        path: pred.collectionPath,
+        reason:
+          `everyItem: item ${i} of '${pred.collectionPath}' ` +
+          `(value ${JSON.stringify(subject)}) fails assert: ${subResult.reason}`,
+      };
+    }
+  }
+
+  return {
+    result: true,
+    path: pred.collectionPath,
+    reason: `everyItem: all ${items.length} item(s) of '${pred.collectionPath}' satisfy the assert`,
   };
 }
 
@@ -731,6 +917,14 @@ export function evaluatePredicate(
   
   if (isAllInPredicate(predicate)) {
     return evalAllIn(predicate, data);
+  }
+  
+  if (isNoneInPredicate(predicate)) {
+    return evalNoneIn(predicate, data);
+  }
+  
+  if (isEveryItemPredicate(predicate)) {
+    return evalEveryItem(predicate, data);
   }
   
   if (isAllPredicate(predicate)) {
