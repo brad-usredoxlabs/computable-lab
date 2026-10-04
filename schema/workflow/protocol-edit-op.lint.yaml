@@ -1,0 +1,37 @@
+# Lint rules for the protocol_edit op envelope (protocol-edit-op.schema.yaml)
+# Campaign ai-protocol-edit-and-router, PROTO-AI-2.
+#
+# The envelope's structural surface is fully closed in the schema itself
+# (unevaluatedProperties:false at every object level + the discriminator op
+# union), so unknown fields, malformed stepId/roleId, out-of-enum kinds, and
+# inline concrete instances are SCHEMA rejections, not lint findings. This
+# file exists for the one policy the schema (and the current predicate DSL)
+# cannot express.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/protocol-edit-op.schema.yaml"
+
+# Intended rule (pending DSL support for cross-array relational checks —
+# the same gap documented in protocol.lint.yaml; see also PROTO-AI-3):
+#
+#   step-description-richtext-sync
+#     For every op with op == 'step_update' that sets `description` (or an
+#     op with op == 'step_insert' that carries `description`), the applied
+#     step's `descriptionRichText` companion — the { plainText, document }
+#     object the human editor persists with every text edit
+#     (app/src/event-editor/right-pane/protocol/ProtocolStepEditModal.tsx:89-91)
+#     — must remain consistent: plainText equal to the step's `description`.
+#     The envelope intentionally makes rich text NON-PROPOSABLE (the closed
+#     op objects reject a `descriptionRichText` field): the applier
+#     (PROTO-AI-8) derives it, and this rule is the post-apply guard that the
+#     derivation kept the protocol's text convention in sync.
+#     Severity: error.
+#
+# Why this cannot live in the schema: it is a cross-field consistency
+# invariant between a proposed value and a derived companion on the RESULT
+# of applying an op (quantification over the ops array plus a path-to-path
+# equality on the post-apply step). The predicate DSL
+# (exists/nonEmpty/regex/equals/in/all/any/not) supports neither array
+# quantification nor path-to-path comparison. Do not hard-code this check in
+# TypeScript; track DSL extension (PROTO-AI-3) separately.
+
+rules: []

@@ -1,0 +1,324 @@
+# protocol-edit-op.schema.yaml — the declarative contract for a `protocol_edit`
+# PROPOSAL envelope (campaign ai-protocol-edit-and-router, PROTO-AI-2).
+#
+# THIS IS A PROPOSAL ENVELOPE, NOT A RECORD. It is the single vocabulary shared
+# by the model prompt (PROTO-AI-6), the server dispatch validator (PROTO-AI-7),
+# the applier (PROTO-AI-8), and the reviewer render (PROTO-AI-9). Op vocabulary
+# and per-op field policy are DATA here — never a TypeScript switchboard.
+#
+# ---------------------------------------------------------------------------
+# SETTINGS ADJUDICATION (map open question 6) — authoritative ruling:
+#   `step_update.settings` is ALWAYS the ARRAY form (`Setting[]`, $ref
+#   ./setting.schema.yaml), uniform across EVERY kind. The base ProtocolStep
+#   declares array settings for all kinds
+#   (protocol.schema.yaml:823-829); `StepRead.settings` as an OBJECT
+#   (protocol.schema.yaml:1004-1007) is a REALIZATION ARTIFACT, not a protocol
+#   edit target. An op carrying an OBJECT for `settings` is REJECTED here,
+#   including for kind `read`.
+#
+# RICH-TEXT RULING (map §(e) note): a text edit op carries ONLY `description`
+# (plain). `descriptionRichText` is NOT an op field — it is app-only and is
+# derived by the applier, never proposed. The envelope's closed objects reject
+# any attempt to propose it; keeping plain and rich in sync is the applier's
+# (PROTO-AI-8) obligation, declared in protocol-edit-op.lint.yaml.
+#
+# IDENTIFIER PATTERNS (copied, not invented):
+#   stepId / afterStepId / beforeStepId: `^[a-z][a-z0-9-]*$`
+#     — exact copy of ProtocolStep.stepId (protocol.schema.yaml:753-755).
+#   roleId: `^[a-z0-9][a-z0-9_-]*$`
+#     — LabwareRole.roleId / InstrumentRole.roleId are declared as plain
+#     `type: string` with NO pattern (protocol.schema.yaml:429-431, :461-463).
+#     The envelope therefore COPIES the real roleId vocabulary found in the
+#     data records (records/protocol/*.yaml): instrument_centrifuge,
+#     labware_96_well_plate, material_lysis_buffer, toppling_medium,
+#     plate_reader, 10-sds, 20-sds, 96-100-ethanol — i.e. lowercase letters,
+#     digits, hyphen, underscore, and ids MAY start with a digit or underscore.
+#     Uppercase, spaces, and punctuation are rejected. Matching the data is
+#     mandatory: an AI op must be able to name an EXISTING role, and the base
+#     schema leaves roleId unconstrained, so no stricter local convention is
+#     safe here.
+#   kind enum: EXACTLY the base ProtocolStep kinds
+#     (protocol.schema.yaml:773): add_material | transfer | mix | wash |
+#     incubate | read | harvest | other.
+#
+# D2 — NO CONCRETE INSTANCES: every object level sets
+# `unevaluatedProperties: false`, so an inline concrete-instance object/ref
+# (e.g. `instanceRef` on a labware op) is structurally impossible; ops address
+# the protocol by ROLE and STEP ID only.
+#
+# protocolId is OPTIONAL: when the proposal rides in an attached-protocol
+# scope (PROTO-AI-6/9) the scope already binds the target; the field is the
+# override for out-of-scope proposals.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/protocol-edit-op.schema.yaml"
+title: "ProtocolEditOps"
+description: >
+  A protocol_edit proposal: an ordered list of declarative edit operations
+  against one protocol, addressed by stepId/roleId only. Not a record; never
+  carries concrete instances. See the header comment for the settings,
+  rich-text, and identifier rulings.
+
+type: object
+unevaluatedProperties: false
+required: [ops]
+
+properties:
+  protocolId:
+    type: string
+    minLength: 1
+    description: >
+      Optional target protocol record id (e.g. 'PRT-000123'). When absent, the
+      attached-protocol scope of the conversation binds the target.
+
+  ops:
+    type: array
+    minItems: 1
+    description: "Ordered operations to apply to the target protocol."
+    items:
+      $ref: "#/$defs/EditOp"
+
+$defs:
+  # ------------------------------------------------------------------ identifiers
+  StepId:
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+    description: "Step identifier within the target protocol (copied from ProtocolStep.stepId, protocol.schema.yaml:755)."
+
+  RoleId:
+    type: string
+    pattern: "^[a-z0-9][a-z0-9_-]*$"
+    description: >
+      Declared role identifier within the target protocol. Base roles leave
+      roleId unconstrained (protocol.schema.yaml:429-431, :461-463), so this
+      pattern is copied to MATCH the real roleId vocabulary in the data
+      records (e.g. instrument_centrifuge, plate_reader, 10-sds,
+      96-100-ethanol): lowercase letters, digits, hyphen, underscore; may
+      start with a digit or underscore. Uppercase, spaces, and punctuation
+      are rejected (see header).
+
+  StepKind:
+    type: string
+    enum: [ add_material, transfer, mix, wash, incubate, read, harvest, other ]
+    description: "Step kind — exactly the base ProtocolStep kinds (protocol.schema.yaml:773)."
+
+  # ------------------------------------------------------------------ the op union
+  EditOp:
+    type: object
+    required: [op]
+    # Top-level op vocabulary: an unknown op name fails here at `/…/op`
+    # (the discriminator alone reports at the op object, not the value).
+    properties:
+      op:
+        enum:
+        - step_update
+        - step_insert
+        - step_delete
+        - labware_add
+        - labware_update
+        - labware_delete
+        - equipment_add
+        - equipment_update
+        - equipment_delete
+    discriminator:
+      propertyName: op
+    oneOf:
+    - $ref: "#/$defs/StepUpdateOp"
+    - $ref: "#/$defs/StepInsertOp"
+    - $ref: "#/$defs/StepDeleteOp"
+    - $ref: "#/$defs/LabwareAddOp"
+    - $ref: "#/$defs/LabwareUpdateOp"
+    - $ref: "#/$defs/LabwareDeleteOp"
+    - $ref: "#/$defs/EquipmentAddOp"
+    - $ref: "#/$defs/EquipmentUpdateOp"
+    - $ref: "#/$defs/EquipmentDeleteOp"
+
+  # ------------------------------------------------------------------ step ops
+  StepUpdateOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, stepId]
+    description: "Update fields of an existing step. Only listed fields change; absent fields are left untouched."
+    properties:
+      op:
+        const: step_update
+      stepId:
+        $ref: "#/$defs/StepId"
+      label:
+        type: string
+        minLength: 1
+        description: "Replacement human-readable label."
+      description:
+        type: string
+        description: >
+          Replacement plain-text description. Rich text is derived by the
+          applier and is NOT proposable here (see rich-text ruling).
+      notes:
+        type: string
+        description: "Replacement operator notes."
+      kind:
+        $ref: "#/$defs/StepKind"
+      settings:
+        type: array
+        description: >
+          Replacement step-level settings — ALWAYS the array form
+          (Setting[], setting.schema.yaml), uniform across every kind
+          (see settings adjudication). An object here is a rejection.
+        items:
+          $ref: "./setting.schema.yaml"
+        uniqueItems: true
+
+  StepInsertOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, label, kind]
+    description: >
+      Insert a new step anchored to an existing one. Exactly one of
+      afterStepId/beforeStepId must be present (matches the anchor model of
+      insertProtocolStep). The new step's stepId is minted by the applier,
+      never proposed.
+    oneOf:
+    - required: [afterStepId]
+    - required: [beforeStepId]
+    properties:
+      op:
+        const: step_insert
+      afterStepId:
+        $ref: "#/$defs/StepId"
+        description: "Insert immediately after this existing step."
+      beforeStepId:
+        $ref: "#/$defs/StepId"
+        description: "Insert immediately before this existing step."
+      label:
+        type: string
+        minLength: 1
+        description: "Label for the new step."
+      kind:
+        $ref: "#/$defs/StepKind"
+        description: "Kind for the new step."
+      description:
+        type: string
+        description: "Optional plain-text description for the new step."
+
+  StepDeleteOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, stepId]
+    description: >
+      Delete an existing step. Executedness, last-step, and content-lock
+      gates are apply-time checks (PROTO-AI-5/8), not envelope vocabulary.
+    properties:
+      op:
+        const: step_delete
+      stepId:
+        $ref: "#/$defs/StepId"
+
+  # ------------------------------------------------------------------ labware role ops
+  LabwareAddOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Declare a new labware role in roles.labwareRoles."
+    properties:
+      op:
+        const: labware_add
+      roleId:
+        $ref: "#/$defs/RoleId"
+      description:
+        type: string
+      expectedLabwareKinds:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        description: "Compatible labware DESIGN record ids (mirror of LabwareRole.expectedLabwareKinds, protocol.schema.yaml:434-438)."
+        items:
+          type: string
+          minLength: 1
+
+  LabwareUpdateOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Update an existing labware role. Only listed fields change."
+    properties:
+      op:
+        const: labware_update
+      roleId:
+        $ref: "#/$defs/RoleId"
+      description:
+        type: string
+      expectedLabwareKinds:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        description: "Replacement list of compatible labware DESIGN record ids."
+        items:
+          type: string
+          minLength: 1
+
+  LabwareDeleteOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Remove a labware role from roles.labwareRoles."
+    properties:
+      op:
+        const: labware_delete
+      roleId:
+        $ref: "#/$defs/RoleId"
+
+  # ------------------------------------------------------------------ equipment role ops
+  # equipment_* mirror InstrumentRole (protocol.schema.yaml:456-469):
+  # roleId + description + allowedInstrumentIds. The base InstrumentRole
+  # field is named allowedInstrumentIds (NOT expectedLabwareKinds).
+  EquipmentAddOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Declare a new instrument role in roles.instrumentRoles."
+    properties:
+      op:
+        const: equipment_add
+      roleId:
+        $ref: "#/$defs/RoleId"
+      description:
+        type: string
+      allowedInstrumentIds:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        description: "Allowable instrument design record ids (mirror of InstrumentRole.allowedInstrumentIds, protocol.schema.yaml:466-469)."
+        items:
+          type: string
+          minLength: 1
+
+  EquipmentUpdateOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Update an existing instrument role. Only listed fields change."
+    properties:
+      op:
+        const: equipment_update
+      roleId:
+        $ref: "#/$defs/RoleId"
+      description:
+        type: string
+      allowedInstrumentIds:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        description: "Replacement list of allowable instrument design record ids."
+        items:
+          type: string
+          minLength: 1
+
+  EquipmentDeleteOp:
+    type: object
+    unevaluatedProperties: false
+    required: [op, roleId]
+    description: "Remove an instrument role from roles.instrumentRoles."
+    properties:
+      op:
+        const: equipment_delete
+      roleId:
+        $ref: "#/$defs/RoleId"
