@@ -11,6 +11,7 @@ import {
   AUTH_STOP_MESSAGE,
   BRAD_ID,
   LOCAL_ADMIN_ID,
+  QMS_ADMIN_ID,
 } from './qms-demo-seed.mjs';
 
 const NOW = '2026-10-03T10:10:17.000Z';
@@ -167,6 +168,7 @@ test('run 1 on an empty store creates everything; grants minted via admin actor'
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
   });
   const result = await runSeed({ baseUrl: 'http://fake', fetchImpl: store.fetchImpl, env: {} });
@@ -177,7 +179,9 @@ test('run 1 on an empty store creates everything; grants minted via admin actor'
   assert.equal(store.records.get('GRANT-DEMO-AUTHOR').grantedBy, LOCAL_ADMIN_ID);
   assert.equal(store.records.get('GRANT-DEMO-REVIEWER').grantedBy, LOCAL_ADMIN_ID);
   assert.equal(store.records.get(BRAD_ID).personRef.id, 'PER-DEMO-AUTHOR');
-  assert.equal(store.records.get(LOCAL_ADMIN_ID).personRef.id, 'PER-DEMO-REVIEWER');
+  assert.equal(store.records.get(QMS_ADMIN_ID).personRef.id, 'PER-DEMO-REVIEWER');
+  assert.equal(store.records.get('GRANT-DEMO-REVIEWER').userId, QMS_ADMIN_ID,
+    'reviewer/approver grant targets the ordinary login-capable actor');
 });
 
 test('run 2 against a populated store issues NO POST/PUT — every fixture skipped', async () => {
@@ -185,6 +189,7 @@ test('run 2 against a populated store issues NO POST/PUT — every fixture skipp
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
   });
   await runSeed({ baseUrl: 'http://fake', fetchImpl: store1.fetchImpl, env: {} });
@@ -207,7 +212,7 @@ test('linkage write-once over HTTP: correct personRef ⇒ no PUT; different ⇒ 
   const okStore = makeFakeStore({
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', personRef: { kind: 'record', type: 'person', id: 'PER-DEMO-AUTHOR' } }],
-      [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', personRef: { kind: 'record', type: 'person', id: 'PER-DEMO-REVIEWER' } }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', personRef: { kind: 'record', type: 'person', id: 'PER-DEMO-REVIEWER' } }],
     ]),
   });
   const okResult = await runSeed({ baseUrl: 'http://fake', fetchImpl: okStore.fetchImpl, env: {} });
@@ -218,7 +223,7 @@ test('linkage write-once over HTTP: correct personRef ⇒ no PUT; different ⇒ 
   const badStore = makeFakeStore({
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', personRef: { kind: 'record', type: 'person', id: 'PER-OTHER' } }],
-      [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user' }],
     ]),
   });
   const badResult = await runSeed({ baseUrl: 'http://fake', fetchImpl: badStore.fetchImpl, env: {} });
@@ -234,6 +239,7 @@ test('no request body anywhere contains a password key; only login could carry o
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
   });
   const result = await runSeed({
@@ -264,6 +270,7 @@ test('admin STOP fires when /api/me reports a non-admin or non-system identity',
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
     // The trap: with an admin credential the header degrades to USR-BRAD.
     meResponses: () => ({ userId: BRAD_ID, isSystem: false }),
@@ -273,7 +280,10 @@ test('admin STOP fires when /api/me reports a non-admin or non-system identity',
   assert.equal(result.stopReason, AUTH_STOP_MESSAGE);
   assert.match(result.stopReason, /^STOP: /);
   assert.match(result.stopReason, /CL_SEED_ADMIN_PASSWORD/);
-  assert.match(result.stopReason, /set-password/);
+  // The stop text names set-password only to explain why the bootstrap-window
+  // call CANNOT work; it must not instruct the operator to run it.
+  assert.match(result.stopReason, /set-password CANNOT/);
+  assert.doesNotMatch(result.stopReason, /curl .*set-password/);
   // Nothing was written at all.
   assert.deepEqual(store.requests.filter((r) => r.method === 'POST' || r.method === 'PUT'), []);
 });
@@ -284,6 +294,7 @@ test('fail-closed: a missing referenced prerequisite stops the seed naming it', 
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
   });
   const brokenFetch = async (url, init = {}) => {
@@ -311,6 +322,7 @@ test('the seed never writes signature or audit-event records', async () => {
     existingRecords: new Map([
       [BRAD_ID, { recordId: BRAD_ID, kind: 'user', username: 'brad' }],
       [LOCAL_ADMIN_ID, { recordId: LOCAL_ADMIN_ID, kind: 'user', username: 'local-admin' }],
+      [QMS_ADMIN_ID, { recordId: QMS_ADMIN_ID, kind: 'user', username: 'qms-admin' }],
     ]),
   });
   await runSeed({ baseUrl: 'http://fake', fetchImpl: store.fetchImpl, env: {} });

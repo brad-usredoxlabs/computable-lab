@@ -7,7 +7,9 @@
  *   PER-DEMO-AUTHOR, PER-DEMO-REVIEWER, user→person linkage (write-once),
  *   DOC-DEMO-SOP, TRM-DEMO-GC, TRR-DEMO-1 (→ DOC-DEMO-SOP canon),
  *   EQP-DEMO-GC, CAL-DEMO-GC (→ EQP-DEMO-GC), GRANT-DEMO-AUTHOR,
- *   GRANT-DEMO-REVIEWER (minted via the verified local-admin actor path).
+ *   GRANT-DEMO-REVIEWER (grantee USR-QMS-ADMIN — an ordinary login-capable
+ *   user; the grant itself is minted via the verified local-admin actor path,
+ *   which is the only actor the role-grant authoring rule accepts).
  *
  * Non-negotiables encoded here:
  *  - NO passwords, NO users, NO signature/audit records are ever written.
@@ -29,20 +31,38 @@ export const DEFAULT_BASE_URL = 'http://localhost:3001';
 export const SCHEMA_BASE = 'https://computable-lab.com/schema/computable-lab/';
 
 export const BRAD_ID = 'USR-BRAD';
+/** Bootstrap/fallback identity ONLY. It can never act as a spoofable actor:
+ *  `x-user-id: USR-LOCAL-ADMIN` degrades to the first active non-admin user
+ *  (LocalIdentityService.ts:43-46) and `POST /auth/set-password` refuses the
+ *  system identity (AuthHandlers.ts:101), so it cannot hold a login. */
 export const LOCAL_ADMIN_ID = 'USR-LOCAL-ADMIN';
 export const LOCAL_ADMIN_USERNAME = 'local-admin';
 
-/** Exact §Auth stop text from the spec (verbatim contract). */
+/** The reviewer/approver DEMO actor: an ordinary, login-capable user
+ *  (username `qms-admin`) that resolves directly from the dev header
+ *  (isSystem never true) and can authenticate. */
+export const QMS_ADMIN_ID = 'USR-QMS-ADMIN';
+export const QMS_ADMIN_USERNAME = 'qms-admin';
+
+/** Stop text when no admin actor path resolves. There is NO "bootstrap window"
+ *  reachable via set-password: the window state it would test (isSystem===true)
+ *  is exactly the state setPassword refuses (403, AuthHandlers.ts:101). */
 export const AUTH_STOP_MESSAGE =
   'STOP: the Local Admin bootstrap window is closed and CL_SEED_ADMIN_PASSWORD is not set. ' +
-  'Either run: curl -s -X POST localhost:3001/api/auth/set-password ' +
-  "-H 'x-user-id: USR-LOCAL-ADMIN' -H 'content-type: application/json' " +
-  `-d '{"password":"<choose>"}' (bootstrap window only), or ` +
-  'export CL_SEED_ADMIN_PASSWORD=<the admin password> and rerun.';
+  'Note: POST /api/auth/set-password CANNOT open it — it is self-service (writes the verifier ' +
+  'for the RESOLVED user) and refuses the system identity with 403, so an ' +
+  "x-user-id: USR-LOCAL-ADMIN call either sets someone else's password or is rejected. " +
+  'Working paths: (a) act as an ordinary user — log in (POST /api/auth/login) and set THAT ' +
+  'user\'s own password via POST /api/auth/set-password; or (b) create the actor with ' +
+  'POST /api/users { username, email, password } (persists the verifier to dataDir/auth). ' +
+  'Then export CL_SEED_ADMIN_PASSWORD=<that user\'s password> and rerun.';
 
 /**
- * Ordered fixture descriptors. `actor` is 'author' (x-user-id: USR-BRAD) or
- * 'admin' (the resolved local-admin actor path — see resolveAdminActor).
+ * Ordered fixture descriptors. `actor` is 'author' (x-user-id: USR-BRAD),
+ * 'qmsadmin' (x-user-id: USR-QMS-ADMIN — an ordinary user, resolves directly
+ * from the dev header), or 'admin' (the resolved local-admin bootstrap actor
+ * path — see resolveAdminActor; kept ONLY where the authoring rule genuinely
+ * requires the bootstrap/system identity, i.e. minting role-grants).
  * `requires` names ids that must read back 2xx before this fixture may be
  * created (fail-closed reference gate — never emit a dangling ref).
  */
@@ -72,7 +92,7 @@ export function buildFixtures(nowIso) {
       payload: {
         kind: 'person',
         id: 'PER-DEMO-REVIEWER',
-        displayName: 'DEMO Reviewer (USR-LOCAL-ADMIN)',
+        displayName: 'DEMO Reviewer (USR-QMS-ADMIN)',
         status: 'active',
         notes: 'DEMO fixture — QMS-4, not real personnel.',
       },
@@ -87,13 +107,15 @@ export function buildFixtures(nowIso) {
       requires: ['PER-DEMO-AUTHOR'],
     },
     {
-      key: 'LINK-USR-LOCAL-ADMIN',
+      key: 'LINK-USR-QMS-ADMIN',
       linkage: {
-        userId: LOCAL_ADMIN_ID,
+        userId: QMS_ADMIN_ID,
         personId: 'PER-DEMO-REVIEWER',
-        actor: 'admin',
+        // USR-QMS-ADMIN is an ordinary user resolvable directly from the dev
+        // header (LocalIdentityService.ts:114-122) — NOT the bootstrap path.
+        actor: 'qmsadmin',
       },
-      requires: ['PER-DEMO-REVIEWER'],
+      requires: ['PER-DEMO-REVIEWER', 'USR-QMS-ADMIN'],
     },
     {
       key: 'DOC-DEMO-SOP',
@@ -190,17 +212,19 @@ export function buildFixtures(nowIso) {
     {
       key: 'GRANT-DEMO-REVIEWER',
       id: 'GRANT-DEMO-REVIEWER',
-      actor: 'admin',
-      requires: ['USR-LOCAL-ADMIN'],
+      actor: 'admin', // grants require the verified local-admin/system actor (role-grant.lint.yaml);
+                      // grantedBy is therefore stamped with the bootstrap identity, NOT the grantee.
+      requires: [QMS_ADMIN_ID],
       schemaId: `${SCHEMA_BASE}role-grant.schema.yaml`,
       payload: {
         kind: 'role-grant',
         recordId: 'GRANT-DEMO-REVIEWER',
-        userId: LOCAL_ADMIN_ID,
+        userId: QMS_ADMIN_ID,
         roles: ['reviewer', 'approver'],
         lifecycleId: 'document-controlled-signing',
         notes:
           'DEMO fixture — holds both gated roles so one demo identity can complete the lap; ' +
+          'grantee is the ordinary login-capable USR-QMS-ADMIN; ' +
           'USR-BRAD intentionally holds only "author" so the regulated denial lap (QMS-7) has a real under-granted actor.',
       },
     },
@@ -301,9 +325,11 @@ export async function runSeed({ baseUrl = process.env.CL_API_BASE ?? DEFAULT_BAS
   };
 
   const author = { headers: { 'x-user-id': BRAD_ID } };
+  const qmsAdmin = { headers: { 'x-user-id': QMS_ADMIN_ID } };
   const admin = await resolveAdminActor({ baseUrl, fetchImpl, env });
   if (admin.stop) return stopAll('AUTH', admin.stop);
-  const headersFor = (actor) => (actor === 'admin' ? admin.headers : author.headers);
+  const headersFor = (actor) =>
+    actor === 'admin' ? admin.headers : actor === 'qmsadmin' ? qmsAdmin.headers : author.headers;
 
   const readRecord = async (id) => api(fetchImpl, baseUrl, 'GET', `/api/records/${encodeURIComponent(id)}`);
 
