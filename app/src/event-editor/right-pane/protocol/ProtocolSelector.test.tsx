@@ -14,8 +14,7 @@ const protocol = (id: string, title: string, kind = 'protocol', links?: Record<s
   recordId: id,
   schemaId: `https://computable-lab.com/schema/computable-lab/${kind}.schema.yaml`,
   meta: { kind },
-  // Approved + localized (every step has a realization ref) so the selector's
-  // attachable filter surfaces it. Override with payload { localizationReady: false }.
+  // Existing research protocol; individual tests override state and lifecycle.
   payload: { kind, title, state: 'approved', localizationReady: true, ...(links ? { links } : {}) },
 })
 
@@ -154,17 +153,17 @@ describe('ProtocolSelector', () => {
     expect(onOpen).toHaveBeenCalledWith('VPDF-9')
   })
 
-  it('shows only approved protocols (draft extraction candidates are hidden)', async () => {
+  it('shows and attaches saved research drafts from both lab and project search results', async () => {
     const base = context()
     const draft = {
       recordId: 'PRT-DRAFT',
       schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
       meta: { kind: 'protocol' },
-      payload: { kind: 'protocol', title: 'Draft candidate', state: 'draft' },
+      payload: { kind: 'protocol', title: 'Zymo soil protocol', state: 'draft', version: '0.1.1' },
     }
     const ctx = {
       ...base,
-      projectTemplates: [],
+      projectTemplates: [{ ...draft, recordId: 'PRT-PROJECT', payload: { ...draft.payload, title: 'Project draft' } }],
       availableProtocols: [protocol('PRT-OK', 'Approved one', 'protocol'), draft],
     }
     render(
@@ -172,7 +171,39 @@ describe('ProtocolSelector', () => {
     )
 
     await screen.findByText('Approved one')
-    expect(screen.queryByText('Draft candidate')).toBeNull()
+    expect(screen.getByText('Zymo soil protocol')).toBeInTheDocument()
+    expect(screen.getByTestId('attach-PRT-PROJECT')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('attach-PRT-DRAFT'))
+    await waitFor(() => expect(apiClient.useProtocolInRun).toHaveBeenCalledWith({
+      protocolId: 'PRT-DRAFT', runId: 'RUN-1', studyId: 'STU-1',
+    }))
+  })
+
+  it('offers controlled protocols only when effective', () => {
+    const controlled = ['draft', 'in_review', 'approved', 'effective', 'superseded'].map(state => ({
+      ...protocol(`PRT-${state}`, `Controlled ${state}`),
+      payload: { kind: 'protocol', title: `Controlled ${state}`, state, lifecycleId: 'document-controlled-signing' },
+    }))
+    render(<ProtocolSelector runId="RUN-1" studyId="STU-1"
+      context={{ ...context(), projectTemplates: controlled, availableProtocols: controlled }} onAttached={() => {}} />)
+
+    expect(screen.getAllByTestId('attach-PRT-effective')).toHaveLength(2)
+    for (const state of ['draft', 'in_review', 'approved', 'superseded']) {
+      expect(screen.queryByTestId(`attach-PRT-${state}`)).toBeNull()
+    }
+  })
+
+  it('excludes retired research protocols from both lab and project results', () => {
+    const retired = ['archived', 'superseded', 'deprecated'].map(state => ({
+      ...protocol(`PRT-${state}`, `Retired ${state}`),
+      payload: { kind: 'protocol', title: `Retired ${state}`, state },
+    }))
+    render(<ProtocolSelector runId="RUN-1" studyId="STU-1"
+      context={{ ...context(), projectTemplates: retired, availableProtocols: retired }} onAttached={() => {}} />)
+
+    for (const state of ['archived', 'superseded', 'deprecated']) {
+      expect(screen.queryByTestId(`attach-PRT-${state}`)).toBeNull()
+    }
   })
 
   it('shows approved universal protocols even before their steps are localized (localization happens in the editor)', async () => {

@@ -49,6 +49,33 @@
   gap: 2px;
 }
 
+.protocol-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 5px 33px;
+}
+
+.protocol-nav__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+}
+.protocol-nav__action:hover { color: var(--cl-accent); background: var(--cl-bg-elev-2); }
+.protocol-nav__action--delete:hover { color: var(--cl-danger); }
+.protocol-nav__actions button:disabled { opacity: 0.4; cursor: default; }
+.protocol-nav__error { color: var(--cl-danger); font-size: 12px; }
+.protocol-nav__notice { font-size: 12px; padding: 4px; }
+.protocol-nav__notice button { background: transparent; border: 0; color: var(--cl-accent); text-decoration: underline; cursor: pointer; }
+
 /* Change-protocol entry: the rail's only protocol-swap affordance once a
    protocol is attached (the right-pane picker is retired — D4). */
 .protocol-nav__footer {
@@ -146,4 +173,87 @@
   white-space: normal;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+}
+
+/* ---- Declared resources (labware / equipment) ------------------------- */
+
+.protocol-nav__section {
+  border-top: 1px solid var(--cl-border);
+  padding-top: 6px;
+}
+
+.protocol-nav__section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--cl-text-dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.protocol-nav__section-head:hover {
+  color: var(--cl-text);
+}
+
+.protocol-nav__chevron {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 100ms ease;
+}
+
+.protocol-nav__chevron--open {
+  transform: rotate(90deg);
+}
+
+.protocol-nav__section-count {
+  margin-left: auto;
+  color: var(--cl-text-faint);
+  font-weight: 500;
+}
+
+.protocol-nav__roles {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.protocol-nav__role {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.protocol-nav__role:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.protocol-nav__role-id {
+  font-family: var(--cl-font-mono, monospace);
+  font-size: 12px;
+  color: var(--cl-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.protocol-nav__role-desc {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

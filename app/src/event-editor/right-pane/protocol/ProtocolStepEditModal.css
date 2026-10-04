@@ -1,0 +1,37 @@
+.protocol-step-edit {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  box-shadow: 0 16px 48px #0005;
+}
+.protocol-step-edit::backdrop { background: #0007; }
+.protocol-step-edit form { display: flex; flex-direction: column; gap: 16px; }
+.protocol-step-edit header, .protocol-step-edit footer { display: flex; align-items: center; gap: 8px; }
+.protocol-step-edit header { justify-content: space-between; }
+.protocol-step-edit h2 { margin: 0; font-size: 17px; }
+.protocol-step-edit footer { justify-content: flex-end; }
+.protocol-step-edit button {
+  background: transparent; color: var(--cl-text); border: 1px solid var(--cl-border);
+  border-radius: 4px; padding: 5px 9px; cursor: pointer;
+}
+.protocol-step-edit button:disabled { opacity: 0.5; cursor: default; }
+.protocol-step-edit button[type=submit] { color: var(--cl-accent); border-color: var(--cl-accent); }
+.protocol-step-edit__label, .protocol-step-edit__instructions { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.protocol-step-edit input, .protocol-step-edit .tiptap {
+  background: var(--cl-bg); color: var(--cl-text); border: 1px solid var(--cl-border);
+  border-radius: 4px; padding: 10px; font: inherit;
+}
+.protocol-step-edit .tiptap { min-height: 180px; max-height: 45vh; overflow-y: auto; line-height: 1.5; overflow-wrap: anywhere; }
+.protocol-step-edit .tiptap p { margin: 0 0 0.7em; }
+.protocol-step-edit .rich-text-toolbar { display: flex; flex-wrap: wrap; gap: 4px; }
+.protocol-step-edit .rich-text-toolbar__group { display: flex; gap: 2px; }
+.protocol-step-edit .rich-text-toolbar__btn--active { color: var(--cl-accent); background: var(--cl-bg-elev-2); }
+.protocol-step-edit [role=alert] { color: var(--cl-danger); margin: 0; }

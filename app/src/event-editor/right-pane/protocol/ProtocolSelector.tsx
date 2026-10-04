@@ -62,16 +62,13 @@ export function ProtocolSelector({ runId, studyId, context, onAttached, alreadyA
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<ProtocolPreview | null>(null)
 
-  const approved = (p: { payload?: Record<string, unknown> | null }): boolean => {
-    const state = p?.payload?.state as string | undefined
-    return state === 'approved' || state === 'effective' || state === 'accepted' || state === 'superseded'
+  // Match protocol-context eligibility: research drafts can be used directly;
+  // controlled protocols must have completed their lifecycle before use.
+  const attachable = (p: { payload?: Record<string, unknown> | null }): boolean => {
+    const payload = p.payload
+    if (payload?.lifecycleId) return payload.state === 'effective'
+    return !['archived', 'superseded', 'deprecated'].includes(String(payload?.state))
   }
-
-  // A protocol is attachable when it is approved-ish. Localization is NOT a gate:
-  // the run-editor is exactly where a universal protocol's steps get localized in
-  // the event editor, so approved universals must remain attachable (gating on
-  // step-realization here hid them and left only vendor PDFs' "Open" rows).
-  const attachable = approved
 
   const projectProtocols = (context?.projectTemplates ?? []).filter(attachable)
   const labProtocols = (context?.availableProtocols ?? []).filter(
@@ -297,9 +294,9 @@ function ProtocolGroup({
                 border: `1px solid ${isPreviewed ? 'var(--cl-accent)' : 'var(--cl-border)'}`,
                 borderRadius: '6px',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '8px',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                gap: '4px',
                 opacity: attaching !== null && attaching !== p.recordId ? 0.5 : 1,
               }}
             >
@@ -318,6 +315,7 @@ function ProtocolGroup({
                   font: 'inherit',
                   padding: 0,
                   minWidth: 0,
+                  overflowWrap: 'anywhere',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '2px',
@@ -336,15 +334,15 @@ function ProtocolGroup({
                 disabled={attaching !== null}
                 title="Attach this protocol to the run"
                 style={{
-                  padding: '6px 10px',
-                  background: 'var(--cl-accent)',
-                  color: '#fff',
+                  padding: 0,
+                  background: 'transparent',
+                  color: 'var(--cl-accent)',
                   border: 0,
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  fontSize: '11px',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
                   cursor: attaching ? 'default' : 'pointer',
-                  flexShrink: 0,
+                  alignSelf: 'flex-start',
                 }}
               >
                 {attaching === p.recordId ? 'Attaching…' : 'Attach to run'}
