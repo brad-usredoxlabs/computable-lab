@@ -20,6 +20,25 @@ import { API_BASE } from '../../../shared/api/base'
 import type { AiClarificationAnswer, AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
 import type { DraftTermRow } from './TermPanel'
 
+/**
+ * The compact ground-truth payload for the protocol ATTACHED to an
+ * event-editor chat (PROTO-AI-6), populated app-side into the request
+ * `context.attachedProtocol`. The server renders it as the ATTACHED PROTOCOL
+ * prompt block plus the protocol_edit instruction section ONLY when present;
+ * absent → neither. It rides in `context` (not a top-level field) so the
+ * warm render and the real request share one cacheable prefix.
+ * Mirrors `server/src/ai/types.ts#AttachedProtocolContext`.
+ */
+export interface AssistAttachedProtocol {
+  recordId: string
+  /** Current content sha of the attached record — the staleness anchor for
+   *  expectedSha at proposal-apply time; absent until the record fetch lands. */
+  sha?: string
+  steps: Array<{ stepId: string; ordinal: number; label: string; kind?: string }>
+  labwareRoles?: Array<{ roleId: string; description?: string; expectedLabwareKinds?: string[] }>
+  instrumentRoles?: Array<{ roleId: string; description?: string; allowedInstrumentIds?: string[] }>
+}
+
 export interface AssistStreamRequest {
   prompt: string
   /** Surface id sent to the orchestrator. Workspace uses `workspace.<viewer>`

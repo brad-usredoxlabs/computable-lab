@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useReducer, useState } from 'r
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
+import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { openContent } from '../../../shared/lib/openContent'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
@@ -127,9 +128,44 @@ export function AiTabPanel() {
   const systemPrompt = systemPromptForViewer(systemPromptKindForTab(activeTab))
 
   // Present only when the active tab is a deck (EventEditorProvider wraps
-  // the pane then); null on pdf/document/project tabs.
+  // the pane then); null on pdf/document tabs.
   const editor = useOptionalEventEditor()
   const editorState = editor?.state ?? null
+
+  // Shared protocol surface (rail/loader): the ATTACHED protocol identity,
+  // its step concepts, and its declared roles. The context builder below
+  // folds them into `attachedProtocol` (PROTO-AI-6) so the outbound request
+  // carries the ground truth the model must cite — never fetched per-turn.
+  const protocolSel = useProtocolSelection()
+  const attachedProtocol = useMemo(() => {
+    const identity = protocolSel?.protocol
+    const steps = protocolSel?.steps ?? []
+    // Identity alone (steps still loading / failed) would render a block with
+    // no citable ids — an invention invitation. Wait for steps.
+    if (!identity || steps.length === 0) return null
+    const labwareRoles = (protocolSel?.resources.labwares ?? []).map((r) => ({
+      roleId: r.roleId,
+      ...(r.description ? { description: r.description } : {}),
+      ...(r.expectedLabwareKinds?.length ? { expectedLabwareKinds: r.expectedLabwareKinds } : {}),
+    }))
+    const instrumentRoles = (protocolSel?.resources.equipment ?? []).map((r) => ({
+      roleId: r.roleId,
+      ...(r.description ? { description: r.description } : {}),
+      ...(r.allowedInstrumentIds?.length ? { allowedInstrumentIds: r.allowedInstrumentIds } : {}),
+    }))
+    return {
+      recordId: identity.recordId,
+      ...(identity.sha ? { sha: identity.sha } : {}),
+      steps: steps.map((s, i) => ({
+        stepId: s.stepId,
+        ordinal: s.ordinal ?? i + 1,
+        label: s.label,
+        ...(s.kind ? { kind: s.kind } : {}),
+      })),
+      ...(labwareRoles.length > 0 ? { labwareRoles } : {}),
+      ...(instrumentRoles.length > 0 ? { instrumentRoles } : {}),
+    }
+  }, [protocolSel?.protocol, protocolSel?.steps, protocolSel?.resources])
 
   // Active deck scope for preview placement validation — computed outside
   // useMemo so it's accessible as a stable reference in useCallback deps.
@@ -233,6 +269,10 @@ export function AiTabPanel() {
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
       activeDeckScope,
+      // The ATTACHED protocol's compact ground truth (identity + steps +
+      // declared roles) — the server renders it as a prompt block plus the
+      // protocol_edit instruction section ONLY when present (PROTO-AI-6).
+      ...(attachedProtocol ? { attachedProtocol } : {}),
       // Deck tabs send the same accepted event graph projection used by the
       // standalone editor; this context object is shared by warm and draft.
       ...acceptedGraphProjection,
@@ -255,7 +295,7 @@ export function AiTabPanel() {
           }
         : {}),
     }
-  }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope])
+  }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope, attachedProtocol])
 
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.

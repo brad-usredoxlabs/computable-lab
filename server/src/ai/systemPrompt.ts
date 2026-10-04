@@ -6,7 +6,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { EditorContext, LabwareSummary, EventSummary } from './types.js';
+import type { EditorContext, LabwareSummary, EventSummary, AttachedProtocolContext } from './types.js';
 
 const promptCache = new Map<string, string>();
 
@@ -461,13 +461,66 @@ export function buildSystemPrompt(
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
     .replace('{{RUN_ID}}', context.runId ?? 'none');
 
+  // PROTO-AI-6: the template carries the protocol_edit instruction section
+  // inside a marker-delimited region. It renders ONLY when a protocol is
+  // attached — with no attachment the whole region is stripped, so the
+  // prompt carries no protocol_edit guidance at all.
+  const gated = context.attachedProtocol
+    ? prompt.replace(
+        /<!--\s*protocol-edit:begin\s*-->\n?([\s\S]*?)\n?<!--\s*protocol-edit:end\s*-->\n?/,
+        '$1\n',
+      )
+    : prompt.replace(/\n?<!--\s*protocol-edit:begin\s*-->[\s\S]*?<!--\s*protocol-edit:end\s*-->\n?/, '');
+
   const extraContexts = [
     formatGraphLemurContext(context),
     formatDraftRevisionContext(context),
     formatProtocolStepContext(context),
     formatLocalProtocolSetup(context),
+    formatAttachedProtocol(context),
   ].filter(Boolean);
-  return extraContexts.length > 0 ? `${prompt}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : prompt;
+  return extraContexts.length > 0 ? `${gated}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : gated;
+}
+
+/**
+ * Render the compact ground-truth block for the protocol ATTACHED to this
+ * chat (PROTO-AI-6): identity (recordId + current sha), every step
+ * (ordinal | stepId | kind | label — nothing more), and the declared
+ * labware / instrument roles. This is the ONLY protocol ground truth the
+ * model may cite; the paired instruction section ({{PROTOCOL_EDIT}}) binds
+ * it to the proposal vocabulary. Returns null when no protocol is attached.
+ */
+export function formatAttachedProtocol(context: EditorContext): string | null {
+  const protocol: AttachedProtocolContext | undefined = context.attachedProtocol;
+  if (!protocol) return null;
+  const lines = [
+    'ATTACHED PROTOCOL (ground truth for protocol_edit):',
+    `- Protocol: ${protocol.recordId}${protocol.sha ? ` (sha ${protocol.sha})` : ''}`,
+  ];
+  lines.push('- Steps (ordinal | stepId | kind | label):');
+  for (const step of protocol.steps) {
+    lines.push(`  ${step.ordinal} | ${step.stepId} | ${step.kind ?? '-'} | ${step.label}`);
+  }
+  if (protocol.labwareRoles && protocol.labwareRoles.length > 0) {
+    lines.push('- Labware roles:');
+    for (const role of protocol.labwareRoles) {
+      const kinds = role.expectedLabwareKinds?.length
+        ? ` (expectedLabwareKinds: ${role.expectedLabwareKinds.join(', ')})`
+        : '';
+      lines.push(`  - ${role.roleId}${role.description ? ` — ${role.description}` : ''}${kinds}`);
+    }
+  }
+  if (protocol.instrumentRoles && protocol.instrumentRoles.length > 0) {
+    lines.push('- Instrument roles:');
+    for (const role of protocol.instrumentRoles) {
+      const ids = role.allowedInstrumentIds?.length
+        ? ` (allowedInstrumentIds: ${role.allowedInstrumentIds.join(', ')})`
+        : '';
+      lines.push(`  - ${role.roleId}${role.description ? ` — ${role.description}` : ''}${ids}`);
+    }
+  }
+  lines.push('- Cite ONLY the stepIds and roleIds listed above; never invent one.');
+  return lines.join('\n');
 }
 
 /**

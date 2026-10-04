@@ -32,6 +32,9 @@ export interface ProtocolStepSummary {
   /** Full human-readable step text (description) for hover tooltips. Optional —
    * absent when the source step carries no description. */
   description?: string
+  /** Step kind (base ProtocolStep kinds). Published by the loaders that read
+   *  the real protocol steps so the AI's attached-protocol block can cite it. */
+  kind?: string
 }
 
 /**
@@ -43,6 +46,10 @@ export interface ProtocolRoleSummary {
   roleId: string
   /** Human label from the declaration (roleId is the machine id). */
   description?: string
+  /** Declared compatible labware DESIGN record ids (labware roles only). */
+  expectedLabwareKinds?: string[]
+  /** Declared allowable instrument DESIGN record ids (instrument roles only). */
+  allowedInstrumentIds?: string[]
 }
 
 /** The protocol's declared labware / equipment roles, grouped for the rail. */
@@ -63,6 +70,10 @@ export const NO_PROTOCOL_RESOURCES: ProtocolResources = { labwares: [], equipmen
 export interface ProtocolIdentityRef {
   recordId: string
   title?: string
+  /** The attached record's current content sha (contentSha/commitSha) — the
+   *  ground-truth anchor the AI's protocol_edit proposals bind to (PROTO-AI-6).
+   *  Published once the record fetch lands; absent until then. */
+  sha?: string
 }
 
 interface ProtocolSelectionState {
