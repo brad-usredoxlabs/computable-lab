@@ -32,7 +32,8 @@ export type PredicateOp =
   | 'context_contains'
   | 'lineage_includes'
   | 'time_within'
-  | 'mention_kind_matches';
+  | 'mention_kind_matches'
+  | 'allIn';
 
 /**
  * Base predicate interface.
@@ -193,6 +194,32 @@ export interface MentionKindMatchesPredicate extends BasePredicate {
 }
 
 /**
+ * AllIn predicate — generic cross-collection membership.
+ *
+ * Asserts that EVERY value selected by `path` (a scalar, a plain array, or
+ * a `[*]`-wildcard projection) is a member of the collection selected by
+ * `collectionPath`. When `itemField` is given, the membership set is the
+ * projection `collectionPath[*].<itemField>`; otherwise the collection
+ * items themselves must be scalars.
+ *
+ * Defined behaviours (documented in schema/lint/lint-v1.schema.yaml):
+ * - `path` selects an empty collection   -> PASS (vacuous).
+ * - `path` resolves to a single scalar   -> treated as a one-item selection.
+ * - `path` does not resolve              -> FAIL, reason names the path.
+ * - `collectionPath` does not resolve, or
+ *   resolves to a non-array              -> FAIL, reason names the path.
+ */
+export interface AllInPredicate extends BasePredicate {
+  op: 'allIn';
+  /** Path selecting the values under test (scalar or array; supports `[*]`). */
+  path: string;
+  /** Path selecting the collection of allowed members (must resolve to an array). */
+  collectionPath: string;
+  /** Optional field of each collection item to compare against (e.g. 'roleId'). */
+  itemField?: string;
+}
+
+/**
  * Union of all predicate types.
  */
 export type Predicate =
@@ -209,7 +236,8 @@ export type Predicate =
   | ContextContainsPredicate
   | LineageIncludesPredicate
   | TimeWithinPredicate
-  | MentionKindMatchesPredicate;
+  | MentionKindMatchesPredicate
+  | AllInPredicate;
 
 /**
  * Message configuration for a lint rule.
