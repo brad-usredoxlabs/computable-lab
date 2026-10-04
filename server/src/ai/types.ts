@@ -310,6 +310,45 @@ export interface GraphLemurContext {
   revisionMode?: boolean;
 }
 
+/** One step of an attached protocol, condensed for the prompt (PROTO-AI-6). */
+export interface AttachedProtocolStep {
+  stepId: string;
+  ordinal: number;
+  label: string;
+  /** Step kind (base ProtocolStep kinds); absent when the client could not resolve it. */
+  kind?: string;
+}
+
+/** Declared labware role of an attached protocol (mirror of LabwareRole). */
+export interface AttachedProtocolLabwareRole {
+  roleId: string;
+  description?: string;
+  expectedLabwareKinds?: string[];
+}
+
+/** Declared instrument role of an attached protocol (mirror of InstrumentRole). */
+export interface AttachedProtocolInstrumentRole {
+  roleId: string;
+  description?: string;
+  allowedInstrumentIds?: string[];
+}
+
+/**
+ * The protocol ATTACHED to the editor (run → plannedRunRef → protocolRef),
+ * resolved app-side into a compact ground-truth payload (PROTO-AI-6). When
+ * present, the system prompt carries the ATTACHED PROTOCOL context block AND
+ * the protocol_edit instruction section; when absent, NEITHER renders.
+ * `sha` is the record's current content sha — the staleness anchor for
+ * expectedSha at proposal-apply time.
+ */
+export interface AttachedProtocolContext {
+  recordId: string;
+  sha?: string;
+  steps: AttachedProtocolStep[];
+  labwareRoles?: AttachedProtocolLabwareRole[];
+  instrumentRoles?: AttachedProtocolInstrumentRole[];
+}
+
 export interface ActiveDeckScope {
   runId?: string;
   platformId: string;
@@ -406,6 +445,13 @@ export interface EditorContext {
     highlightedSection: string;
     selectedText?: string;
   };
+  /**
+   * The protocol ATTACHED to this editor chat (resolved app-side). Present →
+   * the prompt carries a compact ground-truth context block (identity + steps
+   * + declared roles) and the protocol_edit instruction section; absent →
+   * neither renders (PROTO-AI-6).
+   */
+  attachedProtocol?: AttachedProtocolContext;
   /**
    * Plate-setting sections declared on the run's local protocol (labwares /
    * equipment / materials rows: { role, description?, ref? }). Read-only

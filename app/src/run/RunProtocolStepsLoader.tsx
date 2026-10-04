@@ -28,6 +28,8 @@ interface ResolvedRunProtocol {
   stepsId: string
   /** Ref label from the PLR — the display fallback until the record lands. */
   label: string | null
+  /** Current content sha of the ATTACHED record (protocol_edit staleness anchor). */
+  sha?: string
 }
 
 /** Resolve run → plannedRunRef (PLR) → protocolRef → protocol record. */
@@ -49,7 +51,12 @@ async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | 
         const lpEnv = await apiClient.getRecord(attachedId)
         const lp = (lpEnv?.payload ?? lpEnv) as Record<string, unknown> | null
         const inh = lp?.inherits_from as { id?: string } | undefined
-        if (typeof inh?.id === 'string') return { attachedId, stepsId: inh.id, label }
+        const lpSha = (lpEnv as { meta?: { contentSha?: string; commitSha?: string } } | undefined)?.meta?.contentSha
+          ?? (lpEnv as { meta?: { commitSha?: string } } | undefined)?.meta?.commitSha
+        if (typeof inh?.id === 'string') {
+          return { attachedId, stepsId: inh.id, label, ...(lpSha ? { sha: lpSha } : {}) }
+        }
+        return { attachedId, stepsId: attachedId, label, ...(lpSha ? { sha: lpSha } : {}) }
       } catch {
         // fall through — an LPR without a resolvable parent still shows steps
         // by its own id, and the identity is still the local protocol.
@@ -84,7 +91,11 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
       // has an identity even if the steps call is slow or fails.
       sel?.setProtocol(
         resolved
-          ? { recordId: resolved.attachedId, ...(resolved.label ? { title: resolved.label } : {}) }
+          ? {
+              recordId: resolved.attachedId,
+              ...(resolved.label ? { title: resolved.label } : {}),
+              ...(resolved.sha ? { sha: resolved.sha } : {}),
+            }
           : null,
       )
       try {
@@ -97,6 +108,21 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
             if (cancelled) return
             const payload = ((env as { payload?: unknown })?.payload ?? env) as Record<string, unknown>
             sel?.setResources(protocolResourceSummaries(payload))
+            // The attached record's content sha rides in the identity once the
+            // record lands (protocol_edit staleness anchor, PROTO-AI-6). Only
+            // when the STEPS record IS the attached record (universal attach);
+            // the LPR branch captured its own sha in resolveRunProtocol.
+            const meta = (env as { meta?: { contentSha?: string; commitSha?: string } })?.meta
+            const sha = resolved && stepsId === resolved.attachedId
+              ? meta?.contentSha ?? meta?.commitSha
+              : undefined
+            if (resolved && sha) {
+              sel?.setProtocol({
+                recordId: resolved.attachedId,
+                ...(resolved.label ? { title: resolved.label } : {}),
+                sha,
+              })
+            }
           } catch {
             // best-effort: the rail simply shows no resource sections
           }
@@ -115,6 +141,7 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
             ...(typeof s.description === 'string' && (s.description as string).trim()
               ? { description: s.description as string }
               : {}),
+            ...(typeof s.kind === 'string' && s.kind ? { kind: s.kind } : {}),
           }))
           .filter((s) => s)
         // Publish non-empty steps idempotently. We NEVER clear the shared

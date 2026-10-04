@@ -58,6 +58,9 @@ export interface ProtocolStep {
   label: string
   /** Optional step description. */
   description?: string
+  /** Base ProtocolStep kind (carried through so the AI's attached-protocol
+   *  block (PROTO-AI-6) can cite it; absent on extracted-candidate steps). */
+  kind?: string
   /** Whether this step is currently visible on the deck. */
   visible: boolean
   /**
@@ -142,6 +145,8 @@ interface MappedStep {
   text?: string
   notes?: string
   description?: string
+  /** Base ProtocolStep kind from the /steps endpoint. */
+  kind?: string
   /** Conc-first quantity on the step (may be nested under step.working_concentration). */
   workingConcentration?: unknown
   concentration?: unknown
@@ -188,6 +193,7 @@ function toProtocolStep(step: MappedStep, index: number): ProtocolStep {
     ordinal,
     label: step.title ?? briefLabel(step.label ?? step.description) ?? `Step ${ordinal}`,
     description: step.text ?? step.label ?? step.description ?? step.notes,
+    ...(typeof step.kind === 'string' && step.kind ? { kind: step.kind } : {}),
     visible: true,
     ...(working ? { workingConcentration: working } : {}),
     settings: [
@@ -1307,6 +1313,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       label: s.label ?? s.description ?? `Step ${s.ordinal ?? i + 1}`,
       ordinal: s.ordinal ?? i + 1,
       ...(typeof s.description === 'string' && s.description.trim() ? { description: s.description } : {}),
+      ...(s.kind ? { kind: s.kind } : {}),
     })))
   }, [steps, visibleSteps.size, setVisibleSteps, setContextSteps])
 

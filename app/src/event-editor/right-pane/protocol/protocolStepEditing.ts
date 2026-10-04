@@ -11,7 +11,18 @@ function roleSummaries(value: unknown): ProtocolRoleSummary[] {
     const roleId = typeof role?.roleId === 'string' ? role.roleId.trim() : ''
     if (!roleId) return []
     const description = typeof role.description === 'string' ? role.description.trim() : ''
-    return [{ roleId, ...(description ? { description } : {}) }]
+    // Design refs ride along so the AI's attached-protocol block (PROTO-AI-6)
+    // can show WHAT a role binds to, not just that it exists.
+    const kinds = (v: unknown): string[] | undefined =>
+      Array.isArray(v) && v.length > 0 ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : undefined
+    const expectedLabwareKinds = kinds(role.expectedLabwareKinds)
+    const allowedInstrumentIds = kinds(role.allowedInstrumentIds)
+    return [{
+      roleId,
+      ...(description ? { description } : {}),
+      ...(expectedLabwareKinds ? { expectedLabwareKinds } : {}),
+      ...(allowedInstrumentIds ? { allowedInstrumentIds } : {}),
+    }]
   })
 }
 
