@@ -17,6 +17,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
+import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
+import { openProtocolReview } from '../../../shared/lib/openContent'
 import { ProtocolSelector } from './ProtocolSelector'
 
 export interface AttachProtocolPanelProps {
@@ -37,6 +39,7 @@ export function AttachProtocolPanel({
   onAttached,
 }: AttachProtocolPanelProps) {
   const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
   const [context, setContext] = useState<ProtocolContextResponse | null>(null)
   const [query, setQuery] = useState('')
 
@@ -94,7 +97,10 @@ export function AttachProtocolPanel({
           context={context}
           alreadyAttached={alreadyAttached}
           {...(onCancel ? { onCancel } : {})}
-          onOpenIngestedPdf={(id) => navigate(`/ingestion/vendor-pdf/${encodeURIComponent(id)}`)}
+          onOpenIngestedPdf={(id) => {
+            // Its own tab (focusing an existing one), so the run stays on screen.
+            openProtocolReview(openTabs, navigate, id)
+          }}
           onAttached={() => onAttached?.()}
         />
       </div>

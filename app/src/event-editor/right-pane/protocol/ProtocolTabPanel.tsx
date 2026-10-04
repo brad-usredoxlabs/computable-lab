@@ -797,6 +797,8 @@ interface RunHeaderProps {
   runName: string
   onRunNameChange: (name: string) => void
   onPlayAll: () => void
+  /** Set when a server-authoritative run start was rejected (controlled-use gate). */
+  executionError?: string | null
 }
 
 function RunHeader({
@@ -808,6 +810,7 @@ function RunHeader({
   runName,
   onRunNameChange,
   onPlayAll,
+  executionError,
 }: RunHeaderProps) {
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState(runName)
@@ -930,6 +933,24 @@ function RunHeader({
           Play All
         </button>
       </div>
+
+      {/* Controlled-use gate rejection — why the run stayed in planning. */}
+      {executionError && (
+        <div
+          role="alert"
+          style={{
+            marginTop: '8px',
+            padding: '6px 10px',
+            fontSize: '11px',
+            borderRadius: '6px',
+            background: 'rgba(201, 42, 42, 0.08)',
+            color: '#c92a2a',
+            border: '1px solid rgba(201, 42, 42, 0.25)',
+          }}
+        >
+          {executionError}
+        </div>
+      )}
     </div>
   )
 }
@@ -1488,12 +1509,22 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const handlePlayAll = useCallback(() => {
     // Start execution if not already active
     if (!execState.isActive) {
-      startExecution(
+      // Server-authoritative start: the run must be in_progress server-side
+      // before we enter executing mode. A controlled-use rejection leaves the
+      // returned state inactive — stay in planning; the reason is in
+      // execState.executionError for the UI to surface.
+      void startExecution(
         { executionName: runName, operatorName },
         runId,
         runId,
-      )
-      setMode('executing')
+      ).then((result) => {
+        if (!result.isActive) return
+        setMode('executing')
+        // Chain through all: open the first pending step once the server accepted.
+        const firstPending = steps.find(s => !s.executionMeta?.completedAt)
+        if (firstPending) handlePlayStep(firstPending)
+      })
+      return
     }
     // Open modal for the first pending step, then chain through all
     const firstPending = steps.find(s => !s.executionMeta?.completedAt)
@@ -1504,12 +1535,15 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
   const handleToggleMode = useCallback(() => {
     if (mode === 'planning') {
-      startExecution(
+      // Server-authoritative start (see handlePlayAll): only flip to
+      // executing mode once the backend accepted the transition.
+      void startExecution(
         { executionName: runName, operatorName },
         runId,
         runId,
-      )
-      setMode('executing')
+      ).then((result) => {
+        if (result.isActive) setMode('executing')
+      })
     } else {
       abortExecution()
       setMode('planning')
@@ -1726,6 +1760,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         runName={runName}
         onRunNameChange={setRunName}
         onPlayAll={handlePlayAll}
+        executionError={execState.executionError}
       />
 
       {/* Changing the protocol lives in the run workspace's left Protocol rail

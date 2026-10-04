@@ -27,12 +27,12 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  clean: { bg: '#d3f9d8', text: '#2b8a3e' },
-  dirty: { bg: '#fff3bf', text: '#e67700' },
-  syncing: { bg: '#d0ebff', text: '#1971c2' },
-  error: { bg: '#ffe3e3', text: '#c92a2a' },
-  unknown: { bg: '#e9ecef', text: '#495057' },
-  disconnected: { bg: '#e9ecef', text: '#495057' },
+  clean: { bg: 'var(--cl-success-soft)', text: 'var(--cl-success)' },
+  dirty: { bg: 'var(--cl-warn-soft)', text: 'var(--cl-warn)' },
+  syncing: { bg: 'var(--cl-info-soft)', text: 'var(--cl-info)' },
+  error: { bg: 'var(--cl-danger-soft)', text: 'var(--cl-danger)' },
+  unknown: { bg: 'var(--cl-bg-elev-2)', text: 'var(--cl-text-dim)' },
+  disconnected: { bg: 'var(--cl-bg-elev-2)', text: 'var(--cl-text-dim)' },
 }
 
 export function RepositorySection({

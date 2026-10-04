@@ -100,9 +100,9 @@ export function AddRepositorySection({ onSave, saving }: Props) {
   }, [id, url, branch, authType, token, baseUri, prefix, onSave])
 
   const FEEDBACK_COLORS = {
-    success: { bg: '#d3f9d8', text: '#2b8a3e', border: '#b2f2bb' },
-    error: { bg: '#ffe3e3', text: '#c92a2a', border: '#ffc9c9' },
-    restart: { bg: '#fff3bf', text: '#e67700', border: '#ffe066' },
+    success: { bg: 'var(--cl-success-soft)', text: 'var(--cl-success)', border: 'var(--cl-success-border)' },
+    error: { bg: 'var(--cl-danger-soft)', text: 'var(--cl-danger)', border: 'var(--cl-danger-border)' },
+    restart: { bg: 'var(--cl-warn-soft)', text: 'var(--cl-warn)', border: 'var(--cl-warn-border)' },
   }
 
   return (
@@ -144,7 +144,7 @@ export function AddRepositorySection({ onSave, saving }: Props) {
             {authType === 'token' && (
               <SecretRow label="Token" value={token} onChange={setToken} />
             )}
-            <div style={{ borderTop: '1px solid #e9ecef', marginTop: '0.5rem', paddingTop: '0.5rem' }}>
+            <div style={{ borderTop: '1px solid var(--cl-border)', marginTop: '0.5rem', paddingTop: '0.5rem' }}>
               <EditRow label="Base URI" value={baseUri} onChange={setBaseUri} mono placeholder="https://example.org/records/" />
               <EditRow label="Prefix" value={prefix} onChange={setPrefix} mono placeholder="my-lab" />
             </div>

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
 import type { ProtocolStepSummary } from '../event-editor/protocol/ProtocolSelectionContext'
+import { protocolResourceSummaries } from '../event-editor/right-pane/protocol/protocolStepEditing'
 
 export interface RunProtocolStepsLoaderProps {
   runId: string
@@ -87,6 +88,20 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
           : null,
       )
       try {
+        // What the assay NEEDS (declared labware / equipment roles) comes from
+        // the protocol record, not the steps endpoint — publish it alongside the
+        // steps so the rail's resource sections are filled on load too.
+        void (async () => {
+          try {
+            const env = await apiClient.getRecord(stepsId)
+            if (cancelled) return
+            const payload = ((env as { payload?: unknown })?.payload ?? env) as Record<string, unknown>
+            sel?.setResources(protocolResourceSummaries(payload))
+          } catch {
+            // best-effort: the rail simply shows no resource sections
+          }
+        })()
+
         const res = await fetch(`/api/protocols/${encodeURIComponent(stepsId)}/steps`)
         if (!res.ok) return
         const data = await res.json() as Record<string, unknown>

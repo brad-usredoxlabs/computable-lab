@@ -10,6 +10,7 @@
  * It has NO schema-specific logic. All domain rules live in specs.
  */
 
+import { controlledContent, withRecordLock } from '../revisions/RecordRevisionService.js';
 import type { ValidationResult, LintResult } from '../types/common.js';
 import type { RecordEnvelope, RecordMeta } from '../types/RecordEnvelope.js';
 import type { RepoAdapter } from '../repo/types.js';
@@ -26,6 +27,11 @@ import type {
   DeleteRecordOptions,
   GetRecordOptions,
 } from './types.js';
+import {
+  detectLifecycleBypass,
+  type BypassLifecycleReader,
+  type BypassAuditAppender,
+} from '../lifecycle/BypassAudit.js';
 import {
   parseRecord,
   serializeRecord,
@@ -54,11 +60,18 @@ const DEFAULT_CONFIG: Required<Omit<RecordStoreConfig, 'writeHook'>> = {
 type ResolvedConfig = Required<Omit<RecordStoreConfig, 'writeHook'>> &
   Pick<RecordStoreConfig, 'writeHook'>;
 
+/** Late-bound collaborators for the lifecycle-bypass audit detector. */
+export interface LifecycleBypassAuditCollaborator {
+  engine: BypassLifecycleReader;
+  audit: BypassAuditAppender;
+}
+
 export class RecordStoreImpl implements RecordStore {
   private config: ResolvedConfig;
   private readonly repo: RepoAdapter;
   private readonly validator: AjvValidator;
   private readonly lintEngine: LintEngine;
+  private lifecycleBypassAudit?: LifecycleBypassAuditCollaborator;
   
   // Cache: recordId -> { path, sha }
   private readonly pathCache: Map<string, { path: string; sha: string }> = new Map();
@@ -85,6 +98,18 @@ export class RecordStoreImpl implements RecordStore {
   setWriteHook(hook: RecordStoreWriteHook | null): void {
     if (hook) this.config.writeHook = hook;
     else delete this.config.writeHook;
+  }
+
+  /**
+   * Attach (or detach with `null`) the lifecycle-bypass audit collaborator.
+   * Lazily bound like setWriteHook: the lifecycle engine and audit service
+   * are constructed after the store in server.ts. When wired, a successful
+   * update() that flips the lifecycle state of a managed record WITHOUT the
+   * viaLifecycleApi marker self-reports a lifecycle_state_bypass audit event.
+   */
+  setLifecycleBypassAudit(collab: LifecycleBypassAuditCollaborator | null): void {
+    if (collab) this.lifecycleBypassAudit = collab;
+    else delete this.lifecycleBypassAudit;
   }
 
 
@@ -240,6 +265,8 @@ export class RecordStoreImpl implements RecordStore {
         ...result.envelope.meta,
         path: entry.path,
         commitSha: file.sha,
+        contentSha: file.sha,
+        ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}),
       },
     };
   }
@@ -264,6 +291,8 @@ export class RecordStoreImpl implements RecordStore {
         ...result.envelope.meta,
         path,
         commitSha: file.sha,
+        contentSha: file.sha,
+        ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}),
       },
     };
   }
@@ -388,6 +417,8 @@ export class RecordStoreImpl implements RecordStore {
           ...result.envelope.meta,
           path: filePath,
           commitSha: file.sha,
+        contentSha: file.sha,
+        ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}),
         },
       });
 
@@ -421,7 +452,19 @@ export class RecordStoreImpl implements RecordStore {
   /**
    * Create a new record.
    */
+  async getVerifiedCommit(recordId: string, expectedSha?: string): Promise<string | undefined> {
+    const entry = await this.findRecordPath(recordId);
+    if (!entry || !expectedSha) return undefined;
+    if ((await this.repo.getFile(entry.path))?.sha !== expectedSha) return undefined;
+    const commit = await this.repo.getVerifiedCommit?.(entry.path);
+    return (await this.repo.getFile(entry.path))?.sha === expectedSha ? commit : undefined;
+  }
+
   async create(options: CreateRecordOptions): Promise<StoreResult> {
+    return withRecordLock(this, `write:${options.envelope.recordId}`, () => this.createUnlocked(options));
+  }
+
+  private async createUnlocked(options: CreateRecordOptions): Promise<StoreResult> {
     const { envelope, message, skipValidation, skipLint } = options;
     
     // Check if record already exists
@@ -529,7 +572,7 @@ export class RecordStoreImpl implements RecordStore {
     const newMeta: RecordMeta = {
       ...envelope.meta,
       path,
-      ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
+      ...(await this.repo.getFile(path).then(file => file ? { commitSha: file.sha, contentSha: file.sha, ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}) } : {})),
     };
 
     const finalEnvelope = { ...envelope, meta: newMeta };
@@ -585,6 +628,10 @@ export class RecordStoreImpl implements RecordStore {
    * Update an existing record.
    */
   async update(options: UpdateRecordOptions): Promise<StoreResult> {
+    return withRecordLock(this, `write:${options.envelope.recordId}`, () => this.updateUnlocked(options));
+  }
+
+  private async updateUnlocked(options: UpdateRecordOptions): Promise<StoreResult> {
     const { envelope, expectedSha, message, skipValidation, skipLint } = options;
     
     // Find existing record
@@ -603,6 +650,23 @@ export class RecordStoreImpl implements RecordStore {
         success: false,
         error: `File not found: ${existing.path}`,
       };
+    }
+
+    const storedPayload = parseRecord(file.content, existing.path).envelope?.payload as Record<string, unknown> | undefined;
+    if (['record-revision', 'signature', 'audit-event'].includes(String(storedPayload?.kind))) {
+      return { success: false, error: 'APPEND_ONLY: immutable records cannot be updated' };
+    }
+
+    if (storedPayload?.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(storedPayload.state)) && controlledContent(storedPayload) !== controlledContent(envelope.payload)) {
+      return { success: false, error: 'CONTROLLED_RECORD_LOCKED: create a new draft before editing controlled content' };
+    }
+
+    // Snapshot the previous payload for the lifecycle-bypass detector
+    // (only parsed when the detector is wired — otherwise zero cost).
+    let previousPayload: unknown;
+    if (this.lifecycleBypassAudit) {
+      const prev = parseRecord(file.content, existing.path);
+      if (prev.success) previousPayload = prev.envelope?.payload;
     }
     
     // Check expected SHA if provided
@@ -665,12 +729,45 @@ export class RecordStoreImpl implements RecordStore {
     if (result.commit) {
       this.pathCache.set(envelope.recordId, { path: existing.path, sha: result.commit.sha });
     }
+
+    // Lifecycle-bypass self-report (spec §10 gap): the write committed, the
+    // gate was never consulted, and the lifecycle state flipped — record
+    // that fact. Fire-and-forget: never blocks or fails the business write.
+    const collab = this.lifecycleBypassAudit;
+    if (collab) {
+      const nextPayload = envelope.payload;
+      const lifecycleId =
+        nextPayload && typeof nextPayload === 'object'
+          ? (nextPayload as Record<string, unknown>).lifecycleId
+          : undefined;
+      if (typeof lifecycleId === 'string' && collab.engine.isLoaded(lifecycleId)) {
+        // Actor resolution: options.actor (caller-declared) → envelope meta
+        // updatedBy (not a declared RecordMeta field today; probed defensively)
+        // → meta.createdBy (nearest declared provenance) → 'unknown'.
+        const metaAny = envelope.meta as Record<string, unknown> | undefined;
+        const actor =
+          options.actor ??
+          (typeof metaAny?.updatedBy === 'string' ? metaAny.updatedBy : undefined) ??
+          envelope.meta?.createdBy ??
+          'unknown';
+        const event = detectLifecycleBypass(collab.engine, {
+          previousPayload,
+          nextPayload,
+          ...(options.viaLifecycleApi !== undefined ? { viaLifecycleApi: options.viaLifecycleApi } : {}),
+          actor,
+          recordId: envelope.recordId,
+        });
+        if (event) {
+          void collab.audit.append(event).catch(() => {});
+        }
+      }
+    }
     
     // Build meta without undefined values
     const updatedMeta: RecordMeta = {
       ...envelope.meta,
       path: existing.path,
-      ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
+      ...(await this.repo.getFile(existing.path).then(file => file ? { commitSha: file.sha, contentSha: file.sha, ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}) } : {})),
     };
 
     const finalEnvelope = { ...envelope, meta: updatedMeta };
@@ -695,6 +792,10 @@ export class RecordStoreImpl implements RecordStore {
    * Delete a record.
    */
   async delete(options: DeleteRecordOptions): Promise<StoreResult> {
+    return withRecordLock(this, `write:${options.recordId}`, () => this.deleteUnlocked(options));
+  }
+
+  private async deleteUnlocked(options: DeleteRecordOptions): Promise<StoreResult> {
     const { recordId, expectedSha, message } = options;
     
     // Find existing record
@@ -715,6 +816,11 @@ export class RecordStoreImpl implements RecordStore {
       };
     }
     
+    const storedPayload = parseRecord(file.content, existing.path).envelope?.payload as Record<string, unknown> | undefined;
+    if (['record-revision', 'signature', 'audit-event'].includes(String(storedPayload?.kind))) {
+      return { success: false, error: 'APPEND_ONLY: immutable records cannot be deleted' };
+    }
+
     // Check expected SHA if provided
     const sha = expectedSha || file.sha;
     if (expectedSha && file.sha !== expectedSha) {

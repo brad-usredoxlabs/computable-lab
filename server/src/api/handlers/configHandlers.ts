@@ -175,6 +175,27 @@ interface AiTestBody {
 }
 
 // ---------------------------------------------------------------------------
+// Policy-bundle change guard
+// ---------------------------------------------------------------------------
+
+/** Actor identity resolved for a policy-bundle change attempt. */
+export interface PolicyChangeActor {
+  userId: string | null;
+  isSystem: boolean;
+}
+
+/**
+ * Optional authorization + audit hook for `lab.policyBundleId` switches via
+ * PATCH /api/config. Absent wiring leaves the endpoint behaving exactly as
+ * before (the system must work with this ripped out — no hard-coded authz).
+ */
+export interface PolicyChangeGuard {
+  resolveActor: (request: FastifyRequest) => Promise<PolicyChangeActor>;
+  isAdmin: (actor: PolicyChangeActor) => Promise<boolean> | boolean;
+  appendAudit?: (entry: { from: string | null; to: string; actor: string }) => Promise<void> | void;
+}
+
+// ---------------------------------------------------------------------------
 // Handler class
 // ---------------------------------------------------------------------------
 
@@ -184,6 +205,8 @@ export class ConfigHandlers {
     private appConfig: AppConfig,
     private onConfigUpdate?: (config: AppConfig) => Promise<void>,
     private getAiStatus?: () => AiStatusSnapshot | undefined,
+    private knownPolicyBundleIds?: () => string[],
+    private policyChangeGuard?: PolicyChangeGuard,
   ) {}
 
   // ---- GET /api/config ----------------------------------------------------
@@ -321,6 +344,71 @@ export class ConfigHandlers {
       updated.lab = mergedLab
     }
 
+    // -- Fail closed on unknown policy bundle ids ----------------------------
+    if (
+      patch.lab &&
+      typeof patch.lab === 'object' &&
+      typeof (patch.lab as Record<string, unknown>).policyBundleId === 'string' &&
+      this.knownPolicyBundleIds
+    ) {
+      const known = this.knownPolicyBundleIds()
+      const merged = updated.lab?.policyBundleId
+      if (known.length > 0 && merged !== undefined && !known.includes(merged)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: [{
+            path: 'lab.policyBundleId',
+            message: `Unknown policy bundle ${merged}. Known bundles: ${known.join(', ')}`
+          }],
+        })
+      }
+    }
+
+    // -- Authorize policy bundle changes (optional guard; fail closed) -------
+    // Any attempt to set lab.policyBundleId is gated once the known-bundle
+    // validation above has passed. Without guard wiring the endpoint behaves
+    // exactly as before — authz lives in the injected hook, never hardcoded.
+    const policyChangeAttempted =
+      !!patch.lab &&
+      typeof patch.lab === 'object' &&
+      'policyBundleId' in (patch.lab as Record<string, unknown>) &&
+      updated.lab?.policyBundleId !== undefined
+    const policyFrom = existing.lab?.policyBundleId ?? null
+    const policyTo = (updated.lab?.policyBundleId ?? null) as string | null
+    let policyAuditActor: string | null = null
+
+    if (policyChangeAttempted && this.policyChangeGuard) {
+      const guard = this.policyChangeGuard
+      let actor: PolicyChangeActor
+      try {
+        actor = await guard.resolveActor(request)
+      } catch {
+        actor = { userId: null, isSystem: false }
+      }
+      if (!actor.isSystem && !actor.userId) {
+        return reply.status(403).send({
+          success: false,
+          error: 'POLICY_BUNDLE_CHANGE_FORBIDDEN',
+          message: 'Policy bundle change forbidden: identity required.',
+        })
+      }
+      let admin = false
+      try {
+        admin = await guard.isAdmin(actor)
+      } catch {
+        admin = false
+      }
+      if (!admin) {
+        return reply.status(403).send({
+          success: false,
+          error: 'POLICY_BUNDLE_CHANGE_FORBIDDEN',
+          message: 'Policy bundle change forbidden: admin privileges required.',
+        })
+      }
+      policyAuditActor = actor.userId ?? 'system'
+    }
+
     if (patch.integrations !== undefined) {
       const mergedIntegrations = (updated.integrations
         ? mergeConfigPatch(
@@ -361,6 +449,19 @@ export class ConfigHandlers {
     // -- Update in-memory config --------------------------------------------
     this.appConfig = updated;
     await this.onConfigUpdate?.(updated);
+
+    // -- Best-effort audit of the policy bundle change (never fails the write)
+    if (policyChangeAttempted && this.policyChangeGuard && policyAuditActor !== null) {
+      try {
+        await this.policyChangeGuard.appendAudit?.({
+          from: policyFrom,
+          to: policyTo as string,
+          actor: policyAuditActor,
+        });
+      } catch {
+        // Audit is best-effort; a failed append never rolls back the write.
+      }
+    }
 
     return reply.send({
       success: true,
@@ -429,12 +530,22 @@ export class ConfigHandlers {
     return reply.send({
       profiles: profileNames.map(name => {
         const p = profiles[name]!;
+        const inference = (p.inference ?? {}) as unknown as Record<string, unknown>;
         return {
           name,
           provider: p.inference.provider ?? 'openai-compatible',
           baseUrl: p.inference.baseUrl,
           model: p.inference.model,
           active: name === activeProfile,
+          /** Whether an API key is stored, so the editor knows blank means "keep". */
+          hasApiKey: typeof inference.apiKey === 'string' && inference.apiKey.length > 0,
+          /**
+           * The full inference block with secrets redacted. PUT replaces the
+           * whole object, so an editor that only round-trips the three fields
+           * above would silently drop timeoutMs / maxTokens / enableThinking on
+           * save. Redacted, never the literal key.
+           */
+          inference: redactSecrets(inference) as Record<string, unknown>,
         };
       }),
       activeProfile: activeProfile ?? null,

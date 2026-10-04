@@ -22,12 +22,18 @@ import type {
 import type { ResolvedIdentity } from '../../identity/GitHubIdentity.js';
 import type { MaterialTrackingConfig } from '../../config/types.js';
 import { MaterialUsagePolicyError, normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
+import { randomUUID } from 'node:crypto';
+import { RecordRevisionService, RevisionError, contentHash, controlledContent, object, revisionRef, token } from '../../revisions/RecordRevisionService.js';
+import { acceptProtocolGraph } from '../../revisions/ProtocolUseService.js';
 import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
+import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
 import type { AuthorizationService } from '../../security/AuthorizationService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
+import type { AuthoringPolicy } from '../../lint/types.js';
+import { authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 
@@ -44,6 +50,12 @@ interface RecordHandlerSecurityOptions {
    * config ripped out).
    */
   getAppendOnlyKinds?: () => string[];
+  /**
+   * Declarative actor-side authoring gates, keyed by schema id. Sourced from
+   * *.lint.yaml `authoring:` blocks via the LintEngine; absent accessor →
+   * no authoring gates (system works with the wiring ripped out).
+   */
+  getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
 }
 
 /** Body of an update request extended with optional presented signature refs. */
@@ -112,11 +124,87 @@ export function createRecordHandlers(
   };
 
   const canAccess = async (user: ResolvedRequestUser, action: AccessAction, record: Awaited<ReturnType<RecordStore['get']>>): Promise<boolean> => {
+    if (record && payloadKind(record.payload) === 'record-revision') {
+      const source = await store.get(String(payloadObject(record.payload).sourceRecordId));
+      if (!source) return false;
+      return !security?.authorizationService || security.authorizationService.canAccess(user.userId, action, source);
+    }
     if (!record || !security?.authorizationService) return true;
     return security.authorizationService.canAccess(user.userId, action, record);
   };
 
+  /**
+   * Evaluate a declarative authoring policy (from *.lint.yaml) against the
+   * resolved session actor. Returns null when the actor passes (or no
+   * policy is declared); otherwise the reply is set to 403 and the deny
+   * code is returned. Values come from YAML; nothing here is kind- or
+   * role-specific.
+   */
+  const checkAuthoringPolicy = async (
+    policy: AuthoringPolicy,
+    user: ResolvedRequestUser,
+    reply: FastifyReply,
+  ): Promise<string | null> => {
+    const actorContext = {
+      userId: user.userId,
+      isSystem: user.isSystem,
+      isLocalAdmin: user.userId === LOCAL_ADMIN_USER_ID,
+      roles:
+        security?.roleResolver && user.userId
+          ? await security.roleResolver.rolesFor(user.userId)
+          : [],
+    };
+    if (authoringPolicyPasses(policy, actorContext)) return null;
+    reply.status(403);
+    return policy.denyCode ?? 'AUTHORING_FORBIDDEN';
+  };
+
   return {
+    async listRevisions(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+      const user = await resolveRequestUser(request, reply);
+      if (!user) return unauthenticatedError('A valid local user is required');
+      const source = await store.get(request.params.id);
+      if (!source || !(await canAccess(user, 'read', source))) return reply.code(404).send({ error: 'NOT_FOUND' });
+      return { records: await new RecordRevisionService(store).list(source.recordId) };
+    },
+    async draftCopy(request: FastifyRequest<{ Params: { id: string }; Body: { recordId?: string; payload?: Record<string, unknown>; expectedSha?: string } }>, reply: FastifyReply) {
+      try {
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+        const source = await store.get(request.params.id);
+        if (!source || !(await canAccess(user, 'write', source))) return reply.code(404).send({ error: 'NOT_FOUND' });
+        if (!['protocol', 'controlled-document'].includes(String(payloadKind(source.payload)))) return reply.code(422).send({ error: 'DRAFT_COPY_UNSUPPORTED' });
+        if (request.body.expectedSha && token(source) !== request.body.expectedSha) return reply.code(409).send({ error: 'STALE_RECORD', message: 'Reload before creating a draft copy.' });
+        const revision = await new RecordRevisionService(store).capture(source, user.userId ?? 'system', 'derivation');
+        const recordId = request.body.recordId ?? `${payloadKind(source.payload) === 'protocol' ? 'PRT' : 'DOC'}-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`;
+        const payload = { ...object(source.payload), ...request.body.payload, recordId, state: 'draft', createdBy: user.userId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), derivedFromRevisionRef: revisionRef(revision.recordId) };
+        for (const key of ['protocolRevisionRef', 'latestRevisionRef', 'signatureRefs', 'approvals', 'reviewerRef', 'approverRef', 'authorRef']) delete (payload as Record<string, unknown>)[key];
+        if (payloadKind(source.payload) === 'protocol') {
+          (payload as Record<string, unknown>).version = '0.1.1';
+          if ('id' in payload) (payload as Record<string, unknown>).id = recordId;
+        }
+        if (payloadKind(source.payload) === 'controlled-document') {
+          delete (payload as Record<string, unknown>).recordId;
+          (payload as Record<string, unknown>).id = recordId;
+        }
+        const result = await store.create({ envelope: { recordId, schemaId: source.schemaId, payload }, message: `Draft from ${source.recordId}` });
+        if (!result.success) return reply.code(422).send({ error: result.error, validation: result.validation });
+        if (result.envelope && user.userId) await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
+        return { success: true, record: result.envelope ?? await store.get(recordId) };
+      } catch (error) { return reply.code(error instanceof RevisionError ? error.status : 500).send({ error: error instanceof RevisionError ? error.code : 'DRAFT_COPY_FAILED', message: String(error) }); }
+    },
+    async acceptGraph(request: FastifyRequest<{ Params: { id: string }; Body: { expectedSha: string } }>, reply: FastifyReply) {
+      try {
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+        const graph = await store.get(request.params.id);
+        if (!graph || !(await canAccess(user, 'write', graph))) return reply.code(404).send({ error: 'NOT_FOUND' });
+        const sourceId = object(object(graph.payload).protocolSource).recordId;
+        const source = typeof sourceId === 'string' ? await store.get(sourceId) : null;
+        if (source && !(await canAccess(user, 'read', source))) return reply.code(403).send({ error: 'FORBIDDEN' });
+        return { success: true, ...await acceptProtocolGraph(store, graph.recordId, user.userId ?? 'system', request.body.expectedSha) };
+      } catch (error) { return reply.code(error instanceof RevisionError ? error.status : 500).send({ error: error instanceof RevisionError ? error.code : 'GRAPH_ACCEPT_FAILED', message: String(error) }); }
+    },
     /**
      * GET /records
      * List records with optional filtering.
@@ -169,6 +257,7 @@ export function createRecordHandlers(
           ...(offset !== undefined ? { offset: Number(offset) } : {}),
         };
       } catch (err) {
+        if (err instanceof RevisionError) { reply.status(err.status); return { error: err.code, message: err.message }; }
         if (err instanceof MaterialUsagePolicyError) {
           reply.status(422);
           return {
@@ -289,6 +378,15 @@ export function createRecordHandlers(
         const user = await resolveRequestUser(request, reply);
         if (!user) return unauthenticatedError('A valid local user is required');
 
+        // Declarative authoring gate (from *.lint.yaml `authoring:`): the
+        // actor must satisfy the declared policy before the record is
+        // authored at all. Absent policy/accessor -> no gate.
+        const authoringPolicy = security?.getAuthoringPolicy?.(schemaId);
+        if (authoringPolicy) {
+          const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+          if (deny) return { error: deny, message: `Authoring a ${schemaId} record is forbidden for this actor` };
+        }
+
         const currentMaterialTracking = getMaterialTracking?.();
         const payload = await normalizeEventGraphMaterialUsage(
           store,
@@ -308,6 +406,19 @@ export function createRecordHandlers(
         }
 
         const kind = payloadKind(payload);
+        if (['record-revision', 'signature'].includes(String(kind))) {
+          reply.status(403);
+          return { error: 'SYSTEM_OWNED', message: 'Use the revision/signing service to create immutable evidence.' };
+        }
+        if (payloadObject(payload).protocolRevisionRef) return reply.code(422).send({ error: 'SYSTEM_OWNED_REVISION', message: 'Revision pins are assigned when a graph is accepted or a run starts.' });
+        if (kind === 'protocol') {
+          const p = payloadObject(payload);
+          p.version = typeof p.version === 'string' && p.version.trim() ? p.version.trim() : '0.1.1';
+          p.state = 'draft';
+        }
+        if (kind === 'controlled-document' && payloadObject(payload).state !== 'draft') {
+          reply.status(422); return { error: 'INITIAL_STATE_REQUIRED', message: 'Create controlled documents as drafts, then use lifecycle transitions.' };
+        }
         if (kind === 'access-policy') {
           const resourceRef = payloadObject(payload).resourceRef;
           const resourceId = resourceRef && typeof resourceRef === 'object'
@@ -376,7 +487,11 @@ export function createRecordHandlers(
 
         // Create envelope
         const envelope = createEnvelope(
-          payloadWithProvenance,
+          // Stamp the resolved actor into the declared provenance field
+          // (e.g. grantedBy) when the authoring policy asks for it.
+          authoringPolicy?.stampActorAs && user.userId
+            ? { ...payloadWithProvenance, [authoringPolicy.stampActorAs]: user.userId }
+            : payloadWithProvenance,
           schemaId,
           {
             createdAt: now,
@@ -488,6 +603,7 @@ export function createRecordHandlers(
         };
         return response;
       } catch (err) {
+        if (err instanceof RevisionError) { reply.status(err.status); return { error: err.code, message: err.message }; }
         if (err instanceof MaterialUsagePolicyError) {
           reply.status(422);
           return {
@@ -553,7 +669,7 @@ export function createRecordHandlers(
         // Append-only governance kinds (audit events, signatures) can never
         // be mutated through the record API.
         {
-          const appendOnlyKinds = security?.getAppendOnlyKinds?.() ?? [];
+          const appendOnlyKinds = ['record-revision', 'signature', 'audit-event', ...(security?.getAppendOnlyKinds?.() ?? [])];
           const existingKind = payloadKind(existing.payload);
           if (existingKind && appendOnlyKinds.includes(existingKind)) {
             reply.status(405);
@@ -562,6 +678,39 @@ export function createRecordHandlers(
               message: `${existing.recordId} is an append-only ${existingKind} record`,
             };
           }
+        }
+
+        // Declarative authoring gate on UPDATE: fires only when one of the
+        // policy's guardWhenChanged payload paths actually changes.
+        {
+          const authoringPolicy = security?.getAuthoringPolicy?.(existing.schemaId);
+          if (
+            authoringPolicy &&
+            authoringGuardFiresOnUpdate(
+              authoringPolicy,
+              existing.payload as Record<string, unknown>,
+              request.body.payload as Record<string, unknown>,
+            )
+          ) {
+            const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+            if (deny) return { error: deny, message: `Updating ${id} is forbidden for this actor` };
+          }
+        }
+
+        const previousPinned = payloadObject(existing.payload);
+        const nextPinned = payloadObject(request.body.payload);
+        if (!previousPinned.protocolRevisionRef && nextPinned.protocolRevisionRef) return reply.code(422).send({ error: 'SYSTEM_OWNED_REVISION', message: 'Revision pins are assigned when a graph is accepted or a run starts.' });
+        if (previousPinned.protocolRevisionRef && nextPinned.protocolRevisionRef && contentHash(previousPinned.protocolRevisionRef) !== contentHash(nextPinned.protocolRevisionRef)) {
+          reply.status(409); return { error: 'REVISION_PIN_IMMUTABLE', message: 'Create a new record to change an accepted source revision.' };
+        }
+        if (previousPinned.protocolRevisionRef) nextPinned.protocolRevisionRef = previousPinned.protocolRevisionRef;
+        if (previousPinned.kind === 'event-graph' && previousPinned.methodContext && !nextPinned.methodContext) nextPinned.methodContext = previousPinned.methodContext;
+        if (previousPinned.protocolSource) {
+          if (nextPinned.protocolSource && contentHash(nextPinned.protocolSource) !== contentHash(previousPinned.protocolSource)) return reply.code(409).send({ error: 'SOURCE_IMMUTABLE', message: 'Regenerate as a new graph to change its source.' });
+          nextPinned.protocolSource = previousPinned.protocolSource;
+        }
+        if (previousPinned.lifecycleId && previousPinned.lifecycleId !== nextPinned.lifecycleId) {
+          reply.status(409); return { error: 'LIFECYCLE_IMMUTABLE', message: 'A controlled record cannot discard its lifecycle.' };
         }
 
         // Validate presented signature refs BEFORE the lifecycle check: each
@@ -588,6 +737,20 @@ export function createRecordHandlers(
             if (sigPayload.signedBy !== actorIdForSignatures) {
               reply.status(422);
               return { error: 'SIGNATURE_SIGNER_MISMATCH', message: `Signature ${ref} was not signed by the acting user` };
+            }
+            const refId = object(subject.revisionRef).id;
+            if (typeof refId !== 'string' || typeof subject.contentHash !== 'string') {
+              reply.status(422); return { error: 'SIGNATURE_REVISION_REQUIRED', message: 'This historical signature cannot authorize a new transition. Sign the saved revision again.' };
+            }
+            const signed = await new RecordRevisionService(store).read({ id: refId }, id);
+            if (signed.payload.contentHash !== subject.contentHash || contentHash(existing.payload) !== subject.contentHash) {
+              reply.status(409); return { error: 'STALE_SIGNATURE', message: 'The document changed after signing. Sign its current saved revision.' };
+            }
+            if (controlledContent(existing.payload) !== controlledContent(request.body.payload)) {
+              reply.status(409); return { error: 'SIGNED_CONTENT_CHANGED', message: 'Save content edits before signing; a signed transition may only change state.' };
+            }
+            if (subject.targetState && subject.targetState !== payloadObject(request.body.payload).state) {
+              reply.status(422); return { error: 'SIGNATURE_TARGET_MISMATCH', message: 'The signature is for a different transition.' };
             }
             validated.push({
               id: ref,
@@ -630,6 +793,19 @@ export function createRecordHandlers(
           lifecycleTransition = lifecycleResult.transition
         }
         
+        const previous = payloadObject(existing.payload);
+        const proposed = payloadObject(request.body.payload);
+        if (previous.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(previous.state)) && controlledContent(previous) !== controlledContent(proposed)) {
+          reply.status(409); return { error: 'CONTROLLED_RECORD_LOCKED', message: 'Create a new draft to edit an approved or effective document.' };
+        }
+        if (previous.kind === 'protocol' && !previous.lifecycleId) {
+          const service = new RecordRevisionService(store);
+          const versions = await service.list(id);
+          proposed.version = versions.some(r => r.payload.purpose === 'research-use')
+            ? await service.draftVersion(id, proposed)
+            : typeof proposed.version === 'string' && proposed.version.trim() ? proposed.version.trim() : '0.1.1';
+        }
+
         // Inject updatedAt in payload (schema-compatible provenance field).
         const currentMaterialTracking = getMaterialTracking?.();
         const normalizedPayload = await normalizeEventGraphMaterialUsage(
@@ -677,8 +853,12 @@ export function createRecordHandlers(
         // Update record
         const result = await store.update({
           envelope,
-          ...(expectedSha !== undefined ? { expectedSha } : {}),
+          ...((expectedSha ?? (presentedSignatures?.length ? token(existing) : undefined)) ? { expectedSha: expectedSha ?? token(existing)! } : {}),
           ...(message !== undefined ? { message } : {}),
+          // lifecycleTransition is only set when checkLifecycleTransition ran,
+          // allowed, AND the state value actually changed — exactly when the
+          // store's bypass detector must stand down.
+          ...(lifecycleTransition !== undefined ? { viaLifecycleApi: true } : {}),
         });
         
         if (!result.success) {
@@ -739,6 +919,7 @@ export function createRecordHandlers(
               from: lifecycleTransition.from,
               to: lifecycleTransition.to,
               event: lifecycleTransition.event,
+              ...(presentedSignatures?.length ? { signatureRefs: presentedSignatures.map(signature => signature.id) } : {}),
               ...(nextLifecycleId !== undefined ? { lifecycleId: nextLifecycleId } : {}),
               ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
             },
@@ -769,6 +950,7 @@ export function createRecordHandlers(
         };
         return response;
       } catch (err) {
+        if (err instanceof RevisionError) { reply.status(err.status); return { error: err.code, message: err.message }; }
         if (err instanceof MaterialUsagePolicyError) {
           reply.status(422);
           return {
@@ -925,7 +1107,7 @@ export function createRecordHandlers(
         // Append-only governance kinds (audit events, signatures) can never
         // be deleted through the record API.
         {
-          const appendOnlyKinds = security?.getAppendOnlyKinds?.() ?? [];
+          const appendOnlyKinds = ['record-revision', 'signature', 'audit-event', ...(security?.getAppendOnlyKinds?.() ?? [])];
           const existingKind = payloadKind(existing.payload);
           if (existingKind && appendOnlyKinds.includes(existingKind)) {
             reply.status(405);

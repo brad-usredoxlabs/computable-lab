@@ -18,6 +18,7 @@
  * not fail the pass so downstream capability_check can still surface them.
  */
 
+import { RecordRevisionService, type RevisionRef } from '../../../revisions/RecordRevisionService.js';
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
 
@@ -105,7 +106,7 @@ export function createResolveLocalProtocolPass(
         };
       }
 
-      const localProtocol = await deps.recordStore.get(localProtocolId);
+      const localProtocol = await new RecordRevisionService(deps.recordStore).resolve({ id: localProtocolId, ...(typeof localProtocolRef === 'object' && localProtocolRef && 'revisionRef' in localProtocolRef ? { revisionRef: localProtocolRef.revisionRef as RevisionRef } : {}) });
       if (!localProtocol) {
         return {
           ok: false,
@@ -123,7 +124,7 @@ export function createResolveLocalProtocolPass(
       // 3. Read local-protocol.inherits_from.id → load the canonical protocol
       const inheritsFrom = (
         localProtocol.payload as Record<string, unknown>
-      )['inherits_from'] as { id?: string } | undefined;
+      )['inherits_from'] as { id?: string; revisionRef?: RevisionRef } | undefined;
       const protocolId = inheritsFrom?.id;
 
       if (!protocolId) {
@@ -140,7 +141,7 @@ export function createResolveLocalProtocolPass(
         };
       }
 
-      const canonicalProtocol = await deps.recordStore.get(protocolId);
+      const canonicalProtocol = await new RecordRevisionService(deps.recordStore).resolve({ id: protocolId, ...(inheritsFrom?.revisionRef ? { revisionRef: inheritsFrom.revisionRef } : {}) });
       if (!canonicalProtocol) {
         return {
           ok: false,

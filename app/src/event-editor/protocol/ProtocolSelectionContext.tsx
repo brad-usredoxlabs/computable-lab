@@ -35,6 +35,26 @@ export interface ProtocolStepSummary {
 }
 
 /**
+ * An abstract role the protocol DECLARES (labware or instrument). A run binds a
+ * concrete instance to it; the rail lists them as the resources the protocol
+ * needs. Read-only navigation — roles are not clicked, they are context.
+ */
+export interface ProtocolRoleSummary {
+  roleId: string
+  /** Human label from the declaration (roleId is the machine id). */
+  description?: string
+}
+
+/** The protocol's declared labware / equipment roles, grouped for the rail. */
+export interface ProtocolResources {
+  labwares: ProtocolRoleSummary[]
+  equipment: ProtocolRoleSummary[]
+}
+
+/** Shared empty value so the context never hands out a fresh object per render. */
+export const NO_PROTOCOL_RESOURCES: ProtocolResources = { labwares: [], equipment: [] }
+
+/**
  * The protocol a run is attached to (run → plannedRunRef → protocolRef) —
  * the subject of every Protocol surface. `title` is the ref's label, used only
  * until the record itself is read (ProtocolIdentity reads the canonical name
@@ -78,6 +98,11 @@ interface ProtocolSelectionState {
   steps: ProtocolStepSummary[]
   /** Set the step concept list (populated when the protocol steps first load). */
   setSteps: (steps: ProtocolStepSummary[]) => void
+  /** The protocol's DECLARED labware / equipment roles — what the assay needs,
+   *  shown as collapsible sections beside the steps in the rail. */
+  resources: ProtocolResources
+  /** Publish the declared roles (empty when the protocol declares none). */
+  setResources: (resources: ProtocolResources) => void
   /** The attached protocol (normalized from the run's chain) — one source of
    *  truth for "which protocol is this?" across the Protocol surfaces. */
   protocol: ProtocolIdentityRef | null
@@ -103,6 +128,7 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
   const [steps, setStepsState] = useState<ProtocolStepSummary[]>([])
+  const [resources, setResources] = useState<ProtocolResources>(NO_PROTOCOL_RESOURCES)
   const [protocol, setProtocol] = useState<ProtocolIdentityRef | null>(null)
 
   const setFocusedStep = useCallback((step: { stepId: string; label: string; ordinal?: number } | null) => {
@@ -160,6 +186,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         setActiveStepId,
         steps,
         setSteps,
+        resources,
+        setResources,
         protocol,
         setProtocol,
         toggleStepVisibility,

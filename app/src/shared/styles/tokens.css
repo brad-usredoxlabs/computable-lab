@@ -26,7 +26,24 @@
   --cl-accent-soft: rgba(88, 166, 255, 0.12);
   --cl-danger: #f85149;
   --cl-warn: #d29922;
+  --cl-success: #3fb950;
+  --cl-info: #58a6ff;
   --cl-preview: #be4bdb;
+
+  /* Semantic status surfaces — soft fill + hairline border, paired with the
+     solid ink above. Settings cards, status badges and feedback banners read
+     from these so a state (ok / warn / error / info) is legible in both
+     themes instead of hardcoding one light-mode palette. Overridden in the
+     light block below. */
+  --cl-success-soft: rgba(63, 185, 80, 0.15);
+  --cl-info-soft: rgba(88, 166, 255, 0.12);
+  --cl-danger-soft: rgba(248, 81, 73, 0.15);
+  --cl-warn-soft: rgba(210, 153, 34, 0.15);
+  --cl-success-border: rgba(63, 185, 80, 0.4);
+  --cl-info-border: rgba(88, 166, 255, 0.4);
+  --cl-danger-border: rgba(248, 81, 73, 0.4);
+  --cl-warn-border: rgba(210, 153, 34, 0.4);
+  --cl-focus-ring: rgba(88, 166, 255, 0.25);
 
   /* Entity-type accent colors for tab coding, chips, and icons.
      Each type gets a hue; the accent is used for tab borders, chip
@@ -44,6 +61,8 @@
      with theme so it reads correctly against the accent in both modes. */
   --cl-on-accent: #0e1116;
 
+  --cl-accent-hover: #79c0ff;
+
   /* Tile / well-grid fills are explicit because they're shaded gradients
      and SVG fills that don't compose well from rgba(text/bg, alpha). */
   --cl-tile-bg-top: #2a3340;
@@ -59,6 +78,12 @@
   --cl-stage-tint: rgba(88, 166, 255, 0.04);
   --cl-lawn-highlight: rgba(255, 255, 255, 0.02);
   --cl-lawn-grid-line: rgba(255, 255, 255, 0.03);
+
+  /* Native controls (selects, checkboxes, scrollbars) follow the dark
+     palette by default. Without this the app paints dark surfaces but
+     Chrome renders form controls in light mode, so option lists and
+     checkmarks read as light-on-light. The light block overrides it. */
+  color-scheme: dark;
 
   /* Layout dimensions. Overridden in the mobile @media block below so the
      same rules render correctly on phone viewports. */
@@ -77,15 +102,19 @@
   --cl-fixit-width: 420px;
   --cl-dock-height: 240px;
 
-  /* The TipTap/setup widgets (taptab.css) default to a light shell palette
-     (:root --shell-* = black text, white paper). When those widgets render
-     inside the dark app, remap their --shell-* tokens to the app's dark tokens
-     so section headers, rows and text have contrast instead of black-on-black.
-     The light-shell standalone document-shell (outside .cl-app) keeps its own
-     :root values. */
+  /* TapTab surfaces and text must use the same active palette. */
+  --shell-paper-bg: var(--cl-bg);
+  --shell-rail-bg: var(--cl-bg-elev);
+  --shell-bg: var(--cl-bg);
+  --shell-surface: var(--cl-bg-elev);
+  --shell-hover-bg: var(--cl-bg-elev-2);
+  --shell-on-accent: var(--cl-on-accent);
+  --shell-accent-soft: var(--cl-accent-soft);
+  --shell-color-scheme: dark;
+  --shell-text: var(--cl-text);
   --shell-text-primary: var(--cl-text);
   --shell-text-secondary: var(--cl-text-dim);
-  --shell-text-muted: var(--cl-text-faint);
+  --shell-text-muted: var(--cl-text-dim);
   --shell-border: var(--cl-border);
   --shell-accent: var(--cl-accent);
   --shell-accent-hover: #79c0ff;
@@ -94,6 +123,8 @@
 }
 
 .cl-app[data-theme='light'] {
+  --shell-color-scheme: light;
+  --shell-accent-hover: #0550ae;
   --cl-bg: #ffffff;
   --cl-bg-elev: #f6f8fa;
   --cl-bg-elev-2: #eaeef2;
@@ -106,6 +137,8 @@
   --cl-accent-soft: rgba(9, 105, 218, 0.1);
   --cl-danger: #cf222e;
   --cl-warn: #9a6700;
+  --cl-success: #1a7f37;
+  --cl-info: #0969da;
   --cl-preview: #8250df;
   --cl-type-project: #0969da;
   --cl-type-project-soft: rgba(9, 105, 218, 0.1);
@@ -116,6 +149,17 @@
   --cl-type-lab: #8250df;
   --cl-type-lab-soft: rgba(130, 80, 223, 0.1);
   --cl-on-accent: #ffffff;
+  --cl-accent-hover: #0550ae;
+
+  --cl-success-soft: #dafbe1;
+  --cl-info-soft: #ddf4ff;
+  --cl-danger-soft: #ffebe9;
+  --cl-warn-soft: #fff8c5;
+  --cl-success-border: #aceebb;
+  --cl-info-border: #b6e3ff;
+  --cl-danger-border: #ffcecb;
+  --cl-warn-border: #f0dfa0;
+  --cl-focus-ring: rgba(9, 105, 218, 0.15);
 
   --cl-tile-bg-top: #f6f8fa;
   --cl-tile-bg-bottom: #eaeef2;

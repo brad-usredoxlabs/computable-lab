@@ -19,6 +19,7 @@ import {
   NamespaceSection,
   SyncSection,
   JsonLdSection,
+  AiModelSection,
   ExtractorSettingsSection,
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
@@ -93,12 +94,13 @@ export function SettingsPage() {
   // Handle policy bundle change
   const handlePolicyBundleChanged = useCallback(async (bundleId: string) => {
     try {
-      const updated = await apiClient.patchLabSettings({ policyBundleId: bundleId })
-      setLabSettings(updated)
+      await patchConfig({ lab: { policyBundleId: bundleId } })
+      const fresh = await apiClient.getLabSettings()
+      setLabSettings(fresh)
     } catch (err) {
       alert(`Failed to update policy bundle: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [])
+  }, [patchConfig])
 
   const handleSync = async () => {
     const result = await sync()
@@ -149,6 +151,11 @@ export function SettingsPage() {
             label="Status"
             value={loading ? 'Loading...' : error ? 'Error' : 'Connected'}
           />
+        </Section>
+
+        {/* ---- Editable: the AI model every surface uses ---- */}
+        <Section title="AI model">
+          <AiModelSection />
         </Section>
 
         {/* ---- Editable: Repository ---- */}
@@ -279,11 +286,12 @@ export function SettingsPage() {
             </div>
           ) : labSettingsError ? (
             <div className="info-row">
-              <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
+              <span className="info-row__value" style={{ color: 'var(--cl-danger)' }}>{labSettingsError}</span>
             </div>
           ) : labSettings ? (
             <PolicyBundleSelector
               currentBundleId={labSettings.policyBundleId}
+              bundles={labSettings.availablePolicyBundles ?? []}
               onBundleChanged={handlePolicyBundleChanged}
             />
           ) : (
@@ -332,17 +340,17 @@ export function SettingsPage() {
         }
 
         .page-header p {
-          color: #666;
+          color: var(--cl-text-dim);
           margin: 0;
         }
 
         .breadcrumb {
           font-size: 0.875rem;
-          color: #666;
+          color: var(--cl-text-dim);
         }
 
         .breadcrumb a {
-          color: #339af0;
+          color: var(--cl-accent);
           text-decoration: none;
         }
 
@@ -355,9 +363,9 @@ export function SettingsPage() {
         }
 
         .error-banner {
-          background: #ffe3e3;
-          border: 1px solid #ffc9c9;
-          color: #c92a2a;
+          background: var(--cl-danger-soft);
+          border: 1px solid var(--cl-danger-border);
+          color: var(--cl-danger);
           padding: 0.75rem 1rem;
           border-radius: 8px;
           margin-bottom: 1rem;
@@ -368,10 +376,10 @@ export function SettingsPage() {
 
         .error-banner button {
           padding: 0.25rem 0.75rem;
-          border: 1px solid #c92a2a;
+          border: 1px solid var(--cl-danger);
           border-radius: 4px;
-          background: white;
-          color: #c92a2a;
+          background: transparent;
+          color: var(--cl-danger);
           cursor: pointer;
         }
 
@@ -384,10 +392,11 @@ export function SettingsPage() {
         /* --- Section card --- */
 
         .settings-section {
-          background: white;
-          border: 1px solid #e9ecef;
+          background: var(--cl-bg-elev);
+          border: 1px solid var(--cl-border);
           border-radius: 8px;
           overflow: hidden;
+          color: var(--cl-text);
         }
 
         .settings-section__header {
@@ -395,15 +404,15 @@ export function SettingsPage() {
           justify-content: space-between;
           align-items: center;
           padding: 0.75rem 1rem;
-          background: #f8f9fa;
-          border-bottom: 1px solid #e9ecef;
+          background: var(--cl-bg-elev-2);
+          border-bottom: 1px solid var(--cl-border);
         }
 
         .settings-section__header h2 {
           margin: 0;
           font-size: 0.9rem;
           font-weight: 600;
-          color: #495057;
+          color: var(--cl-text);
         }
 
         .settings-section__content {
@@ -414,8 +423,8 @@ export function SettingsPage() {
           display: flex;
           gap: 0.5rem;
           padding: 0.75rem 1rem;
-          border-top: 1px solid #e9ecef;
-          background: #f8f9fa;
+          border-top: 1px solid var(--cl-border);
+          background: var(--cl-bg-elev-2);
         }
 
         /* --- Info rows --- */
@@ -425,7 +434,7 @@ export function SettingsPage() {
           justify-content: space-between;
           align-items: center;
           padding: 0.5rem 0;
-          border-bottom: 1px solid #f1f3f5;
+          border-bottom: 1px solid var(--cl-border);
         }
 
         .info-row:last-child {
@@ -433,7 +442,7 @@ export function SettingsPage() {
         }
 
         .info-row__label {
-          color: #868e96;
+          color: var(--cl-text-dim);
           font-size: 0.85rem;
           flex-shrink: 0;
         }
@@ -444,6 +453,7 @@ export function SettingsPage() {
           max-width: 60%;
           overflow: hidden;
           text-overflow: ellipsis;
+          color: var(--cl-text);
         }
 
         .info-row__value--mono {
@@ -463,16 +473,22 @@ export function SettingsPage() {
           max-width: 60%;
           padding: 0.375rem 0.5rem;
           font-size: 0.85rem;
-          border: 1px solid #dee2e6;
+          border: 1px solid var(--cl-border);
           border-radius: 4px;
-          background: white;
+          background: var(--cl-bg);
+          color: var(--cl-text);
+        }
+
+        .edit-row__input::placeholder {
+          color: var(--cl-text-faint);
+          opacity: 1;
         }
 
         .edit-row__input:focus,
         .edit-row__select:focus {
           outline: none;
-          border-color: #339af0;
-          box-shadow: 0 0 0 2px rgba(51, 154, 240, 0.15);
+          border-color: var(--cl-accent);
+          box-shadow: 0 0 0 2px var(--cl-focus-ring);
         }
 
         .edit-row__input--mono {
@@ -489,6 +505,7 @@ export function SettingsPage() {
           width: 1rem;
           height: 1rem;
           cursor: pointer;
+          accent-color: var(--cl-accent);
         }
 
         /* --- Badges --- */
@@ -511,13 +528,13 @@ export function SettingsPage() {
         }
 
         .secret-badge--set {
-          background: #d3f9d8;
-          color: #2b8a3e;
+          background: var(--cl-success-soft);
+          color: var(--cl-success);
         }
 
         .secret-badge--empty {
-          background: #e9ecef;
-          color: #868e96;
+          background: var(--cl-bg-elev-2);
+          color: var(--cl-text-dim);
         }
 
         /* --- Feedback banner --- */
@@ -561,35 +578,35 @@ export function SettingsPage() {
         }
 
         .btn-primary {
-          background: #339af0;
-          color: white;
+          background: var(--cl-accent);
+          color: var(--cl-on-accent);
         }
 
         .btn-primary:hover:not(:disabled) {
-          background: #228be6;
+          background: var(--cl-accent-hover);
         }
 
         .btn-secondary {
-          background: #e9ecef;
-          color: #495057;
+          background: var(--cl-bg-elev-2);
+          color: var(--cl-text);
         }
 
         .btn-secondary:hover:not(:disabled) {
-          background: #dee2e6;
+          background: var(--cl-border);
         }
 
         .btn-edit {
           padding: 0.25rem 0.75rem;
           font-size: 0.8rem;
-          background: white;
-          border: 1px solid #dee2e6;
-          color: #495057;
+          background: transparent;
+          border: 1px solid var(--cl-border);
+          color: var(--cl-text);
           border-radius: 4px;
         }
 
         .btn-edit:hover:not(:disabled) {
-          background: #f1f3f5;
-          border-color: #adb5bd;
+          background: var(--cl-bg-elev-2);
+          border-color: var(--cl-border-strong);
         }
 
         .btn-edit:disabled {
@@ -605,7 +622,7 @@ export function SettingsPage() {
         }
 
         .not-configured {
-          color: #868e96;
+          color: var(--cl-text-dim);
           font-style: italic;
           font-size: 0.85rem;
         }
@@ -616,11 +633,63 @@ export function SettingsPage() {
         }
 
         .not-configured code {
-          background: #f1f3f5;
+          background: var(--cl-bg-elev-2);
           padding: 0.125rem 0.375rem;
           border-radius: 4px;
           font-family: 'Monaco', 'Menlo', monospace;
         }
+
+        /* --- Helpers used inside section content --- */
+
+        /* Inline kind tag on a storage device row (e.g. "local-mount"). */
+        .storage-device-kind {
+          display: inline-block;
+          margin-right: 0.4rem;
+          padding: 0.05rem 0.4rem;
+          border-radius: 9999px;
+          font-size: 0.7rem;
+          font-family: 'Monaco', 'Menlo', monospace;
+          background: var(--cl-bg-elev-2);
+          color: var(--cl-text-dim);
+        }
+
+        /* "default" marker on the default storage device. */
+        .storage-device-default {
+          display: inline-block;
+          margin-right: 0.4rem;
+          padding: 0.05rem 0.4rem;
+          border-radius: 9999px;
+          font-size: 0.7rem;
+          border: 1px solid var(--cl-accent);
+          color: var(--cl-accent);
+        }
+
+        .storage-device-editor + .storage-device-editor {
+          border-top: 1px solid var(--cl-border);
+          margin-top: 0.5rem;
+          padding-top: 0.5rem;
+        }
+
+        .settings-help {
+          margin: 0.25rem 0;
+          font-size: 0.8rem;
+          color: var(--cl-text-dim);
+        }
+
+        /* The shell resets ".cl-app button { color: inherit }" (specificity
+           0-1-1), which otherwise wins over the 0-1-0 button rules above and
+           paints primary-button text with the page ink instead of the
+           on-accent ink. Re-assert the fills' ink with a page-scoped
+           selector so primary / secondary / ghost labels stay legible
+           against their own backgrounds in both themes. */
+        .settings-page .btn-primary { color: var(--cl-on-accent); }
+        .settings-page .btn-secondary { color: var(--cl-text); }
+        .settings-page .btn-edit { color: var(--cl-text); }
+
+        /* index.css owns a global .breadcrumb* pair with a fixed slate
+           palette; re-point the page's breadcrumb at the theme tokens. */
+        .settings-page .breadcrumb a { color: var(--cl-accent); }
+        .settings-page .breadcrumb-separator { color: var(--cl-text-dim); }
       `}</style>
     </div>
   )

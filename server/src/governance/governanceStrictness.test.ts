@@ -30,6 +30,7 @@
  * scrypt verifier pair (hashPassword/verifyPassword) that the minting path
  * relies on.
  */
+import { RecordRevisionService, revisionRef } from '../revisions/RecordRevisionService.js';
 import { describe, it, expect, vi } from 'vitest';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -350,12 +351,13 @@ describe('governance strictness is policy-bundle dependent (§15)', () => {
 
     // Mint a signature record (bypassing the minting endpoint, see header
     // note) bound to DOC-2 and signed by the acting user.
+    const signed = await new RecordRevisionService(world.fake.store).capture(world.fake.records.get('DOC-2')!, 'USR-REVIEWER', 'signature');
     world.fake.seed(envelope('SIG-T1', {
       kind: 'signature',
       recordId: 'SIG-T1',
       signedBy: 'USR-REVIEWER',
       action: 'approved',
-      subject: { recordId: 'DOC-2', gitCommit: 'abc1234' },
+      subject: { recordId: 'DOC-2', revisionRef: revisionRef(signed.recordId), contentHash: signed.payload.contentHash },
     }, 'https://computable-lab.com/schema/computable-lab/signature.schema.yaml'));
 
     const ok = await callUpdate(world, {

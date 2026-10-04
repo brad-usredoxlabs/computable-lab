@@ -15,6 +15,7 @@
  * When selectedVariantIndex IS set, uses that index instead of auto-picking.
  */
 
+import { RecordRevisionService } from '../../../revisions/RecordRevisionService.js';
 import { randomUUID } from 'node:crypto';
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
@@ -89,7 +90,7 @@ function buildLocalProtocolEnvelope(params: {
     }),
   };
 
-  return { envelope, recordId };
+  return { envelope: { recordId, schemaId: 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml', payload: envelope }, recordId };
 }
 
 // ---------------------------------------------------------------------------
@@ -314,10 +315,11 @@ export function createProtocolRealizePass(
           labContext,
         });
 
-      await deps.recordStore.create({
-        envelope: localProtocolEnvelope as unknown as RecordEnvelope,
+      const persisted = await deps.recordStore.create({
+        envelope: await new RecordRevisionService(deps.recordStore).pinInheritance(localProtocolEnvelope as unknown as RecordEnvelope, 'system'),
         message: 'protocol_realize local-protocol',
       });
+      if (!persisted.success) return { ok: false, diagnostics: [{ severity: 'error', code: 'LOCAL_PROTOCOL_SAVE_FAILED', message: persisted.error ?? 'Could not save local protocol', pass_id: 'protocol_realize' }] };
 
       // ------------------------------------------------------------------
       // 6. Return result

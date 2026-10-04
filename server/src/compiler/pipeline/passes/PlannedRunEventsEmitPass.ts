@@ -10,6 +10,7 @@
  * Pipeline position: after project_result (family: project)
  */
 
+import { contentHash } from '../../../revisions/RecordRevisionService.js';
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
 import type { VerbDefinitionLite } from '../../../protocol/SemanticKeyBuilder.js';
@@ -335,7 +336,7 @@ export function createPlannedRunEventsEmitPass(
       ) as {
         plannedRun?: { recordId?: string; payload?: Record<string, unknown> };
         localProtocol?: { recordId?: string; payload?: Record<string, unknown> };
-        canonicalProtocol?: { recordId?: string; payload?: Record<string, unknown> };
+        canonicalProtocol?: { recordId?: string; payload?: Record<string, unknown>; meta?: { contentSha?: string; commitSha?: string } };
         expandedProtocol?: Record<string, unknown>;
       } | undefined;
 
@@ -565,6 +566,9 @@ export function createPlannedRunEventsEmitPass(
         schemaId: EVENT_GRAPH_SCHEMA_ID,
         payload: {
           kind: 'event-graph',
+          ...(protocolId && (canonicalProtocol?.meta?.contentSha ?? canonicalProtocol?.meta?.commitSha) ? {
+            protocolSource: { recordId: protocolId, contentHash: contentHash(canonicalProtocol?.payload), sourceToken: canonicalProtocol?.meta?.contentSha ?? canonicalProtocol?.meta?.commitSha },
+          } : {}),
           recordId,
           id: recordId,
           name: `${plannedRunPayload.title as string | undefined ?? plannedRunId ?? recordId} method`,
