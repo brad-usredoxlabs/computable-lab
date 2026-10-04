@@ -22,6 +22,7 @@ import type {
   LineageIncludesPredicate,
   TimeWithinPredicate,
   MentionKindMatchesPredicate,
+  AllInPredicate,
 } from './types.js';
 import { parsePromptMentionMatches } from '../ai/promptMentions.js';
 
@@ -29,6 +30,7 @@ import {
   pathExists, 
   getPath, 
   pathIsNonEmpty,
+  resolvePath,
 } from './PathResolver.js';
 
 /**
@@ -76,6 +78,13 @@ function isEqualsPredicate(p: Predicate): p is EqualsPredicate {
  */
 function isInPredicate(p: Predicate): p is InPredicate {
   return p.op === 'in';
+}
+
+/**
+ * Type guard for allIn predicate.
+ */
+function isAllInPredicate(p: Predicate): p is AllInPredicate {
+  return p.op === 'allIn';
 }
 
 /**
@@ -275,6 +284,140 @@ function evalIn(pred: InPredicate, data: unknown): PredicateResult {
     reason: result
       ? `Value '${value}' is in allowed set`
       : `Value '${value}' is not in allowed set [${allowedSet.join(', ')}]`,
+  };
+}
+
+/**
+ * Normalise a selected/candidate value for generic membership comparison.
+ * Objects are compared by their serialised shape; scalars by string form,
+ * mirroring the existing `in` predicate's string-set comparison.
+ */
+function membershipKey(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Evaluate an 'allIn' predicate (generic cross-collection membership).
+ *
+ * Every value selected by `path` (scalar, plain array, or `[*]` projection)
+ * must be a member of the collection at `collectionPath`. When `itemField`
+ * is set, membership is checked against `collectionPath[*].<itemField>`.
+ *
+ * Semantics (also documented in schema/lint/lint-v1.schema.yaml):
+ * - empty selection at `path` (missing fields under a wildcard, or `[]`)
+ *   -> PASS vacuously;
+ * - single scalar at `path` -> one-item selection;
+ * - `path` unresolvable -> loud FAIL naming the path;
+ * - `collectionPath` unresolvable or not an array -> loud FAIL naming the path.
+ */
+function evalAllIn(pred: AllInPredicate, data: unknown): PredicateResult {
+  // Structural sanity first: a malformed predicate must fail loudly, not
+  // silently pass. (The lint meta-schema is the primary gate; this is the
+  // interpreter's own guard for specs that bypassed it.)
+  if (typeof pred.collectionPath !== 'string' || pred.collectionPath === '') {
+    return {
+      result: false,
+      path: pred.path,
+      reason: `allIn predicate requires a 'collectionPath' string`,
+    };
+  }
+  if (pred.itemField !== undefined && typeof pred.itemField !== 'string') {
+    return {
+      result: false,
+      path: pred.path,
+      reason: `allIn predicate 'itemField' must be a string`,
+    };
+  }
+
+  // --- Select the values under test (A) ------------------------------------
+  const aResult = resolvePath(data, pred.path);
+  if (!aResult.found) {
+    return {
+      result: false,
+      path: pred.path,
+      reason: `allIn: path '${pred.path}' does not resolve (not found)`,
+    };
+  }
+
+  const selected: unknown[] = Array.isArray(aResult.value)
+    ? (aResult.value as unknown[])
+    : [aResult.value];
+
+  // Resolve the allowed collection (B) before the vacuous-pass shortcut so a
+  // broken B never passes silently just because A happened to be empty.
+  const bResult = resolvePath(data, pred.collectionPath);
+  if (!bResult.found) {
+    return {
+      result: false,
+      path: pred.path,
+      reason:
+        `allIn: collectionPath '${pred.collectionPath}' does not resolve ` +
+        `(not found) — cannot check ${selected.length} value(s) from '${pred.path}'`,
+    };
+  }
+  if (!Array.isArray(bResult.value)) {
+    return {
+      result: false,
+      path: pred.path,
+      reason:
+        `allIn: collectionPath '${pred.collectionPath}' does not resolve to an ` +
+        `array/collection (got ${typeof bResult.value}) — cannot check membership of '${pred.path}'`,
+    };
+  }
+
+  // Build the allowed member set: B items themselves, or one field of each.
+  const allowed = new Set<string>();
+  for (const item of bResult.value as unknown[]) {
+    if (pred.itemField !== undefined) {
+      const fieldResult = resolvePath(item, pred.itemField);
+      if (fieldResult.found) {
+        allowed.add(membershipKey(fieldResult.value));
+      }
+    } else {
+      allowed.add(membershipKey(item));
+    }
+  }
+
+  // --- Vacuous pass on an empty selection ----------------------------------
+  if (selected.length === 0) {
+    return {
+      result: true,
+      path: pred.path,
+      reason: `allIn: '${pred.path}' selected no values — membership of '${pred.collectionPath}' holds vacuously`,
+    };
+  }
+
+  // --- Check every selected value ------------------------------------------
+  const selector = pred.itemField !== undefined
+    ? `'${pred.collectionPath}[*].${pred.itemField}'`
+    : `'${pred.collectionPath}'`;
+
+  for (const value of selected) {
+    if (!allowed.has(membershipKey(value))) {
+      return {
+        result: false,
+        path: pred.path,
+        reason:
+          `allIn: value ${JSON.stringify(value)} selected by '${pred.path}' ` +
+          `is not a member of ${selector}`,
+      };
+    }
+  }
+
+  return {
+    result: true,
+    path: pred.path,
+    reason:
+      `allIn: all ${selected.length} value(s) selected by '${pred.path}' ` +
+      `are members of ${selector}`,
   };
 }
 
@@ -584,6 +727,10 @@ export function evaluatePredicate(
   
   if (isInPredicate(predicate)) {
     return evalIn(predicate, data);
+  }
+  
+  if (isAllInPredicate(predicate)) {
+    return evalAllIn(predicate, data);
   }
   
   if (isAllPredicate(predicate)) {

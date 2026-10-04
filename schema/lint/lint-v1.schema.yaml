@@ -217,6 +217,46 @@ definitions:
             - type: "number"
             - type: "boolean"
 
+    # AllIn predicate (generic cross-collection membership)
+    - type: "object"
+      required: [ "op", "path", "collectionPath" ]
+      description: >-
+        Generic cross-collection membership: EVERY value selected by 'path'
+        must be a member of the collection selected by 'collectionPath'
+        (optionally projected to one field per item via 'itemField').
+        Defined behaviours: 'path' selecting an empty collection (an empty
+        array, or a wildcard whose items lack the field) PASSES vacuously;
+        'path' resolving to a single scalar is treated as a one-item
+        selection; 'path' not resolving FAILS loudly naming the path;
+        'collectionPath' not resolving or resolving to a non-array FAILS
+        loudly naming the path. Values are compared generically (scalars by
+        string form, objects by serialised shape); the interpreter has no
+        domain knowledge of which fields or records are involved.
+      properties:
+        op:
+          type: "string"
+          const: "allIn"
+        path:
+          type: "string"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path selecting the values under test: a single scalar, a plain
+            array, or a [*]-wildcard projection (e.g. 'steps[*].roleId').
+        collectionPath:
+          type: "string"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path selecting the collection of allowed members. Must resolve to
+            an array at evaluation time; if it does not resolve, or resolves
+            to a non-array, the predicate fails loudly naming this path.
+        itemField:
+          type: "string"
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+          description: >-
+            Optional field of each collection item forming the membership set
+            (i.e. compare against collectionPath[*].itemField, e.g. 'roleId').
+            When omitted, the collection items themselves are the members.
+
     # All predicate (AND)
     - type: "object"
       required: [ "op", "predicates" ]
