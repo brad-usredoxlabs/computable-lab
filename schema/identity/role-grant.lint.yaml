@@ -1,0 +1,31 @@
+# Authoring policy for role-grant records (privilege-escalation guard).
+#
+# `authoring` is evaluated against the ACTOR context (session identity,
+# system flag, resolved roles) at create/update time — not the record —
+# mirroring how lifecycle guards are declared in YAML and interpreted
+# generically in code. RecordHandlers reads this via
+# LintEngine.authoringRuleFor(schemaId); zero role/kind literals in TS.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/role-grant.schema.yaml"
+
+rules: []
+
+authoring:
+  # Error code surfaced on denial.
+  denyCode: GRANT_FORBIDDEN
+  # The actor context must satisfy at least one of these (OR).
+  require:
+    anyOf:
+      # Trusted local system identity (no authenticated session at all).
+      - systemActor: true
+      # The platform local-admin bootstrap user (LOCAL_ADMIN_USER_ID).
+      - localAdmin: true
+      # Any session holding this role via role-grant records (RoleResolver).
+      - role: admin
+  # On UPDATE, the guard fires only when one of these payload paths changes.
+  guardWhenChanged:
+    - roles
+    - userId
+  # On an accepted create, stamp the resolved session actor into this
+  # payload field (schema declares grantedBy).
+  stampActorAs: grantedBy
