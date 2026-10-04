@@ -3191,8 +3191,18 @@ export const apiClient = {
    * List saved AI profiles.
    */
   async listAiProfiles(): Promise<{
-    profiles: Array<{ name: string; provider: string; baseUrl: string; model: string; active: boolean }>;
-    activeProfile: string | null;
+    profiles: Array<{
+      name: string
+      provider: string
+      baseUrl: string
+      model: string
+      active: boolean
+      /** Whether an API key is stored (blank field then means "keep existing"). */
+      hasApiKey?: boolean
+      /** Full inference block, secrets redacted — round-trip on save. */
+      inference?: Record<string, unknown>
+    }>
+    activeProfile: string | null
   }> {
     return request('/config/ai/profiles')
   },

@@ -40,10 +40,10 @@ function inferProvider(extractor: ExtractorProfileConfig | null | undefined): 'o
 }
 
 const FEEDBACK_COLORS = {
-  success: { bg: '#d3f9d8', text: '#2b8a3e', border: '#b2f2bb' },
-  error: { bg: '#ffe3e3', text: '#c92a2a', border: '#ffc9c9' },
-  restart: { bg: '#fff3bf', text: '#e67700', border: '#ffe066' },
-  info: { bg: '#e7f5ff', text: '#1864ab', border: '#a5d8ff' },
+  success: { bg: 'var(--cl-success-soft)', text: 'var(--cl-success)', border: 'var(--cl-success-border)' },
+  error: { bg: 'var(--cl-danger-soft)', text: 'var(--cl-danger)', border: 'var(--cl-danger-border)' },
+  restart: { bg: 'var(--cl-warn-soft)', text: 'var(--cl-warn)', border: 'var(--cl-warn-border)' },
+  info: { bg: 'var(--cl-info-soft)', text: 'var(--cl-info)', border: 'var(--cl-info-border)' },
 }
 
 export function ExtractorSettingsSection({ extractor, editingSection, onEditChange, onSave, onTest, saving }: Props) {

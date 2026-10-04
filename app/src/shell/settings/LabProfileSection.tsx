@@ -47,7 +47,7 @@ export function LabProfileSection() {
           <div className="info-row"><span className="info-row__value">Loading...</span></div>
         ) : error ? (
           <div className="info-row">
-            <span className="info-row__value" style={{ color: '#c92a2a' }}>{error}</span>
+            <span className="info-row__value" style={{ color: 'var(--cl-danger)' }}>{error}</span>
           </div>
         ) : profile ? (
           <>
@@ -78,9 +78,9 @@ export function LabProfileSection() {
       <style>{`
         .chip {
           display: inline-block;
-          background: #e7f5ff;
-          color: #1864ab;
-          border: 1px solid #d0ebff;
+          background: var(--cl-info-soft);
+          color: var(--cl-info);
+          border: 1px solid var(--cl-info-border);
           border-radius: 9999px;
           padding: 0.125rem 0.6rem;
           margin: 0.15rem 0.25rem 0.15rem 0;

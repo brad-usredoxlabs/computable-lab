@@ -226,7 +226,7 @@ function GroupCard({
 
 const groupStyles = `
 .groups__error { color: var(--cl-danger); font-size: 0.85rem; margin: 0 0 8px; }
-.groups__muted { color: var(--cl-text-faint); font-size: 0.85rem; margin: 4px 0; }
+.groups__muted { color: var(--cl-text-dim); font-size: 0.85rem; margin: 4px 0; }
 .groups__create { display: flex; gap: 6px; margin-bottom: 12px; }
 .groups__create input { flex: 1; font: inherit; background: var(--cl-bg-elev-2); color: var(--cl-text); border: 1px solid var(--cl-border); border-radius: 4px; padding: 5px 8px; }
 .groups__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
