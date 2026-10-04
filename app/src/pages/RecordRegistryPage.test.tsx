@@ -58,6 +58,7 @@ vi.mock('../shared/api/client', () => ({
     getRecord: mocked.mockGetRecord,
     createDraftCopy: mocked.mockCreateDraftCopy,
     createSignature: vi.fn(),
+    listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
   },
 }))
 
@@ -494,5 +495,65 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
 
     await screen.findByTestId('projection-taptab-editor')
     expect(screen.queryByTestId('document-control-bar')).toBeNull()
+  })
+
+  it('Create draft revision replaces Save when locked, opens the NEW draft, and states honestly what happened (delta D6 messaging)', async () => {
+    // The locked-record path: approved content → Save is REPLACED by
+    // "Create draft revision"; clicking it must (1) call draft-copy,
+    // (2) open the returned NEW record as a fresh draft, and (3) leave a
+    // one-line honest note — the copy is derived, signatures/approvals do
+    // not carry over (server: RecordHandlers.ts:180-181 strips them).
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    }
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      return { records: [], total: 0 }
+    })
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+
+    // Locked: the draft-copy affordance replaces Save.
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+
+    fireEvent.click(draftBtn)
+
+    await waitFor(() => expect(mocked.mockCreateDraftCopy).toHaveBeenCalledWith('DOC-DEMO-SOP', {}))
+    // The NEW record is opened as the editing subject.
+    await waitFor(() =>
+      expect(screen.getByTestId('editor-data').textContent).toContain('DOC-NEWDRAFT')
+    )
+    // Honest one-line messaging: derived from the locked doc, approvals not inherited.
+    const note = await screen.findByTestId('draft-revision-note')
+    expect(note.textContent).toMatch(/Created draft revision DOC-NEWDRAFT from DOC-DEMO-SOP/)
+    expect(note.textContent).toMatch(/signatures and approvals do not carry over/i)
   })
 })

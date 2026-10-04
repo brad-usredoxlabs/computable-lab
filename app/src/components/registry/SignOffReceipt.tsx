@@ -14,6 +14,14 @@
  *   apiClient.listRecordsByKind('audit-event', N)    — same
  * filtered client-side: SIG.subject.recordId === recordId,
  * EVT.subjectId === recordId && EVT.action === 'lifecycle_transition'.
+ *
+ * QMS-6A (delta D9, gap (e)) — minimal revision visibility: a compact readout
+ * "N revisions · newest REV-x" from the EXISTING apiClient.listRecordRevisions
+ * (client.ts:2325 → GET /records/:id/revisions → { records: RecordEnvelope[] },
+ * payload.kind 'record-revision', recordId REV-<32 uppercase hex>,
+ * RecordRevisionService.ts:65). The 0-revision (and fetch-failure) case renders
+ * NOTHING — never "0 revisions · newest —". Newest = max payload.createdAt, not
+ * store listing order. Shares the receipt's refreshKey cadence.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -38,15 +46,25 @@ interface ReceiptRow {
 
 const LIST_LIMIT = 200
 
+interface RevisionSummary {
+  count: number
+  newestId: string
+}
+
 export function SignOffReceipt({ recordId, refreshKey = 0 }: SignOffReceiptProps) {
   const [rows, setRows] = useState<ReceiptRow[]>([])
+  const [revisions, setRevisions] = useState<RevisionSummary | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [sigs, events] = await Promise.all([
+      const [sigs, events, revs] = await Promise.all([
         apiClient.listRecordsByKind('signature', LIST_LIMIT),
         apiClient.listRecordsByKind('audit-event', LIST_LIMIT),
+        // Gap (e) / delta D9: minimal revision visibility via the EXISTING
+        // client method. A failure here is honest-abstention, not a receipt
+        // failure — it degrades to null below.
+        apiClient.listRecordRevisions(recordId).catch(() => null),
       ])
 
       // Applied = referenced by a lifecycle_transition event for THIS record.
@@ -81,8 +99,28 @@ export function SignOffReceipt({ recordId, refreshKey = 0 }: SignOffReceiptProps
         })
       }
       setRows(mine)
+
+      // Revision summary: count + newest by createdAt (server list order is
+      // store order, not chronological — RecordRevisionService.list). 0 or
+      // unavailable → null (render nothing, never "0 revisions · newest —").
+      if (revs) {
+        const list = revs.records
+        if (list.length === 0) {
+          setRevisions(null)
+        } else {
+          const newest = list.reduce((a, b) => {
+            const ta = (a.payload as { createdAt?: unknown }).createdAt
+            const tb = (b.payload as { createdAt?: unknown }).createdAt
+            return typeof tb === 'string' && (typeof ta !== 'string' || tb > ta) ? b : a
+          })
+          setRevisions({ count: list.length, newestId: newest.recordId })
+        }
+      } else {
+        setRevisions(null)
+      }
     } catch {
       setRows([])
+      setRevisions(null)
     } finally {
       setLoaded(true)
     }
@@ -94,16 +132,28 @@ export function SignOffReceipt({ recordId, refreshKey = 0 }: SignOffReceiptProps
   }, [load, refreshKey])
 
   if (!loaded) return null
+
+  const readout = revisions ? (
+    <div data-testid="revision-readout" className="mt-1 text-xs text-gray-500">
+      {revisions.count} revision{revisions.count === 1 ? '' : 's'} · newest{' '}
+      <span title={revisions.newestId}>{revisions.newestId.slice(0, 12)}</span>
+    </div>
+  ) : null
+
   if (rows.length === 0) {
     return (
-      <div data-testid="sign-off-receipt" className="text-xs text-gray-500">
-        No signatures on record for this document.
-      </div>
+      <>
+        <div data-testid="sign-off-receipt" className="text-xs text-gray-500">
+          No signatures on record for this document.
+        </div>
+        {readout}
+      </>
     )
   }
 
   return (
-    <div data-testid="sign-off-receipt" className="text-xs text-gray-600">
+    <>
+      <div data-testid="sign-off-receipt" className="text-xs text-gray-600">
       <div className="font-medium text-gray-700">Sign-off receipt</div>
       <ul className="mt-1 space-y-1">
         {rows.map(r => (
@@ -126,6 +176,8 @@ export function SignOffReceipt({ recordId, refreshKey = 0 }: SignOffReceiptProps
           </li>
         ))}
       </ul>
-    </div>
+      </div>
+      {readout}
+    </>
   )
 }
