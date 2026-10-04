@@ -67,14 +67,20 @@ was reconciled "against repo @ main (d290a7fc tip)".
 While stopping the lane-2 worker I used `pgrep -f "hermes -p cl-senior"` to find its PID. **Lane 1 runs
 its workers on the same `cl-senior` profile**, so the pattern also matched lane 1's EDITOR-2 worker
 (`hermes -p cl-senior -z Work item EDITOR-2 on LANE 1 ...`, PID 2191613) and my `kill` TERMed it.
-- Damage: lane 1's EDITOR-2 worker was terminated (~30 min in). Its worktree
-  `/mnt/vast/home/brad/git/wt/editor-2-lane1-20261004T030515` is **clean at the lane-1 trunk tip
-  `34cfe597` with no commits and no uncommitted product edits** — so no committed work was lost; EDITOR-2
-  will simply be re-adopted by lane 1's next tick (in-progress with no handoff).
+- Damage: lane 1's EDITOR-2 worker was terminated mid-run. Its worktree
+  `/mnt/vast/home/brad/git/wt/editor-2-lane1-20261004T030515` was clean at the lane-1 trunk tip
+  `34cfe597` with no commits and no uncommitted product edits — no committed work was lost.
+- **Recovered:** lane 1 re-dispatched EDITOR-2 on the SAME worktree (observed live at 23:45, PID
+  2234740, with a tightened prompt). So the net effect was one wasted lane-1 worker dispatch, not a
+  stalled lane. Still my error and still a lane-isolation breach to avoid.
 - My own lane-2 worker had ALREADY exited cleanly on its own (its log ends
-  `DONE .../PROTO-AI-1-grounding-map.wip-l2t2215.md`) — the pattern match was against lane 1, not mine.
-- Corrective rule for future ticks: identify a worker by its unique prompt token / log path, or kill by
-  the exact PID captured at dispatch — **never** by a profile-name pattern (profiles are shared across lanes).
+  `DONE .../PROTO-AI-1-grounding-map.wip-l2t2215.md`). A SECOND cross-lane trap surfaced here: both
+  lanes run workers on the `cl-senior` profile, so `cl-senior/state.db` mixes BOTH lanes' sessions —
+  my "live progress" peeks after ~23:05 were reading lane 1's EDITOR-2, not my (already-finished) worker.
+- Corrective rules for future ticks: (1) identify a worker by its unique prompt token / fixed log path,
+  or kill by the exact PID captured at dispatch — **never** by profile name (profiles are shared across
+  lanes). (2) For live state, filter `state.db` by the session whose start time matches YOUR dispatch,
+  or just read your own fixed log — never assume the profile's latest session is yours.
 
 ## Exact git state
 - Trunk `cl/integration-2` @ `ca7c4458` (working tree clean apart from untracked `node_modules`).
