@@ -134,6 +134,253 @@ editor:
     });
   });
 
+  describe('editor binding validation (RED: loader must reject broken claims)', () => {
+    it('accepts a spec with valid explicit block.slots claims', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "header"
+      kind: "section"
+      label: "Header"
+      slots: ["title-slot", "state-slot"]
+    - id: "lines"
+      kind: "repeater"
+      path: "$.lines"
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "select"
+    - id: "line-slot"
+      path: "$.lines[0].qty"
+      label: "Qty"
+      widget: "number"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(true);
+      expect(result.spec!.editor!.blocks[0].slots).toEqual(['title-slot', 'state-slot']);
+    });
+
+    it('rejects a block.slots reference to an unknown slot id', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "header"
+      kind: "section"
+      slots: ["ghost-slot"]
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes("unknown slot id 'ghost-slot'")
+      )).toBe(true);
+    });
+
+    it('rejects the same slot claimed by two blocks (double claim)', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "a"
+      kind: "section"
+      slots: ["title-slot"]
+    - id: "b"
+      kind: "section"
+      slots: ["title-slot"]
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes("claimed by multiple blocks")
+      )).toBe(true);
+    });
+
+    it('rejects an unclaimed slot in an explicitly-bound spec', () => {
+      // header explicitly claims title-slot; state-slot is claimed by nobody
+      // and no block falls back to prefix binding for it — the spec must
+      // fail rather than silently drop state-slot from the editor.
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "header"
+      kind: "section"
+      slots: ["title-slot"]
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+    - id: "state-slot"
+      path: "$.state"
+      label: "State"
+      widget: "select"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes("not claimed by any block")
+      )).toBe(true);
+    });
+
+    it('does NOT reject unclaimed slots when the spec has no explicit bindings (pure prefix)', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "lines"
+      kind: "repeater"
+      path: "$.lines"
+  slots:
+    - id: "orphan-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(true);
+    });
+
+    it('treats a prefix-coverable slot as claimed in an explicitly-bound spec', () => {
+      // header explicitly binds; the repeater has no explicit slots but its
+      // path prefix covers line-slot, so nothing is "unclaimed".
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "header"
+      kind: "section"
+      slots: ["title-slot"]
+    - id: "lines"
+      kind: "repeater"
+      path: "$.lines"
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+    - id: "line-slot"
+      path: "$.lines[0].qty"
+      label: "Qty"
+      widget: "number"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an editor slot missing id/path/label/widget', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks: []
+  slots:
+    - path: "$.x"
+      widget: "bogus-widget"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      const errs = result.validationErrors!;
+      expect(errs.some((e) => e.includes("missing required 'id'"))).toBe(true);
+      expect(errs.some((e) => e.includes("missing required 'label'"))).toBe(true);
+      expect(errs.some((e) => e.includes("invalid widget type 'bogus-widget'"))).toBe(true);
+    });
+
+    it('rejects an invalid block kind', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "b1"
+      kind: "dashboard"
+  slots: []
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes("invalid block kind 'dashboard'")
+      )).toBe(true);
+    });
+
+    it('rejects a non-array block.slots value', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "b1"
+      kind: "section"
+      slots: "title-slot"
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes('slots: must be an array')
+      )).toBe(true);
+    });
+
+    it('rejects editor.slots containing a non-string entry inside block.slots', () => {
+      const yaml = `
+uiVersion: 1
+schemaId: "https://example.com/schema/test.schema.yaml"
+editor:
+  mode: "document"
+  blocks:
+    - id: "b1"
+      kind: "section"
+      slots:
+        - 42
+  slots:
+    - id: "title-slot"
+      path: "$.title"
+      label: "Title"
+      widget: "text"
+`;
+      const result = loader.load(yaml);
+      expect(result.success).toBe(false);
+      expect(result.validationErrors!.some((e) =>
+        e.includes('must be a string')
+      )).toBe(true);
+    });
+  });
+
   describe('editor is additive to form', () => {
     it('loads a spec with both editor and form configs', () => {
       const yaml = `
