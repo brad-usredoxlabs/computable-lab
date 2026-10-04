@@ -1,24 +1,31 @@
 /**
  * IngestionPage — top-level destination for external-document acquisition
- * workflows. Hosts tabbed ingestion surfaces (Vendor PDFs, PubMed) that bring
- * documents into the lab as first-class objects, mirroring the /lab tabbed
- * category structure.
+ * workflows. Hosts tabbed ingestion surfaces (Vendor PDFs, Literature) that
+ * bring documents and their extracted content into the lab as first-class
+ * objects, mirroring the /lab tabbed category structure.
  *
- * Phase 3: navigation shell + tab routing. The Vendor PDFs and PubMed tabs
- * render placeholder bodies here; the actual workflow UI lands in later phases.
+ * The Literature tab mounts the bio-source explorer (PubMed / Europe PMC /
+ * UniProt / … search → "Extract Knowledge" → claim/assertion/evidence
+ * preview), the same surface as /literature?view=explore. It replaces the
+ * former dead "PubMed — coming soon" placeholder.
  */
 
+import { lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { VendorPdfWorkflowTab } from './VendorPdfWorkflowTab'
 import './IngestionPage.css'
 
-type IngestionTab = 'vendor-pdf' | 'pubmed'
+const LiteratureExplorer = lazy(() =>
+  import('../knowledge/LiteratureExplorer').then((m) => ({ default: m.LiteratureExplorer })),
+)
+
+type IngestionTab = 'vendor-pdf' | 'literature'
 
 const TABS: { id: IngestionTab; label: string }[] = [
   { id: 'vendor-pdf', label: 'Vendor PDFs' },
-  { id: 'pubmed', label: 'PubMed' },
+  { id: 'literature', label: 'Literature' },
 ]
 
 export function IngestionPage() {
@@ -62,11 +69,9 @@ export function IngestionPage() {
             {active === 'vendor-pdf' ? (
               <VendorPdfWorkflowTab />
             ) : (
-              <div className="ingestion-page__placeholder" data-testid="ingestion-pubmed-placeholder">
-                <h2>PubMed</h2>
-                <p>Ingest and extract from PubMed studies.</p>
-                <p className="ingestion-page__note">Coming soon.</p>
-              </div>
+              <Suspense fallback={<p className="ingestion-page__loading">Loading literature…</p>}>
+                <LiteratureExplorer />
+              </Suspense>
             )}
           </div>
         </div>

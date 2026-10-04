@@ -18,7 +18,7 @@ import { CreateMenu } from './CreateMenu'
 import { useViewport } from './useViewport'
 import './GlobalNavbar.css'
 
-type PrimaryDestination = 'projects' | 'runs' | 'claims' | 'lab' | 'ingestion' | 'intake' | 'chat'
+type PrimaryDestination = 'projects' | 'runs' | 'claims' | 'lab' | 'ingestion' | 'chat'
 
 const DESTINATIONS: { id: PrimaryDestination; label: string; path: string }[] = [
   { id: 'projects', label: 'Projects', path: '/projects' },
@@ -26,7 +26,6 @@ const DESTINATIONS: { id: PrimaryDestination; label: string; path: string }[] = 
   { id: 'claims', label: 'Claims', path: '/claims' },
   { id: 'lab', label: 'Lab', path: '/lab' },
   { id: 'ingestion', label: 'Ingestion', path: '/ingestion' },
-  { id: 'intake', label: 'Intake', path: '/intake' },
   { id: 'chat', label: 'Chat', path: '/chat' },
 ]
 

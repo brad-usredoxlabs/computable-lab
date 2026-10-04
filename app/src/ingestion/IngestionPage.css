@@ -53,23 +53,8 @@
   padding: 0.5rem 0;
 }
 
-.ingestion-page__placeholder {
+.ingestion-page__loading {
   padding: 1.5rem;
-  border: 1px dashed var(--cl-border, #ddd);
-  border-radius: 8px;
-}
-
-.ingestion-page__placeholder h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
-}
-
-.ingestion-page__placeholder p {
-  margin: 0.25rem 0;
   color: var(--cl-text-muted, #666);
-}
-
-.ingestion-page__note {
-  font-style: italic;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }

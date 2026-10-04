@@ -20,6 +20,12 @@ vi.mock('../shared/api/client', () => ({
   },
 }))
 
+// The Literature tab mounts the bio-source explorer; stub it so this suite
+// stays focused on the tab shell (the explorer has its own coverage).
+vi.mock('../knowledge/LiteratureExplorer', () => ({
+  LiteratureExplorer: () => <div data-testid="literature-explorer">literature-explorer</div>,
+}))
+
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { IngestionPage } from './IngestionPage'
@@ -54,7 +60,7 @@ describe('IngestionPage', () => {
     renderAt('/ingestion/vendor-pdf')
     expect(screen.getByTestId('ingestion-page')).toBeDefined()
     expect(screen.getByTestId('ingestion-tab-vendor-pdf')).toBeDefined()
-    expect(screen.getByTestId('ingestion-tab-pubmed')).toBeDefined()
+    expect(screen.getByTestId('ingestion-tab-literature')).toBeDefined()
   })
 
   it('defaults to the vendor-pdf tab and renders its workflow', () => {
@@ -63,9 +69,10 @@ describe('IngestionPage', () => {
     expect(screen.getByTestId('vendor-pdf-workflow')).toBeDefined()
   })
 
-  it('switches to the PubMed tab on click', () => {
+  it('switches to the Literature tab on click', async () => {
     renderAt('/ingestion/vendor-pdf')
-    fireEvent.click(screen.getByTestId('ingestion-tab-pubmed'))
-    expect(screen.getByTestId('ingestion-body-pubmed')).toBeDefined()
+    fireEvent.click(screen.getByTestId('ingestion-tab-literature'))
+    expect(screen.getByTestId('ingestion-body-literature')).toBeDefined()
+    expect(await screen.findByTestId('literature-explorer')).toBeDefined()
   })
 })
