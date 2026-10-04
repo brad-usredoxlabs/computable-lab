@@ -50,6 +50,7 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
@@ -1919,6 +1920,55 @@ export function createAgentOrchestrator(
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done deck_layout success=${deckResult.success} variant=${variantId ?? '(none)'} elapsedMs=${elapsed}`);
               return deckResult;
+            }
+
+            // intent=protocol_edit: propose declarative edits to the ATTACHED
+            // protocol. The payload is validated against the REGISTERED
+            // protocol-edit-op envelope (PROTO-AI-2) — the vocabulary is schema
+            // data, never a hand-rolled shape — and the proposal is emitted
+            // VERBATIM. Structurally NOTHING else runs: no compiler, no store
+            // read-modify-write, no event draft. Accept applies (PROTO-AI-8);
+            // until then this turn has written nothing (PROTO-AI-7).
+            if (agentIntent.intent === 'protocol_edit') {
+              const payload: Record<string, unknown> = {
+                ops: agentIntent.ops ?? [],
+                ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}),
+              };
+              const envelope = await validateProtocolEditPayload(payload);
+              const editOk = envelope.valid;
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: editOk, durationMs: 0 });
+              const elapsed = Date.now() - t0;
+              const editResult: AgentResult = editOk
+                ? { success: true, notes: [], protocolEdit: { ops: payload.ops as unknown[], ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}) } }
+                : {
+                  success: false,
+                  // The SAME channel every other validation failure uses today
+                  // (create_record's missing-`records` error below): success=false
+                  // with a corrective `error` string. Ajv's teaching suggestions
+                  // ride along so the corrective turn converges.
+                  error: `protocol_edit proposal rejected by the protocol-edit-op schema: ${formatProtocolEditErrors(envelope)}. No ops were applied; re-emit with the fields the schema names.`,
+                };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: editResult.success,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              if (editResult.error) summary.error = editResult.error;
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done protocol_edit success=${editResult.success} ops=${(payload.ops as unknown[]).length} elapsedMs=${elapsed}`);
+              return editResult;
             }
           }
 

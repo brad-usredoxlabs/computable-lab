@@ -62,6 +62,23 @@ export interface AssistStreamRequest {
 }
 
 /**
+ * A protocol_edit proposal emitted by the server (PROTO-AI-7) and rendered by
+ * the ChangesPanel diff (PROTO-AI-9). `ops` is the model's envelope ALREADY
+ * validated server-side against the registered protocol-edit-op schema
+ * (schema/workflow/protocol-edit-op.schema.yaml), re-emitted verbatim; the op
+ * shape is schema-owned data, so it stays an opaque validated array here
+ * rather than a hand-rolled TypeScript mirror of the op union.
+ * `protocolId` is only the model's explicit override; when absent, the
+ * attached-protocol scope of the conversation binds the target.
+ * PROPOSE-NEVER-WRITE: the server writes NOTHING for this payload — Accept
+ * (PROTO-AI-8) is the only path that applies it.
+ */
+export interface AiProtocolEditProposal {
+  ops: unknown[]
+  protocolId?: string
+}
+
+/**
  * The slice of the backend's AgentResult the chat panel can render. In
  * forced-draft-tool mode the model emits no prose at all — the entire answer
  * lives in this payload, so dropping it renders as "(no response)".
@@ -107,6 +124,13 @@ export interface AssistDraftResult {
   }>
   /** Place the created record on the bench in the same turn (explicit). */
   alsoPlace?: { surface?: 'lawn' | 'slot'; slotId?: string }
+  /**
+   * A protocol_edit proposal emitted via agent_intent (PROTO-AI-7). See
+   * AiProtocolEditProposal — the server validates the envelope against the
+   * registered schema and WRITES NOTHING; rendering is PROTO-AI-9, applying
+   * (on Accept) is PROTO-AI-8.
+   */
+  protocolEdit?: AiProtocolEditProposal
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string

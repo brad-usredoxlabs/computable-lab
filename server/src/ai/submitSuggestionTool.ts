@@ -416,6 +416,10 @@ const DRAFT_ARGS_PROPERTIES: Record<string, unknown> = (
  *   - `event_graph`: draft events onto the current deck (existing draft args).
  *   - `deck_layout`: switch the run deck platform/variant (e.g. to the freeform
  *     bench). No event drafting — the client applies the change to the editor.
+ *   - `protocol_edit`: propose declarative edits to the ATTACHED protocol via
+ *     the `ops` envelope (PROTO-AI-2 schema). The server validates the payload
+ *     against the REGISTERED schema and emits the proposal; it runs nothing
+ *     else — propose, never write (PROTO-AI-7).
  *
  * Keeping a single forced tool (tool_choice) preserves the hard constraint that
  * the model emits structured output every turn, while widening the menu beyond
@@ -428,7 +432,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, or `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"). Fill only the fields that belong to the intent you chose; never mix both.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), or `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -436,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing).',
         },
         platformId: {
           type: 'string',
@@ -447,6 +451,51 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         variantId: {
           type: 'string',
           description: 'deck_layout only: target deck variant id, e.g. "manual_freeform" (the freeform bench / Manual Bench).',
+        },
+        protocolId: {
+          type: 'string',
+          description: 'protocol_edit only (optional): target protocol record id (e.g. "PRT-000123"). Omit when the proposal rides the attached-protocol scope — the scope already binds the target.',
+        },
+        ops: {
+          type: 'array',
+          minItems: 1,
+          description:
+            'protocol_edit only: the ordered edit operations against the attached protocol. The server validates this against the registered protocol-edit-op schema; an invalid op is rejected back to you, never applied. Cite ONLY stepIds/roleIds shown in the ATTACHED PROTOCOL block.',
+          items: {
+            type: 'object',
+            required: ['op'],
+            properties: {
+              op: {
+                type: 'string',
+                enum: [
+                  'step_update',
+                  'step_insert',
+                  'step_delete',
+                  'labware_add',
+                  'labware_update',
+                  'labware_delete',
+                  'equipment_add',
+                  'equipment_update',
+                  'equipment_delete',
+                ],
+              },
+              stepId: { type: 'string', description: 'step_update / step_delete: existing step id (^[a-z][a-z0-9-]*$).' },
+              afterStepId: { type: 'string', description: 'step_insert: anchor — insert after this existing step (exactly one of afterStepId/beforeStepId).' },
+              beforeStepId: { type: 'string', description: 'step_insert: anchor — insert before this existing step.' },
+              roleId: { type: 'string', description: 'labware_* / equipment_*: declared role id (^[a-z0-9][a-z0-9_-]*$).' },
+              label: { type: 'string', description: 'step_update: replacement label; step_insert: label of the new step.' },
+              description: { type: 'string', description: 'Replacement/added plain-text description (rich text is derived at apply time, never proposed).' },
+              notes: { type: 'string', description: 'step_update: replacement operator notes.' },
+              kind: { type: 'string', enum: ['add_material', 'transfer', 'mix', 'wash', 'incubate', 'read', 'harvest', 'other'], description: 'step kind — only the base ProtocolStep kinds.' },
+              settings: {
+                type: 'array',
+                items: { type: 'object', additionalProperties: true },
+                description: 'step_update: replacement step settings — ALWAYS the array form (Setting objects), even for kind read.',
+              },
+              expectedLabwareKinds: { type: 'array', items: { type: 'string' }, description: 'labware_add/update: compatible labware DESIGN record ids.' },
+              allowedInstrumentIds: { type: 'array', items: { type: 'string' }, description: 'equipment_add/update: allowable instrument DESIGN record ids.' },
+            },
+          },
         },
         events: DRAFT_ARGS_PROPERTIES['events'],
         notes: DRAFT_ARGS_PROPERTIES['notes'],
@@ -464,19 +513,33 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'unknown';
   platformId?: string;
   variantId?: string;
+  /**
+   * protocol_edit only: the ops envelope EXACTLY as the model emitted it. The
+   * parser retains the array by reference — no copy, filter, or reorder — so
+   * the schema validator sees the model's own answer, and the emission path
+   * re-emits that same validated array. (Parsing happens BEFORE validation;
+   * any "help" here would silently mutate the proposal under audit.)
+   */
+  ops?: unknown[];
+  /** protocol_edit only: explicit target protocol record id, if stated. */
+  protocolId?: string;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
       ...(typeof args.variantId === 'string' && args.variantId.trim().length > 0 ? { variantId: args.variantId.trim() } : {}),
+      ...(intent === 'protocol_edit' && Array.isArray(args.ops) ? { ops: args.ops } : {}),
+      ...(intent === 'protocol_edit' && typeof args.protocolId === 'string' && args.protocolId.trim().length > 0
+        ? { protocolId: args.protocolId.trim() }
+        : {}),
     };
   }
   return { intent: 'unknown' };
@@ -791,6 +854,7 @@ function parseEquipmentRequirements(raw: unknown): AgentEquipmentRequirement[] {
 /** Every field the emission contract recognises. Anything else is reported back. */
 const KNOWN_SUBMISSION_KEYS = new Set([
   'intent', 'platformId', 'variantId',
+  'ops', 'protocolId',
   'events', 'notes', 'unresolvedRefs', 'clarification', 'clarificationRequests',
   'labwareRequirements', 'labwareAdditions', 'equipmentRequirements',
   'records', 'alsoPlace',
