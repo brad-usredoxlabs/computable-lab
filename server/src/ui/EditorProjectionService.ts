@@ -11,6 +11,7 @@
 import type {
   UISpec,
   EditorConfig,
+  EditorBlock,
   FormSection,
   EditorBlockKind,
   EditorDiagnostic,
@@ -99,20 +100,50 @@ function projectSlotsFromEditorConfig(
 }
 
 /**
- * Assign slots to blocks based on path prefix matching.
- * A slot belongs to a block if the slot's path starts with the block's path.
+ * Assign slots to blocks.
+ *
+ * Declarative binding first: a block whose spec declares `slots` claims
+ * exactly those slot ids, projected into `slotIds` IN LIST ORDER, and those
+ * claims are marked so path-prefix matching never reassigns them. Blocks
+ * WITHOUT explicit `slots` keep the legacy path-prefix binding: a slot
+ * belongs to such a block if the slot's path starts with the block's path.
+ *
+ * @param blocks        Projected blocks (assigned in place, index-aligned)
+ * @param slots         Projected slots
+ * @param sourceBlocks  The source EditorBlock specs (same order/length as
+ *                      `blocks`) carrying the declarative `slots` claims.
  */
 function assignSlotsToBlocks(
   blocks: ProjectionBlock[],
-  slots: ProjectionSlot[]
+  slots: ProjectionSlot[],
+  sourceBlocks: EditorBlock[]
 ): void {
-  for (const block of blocks) {
-    if (!block.path) continue;
+  const slotsById = new Map(slots.map((slot) => [slot.id, slot]));
+
+  // Pass 1 — explicit claims (list order is authoritative).
+  const claimed = new Set<string>();
+  blocks.forEach((block, i) => {
+    const source = sourceBlocks[i];
+    if (!source || source.slots === undefined) return;
+    const slotIds: string[] = [];
+    for (const slotId of source.slots) {
+      if (!slotsById.has(slotId)) continue; // unknown refs fail at load time
+      slotIds.push(slotId);
+      claimed.add(slotId);
+    }
+    block.slotIds = slotIds;
+  });
+
+  // Pass 2 — path-prefix fallback for blocks with no explicit claim.
+  blocks.forEach((block, i) => {
+    const source = sourceBlocks[i];
+    if (!source || source.slots !== undefined) return;
+    if (!block.path) return;
     const blockPath = block.path;
     block.slotIds = slots
-      .filter((slot) => slot.path.startsWith(blockPath))
+      .filter((slot) => !claimed.has(slot.id) && slot.path.startsWith(blockPath))
       .map((slot) => slot.id);
-  }
+  });
 }
 
 // ============================================================================
@@ -398,7 +429,7 @@ export function projectRecord(
     // --- Editor config path ---
     blocks = projectBlocksFromEditorConfig(uiSpec.editor);
     slots = projectSlotsFromEditorConfig(uiSpec.editor);
-    assignSlotsToBlocks(blocks, slots);
+    assignSlotsToBlocks(blocks, slots, uiSpec.editor.blocks);
   } else if (uiSpec.form && uiSpec.form.sections.length > 0) {
     // --- Form sections fallback path ---
     blocks = projectBlocksFromFormSections(uiSpec.form.sections);

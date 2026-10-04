@@ -29,6 +29,9 @@ function makeBudgetUISpec(): UISpec {
           kind: 'section',
           label: 'Budget Summary',
           help: 'Overview of budget state, currency, and totals.',
+          // Declarative binding: claims exactly these slots, in THIS list
+          // order (deliberately not the declaration order of `slots`).
+          slots: ['currency-slot', 'title-slot', 'state-slot'],
         },
         {
           id: 'line-items',
@@ -42,6 +45,7 @@ function makeBudgetUISpec(): UISpec {
           kind: 'section',
           label: 'Totals',
           help: 'Computed summary of approved line items.',
+          slots: ['notes-slot'],
         },
       ],
       slots: [
@@ -208,7 +212,12 @@ describe('EditorProjectionService', () => {
       expect(notesSlot!.widget).toBe('textarea');
     });
 
-    it('assigns slots to blocks by path prefix', () => {
+    // INVERTED (was: "header-summary and totals have no path, so slotIds
+    // must be []" — that assertion ENCODED the platform gap: pathless
+    // section blocks could never receive slots and the editor rendered
+    // blank). Declarative `block.slots` claims now drive binding for
+    // pathless blocks; `slots` list order is authoritative.
+    it('binds pathless section blocks by declarative block.slots in list order', () => {
       const uiSpec = makeBudgetUISpec();
       const result = projectRecord(
         uiSpec,
@@ -217,13 +226,79 @@ describe('EditorProjectionService', () => {
         'BUD-001'
       );
 
-      // line-items block should have no slots (no slot path starts with $.lines)
-      const lineItemsBlock = result.blocks.find((b) => b.id === 'line-items');
-      expect(lineItemsBlock!.slotIds).toEqual([]);
-
-      // header-summary and totals blocks have no path, so no slot assignment
       const headerBlock = result.blocks.find((b) => b.id === 'header-summary');
-      expect(headerBlock!.slotIds).toEqual([]);
+      expect(headerBlock!.slotIds).toEqual([
+        'currency-slot',
+        'title-slot',
+        'state-slot',
+      ]);
+
+      const totalsBlock = result.blocks.find((b) => b.id === 'totals');
+      expect(totalsBlock!.slotIds).toEqual(['notes-slot']);
+    });
+
+    it('keeps path-prefix binding for blocks WITHOUT explicit slots (repeater)', () => {
+      const uiSpec: UISpec = {
+        uiVersion: 1,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/mixed.schema.yaml',
+        editor: {
+          mode: 'document',
+          blocks: [
+            { id: 'summary', kind: 'section', label: 'Summary', slots: ['s-title'] },
+            // No `slots` — legacy prefix binding must still work verbatim.
+            { id: 'line-items', kind: 'repeater', label: 'Lines', path: '$.lines' },
+          ],
+          slots: [
+            { id: 's-title', path: '$.title', label: 'Title', widget: 'text' },
+            { id: 's-line-a', path: '$.lines[0].amount', label: 'Amount', widget: 'number' },
+            { id: 's-line-b', path: '$.lines[0].qty', label: 'Qty', widget: 'number' },
+          ],
+        },
+      };
+      const result = projectRecord(
+        uiSpec,
+        { title: 'x', lines: [] },
+        uiSpec.schemaId,
+        'MIX-001'
+      );
+
+      const lineItems = result.blocks.find((b) => b.id === 'line-items');
+      expect(lineItems!.slotIds).toEqual(['s-line-a', 's-line-b']);
+
+      const summary = result.blocks.find((b) => b.id === 'summary');
+      expect(summary!.slotIds).toEqual(['s-title']);
+    });
+
+    it('never prefix-reassigns an explicitly claimed slot to another block', () => {
+      // 's-captured' sits UNDER the repeater's path prefix, but an explicit
+      // claim by 'summary' must win — prefix matching never reassigns it.
+      const uiSpec: UISpec = {
+        uiVersion: 1,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/claimwins.schema.yaml',
+        editor: {
+          mode: 'document',
+          blocks: [
+            { id: 'summary', kind: 'section', label: 'Summary', slots: ['s-captured'] },
+            { id: 'lines', kind: 'repeater', label: 'Lines', path: '$.lines' },
+          ],
+          slots: [
+            { id: 's-captured', path: '$.lines.meta', label: 'Captured', widget: 'text' },
+            { id: 's-regular', path: '$.lines[0].qty', label: 'Qty', widget: 'number' },
+          ],
+        },
+      };
+      const result = projectRecord(
+        uiSpec,
+        { lines: [] },
+        uiSpec.schemaId,
+        'CLAIM-001'
+      );
+
+      const summary = result.blocks.find((b) => b.id === 'summary');
+      expect(summary!.slotIds).toEqual(['s-captured']);
+
+      const lines = result.blocks.find((b) => b.id === 'lines');
+      expect(lines!.slotIds).toEqual(['s-regular']);
     });
 
     it('emits a diagnostic for required slot with missing value', () => {
