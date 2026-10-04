@@ -286,6 +286,42 @@ describe('controlled-document / calibration-record UI specs', () => {
     ).toEqual([]);
   });
 
+  it('EDITOR-2: every controlled-document block claims its slots and the union covers all declared slots', async () => {
+    const loader = createUISpecLoader();
+    const content = await readFile(UI_PATH('controlled-document.ui.yaml'), 'utf-8');
+    const res = loader.load(content, UI_PATH('controlled-document.ui.yaml'));
+    const projection = projectRecord(
+      res.spec!,
+      validDraft as Record<string, unknown>,
+      SCHEMA_ID('controlled-document.schema.yaml'),
+      'DOC-TEST-SOP',
+    );
+
+    // Block membership: every block claims a non-empty set of slots.
+    for (const block of projection.blocks) {
+      expect(block.slotIds.length, `block ${block.id}`).toBeGreaterThan(0);
+    }
+
+    const byId = (id: string) => projection.blocks.find(b => b.id === id)!;
+    expect(byId('identity').slotIds).toEqual(['id-slot', 'title-slot', 'state-slot']);
+    expect(byId('classification').slotIds).toEqual([
+      'doctype-slot',
+      'revision-slot',
+      'author-ref-slot',
+      'reviewer-ref-slot',
+      'approver-ref-slot',
+    ]);
+    expect(byId('document-body').slotIds).toEqual(['body-slot']);
+
+    // Union covers the 9 declared slot ids exactly, with no duplicates.
+    const union = projection.blocks.flatMap(b => b.slotIds);
+    expect(union.length).toBe(new Set(union).size);
+    expect([...union].sort()).toEqual(
+      projection.slots.map(s => s.id).sort(),
+    );
+    expect(union).toHaveLength(9);
+  });
+
   it('calibration-record.ui.yaml covers the schema fields as form widgets', async () => {
     const loader = createUISpecLoader();
     const content = await readFile(UI_PATH('calibration-record.ui.yaml'), 'utf-8');

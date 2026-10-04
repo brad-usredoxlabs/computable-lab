@@ -15,15 +15,23 @@ editor:
       kind: "section"
       label: "Budget Summary"
       help: "Overview of budget state, currency, and totals."
+      slots: ["title-slot", "state-slot", "currency-slot"]
     - id: "line-items"
       kind: "repeater"
       label: "Line Items"
       help: "Selected vendor-offer lines with pricing. Edit quantities and approve."
       path: "$.lines"
+    # Computed totals are rendered by BudgetDocumentSurface in the run
+    # workspace; the generic projection renders only blocks with claimed slots.
     - id: "totals"
       kind: "section"
       label: "Totals"
       help: "Computed summary of approved line items."
+    - id: "notes"
+      kind: "section"
+      label: "Notes"
+      help: "Free-text notes for this budget."
+      slots: ["notes-slot"]
   slots:
     - id: "title-slot"
       path: "$.title"
