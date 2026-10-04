@@ -24,6 +24,7 @@ const mocked = vi.hoisted(() => ({
   updateRecord: vi.fn(),
   createSignature: vi.fn(),
   listRecordsByKind: vi.fn(),
+  listRecordRevisions: vi.fn(),
 }))
 
 vi.mock('../../shared/api/client', async (importOriginal) => {
@@ -35,6 +36,7 @@ vi.mock('../../shared/api/client', async (importOriginal) => {
       updateRecord: mocked.updateRecord,
       createSignature: mocked.createSignature,
       listRecordsByKind: mocked.listRecordsByKind,
+      listRecordRevisions: mocked.listRecordRevisions,
     },
   }
 })
@@ -98,7 +100,9 @@ beforeEach(() => {
   mocked.updateRecord.mockReset()
   mocked.createSignature.mockReset()
   mocked.listRecordsByKind.mockReset()
+  mocked.listRecordRevisions.mockReset()
   mocked.getValidTransitions.mockResolvedValue({ transitions: [] })
+  mocked.listRecordRevisions.mockResolvedValue({ records: [] })
   mocked.updateRecord.mockResolvedValue({ record: { recordId: docRecord.recordId, schemaId: 'x', payload: {} }, validation: { valid: true, errors: [] }, lint: { valid: true, violations: [] } })
   mocked.createSignature.mockResolvedValue({
     success: true,

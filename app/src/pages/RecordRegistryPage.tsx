@@ -42,6 +42,9 @@ export default function RecordRegistryPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // QMS-6A (delta D6 messaging): after a draft-copy the editing subject has
+  // silently changed — one honest clarifying line, no design decision.
+  const [draftRevisionNote, setDraftRevisionNote] = useState<string | null>(null);
 
   // Projection state for the selected record
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
@@ -80,6 +83,7 @@ export default function RecordRegistryPage() {
     setSelectedRecord(recordData);
     setEditorMode('edit');
     setDirty(false);
+    setDraftRevisionNote(null);
 
     // Load editor projection for the selected record
     loadProjectionForRecord(recordData);
@@ -89,6 +93,7 @@ export default function RecordRegistryPage() {
     setSelectedRecord({ recordId: '', schemaId, payload: {} });
     setEditorMode('create');
     setDirty(false);
+    setDraftRevisionNote(null);
 
     // Load draft editor projection for create mode
     loadDraftProjection(schemaId);
@@ -177,6 +182,7 @@ export default function RecordRegistryPage() {
     setProjection(null);
     setDirty(false);
     setError(null);
+    setDraftRevisionNote(null);
   };
 
   // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
@@ -201,6 +207,9 @@ export default function RecordRegistryPage() {
       };
       setSelectedRecord(draftData);
       setDirty(false);
+      setDraftRevisionNote(
+        `Created draft revision ${draft.recordId} from ${selectedRecord.recordId} — signatures and approvals do not carry over.`,
+      );
       await refreshRecords();
       loadProjectionForRecord(draftData);
     } catch (err) {
@@ -341,6 +350,11 @@ export default function RecordRegistryPage() {
                   >
                     Cancel
                   </button>
+                  {draftRevisionNote && (
+                    <span data-testid="draft-revision-note" className="text-xs text-blue-700">
+                      {draftRevisionNote}
+                    </span>
+                  )}
                   {dirty && !saving && (
                     <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
                   )}
