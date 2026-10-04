@@ -33,7 +33,9 @@ export type PredicateOp =
   | 'lineage_includes'
   | 'time_within'
   | 'mention_kind_matches'
-  | 'allIn';
+  | 'allIn'
+  | 'everyItem'
+  | 'noneIn';
 
 /**
  * Base predicate interface.
@@ -220,6 +222,57 @@ export interface AllInPredicate extends BasePredicate {
 }
 
 /**
+ * EveryItem predicate — generic per-item quantification over a collection.
+ *
+ * Asserts that EVERY item of the array at `collectionPath` satisfies
+ * `assert`, evaluated with that item as the root data (so sub-paths are
+ * written relative to the item). The interpreter has no knowledge of what
+ * the items are or which fields `assert` reads.
+ *
+ * Defined behaviours (documented in schema/lint/lint-v1.schema.yaml):
+ * - empty collection -> PASS (vacuously).
+ * - `collectionPath` does not resolve   -> FAIL, reason names the path.
+ * - `collectionPath` resolves to a non-array -> FAIL, reason names the path.
+ * - failure reason names the failing item's index (and value shape).
+ * - `itemField` (optional): when set, `assert` is evaluated against each
+ *   item's `itemField` value rather than the item itself.
+ */
+export interface EveryItemPredicate extends BasePredicate {
+  op: 'everyItem';
+  /** Path selecting the collection to quantify over (must resolve to an array). */
+  collectionPath: string;
+  /** Optional field of each collection item to evaluate `assert` against. */
+  itemField?: string;
+  /** Predicate evaluated with each item (or item.itemField) as root data. */
+  assert: Predicate;
+}
+
+/**
+ * NoneIn predicate — generic cross-collection disjointness.
+ *
+ * Symmetric variation of `allIn`: asserts that NO value selected by `path`
+ * (a scalar, a plain array, or a `[*]`-wildcard projection) is a member of
+ * the collection selected by `collectionPath`. When `itemField` is given,
+ * the membership set is the projection `collectionPath[*].<itemField>`;
+ * otherwise the collection items themselves must be scalars.
+ *
+ * Selection, comparison and loud-failure semantics are exactly those of
+ * `allIn` (documented in schema/lint/lint-v1.schema.yaml): empty selection
+ * at `path` -> PASS vacuously; `path` unresolvable -> FAIL naming the path;
+ * `collectionPath` unresolvable or non-array -> FAIL naming the path;
+ * an overlap FAILS naming the offending shared value.
+ */
+export interface NoneInPredicate extends BasePredicate {
+  op: 'noneIn';
+  /** Path selecting the values under test (scalar or array; supports `[*]`). */
+  path: string;
+  /** Path selecting the collection to stay disjoint from (must resolve to an array). */
+  collectionPath: string;
+  /** Optional field of each collection item to compare against (e.g. 'roleId'). */
+  itemField?: string;
+}
+
+/**
  * Union of all predicate types.
  */
 export type Predicate =
@@ -237,7 +290,9 @@ export type Predicate =
   | LineageIncludesPredicate
   | TimeWithinPredicate
   | MentionKindMatchesPredicate
-  | AllInPredicate;
+  | AllInPredicate
+  | EveryItemPredicate
+  | NoneInPredicate;
 
 /**
  * Message configuration for a lint rule.

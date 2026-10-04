@@ -147,7 +147,7 @@ definitions:
           const: "exists"
         path:
           type: "string"
-          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
           description: "Path to check for existence"
 
     # Non-empty predicate
@@ -159,8 +159,14 @@ definitions:
           const: "nonEmpty"
         path:
           type: "string"
-          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
-          description: "Path to check for non-empty value"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path to check for a non-empty value. A [*] projection resolves
+            to the array of PRESENT values and is non-empty when ANY item
+            carries the field (any-semantics; the interpreter already
+            resolves wildcards here — the pattern is aligned with that
+            reality so wildcard projections are usable in `when` guards).
+            Use 'everyItem' to require the property of EVERY item.
 
     # Regex predicate
     - type: "object"
@@ -256,6 +262,84 @@ definitions:
             Optional field of each collection item forming the membership set
             (i.e. compare against collectionPath[*].itemField, e.g. 'roleId').
             When omitted, the collection items themselves are the members.
+
+    # NoneIn predicate (generic cross-collection disjointness)
+    - type: "object"
+      required: [ "op", "path", "collectionPath" ]
+      description: >-
+        Generic cross-collection disjointness: NO value selected by 'path'
+        may be a member of the collection selected by 'collectionPath'
+        (optionally projected to one field per item via 'itemField'). The
+        symmetric variation of 'allIn'. Defined behaviours: 'path' selecting
+        an empty collection (an empty array, or a wildcard whose items lack
+        the field) PASSES vacuously; 'path' resolving to a single scalar is
+        treated as a one-item selection; 'path' not resolving FAILS loudly
+        naming the path; 'collectionPath' not resolving or resolving to a
+        non-array FAILS loudly naming the path; an overlap FAILS naming the
+        offending shared value. Values are compared generically (scalars by
+        string form, objects by serialised shape); the interpreter has no
+        domain knowledge of which fields or records are involved.
+      properties:
+        op:
+          type: "string"
+          const: "noneIn"
+        path:
+          type: "string"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path selecting the values under test: a single scalar, a plain
+            array, or a [*]-wildcard projection (e.g. 'roles.a[*].roleId').
+        collectionPath:
+          type: "string"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path selecting the collection to stay disjoint from. Must resolve
+            to an array at evaluation time; if it does not resolve, or
+            resolves to a non-array, the predicate fails loudly naming this
+            path.
+        itemField:
+          type: "string"
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+          description: >-
+            Optional field of each collection item forming the membership set
+            (i.e. compare against collectionPath[*].itemField, e.g. 'roleId').
+            When omitted, the collection items themselves are the members.
+
+    # EveryItem predicate (generic per-item quantification)
+    - type: "object"
+      required: [ "op", "collectionPath", "assert" ]
+      description: >-
+        Generic per-item quantification: EVERY item of the array selected by
+        'collectionPath' must satisfy 'assert', evaluated with that item (or,
+        when 'itemField' is set, the item's 'itemField' value) as root data —
+        so paths inside 'assert' are written relative to the item. Defined
+        behaviours: an empty collection PASSES vacuously; 'collectionPath'
+        not resolving or resolving to a non-array FAILS loudly naming the
+        path; a failing item names its index and the sub-reason. The
+        interpreter has no domain knowledge of what the items are or which
+        fields 'assert' reads.
+      properties:
+        op:
+          type: "string"
+          const: "everyItem"
+        collectionPath:
+          type: "string"
+          pattern: '^(\\$\\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[\*\])?)*)$'
+          description: >-
+            Path selecting the collection to quantify over. Must resolve to
+            an array at evaluation time; if it does not resolve, or resolves
+            to a non-array, the predicate fails loudly naming this path.
+        itemField:
+          type: "string"
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+          description: >-
+            Optional field of each collection item to evaluate 'assert'
+            against instead of the item itself.
+        assert:
+          $ref: "#/definitions/predicate"
+          description: >-
+            Predicate evaluated with each item (or item.itemField) as root
+            data. May nest any predicate, including everyItem/noneIn/allIn.
 
     # All predicate (AND)
     - type: "object"
