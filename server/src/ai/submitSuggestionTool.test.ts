@@ -266,14 +266,17 @@ describe('parseSubmitSuggestionArgs', () => {
 });
 
 describe('agent_intent — the constrained emission menu', () => {
-  it('exposes a single forced tool with a three-intent menu (event_graph | deck_layout | create_record)', () => {
+  it('exposes a single forced tool with a four-intent menu (event_graph | deck_layout | create_record | protocol_edit)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters;
     expect(params).toHaveProperty('required', ['intent']);
     const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
     expect(props.intent?.type).toBe('string');
     // Third intent added 2026-09-20: authoring records (equipment/material/labware) is
     // an ACT with its own review, not a field hidden inside event_graph.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record']);
+    // Fourth intent added PROTO-AI-7: protocol_edit proposes an ops envelope against
+    // the attached protocol; it validates against the registered schema and writes
+    // NOTHING (propose-never-write is structural).
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

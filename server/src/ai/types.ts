@@ -718,6 +718,18 @@ export interface AgentResult {
   /** Deck layout switch requested via agent_intent (intent: deck_layout). The
    *  client applies this to the live editor; nothing is drafted. */
   deckLayout?: { platformId: string; variantId: string };
+  /**
+   * Protocol-edit proposal emitted via agent_intent (intent: protocol_edit,
+   * PROTO-AI-7). `ops` is the model's envelope VALIDATED server-side against
+   * the registered protocol-edit-op schema (schema/workflow/
+   * protocol-edit-op.schema.yaml) and re-emitted VERBATIM. Nothing runs on
+   * emission — the client renders the proposal (PROTO-AI-9) and Accept applies
+   * it (PROTO-AI-8). `protocolId` is only the model's explicit override; when
+   * absent, the attached-protocol scope of the conversation binds the target.
+   * The op shape is schema-owned DATA, so `ops` stays an opaque validated
+   * array here rather than a hand-rolled TypeScript mirror of the union.
+   */
+  protocolEdit?: { ops: unknown[]; protocolId?: string };
   /** Semantic interpretation of the parsed prompt — operations, materials, parameters. */
   interpretation?: {
     operations: Array<{
