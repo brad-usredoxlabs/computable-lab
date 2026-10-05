@@ -83,6 +83,95 @@ export function insertProtocolStep(payload: Payload, anchorId: string, position:
   return { ...updateMembership(payload, anchorId, step.stepId, position), steps: steps.map((s, i) => ({ ...s, ordinal: i + 1 })) }
 }
 
+// ---------------------------------------------------------------------------
+// Declared-role ops (PROTO-AI-8). The AI applier drives these through the SAME
+// edit gates the step editor uses: a kind-only/inherited protocol and a
+// content-locked controlled document cannot have their declared resources
+// rewritten by an accepted proposal. Like `updateMembership`, only the DECLARED
+// list is touched — a protocol with no `instrumentRoles` does not gain one from
+// a labware edit, and sibling role lists (materialRoles, layoutTemplateRoles…)
+// ride through untouched. An emptied list pops cleanly; an emptied `roles`
+// object pops with it, so the record never carries `labwareRoles: []`.
+// ---------------------------------------------------------------------------
+
+type RoleListKey = 'labwareRoles' | 'instrumentRoles'
+
+/** The kind/lock gates of `editableProtocolSteps`, without the steps requirement. */
+function assertRolesEditable(payload: Payload, listKey: RoleListKey): void {
+  if (payload.kind !== 'protocol') throw new Error(`These roles are inherited. Edit the source protocol to change its ${listKey}.`)
+  if (payload.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(payload.state))) {
+    throw new Error('This controlled protocol is locked. Create a draft copy before editing its declared roles.')
+  }
+}
+
+function editRoleList(payload: Payload, listKey: RoleListKey, edit: (declared: Payload[]) => Payload[]): Payload {
+  assertRolesEditable(payload, listKey)
+  const roles = (payload.roles ?? {}) as Payload
+  const declared = Array.isArray(roles[listKey]) ? roles[listKey] as Payload[] : []
+  const next = edit(declared)
+  const nextRoles: Payload = { ...roles }
+  if (next.length > 0) nextRoles[listKey] = next
+  else delete nextRoles[listKey]
+  const updated: Payload = { ...payload }
+  if (Object.keys(nextRoles).length > 0) updated.roles = nextRoles
+  else delete updated.roles
+  return updated
+}
+
+function requireRole(declared: Payload[], roleId: string, listKey: RoleListKey): Payload {
+  const found = declared.find(role => role.roleId === roleId)
+  if (!found) throw new Error(`Role '${roleId}' is not a declared ${listKey === 'labwareRoles' ? 'labware' : 'equipment'} role of this protocol.`)
+  return found
+}
+
+/** Declare a new labware role. A duplicate roleId is a rejection, not a merge. */
+export function addLabwareRole(payload: Payload, role: Payload): Payload {
+  return editRoleList(payload, 'labwareRoles', declared => {
+    if (declared.some(existing => existing.roleId === role.roleId)) throw new Error(`Labware role '${role.roleId}' already exists.`)
+    return [...declared, role]
+  })
+}
+
+/** Update an existing labware role; only the listed fields change. */
+export function updateLabwareRole(payload: Payload, roleId: string, changes: Payload): Payload {
+  return editRoleList(payload, 'labwareRoles', declared => {
+    requireRole(declared, roleId, 'labwareRoles')
+    return declared.map(role => role.roleId === roleId ? { ...role, ...changes } : role)
+  })
+}
+
+/** Remove a labware role; deleting the last one pops `roles.labwareRoles` cleanly. */
+export function deleteLabwareRole(payload: Payload, roleId: string): Payload {
+  return editRoleList(payload, 'labwareRoles', declared => {
+    requireRole(declared, roleId, 'labwareRoles')
+    return declared.filter(role => role.roleId !== roleId)
+  })
+}
+
+/** Declare a new instrument role. A duplicate roleId is a rejection, not a merge. */
+export function addInstrumentRole(payload: Payload, role: Payload): Payload {
+  return editRoleList(payload, 'instrumentRoles', declared => {
+    if (declared.some(existing => existing.roleId === role.roleId)) throw new Error(`Equipment role '${role.roleId}' already exists.`)
+    return [...declared, role]
+  })
+}
+
+/** Update an existing instrument role; only the listed fields change. */
+export function updateInstrumentRole(payload: Payload, roleId: string, changes: Payload): Payload {
+  return editRoleList(payload, 'instrumentRoles', declared => {
+    requireRole(declared, roleId, 'instrumentRoles')
+    return declared.map(role => role.roleId === roleId ? { ...role, ...changes } : role)
+  })
+}
+
+/** Remove an instrument role; deleting the last one pops `roles.instrumentRoles` cleanly. */
+export function deleteInstrumentRole(payload: Payload, roleId: string): Payload {
+  return editRoleList(payload, 'instrumentRoles', declared => {
+    requireRole(declared, roleId, 'instrumentRoles')
+    return declared.filter(role => role.roleId !== roleId)
+  })
+}
+
 export function deleteProtocolStep(payload: Payload, stepId: string): Payload {
   const steps = editableProtocolSteps(payload)
   const step = steps.find(s => s.stepId === stepId)
