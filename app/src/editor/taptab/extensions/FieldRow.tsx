@@ -7,6 +7,7 @@ import { OntologySidebar, type OntologyTerm } from '../OntologySidebar';
 import { apiClient } from '../../../shared/api/client';
 import { WidgetRenderer } from './WidgetRenderer';
 import { focusAdjacentTapTabField } from '../tabNavPlugin';
+import { normalizeRefFieldValue } from '../refValue';
 
 interface SelectedOntologyTerm {
   label: string;
@@ -144,7 +145,12 @@ function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
         options={attrs.options}
         refKind={attrs.refKind}
         suggestionPlan={attrs.suggestionPlan}
-        onCommit={(v) => updateAttributes({ value: v })}
+        onCommit={(v) =>
+          // Ref value-emission contract (QMS-6E D3b): a ref widget may commit
+          // the structured ref it selected or the TRUE empty (null) — never a
+          // display glyph or placeholder string into the field value.
+          updateAttributes({ value: normalizeRefFieldValue(v, attrs.widget) })
+        }
         onRefSelect={handleRefSelect}
         onCancel={() => {}}
         objectProperties={attrs.objectConfig?.properties}

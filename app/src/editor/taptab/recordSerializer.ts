@@ -13,6 +13,32 @@
 
 import type { JSONContent } from '@tiptap/core';
 import { setValueAtPath, stripJsonPath } from '../../shared/lib/formHelpers';
+import { isEmptyRefFieldValue } from './refValue';
+
+/**
+ * Immutably remove the value at a dotted path. No-op when the path is absent.
+ * Used for the ref value contract: a cleared ref must be DELETED, not written
+ * as a typed empty.
+ */
+function deleteValueAtPath(
+  obj: Record<string, unknown>,
+  path: string,
+): Record<string, unknown> {
+  const parts = stripJsonPath(path).split('.')
+  if (parts.length === 0 || parts.some((p) => p.length === 0)) return obj
+
+  const result = { ...obj }
+  let current = result
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]!
+    const next = current[part]
+    if (next === null || typeof next !== 'object' || Array.isArray(next)) return obj
+    current[part] = { ...(next as Record<string, unknown>) }
+    current = current[part] as Record<string, unknown>
+  }
+  delete current[parts[parts.length - 1]!]
+  return result
+}
 
 /**
  * Recursively walks a TipTap document tree and extracts fieldRow path/value pairs.
@@ -30,6 +56,18 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
       const value = node.attrs.value as unknown;
 
       if (typeof path === 'string') {
+        // Ref value contract (QMS-6E D3b): a structured ref that is unset is
+        // ABSENT from the payload — writing null/''/'—' into a `type: object`
+        // slot 422s. Absence is the true empty value for a ref; a cleared ref
+        // must also delete any base-payload value at the same path.
+        if (isEmptyRefFieldValue(value, node.attrs.widget)) {
+          result = deleteValueAtPath(result, stripJsonPath(path));
+          // Recursively process child nodes
+          if (node.content && node.content.length > 0) {
+            result = extractFieldRows(node.content, result);
+          }
+          continue;
+        }
         // Use stripJsonPath to remove $. prefix, then set the value
         const cleanPath = stripJsonPath(path);
         // setValueAtPath returns a new object, so we need to capture it
