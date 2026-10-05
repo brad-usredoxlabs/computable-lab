@@ -1,7 +1,8 @@
 # Handoff — LANE 2 tick 2026-10-04T19:50 → 20:35 EDT (PROTO-AI-10 MERGED; UI gate in flight; AI-5 still in flight)
 
 Campaign: `ai-protocol-edit-and-router` (lane 2 list `~/.hermes/cl/lanes/2/task-list.md`).
-Trunk: `cl/integration-2` @ **`361ace26`** (was `4149109e`).
+Trunk: `cl/integration-2` — this tick merged the **PROTO-AI-10 CODE revision `361ace26`**
+(parent `4149109e`); the tip after this tick's docs commits is the latest `docs(lane2)` commit on top.
 Worker profile: `cl-senior` (thunderbeast `:8080`, shared 4-slot endpoint, other lane shares it).
 
 ## Outcome this tick
