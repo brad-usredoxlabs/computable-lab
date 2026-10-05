@@ -306,6 +306,13 @@ properties:
     items:
       $ref: "#/$defs/ProtocolStep"
 
+  derivedFromRevisionRef:
+    $ref: "./datatypes/revision-ref.schema.yaml"
+    readOnly: true
+    description: >
+      Lineage back to the captured revision this draft was derived from
+      (draft-copy only; set once by the server at derivation, never edited).
+
 $defs:
   # -------------------------
   # Phase definitions
