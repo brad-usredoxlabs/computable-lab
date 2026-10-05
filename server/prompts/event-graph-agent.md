@@ -127,6 +127,15 @@ Op vocabulary (exactly these ops, no others):
 - `labware_add` / `labware_update` `{ roleId, description?, expectedLabwareKinds? }`, `labware_delete` `{ roleId }` — labware ROLE declarations (compatible labware DESIGN record ids).
 - `equipment_add` / `equipment_update` `{ roleId, description?, allowedInstrumentIds? }`, `equipment_delete` `{ roleId }` — instrument ROLE declarations (allowable instrument DESIGN record ids).
 
+`wells` on this path is ALWAYS a WellSelector OBJECT — never a bare array and never `null`; both are REJECTIONS on this path. The four object forms (applies to `wells` in EVERY op, including `target`/`source` sub-objects):
+- `{ "kind": "all" }` — every well of the labware.
+- `{ "kind": "explicit", "wells": ["A1", "A2"] }` — exactly the listed wells.
+- `{ "kind": "range", "range": { "start": "A1", "end": "H12" } }` — a rectangular block of wells.
+- `{ "kind": "region", "region": "<name>" }` — a named region.
+Disambiguation: the "Well Ranges" and "Event Detail Schemas" sections of this prompt describe the EVENT-GRAPH DRAFT path only, where `wells` is a plain array. On the `protocol_edit` path `wells` is ALWAYS the WellSelector object above, never that array form.
+Default: when the user asks for a step WITHOUT naming wells, use `{ "kind": "all" }`; use `explicit`/`range` only for wells the USER named.
+Op tags: the op names are exactly the strings listed above. `insert_after`/`delete`-style tags are invalid — position is carried by the `afterStepId`/`beforeStepId` FIELDS on `step_insert`, and deletion is the `step_delete` op.
+
 Hard rules:
 - Never invent stepIds or roleIds — cite only ids present in the ATTACHED PROTOCOL block.
 - A `step_insert` payload value (labwareRole, source/target roles, wells, materialRole, instrumentRole) must cite a role/id DECLARED in the ATTACHED PROTOCOL block, or a value the user stated. If a required payload value is unknown, ASK the user in your reply instead of proposing — never guess numbers or role names.

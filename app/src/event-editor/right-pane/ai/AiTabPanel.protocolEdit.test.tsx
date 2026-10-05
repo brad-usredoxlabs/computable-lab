@@ -235,6 +235,48 @@ describe('AiTabPanel protocol_edit wiring', () => {
     expect(screen.getByTestId('chat-input')).toBeTruthy()
   })
 
+  it('a successful protocol accept dispatches cl:records-changed so the rail refills (D2)', async () => {
+    // Mirrors the human protocol-write convention: ProtocolStepEditModal.tsx:99
+    // fires window 'cl:records-changed' after a successful updateRecord, which
+    // RunProtocolStepsLoader listens for to refill the rail (labware badge).
+    mocks.applyProtocolEdit.mockResolvedValue({ wrote: true, payload: {} })
+    const listener = vi.fn()
+    window.addEventListener('cl:records-changed', listener)
+    try {
+      renderPanel()
+      await screen.findByTestId('ai-tab-system-prompt')
+      await emitProtocolEdit()
+      fireEvent.click(await screen.findByTestId('changes-apply'))
+      await waitFor(() => {
+        expect(mocks.applyProtocolEdit).toHaveBeenCalledTimes(1)
+      })
+      await waitFor(() => {
+        expect(listener).toHaveBeenCalledTimes(1)
+      })
+    } finally {
+      window.removeEventListener('cl:records-changed', listener)
+    }
+  })
+
+  it('a failed (stale-sha) protocol accept dispatches NOTHING (D4: nothing was written)', async () => {
+    mocks.applyProtocolEdit.mockRejectedValue(new Error(STALE))
+    const listener = vi.fn()
+    window.addEventListener('cl:records-changed', listener)
+    try {
+      renderPanel()
+      await screen.findByTestId('ai-tab-system-prompt')
+      await emitProtocolEdit()
+      fireEvent.click(await screen.findByTestId('changes-apply'))
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(STALE)
+      })
+      expect(mocks.applyProtocolEdit).toHaveBeenCalledTimes(1)
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('cl:records-changed', listener)
+    }
+  })
+
   it('an event-graph draft is unaffected: no protocol rows, event rows render', async () => {
     renderPanel()
     await screen.findByTestId('ai-tab-system-prompt')

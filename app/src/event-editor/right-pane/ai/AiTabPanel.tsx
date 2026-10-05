@@ -617,6 +617,13 @@ export function AiTabPanel() {
         await applyProtocolEdit(proposal.protocolId, proposal.ops)
         // Success: the proposal is spent. Reset the sidebar so the chat
         // input returns and there is nothing left to re-Accept.
+        // D2 rail refresh: same window signal every human protocol-write
+        // path fires after a successful write (ProtocolStepEditModal.tsx:99,
+        // ProtocolTabPanel.tsx:1394, ProtocolNavPanel.tsx:130) — RunProtocol
+        // StepsLoader listens and refills the rail so the LABWARE count
+        // updates without a page reload. SUCCESS only: a failed apply wrote
+        // nothing and must not refresh.
+        window.dispatchEvent(new CustomEvent('cl:records-changed'))
         protocolProposalRef.current = null
         setProtocolApply(null)
         sidebarDispatch({ type: 'reset' })
