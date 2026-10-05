@@ -62,6 +62,26 @@ export interface ProtocolResources {
 export const NO_PROTOCOL_RESOURCES: ProtocolResources = { labwares: [], equipment: [] }
 
 /**
+ * What one run's `bindings.labware` entry binds to a declared role: the
+ * CONCRETE instance (and optional geometry) ref of a
+ * `planned-run.schema.yaml` / `$defs/LabwareBinding` — a
+ * `core/datatypes/ref.schema.yaml` node. Read-only display: the setup wizard
+ * creates bindings, the rail only shows which plate this run bound (PROTO-AI-10).
+ */
+export interface LabwareBindingDisplay {
+  /** Concrete labware instance ref ({ id, label? } — bare id tolerated). */
+  instanceRef: { id: string; label?: string }
+  /** Optional physical geometry definition ref. */
+  geometryRef?: { id: string; label?: string }
+}
+
+/** roleId → the concrete instance THIS run bound to it. */
+export type LabwareBindingMap = Record<string, LabwareBindingDisplay>
+
+/** Shared empty value so the context never hands out a fresh object per render. */
+export const NO_LABWARE_BINDINGS: LabwareBindingMap = {}
+
+/**
  * The protocol a run is attached to (run → plannedRunRef → protocolRef) —
  * the subject of every Protocol surface. `title` is the ref's label, used only
  * until the record itself is read (ProtocolIdentity reads the canonical name
@@ -114,6 +134,12 @@ interface ProtocolSelectionState {
   resources: ProtocolResources
   /** Publish the declared roles (empty when the protocol declares none). */
   setResources: (resources: ProtocolResources) => void
+  /** What THIS run's planned-run binds to the declared labware roles —
+   *  roleId → concrete instance. Empty in protocol-only context or when the
+   *  run binds nothing (read-only display, PROTO-AI-10). */
+  labwareBindings: LabwareBindingMap
+  /** Publish the run's roleId → bound-instance map (empty resets it). */
+  setLabwareBindings: (bindings: LabwareBindingMap) => void
   /** The attached protocol (normalized from the run's chain) — one source of
    *  truth for "which protocol is this?" across the Protocol surfaces. */
   protocol: ProtocolIdentityRef | null
@@ -140,6 +166,7 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
   const [steps, setStepsState] = useState<ProtocolStepSummary[]>([])
   const [resources, setResources] = useState<ProtocolResources>(NO_PROTOCOL_RESOURCES)
+  const [labwareBindings, setLabwareBindings] = useState<LabwareBindingMap>(NO_LABWARE_BINDINGS)
   const [protocol, setProtocol] = useState<ProtocolIdentityRef | null>(null)
 
   const setFocusedStep = useCallback((step: { stepId: string; label: string; ordinal?: number } | null) => {
@@ -199,6 +226,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         setSteps,
         resources,
         setResources,
+        labwareBindings,
+        setLabwareBindings,
         protocol,
         setProtocol,
         toggleStepVisibility,

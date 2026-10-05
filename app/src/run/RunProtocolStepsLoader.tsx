@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../shared/api/client'
 import { useProtocolSelection } from '../event-editor/protocol/ProtocolSelectionContext'
-import type { ProtocolStepSummary } from '../event-editor/protocol/ProtocolSelectionContext'
+import type { LabwareBindingMap, ProtocolStepSummary } from '../event-editor/protocol/ProtocolSelectionContext'
 import { protocolResourceSummaries } from '../event-editor/right-pane/protocol/protocolStepEditing'
 
 export interface RunProtocolStepsLoaderProps {
@@ -30,6 +30,45 @@ interface ResolvedRunProtocol {
   label: string | null
   /** Current content sha of the ATTACHED record (protocol_edit staleness anchor). */
   sha?: string
+  /** roleId → concrete bound instance from the PLR's `bindings.labware`
+   *  (read-only display, PROTO-AI-10). Empty when the run binds nothing. */
+  labwareBindings: LabwareBindingMap
+}
+
+/** Read a `core/datatypes/ref.schema.yaml` node (or bare id string) into a
+ *  minimal `{ id, label? }` — null when it names no concrete instance. */
+function refIdentity(value: unknown): { id: string; label?: string } | null {
+  if (typeof value === 'string') {
+    const id = value.trim()
+    return id ? { id } : null
+  }
+  if (!value || typeof value !== 'object') return null
+  const r = value as Record<string, unknown>
+  if (typeof r.id !== 'string' || !r.id.trim()) return null
+  const label = typeof r.label === 'string' && r.label.trim() ? r.label.trim() : undefined
+  return label ? { id: r.id.trim(), label } : { id: r.id.trim() }
+}
+
+/**
+ * Join the planned-run's `bindings.labware` ($defs/LabwareBinding) into a
+ * roleId → { instanceRef, geometryRef? } map. Zero guessing: an entry without
+ * a `labwareInstanceRef` binds no concrete instance and publishes nothing;
+ * two roles bound to different instances of the same design stay distinct.
+ */
+function labwareBindingsFromPayload(pp: Record<string, unknown>): LabwareBindingMap {
+  const bindings = (pp.bindings as Record<string, unknown> | undefined)?.labware
+  if (!Array.isArray(bindings)) return {}
+  const map: LabwareBindingMap = {}
+  for (const entry of bindings as Array<Record<string, unknown> | null>) {
+    if (!entry || typeof entry !== 'object') continue
+    const roleId = typeof entry.roleId === 'string' ? entry.roleId.trim() : ''
+    if (!roleId) continue
+    const instanceRef = refIdentity(entry.labwareInstanceRef)
+    if (!instanceRef) continue
+    const geometryRef = refIdentity(entry.labwareGeometryRef)
+    map[roleId] = geometryRef ? { instanceRef, geometryRef } : { instanceRef }
+  }
+  return map
 }
 
 /** Resolve run → plannedRunRef (PLR) → protocolRef → protocol record. */
@@ -41,6 +80,9 @@ async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | 
     if (!plr?.id) return null
     const plrEnv = await apiClient.getRecord(plr.id)
     const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+    // The PLR payload is in hand exactly here — its `bindings.labware` say
+    // WHICH concrete plate this run bound to each declared role (PROTO-AI-10).
+    const labwareBindings = pp ? labwareBindingsFromPayload(pp) : {}
     const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string; kind?: string; label?: string } | undefined
     if (typeof protoRef?.id !== 'string') return null
     const attachedId = protoRef.id
@@ -54,15 +96,15 @@ async function resolveRunProtocol(runId: string): Promise<ResolvedRunProtocol | 
         const lpSha = (lpEnv as { meta?: { contentSha?: string; commitSha?: string } } | undefined)?.meta?.contentSha
           ?? (lpEnv as { meta?: { commitSha?: string } } | undefined)?.meta?.commitSha
         if (typeof inh?.id === 'string') {
-          return { attachedId, stepsId: inh.id, label, ...(lpSha ? { sha: lpSha } : {}) }
+          return { attachedId, stepsId: inh.id, label, labwareBindings, ...(lpSha ? { sha: lpSha } : {}) }
         }
-        return { attachedId, stepsId: attachedId, label, ...(lpSha ? { sha: lpSha } : {}) }
+        return { attachedId, stepsId: attachedId, label, labwareBindings, ...(lpSha ? { sha: lpSha } : {}) }
       } catch {
         // fall through — an LPR without a resolvable parent still shows steps
         // by its own id, and the identity is still the local protocol.
       }
     }
-    return { attachedId, stepsId: attachedId, label }
+    return { attachedId, stepsId: attachedId, label, labwareBindings }
   } catch {
     return null
   }
@@ -98,6 +140,11 @@ export function RunProtocolStepsLoader({ runId }: RunProtocolStepsLoaderProps) {
             }
           : null,
       )
+      // Publish WHICH concrete instances this run bound (roleId → instance,
+      // read-only) exactly when the run re-resolves — an empty map resets
+      // stale labels on every runId/protocol switch, regardless of whether
+      // the step/resource fetches below succeed (PROTO-AI-10).
+      sel?.setLabwareBindings(resolved?.labwareBindings ?? {})
       try {
         // What the assay NEEDS (declared labware / equipment roles) comes from
         // the protocol record, not the steps endpoint — publish it alongside the
