@@ -54,6 +54,28 @@ properties:
     properties:
       recordId:
         type: string
+      revisionRef:
+        type: object
+        additionalProperties: false
+        required: [ kind, type, id ]
+        description: >
+          Immutable record-revision snapshot of the subject at signing time
+          (2026-10-03 signature-integrity contract). Optional in the schema
+          only so legacy gitCommit-only signatures stay readable as historical
+          evidence; enforcement that NEW transitions require a verifiable
+          snapshot lives in the update path (SIGNATURE_REVISION_REQUIRED).
+        properties:
+          kind:
+            const: "record"
+          type:
+            const: "record-revision"
+          id:
+            type: string
+            pattern: "^REV-[A-F0-9]+$"
+      contentHash:
+        type: string
+        pattern: "^[a-f0-9]{64}$"
+        description: "Canonical SHA-256 of the signed snapshot — drives STALE_SIGNATURE / SIGNED_CONTENT_CHANGED."
       gitCommit:
         type: string
         pattern: "^[a-f0-9]{7,40}$"
