@@ -104,9 +104,15 @@ export function RecordEditPanel({ recordId, title, recordKind, onClose }: Record
         if (editor) {
           payload = serializeDocument(editor.getJSON(), formData)
         }
-        // Identity is fixed for an edit — re-stamp so a serialization pass
-        // can't drop or fork it.
-        payload.recordId = recordId
+        // Identity is fixed for an edit. Re-stamp `recordId` ONLY when the
+        // stored payload actually carries that field — some schemas declare
+        // `recordId` inside the payload, while others (e.g. controlled-
+        // document, `unevaluatedProperties: false`) declare only `id`.
+        // Inventing `recordId` there 422s with "must NOT have unevaluated
+        // properties" (QMS-6E D3b receipt trail-H step 19).
+        if ('recordId' in formData || payload.recordId !== undefined) {
+          payload.recordId = recordId
+        }
         await apiClient.updateRecord(recordId, payload)
         window.dispatchEvent(new CustomEvent('cl:records-changed'))
         setSavedAt(Date.now())

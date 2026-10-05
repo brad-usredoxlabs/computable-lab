@@ -3,6 +3,7 @@ import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobo
 import { CsvImportModal } from '../components/registry/CsvImportModal';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
+import { serializeDocument } from '../editor/taptab/recordSerializer';
 import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
@@ -50,29 +51,42 @@ export default function RecordRegistryPage() {
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
 
-  useEffect(() => {
-    async function refreshRecords() {
-      const tab = REGISTRY_TABS.find(t => t.id === activeTab);
-      if (!tab) return;
-      setLoading(true);
-      try {
-        const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
-        const results = await Promise.all(promises);
-        const allRecords: RecordData[] = [];
-        for (const { records } of results) allRecords.push(...records);
-        allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
-        setRecords(allRecords);
-      } catch {
-        setRecords([]);
-      } finally {
-        setLoading(false);
-      }
+  // QMS-6E D5: request-sequence token for the record list. Every refresh (tab
+  // switch, post-save, post-transition) bumps the token; a response whose
+  // token is no longer current is STALE — its tab is gone — and is dropped
+  // instead of rendering the wrong tab's rows.
+  const refreshSeqRef = useRef(0);
+
+  // Single implementation of the record-list refresh — the tab-switch effect
+  // and every manual refresh (save, draft-copy, transitions, CSV import) share
+  // it. Previously the effect carried a private copy with no staleness guard.
+  const refreshRecords = useCallback(async () => {
+    const tab = REGISTRY_TABS.find(t => t.id === activeTab);
+    if (!tab) return;
+    const seq = ++refreshSeqRef.current;
+    setLoading(true);
+    try {
+      const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
+      const results = await Promise.all(promises);
+      if (seq !== refreshSeqRef.current) return; // A newer refresh won the race.
+      const allRecords: RecordData[] = [];
+      for (const { records } of results) allRecords.push(...records);
+      allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
+      setRecords(allRecords);
+    } catch {
+      if (seq !== refreshSeqRef.current) return;
+      setRecords([]);
+    } finally {
+      if (seq === refreshSeqRef.current) setLoading(false);
     }
-    refreshRecords();
+  }, [activeTab]);
+
+  useEffect(() => {
+    void refreshRecords();
     setSelectedRecord(null);
     setProjection(null);
     setDirty(false);
-  }, [activeTab]);
+  }, [activeTab, refreshRecords]);
 
   const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
     const recordData: RecordData = {
@@ -102,24 +116,6 @@ export default function RecordRegistryPage() {
   const handleSaved = async () => {
     await refreshRecords();
   };
-
-  async function refreshRecords() {
-    const tab = REGISTRY_TABS.find(t => t.id === activeTab);
-    if (!tab) return;
-    setLoading(true);
-    try {
-      const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
-      const results = await Promise.all(promises);
-      const allRecords: RecordData[] = [];
-      for (const { records } of results) allRecords.push(...records);
-      allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
-      setRecords(allRecords);
-    } catch {
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const loadProjectionForRecord = async (recordData: RecordData) => {
     if (!recordData.recordId) return;
@@ -157,9 +153,15 @@ export default function RecordRegistryPage() {
     setError(null);
 
     try {
-      // Serialize from the TipTap editor JSON
+      // QMS-6E D3a: serialize the TipTap doc INTO the record's own payload —
+      // exactly like the /record sibling (RecordEditPanel). PUTting the raw
+      // doc as the payload loses kind/id/lifecycleId and every save of a
+      // lifecycle-bearing record dies with 409 LIFECYCLE_IMMUTABLE.
       const docJson = editor.getJSON();
-      const serialized = docJson as Record<string, unknown>;
+      const serialized = serializeDocument(
+        docJson,
+        selectedRecord.payload as Record<string, unknown>,
+      );
 
       if (editorMode === 'create') {
         await apiClient.createRecord(selectedRecord.schemaId, serialized);
