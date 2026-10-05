@@ -85,3 +85,21 @@ properties:
         type: { const: user }
         id: { type: string, pattern: "^USR-" }
     description: "Approver role assignment (lifecycle role: approver). USR-* id; assigned as the flow advances, so not required at draft."
+
+  derivedFromRevisionRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    description: >
+      Immutable record-revision snapshot of the source document this draft was
+      copied from (POST /records/:id/draft-copy, 2026-10-03 revision contract).
+      System-assigned by the draft-copy endpoint; a new draft never inherits
+      author, reviewer, approver, or signature assignments.
+    properties:
+      kind:
+        const: "record"
+      type:
+        const: "record-revision"
+      id:
+        type: string
+        pattern: "^REV-[A-F0-9]+$"

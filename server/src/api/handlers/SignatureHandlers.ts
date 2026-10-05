@@ -28,6 +28,12 @@ export interface SignatureHandlerOptions {
   authorizationService?: AuthorizationService;
 }
 
+/** Signed-revision binding the mint always stamps into the subject (2026-10-03 contract). */
+export interface SignedRevisionSubject {
+  revisionRef: { kind: 'record'; type: 'record-revision'; id: string };
+  contentHash: string;
+}
+
 export interface MintSignatureBody {
   subject: { recordId: string; lifecycleId?: string; targetState?: string };
   action: string;
@@ -92,7 +98,7 @@ export function createSignatureHandlers(options: SignatureHandlerOptions) {
         // Preserve the signed content independently of repository history.
         // A legacy meta.commitSha is a content token, not a verified commit.
         const revision = await new RecordRevisionService(store).capture(subject, user.userId, 'signature');
-        const signedRevision = { revisionRef: revisionRef(revision.recordId), contentHash: revision.payload.contentHash };
+        const signedRevision: SignedRevisionSubject = { revisionRef: revisionRef(revision.recordId), contentHash: revision.payload.contentHash };
         const gitCommit = revision.payload.gitCommit;
 
         const now = new Date().toISOString();

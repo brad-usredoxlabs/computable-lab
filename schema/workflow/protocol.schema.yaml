@@ -254,6 +254,24 @@ properties:
         type: { const: person }
     description: "Person with authority to approve this protocol for use."
 
+  derivedFromRevisionRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    description: >
+      Immutable record-revision snapshot of the source record this draft was
+      copied from (POST /records/:id/draft-copy, 2026-10-03 revision contract).
+      System-assigned by the draft-copy endpoint; a new draft never inherits
+      reviewer, approver, or signature assignments.
+    properties:
+      kind:
+        const: "record"
+      type:
+        const: "record-revision"
+      id:
+        type: string
+        pattern: "^REV-[A-F0-9]+$"
+
   componentInstanceRefs:
     type: array
     description: "Optional graph-component-instance refs linked to this protocol."
