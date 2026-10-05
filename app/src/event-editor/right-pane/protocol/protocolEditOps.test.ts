@@ -233,6 +233,116 @@ describe('applyOps — gate rejections name the op index', () => {
   })
 })
 
+describe('applyOps — PROTO-AI-8 step_update kind-change payload', () => {
+  // Architect ruling (Option (i) RELAXED, PROTO-AI-9 §4): on a kind change the step is
+  // REBUILT as { ...baseFields, kind, ...explicitPayloadPicksFromOp }, and every payload
+  // field NOT allowed by the NEW kind's per-kind set (envelope $defs/StepPayloadFields)
+  // is DROPPED — superseded dead data must not ride the ledger. Base fields are untouched.
+  // Without `kind` the ordinary-edit path is byte-identical to today.
+  const kindPayload = () => structuredClone(basePayload()) as unknown as Record<string, unknown> & {
+    steps: Array<Record<string, unknown> & { stepId: string }>
+  }
+  const withKindFields = () => {
+    const p = kindPayload()
+    // s2: a full wash step (payload per protocol.schema.yaml StepWash).
+    Object.assign(p.steps[1]!, {
+      target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3, washVolume_uL: 200,
+      description: 'Wash the beads.',
+    })
+    // s3: a full mix step.
+    Object.assign(p.steps[2]!, {
+      target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 2, volume_uL: 50,
+      description: 'Mix the eluate.',
+    })
+    return p
+  }
+  const stepById = (payload: Record<string, unknown>, stepId: string) =>
+    stepsOf(payload).find(s => s.stepId === stepId)!
+
+  it('wash→incubate: applies duration_min, drops washVolume_uL, KEEPS target/wells, drops cycles', () => {
+    const result = applyOps(withKindFields(), [
+      { op: 'step_update', stepId: 's2', kind: 'incubate', duration_min: 720 },
+    ], { mint })
+    const step = stepById(result, 's2')
+    expect(step.kind).toBe('incubate')
+    expect(step.duration_min).toBe(720)
+    // The delta-only op names only duration_min; target/wells already sit on the step and
+    // incubate ALLOWS them — hygiene keeps what the new kind permits.
+    expect(step.target).toEqual({ labwareRole: 'plate' })
+    expect(step.wells).toEqual({ kind: 'all' })
+    // Superseded wash payload (not in incubate's allow-set) is gone entirely, not undefined.
+    expect(Object.prototype.hasOwnProperty.call(step, 'washVolume_uL')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(step, 'cycles')).toBe(false)
+    // Base fields survive the rebuild untouched.
+    expect(step.label).toBe('Wash')
+    expect(step.description).toBe('Wash the beads.')
+    expect(step.executionMeta).toEqual({ startedAt: '2026-01-01T00:00:00.000Z' })
+    expect(step.ordinal).toBe(2)
+  })
+
+  it('wash→mix: KEEPS cycles (mix allows it) and drops washVolume_uL — per-kind allow-set, not a blanket wipe', () => {
+    const result = applyOps(withKindFields(), [
+      { op: 'step_update', stepId: 's2', kind: 'mix' },
+    ], { mint })
+    const step = stepById(result, 's2')
+    expect(step.kind).toBe('mix')
+    expect(step.cycles).toBe(3)
+    expect(step.target).toEqual({ labwareRole: 'plate' })
+    expect(step.wells).toEqual({ kind: 'all' })
+    expect(Object.prototype.hasOwnProperty.call(step, 'washVolume_uL')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(step, 'duration_min')).toBe(false)
+  })
+
+  it('mix→other: wipes ALL payload and keeps description (base field)', () => {
+    const result = applyOps(withKindFields(), [
+      { op: 'step_update', stepId: 's3', kind: 'other' },
+    ], { mint })
+    const step = stepById(result, 's3')
+    expect(step.kind).toBe('other')
+    for (const payloadKey of ['target', 'wells', 'cycles', 'volume_uL']) {
+      expect(Object.prototype.hasOwnProperty.call(step, payloadKey), payloadKey).toBe(false)
+    }
+    expect(step.description).toBe('Mix the eluate.')
+    expect(step.label).toBe('Elute')
+    expect(step.ordinal).toBe(3)
+  })
+
+  it('a kind-change op’s listed base-field edits ride the rebuild (label/description/notes/settings)', () => {
+    const result = applyOps(withKindFields(), [
+      { op: 'step_update', stepId: 's3', kind: 'incubate', duration_min: 30,
+        label: 'Incubate eluate', notes: 'Room temp.' },
+    ], { mint })
+    const step = stepById(result, 's3')
+    expect(step).toMatchObject({
+      kind: 'incubate', duration_min: 30, label: 'Incubate eluate', notes: 'Room temp.',
+      description: 'Mix the eluate.', target: { labwareRole: 'plate' },
+    })
+    expect(Object.prototype.hasOwnProperty.call(step, 'volume_uL')).toBe(false)
+    // op/stepId-op-leak: the rebuilt step is built from explicit picks, never a spread of
+    // the op — `op` cannot ride the record step (stepId legitimately stays: it is a base
+    // ProtocolStep field preserved from the existing step).
+    expect(Object.prototype.hasOwnProperty.call(step, 'op')).toBe(false)
+    expect(step.stepId).toBe('s3')
+  })
+
+  it('ordinary update WITHOUT kind is byte-identical to today: no rebuild, step payload untouched', () => {
+    const payload = withKindFields()
+    const before = structuredClone(stepById(payload, 's2'))
+    const result = applyOps(payload, [
+      { op: 'step_update', stepId: 's2', label: 'Wash ×3' },
+    ], { mint })
+    const after = stepById(result, 's2')
+    // Same key SET and same values as the original step plus the label — no dropped keys,
+    // no added keys, no undefined-valued keys (the regression guard for the rebuild path).
+    expect(Object.keys(after).sort()).toEqual(Object.keys(before).sort())
+    expect({ ...before, label: 'Wash ×3' }).toEqual(after)
+    expect(after.kind).toBe('wash')
+    expect(after.cycles).toBe(3)
+    expect(after.washVolume_uL).toBe(200)
+    expect(payload).toEqual(withKindFields())
+  })
+})
+
 describe('applyProtocolEdit — one atomic write under the human lock', () => {
   beforeEach(() => {
     vi.clearAllMocks()

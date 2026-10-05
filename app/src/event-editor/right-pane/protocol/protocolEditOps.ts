@@ -90,6 +90,55 @@ interface InsertPayloadFields {
   producesArtifactId?: string
 }
 
+/**
+ * The payload fields a kind-changing `step_update` op may carry, PROTO-AI-2/8
+ * (architect ruling Option (i) RELAXED): the NEW kind's payload fields,
+ * permitted ONLY together with `kind`, required by NOTHING at envelope level
+ * (per-kind completeness is the record PUT's authority). Same field vocabulary
+ * as insert, mirrored here from envelope $defs/UpdateTarget/UpdateSource/
+ * UpdateMaterial/WellSelector/Expr and the per-kind whitelists (protocol-edit-
+ * op.schema.yaml StepUpdateOp allOf); parity of the per-kind sets with the
+ * record defs is drift-locked in ProtocolEditOpSchema.test.ts.
+ */
+type UpdatePayloadFields = InsertPayloadFields & {
+  /** Optional authoring hint (StepTransfer.mappingHint, protocol.schema.yaml:923-927). */
+  mappingHint?: Record<string, unknown>
+}
+
+/** The declared payload-field SUPERSET (update side) — the ONLY keys the
+ *  kind-change rebuild reads off the op and prunes off the step (explicit
+ *  picks; never a spread of the op, so op/stepId can never leak). Mirrors the
+ *  envelope's whitelist union; order mirrors INSERT_PAYLOAD_FIELDS + mappingHint. */
+const UPDATE_PAYLOAD_FIELDS = [
+  'target', 'source', 'material', 'wells', 'modality', 'channels', 'instrumentRole',
+  'cycles', 'volume_uL', 'washVolume_uL', 'duration_min', 'temperature_C',
+  'working_concentration', 'ratio', 'producesArtifactId', 'mappingHint',
+] as const satisfies readonly (keyof UpdatePayloadFields)[]
+
+/**
+ * kind → allowed payload fields on a kind change — the TypeScript MIRROR of
+ * envelope $defs/StepPayloadFields (protocol-edit-op.schema.yaml). The applier
+ * keeps the rebuild's keep/drop decision DATA-shaped here so the envelope
+ * stays the single vocabulary authority (parity drift-locked in
+ * ProtocolEditOpSchema.test.ts; envelope → record-def parity, and the app
+ * mirror below is pinned to these exact sets by protocolEditOps.test.ts).
+ * Superseded-field disposition (architect §4): on a kind change the step is
+ * rebuilt keeping every BASE field untouched; a payload field rides the new
+ * step only if the NEW kind allows it — the op's explicit value wins, else the
+ * step's existing value is kept; a field outside the new kind's list is DROPPED
+ * (dead data never rides the ledger).
+ */
+const STEP_PAYLOAD_FIELDS_BY_KIND: Record<string, ReadonlySet<string>> = {
+  add_material: new Set(['target', 'wells', 'material', 'working_concentration', 'ratio', 'volume_uL']),
+  transfer: new Set(['source', 'target', 'working_concentration', 'ratio', 'volume_uL', 'mappingHint']),
+  mix: new Set(['target', 'wells', 'cycles', 'volume_uL']),
+  wash: new Set(['target', 'wells', 'cycles', 'washVolume_uL']),
+  incubate: new Set(['target', 'wells', 'duration_min', 'temperature_C']),
+  read: new Set(['target', 'wells', 'modality', 'channels', 'instrumentRole']),
+  harvest: new Set(['source', 'wells', 'volume_uL', 'producesArtifactId']),
+  other: new Set<string>(),
+}
+
 /** The declared payload fields in list order — the ONLY keys the applier
  *  copies onto the minted step (explicit picks; op/anchor/label/kind/description
  *  are handled by name). Keys absent on the op are absent on the step — never
@@ -106,7 +155,7 @@ const INSERT_PAYLOAD_FIELDS = [
  * validates before this ever runs); no runtime vocabulary switchboard lives here.
  */
 export type ProtocolEditOp =
-  | { op: 'step_update'; stepId: string; label?: string; description?: string; notes?: string; kind?: string; settings?: unknown[] }
+  | ({ op: 'step_update'; stepId: string; label?: string; description?: string; notes?: string; kind?: string; settings?: unknown[] } & UpdatePayloadFields)
   | { op: 'step_insert'; afterStepId?: string; beforeStepId?: string; label: string; kind: string; description?: string } & InsertPayloadFields
   | { op: 'step_delete'; stepId: string }
   | { op: 'labware_add' | 'labware_update' | 'labware_delete'; roleId: string; description?: string; expectedLabwareKinds?: string[] }
@@ -159,6 +208,47 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * Rebuild a step for a kind change (PROTO-AI-2/8, architect §3.4/§4):
+ * `{ ...baseFields, kind: op.kind, ...explicitPayloadPicks }`.
+ *  - baseFields = every key the step already has that is NOT a payload key
+ *    (i.e. stepId, ordinal, label, description(+RichText), notes, settings,
+ *    executionMeta, isOptional, phaseId, phase, plannedOffset, semanticVerb,
+ *    methodRequirement, executionPreference, subGraphRef — everything
+ *    ProtocolStep :752-839 declares OUTSIDE payloads, plus anything unknown,
+ *    which is base by exclusion), carried UNTOUCHED, with the op's listed base
+ *    edits (label/description/notes/settings) overriding and the rich-text
+ *    ruling honoured.
+ *  - Payload: for each key the NEW kind allows (explicit picks over
+ *    UPDATE_PAYLOAD_FIELDS — never a spread of the op), the op's explicit
+ *    value wins; else the step's existing value is kept; absent stays absent
+ *    (never written as undefined). Keys outside the allow-set are DROPPED —
+ *    the superseded-field disposition.
+ */
+function applyOpsToStepKindChange(
+  step: Step,
+  newKind: string,
+  op: { label?: string; description?: string; notes?: string; settings?: unknown[] } & UpdatePayloadFields,
+  allowed: ReadonlySet<string>,
+): Step {
+  const base: Payload = {}
+  for (const [key, value] of Object.entries(step)) {
+    if (!(UPDATE_PAYLOAD_FIELDS as readonly string[]).includes(key)) base[key] = value
+  }
+  if (op.label !== undefined) base.label = op.label
+  if (op.description !== undefined) Object.assign(base, descriptionChanges(op.description))
+  if (op.notes !== undefined) base.notes = op.notes
+  if (op.settings !== undefined) base.settings = op.settings
+  const rebuilt: Step = { ...(base as Step), kind: newKind }
+  for (const field of UPDATE_PAYLOAD_FIELDS) {
+    if (!allowed.has(field)) continue
+    const fromOp = op[field]
+    if (fromOp !== undefined) rebuilt[field] = fromOp
+    else if (field in step) rebuilt[field] = step[field]
+  }
+  return rebuilt
+}
+
+/**
  * Apply the ops to a COPY of the payload — pure: the input payload is never
  * mutated. Ops run strictly in listed order, each through the human editor's
  * gated functions; the first rejection throws naming the OP INDEX and the
@@ -184,13 +274,30 @@ function applyOne(payload: Payload, op: ProtocolEditOp, mint: () => string): Pay
       const steps = editableProtocolSteps(payload)
       const step = steps.find(s => s.stepId === op.stepId)
       if (!step) throw new Error('This step no longer exists. Reload the protocol.')
-      const changes: Payload = {}
-      if (op.label !== undefined) changes.label = op.label
-      if (op.description !== undefined) Object.assign(changes, descriptionChanges(op.description))
-      if (op.notes !== undefined) changes.notes = op.notes
-      if (op.kind !== undefined) changes.kind = op.kind
-      if (op.settings !== undefined) changes.settings = op.settings
-      return { ...payload, steps: steps.map(s => s.stepId === op.stepId ? { ...s, ...changes } : s) }
+      // PROTO-AI-2/8 kind-change (architect ruling Option (i) RELAXED, §4):
+      //   - op WITHOUT kind: the ordinary edit — EXACT legacy behaviour, the
+      //     spread-merge below, byte-identical to today (regression-pinned).
+      //   - op WITH kind: the step is REBUILT as
+      //     { ...baseFields, kind, ...explicitPayloadPicks } — every BASE field
+      //     ProtocolStep declares outside payloads rides untouched (plus the
+      //     op's listed base edits); a payload field survives only if the NEW
+      //     kind's allow-set (STEP_PAYLOAD_FIELDS_BY_KIND, the envelope
+      //     $defs/StepPayloadFields mirror) permits it: the op's explicit value
+      //     wins, else the step's existing value is kept; superseded fields are
+      //     DROPPED — dead data (a washVolume_uL on an incubate step) must not
+      //     ride the ledger. Explicit picks only, never a spread of the op.
+      if (op.kind === undefined) {
+        const changes: Payload = {}
+        if (op.label !== undefined) changes.label = op.label
+        if (op.description !== undefined) Object.assign(changes, descriptionChanges(op.description))
+        if (op.notes !== undefined) changes.notes = op.notes
+        if (op.settings !== undefined) changes.settings = op.settings
+        return { ...payload, steps: steps.map(s => s.stepId === op.stepId ? { ...s, ...changes } : s) }
+      }
+      const allowed = STEP_PAYLOAD_FIELDS_BY_KIND[op.kind]
+      if (!allowed) throw new Error(`Unknown step kind '${op.kind}'.`)
+      const rebuilt = applyOpsToStepKindChange(step, op.kind, op, allowed)
+      return { ...payload, steps: steps.map(s => s.stepId === op.stepId ? rebuilt : s) }
     }
     case 'step_insert': {
       if (op.afterStepId === undefined === (op.beforeStepId === undefined)) {
