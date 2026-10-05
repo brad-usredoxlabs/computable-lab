@@ -380,15 +380,23 @@ original, and any revision-management UI.
 Per QMS-6B receipts (`/home/brad/.hermes/cl/receipts/QMS-6B/`) — final confirmation
 pending QMS-6B VERDICT: accept. Restore-the-bundle is REQUIRED even if the lap fails.
 
-1. `/settings` → policy-bundle card → click **Regulated** (`POL-REGULATED`).
-   `PolicyBundleSelector` renders the bundle catalog (four cards: POL-SANDBOX,
-   POL-NOTEBOOK, POL-TRACKED, POL-REGULATED —
-   `app/src/components/settings/PolicyBundleSelector.tsx:5-29`); click →
-   `onBundleChanged(bundle.id)` → `SettingsPage.tsx:94-100` PATCHes lab settings.
-   On failure it shows a plain JS `alert("Failed to update policy bundle: …")`
-   (`SettingsPage.tsx:99`) — a browser reviewer must DISMISS it, not treat it as a
-   product crash. Live per-request (no restart); audited as `policy_bundle_changed
-   {from,to}` on builds that carry that hook (see the divergence note below).
+1. **SELECT the regulated bundle via the working API path** (architect decision (a);
+   the Settings selector is a recorded known defect — see the divergence note below —
+   so the lap does NOT go through `/settings`):
+   ```bash
+   # SELECT the regulated bundle via the WORKING api path (no restart; live per-request)
+   curl -s -X PATCH http://localhost:3092/api/config \
+     -H 'content-type: application/json' -H 'x-user-id: USR-QMS-ADMIN' \
+     -d '{"lab":{"policyBundleId":"POL-REGULATED"}}'
+   # VERIFY — GET /api/config, NOT /settings/lab (the latter serves a boot snapshot)
+   curl -s -H 'x-user-id: USR-QMS-ADMIN' http://localhost:3092/api/config   # → lab.policyBundleId == "POL-REGULATED"
+   ```
+   Capture the `GET /api/config` JSON showing `lab.policyBundleId: "POL-REGULATED"` as
+   `qms-regulated-bundle-selected.png` (see the receipt-mapping note below — this is a
+   terminal/JSON view, NOT a Settings-page screenshot). Caveats that stay true on this
+   trunk: the route has **no auth gate** (no `POLICY_BUNDLE_CHANGE_FORBIDDEN`, no
+   `policy_bundle_changed` audit — verified absent in `server/src`), live per-request,
+   no restart.
 2. Switch the session user to **`USR-BRAD`** (author ONLY — the under-granted actor).
    Under POL-REGULATED, `enforceTransitionRoles: deny`
    (`schema/core/policy-bundles/regulated.policy-bundle.yaml:16`).
@@ -404,11 +412,21 @@ pending QMS-6B VERDICT: accept. Restore-the-bundle is REQUIRED even if the lap f
    → denial observed **despite the visible, permissive-preview button**, and the
    document's state is unchanged. Capture the screenshot at this point
    (`qms-regulated-denial.png`).
-5. **RESTORE THE BUNDLE** to the pre-lap value (`POL-SANDBOX` on the current lane —
-   read `GET /api/config` first to capture it): `/settings` → Sandbox, then verify
-   `curl -s -H 'x-user-id: USR-QMS-ADMIN' http://localhost:3092/api/config | jq .lab`
-   → `policyBundleId: "POL-SANDBOX"` (`qms-bundle-restored.png`). Do this EVEN IF any
-   lap step failed. Never leave the bundle changed.
+5. **RESTORE THE BUNDLE via the same API path** to the PRE-LAP VALUE — read
+   `GET /api/config` FIRST to capture it and restore to THAT, never hardcode:
+   ```bash
+   # read FIRST (pre-lap value; `POL-SANDBOX` on the current lane)
+   curl -s -H 'x-user-id: USR-QMS-ADMIN' http://localhost:3092/api/config | jq .lab.policyBundleId
+   # restore to the captured value (example shows POL-SANDBOX; use what the read returned)
+   curl -s -X PATCH http://localhost:3092/api/config \
+     -H 'content-type: application/json' -H 'x-user-id: USR-QMS-ADMIN' \
+     -d '{"lab":{"policyBundleId":"POL-SANDBOX"}}'
+   # VERIFY
+   curl -s -H 'x-user-id: USR-QMS-ADMIN' http://localhost:3092/api/config | jq .lab
+   ```
+   Capture the verification `GET /api/config` JSON as `qms-bundle-restored.png` (a
+   terminal/JSON view, NOT a Settings-page shot — see the receipt-mapping note below).
+   Do this EVEN IF any lap step failed. Never leave the bundle changed.
 
 **Lane-build divergence note (static-verified at drafting, 2026-10-04; reported to the
 orchestrator as a flag, NOT resolved here).** The lane trunk `cl/integration-1 @
@@ -429,6 +447,15 @@ says not-ancestor). On the LANE build as it stands:
   step 1 will always fail on it; the API `PATCH /api/config` path still changes the
   bundle on the lane build (with the guard/audit caveats above). The reviewer's
   screenshots will distinguish these cases; this note is the drafting-time evidence.
+
+**Receipt mapping for this lap (architect item 2 — read before capturing anything).**
+`qms-regulated-bundle-selected.png` and `qms-bundle-restored.png` are captures of the
+**`GET /api/config` JSON** showing `lab.policyBundleId` (terminal/JSON view), **NOT**
+Settings-page screenshots — after an API switch the Settings display is a stale boot
+snapshot (`server.ts:817` vs `:1248`) and the selector is a recorded defect; a
+Settings-page shot showing `POL-SANDBOX` is **NOT** a failed lap.
+`qms-regulated-denial.png` remains a **UI screenshot** of the observed denial (the
+browser denial in step 4 is unchanged).
 
 ### 11) What is NOT automated — stated plainly
 
@@ -461,6 +488,13 @@ kept for provenance, not lane receipts.
 - §Setup's `POST /auth/...` URLs lack the `/api` prefix — real routes are
   `/api/auth/login`, `/api/auth/set-password` (`server/src/api/routes.ts:265,267`
   under the `/api` prefix registered at `server/src/server.ts:1547`).
+- §1 "Bundle switching — admin-gated" describes **unimplemented** behaviour on this
+  trunk: the `PATCH /api/config` handler has no admin guard (no
+  `POLICY_BUNDLE_CHANGE_FORBIDDEN` 403 token), no known-bundle 400 check, and no
+  `policy_bundle_changed` audit emit (verified absent in `server/src` — see §10's
+  divergence note). §1's contract holds only on builds containing main's `8e14b061`.
+  For the current lane, use the working `PATCH /api/config` path documented in §10
+  step 1/5; §1 itself is left as written.
 - §6's signature body `{action, subjectRecordId, password}` is the OLD shape; current
   `POST /api/signatures` requires `{action, subject:{recordId, targetState},
   password}` (`server/src/api/handlers/SignatureHandlers.ts:59-102`), and "the record
