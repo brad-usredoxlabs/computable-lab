@@ -8,8 +8,8 @@ merge performed. This tick's only commit is this handoff (docs).
 - **Reconciled (step 2):** the PROTO-AI-9 `cl-browser-reviewer` re-run from the prior tick was still
   live at tick start (bash pid `1638345` / hermes python pid `1638488`). I observed it (not killed, not
   re-dispatched): its `state.db` kept advancing, it kept issuing model/browser calls, and at **05:04**
-  it wrote its `report.md`. It then continued a final deck-surface experiment and is still draining at
-  checkpoint — left RUNNING per budget policy. No lane-2 coder worker was live; the only other live
+  it wrote its `report.md`. It then ran a final deck-surface experiment and **exited cleanly at ~05:10**
+  (`PROTO-AI-9 RERUN REVIEW EXITED code=0`). No lane-2 coder worker was live; the only other live
   reviewer was lane 1's (QMS-7).
 - **Adopted the reviewer's output:** `receipts/PROTO-AI-9/2026-10-05_0354/report.md` → **VERDICT:
   BLOCKED**. Candidate `99a13728` verified served (`protocolEditDiffFrom` count = 1); profile
