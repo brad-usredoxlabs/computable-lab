@@ -34,7 +34,8 @@ import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
 import { changesFromDraftEvents } from './draftChanges'
 import { InterpretationPanel } from './InterpretationPanel'
-import { ChangesPanel } from './ChangesPanel'
+import { ChangesPanel, protocolEditDiffFrom, type AttachedProtocolSnapshot } from './ChangesPanel'
+import { applyProtocolEdit, type ProtocolEditOp } from '../protocol/protocolEditOps'
 import type { DraftTermRow } from './TermPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
@@ -306,6 +307,65 @@ export function AiTabPanel() {
       // the whole draft because of an ungrounded material).
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
+
+      // PROTO-AI-9: a `protocol_edit` emission branches HERE, independent of
+      // the event-graph path. The proposal renders in the SAME ChangesPanel
+      // review surface (D1: no new rail) and the sidebar leaves 'interpreting'
+      // the moment it is shown — never stuck. The envelope's validated `ops`
+      // are kept verbatim for Accept; only the display diff is derived.
+      const protocolEdit = result.protocolEdit
+      if (protocolEdit && Array.isArray(protocolEdit.ops) && protocolEdit.ops.length > 0) {
+        const identity = protocolSel?.protocol
+        if (identity) {
+          const snapshot: AttachedProtocolSnapshot = {
+            steps: (protocolSel?.steps ?? []).map((s) => ({
+              stepId: s.stepId,
+              label: s.label,
+              ...(s.description ? { description: s.description } : {}),
+              ...(s.kind ? { kind: s.kind } : {}),
+            })),
+            labwareRoles: (protocolSel?.resources.labwares ?? []).map((r) => ({
+              roleId: r.roleId,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.expectedLabwareKinds?.length ? { expectedLabwareKinds: r.expectedLabwareKinds } : {}),
+            })),
+            instrumentRoles: (protocolSel?.resources.equipment ?? []).map((r) => ({
+              roleId: r.roleId,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.allowedInstrumentIds?.length ? { allowedInstrumentIds: r.allowedInstrumentIds } : {}),
+            })),
+          }
+          const diff = protocolEditDiffFrom(
+            protocolEdit,
+            { recordId: identity.recordId, ...(identity.title ? { title: identity.title } : {}) },
+            snapshot,
+          )
+          if (diff) {
+            const targetRecordId = protocolEdit.protocolId ?? identity.recordId
+            protocolProposalRef.current = {
+              protocolId: targetRecordId,
+              attachedRecordId: identity.recordId,
+              ops: protocolEdit.ops as ProtocolEditOp[],
+            }
+            setProtocolApply(null)
+            sidebarDispatch({
+              type: 'draft-ready',
+              draftId,
+              interpretation: { operations: [] },
+              changes: [],
+              warnings: [],
+              terms: result.termManifest ?? [],
+              protocolDiff: diff,
+            })
+            // A protocol edit ghosts NOTHING on the deck — its review surface
+            // is this panel; the deck preview belongs to the event-graph path.
+            return
+          }
+          // An unmappable envelope falls through to the event-graph path
+          // unchanged rather than opening an empty protocol review.
+        }
+      }
+
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
         sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
       } else {
@@ -390,7 +450,7 @@ export function AiTabPanel() {
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
-    [activeDeckScope, editor],
+    [activeDeckScope, editor, protocolSel?.protocol, protocolSel?.steps, protocolSel?.resources],
   )
 
   const chat = useChatThread({
@@ -488,6 +548,60 @@ export function AiTabPanel() {
   // Coexists alongside the chat reducer — it adds state-driven UI behavior on top of the existing chat.
   const [sidebar, sidebarDispatch] = useReducer(sidebarReducer, initialSidebarState)
 
+  // PROTO-AI-9 Accept/Reject state. The VALIDATED envelope ops ride a ref
+  // (never re-derived from the display diff) so Accept sends exactly what the
+  // server validated. `applying` disables the button the moment Accept fires —
+  // a duplicate click cannot replay; AI-8's no-op idempotence is the backstop.
+  // `error` carries a failed apply verbatim (the D4 stale-sha message).
+  const protocolProposalRef = useRef<{
+    protocolId: string
+    attachedRecordId: string
+    ops: ProtocolEditOp[]
+  } | null>(null)
+  const [protocolApply, setProtocolApply] = useState<{
+    applying: boolean
+    error?: string
+  } | null>(null)
+
+  // Swapping the attached protocol invalidates an open proposal: what the AI
+  // proposed was against the PREVIOUS protocol's ground truth — Reject it.
+  const attachedProtocolId = protocolSel?.protocol?.recordId ?? null
+  useEffect(() => {
+    const open = protocolProposalRef.current
+    if (open && open.attachedRecordId !== attachedProtocolId) {
+      protocolProposalRef.current = null
+      setProtocolApply(null)
+      sidebarDispatch({ type: 'reset' })
+    }
+  }, [attachedProtocolId])
+
+  const handleProtocolAccept = useCallback(() => {
+    const proposal = protocolProposalRef.current
+    if (!proposal) return
+    // Duplicate-Accept gate: while an apply is in flight nothing re-fires.
+    setProtocolApply((prev) => (prev?.applying ? prev : { applying: true }))
+    void (async () => {
+      try {
+        // PROTO-AI-8 applier: getRecord → apply pure → ONE updateRecord
+        // under the human lock. Zero writes on gate rejection / no-op / stale sha.
+        await applyProtocolEdit(proposal.protocolId, proposal.ops)
+        // Success: the proposal is spent. Reset the sidebar so the chat
+        // input returns and there is nothing left to re-Accept.
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+      } catch (error) {
+        // Truthful conflict state (D4 verbatim via protocolEditOps): the
+        // proposal stays open for review, the input is NOT lost, and the
+        // Apply label flips back; the user reloads per the message.
+        setProtocolApply({
+          applying: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })()
+  }, [])
+
   // Sub-tab navigation: auto-switches based on sidebar mode, user can override
   type AiSubTab = 'chat' | 'questions' | 'interpretation' | 'changes'
 
@@ -550,6 +664,10 @@ export function AiTabPanel() {
   )
 
   const handleCancelDraft = useCallback(() => {
+    // Reject → zero mutation: the proposal is dropped, NOTHING is written,
+    // and the deck preview (if any) clears exactly as before.
+    protocolProposalRef.current = null
+    setProtocolApply(null)
     sidebarDispatch({ type: 'cancel' })
     resolvedClarificationsRef.current.clear()
     editor?.actions.clearPreview()
@@ -801,7 +919,17 @@ export function AiTabPanel() {
           <ChangesPanel
             changes={sidebar.changes}
             warnings={sidebar.warnings}
+            {...(sidebar.protocolDiff ? { protocolDiff: sidebar.protocolDiff } : {})}
+            {...(protocolApply?.applying ? { applying: true } : {})}
+            {...(protocolApply?.error ? { applyError: protocolApply.error } : {})}
             onApply={() => {
+              // The ONLY behavioural hook (grounding-map §(e)): a protocol
+              // proposal runs the PROTO-AI-8 applier; an event-graph draft
+              // commits its preview exactly as before.
+              if (sidebar.protocolDiff) {
+                handleProtocolAccept()
+                return
+              }
               sidebarDispatch({ type: 'commit' })
               editor?.actions.commitPreview()
             }}

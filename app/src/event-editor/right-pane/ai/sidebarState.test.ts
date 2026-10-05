@@ -67,6 +67,51 @@ describe('sidebarState', () => {
     expect(state.mode).toBe('reviewing')
   })
 
+  it('draft-ready carries protocolDiff into the reviewing state', () => {
+    const protocolDiff = {
+      protocol: { recordId: 'PROT-1', title: 'Hep G2 ROS assay' },
+      ops: [
+        {
+          op: 'add' as const,
+          target: { type: 'step' as const, stepId: 'step-3' },
+          after: { label: 'Wash', kind: 'wash' as const, description: 'Wash twice with PBS' },
+          position: { anchorStepId: 'step-3', relative: 'after' as const },
+        },
+      ],
+    }
+    const state = sidebarReducer({ mode: 'updating', draftId: 'draft-1' }, {
+      type: 'draft-ready',
+      draftId: 'draft-1',
+      interpretation: { operations: [] },
+      changes: [],
+      warnings: [],
+      protocolDiff,
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      expect(state.protocolDiff).toEqual(protocolDiff)
+    }
+  })
+
+  it('draft-ready WITHOUT protocolDiff leaves the key absent (event-graph dispatches compile unchanged)', () => {
+    const state = sidebarReducer({ mode: 'updating', draftId: 'draft-2' }, {
+      type: 'draft-ready',
+      draftId: 'draft-2',
+      interpretation: { operations: [] },
+      changes: [{ op: 'add', description: 'Dispense 10 uL DMEM into A1' }],
+      warnings: [],
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      // The event-graph review payload must stay byte-identical: no
+      // `protocolDiff: undefined` key is introduced by the reducer.
+      expect('protocolDiff' in state).toBe(false)
+      expect(Object.keys(state).sort()).toEqual(
+        ['changes', 'draftId', 'interpretation', 'mode', 'terms', 'warnings'],
+      )
+    }
+  })
+
   it('transitions reviewing → committing on commit', () => {
     const reviewing = {
       mode: 'reviewing' as const,
