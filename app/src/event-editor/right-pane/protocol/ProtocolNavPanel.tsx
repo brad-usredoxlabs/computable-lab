@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
-import type { ProtocolRoleSummary, ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
+import type { LabwareBindingMap, ProtocolRoleSummary, ProtocolStepSummary } from '../../protocol/ProtocolSelectionContext'
 import { AttachProtocolPanel } from './AttachProtocolPanel'
 import { ProtocolIdentity } from './ProtocolIdentity'
 import { ProtocolStepEditModal } from './ProtocolStepEditModal'
@@ -42,6 +42,9 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
   const sel = useProtocolSelection()
   const steps = sel?.steps ?? []
   const resources = sel?.resources ?? { labwares: [], equipment: [] }
+  // What THIS run bound to the declared labware roles (read-only, PROTO-AI-10).
+  // Empty in protocol-only context — the rail then shows role identities only.
+  const labwareBindings = sel?.labwareBindings ?? {}
   // Declared resources start COLLAPSED and sit above the step list: with a
   // 17-step protocol an expanded resource list buries the navigation, while a
   // header with its count is visible at a glance and one click away.
@@ -216,6 +219,7 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
         testId="protocol-nav-labware"
         title="Labware"
         roles={resources.labwares}
+        bindings={labwareBindings}
         open={labwareOpen}
         onToggle={() => setLabwareOpen((o) => !o)}
       />
@@ -338,17 +342,27 @@ export function ProtocolNavPanel({ title, runId, studyId }: ProtocolNavPanelProp
  * so the rows are read-only context — the only interactive element is the
  * disclosure header. A protocol that declares none renders no section at all
  * (an empty accordion is chrome without content).
+ *
+ * When `bindings` carries a run's `LabwareBinding` map (PROTO-AI-10), a role
+ * with a MATCHING roleId additionally shows the concrete instance THIS run
+ * bound — `instanceRef.label ?? instanceRef.id`, the rail's compact
+ * `label ?? id` ref read (same convention as KnowledgeRailSection.refId; the
+ * full `describeRef` form rides in the title). Unmatched roles render exactly
+ * as today: role identity only, zero guessing.
  */
 function ResourceSection({
   testId,
   title,
   roles,
+  bindings,
   open,
   onToggle,
 }: {
   testId: string
   title: string
   roles: ProtocolRoleSummary[]
+  /** roleId → bound instance (this run). Omitted/empty → role-only rows. */
+  bindings?: LabwareBindingMap
   open: boolean
   onToggle: () => void
 }) {
@@ -373,12 +387,27 @@ function ResourceSection({
       </button>
       {open ? (
         <ul className="protocol-nav__roles" data-testid={`${testId}-list`}>
-          {roles.map((role) => (
-            <li key={role.roleId} className="protocol-nav__role" title={role.description ?? role.roleId}>
-              <span className="protocol-nav__role-id">{role.roleId}</span>
-              {role.description ? <span className="protocol-nav__role-desc">{role.description}</span> : null}
-            </li>
-          ))}
+          {roles.map((role) => {
+            const instance = bindings?.[role.roleId]?.instanceRef
+            const instanceLabel = instance ? instance.label ?? instance.id : null
+            return (
+              <li key={role.roleId} className="protocol-nav__role" title={role.description ?? role.roleId}>
+                <span className="protocol-nav__role-id">{role.roleId}</span>
+                {role.description ? <span className="protocol-nav__role-desc">{role.description}</span> : null}
+                {instance ? (
+                  <span
+                    className="protocol-nav__role-bound"
+                    data-testid={`${testId}-bound-${role.roleId}`}
+                    // The compact line is `label ?? id`; the concrete record id
+                    // always rides in the title (describeRef's id, rail-compact).
+                    title={instance.id}
+                  >
+                    {instanceLabel}
+                  </span>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
       ) : null}
     </section>

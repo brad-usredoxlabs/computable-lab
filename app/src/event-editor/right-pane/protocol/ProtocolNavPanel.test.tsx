@@ -11,6 +11,7 @@ afterEach(() => {
 type Step = { stepId: string; label: string; ordinal: number; description?: string }
 type Role = { roleId: string; description?: string }
 type Resources = { labwares: Role[]; equipment: Role[] }
+type Bindings = Record<string, { instanceRef: { id: string; label?: string }; geometryRef?: { id: string; label?: string } }>
 type FocusChange = { stepId: string; label: string; ordinal?: number } | null
 type Graph = { id: string; events: Record<string, unknown>[]; labwares: Record<string, unknown>[] }
 
@@ -18,9 +19,10 @@ function renderNav(opts: {
   steps?: Step[]
   graphs?: Record<string, Graph>
   resources?: Resources
+  bindings?: Bindings
   onFocusChange?: (f: FocusChange) => void
 }) {
-  const { steps = [], graphs = {}, resources, onFocusChange } = opts
+  const { steps = [], graphs = {}, resources, bindings, onFocusChange } = opts
   const seedDone = { current: false }
   const reportDone = { current: false }
   return render(
@@ -29,6 +31,7 @@ function renderNav(opts: {
         steps={steps}
         graphs={graphs}
         resources={resources}
+        bindings={bindings}
         seedDone={seedDone}
         reportDone={reportDone}
         onFocusChange={onFocusChange}
@@ -43,6 +46,7 @@ function Harness({
   steps,
   graphs,
   resources,
+  bindings,
   seedDone,
   reportDone,
   onFocusChange,
@@ -50,6 +54,7 @@ function Harness({
   steps: Step[]
   graphs: Record<string, Graph>
   resources?: Resources
+  bindings?: Bindings
   seedDone: { current: boolean }
   reportDone: { current: boolean }
   onFocusChange?: (f: FocusChange) => void
@@ -60,6 +65,7 @@ function Harness({
     seedDone.current = true
     sel?.setSteps(steps)
     if (resources) sel?.setResources(resources)
+    if (bindings) sel?.setLabwareBindings(bindings)
     for (const [id, g] of Object.entries(graphs)) sel?.setStepGraph(id, g)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -232,4 +238,94 @@ describe('ProtocolNavPanel (left navigation rail)', () => {
     expect(screen.queryByTestId('protocol-nav-labware')).toBeNull()
     expect(screen.queryByTestId('protocol-nav-equipment')).toBeNull()
   })
+
+  // ---- Run-bound labware instances beside matched roles (PROTO-AI-10) -------
+
+  const BINDINGS: Bindings = {
+    'deep-well-block': {
+      instanceRef: { id: 'LABI-96A', label: 'Deep well plate A' },
+      geometryRef: { id: 'GEO-96x2' },
+    },
+  }
+
+  it('shows the bound instance beside its matched roleId when the run binds it', () => {
+    renderNav({ steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }], resources: RESOURCES, bindings: BINDINGS })
+    fireEvent.click(screen.getByTestId('protocol-nav-labware-toggle'))
+
+    const bound = screen.getByTestId('protocol-nav-labware-bound-deep-well-block')
+    expect(bound.textContent).toContain('Deep well plate A')
+    // The label rides on the concrete instance's id — identity, not guessing.
+    expect(bound.getAttribute('title')).toContain('LABI-96A')
+
+    // The role itself still reads exactly as before.
+    expect(screen.getByTestId('protocol-nav-labware-list').textContent).toContain('deep-well-block')
+    // Zero guessing: the UNBOUND role shows no instance at all.
+    expect(screen.queryByTestId('protocol-nav-labware-bound-lysis-rack')).toBeNull()
+  })
+
+  it('falls back to the instance id when the ref carries no label', () => {
+    renderNav({
+      steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }],
+      resources: RESOURCES,
+      bindings: { 'deep-well-block': { instanceRef: { id: 'LABI-96A' } } },
+    })
+    fireEvent.click(screen.getByTestId('protocol-nav-labware-toggle'))
+    expect(screen.getByTestId('protocol-nav-labware-bound-deep-well-block').textContent).toBe('LABI-96A')
+  })
+
+  it('keeps two roles bound to different instances of the same design distinguishable', () => {
+    renderNav({
+      steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }],
+      resources: RESOURCES,
+      bindings: {
+        'deep-well-block': { instanceRef: { id: 'LABI-96A', label: 'Deep well plate A' } },
+        'bashingbead-lysis-rack': { instanceRef: { id: 'LABI-96B', label: 'Deep well plate B' } },
+      },
+    })
+    fireEvent.click(screen.getByTestId('protocol-nav-labware-toggle'))
+    expect(screen.getByTestId('protocol-nav-labware-bound-deep-well-block').textContent).toContain('Deep well plate A')
+    expect(screen.getByTestId('protocol-nav-labware-bound-bashingbead-lysis-rack').textContent).toContain('Deep well plate B')
+  })
+
+  it('shows no bound-instance labels in protocol-only context (empty binding map)', () => {
+    renderNav({ steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }], resources: RESOURCES })
+    fireEvent.click(screen.getByTestId('protocol-nav-labware-toggle'))
+    expect(screen.queryAllByTestId(/-bound-/)).toHaveLength(0)
+  })
+
+  it('never decorates equipment roles — bindings shown are LABWARE bindings only', () => {
+    renderNav({
+      steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }],
+      resources: RESOURCES,
+      // A stray binding keyed like the equipment role must not leak there.
+      bindings: { 'bead-beater': { instanceRef: { id: 'LABI-XX', label: 'Not an instrument' } } },
+    })
+    fireEvent.click(screen.getByTestId('protocol-nav-equipment-toggle'))
+    expect(screen.queryByTestId('protocol-nav-equipment-bound-bead-beater')).toBeNull()
+  })
+
+  it('bound labels ride the binding map: clearing it removes stale labels', () => {
+    // The run switch itself is covered by the loader suite (setLabwareBindings
+    // resets with the run). Here the rail must simply follow the map.
+    const view = renderNav({ steps: [{ stepId: 's1', label: 'Lyse', ordinal: 1 }], resources: RESOURCES, bindings: BINDINGS })
+    fireEvent.click(screen.getByTestId('protocol-nav-labware-toggle'))
+    expect(screen.getByTestId('protocol-nav-labware-bound-deep-well-block')).not.toBeNull()
+    view.rerender(
+      <ProtocolSelectionProvider>
+        <Clearer />
+        <ProtocolNavPanel title="CellROX Run" />
+      </ProtocolSelectionProvider>,
+    )
+    expect(screen.queryByTestId('protocol-nav-bound-deep-well-block')).toBeNull()
+  })
 })
+
+/** Publishes the run's (now empty) binding map — what a run switch does. */
+function Clearer() {
+  const sel = useProtocolSelection()
+  useEffect(() => {
+    sel?.setLabwareBindings({})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
+}
