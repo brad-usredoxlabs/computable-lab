@@ -171,6 +171,12 @@ export interface AIConfig {
   /** Background KV-context warming against a local llama.cpp server. */
   warmup?: WarmupConfig;
   /**
+   * PROTO-AI-12 shadow router (log-only). MISSING block = fully OFF: no
+   * inference call, no telemetry write. All endpoints are DATA here — the
+   * router URL is never hardcoded in code.
+   */
+  shadowRouter?: ShadowRouterConfig;
+  /**
    * RESOLVE threshold for prompt resolution assurance (default 0.9).
    * Below-threshold compiles pause for user confirmation instead of
    * auto-previewing. Also used as the default per-critical-binding floor.
@@ -195,6 +201,31 @@ export interface WarmupConfig {
   maxLibraryEntries?: number;
   /** Manifest path for persisted contexts (default "var/compiled-contexts.json"). */
   manifestPath?: string;
+}
+
+/**
+ * PROTO-AI-12 shadow-router configuration (campaign ai-protocol-edit-and-router).
+ *
+ * The tiny-model router is a LOG-ONLY shadow: it classifies the same turn the
+ * big model handles and appends a paired telemetry record. It never drafts
+ * payloads, never writes records, and its failure can never alter the
+ * user-visible result.
+ *
+ * Kill-switch semantics: MISSING config = OFF. Every field is optional;
+ * `enabled` must be explicitly `true` for anything to fire. Endpoints are
+ * DATA (never hardcoded URLs).
+ */
+export interface ShadowRouterConfig {
+  /** Master switch (default false — absent means OFF). */
+  enabled?: boolean;
+  /** OpenAI-compatible base URL of the tiny-model endpoint (e.g. "http://appliance-2:8900/v1"). */
+  baseUrl?: string;
+  /** Model name served at that endpoint. */
+  model?: string;
+  /** Per-classification timeout in ms (default 8_000). */
+  timeoutMs?: number;
+  /** Append-only JSONL telemetry destination (mirrors the foundry events.jsonl pattern). */
+  telemetryPath?: string;
 }
 
 /**
