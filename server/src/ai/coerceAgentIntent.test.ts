@@ -53,7 +53,11 @@ describe('a draft returned as prose is still a draft', () => {
 const protocolEditDraft = {
   intent: 'protocol_edit',
   ops: [
-    { op: 'step_insert', label: 'Wash', kind: 'wash', afterStepId: 'step-3' },
+    // PROTO-AI-9 payload contract: a wash insert carries its full payload.
+    {
+      op: 'step_insert', label: 'Wash', kind: 'wash', afterStepId: 'step-3',
+      target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3,
+    },
     { op: 'step_delete', stepId: 'step-6' },
   ],
 };
