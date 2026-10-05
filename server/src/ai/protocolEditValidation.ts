@@ -8,8 +8,12 @@
  * This module validates the model's payload with that file through the repo's
  * OWN registration pipeline (SchemaLoader → SchemaRegistry → AjvValidator, the
  * same order server.ts uses at boot) — never a hand-rolled TypeScript shape,
- * so the op vocabulary stays DATA. The envelope's only external dependency is
- * `./setting.schema.yaml`, which the recursive load picks up beside it.
+ * so the op vocabulary stays DATA. The envelope's declared $ref dependencies
+ * are `./setting.schema.yaml` plus — since the PROTO-AI-9 step_insert payload
+ * ruling — the two shared datatype files the insert payloads mirror from the
+ * record schema (`working_concentration`, `ratio`). protocol.schema.yaml itself
+ * is NOT loaded: the envelope copies the record payload shapes locally (see
+ * the StepInsertOp header comment for provenance line numbers).
  *
  * The validator is built lazily once per process (the schema files are static)
  * and reused for every proposal. A load/compile failure is reported as a
@@ -30,10 +34,13 @@ export const PROTOCOL_EDIT_OP_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/protocol-edit-op.schema.yaml';
 
 /** Schema files the envelope needs, relative to the schema root. The envelope
- *  is the contract; `setting.schema.yaml` is its one declared $ref dependency. */
+ *  is the contract; setting.schema.yaml and the two shared datatypes the
+ *  step_insert payloads $ref (PROTO-AI-9) are its declared dependencies. */
 const ENVELOPE_FILES = [
   'workflow/protocol-edit-op.schema.yaml',
   'workflow/setting.schema.yaml',
+  'core/datatypes/concentration.schema.yaml',
+  'core/datatypes/reference-ratio.schema.yaml',
 ] as const;
 
 /** Candidate schema roots, in trust order: the deployed base path, the repo

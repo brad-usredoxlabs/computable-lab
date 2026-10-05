@@ -121,6 +121,44 @@ describe('applyOps — every op kind applies', () => {
     expect(inserted.label).toBe('Prep')
   })
 
+  it('PROTO-AI-9: copies step_insert payload fields through EXPLICITLY onto the minted step — and never leaks op/anchor keys', () => {
+    const washInsert = {
+      op: 'step_insert', afterStepId: 's1', label: 'Wash beads', kind: 'wash',
+      description: 'Three washes.',
+      target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3, washVolume_uL: 200,
+    } satisfies ProtocolEditOp
+    const result = applyOps(basePayload(), [washInsert], { mint })
+    const inserted = stepsOf(result).find(s => s.stepId === mint())!
+    // Payload rides the record step: the envelope-validated insert is appliable
+    // (this is exactly the wash step the server 422ed before the fix).
+    expect(inserted).toMatchObject({
+      stepId: mint(), label: 'Wash beads', kind: 'wash',
+      description: 'Three washes.',
+      target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3, washVolume_uL: 200,
+    })
+    expect(inserted.descriptionRichText).toEqual({
+      plainText: 'Three washes.',
+      document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Three washes.' }] }] },
+    })
+    // Explicit picks, never a spread of the op: op/anchor keys cannot leak.
+    for (const leaked of ['op', 'afterStepId', 'beforeStepId']) {
+      expect(inserted).not.toHaveProperty(leaked)
+    }
+  })
+
+  it('PROTO-AI-9: an insert WITHOUT a payload field copies exactly the fields present (absent fields are not invented)', () => {
+    const mixInsert = {
+      op: 'step_insert', afterStepId: 's1', label: 'Mix', kind: 'mix',
+      target: { labwareRole: 'plate' }, wells: { kind: 'explicit', wells: ['A1'] },
+    } satisfies ProtocolEditOp
+    const result = applyOps(basePayload(), [mixInsert], { mint })
+    const inserted = stepsOf(result).find(s => s.stepId === mint())!
+    expect(inserted).toMatchObject({ kind: 'mix', target: { labwareRole: 'plate' }, wells: { kind: 'explicit', wells: ['A1'] } })
+    // Absent OR value, never undefined (exactOptionalPropertyTypes discipline):
+    expect(Object.prototype.hasOwnProperty.call(inserted, 'cycles')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call(inserted, 'description')).toBe(false)
+  })
+
   it('renumbers ordinals contiguously 1..N, matching the server rebuild on both live and stored ordinals', () => {
     const result = applyOps(basePayload(), [
       { op: 'step_delete', stepId: 's1' },

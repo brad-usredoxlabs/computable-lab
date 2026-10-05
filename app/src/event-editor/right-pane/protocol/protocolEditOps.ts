@@ -56,14 +56,58 @@ type Step = Record<string, unknown> & { stepId: string }
 export const STALE_PROTOCOL_WRITE_MESSAGE = 'Someone changed this protocol - reload and try again.'
 
 /**
- * The op vocabulary mirrored from the merged envelope
+ * The payload fields a `step_insert` op may carry, PROTO-AI-9 (architect
+ * ruling Option (i)): the per-kind step payload the envelope
+ * (protocol-edit-op.schema.yaml StepInsertOp) requires per kind, mirroring
+ * protocol.schema.yaml kind payloads. The envelope validates completeness
+ * server-side BEFORE this ever runs; the applier copies these fields through
+ * EXPLICITLY onto the minted record step — never a spread of the op, so
+ * op/anchor keys cannot leak into the record. Shapes are the validated
+ * record-schema shapes (WellSelector/Expr/concentration/reference-ratio/RoleId
+ * strings); the applier keeps them structural — schema-owned, re-typed here
+ * only as the type mirror.
+ */
+interface InsertPayloadFields {
+  /** { labwareRole, wells? } (envelope $defs/InsertTarget). */
+  target?: Record<string, unknown>
+  /** { labwareRole, wells? } (envelope $defs/InsertSource). */
+  source?: Record<string, unknown>
+  /** { materialRole } | { materialId } (envelope $defs/InsertMaterial). */
+  material?: Record<string, unknown>
+  /** WellSelector shape (protocol.schema.yaml:612-649). */
+  wells?: Record<string, unknown>
+  modality?: string
+  channels?: string[]
+  instrumentRole?: string
+  /** Expr: number | boolean | string | { param } (protocol.schema.yaml:654-667). */
+  cycles?: unknown
+  volume_uL?: unknown
+  washVolume_uL?: unknown
+  duration_min?: unknown
+  temperature_C?: unknown
+  working_concentration?: Record<string, unknown>
+  ratio?: Record<string, unknown>
+  producesArtifactId?: string
+}
+
+/** The declared payload fields in list order — the ONLY keys the applier
+ *  copies onto the minted step (explicit picks; op/anchor/label/kind/description
+ *  are handled by name). Keys absent on the op are absent on the step — never
+ *  written as `undefined` (exactOptionalPropertyTypes). */
+const INSERT_PAYLOAD_FIELDS = [
+  'target', 'source', 'material', 'wells', 'modality', 'channels', 'instrumentRole',
+  'cycles', 'volume_uL', 'washVolume_uL', 'duration_min', 'temperature_C',
+  'working_concentration', 'ratio', 'producesArtifactId',
+] as const satisfies readonly (keyof InsertPayloadFields)[]
+
+/** The op vocabulary mirrored from the merged envelope
  * (protocol-edit-op.schema.yaml). This is a TYPE mirror for call sites only —
  * the schema file stays the single validation authority (server PROTO-AI-7
  * validates before this ever runs); no runtime vocabulary switchboard lives here.
  */
 export type ProtocolEditOp =
   | { op: 'step_update'; stepId: string; label?: string; description?: string; notes?: string; kind?: string; settings?: unknown[] }
-  | { op: 'step_insert'; afterStepId?: string; beforeStepId?: string; label: string; kind: string; description?: string }
+  | { op: 'step_insert'; afterStepId?: string; beforeStepId?: string; label: string; kind: string; description?: string } & InsertPayloadFields
   | { op: 'step_delete'; stepId: string }
   | { op: 'labware_add' | 'labware_update' | 'labware_delete'; roleId: string; description?: string; expectedLabwareKinds?: string[] }
   | { op: 'equipment_add' | 'equipment_update' | 'equipment_delete'; roleId: string; description?: string; allowedInstrumentIds?: string[] }
@@ -153,11 +197,21 @@ function applyOne(payload: Payload, op: ProtocolEditOp, mint: () => string): Pay
         throw new Error('Exactly one of afterStepId/beforeStepId must name the anchor step.')
       }
       const anchorId = op.afterStepId ?? op.beforeStepId!
+      // PROTO-AI-9: the envelope guarantees a COMPLETE per-kind payload before
+      // an Accept is ever offered; the applier copies exactly the declared
+      // payload fields onto the minted step (explicit picks, never a spread of
+      // the op, so op/anchor keys can never leak into the record). Absent
+      // fields stay absent — never written as undefined.
+      const payloadFields: Payload = {}
+      for (const field of INSERT_PAYLOAD_FIELDS) {
+        if (op[field] !== undefined) payloadFields[field] = op[field]
+      }
       const step: Step = {
         stepId: mint(),
         label: op.label,
         kind: op.kind,
         ...(op.description !== undefined ? descriptionChanges(op.description) : {}),
+        ...payloadFields,
       }
       return insertProtocolStep(payload, anchorId, op.afterStepId !== undefined ? 'after' : 'before', step)
     }

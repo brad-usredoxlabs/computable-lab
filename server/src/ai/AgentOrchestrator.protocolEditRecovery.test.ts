@@ -79,9 +79,14 @@ function degenerateStopThenCoercionClient(coercionContent: string): {
   return { client: { complete, completeStream }, complete };
 }
 
-/** The exact 2-op envelope the live SSE carried while the server dropped it. */
+/** The exact 2-op envelope the live SSE carried while the server dropped it,
+ *  updated to the PROTO-AI-9 payload contract: a wash insert must carry its
+ *  complete wash payload (target/wells/cycles) to be envelope-valid at all. */
 const LIVE_OPS = [
-  { op: 'step_insert', label: 'Wash', kind: 'wash', afterStepId: 'step-3' },
+  {
+    op: 'step_insert', label: 'Wash', kind: 'wash', afterStepId: 'step-3',
+    target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3,
+  },
   { op: 'step_delete', stepId: 'step-6' },
 ];
 

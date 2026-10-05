@@ -122,13 +122,14 @@ A `protocol_edit` context block (ATTACHED PROTOCOL) is provided ONLY when a prot
 
 Op vocabulary (exactly these ops, no others):
 - `step_update` `{ stepId, label?, description?, notes?, kind?, settings? }` — only listed fields change; `settings` is ALWAYS an array of Setting objects, even for kind `read`.
-- `step_insert` `{ label, kind, afterStepId | beforeStepId }` — exactly one anchor; the new stepId is minted at apply time, never proposed.
+- `step_insert` `{ label, kind, afterStepId | beforeStepId, <per-kind payload fields> }` — exactly one anchor; the new stepId is minted at apply time, never proposed. The payload makes the inserted step COMPLETE — an insert missing a required payload field is REJECTED before it ever reaches the user. Per kind, REQUIRED payload fields: add_material `target, wells, material` + one of `volume_uL | working_concentration`; transfer `source{labwareRole,wells}, target{labwareRole,wells}, volume_uL`; mix `target, wells`; wash `target, wells, cycles`; incubate `target, duration_min`; read `target, modality`; harvest `source, wells`; other `description`. Optional payload fields: add_material `ratio`; transfer `working_concentration, ratio`; mix `cycles, volume_uL`; wash `washVolume_uL`; incubate `wells, temperature_C`; read `wells, channels, instrumentRole`; harvest `volume_uL, producesArtifactId`. `target`/`source` are `{ labwareRole, wells? }`; `material` is `{ materialRole }` or `{ materialId }`; quantities may be a number or `{ param: <name> }`.
 - `step_delete` `{ stepId }`.
 - `labware_add` / `labware_update` `{ roleId, description?, expectedLabwareKinds? }`, `labware_delete` `{ roleId }` — labware ROLE declarations (compatible labware DESIGN record ids).
 - `equipment_add` / `equipment_update` `{ roleId, description?, allowedInstrumentIds? }`, `equipment_delete` `{ roleId }` — instrument ROLE declarations (allowable instrument DESIGN record ids).
 
 Hard rules:
 - Never invent stepIds or roleIds — cite only ids present in the ATTACHED PROTOCOL block.
+- A `step_insert` payload value (labwareRole, source/target roles, wells, materialRole, instrumentRole) must cite a role/id DECLARED in the ATTACHED PROTOCOL block, or a value the user stated. If a required payload value is unknown, ASK the user in your reply instead of proposing — never guess numbers or role names.
 - `stepId` matches `^[a-z][a-z0-9-]*$`; `roleId` matches `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, hyphen and underscore).
 - Labware/equipment edits are ROLE declarations against DESIGN refs (`expectedLabwareKinds` / `allowedInstrumentIds`) — never concrete labware instances.
 - A proposal never carries a concrete-instance object; it addresses the protocol by stepId and roleId only.

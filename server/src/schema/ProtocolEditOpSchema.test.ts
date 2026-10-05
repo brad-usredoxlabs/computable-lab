@@ -34,6 +34,11 @@ describe('Protocol edit-op envelope schema', () => {
     const paths = [
       'workflow/protocol-edit-op.schema.yaml',
       'workflow/setting.schema.yaml',
+      // PROTO-AI-9: the step_insert payloads $ref the two shared datatypes the
+      // record kind payloads use (mirrored in protocolEditValidation.ts
+      // ENVELOPE_FILES).
+      'core/datatypes/concentration.schema.yaml',
+      'core/datatypes/reference-ratio.schema.yaml',
     ];
     const contents = new Map<string, string>();
     for (const path of paths) contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
@@ -80,8 +85,14 @@ describe('Protocol edit-op envelope schema', () => {
           settings: [validSetting],
         },
         { op: 'step_update', stepId: 'step-002', description: 'Text-only edit.' },
-        { op: 'step_insert', afterStepId: 'step-002', label: 'Wash beads', kind: 'wash', description: 'Three washes.' },
-        { op: 'step_insert', beforeStepId: 'step-001', label: 'Read plate', kind: 'read' },
+        {
+          op: 'step_insert', afterStepId: 'step-002', label: 'Wash beads', kind: 'wash', description: 'Three washes.',
+          target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3,
+        },
+        {
+          op: 'step_insert', beforeStepId: 'step-001', label: 'Read plate', kind: 'read',
+          target: { labwareRole: 'plate' }, modality: 'absorbance',
+        },
         validStepDelete,
         {
           op: 'labware_add',
@@ -244,9 +255,156 @@ describe('Protocol edit-op envelope schema', () => {
 
   it('REJECTS a step_insert with no anchor (position is part of the contract)', () => {
     const result = validate({
-      ops: [{ op: 'step_insert', label: 'Wash', kind: 'wash' }],
+      ops: [{ op: 'step_insert', label: 'Wash', kind: 'wash', target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3 }],
     });
     expect(result.valid).toBe(false);
+  });
+
+  // ------------------------------------------------- step_insert payload contract
+  // PROTO-AI-9 (architect ruling Option (i)): an insert must carry the SAME
+  // per-kind payload the record schema requires (protocol.schema.yaml kind
+  // payloads — see the StepInsertOp header comment for mirrored line numbers),
+  // so an accepted proposal is always APPLIABLE: the minted record step passes
+  // protocol.schema.yaml. Each kind gets a complete-payload ACCEPT and a
+  // drop-one-required-field REJECT naming the field-level path.
+  const allWells = { kind: 'all' } as const;
+  const explicitWells = { kind: 'explicit', wells: ['A1', 'B2'] } as const;
+
+  const completeInsert: Record<string, Record<string, unknown>> = {
+    add_material: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Add lysis buffer', kind: 'add_material',
+      target: { labwareRole: 'plate' }, wells: allWells,
+      material: { materialRole: 'lysis-buffer' }, volume_uL: 20,
+    },
+    transfer: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Transfer lysate', kind: 'transfer',
+      source: { labwareRole: 'plate', wells: explicitWells },
+      target: { labwareRole: 'deep-plate', wells: explicitWells },
+      volume_uL: { param: 'transfer_uL' },
+    },
+    mix: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Mix beads', kind: 'mix',
+      target: { labwareRole: 'plate' }, wells: allWells,
+    },
+    wash: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Wash beads', kind: 'wash',
+      target: { labwareRole: 'plate' }, wells: allWells, cycles: 3, washVolume_uL: 200,
+    },
+    incubate: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Incubate lysate', kind: 'incubate',
+      target: { labwareRole: 'plate' }, duration_min: 30, temperature_C: 37,
+    },
+    read: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Read plate', kind: 'read',
+      target: { labwareRole: 'plate_reader' }, modality: 'absorbance',
+      instrumentRole: 'plate_reader', channels: ['595'],
+    },
+    harvest: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Harvest eluate', kind: 'harvest',
+      source: { labwareRole: 'plate' }, wells: allWells, volume_uL: 50,
+      producesArtifactId: 'eluate',
+    },
+    other: {
+      op: 'step_insert', afterStepId: 'step-001', label: 'Spin down', kind: 'other',
+      description: 'Brief centrifugal spin.',
+    },
+  };
+
+  it.each(Object.keys(completeInsert))(
+    'ACCEPTS a complete %s step_insert payload (appliable record shape)',
+    (kind) => {
+      const result = validate({ ops: [completeInsert[kind]!] });
+      expect(result.errors ?? []).toEqual([]);
+      expect(result.valid).toBe(true);
+    },
+  );
+
+  it('ACCEPTS add_material expressing working_concentration instead of volume_uL (record oneOf mirrored)', () => {
+    const op = { ...completeInsert.add_material! } as Record<string, unknown>;
+    delete op.volume_uL;
+    op.working_concentration = { value: 10, unit: 'nM', basis: 'molar' };
+    const result = validate({ ops: [op] });
+    expect(result.errors ?? []).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  // One dropped REQUIRED payload field per kind → rejection whose Ajv errors
+  // name the op object (the `then` required keyword reports at /ops/0 with
+  // missingProperty = the dropped field).
+  it.each([
+    ['add_material', 'target'],
+    ['add_material', 'material'],
+    ['transfer', 'source'],
+    ['transfer', 'volume_uL'],
+    ['mix', 'wells'],
+    ['wash', 'cycles'],
+    ['incubate', 'duration_min'],
+    ['read', 'modality'],
+    ['harvest', 'wells'],
+    ['other', 'description'],
+  ] as const)('REJECTS %s step_insert missing required payload field "%s" (field-level report)', (kind, field) => {
+    const op = { ...completeInsert[kind]! };
+    delete op[field];
+    const result = validate({ ops: [op] });
+    expect(result.valid).toBe(false);
+    const missing = (result.errors ?? []).filter(
+      (e) => e.path === '/ops/0' && e.params?.missingProperty === field,
+    );
+    expect(missing.length).toBeGreaterThan(0);
+  });
+
+  it('REJECTS an add_material step_insert carrying NEITHER volume_uL NOR working_concentration (record oneOf mirrored)', () => {
+    const op = { ...completeInsert.add_material! } as Record<string, unknown>;
+    delete op.volume_uL;
+    const result = validate({ ops: [op] });
+    expect(result.valid).toBe(false);
+    const paths = (result.errors ?? []).map((e) => e.path);
+    expect(paths).toContain('/ops/0');
+  });
+
+  it('REJECTS an unknown property on a step_insert payload (closed op object)', () => {
+    const result = validate({
+      ops: [{ ...completeInsert.wash!, settings: { soak: true } }],
+    });
+    expectRejectedAt(result, '/ops/0');
+  });
+
+  it.each([
+    ['uppercase role', 'Plate'],
+    ['space in role', 'plate reader'],
+  ])('REJECTS a step_insert payload with a malformed labwareRole (%s) at /ops/0/target/labwareRole', (_label, labwareRole) => {
+    const result = validate({
+      ops: [{ ...completeInsert.wash!, target: { labwareRole } }],
+    });
+    expectRejectedAt(result, '/ops/0/target/labwareRole');
+  });
+
+  it('REJECTS a step_insert payload with a malformed material.materialRole at /ops/0/material/materialRole', () => {
+    const result = validate({
+      ops: [{ ...completeInsert.add_material!, material: { materialRole: 'Lysis Buffer' } }],
+    });
+    expectRejectedAt(result, '/ops/0/material/materialRole');
+  });
+
+  it('REJECTS a step_insert payload leaking record fields (stepId/ordinal are minted/renumbered, never proposed)', () => {
+    const result = validate({
+      ops: [{ ...completeInsert.wash!, stepId: 'step-wash-me', ordinal: 4 }],
+    });
+    expectRejectedAt(result, '/ops/0');
+  });
+
+  it('REJECTS a malformed WellSelector on a step_insert payload at the field path', () => {
+    const result = validate({
+      ops: [{ ...completeInsert.wash!, wells: { kind: 'explicit' } }],
+    });
+    expectRejectedAt(result, '/ops/0/wells');
+  });
+
+  it('REJECTS a modality outside the StepRead enum at /ops/0/modality', () => {
+    const result = validate({
+      ops: [{ ...completeInsert.read!, modality: 'fluorescence-x' }],
+    });
+    expectRejectedAt(result, '/ops/0/modality');
   });
 
   it('REJECTS a step_insert missing the required kind', () => {
