@@ -124,6 +124,16 @@ describe('sidebarState', () => {
     expect(state.mode).toBe('committing')
   })
 
+  it('R-Defect-2: committing has a bounded reset path — reset/cancel return to ready', () => {
+    // `committing` disables the chat input (isChatEnabled false), so it must
+    // never be terminal: the reducer's reset/cancel are the exits the panel
+    // fires after a commit lands (AiTabPanel.onApply) and on empty applies.
+    const committing = { mode: 'committing' as const, draftId: 'draft-1' }
+    expect(isChatEnabled(committing)).toBe(false)
+    expect(sidebarReducer(committing, { type: 'reset' }).mode).toBe('ready')
+    expect(sidebarReducer(committing, { type: 'cancel' }).mode).toBe('ready')
+  })
+
   it('transitions to ready on cancel from any state', () => {
     const clarifying = {
       mode: 'clarifying' as const,

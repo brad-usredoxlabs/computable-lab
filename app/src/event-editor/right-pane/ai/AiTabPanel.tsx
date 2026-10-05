@@ -126,12 +126,23 @@ export function AiTabPanel() {
     return ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
   }, [ws.state.activeTabId, ws.state.tabs])
 
-  const systemPrompt = systemPromptForViewer(systemPromptKindForTab(activeTab))
-
   // Present only when the active tab is a deck (EventEditorProvider wraps
   // the pane then); null on pdf/document tabs.
   const editor = useOptionalEventEditor()
   const editorState = editor?.state ?? null
+
+  // PROTO-AI-9 surface ruling (architect decision 2026-10-05, option d):
+  // while the deck editor is MOUNTED the pane sends on the deck surface,
+  // even when the workspace's ACTIVE tab is not a deck (the run page wraps
+  // the pane in EventEditorProvider regardless of the active tab, which
+  // defaultWorkspaceState seeds as `details:<studyId>`). The warm path below
+  // already triggers off the mounted deck editor — the chat send must not
+  // contradict it. No deck editor mounted → the active-tab derivation stands
+  // byte-identical (pdf/document/other tabs unaffected).
+  const systemPrompt =
+    editorState !== null
+      ? systemPromptForViewer('deck')
+      : systemPromptForViewer(systemPromptKindForTab(activeTab))
 
   // Shared protocol surface (rail/loader): the ATTACHED protocol identity,
   // its step concepts, and its declared roles. The context builder below
@@ -206,8 +217,14 @@ export function AiTabPanel() {
       activeTab && (activeTab.kind === 'pdf' || activeTab.kind === 'document')
         ? activeTab.artifactId
         : null
+    // PROTO-AI-9 surface ruling: the deck template's {{RUN_ID}}/graph fields
+    // read this id. On the run page the ACTIVE tab is not a deck, so fall
+    // back to the mounted editor's graph — the same deck the surface label
+    // now declares. When the active tab IS a deck, the tab's id wins.
     const activeEventGraphId =
-      activeTab?.kind === 'deck' ? activeTab.eventGraphId : null
+      activeTab?.kind === 'deck'
+        ? activeTab.eventGraphId
+        : editorState?.eventGraphId ?? null
     const activeVariant = editorState
       ? getVariantManifest(editorState.platforms, editorState.platformId, editorState.variantId)
       : null
@@ -307,6 +324,19 @@ export function AiTabPanel() {
       // the whole draft because of an ungrounded material).
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
+
+      // R-Defect-1 (PROTO-AI-9 fix): a failed turn — the server result
+      // carries `error` (schema rejection, model failure; assistStream
+      // renders "Draft failed: …" in the chat log) — must NOT open an
+      // actionable review over an empty change list. Return the pane to
+      // chat (ready) with the error visible in the message log so the
+      // biologist can simply retry.
+      if (result.error) {
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
 
       // PROTO-AI-9: a `protocol_edit` emission branches HERE, independent of
       // the event-graph path. The proposal renders in the SAME ChangesPanel
@@ -930,8 +960,21 @@ export function AiTabPanel() {
                 handleProtocolAccept()
                 return
               }
+              // R-Defect-2 (PROTO-AI-9 fix): with NO protocol proposal and
+              // NO mounted preview there is nothing to commit — entering
+              // `committing` here hid the chat input with no UI exit
+              // (isChatEnabled false, nothing but cancel/reset leaves it).
+              // Stay usable: return the pane to chat instead.
+              if (!previewActive) {
+                sidebarDispatch({ type: 'reset' })
+                return
+              }
               sidebarDispatch({ type: 'commit' })
               editor?.actions.commitPreview()
+              // Bounded reset path for `committing`: the commit is a
+              // synchronous local editor dispatch, so the pane returns to
+              // chat in the same turn — the input can never be stranded.
+              sidebarDispatch({ type: 'reset' })
             }}
             onDiscard={handleCancelDraft}
           />
