@@ -350,6 +350,27 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
     }
   }
 
+  // Validate shadow-router block if present (PROTO-AI-12). MISSING = OFF;
+  // nothing here may default to ON.
+  const shadowRouter = c.shadowRouter as Record<string, unknown> | undefined;
+  if (shadowRouter !== undefined) {
+    if (!shadowRouter || typeof shadowRouter !== 'object') {
+      throw new ConfigValidationError('shadowRouter must be an object', `${path}.shadowRouter`, shadowRouter);
+    }
+    const s = shadowRouter as Record<string, unknown>;
+    if (s.enabled !== undefined && typeof s.enabled !== 'boolean') {
+      throw new ConfigValidationError('shadowRouter.enabled must be a boolean', `${path}.shadowRouter.enabled`, s.enabled);
+    }
+    for (const key of ['baseUrl', 'model', 'telemetryPath'] as const) {
+      if (s[key] !== undefined && typeof s[key] !== 'string') {
+        throw new ConfigValidationError(`shadowRouter.${key} must be a string`, `${path}.shadowRouter.${key}`, s[key]);
+      }
+    }
+    if (s.timeoutMs !== undefined && typeof s.timeoutMs !== 'number') {
+      throw new ConfigValidationError('shadowRouter.timeoutMs must be a number', `${path}.shadowRouter.timeoutMs`, s.timeoutMs);
+    }
+  }
+
   // Normalize: agent block is optional in config.yaml but the type contract
   // (AIConfig.agent, AIProfile.agent) requires it to exist. Default to {}
   // here so every downstream consumer can read ai.agent.* without guarding.
