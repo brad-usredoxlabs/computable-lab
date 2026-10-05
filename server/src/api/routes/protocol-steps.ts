@@ -204,6 +204,68 @@ function findMalformedCyclingPrograms(equipments: unknown[]): string | null {
   return null
 }
 
+/**
+ * Content-lock gate (PROTO-AI-5 G2). Lifecycle states whose payload content
+ * is immutable once controlled. This mirrors the human editor's client rule
+ * (`app/src/event-editor/right-pane/protocol/protocolStepEditing.ts:45`), the
+ * PUT handler lock (`RecordHandlers.ts:798` `CONTROLLED_RECORD_LOCKED`, 409),
+ * and the store lock (`RecordStoreImpl.ts:661`) — the SAME semantics and code
+ * at every layer; the step endpoints were the one path missing the route-level
+ * check (the store refused the write but the endpoint still answered 200).
+ */
+const CONTENT_LOCKED_STATES = ['approved', 'effective', 'superseded', 'archived'];
+function contentLocked(payload: Record<string, unknown>): boolean {
+  return Boolean(payload.lifecycleId) && CONTENT_LOCKED_STATES.includes(String(payload.state));
+}
+
+/** The lock denial in the existing 409 CONTROLLED_RECORD_LOCKED shape. */
+function controlledLockedReply(): ErrorResponse {
+  return {
+    error: 'CONTROLLED_RECORD_LOCKED',
+    message: 'Create a new draft to edit an approved or effective document.',
+  };
+}
+
+/** Result of ctx.store.update — the value previously discarded (G5). */
+type StoreUpdateResult = Awaited<ReturnType<AppContext['store']['update']>>;
+
+/**
+ * Surface a store refusal as a real failure response instead of a false 200
+ * (PROTO-AI-5 G5). Mirrors the EXISTING failure mapping in
+ * `RecordHandlers.updateRecord` (`RecordHandlers.ts:864-897`): validation
+ * failure → 422, lint failure → 422, controlled-lock → 409, SHA mismatch →
+ * 409 with the original conflict string, anything else → 400 with the store's
+ * error. Returns null when the store accepted the write. No new mechanism:
+ * the PUT path already speaks this mapping.
+ */
+function surfaceStoreFailure(reply: FastifyReply, result: StoreUpdateResult): ErrorResponse | null {
+  if (result.success) return null;
+  if (result.validation && !result.validation.valid) {
+    reply.status(422);
+    const first = result.validation.errors?.[0];
+    return {
+      error: 'VALIDATION_FAILED',
+      message: first ? `${first.path}: ${first.message}` : 'Schema validation rejected the update',
+    };
+  }
+  if (result.lint && !result.lint.valid) {
+    reply.status(422);
+    return { error: 'LINT_FAILED', message: result.error ?? 'Lint rejected the update' };
+  }
+  if (result.error?.includes('CONTROLLED_RECORD_LOCKED')) {
+    reply.status(409);
+    return { error: 'CONTROLLED_RECORD_LOCKED', message: result.error };
+  }
+  if (result.error?.includes('SHA mismatch')) {
+    // Stale expectedSha conflict stays a conflict with its original string
+    // (same treatment as RecordHandlers.ts:885-891).
+    reply.status(409);
+    return { error: result.error, message: result.error };
+  }
+  reply.status(400);
+  return { error: result.error ?? 'STORE_UPDATE_FAILED', message: result.error ?? 'Store refused the update' };
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -323,6 +385,13 @@ export function registerProtocolStepsRoutes(
         reply.status(400);
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
+      // G2 content-lock gate — mirrors the client rule (protocolStepEditing.ts:45)
+      // and the PUT handler lock (RecordHandlers.ts:798). Route-level so the
+      // response tells the truth, not just the store backstop.
+      if (contentLocked(payload)) {
+        reply.status(409);
+        return controlledLockedReply();
+      }
 
       const steps = (payload.steps as ProtocolStep[]) ?? [];
       const result = findStep(steps, stepId);
@@ -363,11 +432,15 @@ export function registerProtocolStepsRoutes(
       steps[result.index] = updatedStep;
       payload.steps = steps;
 
-      // Save updated protocol record
-      await ctx.store.update({
+      // Save updated protocol record. G5: the store result is NOT discarded —
+      // a refusal (Ajv / controlled lock) must answer with its real failure,
+      // not a false 200. Mirrors RecordHandlers.updateRecord's mapping.
+      const update = await ctx.store.update({
         envelope: { ...record, payload },
         message: `Update step '${stepId}' in protocol '${protocolId}'`,
       });
+      const failure = surfaceStoreFailure(reply, update);
+      if (failure) return failure;
 
       return { step: updatedStep };
     } catch (error) {
@@ -419,6 +492,11 @@ export function registerProtocolStepsRoutes(
         reply.status(400);
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
+      // G2 content-lock gate (see PATCH step above for the mirrored pattern).
+      if (contentLocked(payload)) {
+        reply.status(409);
+        return controlledLockedReply();
+      }
 
       const steps = (payload.steps as ProtocolStep[]) ?? [];
 
@@ -448,11 +526,13 @@ export function registerProtocolStepsRoutes(
 
       payload.steps = sortedSteps;
 
-      // Save updated protocol record
-      await ctx.store.update({
+      // Save updated protocol record. G5: surface the store result (see PATCH step).
+      const update = await ctx.store.update({
         envelope: { ...record, payload },
         message: `Add step '${body.stepId}' to protocol '${protocolId}'`,
       });
+      const failure = surfaceStoreFailure(reply, update);
+      if (failure) return failure;
 
       return { step: newStep };
     } catch (error) {
@@ -490,6 +570,11 @@ export function registerProtocolStepsRoutes(
         reply.status(400);
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
+      // G2 content-lock gate (see PATCH step above for the mirrored pattern).
+      if (contentLocked(payload)) {
+        reply.status(409);
+        return controlledLockedReply();
+      }
 
       const steps = (payload.steps as ProtocolStep[]) ?? [];
       const result = findStep(steps, stepId);
@@ -499,8 +584,24 @@ export function registerProtocolStepsRoutes(
         return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
       }
 
-      // Prevent deletion if the step has been executed (has executionMeta with timestamps)
-      if (result.step.executionMeta && result.step.executionMeta.startedAt) {
+      // G3 ≥1-step gate. Mirrors the client delete order (protocolStepEditing.ts:90
+      // counts BEFORE executedness) and the schema authority's minItems:1
+      // (`schema/workflow/protocol.schema.yaml:301-303`) with a stable code
+      // instead of a swallowed Ajv 422.
+      if (steps.length <= 1) {
+        reply.status(422);
+        return {
+          error: 'MIN_STEPS_REMAIN',
+          message: `A protocol needs at least one step. Add another step before deleting '${stepId}'`,
+        };
+      }
+
+      // Prevent deletion if the step has been executed. PROTO-AI-5 symmetry
+      // rule: the STRICTER client rule (startedAt OR completedAt,
+      // protocolStepEditing.ts:91-92) is the target; the old route checked
+      // startedAt only. Same code/message shape as before (startedAt refusal
+      // is byte-compatible).
+      if (result.step.executionMeta && (result.step.executionMeta.startedAt || result.step.executionMeta.completedAt)) {
         reply.status(400);
         return {
           error: 'STEP_ALREADY_EXECUTED',
@@ -514,11 +615,13 @@ export function registerProtocolStepsRoutes(
 
       payload.steps = renumbered;
 
-      // Save updated protocol record
-      await ctx.store.update({
+      // Save updated protocol record. G5: surface the store result (see PATCH step).
+      const update = await ctx.store.update({
         envelope: { ...record, payload },
         message: `Delete step '${stepId}' from protocol '${protocolId}'`,
       });
+      const failure = surfaceStoreFailure(reply, update);
+      if (failure) return failure;
 
       return { success: true, deletedStepId: stepId };
     } catch (error) {
@@ -669,6 +772,11 @@ export function registerProtocolStepsRoutes(
         reply.status(400);
         return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
       }
+      // G2 content-lock gate (see PATCH step above for the mirrored pattern).
+      if (contentLocked(payload)) {
+        reply.status(409);
+        return controlledLockedReply();
+      }
 
       const steps = (payload.steps as ProtocolStep[]) ?? [];
       const result = findStep(steps, stepId);
@@ -681,10 +789,14 @@ export function registerProtocolStepsRoutes(
       result.step.settings = body.settings ?? [];
       payload.steps = steps;
 
-      await ctx.store.update({
+      // G5: surface the store result — invalid settings fail at store Ajv and
+      // must NOT be swallowed into a false 200.
+      const update = await ctx.store.update({
         envelope: { ...record, payload },
         message: `Update settings for step '${stepId}' in protocol '${protocolId}'`,
       });
+      const failure = surfaceStoreFailure(reply, update);
+      if (failure) return failure;
 
       return { settings: result.step.settings ?? [] };
     } catch (error) {
@@ -725,6 +837,12 @@ export function registerProtocolStepsRoutes(
         if (payload.kind !== 'protocol') {
           reply.status(400);
           return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
+        }
+        // G2 content-lock gate: committing a realization PATCHes the step's
+        // subGraphRef — a content edit like any other (see PATCH step above).
+        if (contentLocked(payload)) {
+          reply.status(409);
+          return controlledLockedReply();
         }
         const steps = (payload.steps as ProtocolStep[]) ?? [];
         const result = findStep(steps, stepId);
@@ -843,10 +961,15 @@ export function registerProtocolStepsRoutes(
         result.step = { ...result.step, subGraphRef };
         steps[result.index] = result.step;
         payload.steps = steps;
-        await ctx.store.update({
+        // G5: the realization-create result was already surfaced; the protocol
+        // PATCH that points the step at it must surface a refusal too, not a
+        // false 200 claiming the ref was committed.
+        const refUpdate = await ctx.store.update({
           envelope: { ...record, payload },
           message: `Commit realization ${realizationId} to step '${stepId}' in protocol '${protocolId}'`,
         });
+        const refFailure = surfaceStoreFailure(reply, refUpdate);
+        if (refFailure) return refFailure;
 
         return { subGraphRef, realizationId };
       } catch (error) {
