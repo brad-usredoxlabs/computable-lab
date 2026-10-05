@@ -14,13 +14,26 @@
  * one answer is possible.
  */
 
-export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout';
+export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout' | 'protocol_edit';
 
 const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
   event_graph: ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'unresolvedRefs'],
   create_record: ['records', 'alsoPlace'],
   deck_layout: ['variantId'],
+  // PROTO-AI-7 gave the forced-draft flow `protocol_edit`; PROTO-AI-9 taught the
+  // recovery paths the same. `ops` is its signature key — deliberately narrow:
+  // `protocolId` alone is not a draft (it is an optional target, not content).
+  protocol_edit: ['ops'],
 };
+
+/**
+ * The substantive keys of the protocol_edit envelope, exported for the
+ * fast-recovery guard (`coerceDraftArgsFromContent`), which decides "is this
+ * prose JSON a draft at all?" without widening the event-draft key list
+ * (DRAFT_ARG_KEYS feeds the unknown-field diagnostic and must stay event-only).
+ * The decision still lives in this table — one source.
+ */
+export const PROTOCOL_EDIT_ARG_KEYS: readonly string[] = INTENT_KEYS.protocol_edit;
 
 export function isAgentIntentName(value: unknown): value is AgentIntentName {
   return typeof value === 'string' && value in INTENT_KEYS;

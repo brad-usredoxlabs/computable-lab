@@ -49,7 +49,7 @@ import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.j
 import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
-import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS } from './coerceAgentIntent.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
@@ -752,8 +752,13 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
     }
   }
   // Bare argument object: require a known draft key so unrelated prose-JSON
-  // (an example, a code block) is never fed to the compiler.
+  // (an example, a code block) is never fed to the compiler. The protocol_edit
+  // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
+  // table) rather than DRAFT_ARG_KEYS, because that list also drives the
+  // unknown-field diagnostic and must stay event-draft-only. Guard stays
+  // strict: `{intent, protocolId}` with no substantive key is still not a draft.
   if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
+  if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return obj;
   return null;
 }
 
@@ -763,6 +768,9 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
     'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
     'For event drafting, use intent "event_graph" and allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
     'For a deck layout change, use intent "deck_layout" with variantId (e.g. "manual_freeform") and leave the event fields empty.',
+    // PROTO-AI-9: the retry prompt must know the protocol_edit envelope too, or
+    // a protocol-edit turn can never be recovered by the slow path.
+    'For edits to the ATTACHED PROTOCOL (add/delete/reorder/modify its steps), use intent "protocol_edit" with ops:[...] — cite ONLY stepIds/roleIds from the ATTACHED PROTOCOL block; this proposes an edit and writes nothing.',
     'For labware/deck setup, prefer labwareRequirements like {"classCurie":"CL:96_well_plate","deckSlot":"B2","reason":"96-well plate requested","specificity":"generic"}. Do not invent LBW-* recordIds.',
     'Do not ask which vendor/catalog/plate subtype for a generic request like a 96-well plate. Emit the generic requirement.',
     'For material nouns, use materials[].ref as {"curie":"..."} or {"mint":{"label":"...","domain":"..."}}.',
@@ -1666,22 +1674,36 @@ export function createAgentOrchestrator(
               ? coerceResponse.choices[0]!.message.content
               : '';
             const coercedArgs = extractJsonObject(coerceText);
-            if (coercedArgs) {
+            // The SAME discipline the fast path applies: the forced flow ships
+            // `agent_intent` as the terminal tool, so the recovered JSON must be
+            // callable AS that tool. Wrapping it as the compile-draft tool is
+            // what dropped a valid recovered protocol_edit envelope live
+            // (PROTO-AI-9: "no proposal … no usable draft arguments" while the
+            // SSE carried the right ops). A null coercion keeps the existing
+            // failed-to-coerce diagnostic — never invoke a tool with args it
+            // cannot honour.
+            const forcedAgentIntentArgs = coercedArgs && forceDraftTool
+              ? coerceToAgentIntentArgs(coercedArgs)
+              : coercedArgs;
+            if (forcedAgentIntentArgs) {
+              const coercedToolName = forceDraftTool
+                ? AGENT_INTENT_TOOL_NAME
+                : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME;
               assistantMsg.content = null;
               assistantMsg.tool_calls = [{
                 id: `call-coerced-${Date.now().toString(36)}`,
                 type: 'function',
                 function: {
-                  name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
-                  arguments: JSON.stringify(coercedArgs),
+                  name: coercedToolName,
+                  arguments: JSON.stringify(forcedAgentIntentArgs),
                 },
               }];
               choice.finish_reason = 'tool_calls';
               onEvent?.({
                 type: 'status',
-                message: `AI returned compiler arguments; invoking ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`,
+                message: `AI returned compiler arguments; invoking ${coercedToolName}…`,
               });
-              console.warn(`[agent ${tid}] model ignored forced tool call; coerced JSON args after stop contentPreview="${contentPreview}"`);
+              console.warn(`[agent ${tid}] model ignored forced tool call; coerced JSON args after stop as ${coercedToolName}${coercedArgs && forcedAgentIntentArgs !== coercedArgs ? ' (intent inferred)' : ''} contentPreview="${contentPreview}"`);
             } else {
               console.warn(`[agent ${tid}] failed to coerce compiler args from response: ${coerceText.replace(/\s+/g, ' ').slice(0, 400)}`);
             }
