@@ -72,6 +72,63 @@ function payloadKind(payload: unknown): string | undefined {
   return typeof kind === 'string' ? kind : undefined;
 }
 
+/**
+ * PROTO-AI-5 — protocol step write gates for the whole-record PUT path.
+ *
+ * Mirrors the human editor's client-only gate module
+ * (`app/src/event-editor/right-pane/protocol/protocolStepEditing.ts`:
+ * ≥1-step :90, executed-undeletable :91-92 startedAt OR completedAt — the
+ * stricter rule, the campaign's symmetry target — duplicate stepId :78) onto
+ * the server, following the EXISTING server gate pattern: a route-level
+ * conditional returning a stable machine-readable code BEFORE the store write
+ * (cf. `MaterialPrepHandlers.ts:1153-1157` ≥1-step check and the
+ * CONTROLLED_RECORD_LOCKED block below at :798-799). Ajv (`minItems:1`,
+ * `schema/workflow/protocol.schema.yaml:301-303`) stays the structural
+ * authority; this adds the STABLE CODE the schema path cannot name.
+ *
+ * Returns null when the write may proceed. Codes reuse the step endpoints'
+ * vocabulary: MIN_STEPS_REMAIN / STEP_ALREADY_EXECUTED / DUPLICATE_STEP_ID.
+ */
+function protocolStepWriteGate(
+  previousPayload: Record<string, unknown>,
+  proposedPayload: Record<string, unknown>,
+): { status: number; code: string; message: string } | null {
+  if (previousPayload.kind !== 'protocol' || proposedPayload.kind !== 'protocol') return null;
+  const asSteps = (v: unknown) => (Array.isArray(v) ? (v as Array<Record<string, unknown>>) : undefined);
+  const previousSteps = asSteps(previousPayload.steps);
+  const nextSteps = asSteps(proposedPayload.steps);
+
+  // G3 ≥1 step must remain (client protocolStepEditing.ts:90; schema minItems 1).
+  // Fires when the write would leave the protocol step-less: absent steps, or
+  // a steps[] that DROPS from a non-empty previous. (A record already stored
+  // without steps — a malformed legacy row, schema-illegal at creation — may
+  // still be edited; this gate guards the deletion, not pre-existing rot.)
+  if (!nextSteps || (previousSteps && previousSteps.length > 0 && nextSteps.length === 0)) {
+    return { status: 422, code: 'MIN_STEPS_REMAIN', message: 'A protocol needs at least one step. Add another step before deleting this one.' };
+  }
+  if (previousSteps) {
+    // G1 executed steps are undeletable (client protocolStepEditing.ts:91-92):
+    // startedAt OR completedAt. Deletions on this path are payload-subtractive,
+    // so comparing executed stepIds existing-vs-proposed is the whole gate.
+    const surviving = new Set(nextSteps.map((s) => s.stepId));
+    const deletedExecuted = previousSteps.find((s) => {
+      const meta = s.executionMeta as { startedAt?: string; completedAt?: string } | undefined;
+      return Boolean(meta && (meta.startedAt || meta.completedAt)) && !surviving.has(s.stepId);
+    });
+    if (deletedExecuted) {
+      return { status: 400, code: 'STEP_ALREADY_EXECUTED', message: `Step '${deletedExecuted.stepId}' cannot be deleted — it has already been executed` };
+    }
+  }
+  // G4 stepIds must be unique (client protocolStepEditing.ts:78; POST /steps
+  // DUPLICATE_STEP_ID at protocol-steps.ts:426-429 — same code, same status).
+  const ids = nextSteps.map((s) => s.stepId);
+  if (new Set(ids).size !== ids.length) {
+    const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+    return { status: 400, code: 'DUPLICATE_STEP_ID', message: `Step '${dup}' already exists in protocol '${previousPayload.recordId ?? ''}'` };
+  }
+  return null;
+}
+
 function parentRecordIds(payload: unknown): string[] {
   const p = payloadObject(payload);
   const links = p.links && typeof p.links === 'object' ? p.links as Record<string, unknown> : {};
@@ -797,6 +854,18 @@ export function createRecordHandlers(
         const proposed = payloadObject(request.body.payload);
         if (previous.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(previous.state)) && controlledContent(previous) !== controlledContent(proposed)) {
           reply.status(409); return { error: 'CONTROLLED_RECORD_LOCKED', message: 'Create a new draft to edit an approved or effective document.' };
+        }
+        // PROTO-AI-5 G1/G3/G4 — protocol step write gates (executed-step
+        // delete, ≥1-step, duplicate stepId). Runs AFTER the controlled lock
+        // (a locked edit is refused first, unchanged) and BEFORE the store
+        // write, so a refusal persists nothing. Same pattern as the lock
+        // above; see protocolStepWriteGate for the mirrored client rules.
+        {
+          const stepGate = protocolStepWriteGate(previous, proposed);
+          if (stepGate) {
+            reply.status(stepGate.status);
+            return { error: stepGate.code, message: stepGate.message };
+          }
         }
         if (previous.kind === 'protocol' && !previous.lifecycleId) {
           const service = new RecordRevisionService(store);
