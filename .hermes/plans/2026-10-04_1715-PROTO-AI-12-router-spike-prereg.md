@@ -107,3 +107,15 @@ never writes records.
   re-verified by direct reads.
 - The task is `todo` (dep AI-7 unmet). No blocker recorded yet — it is dependency-gated, and the §2
   signature is not needed until §4.
+
+
+## Addendum A — cl-scout orientation recon (SCREENING ONLY, orch 2026-10-04T21:26)
+Two cl-scout runs landed after the spec was written; findings are screening, verify before relying.
+### A1 config optional-boolean / kill-switch convention
+- Type decl: `AppConfig` (server/src/config/types.ts:12) holds nested `corpus?: CorpusConfig` (:27); concrete optional boolean field `CorpusConfig.enabled?: boolean` (:64), doc "Master switch (default false). Can also be flipped via CLA_CORPUS_ENABLED."
+- Loader/merge: deepMerge at server/src/config/loader.ts:118-142; `server: deepMerge(DEFAULT_CONFIG.server, partialConfig.server ?? {})` (:706). Absent key -> target default retained (:136-138); whole config.yaml missing -> `{ ...DEFAULT_CONFIG }` (:682). Corpus defaults `DEFAULT_CORPUS_CONFIG {enabled:false}` (CorpusClient.ts:52-55), resolver resolveCorpusConfig :61-70.
+- Read site: `if (!config.enabled) return { ok:false, error:'corpus.disabled' }` (CorpusClient.ts:170). MISSING => false/off. THIS is the precedent for the router kill-switch field.
+### A2 AgentOrchestrator test mocking (if §4 lands later)
+- Contract `InferenceClient` (server/src/ai/types.ts:853-856): complete / completeStream.
+- Fake = object literal with vi.fn(); streaming mock `completeStream: vi.fn(async function*(){ yield {id, choices:[{index:0, delta:{...}, finish_reason}]} })` (AgentOrchestrator.test.ts:10-23); passed as FIRST arg to createAgentOrchestrator(client, toolBridge, config, agentConfig, deps?) (:33-38).
+- Existing protocol_edit suite `AgentOrchestrator.protocolEdit.test.ts` already present (PROTO-AI-7).
