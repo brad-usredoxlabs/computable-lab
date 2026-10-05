@@ -428,4 +428,110 @@ describe('Protocol edit-op envelope schema', () => {
     const result = validate({ ops: validStepDelete });
     expectRejectedAt(result, '/ops');
   });
+
+  // ------------------------------------------------- PROTO-AI-2 step_update kind-change payload
+  // Architect ruling (Option (i) RELAXED, PROTO-AI-9-stepupdate-kindchange-decision.md):
+  // a step_update that CHANGES `kind` may carry the NEW kind's payload fields; nothing is
+  // required at envelope level (completeness is the record PUT's authority). Payload fields
+  // WITHOUT a kind change stay impossible (no branch applies → unevaluatedProperties rejects),
+  // and only the NEW kind's fields are allowed (wrong-kind fields stay unevaluated).
+
+  const stepUpdate = (fields: Record<string, unknown>): Record<string, unknown> => ({
+    op: 'step_update',
+    stepId: 'step-001',
+    ...fields,
+  });
+
+  it('ACCEPTS a delta-only kind change: {kind: incubate, duration_min:720} with no target (relaxed-ruling signature)', () => {
+    const result = validate({ ops: [stepUpdate({ kind: 'incubate', duration_min: 720 })] });
+    expect(result.errors ?? []).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('ACCEPTS {kind: other} with no payload (description is a base field, not payload)', () => {
+    const result = validate({ ops: [stepUpdate({ kind: 'other' })] });
+    expect(result.errors ?? []).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('ACCEPTS a fuller kind-change payload: {kind: wash, target, wells, cycles:3}', () => {
+    const result = validate({
+      ops: [stepUpdate({ kind: 'wash', target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3 })],
+    });
+    expect(result.errors ?? []).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('ACCEPTS a read kind-change delta: {kind: read, modality} (read payload minus its object settings)', () => {
+    const result = validate({
+      ops: [stepUpdate({ kind: 'read', modality: 'absorbance', channels: ['ex485_em528'], instrumentRole: 'plate_reader' })],
+    });
+    expect(result.errors ?? []).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('REJECTS a payload field WITHOUT kind at /ops/0 (payload is proposable only with a kind change)', () => {
+    const result = validate({ ops: [stepUpdate({ duration_min: 30 })] });
+    expectRejectedAt(result, '/ops/0');
+  });
+
+  it('REJECTS a wrong-kind payload field alongside kind: {kind: wash, duration_min:30} at /ops/0', () => {
+    const result = validate({ ops: [stepUpdate({ kind: 'wash', duration_min: 30 })] });
+    expectRejectedAt(result, '/ops/0');
+  });
+
+  it('REJECTS an unknown payload-ish field alongside kind at /ops/0', () => {
+    const result = validate({ ops: [stepUpdate({ kind: 'wash', wash_volume_ml: 30 })] });
+    expectRejectedAt(result, '/ops/0');
+  });
+
+  it('DRIFT LOCK: $defs/StepPayloadFields per-kind sets equal the payload props of the protocol.schema.yaml step defs', async () => {
+    // The copied-route's anti-drift lock (architect §3.5): parse BOTH schema files and
+    // assert the envelope's DATA mirror of allowed payload fields per kind matches the
+    // required+optional payload properties of the corresponding record def (minus `kind`
+    // itself and the two adjudicated exclusions below).
+    const { parse } = await import('yaml');
+    const schemaRoot = join(process.cwd(), '..', 'schema');
+    const envelope = parse(await readFile(join(schemaRoot, 'workflow/protocol-edit-op.schema.yaml'), 'utf8')) as {
+      $defs: Record<string, Record<string, unknown>>;
+    };
+    const record = parse(await readFile(join(schemaRoot, 'workflow/protocol.schema.yaml'), 'utf8')) as {
+      $defs: Record<string, { properties?: Record<string, unknown> }>;
+    };
+    // Encoded as schema-legal data: properties per kind, each an array whose items
+    // enum IS the allowed-payload-field list (keeps the envelope Ajv-strict-clean).
+    const fieldLists = envelope.$defs.StepPayloadFields?.properties as
+      | Record<string, { items?: { enum?: string[] } }>
+      | undefined;
+    expect(fieldLists, 'envelope $defs/StepPayloadFields must declare per-kind properties').toBeDefined();
+    const declared = Object.fromEntries(
+      Object.entries(fieldLists ?? {}).map(([k, v]) => [k, v.items?.enum ?? []]),
+    );
+
+    const recordDefs: Record<string, string> = {
+      add_material: 'StepAddMaterial',
+      transfer: 'StepTransfer',
+      mix: 'StepMix',
+      wash: 'StepWash',
+      incubate: 'StepIncubate',
+      read: 'StepRead',
+      harvest: 'StepHarvest',
+      other: 'StepOther',
+    };
+    // Adjudicated exclusions (declared in the envelope header, not drift):
+    //  - read.settings: StepRead's OBJECT settings (protocol.schema.yaml:1004-1007) is a
+    //    realization artifact; the settings adjudication keeps the array form only.
+    //  - other.description: `description` is a BASE step_update field, not kind payload.
+    const adjudicated: Record<string, string[]> = { read: ['settings'], other: ['description'] };
+
+    expect(Object.keys(declared!).sort()).toEqual(Object.keys(recordDefs).sort());
+    for (const [kind, defName] of Object.entries(recordDefs)) {
+      const def = record.$defs[defName];
+      expect(def, `record def ${defName} exists`).toBeDefined();
+      const recordFields = Object.keys(def!.properties ?? {})
+        .filter((f) => f !== 'kind' && !(adjudicated[kind] ?? []).includes(f))
+        .sort();
+      expect([...(declared![kind] ?? [])].sort(), `$defs/StepPayloadFields.${kind}`).toEqual(recordFields);
+    }
+  });
 });

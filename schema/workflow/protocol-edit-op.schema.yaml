@@ -49,6 +49,26 @@
 # protocolId is OPTIONAL: when the proposal rides in an attached-protocol
 # scope (PROTO-AI-6/9) the scope already binds the target; the field is the
 # override for out-of-scope proposals.
+#
+# KIND-CHANGE PAYLOAD RULING (PROTO-AI-2/AI-8 repair, architect Option (i)
+# RELAXED, decisions/PROTO-AI-9-stepupdate-kindchange-decision.md 2026-10-05):
+# a `step_update` that CHANGES `kind` may carry the NEW kind's payload fields —
+# permitted ONLY on an op that changes kind, required by NOTHING at envelope
+# level; per-kind completeness is enforced by the record PUT (field-level
+# paths, zero write), which the clarify-then-redraft review loop already
+# consumes. Per-kind whitelists are in $defs/StepUpdateOp (`allOf` if/then
+# branch per kind); their field-list mirror is $defs/StepPayloadFields (DATA,
+# mirrored by the applier, parity drift-locked in
+# server/src/schema/ProtocolEditOpSchema.test.ts). Superseded-field
+# disposition: on a kind change the applier DROPS every payload field NOT
+# allowed by the NEW kind's set and keeps base fields — leftovers would stay
+# record-VALID (ProtocolStep sets no additionalProperties and every kind branch
+# discriminates on kind), which is exactly why they must be cleaned. Record
+# provenance: protocol.schema.yaml kind payload defs — StepAddMaterial
+# :855-897, StepTransfer :897-928, StepMix :930-944, StepWash :946-960,
+# StepIncubate :962-978, StepRead :980-1007 (OBJECT settings :1004-1007 stay
+# excluded, array adjudication above stands), StepHarvest :1009-1028,
+# StepOther :1030-1037.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/protocol-edit-op.schema.yaml"
 title: "ProtocolEditOps"
@@ -213,6 +233,64 @@ $defs:
         type: string
         description: "Optional: pin to a specific material concept instead of a role."
 
+  # ------------------------------------------------------------------ step_update kind-change payload shapes
+  # COPIED, not invented, from protocol.schema.yaml kind payloads (PROVENANCE in
+  # each description). The shapes deliberately mirror $defs/InsertTarget /
+  # InsertSource / InsertMaterial but are DECLARED SEPARATELY: the insert defs
+  # are owned by the step_insert contract (its descriptions and drift-lock
+  # wording must never be edited from here), and the update per-kind whitelists
+  # differ from insert's (target/wells are NOT required here — the relaxed
+  # ruling). labwareRole/materialRole stay $ref #/$defs/RoleId (cite DECLARED
+  # roles only; same no-fabrication ruling as insert).
+  UpdateTarget:
+    type: object
+    additionalProperties: false
+    required: [ labwareRole ]
+    description: >
+      Labware target of a kind-change payload (record shape: protocol.schema.yaml
+      kind payloads, e.g. StepWash.target :952-957 — labwareRole only;
+      StepTransfer.target :910-914 additionally declares/requires wells). The
+      envelope keeps wells OPTIONAL: the relaxed ruling requires no payload, and
+      a wash-target-with-wells is the record PUT's rejection, not the envelope's.
+    properties:
+      labwareRole:
+        $ref: "#/$defs/RoleId"
+      wells:
+        $ref: "#/$defs/WellSelector"
+
+  UpdateSource:
+    type: object
+    additionalProperties: false
+    required: [ labwareRole ]
+    description: >
+      Labware source of a kind-change payload (StepTransfer.source
+      protocol.schema.yaml:903-909 declares labwareRole+wells; StepHarvest.source
+      :1015-1020 labwareRole only). The envelope keeps wells OPTIONAL here: the
+      relaxed ruling requires NO payload at envelope level and the step's
+      existing source already carries its wells.
+    properties:
+      labwareRole:
+        $ref: "#/$defs/RoleId"
+      wells:
+        $ref: "#/$defs/WellSelector"
+
+  UpdateMaterial:
+    type: object
+    additionalProperties: false
+    # At least one of materialRole/materialId (mirrors $defs/InsertMaterial;
+    # the record StepAddMaterial.material :875-884 always names materialRole).
+    anyOf:
+    - required: [ materialRole ]
+    - required: [ materialId ]
+    description: "Material slot of an add_material kind-change payload (mirrors StepAddMaterial.material, protocol.schema.yaml:875-884)."
+    properties:
+      materialRole:
+        $ref: "#/$defs/RoleId"
+        description: "Declared materialRole within the target protocol (roles.materialRoles)."
+      materialId:
+        type: string
+        description: "Optional: pin to a specific material concept instead of a role."
+
   # ------------------------------------------------------------------ the op union
   EditOp:
     type: object
@@ -249,7 +327,49 @@ $defs:
     type: object
     unevaluatedProperties: false
     required: [op, stepId]
-    description: "Update fields of an existing step. Only listed fields change; absent fields are left untouched."
+    description: >
+      Update fields of an existing step. Only listed fields change; absent
+      fields are left untouched.
+
+      KIND-CHANGE PAYLOAD RULING (architect Option (i) RELAXED, PROTO-AI-9
+      decision 2026-10-05 §1/§3.1): a step_update that CHANGES `kind` may carry
+      the NEW kind's payload fields — permitted ONLY on an op that changes kind,
+      required by NOTHING at envelope level. Per-kind completeness is enforced
+      by the RECORD PUT (Ajv record validation, field-level paths, zero write),
+      which the review dialogue already consumes (clarify-then-redraft). A
+      delta-only change (e.g. wash→incubate naming just `duration_min`) is the
+      signature case: values already on the step need no restatement.
+      MECHANICS: `allOf:` one branch per kind — `if` pins `required: [kind]` +
+      kind const (MANDATORY: a properties-only `if` would match when kind is
+      absent and whitelist the wrong kind), `then` declares THAT kind's payload
+      properties (NO then.required). The outer unevaluatedProperties:false then
+      does double duty via 2020-12 annotation scoping: with NO branch applied
+      (no kind) every payload field is unevaluated → REJECTED (payload without
+      a kind change is impossible); with the branch applied, only that kind's
+      fields are annotated evaluated → prior/other-kind fields in the op (e.g.
+      {kind: 'wash', duration_min: 30}) are REJECTED. SUPERSDED-FIELD
+      DISPOSITION (§4): on a kind change the applier DROPS every payload field
+      NOT allowed by the NEW kind's set ($defs/StepPayloadFields) and keeps
+      base fields — dead data never rides the ledger (semantic hygiene, not
+      validation rescue: leftovers stay record-VALID, which is exactly why they
+      are cleaned). MIRRORED PER-KIND PROPS (protocol.schema.yaml kind payload
+      defs, copied shapes with provenance; working_concentration/ratio $ref the
+      SAME shared datatypes insert already loads — zero new ENVELOPE_FILES deps):
+        add_material :855-895  target, wells, material, volume_uL,
+                               working_concentration, ratio
+        transfer     :897-928  source, target, volume_uL,
+                               working_concentration, ratio, mappingHint
+        mix          :930-944  target, wells, cycles, volume_uL
+        wash         :946-960  target, wells, cycles, washVolume_uL
+        incubate     :962-978  target, wells, duration_min, temperature_C
+        read         :980-1002 target, wells, modality (enum :995-997),
+                               channels, instrumentRole
+                               (NOT read's OBJECT settings :1004-1007 — the
+                               array adjudication above stands)
+        harvest      :1009-1028 source, wells, volume_uL, producesArtifactId
+        other        :1030-1037 (no payload props; description is a base field)
+      PARITY: $defs/StepPayloadFields is the DATA mirror of these whitelists,
+      mirrored by the applier; parity asserted in ProtocolEditOpSchema.test.ts.
     properties:
       op:
         const: step_update
@@ -278,6 +398,105 @@ $defs:
         items:
           $ref: "./setting.schema.yaml"
         uniqueItems: true
+    allOf:
+    # Per-kind payload whitelists for a KIND CHANGE (no requiredness — relaxed
+    # ruling; completeness is the record PUT's authority). Each `if` pins kind
+    # first; payload props then evaluate ONLY for the matching new kind.
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: add_material } }
+      then:
+        properties:
+          target: { $ref: "#/$defs/UpdateTarget" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          material: { $ref: "#/$defs/UpdateMaterial" }
+          volume_uL: { $ref: "#/$defs/Expr" }
+          working_concentration: { $ref: "./datatypes/concentration.schema.yaml" }
+          ratio: { $ref: "./datatypes/reference-ratio.schema.yaml" }
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: transfer } }
+      then:
+        properties:
+          source: { $ref: "#/$defs/UpdateSource" }
+          target: { $ref: "#/$defs/UpdateTarget" }
+          volume_uL: { $ref: "#/$defs/Expr" }
+          working_concentration: { $ref: "./datatypes/concentration.schema.yaml" }
+          ratio: { $ref: "./datatypes/reference-ratio.schema.yaml" }
+          mappingHint:
+            type: object
+            additionalProperties: true
+            description: "Optional authoring hint (mirrors StepTransfer.mappingHint, protocol.schema.yaml:923-927)."
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: mix } }
+      then:
+        properties:
+          target: { $ref: "#/$defs/UpdateTarget" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          cycles: { $ref: "#/$defs/Expr" }
+          volume_uL: { $ref: "#/$defs/Expr" }
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: wash } }
+      then:
+        properties:
+          target: { $ref: "#/$defs/UpdateTarget" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          cycles: { $ref: "#/$defs/Expr" }
+          washVolume_uL: { $ref: "#/$defs/Expr" }
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: incubate } }
+      then:
+        properties:
+          target: { $ref: "#/$defs/UpdateTarget" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          duration_min: { $ref: "#/$defs/Expr" }
+          temperature_C: { $ref: "#/$defs/Expr" }
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: read } }
+      then:
+        properties:
+          target: { $ref: "#/$defs/UpdateTarget" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          modality:
+            type: string
+            enum: [ fluorescence, absorbance, luminescence, microscopy, ms, qpcr, other ]
+            description: "Read modality (enum copied from StepRead.modality, protocol.schema.yaml:995-997)."
+          channels:
+            type: array
+            items: { type: string }
+            description: "Optional read channels (mirrors StepRead.channels, protocol.schema.yaml:998-1000)."
+          instrumentRole:
+            $ref: "#/$defs/RoleId"
+            description: >
+              Optional read instrument role. The record leaves StepRead.instrumentRole
+              a plain string (protocol.schema.yaml:1001-1002); the envelope narrows it
+              to RoleId because payload values must cite DECLARED roles (same ruling
+              as the insert payload).
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: harvest } }
+      then:
+        properties:
+          source: { $ref: "#/$defs/UpdateSource" }
+          wells: { $ref: "#/$defs/WellSelector" }
+          volume_uL: { $ref: "#/$defs/Expr" }
+          producesArtifactId:
+            type: string
+            description: >
+              Optional harvest reference to a Protocol.producedArtifacts[].artifactId
+              (mirrors StepHarvest.producesArtifactId, protocol.schema.yaml:1023-1028).
+    - if:
+        required: [ kind ]
+        properties: { kind: { const: other } }
+      then:
+        # other carries NO payload props (StepOther, protocol.schema.yaml
+        # :1030-1037): `description` is a BASE step_update field. Every payload
+        # field stays unevaluated → rejected on a change to other.
+        properties: {}
 
   StepInsertOp:
     type: object
@@ -580,3 +799,61 @@ $defs:
         const: equipment_delete
       roleId:
         $ref: "#/$defs/RoleId"
+
+  # ------------------------------------------------------------------ payload-field registry (DATA)
+  # $defs/StepPayloadFields — kind → the step payload fields that kind allows
+  # (required + optional, exactly the properties protocol.schema.yaml declares
+  # per kind def, minus `kind` itself and the adjudicated exclusions below).
+  # MIRRORS the StepUpdateOp per-kind whitelists above; the APPLIER
+  # (app/.../protocolEditOps.ts) mirrors the SAME sets as its explicit picks:
+  # on a kind change it drops every payload field NOT in the NEW kind's list
+  # (superseded-field disposition, architect §4). PARITY asserted in
+  # server/src/schema/ProtocolEditOpSchema.test.ts (drift lock: parses this
+  # file AND protocol.schema.yaml and asserts the sets match). This is DATA,
+  # not validation: it is never $ref'd by an op — encoded as schema-legal
+  # shapes (array-of-enum) so Ajv strict mode compiles the envelope untouched.
+  # Adjudicated exclusions vs the record defs (declared, not drift):
+  #   read.settings       — StepRead's OBJECT settings (protocol.schema.yaml
+  #                         :1004-1007) is a realization artifact; the settings
+  #                         adjudication keeps the Setting[] array only.
+  #   other.description   — `description` is a BASE step_update field, not kind
+  #                         payload (StepOther :1030-1037 requires it; the base
+  #                         prop already carries it).
+  StepPayloadFields:
+    type: object
+    additionalProperties: false
+    description: "Registry (DATA mirror) of allowed step payload fields per kind; mirrored by the applier; parity asserted in ProtocolEditOpSchema.test.ts."
+    required: [ add_material, transfer, mix, wash, incubate, read, harvest, other ]
+    properties:
+      add_material:
+        type: array
+        items:
+          enum: [ target, wells, material, working_concentration, ratio, volume_uL ]
+      transfer:
+        type: array
+        items:
+          enum: [ source, target, working_concentration, ratio, volume_uL, mappingHint ]
+      mix:
+        type: array
+        items:
+          enum: [ target, wells, cycles, volume_uL ]
+      wash:
+        type: array
+        items:
+          enum: [ target, wells, cycles, washVolume_uL ]
+      incubate:
+        type: array
+        items:
+          enum: [ target, wells, duration_min, temperature_C ]
+      read:
+        type: array
+        items:
+          enum: [ target, wells, modality, channels, instrumentRole ]
+      harvest:
+        type: array
+        items:
+          enum: [ source, wells, volume_uL, producesArtifactId ]
+      other:
+        type: array
+        maxItems: 0
+        description: "other carries NO payload fields (description is a base field)."
