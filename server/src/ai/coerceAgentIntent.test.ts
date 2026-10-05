@@ -48,3 +48,38 @@ describe('a draft returned as prose is still a draft', () => {
     });
   });
 });
+
+/** PROTO-AI-9 recovery: the live appliance envelope, recovered from a stop turn. */
+const protocolEditDraft = {
+  intent: 'protocol_edit',
+  ops: [
+    { op: 'step_insert', label: 'Wash', kind: 'wash', afterStepId: 'step-3' },
+    { op: 'step_delete', stepId: 'step-6' },
+  ],
+};
+
+describe('a recovered protocol_edit envelope is an agent_intent too (PROTO-AI-9)', () => {
+  it('keeps intent protocol_edit untouched', () => {
+    expect(coerceToAgentIntentArgs(protocolEditDraft)).toEqual(protocolEditDraft);
+  });
+
+  it('infers protocol_edit from a bare ops envelope', () => {
+    const { intent, ...withoutIntent } = protocolEditDraft;
+    expect(intent).toBe('protocol_edit');
+    expect(inferAgentIntent(withoutIntent)).toBe('protocol_edit');
+    expect(coerceToAgentIntentArgs(withoutIntent)).toMatchObject({ intent: 'protocol_edit' });
+  });
+
+  it('stays ambiguous when ops are absent and nothing else matches', () => {
+    expect(inferAgentIntent({ protocolId: 'PRT-000123' })).toBeNull();
+    expect(coerceToAgentIntentArgs({ protocolId: 'PRT-000123' })).toBeNull();
+  });
+
+  it('the three existing intents regress unchanged beside the new one', () => {
+    expect(inferAgentIntent({ events: [] })).toBe('event_graph');
+    expect(inferAgentIntent({ records: [] })).toBe('create_record');
+    expect(inferAgentIntent({ variantId: 'manual_freeform' })).toBe('deck_layout');
+    // variantId still wins the tie — the deck rule is unchanged by the new key.
+    expect(inferAgentIntent({ variantId: 'manual_freeform', ops: [] })).toBe('deck_layout');
+  });
+});
