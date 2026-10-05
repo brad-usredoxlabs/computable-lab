@@ -48,6 +48,7 @@ transitions:
   guards:
   - type: requires_different_person
     than: author
+    denialMessage: "This transition requires a different person than the author. As the author you may not perform it — the document's state did not change."
 - from: in_review
   to: draft
   role: reviewer

@@ -10,6 +10,8 @@ export interface TransitionRequirements {
   signatureAction?: string
   /** requires_different_person guard: the role whose assignee must differ from the actor. */
   differentPersonThan?: string
+  /** YAML denialMessage of the guard; keyed so the middleware can map guard -> message without policy. */
+  denialMessages?: { differentPerson?: string; signature?: string }
 }
 
 export interface TransitionInfo {
@@ -20,6 +22,8 @@ export interface TransitionInfo {
   allowed: boolean
   /** Present only when the transition declares guards. Absent otherwise. */
   requires?: TransitionRequirements
+  /** Present only when the transition matched but was denied: the first failing declared guard. */
+  failedGuard?: { type: string; than?: string; field?: string; signatureAction?: string; denialMessage?: string }
 }
 
 export interface TransitionResult {
@@ -54,9 +58,34 @@ function describeGuardFacts(
       : {}),
     ...(differentPersonGuard?.than !== undefined
       ? { differentPersonThan: differentPersonGuard.than }
+      : {}),
+    ...(signatureGuard?.denialMessage !== undefined || differentPersonGuard?.denialMessage !== undefined
+      ? {
+          denialMessages: {
+            ...(differentPersonGuard?.denialMessage !== undefined
+              ? { differentPerson: differentPersonGuard.denialMessage }
+              : {}),
+            ...(signatureGuard?.denialMessage !== undefined
+              ? { signature: signatureGuard.denialMessage }
+              : {}),
+          },
+        }
       : {})
   }
   return requires
+}
+
+/** Copy the declarative facts of a failing guard for the denial report — no wording invented here. */
+function describeFailedGuard(
+  guard: NonNullable<LifecycleSpec['transitions'][number]['guards']>[number]
+): NonNullable<TransitionInfo['failedGuard']> {
+  return {
+    type: guard.type,
+    ...(guard.than !== undefined ? { than: guard.than } : {}),
+    ...(guard.field !== undefined ? { field: guard.field } : {}),
+    ...(guard.signatureAction !== undefined ? { signatureAction: guard.signatureAction } : {}),
+    ...(guard.denialMessage !== undefined ? { denialMessage: guard.denialMessage } : {}),
+  }
 }
 
 export class LifecycleEngine {
@@ -109,9 +138,21 @@ export class LifecycleEngine {
     })
   }
 
+  /** Returns the first guard that fails for this context, or undefined when all pass.
+   *  Fail-closed: an unknown guard type counts as failed (QMS-1A). */
+  private firstFailingGuard(
+    guards: NonNullable<LifecycleSpec['transitions'][number]['guards']>,
+    context: LifecycleContext
+  ): NonNullable<LifecycleSpec['transitions'][number]['guards']>[number] | undefined {
+    return guards.find(guard => !this.guardPasses(guard, context))
+  }
+
   private guardsPass(guards: NonNullable<LifecycleSpec['transitions'][number]['guards']>, context: LifecycleContext): boolean {
-    return guards.every(guard => {
-      switch (guard.type) {
+    return this.firstFailingGuard(guards, context) === undefined
+  }
+
+  private guardPasses(guard: NonNullable<LifecycleSpec['transitions'][number]['guards']>[number], context: LifecycleContext): boolean {
+    switch (guard.type) {
         case 'requires_different_person': {
           const otherActorId = guard.than ? context.roleAssignments[guard.than] : undefined
           return Boolean(otherActorId) && otherActorId !== context.currentActorId
@@ -138,7 +179,6 @@ export class LifecycleEngine {
         default:
           return false
       }
-    })
   }
 
   private fieldValue(fields: Record<string, unknown>, path?: string): unknown {
@@ -162,13 +202,19 @@ export class LifecycleEngine {
       const allowed = this.canTransition(lifecycleId, currentState, eventName, context)
 
       const requires = describeGuardFacts(transition.guards)
+      // Failed-guard report ONLY when the transition was denied AND declares
+      // guards (unguarded transitions keep legacy behavior: no failedGuard).
+      const failingGuard = allowed === false && transition.guards?.length
+        ? this.firstFailingGuard(transition.guards, context)
+        : undefined
       result.push({
         event: eventName,
         targetState: transition.to,
         label: transition.label || transition.to,
         role: transition.role,
         allowed,
-        ...(requires ? { requires } : {})
+        ...(requires ? { requires } : {}),
+        ...(failingGuard ? { failedGuard: describeFailedGuard(failingGuard) } : {})
       })
     }
     return result

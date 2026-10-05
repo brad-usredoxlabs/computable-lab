@@ -64,7 +64,16 @@ export function checkLifecycleTransition(
   }
 
   if (!matching.allowed) {
-    return { allowed: false, error: 'You do not have the required role for this transition.' }
+    return {
+      allowed: false,
+      // Denial wording is declarative: the failing guard's YAML `denialMessage` verbatim.
+      // No message text or guard→wording mapping is invented here. The generic
+      // constant remains ONLY as the fallback for role failures (no failedGuard)
+      // or guards with no declared denialMessage — i.e., exact legacy behavior.
+      error:
+        matching.failedGuard?.denialMessage ??
+        'You do not have the required role for this transition.',
+    }
   }
 
   return { allowed: true, transition: { from: previousState || '', to: nextState || '', event: matching.event } }

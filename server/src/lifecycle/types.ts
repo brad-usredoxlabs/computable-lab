@@ -30,6 +30,8 @@ export interface LifecycleSpec {
       disposition?: 'allowed' | 'needs-confirmation' | 'blocked'
       authority?: string
       signatureAction?: string  // required signature action for requires_signature
+      /** Optional YAML-declared denial reason surfaced when this guard fails. */
+      denialMessage?: string
     }>
     description?: string
   }>
