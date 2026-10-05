@@ -11,7 +11,7 @@ discipline (proposal shown for review, sidebar reset so the input returns — NE
 `interpreting`). Event-graph review must stay byte-unchanged. Propose-never-write means nothing
 without review here.
 
-## Orientation — verified anchors (orchestrator read on current trunk `a3637ab1`; confirm by reading)
+## Orientation — verified anchors (orchestrator re-verified on current trunk `b03d8716`, 2026-10-04T21:56; confirm by reading)
 - `app/src/event-editor/right-pane/ai/ChangesPanel.tsx` TODAY (`:3-63`): props
   `{ changes: EventGraphChange[]; warnings: ValidationGap[]; onApply; onDiscard }`; per-change it
   reads ONLY `change.op` (prefix `+`/`-`/`~`, `:35-39`) and `change.description` (`:40`);
@@ -32,7 +32,9 @@ without review here.
   type added in PROTO-AI-7) INDEPENDENT of the event-graph path. ChangesPanel mount `:759-772`;
   commit/`commitPreview` also at `:805-806`. An `attachedProtocol` value already exists in the
   context `useMemo` (`:298`, PROTO-AI-6) — reuse it to name the target protocol.
-- **The applier** (PROTO-AI-8, merged): `app/src/event-editor/right-pane/protocol/protocolEditOps.ts`
+- **The applier** (PROTO-AI-8 — status at spec refresh 21:56: worker IN FLIGHT, not yet merged; the
+  orchestrator confirms the merge and the file's existence before dispatching you):
+  `app/src/event-editor/right-pane/protocol/protocolEditOps.ts`
   — `applyOps(payload, ops)` pure + the getRecord → apply → ONE `updateRecord(id, payload,
   {expectedSha})` orchestration. D4 stale-sha → surface EXACTLY
   `Someone changed this protocol - reload and try again.`
