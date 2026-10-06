@@ -133,3 +133,31 @@ Brad's :3001/:5174 untouched. Coder fleet lock: HELD by AI-12 §4 run (pid file 
   sessions can DIE on context compression — keep gate prompts bounded; lint schemaId full https
   form; lane SPA record route /record/<recordId>; lane test-data store
   /home/brad/.computable-lab-lane2/worktrees/main.
+
+---
+## CHECKPOINT ADDENDUM 2026-10-06T13:12 EDT (same tick, budget expiry)
+- **AI-12 §4 coder EXITED COMPLETE**: ONE commit f472f0c5 off 7c418e36 — 6 files +1235/-2:
+  shadowRouterAdapter.ts (240 ln) + .test.ts (362), AgentOrchestrator.ts (+61; shadowRoute once
+  per turn AFTER authoritative branch at :1959/:1994/:2046/:2542; selectSubmitCall/branch order
+  untouched), AgentOrchestrator.shadowRouter.test.ts (361), server.ts (+10, construction seam
+  :1068), report wip-l2t1225.md committed in-worktree. ALL coder gates real per log: RED-first ->
+  27/27 green, on/off deep-equal onEvent streams, kill-switch zero-call proofs, S1 hang test
+  (5 s router hang -> turn <2 s), REAL p95 = 159 ms wall (60 calls, 0 failures, :8900 up,
+  12:53:18 EDT) -> §2 latency clause MET with evidence. src/ai stayed 10/21 + 27 new green;
+  tsc 33 per-file identical. OPEN FINDING (feeds AI-13, honestly reported, prompt NOT tuned):
+  350M echoes token list -> 42/60 parse_failure on real calls.
+  -> NEXT TICK: dispatch cl-adversarial-reviewer (unique path logs/review-PROTO-AI-12-s4-<ts>.md;
+     baits: server.ts wiring-only, no await leak, branch-order touch, prompt text into telemetry,
+     hardcoded host) -> ACCEPT: merge, re-run src/ai on trunk expecting 10/21 + 27 green, promote
+     report, mark AI-12 §4 done. Coder fleet lock now FREE (clear stale pid file 1084709).
+- **AI-14 gate run 1 VERDICT: BLOCKED (premise)** — no screenshots at all (trail.json N/A),
+  F1/F3 only served-check/code-inspection. Premise fix for run 2 (authored into task list): the
+  panel IS reachable by driving a real protocol_edit chat turn on the run page — PROVEN by the
+  accepted AI-9 washgate flow (receipts/PROTO-AI-9/2026-10-05_1848, VERDICT: accept). Run 2
+  prompt must script that flow + require screenshots. VISION SLOT NOW FREE.
+- **QUEUE FOR NEXT TICK (vision slot serial)**: (1) AI-11 run 4 (same verified-facts prompt +
+  small-context note) — OR AI-14 run 2 first; both bounded, either order; (2) AI-12 §4
+  adversarial gate; (3) PB-CH-7 artifact check; (4) PB-CH-1 draft check.
+- STILL LIVE at expiry (do NOT duplicate): architect PB-CH-7 bash 1108369 (artifact absent at
+  13:06; thunderbeast ~30 min); spec-composer PB-CH-1 bash 955044 (~1h35m, log 0 B).
+- Trunk unchanged 7c418e36 (docs commits this tick: f587d53d + this addendum's commit).
