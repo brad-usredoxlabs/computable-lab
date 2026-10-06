@@ -1,14 +1,14 @@
 /**
  * PROTO-AI-7 — `protocol_edit` as a FOURTH intent on the single forced
- * `agent_intent` tool.
+ * `agent_intent` tool (PB-CH-1 widened the menu to five: workspace_action).
  *
  * The model answers a protocol-edit request with `{ intent: 'protocol_edit',
  * ops: [...] }` — the PROTO-AI-2 envelope. This file pins the PARSE layer only
  * (the schema validation and zero-write dispatch are AgentOrchestrator
- * .protocolEdit.test.ts): the intent menu is exactly four, `ops` ride the tool
- * schema, and the parser retains the ops array VERBATIM — an edit proposal that
- * gets "helpfully" rewritten on the way to validation is no longer the model's
- * answer.
+ * .protocolEdit.test.ts): the intent menu is exactly the declared set, `ops`
+ * ride the tool schema, and the parser retains the ops array VERBATIM — an
+ * edit proposal that gets "helpfully" rewritten on the way to validation is
+ * no longer the model's answer.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -18,18 +18,22 @@ import {
 } from './submitSuggestionTool.js';
 
 describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
-  it('exposes a four-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit)', () => {
+  it('exposes a five-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit | workspace_action)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters as {
       required?: string[];
       properties: Record<string, { type?: string; enum?: string[] }>;
     };
     expect(params.required).toEqual(['intent']);
     expect(params.properties.intent?.type).toBe('string');
+    // PB-CH-1 deliberately widened the menu: workspace_action is the fifth
+    // intent (the server compiles its `action` envelope; see
+    // compileWorkspaceAction.test.ts + AgentOrchestrator.workspaceAction.test.ts).
     expect(params.properties.intent?.enum).toEqual([
       'event_graph',
       'deck_layout',
       'create_record',
       'protocol_edit',
+      'workspace_action',
     ]);
   });
 

@@ -42,6 +42,9 @@ export const AGENT_ALLOWED_TOOLS = [
   // Tree navigation
   'tree_studies',
   'tree_records_for_run',
+  // Workspace actions (PB-CH-1): the loop-path proposal channel. The handler
+  // compiles and returns data only — the orchestrator branch is the emitter.
+  'workspace_action',
   // Platform / settings
   'platforms_list',
   'platform_get',

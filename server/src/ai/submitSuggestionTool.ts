@@ -432,7 +432,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), or `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal). Fill only the fields that belong to the intent you chose; never mix intents.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), or `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing).',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing).',
         },
         platformId: {
           type: 'string',
@@ -507,13 +507,36 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         records: DRAFT_ARGS_PROPERTIES['records'],
         alsoPlace: DRAFT_ARGS_PROPERTIES['alsoPlace'],
         labwareAdditions: DRAFT_ARGS_PROPERTIES['labwareAdditions'],
+        action: {
+          type: 'object',
+          description:
+            'workspace_action only: the agent-action envelope. VERBS AND TERMS ONLY — `action` is "focus" or "open-surface"; `target` is a protocol-step {kind,protocolId,stepId} or a record/ontology ref, or a TERM ({kind:"record", label:"the biologist words"}) for the server to resolve; `surface` names a registered surface for open-surface. THE SERVER resolves terms through the lab spine + surface registry and REJECTS invented ids; nothing is written.',
+          additionalProperties: false,
+          properties: {
+            action: { type: 'string', enum: ['focus', 'open-surface'], description: 'The declared verb. Unknown verbs are rejected by the registered agent-action schema.' },
+            target: {
+              type: 'object',
+              description: 'focus: what to retarget the investigation to. Prefer a TERM you are sure of ({kind:"record", label:"HepG2 cells"}) — the server resolves it. protocol-step targets must cite protocolId+stepId from the ATTACHED PROTOCOL block.',
+              properties: {
+                kind: { type: 'string', enum: ['protocol-step', 'record', 'ontology'] },
+                protocolId: { type: 'string', description: 'protocol-step: an existing protocol record id.' },
+                stepId: { type: 'string', description: 'protocol-step: an existing stepId in that protocol.' },
+                id: { type: 'string', description: 'record/ontology: an existing record id or CURIE — the server verifies it; never invent one.' },
+                type: { type: 'string', description: 'record: the record type (e.g. "material", "protocol").' },
+                label: { type: 'string', description: 'The term, in the words the biologist used, for the server to resolve.' },
+              },
+            },
+            surface: { type: 'string', description: 'open-surface: a registered surface id (e.g. "analysis", "run-design").' },
+            contextNote: { type: 'string', description: 'A human-readable note. It never overrides the authoritative resolved label.' },
+          },
+        },
       },
     },
   },
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -526,12 +549,19 @@ export interface AgentIntentArgs {
   ops?: unknown[];
   /** protocol_edit only: explicit target protocol record id, if stated. */
   protocolId?: string;
+  /**
+   * workspace_action only (PB-CH-1): the agent-action envelope EXACTLY as the
+   * model emitted it — retained by reference, no copy/filter (the protocol_edit
+   * `ops` discipline). The server compiler (compileWorkspaceAction) validates
+   * and resolves it; the parser never "helps".
+   */
+  action?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -539,6 +569,9 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
       ...(intent === 'protocol_edit' && Array.isArray(args.ops) ? { ops: args.ops } : {}),
       ...(intent === 'protocol_edit' && typeof args.protocolId === 'string' && args.protocolId.trim().length > 0
         ? { protocolId: args.protocolId.trim() }
+        : {}),
+      ...(intent === 'workspace_action' && args.action !== null && typeof args.action === 'object' && !Array.isArray(args.action)
+        ? { action: args.action as Record<string, unknown> }
         : {}),
     };
   }

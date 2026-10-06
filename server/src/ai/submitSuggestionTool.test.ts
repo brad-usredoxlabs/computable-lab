@@ -266,7 +266,7 @@ describe('parseSubmitSuggestionArgs', () => {
 });
 
 describe('agent_intent — the constrained emission menu', () => {
-  it('exposes a single forced tool with a four-intent menu (event_graph | deck_layout | create_record | protocol_edit)', () => {
+  it('exposes a single forced tool with a five-intent menu (event_graph | deck_layout | create_record | protocol_edit | workspace_action)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters;
     expect(params).toHaveProperty('required', ['intent']);
     const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
@@ -276,7 +276,11 @@ describe('agent_intent — the constrained emission menu', () => {
     // Fourth intent added PROTO-AI-7: protocol_edit proposes an ops envelope against
     // the attached protocol; it validates against the registered schema and writes
     // NOTHING (propose-never-write is structural).
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit']);
+    // Fifth intent added PB-CH-1: workspace_action proposes a focus/open-surface
+    // envelope; the SERVER compiles it (terms -> refs via spine + surface
+    // registry) and only a resolved, Ajv-revalidated action emits. Invented ids
+    // are rejected; nothing is written.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

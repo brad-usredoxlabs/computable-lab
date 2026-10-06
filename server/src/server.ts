@@ -145,6 +145,7 @@ import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
@@ -1062,6 +1063,10 @@ export async function createServer(
         // The identity spine: lets a biologist's own words be resolved by the same
         // alias-first tier-0 lookup the UI and the compiler use.
         resolveSpine,
+        // PB-CH-1: the declarative surfaces registry for the workspace-action
+        // compiler (surface MEMBERSHIP is registry data, never a TS allow-list).
+        // Validated on load; cheap (routes/surfaces.ts has the same precedent).
+        surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       

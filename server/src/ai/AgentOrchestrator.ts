@@ -51,6 +51,11 @@ import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS } from './coerceAgentIntent.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
+import {
+  compileWorkspaceAction,
+  type CompileResult,
+  type WorkspaceActionCompilerDeps,
+} from './compileWorkspaceAction.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
@@ -889,6 +894,14 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   resolveSpine?: import('./resolveDraftMaterials.js').SpineLike;
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
+  /**
+   * PB-CH-1 — the declarative work-surface registry
+   * (schema/registry/surfaces/surfaces.yaml via loadDefaultSurfacesRegistry).
+   * The workspace-action compiler checks surface MEMBERSHIP through it — never
+   * a TS allow-list (surfaces.ts:64). Optional — without it a workspace_action
+   * cannot compile and surfaces a COMPILE_INTERNAL diagnostic.
+   */
+  surfaces?: import('../surfaces/surfaces.js').SurfacesRegistry;
   /**
    * Ontology config — gives draft-time material labeling access to the
    * on-box OAK terms endpoint, so grounded CURIEs render as names in well
@@ -1991,6 +2004,94 @@ export function createAgentOrchestrator(
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done protocol_edit success=${editResult.success} ops=${(payload.ops as unknown[]).length} elapsedMs=${elapsed}`);
               return editResult;
+            }
+
+            // intent=workspace_action: propose a workspace action (focus |
+            // open-surface). THE SERVER COMPILES IT (PB-CH-1 / AR-1): the model
+            // proposes VERBS AND TERMS; compileWorkspaceAction resolves terms
+            // through ResolveSpine + the declarative surfaces registry and
+            // store-verifies every id. ONLY a resolved, Ajv-revalidated action
+            // is emitted as `agent_action` — this branch is the ONE emit path
+            // (the MCP tool handler returns data only; AIHandlers.sendEvent
+            // passes AgentEvent frames through untyped, AIHandlers.ts:373-375).
+            // Unresolved/ambiguous/invented produce pipeline_diagnostics (the
+            // existing trace channel, pass_id 'workspace-action-compile') and
+            // ZERO action. Structurally NOTHING else runs: no compiler pass, no
+            // store write, no session push — propose, never write.
+            if (agentIntent.intent === 'workspace_action') {
+              const compileDeps: WorkspaceActionCompilerDeps | null =
+                deps.resolveSpine && deps.surfaces && deps.store
+                  ? { resolveSpine: deps.resolveSpine, surfaces: deps.surfaces, store: deps.store }
+                  : null;
+              const compiled: CompileResult = compileDeps
+                ? await compileWorkspaceAction(agentIntent.action, compileDeps)
+                : {
+                  ok: false,
+                  diagnostics: [{
+                    code: 'COMPILE_INTERNAL',
+                    message: 'workspace_action cannot compile: this orchestrator has no resolveSpine/surfaces/store wired.',
+                  }],
+                };
+              const elapsed = Date.now() - t0;
+              if (compiled.ok) {
+                onEvent?.({ type: 'agent_action', action: compiled.action });
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+                const resolvedLabel = compiled.action.target?.label ?? compiled.action.surface ?? 'the workspace';
+                const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
+                const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
+                const summary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: true,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                };
+                logAgentSummary(tid, summary);
+                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : compiled.action.target.stepId) : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
+                return wsResult;
+              }
+              const diagnostics = compiled.diagnostics.map((d) => ({
+                pass_id: 'workspace-action-compile',
+                code: d.code,
+                severity: 'error' as const,
+                message: d.message,
+              }));
+              onEvent?.({ type: 'pipeline_diagnostics', outcome: 'gap', diagnostics });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+              // A no-op with a visible reason is a SUCCESSFUL compile decision:
+              // success:false would ride the existing error surface and read as
+              // an endpoint failure. The corrective text rides the notes channel.
+              const wsResult: AgentResult = { success: true, notes: diagnostics.map((d) => d.message) };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done workspace_action compile-rejected ${diagnostics.map((d) => d.code).join(',')} elapsedMs=${elapsed}`);
+              return wsResult;
             }
           }
 

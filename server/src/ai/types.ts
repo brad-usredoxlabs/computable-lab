@@ -834,6 +834,23 @@ export interface AgentProtocolExtractedEvent {
   sourcePdf?: { artifactPath?: string; url?: string; title?: string; vendor?: string; sha256?: string }
 }
 
+/**
+ * PB-CH-1 — transport shape of the VALIDATED agent-action schema
+ * (schema/workflow/agent-action.schema.yaml). THE SCHEMA IS THE AUTHORITY;
+ * this interface is typing convenience for the stream event only. An
+ * `agent_action` event exists ONLY as the output of the workspace-action
+ * compiler (server/src/ai/compileWorkspaceAction.ts) — a raw model proposal
+ * never rides this event. exactOptionalPropertyTypes discipline: optional
+ * fields are OMITTED, never `undefined`.
+ */
+export interface AgentActionPayload {
+  action: 'focus' | 'open-surface';
+  target?: import('./compileWorkspaceAction.js').ResolvedActionTarget;
+  surface?: string;
+  contextNote?: string;
+  supportedBy?: import('./compileWorkspaceAction.js').ResolvedActionTarget[];
+}
+
 export type AgentEvent =
   | { type: 'status'; message: string }
   | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
@@ -844,6 +861,7 @@ export type AgentEvent =
   | { type: 'done'; result: AgentResult }
   | { type: 'error'; message: string }
   | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> }
+  | { type: 'agent_action'; action: AgentActionPayload }
   | AgentProtocolExtractedEvent;
 
 // ============================================================================
