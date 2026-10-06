@@ -119,3 +119,21 @@ Two cl-scout runs landed after the spec was written; findings are screening, ver
 - Contract `InferenceClient` (server/src/ai/types.ts:853-856): complete / completeStream.
 - Fake = object literal with vi.fn(); streaming mock `completeStream: vi.fn(async function*(){ yield {id, choices:[{index:0, delta:{...}, finish_reason}]} })` (AgentOrchestrator.test.ts:10-23); passed as FIRST arg to createAgentOrchestrator(client, toolBridge, config, agentConfig, deps?) (:33-38).
 - Existing protocol_edit suite `AgentOrchestrator.protocolEdit.test.ts` already present (PROTO-AI-7).
+
+## Addendum B — SIGN-OFF + §4 DISPATCH STATE (orch 2026-10-06T09:30)
+- **§2 SIGNED** by Brad 2026-10-06T08:52 EDT (architect-recorded) in
+  `/home/brad/.hermes/cl/lanes/2/decisions/PROTO-AI-12-prereg-approval.md` Answer section. Latency
+  number set: **p95 router-pick <= 2000 ms on appliance-2 CPU**; no separate user-visible
+  shadow-overhead ceiling (the shadow call is never awaited — a ceiling on a non-blocking call is
+  fake chrome; snappy-chat posture guards the chat path). All five bullets otherwise unchanged.
+- **§4 ONLY remaining scope.** §1+§3 already merged (report + serving notes canonical; §3 machinery
+  = server/src/ai/shadowTelemetry.ts + config loader kill-switch fields, merged cc5a3004).
+- **SERVING IS CURRENTLY DOWN**: `curl http://100.69.173.99:8900/health` connection-refused
+  (verified 2026-10-06T09:20 EDT). §1's serving notes carry the exact relaunch command
+  (`.hermes/plans/PROTO-AI-12-serving-notes.md`: llama-server, QAD-Q4_0 gguf sha256 3d10b6ab...,
+  CPU-only flags, port 8900 on appliance-2). §4 work must FIRST relaunch serving with that recorded
+  command, verify /health + a real completion + the bracket-notation parser contract still holds,
+  and measure p95 pick latency over a real sample >= 20 calls for the signed 2000 ms number. NEVER
+  displace the appliance-2 vision service (D6).
+- Kill-switch: §3 fields already exist (MISSING config = OFF); the §4 adapter must READ them, not
+  re-invent them. Evidence-debt AS-PROTO-AI-12-W1 (QAD quant disclosure) stays open until AI-13.
