@@ -432,22 +432,34 @@ export function loadFromStorage(userId?: string): OpenTabsState {
     if (!raw) return EMPTY_TABS_STATE
     const parsed = JSON.parse(raw) as StoredState
     if (!Array.isArray(parsed.tabs)) return EMPTY_TABS_STATE
+    // PROTO-AI-14 F3 — dedupe at the LOAD entry site, on tab.id. Ids are
+    // value-derived (tabId.ts), so a persisted store that carries the same tab
+    // VALUE twice (or a double-applied hydration) hydrates two entries with
+    // the SAME id, and WorkspaceTabStrip's `key={tab.id}` hits React's
+    // duplicate-key warning. The reducer's 'open' case already replaces a
+    // same-id tab (~136-168), so the loader follows the SAME convention:
+    // LAST-WINS — the later duplicate replaces the earlier entry in place
+    // (keeping the earlier slot's position), so the state can never hold two
+    // entries with one tab.id. Entries whose ids differ by a slot suffix
+    // (tabId.ts slotSuffix()) are DISTINCT tabs and are kept.
+    const byId = new Map<string, OpenTabState>()
+    for (const t of parsed.tabs) {
+      const entry = {
+        tab: t.tab,
+        activeRightPaneMode: t.activeRightPaneMode ?? 'ai',
+        breadcrumb: t.breadcrumb ?? [],
+      }
+      // Migrate older persisted tabs to the per-tab content history model.
+      const contentHistory = Array.isArray(t.contentHistory) && t.contentHistory.length > 0
+        ? t.contentHistory
+        : [t.tab]
+      const contentCursor = typeof t.contentCursor === 'number' && t.contentCursor >= 0
+        ? Math.min(t.contentCursor, contentHistory.length - 1)
+        : contentHistory.length - 1
+      byId.set(t.tab.id, { ...entry, contentHistory, contentCursor })
+    }
     return {
-      tabs: parsed.tabs.map((t) => {
-        const entry = {
-          tab: t.tab,
-          activeRightPaneMode: t.activeRightPaneMode ?? 'ai',
-          breadcrumb: t.breadcrumb ?? [],
-        }
-        // Migrate older persisted tabs to the per-tab content history model.
-        const contentHistory = Array.isArray(t.contentHistory) && t.contentHistory.length > 0
-          ? t.contentHistory
-          : [t.tab]
-        const contentCursor = typeof t.contentCursor === 'number' && t.contentCursor >= 0
-          ? Math.min(t.contentCursor, contentHistory.length - 1)
-          : contentHistory.length - 1
-        return { ...entry, contentHistory, contentCursor }
-      }),
+      tabs: [...byId.values()],
       activeTabId: parsed.activeTabId ?? null,
       history: Array.isArray(parsed.history) ? parsed.history : [],
       historyCursor: typeof parsed.historyCursor === 'number' ? parsed.historyCursor : -1,

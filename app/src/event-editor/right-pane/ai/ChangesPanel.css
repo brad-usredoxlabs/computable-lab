@@ -1,0 +1,207 @@
+/*
+ * ChangesPanel — the propose-never-write review surface (PROTO-AI-9/14).
+ *
+ * PROTO-AI-14 F1: this surface previously had ZERO CSS — the ~17
+ * changes-panel__* classes rendered as jammed plain text and the apply-error
+ * (role=alert) was invisible chrome. Following the settings-surface precedent
+ * (commit 8e14b061 "theme-token the settings surfaces"), every color/border
+ * here reads a --cl-* design token from shared/styles/tokens.css: no hex, no
+ * rgba, no theme-specific palette. The .cl-app[data-theme='light'] block
+ * re-skins the panel automatically, so it is legible in dark AND light.
+ */
+
+.changes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  color: var(--cl-text);
+}
+
+/* ── validation warnings — severity-tinted status rows ─────────────────── */
+
+.changes-panel__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changes-panel__warning {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.changes-panel__warning--info {
+  background: var(--cl-info-soft);
+  border-color: var(--cl-info-border);
+  color: var(--cl-info);
+}
+
+.changes-panel__warning--warning {
+  background: var(--cl-warn-soft);
+  border-color: var(--cl-warn-border);
+  color: var(--cl-warn);
+}
+
+.changes-panel__warning--error {
+  background: var(--cl-danger-soft);
+  border-color: var(--cl-danger-border);
+  color: var(--cl-danger);
+}
+
+/* ── protocol diff card ─────────────────────────────────────────────────── */
+
+.changes-panel__protocol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+}
+
+.changes-panel__protocol-target {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+}
+
+/* ── diff rows — one readable row per op, tinted by op kind ─────────────── */
+
+.changes-panel__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changes-panel__change {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg);
+  font-size: 13px;
+}
+
+.changes-panel__change-prefix {
+  font-family: var(--cl-font-mono, ui-monospace, monospace);
+  font-weight: 700;
+  flex: none;
+  color: var(--cl-text-dim);
+}
+
+.changes-panel__change-desc {
+  color: var(--cl-text);
+}
+
+.changes-panel__change--add {
+  background: var(--cl-success-soft);
+  border-color: var(--cl-success-border);
+}
+
+.changes-panel__change--add .changes-panel__change-prefix {
+  color: var(--cl-success);
+}
+
+.changes-panel__change--modify {
+  background: var(--cl-info-soft);
+  border-color: var(--cl-info-border);
+}
+
+.changes-panel__change--modify .changes-panel__change-prefix {
+  color: var(--cl-info);
+}
+
+.changes-panel__change--remove {
+  background: var(--cl-danger-soft);
+  border-color: var(--cl-danger-border);
+}
+
+.changes-panel__change--remove .changes-panel__change-prefix {
+  color: var(--cl-danger);
+}
+
+/* ── apply status / apply error ─────────────────────────────────────────── */
+
+.changes-panel__applying {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-info-border);
+  background: var(--cl-info-soft);
+  color: var(--cl-info);
+  font-size: 13px;
+}
+
+/* role=alert: must READ as an alert — danger soft fill + hairline danger
+   border + danger ink, the same family the settings feedback banners use. */
+.changes-panel__apply-error {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-danger-border);
+  background: var(--cl-danger-soft);
+  color: var(--cl-danger);
+  font-size: 13px;
+}
+
+/* ── actions — Accept / Reject as distinct visible buttons ──────────────── */
+
+.changes-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.changes-panel__btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border-strong);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.changes-panel__btn:focus-visible {
+  outline: 2px solid var(--cl-focus-ring);
+  outline-offset: 2px;
+}
+
+.changes-panel__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Accept = primary action: accent fill with the theme-inverting on-accent ink. */
+.changes-panel__btn--apply {
+  background: var(--cl-accent);
+  border-color: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+
+.changes-panel__btn--apply:hover:not(:disabled) {
+  background: var(--cl-accent-hover);
+  border-color: var(--cl-accent-hover);
+}
+
+/* Reject/Discard = neutral with a danger tint so the pair reads as distinct
+   controls, not jammed plain text. */
+.changes-panel__btn--discard {
+  background: var(--cl-danger-soft);
+  border-color: var(--cl-danger-border);
+  color: var(--cl-danger);
+}
+
+.changes-panel__btn--discard:hover {
+  background: var(--cl-danger-soft);
+  border-color: var(--cl-danger);
+}

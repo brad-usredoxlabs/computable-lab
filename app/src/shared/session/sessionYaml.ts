@@ -84,17 +84,28 @@ export function sessionDocumentToState(
   doc: SessionDocument,
   tabIdFor: (tab: WorkspaceTab) => string,
 ): OpenTabsState {
-  const tabs: OpenTabState[] = doc.tabs.map((rawTab) => {
+  // PROTO-AI-14 F3 — dedupe at the LOAD entry site, on the value-derived id.
+  // The document deliberately carries no ids (see sessionToYaml above), so ids
+  // are re-derived here; two document entries with the same tab VALUE therefore
+  // collapse to the SAME id, and both landing in `tabs` is what makes
+  // WorkspaceTabStrip's `key={tab.id}` hit React's duplicate-key warning. The
+  // reducer's 'open' case already replaces a same-id tab (OpenTabsContext.tsx
+  // ~136-168), so the loader follows the SAME convention: LAST-WINS — the later
+  // duplicate replaces the earlier entry in place (keeping the earlier slot's
+  // position), and the state can never hold two entries with one tab.id.
+  const byId = new Map<string, OpenTabState>()
+  for (const rawTab of doc.tabs) {
     const { activeRightPaneMode, breadcrumb, ...kindFields } = rawTab
     const tab = { ...kindFields, id: tabIdFor(kindFields as unknown as WorkspaceTab) } as WorkspaceTab
-    return {
+    byId.set(tab.id, {
       tab,
       activeRightPaneMode: activeRightPaneMode ?? defaultRightPaneMode(tab),
       breadcrumb: breadcrumb ?? [],
       contentHistory: [tab],
       contentCursor: 0,
-    }
-  })
+    })
+  }
+  const tabs: OpenTabState[] = [...byId.values()]
   const activeTabId =
     doc.activeTabId && tabs.some((t) => t.tab.id === doc.activeTabId)
       ? doc.activeTabId

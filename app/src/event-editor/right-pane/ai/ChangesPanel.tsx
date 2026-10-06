@@ -1,3 +1,4 @@
+import './ChangesPanel.css'
 import type { AiProtocolEditProposal } from './assistStream'
 import type {
   EventGraphChange,
