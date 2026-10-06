@@ -121,3 +121,17 @@ Brad's :3001/:5174 untouched. Fleet coder lock: **FREE**, no live cl-coder (pgre
   reviewer sessions can die on context compression; lint schemaId full https form; SPA record
   route /record/<id>; lane data store /home/brad/.computable-lab-lane2/worktrees/main; verify NO
   live cl-coder session before trusting a free lock.
+
+## ADDENDUM 2026-10-06T16:30 (same tick) — AI-14 gate run 2 died on infra; run 3 dispatched with hygiene override
+- Run-2 python 1235682 exited ~16:05: log = single context-compression-death line, ZERO receipts
+  (same death as AI-11 run 3). NOT a product verdict. Premise re-verified healthy (served CSS/
+  byId greps, ports 200, real schema-valid protocol_edit turn end-to-end via precheck + telemetry
+  pair landed).
+- RUN 3 dispatched 16:25 pid **1561766** with a context-hygiene override appended to the run-2
+  prompt (no full snapshots/DOM dumps, incremental trail.json, 240s-capped waits, <120-line
+  report), receipts receipts/PROTO-AI-14/2026-10-06_1625/, log
+  logs/review-PROTO-AI-14-gate-run3-20261006T1625.log. Change-of-diagnosis honored. If run 3 dies
+  identically: stop reviewer re-dispatch; investigate the reviewer profile's auxiliary.compression.
+- Queue order at next tick: run 3 verdict -> close/fix AI-14; AI-11 run 4 next on the vision slot;
+  PB-CH-2 composer (python 1260414, still live wal-advancing at 16:05) -> review draft -> promote
+  -> CLAIM -> cl-coder into ALREADY-PREPPED wt/PB-CH-2-lane2-l2t1550. Vision slot: only run 3.
