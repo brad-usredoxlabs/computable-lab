@@ -145,3 +145,15 @@ not thunderbeast) -> headroom OK this tick. Vision slot: held by AI-14 run 2.
   lint schemaId full https form; lane SPA record route /record/<id>; lane test-data store
   /home/brad/.computable-lab-lane2/worktrees/main; fleet coder: verify NO live cl-coder session
   before trusting a free lock (pgrep string-matches the tick's own prompt text).
+
+## CHECKPOINT ADDENDUM 2026-10-06T14:12 EDT (same tick, budget expiry)
+- IDENTITY CORRECTION (reconciled live): the tracked bash pids for the AI-14 gate run 2 (1235626)
+  and PB-CH-2 spec-composer (1260359) were the nohup WRAPPERS and have exited; the REAL workers
+  are alive on child pids: cl-browser-reviewer session 20261006_134330_8ef34b python **1235682**
+  (state.db last_activity 14:07:22 'receiving stream response', 121 msgs/62 tools — mid-run,
+  receipts dir still empty = writes land at exit), cl-spec-composer session
+  20261006_135418_b84169 python **1260414** (last_activity 14:07:24, 47 msgs/30 tools).
+  cl-coder PB-CH-1 python 1254929 ALIVE; worktree shows RED phase (?? compileWorkspaceAction.test.ts).
+  NO duplicates launched. Logs stay 0 B until exit (buffered).
+- All three live: do NOT re-dispatch. Next tick: poll state.db last_activity + receipts/report
+  paths, not the wrapper pids.
