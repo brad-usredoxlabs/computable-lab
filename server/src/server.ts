@@ -1070,7 +1070,15 @@ export async function createServer(
         toolBridge,
         inferenceConfig,
         agentConfig,
-        placeholderDeps,
+        {
+          ...placeholderDeps,
+          // PROTO-AI-12 §4 — the shadow-router block rides the same deps seam
+          // as the rest of the AI config (ontology at :1055,
+          // assuranceThreshold at :1065). MISSING block = fully OFF inside the
+          // orchestrator; endpoints are DATA (config.yaml ai.shadowRouter),
+          // never hardcoded.
+          ...(appConfig?.ai?.shadowRouter ? { shadowRouter: appConfig.ai.shadowRouter } : {}),
+        },
       );
       currentOrchestrator = orchestrator;
       // Wire the orchestrator into the protocol-builder handlers (for draft endpoint).
