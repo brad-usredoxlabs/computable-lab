@@ -4,7 +4,7 @@
  * graph fragments for preview.
  */
 
-import type { InferenceConfig, AgentConfig, OntologyConfig } from '../config/types.js';
+import type { InferenceConfig, AgentConfig, OntologyConfig, ShadowRouterConfig } from '../config/types.js';
 import type {
   InferenceClient,
   ToolBridge,
@@ -53,6 +53,7 @@ import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS } from './coerceAgentIn
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
+import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
@@ -902,6 +903,17 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * tool-bearing turns. Computed once at construction.
    */
   residentContext?: string;
+  /**
+   * PROTO-AI-12 §4 shadow-router block (log-only, zero authority). MISSING =
+   * fully OFF: zero router calls, zero telemetry writes. Endpoints are DATA —
+   * never hardcoded in code. Production wiring: the createAgentOrchestrator
+   * call in server.ts:1068 passes `appConfig.ai.shadowRouter` through this
+   * same deps seam (alongside ontology at server.ts:1055 and
+   * assuranceThreshold at server.ts:1065).
+   */
+  shadowRouter?: ShadowRouterConfig;
+  /** fetch override (tests inject a spy); defaults to globalThis.fetch. */
+  fetch?: typeof fetch;
 }
 
 export function createAgentOrchestrator(
@@ -926,6 +938,21 @@ export function createAgentOrchestrator(
    * Shared by run() and buildPrefixRequest so warm and real renders agree.
    */
   const defaultForceDraftTool = draftFlowMode !== 'preflight-llm';
+
+  /**
+   * PROTO-AI-12 §4 — the shadow router, resolved ONCE at construction from
+   * the config block (DATA). MISSING/disabled config or a disabled writer =
+   * null = fully OFF: zero inference calls, zero telemetry lines. The config
+   * arrives through the deps seam from the createAgentOrchestrator call in
+   * server.ts:1068 (see AgentOrchestratorDeps.shadowRouter).
+   */
+  const shadowSetup = deps.shadowRouter
+    ? shadowRouterDepsFromConfig({
+        shadowRouter: deps.shadowRouter,
+        fetch: deps.fetch ?? globalThis.fetch,
+        bigModel: inferenceConfig.model,
+      })
+    : null;
 
   const traceId = () => Math.random().toString(36).slice(2, 8);
 
@@ -1021,6 +1048,24 @@ export function createAgentOrchestrator(
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
+
+      /**
+       * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
+       * after the authoritative intent branch has resolved (each call site
+       * sits after that branch built its result and logged its done line),
+       * so authoritativePick records what the big model DID, not what the
+       * router wished. Never awaited (S1) and fully swallowed inside the
+       * adapter: router code can never reach the user path.
+       */
+      function shadowRoute(authoritativePick: ShadowRouterPick, bigModelLatencyMs: number): void {
+        if (!shadowSetup) return;
+        shadowRouteIfNeeded(shadowSetup.deps, {
+          correlationId: tid,
+          turn: effectivePrompt,
+          authoritativePick,
+          bigModelLatencyMs,
+        });
+      }
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -1909,6 +1954,9 @@ export function createAgentOrchestrator(
               if (creationResult.error) summary.error = creationResult.error;
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done create_record success=${creationResult.success} records=${creations.map((c) => c.kind).join(',') || '(none)'} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is create_record.
+              shadowRoute('create_record', elapsed);
               return creationResult;
             }
 
@@ -1941,6 +1989,9 @@ export function createAgentOrchestrator(
               if (deckResult.error) summary.error = deckResult.error;
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done deck_layout success=${deckResult.success} variant=${variantId ?? '(none)'} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is deck_layout.
+              shadowRoute('deck_layout', elapsed);
               return deckResult;
             }
 
@@ -1990,6 +2041,9 @@ export function createAgentOrchestrator(
               if (editResult.error) summary.error = editResult.error;
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done protocol_edit success=${editResult.success} ops=${(payload.ops as unknown[]).length} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is protocol_edit.
+              shadowRoute('protocol_edit', elapsed);
               return editResult;
             }
           }
@@ -2481,6 +2535,11 @@ export function createAgentOrchestrator(
           console.log(
             `[agent ${tid}] done success=${result.success} via ${submitCall.function.name} turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
           );
+          // PROTO-AI-12 §4: shadow classification AFTER the authoritative path
+          // resolved. Reaching here means the agent_intent matched none of the
+          // create_record/deck_layout/protocol_edit branches — the event_graph
+          // draft path is what actually executed.
+          shadowRoute('event_graph', elapsed);
           // The terms this draft used, classified ONCE, here: what each matched
           // (local record / ontology / vendor item / not yet in the lab) and where it
           // appeared. The review dialogue's term panel renders this verbatim — the
