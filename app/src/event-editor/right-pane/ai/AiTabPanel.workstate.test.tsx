@@ -60,7 +60,21 @@ const mocks = vi.hoisted(() => ({
     workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
     onAgentAction?: (action: unknown) => string | undefined
     onWorkstateProposal?: (intent: Record<string, unknown>) => void
+    onDraftResult?: (result: unknown, prompt: string) => void
   },
+  // Review fix1 D1 test seam: the hook's state is mutable per-test (a
+  // protocolCandidate makes the protocol-builder Draft button — one of the
+  // two leak send sites — reachable), and `send` is captured so a button
+  // click's turn start is observable.
+  chatState: {
+    messages: [] as unknown[],
+    pending: null as unknown,
+    status: null as unknown,
+    error: null as unknown,
+    trace: [] as unknown[],
+    protocolCandidate: undefined as undefined | { kind: 'vendor-protocol-candidate'; title: string },
+  },
+  send: vi.fn(async () => undefined),
   executeTier1: vi.fn(),
   applyAcceptedWorkstate: vi.fn(),
   compileWorkstateDraft: vi.fn(),
@@ -83,12 +97,13 @@ vi.mock('./useChatThread', () => ({
     workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
     onAgentAction?: (action: unknown) => string | undefined
     onWorkstateProposal?: (intent: Record<string, unknown>) => void
+    onDraftResult?: (result: unknown, prompt: string) => void
   }) => {
     mocks.chatOptions = options
     return {
-      state: { messages: [], pending: null, status: null, error: null, trace: [] },
+      state: mocks.chatState,
       isStreaming: false,
-      send: vi.fn(async () => undefined),
+      send: mocks.send,
       stop: vi.fn(),
       reset: vi.fn(),
       clearProtocolCandidate: vi.fn(),
@@ -215,6 +230,9 @@ beforeEach(() => {
   // and a call would return false rather than block the test.
   vi.spyOn(window, 'confirm').mockImplementation(() => false)
   mocks.chatOptions = null
+  mocks.chatState.protocolCandidate = undefined
+  mocks.send.mockReset()
+  mocks.send.mockResolvedValue(undefined)
   mocks.executeTier1.mockReset()
   mocks.executeTier1.mockReturnValue({ ok: true, kind: 'focused', diagnostics: [] })
   mocks.applyAcceptedWorkstate.mockReset()
@@ -525,5 +543,199 @@ describe('AiTabPanel — tier-2 card (actionable ONLY from a canAccept:true comp
     expect(screen.getByTestId('workstate-card').textContent).toContain('Newer workspace')
     expect(screen.getByTestId('workstate-card').textContent).not.toContain('Superseded workspace')
     expect(screen.getByTestId('workstate-card').textContent).toContain('revision 2')
+  })
+})
+
+describe('AiTabPanel — D1 gate fix: a workstate turn never opens the event-graph review', () => {
+  // Gate defect D1 (receipts 2026-10-07_orchgate2, wave1-pending-card.png,
+  // card-state cardVisible:false): the compose_workstate turn ALSO fires the
+  // event-graph onDraftResult path — the result carries notes only (no error,
+  // no protocolEdit, no clarificationRequests, empty events), so it fell to
+  // the final else and dispatched draft-ready with changes:[] — sidebar
+  // 'reviewing', auto subtab 'changes', the chat section (where the card
+  // renders) UNMOUNTED, and an actionable 'Apply to run' over an empty change
+  // list. The card must be the turn's ONLY review surface.
+  //
+  // Event ordering VERIFIED in code (not assumed): the server emits
+  // `workstate_proposal` DURING orchestrator.run (server/src/ai/
+  // AgentOrchestrator.ts:2199, compose_workstate branch) and `done` is sent
+  // only AFTER run() resolves in the assistStream handler the client's
+  // /ai/assist/stream posts to (server/src/api/handlers/AIHandlers.ts:458,
+  // async assistStream at :299 — NOT :288, which is draftEventsStream's done
+  // for the different /ai/draft-events/stream endpoint) —
+  // so in the SSE stream the proposal frame always precedes the done frame.
+  // The guard below is still written so a stale flag can never leak into a
+  // later turn (consumed in onDraftResult + reset at the single sendChat
+  // choke point every turn starts through).
+  it('a done result on a turn that emitted workstate_proposal keeps the card as the ONLY review surface — no reviewing mode, no Apply to run', async () => {
+    await mount()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    // Same-turn stream, verified order: workstate_proposal, then done.
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+
+    // The turn's `done` result — compose_workstate's AgentResult verbatim
+    // (AgentOrchestrator.ts: notes only; success:true; no events/error/
+    // protocolEdit/clarifications).
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.(
+        { success: true, notes: ['Proposed a workspace — review the card to accept; nothing was written.'] },
+        'open the ROS run',
+      )
+      await Promise.resolve()
+    })
+
+    // (a) the card is STILL rendered — compiling slot at minimum, here the
+    // review card; the chat section did not unmount.
+    expect(screen.getByTestId('workstate-card')).toBeTruthy()
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+    // (b) the pane is NOT in 'reviewing'/changes mode.
+    expect(screen.queryByTestId('ai-subtab-changes')).toBeNull()
+    expect(screen.getByTestId('ai-tab-system-prompt').textContent).not.toContain('Review changes')
+    // (c) NO 'Apply to run' affordance anywhere.
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(screen.queryByText('Apply to run')).toBeNull()
+    // The chat subtab stays active while the card is pending.
+    expect(screen.getByTestId('ai-subtab-chat').className).toContain('ai-tab__subtab--active')
+    // Invariants untouched: no accept fired, zero session push while pending.
+    expect(mocks.acceptWorkstateDraft).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(mocks.putSession).not.toHaveBeenCalled()
+  })
+
+  it('the guard is per-turn: once the card is rejected, a later plain draft result still opens the changes review', async () => {
+    await mount()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, notes: ['Proposed a workspace.'] }, 'open the ROS run')
+      await Promise.resolve()
+    })
+    expect(screen.queryByTestId('ai-subtab-changes')).toBeNull()
+
+    // Reject resolves the card; the guard flag was already consumed by the
+    // turn's done — a subsequent event-graph draft must review normally.
+    fireEvent.click(screen.getByTestId('workstate-card-reject'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, events: [{ event_type: 'transfer' }] }, 'draft a transfer')
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('ai-subtab-changes')).toBeTruthy()
+    expect(screen.getByTestId('changes-apply')).toBeTruthy()
+  })
+
+  // Review fix1 D1 (adversarial review 2026-10-07, PB-CH-4-review-fix1-l2t0640):
+  // the flag was cleared on only THREE of the five chat.send entry points
+  // (sendSurfaceContext :727, handleSend :902, handleClarificationsSubmit :930)
+  // and never on the SSE-error/abort exit (useChatThread.ts:221-223 — an
+  // `error` frame dispatches stream-error, NO done frame, so onDraftResult
+  // never runs and the flag stays true). Leak sequence: a turn emits
+  // workstate_proposal (flag := true), the stream dies with an error frame
+  // (no done), and the NEXT turn starts via the protocol-builder Draft button
+  // (:1122) or the Extract-Protocol CTA (:1145) — neither cleared the flag, so
+  // that turn's legitimate draft-ready was silently suppressed (sidebar reset,
+  // no changes review). The fix: ONE choke point — every chat.send in the
+  // panel goes through a wrapper that resets the flag at turn start.
+  const CANDIDATE = {
+    kind: 'vendor-protocol-candidate' as const,
+    title: 'Kit protocol',
+    steps: [{ stepNumber: 1, title: 'Seed cells', text: 'Seed cells at 1000 cells per well' }],
+  }
+
+  it('D1 leak: proposal turn that died on a stream error (no done) must NOT suppress the next turn started via the protocol-builder Draft button', async () => {
+    mocks.chatState.protocolCandidate = CANDIDATE
+    await mount()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    // Turn 1: workstate_proposal arrives, then the stream dies on an error
+    // frame — NO done frame, so onDraftResult never runs for this turn. The
+    // flag must not survive into the next turn.
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+
+    // Turn 2 starts via the protocol-builder Draft button — a chat.send site
+    // that handleSend/sendSurfaceContext/handleClarificationsSubmit do NOT cover.
+    fireEvent.click(screen.getByTestId('protocol-builder-draft-btn'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.send).toHaveBeenCalled() // the leak site really started a turn
+
+    // Turn 2's done carries a NORMAL event-graph draft. It must review.
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, events: [{ event_type: 'transfer' }] }, 'adapt this protocol')
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('ai-subtab-changes')).toBeTruthy()
+    expect(screen.getByTestId('changes-apply')).toBeTruthy()
+  })
+
+  it('D1 leak: the same stale flag must NOT suppress a turn started via the Extract-Protocol CTA button', async () => {
+    // PDF tab, no candidate yet → the Extract Protocol CTA is rendered.
+    const base = defaultWorkspaceState('STU-000001')
+    render(
+      <MemoryRouter>
+        <OpenTabsProvider>
+          <SyncMount />
+          <StoreProbe />
+          <WorkspaceProvider
+            studyId="STU-000001"
+            saveDebounceMs={0}
+            loadFn={async () => ({
+              state: {
+                ...base,
+                tabs: [{ id: 't-pdf', kind: 'pdf' as const, artifactId: 'ART-1', title: 'Kit manual' }],
+                activeTabId: 't-pdf',
+              } as ReturnType<typeof defaultWorkspaceState>,
+            })}
+            saveFn={async (_id, s) => ({ state: s })}
+          >
+            <AiTabPanel />
+          </WorkspaceProvider>
+        </OpenTabsProvider>
+      </MemoryRouter>,
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await settlePushBaseline()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    // Turn 1: proposal, then a stream error with no done frame (same as above).
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+
+    // Turn 2 starts via the Extract-Protocol CTA — the other uncovered site.
+    fireEvent.click(screen.getByTestId('ai-tab-extract-protocol-btn'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.send).toHaveBeenCalled()
+
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, events: [{ event_type: 'transfer' }] }, 'extract a protocol')
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('ai-subtab-changes')).toBeTruthy()
+    expect(screen.getByTestId('changes-apply')).toBeTruthy()
   })
 })

@@ -333,6 +333,24 @@ export function AiTabPanel() {
     }
   }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope, attachedProtocol])
 
+  // PB-CH-4 D1 fix (gate receipts 2026-10-07_orchgate2): a compose_workstate
+  // turn ALSO fires the event-graph onDraftResult path — its done result
+  // carries notes only (no error, no protocolEdit, no clarifications, empty
+  // events), so it fell to the final else and dispatched draft-ready with an
+  // EMPTY changes list: sidebar 'reviewing', auto subtab 'changes', the chat
+  // section (where <WorkstateProposalCard> renders) unmounted, and an
+  // actionable 'Apply to run' over nothing. The card is that turn's ONLY
+  // review surface. The flag is set when the turn's workstate_proposal event
+  // arrives (server emits it DURING run(), before the post-run `done` frame —
+  // AgentOrchestrator.ts:2199 inside orchestrator.run vs the assistStream
+  // handler's `sendEvent({type:'done'})` at AIHandlers.ts:458, the endpoint
+  // the client's /ai/assist/stream posts to), CONSUMED by the same
+  // turn's onDraftResult, and cleared at the single sendChat choke point every
+  // turn starts through so a stale flag can
+  // never suppress a later turn's review (race-safe without depending on any
+  // untested ordering beyond that verified one).
+  const workstateTurnRef = useRef(false)
+
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
@@ -343,6 +361,12 @@ export function AiTabPanel() {
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
 
+      // PB-CH-4 D1: consume the turn flag FIRST, on every path, so a stale
+      // flag can never leak into a later turn (a no-envelope compose_workstate
+      // turn ends with an `error` result and never reaches the flag branch).
+      const workstateTurn = workstateTurnRef.current
+      workstateTurnRef.current = false
+
       // R-Defect-1 (PROTO-AI-9 fix): a failed turn — the server result
       // carries `error` (schema rejection, model failure; assistStream
       // renders "Draft failed: …" in the chat log) — must NOT open an
@@ -352,6 +376,18 @@ export function AiTabPanel() {
       if (result.error) {
         protocolProposalRef.current = null
         setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
+      // PB-CH-4 D1: this turn proposed a workstate — the card (compiling slot
+      // or review card) is its ONLY review surface, NOT the ChangesPanel.
+      // Same discipline as the result.error guard above: no draft-ready, no
+      // 'reviewing' mode, no empty actionable 'Apply to run', the chat
+      // section (where the card renders) stays mounted and the input stays
+      // usable. The turn still commits its chat message/trace —
+      // summarizeDraftResult covers the notes (useChatThread 'done').
+      if (workstateTurn) {
         sidebarDispatch({ type: 'reset' })
         return
       }
@@ -577,6 +613,12 @@ export function AiTabPanel() {
 
   const handleWorkstateProposal = useCallback(
     async (intent: Record<string, unknown>) => {
+      // PB-CH-4 D1: mark THIS turn as a workstate turn. The server emits
+      // workstate_proposal during run() and `done` only after run() resolves
+      // (AgentOrchestrator.ts:2199 vs AIHandlers.ts:458, assistStream — the
+      // handler behind the client's /ai/assist/stream), so the flag is set
+      // before the same turn's onDraftResult consumes it.
+      workstateTurnRef.current = true
       const seq = compileSeqRef.current + 1
       compileSeqRef.current = seq
       setCard({ phase: 'compiling' })
@@ -680,17 +722,34 @@ export function AiTabPanel() {
     },
   })
 
+  // PB-CH-4 review fix1 D1: THE single choke point every turn starts through.
+  // The panel has FIVE chat.send entry points (sendSurfaceContext, handleSend,
+  // handleClarificationsSubmit, the protocol-builder Draft button, the
+  // Extract-Protocol CTA); clearing the workstate flag at three of them left
+  // two leak paths, and a turn that dies on an SSE error/abort never fires
+  // onDraftResult, so a stale flag could suppress a LATER turn's draft-ready.
+  // Every send in this panel goes through this wrapper, so no send path can
+  // miss the reset — the flag is cleared at turn start regardless of how the
+  // previous turn ended (done, error frame, or Stop).
+  const sendChat = useCallback(
+    (text: string, options?: Parameters<typeof chat.send>[1]) => {
+      workstateTurnRef.current = false // PB-CH-4 D1: a fresh turn starts here — no leak
+      return chat.send(text, options)
+    },
+    [chat],
+  )
+
   // Send a well-formed SurfaceContext into the AI chat with the deterministic
   // "from surface, selected N, goal" preamble so every selection→AI seam is
   // corpus-capturable. Accepts extra chat.send options (e.g. protocolStepContext).
   const sendSurfaceContext = useCallback(
     (sc: SurfaceContext, extra?: Parameters<typeof chat.send>[1]) => {
-      void chat.send(surfaceAiPrompt(sc), {
+      void sendChat(surfaceAiPrompt(sc), {
         enableThinking: false,
         ...(extra ?? {}),
       })
     },
-    [chat],
+    [sendChat],
   )
 
   // Pre-warm the KV cache while the user reads/types: whenever the deck
@@ -855,10 +914,14 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // PB-CH-4 D1: a fresh send starts a fresh turn — sendChat resets the
+      // workstate flag at the choke point, so a flag from a previous turn
+      // (e.g. one that ended on an SSE error with no `done` frame) can never
+      // suppress this turn's review path.
       sidebarDispatch({ type: 'start-interpreting', prompt: text })
-      await chat.send(text, { enableThinking: false })
+      await sendChat(text, { enableThinking: false })
     },
-    [chat],
+    [sendChat],
   )
 
   // Term overrides were moved to the deck's review modal (Discard / View changes /
@@ -883,12 +946,12 @@ export function AiTabPanel() {
       const all = [...resolvedClarificationsRef.current.values()]
       const answerMap = Object.fromEntries(answers.map((a) => [a.requestId, a]))
       sidebarDispatch({ type: 'submit-answers', answers: answerMap })
-      await chat.send(clarificationAnswersPrompt(answers, requests), {
+      await sendChat(clarificationAnswersPrompt(answers, requests), {
         clarificationAnswers: all,
         enableThinking: false,
       })
     },
-    [chat],
+    [sendChat],
   )
 
   const handleCancelDraft = useCallback(() => {
@@ -1075,7 +1138,7 @@ export function AiTabPanel() {
                 })
               }
 
-              void chat.send(draftPrompt, { enableThinking: false })
+              void sendChat(draftPrompt, { enableThinking: false })
             }}
             onPromote={() => {
               // Accept the ghost preview events into the event graph
@@ -1098,7 +1161,7 @@ export function AiTabPanel() {
               className="ai-tab__protocol-cta-btn"
               onClick={() => {
                 resolvedClarificationsRef.current.clear()
-                void chat.send(
+                void sendChat(
                   `Extract a protocol from the PDF in the active tab. Identify the procedure steps, materials, and labware.`,
                   { enableThinking: false },
                 )
