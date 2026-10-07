@@ -208,6 +208,12 @@ export type AssistStreamEvent =
   // `workstate` mirrors the server frame (AgentOrchestrator emits
   // {type:'workstate_proposal', workstate}).
   | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
+  // PB-CH-5 tier-2 (analysis): the model's analysis INTENT — verbs and terms
+  // only, relayed verbatim. NOT a compiled draft and NOT actionable alone:
+  // POST /api/drafts/compile (Ajv + canAccept) is the trust boundary, not this
+  // stream. Field name `analysis` mirrors the server frame (AgentOrchestrator
+  // emits {type:'analysis_proposal', analysis}).
+  | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -341,7 +347,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown> }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown> }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -390,6 +396,14 @@ function dispatchFrame(
       // Ajv/canAccept trust boundary.
       if (parsed.workstate && typeof parsed.workstate === 'object' && !Array.isArray(parsed.workstate)) {
         onEvent({ type: 'workstate_proposal', workstate: parsed.workstate })
+      }
+      return
+    case 'analysis_proposal':
+      // PB-CH-5 tier-2 (analysis): same discipline — relay the model's INTENT
+      // verbatim; the mount relays it to POST /api/drafts/compile (adapter
+      // 'analysis'), which is the Ajv/canAccept trust boundary.
+      if (parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)) {
+        onEvent({ type: 'analysis_proposal', analysis: parsed.analysis })
       }
       return
     case 'protocol_extracted':

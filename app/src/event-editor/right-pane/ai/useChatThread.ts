@@ -115,6 +115,13 @@ export interface UseChatThreadOptions {
    */
   onWorkstateProposal?: (workstate: Record<string, unknown>) => void
   /**
+   * PB-CH-5 — tier-2 mount (analysis): fires when the model proposes an
+   * analysis composition. Forwards the INTENT verbatim; the mount relays it to
+   * POST /api/drafts/compile with adapter 'analysis'. Same zero-touch
+   * discipline as onWorkstateProposal — the card owns the flow.
+   */
+  onAnalysisProposal?: (analysis: Record<string, unknown>) => void
+  /**
    * Test seam — override the SSE runner. Real callers leave this unset
    * to use the default fetch-based client.
    */
@@ -127,6 +134,7 @@ export function useChatThread({
   onDraftResult,
   onAgentAction,
   onWorkstateProposal,
+  onAnalysisProposal,
   workingFocus,
   runStream,
 }: UseChatThreadOptions): UseChatThreadResult {
@@ -268,6 +276,21 @@ export function useChatThread({
                 // card mount owns the compile→review→accept flow.
                 onWorkstateProposal?.(event.workstate)
                 return
+              case 'analysis_proposal':
+                // PB-CH-5 tier-2 (analysis): same zero-touch discipline — the
+                // mount relays the INTENT to POST /api/drafts/compile (adapter
+                // 'analysis'); the hook touches nothing else. The relay is
+                // wrapped so a throwing mount can never break the chat turn
+                // (the never-break-the-turn wrapper the agent_action case uses;
+                // the relay is async fire-and-forget, so its rejection is
+                // swallowed here too).
+                try {
+                  onAnalysisProposal?.(event.analysis)
+                } catch {
+                  // The card mount owns the flow; a mount explosion must not
+                  // end the turn or the chat.
+                }
+                return
               default: {
                 const _exhaustive: never = event
                 return _exhaustive
@@ -283,7 +306,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, runStream],
   )
 
   const stop = useCallback(() => {

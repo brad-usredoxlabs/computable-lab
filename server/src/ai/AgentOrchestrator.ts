@@ -2223,6 +2223,85 @@ export function createAgentOrchestrator(
               console.log(`[agent ${tid}] done compose_workstate emitted elapsedMs=${elapsed}`);
               return wsProposalResult;
             }
+
+            // intent=compose_analysis (PB-CH-5): propose an analysis composition.
+            // THE SAME thin-event design (OQ1 ruling): this branch emits the
+            // model's analysis INTENT VERBATIM as ONE `analysis_proposal` event
+            // and runs NOTHING else — no compile, no store write, no session
+            // push, no execute, no promote. The drafts compile endpoint
+            // (POST /api/drafts/compile — Ajv against the registered
+            // analysis-intent $id + canAccept), NOT this stream, is the trust
+            // boundary: a raw term crossing the wire here is structurally
+            // non-actionable (the client renders a compiling slot, never an
+            // Accept, until the compile response says canAccept:true). Accept
+            // stages at most a QUEUED analysis-run create through the draft
+            // lifecycle — this turn NEVER executes a run and NEVER promotes an
+            // artifact. An invalid envelope is NOT rejected here — the compile
+            // endpoint owns the diagnostic (canAccept:false + path-named
+            // diagnostics).
+            if (agentIntent.intent === 'compose_analysis') {
+              const analysis = agentIntent.analysis;
+              const elapsed = Date.now() - t0;
+              if (!analysis) {
+                // The existing error channel (create_record's missing-`records`
+                // precedent): success:false with a corrective `error` string,
+                // and NO analysis_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const analysisEnvelopeError = 'compose_analysis requires an `analysis` envelope: {operation:"compose-analysis", target:{revision:{term|recordId}, newRun?} | {run:{term|recordId}}, focus?, open?} — VERBS AND TERMS ONLY; the server compiles it into a review card, Accept creates at most a QUEUED run, and nothing is executed or promoted.';
+                const emptyAnalysisResult: AgentResult = {
+                  success: false,
+                  error: analysisEnvelopeError,
+                };
+                const emptyAnalysisSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: analysisEnvelopeError,
+                };
+                logAgentSummary(tid, emptyAnalysisSummary);
+                console.log(`[agent ${tid}] done compose_analysis no-envelope elapsedMs=${elapsed}`);
+                return emptyAnalysisResult;
+              }
+              onEvent?.({ type: 'analysis_proposal', analysis });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const analysisProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed an analysis — review the card; nothing executed.'],
+              };
+              const analysisProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, analysisProposalSummary);
+              console.log(`[agent ${tid}] done compose_analysis emitted elapsedMs=${elapsed}`);
+              return analysisProposalResult;
+            }
           }
 
           // Instruments the USER named this turn (`[[equipment:EQP-…]]`) outrank

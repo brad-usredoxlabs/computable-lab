@@ -266,7 +266,7 @@ describe('parseSubmitSuggestionArgs', () => {
 });
 
 describe('agent_intent — the constrained emission menu', () => {
-  it('exposes a single forced tool with a six-intent menu (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate)', () => {
+  it('exposes a single forced tool with a seven-intent menu (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate | compose_analysis)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters;
     expect(params).toHaveProperty('required', ['intent']);
     const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
@@ -284,7 +284,12 @@ describe('agent_intent — the constrained emission menu', () => {
     // via the workstate envelope; the orchestrator emits the intent VERBATIM as a
     // workstate_proposal event and the drafts compile endpoint (Ajv + canAccept)
     // is the trust boundary. Nothing is written.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate']);
+    // Seventh intent added PB-CH-5 (DELIBERATE golden diff): compose_analysis
+    // proposes an analysis composition; the orchestrator emits the envelope
+    // VERBATIM as an analysis_proposal event and the drafts compile endpoint
+    // (Ajv + canAccept) is the trust boundary. Accept stages at most a QUEUED
+    // run; nothing executes, nothing promotes, nothing writes before Accept.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

@@ -885,6 +885,16 @@ export type AgentEvent =
    * compilation trust boundary (OQ1 ruling, spec §4).
    */
   | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
+  /**
+   * PB-CH-5 — the model's analysis INTENT, retained verbatim (compose_analysis).
+   * This is NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — Ajv against the registered
+   * analysis-intent $id + canAccept), NOT this stream, is the trust boundary.
+   * Accepting the compiled draft stages at most one QUEUED analysis-run create;
+   * nothing here executes a run or promotes an artifact (OQ1 ruling, thin-event
+   * design — same shape as workstate_proposal).
+   */
+  | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
   | AgentProtocolExtractedEvent;
 
 // ============================================================================

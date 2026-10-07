@@ -39,3 +39,17 @@ kinds:
     tabKind: protocol-review
     idField: recordId
     idPrefix: protocol-review
+  # PB-CH-5: the analysis chain (analysis-revision → analysis-run) opens in the
+  # native record editor. These two DATA entries ALONE make analysis terms
+  # resolvable + projectable through the EXISTING generic workstate adapter —
+  # the genericity proof pinned in workstateCompile.test.ts. No TS kind branch
+  # anywhere; the idPrefix matches recordEditTabId (app types.ts) so the
+  # server-derived activeTabId equals what tabId.ts re-derives.
+  analysis-revision:
+    tabKind: record-edit
+    idField: recordId
+    idPrefix: record
+  analysis-run:
+    tabKind: record-edit
+    idField: recordId
+    idPrefix: record

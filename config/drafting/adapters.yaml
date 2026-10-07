@@ -14,3 +14,13 @@ adapters:
     domain: workstate
     operations: [compose-workstate]
     projection: {}
+  # PB-CH-5: analysis proposals compiled onto the EXISTING analysis-revision →
+  # analysis-run → analysis-output-artifact → view-spec chain. At most ONE
+  # staged `analysis-run` create (status `queued`, initiator = the actor); the
+  # compiled session document rides in the compile/accept `result` like the
+  # workstate adapter. Kind policy: workstate-tab-kinds.yaml (landing tabs) +
+  # analysis-composition.yaml (this adapter's own reference/id policy).
+  analysis:
+    domain: analysis
+    operations: [compose-analysis]
+    projection: {}
