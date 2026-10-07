@@ -60,6 +60,7 @@ const mocks = vi.hoisted(() => ({
     workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
     onAgentAction?: (action: unknown) => string | undefined
     onWorkstateProposal?: (intent: Record<string, unknown>) => void
+    onDraftResult?: (result: unknown, prompt: string) => void
   },
   executeTier1: vi.fn(),
   applyAcceptedWorkstate: vi.fn(),
@@ -83,6 +84,7 @@ vi.mock('./useChatThread', () => ({
     workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
     onAgentAction?: (action: unknown) => string | undefined
     onWorkstateProposal?: (intent: Record<string, unknown>) => void
+    onDraftResult?: (result: unknown, prompt: string) => void
   }) => {
     mocks.chatOptions = options
     return {
@@ -525,5 +527,93 @@ describe('AiTabPanel — tier-2 card (actionable ONLY from a canAccept:true comp
     expect(screen.getByTestId('workstate-card').textContent).toContain('Newer workspace')
     expect(screen.getByTestId('workstate-card').textContent).not.toContain('Superseded workspace')
     expect(screen.getByTestId('workstate-card').textContent).toContain('revision 2')
+  })
+})
+
+describe('AiTabPanel — D1 gate fix: a workstate turn never opens the event-graph review', () => {
+  // Gate defect D1 (receipts 2026-10-07_orchgate2, wave1-pending-card.png,
+  // card-state cardVisible:false): the compose_workstate turn ALSO fires the
+  // event-graph onDraftResult path — the result carries notes only (no error,
+  // no protocolEdit, no clarificationRequests, empty events), so it fell to
+  // the final else and dispatched draft-ready with changes:[] — sidebar
+  // 'reviewing', auto subtab 'changes', the chat section (where the card
+  // renders) UNMOUNTED, and an actionable 'Apply to run' over an empty change
+  // list. The card must be the turn's ONLY review surface.
+  //
+  // Event ordering VERIFIED in code (not assumed): the server emits
+  // `workstate_proposal` DURING orchestrator.run (server/src/ai/
+  // AgentOrchestrator.ts:2199, compose_workstate branch) and `done` is sent
+  // only AFTER run() resolves (server/src/api/handlers/AIHandlers.ts:288) —
+  // so in the SSE stream the proposal frame always precedes the done frame.
+  // The guard below is still written so a stale flag can never leak into a
+  // later turn (consumed in onDraftResult + cleared on every next send).
+  it('a done result on a turn that emitted workstate_proposal keeps the card as the ONLY review surface — no reviewing mode, no Apply to run', async () => {
+    await mount()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    // Same-turn stream, verified order: workstate_proposal, then done.
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+
+    // The turn's `done` result — compose_workstate's AgentResult verbatim
+    // (AgentOrchestrator.ts: notes only; success:true; no events/error/
+    // protocolEdit/clarifications).
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.(
+        { success: true, notes: ['Proposed a workspace — review the card to accept; nothing was written.'] },
+        'open the ROS run',
+      )
+      await Promise.resolve()
+    })
+
+    // (a) the card is STILL rendered — compiling slot at minimum, here the
+    // review card; the chat section did not unmount.
+    expect(screen.getByTestId('workstate-card')).toBeTruthy()
+    expect(screen.getByTestId('workstate-card-accept')).toBeTruthy()
+    // (b) the pane is NOT in 'reviewing'/changes mode.
+    expect(screen.queryByTestId('ai-subtab-changes')).toBeNull()
+    expect(screen.getByTestId('ai-tab-system-prompt').textContent).not.toContain('Review changes')
+    // (c) NO 'Apply to run' affordance anywhere.
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(screen.queryByText('Apply to run')).toBeNull()
+    // The chat subtab stays active while the card is pending.
+    expect(screen.getByTestId('ai-subtab-chat').className).toContain('ai-tab__subtab--active')
+    // Invariants untouched: no accept fired, zero session push while pending.
+    expect(mocks.acceptWorkstateDraft).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(mocks.putSession).not.toHaveBeenCalled()
+  })
+
+  it('the guard is per-turn: once the card is rejected, a later plain draft result still opens the changes review', async () => {
+    await mount()
+    mocks.compileWorkstateDraft.mockResolvedValue(COMPILED_OK)
+
+    await act(async () => {
+      mocks.chatOptions?.onWorkstateProposal?.(INTENT)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, notes: ['Proposed a workspace.'] }, 'open the ROS run')
+      await Promise.resolve()
+    })
+    expect(screen.queryByTestId('ai-subtab-changes')).toBeNull()
+
+    // Reject resolves the card; the guard flag was already consumed by the
+    // turn's done — a subsequent event-graph draft must review normally.
+    fireEvent.click(screen.getByTestId('workstate-card-reject'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await act(async () => {
+      mocks.chatOptions?.onDraftResult?.({ success: true, events: [{ event_type: 'transfer' }] }, 'draft a transfer')
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('ai-subtab-changes')).toBeTruthy()
+    expect(screen.getByTestId('changes-apply')).toBeTruthy()
   })
 })
