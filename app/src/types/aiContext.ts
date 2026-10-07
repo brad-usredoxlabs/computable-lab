@@ -7,6 +7,11 @@
 
 export type AiSurface =
   | 'event-editor'
+  // PB-CH-6: the `/analysis` work surface (surfaces registry id `analysis`,
+  // surfaces.yaml:57-62 — a no-params AI-context surface). The server-side
+  // mirror is the additive `server/src/ai/systemPrompt.ts` union member; the
+  // generic prompt with an empty preamble is the intended behavior there.
+  | 'analysis'
   | 'run-workspace'
   | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget' | 'execution'}`
   | 'materials'

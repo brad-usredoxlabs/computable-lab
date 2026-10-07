@@ -11,6 +11,7 @@ import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
 import { renderViews, type RenderableArtifact, type RenderableView } from './ViewRenderer'
+import { AnalysisChatPanel } from './AnalysisChatPanel'
 import './AnalysisPage.css'
 
 interface RunPayload {
@@ -283,6 +284,10 @@ export function AnalysisPage() {
 
   const rightPane = (
     <div className="analysis-right" data-testid="analysis-right">
+      {/* PB-CH-6 (OQ2 ruling (a)): compact chat column above the artifact
+          area — the chat + proposal card stack rides the right pane, matching
+          the run page's chat-right discipline. No new layout machinery. */}
+      <AnalysisChatPanel />
       <div className="analysis-right__title">
         {activeRun?.payload.title ?? (activeRunId ? runs.find((r) => r.recordId === activeRunId)?.payload.title : null) ?? 'Results'}
         {activeStatus ? <span className={`analysis__status analysis__status--${activeStatus}`}>{activeStatus}</span> : null}

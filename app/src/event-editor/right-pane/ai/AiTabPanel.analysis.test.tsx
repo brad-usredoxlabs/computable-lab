@@ -358,23 +358,28 @@ describe('AiTabPanel — analysis card (shared flow, adapter is the only delta)'
     expect(mocks.putSession).not.toHaveBeenCalled()
   })
 
-  it('source-pin: card/accept/reject paths are SHARED, not forked — one proposal handler taking the adapter as a parameter', () => {
-    const source = readFileSync('src/event-editor/right-pane/ai/AiTabPanel.tsx', 'utf8')
-    // Exactly ONE proposal handler and ONE draft-card accept handler exist
-    // (no analysis fork; handleProtocolAccept is the pre-existing protocol-edit
-    // flow, untouched by PB-CH-5).
-    const proposalHandlers = source.match(/const handle\w*Proposal = useCallback/g) ?? []
+  it('source-pin: card/accept/reject paths are SHARED, not forked — the flow holds the single compile/accept implementation; both mounts pass their adapter constant', () => {
+    // PB-CH-6 extraction: the compile→card→accept/reject orchestration now
+    // lives in shared/ai/useWorkstateProposalFlow.ts (the ONE implementation).
+    // This pin keeps the PB-CH-5 no-fork assertions against the POST-extraction
+    // shape the PB-CH-6 spec mandates (its verification item 6: compileWorkstateDraft
+    // call sites are ONLY the shared flow, AiTabPanel reaches it via the flow).
+    const panel = readFileSync('src/event-editor/right-pane/ai/AiTabPanel.tsx', 'utf8')
+    const flow = readFileSync('src/shared/ai/useWorkstateProposalFlow.ts', 'utf8')
+    // The panel no longer implements compile/accept itself — ZERO call sites there.
+    expect(panel.match(/compileWorkstateDraft\(/g) ?? []).toHaveLength(0)
+    expect(panel.match(/acceptWorkstateDraft\(/g) ?? []).toHaveLength(0)
+    // Exactly ONE proposal handler in the panel (no analysis fork;
+    // handleProtocolAccept is the pre-existing protocol-edit flow).
+    const proposalHandlers = panel.match(/const handle\w*Proposal = useCallback/g) ?? []
     expect(proposalHandlers).toHaveLength(1)
-    const acceptHandlers = source.match(/const handle\w*(Workstate|Analysis)Accept = useCallback/g) ?? []
-    expect(acceptHandlers).toHaveLength(1)
     // The adapter is a PARAMETER of the shared flow, and both mounts pass
     // their constant into the SAME handler.
-    expect(source).toContain("adapter: 'workstate' | 'analysis'")
-    expect(source).toContain("handleWorkstateProposal(intent, 'workstate')")
-    expect(source).toContain("handleWorkstateProposal(intent, 'analysis')")
-    // The compile call site passes the parameter — no second literal 'workstate'
-    // call site remains (grep precedent: the shared flow, not a fork).
-    const compileCallSites = source.match(/compileWorkstateDraft\(\{[\s\S]{0,80}?adapter/g) ?? []
-    expect(compileCallSites).toHaveLength(1)
+    expect(panel).toContain("handleWorkstateProposal(intent, 'workstate')")
+    expect(panel).toContain("handleWorkstateProposal(intent, 'analysis')")
+    // The flow is the ONE implementation: adapter union + single compile/accept sites.
+    expect(flow).toContain("export type WorkstateAdapter = 'workstate' | 'analysis'")
+    expect(flow.match(/compileWorkstateDraft\(\{/g) ?? []).toHaveLength(1)
+    expect(flow.match(/acceptWorkstateDraft\(\{/g) ?? []).toHaveLength(1)
   })
 })

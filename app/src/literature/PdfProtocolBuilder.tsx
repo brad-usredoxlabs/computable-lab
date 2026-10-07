@@ -15,6 +15,8 @@ import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useAiChat } from '../shared/hooks/useAiChat'
+import { useWorkstateProposalFlow } from '../shared/ai/useWorkstateProposalFlow'
+import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import type { AiContext } from '../types/aiContext'
 import { LiteratureRightPanel } from './LiteratureRightPanel'
 
@@ -123,8 +125,24 @@ export function PdfProtocolBuilder() {
     [pdfUrl, pdfDoc, selectedText],
   )
 
-  // Use the literature endpoint for thread persistence
-  const aiChat = useAiChat({ aiContext, endpoint: 'literature' })
+  // Use the literature endpoint for thread persistence.
+  // PB-CH-6 (OQ1 ruling): this is the ONE approved generic useAiChat consumer
+  // (surface `protocol-builder`, reached at /literature?view=build via
+  // LiteratureBody). Its chat gains the wave-1 channel behavior by composing
+  // the SAME `useWorkstateProposalFlow` AiTabPanel rides — no fork, no second
+  // compile/accept implementation here; the card renders locally in the right
+  // panel (the AiPanelContext slot renderer lives in the absent overlay on
+  // this host, so a registered-but-invisible mount would be the forbidden
+  // silent no-op).
+  const flow = useWorkstateProposalFlow()
+  const aiChat = useAiChat({
+    aiContext,
+    endpoint: 'literature',
+    onWorkstateProposal: (intent) => {
+      void flow.proposeWorkstate('workstate', intent)
+    },
+    onAgentAction: flow.handleAgentAction,
+  })
 
   return (
     <div className="pdf-protocol-builder">
@@ -216,8 +234,26 @@ export function PdfProtocolBuilder() {
           )}
         </div>
 
-        {/* Right: Search + AI tabs */}
+        {/* Right: Search + AI tabs. PB-CH-6: the tier-2 review card rides the
+            chat locally (same discipline as the run page) — while a card is
+            pending NO proposed tab is rendered anywhere; the workspace adopts
+            a workstate only through Accept → the single writer. */}
         <div className="pdf-protocol-builder__right-panel">
+          {flow.card ? (
+            <div className="pdf-protocol-builder__proposal-card" data-testid="pdf-builder-proposal-card">
+              <WorkstateProposalCard
+                phase={flow.card.phase}
+                {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+                {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
+                {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+                {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+                {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+                {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+                onAccept={() => void flow.acceptWorkstate()}
+                onReject={flow.rejectWorkstate}
+              />
+            </div>
+          ) : null}
           <LiteratureRightPanel aiChat={aiChat} />
         </div>
       </div>

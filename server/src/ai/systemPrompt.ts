@@ -280,6 +280,12 @@ function formatDraftRevisionContext(context: EditorContext): string {
 export type AiSurface =
   | 'event-editor'
   | 'workspace.deck'
+  // PB-CH-6: the `/analysis` work surface (registry id `analysis`,
+  // schema/registry/surfaces/surfaces.yaml — a no-params AI-context surface).
+  // Additive ONLY: getSurfacePreamble falls through to the generic prompt
+  // with an empty preamble (the intended behavior — no new preamble/prompt
+  // template; prompt authoring is not this item's authority).
+  | 'analysis'
   | 'run-workspace'
   | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'}`
   | 'materials'
