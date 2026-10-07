@@ -2,8 +2,8 @@
 ## (PB-CH-2 DONE — coder clean exit, adversarial fix cycle closed by orchestrator-executed receipts, merged 236228fc; PB-CH-3 spec PROMOTED, coder-ready next tick)
 
 Campaigns: `ai-protocol-edit-and-router` + `page-builder channel`. Trunk `cl/integration-2` HEAD
-**`f19319a5`** (docs; code tip = PB-CH-2 merge chain 23c92476 -> 35f28cbb -> 6fd9f4b7 -> 236228fc +
-PB-CH-3 spec promotion). Lane stack restarted 23:20 EDT (new workstate YAML loaded, 185 schemas),
+**`24cb95c6`** (this handoff; code tip = PB-CH-2 merge chain 23c92476 -> 35f28cbb -> 6fd9f4b7 ->
+236228fc + PB-CH-3 spec promotion ab6238b9). Lane stack restarted 23:20 EDT (new workstate YAML loaded, 185 schemas),
 :3093/:5193 both 200 serving merged trunk. Brad's :3001/:5174 untouched.
 
 ## LIVE AT CHECKPOINT
@@ -89,7 +89,7 @@ PB-CH-3 spec promotion). Lane stack restarted 23:20 EDT (new workstate YAML load
 - **AS-PROTO-AI-12-W1** — served router artifact is the QAD-Q4_0 quant of LFM2.5-350M (sha256
   3d10b6ab…); disclose with the PROTO-AI-13 verdict digest. STILL OPEN (due at AI-13).
 
-## Baseline facts (at merged trunk 236228fc / f19319a5)
+## Baseline facts (at merged trunk 236228fc; docs tip 24cb95c6)
 - server tsc **26** lines (pin corrected, see AS-LANE2-SERVER-TSC-PIN-26); src/drafts **3 files/39
   PASS**; app tsc 34; src/ai 10 failed files/21 failed/565 passed (set-identity); src/schema+surfaces
   3 failing files (symlinked live-tree tests). PRT-4iaey2 sha 30a353a8… unchanged.
