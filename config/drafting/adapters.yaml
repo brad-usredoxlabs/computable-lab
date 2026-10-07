@@ -7,3 +7,10 @@ adapters:
       sequence: sequence
       modifications: modifications
       vendor: vendor
+  # PB-CH-2: tier-2 workstate proposals. Projection-only: the projection map is
+  # the intent echo (empty here); the compiled session document rides in the
+  # compile/accept `result`. Kind→tab policy lives in workstate-tab-kinds.yaml.
+  workstate:
+    domain: workstate
+    operations: [compose-workstate]
+    projection: {}

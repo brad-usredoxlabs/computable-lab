@@ -1,0 +1,41 @@
+# PB-CH-2 — kind→tab policy for the workstate draft adapter. DATA, not code:
+# the adapter reads this file per call (like adapters.yaml); teaching the
+# adapter a new record kind is a YAML edit, never a TS if-chain on kind names.
+#
+# tabKind  — must be a lab-session tab kind (schema/workflow/lab-session.schema.yaml enum).
+# idField  — the TAB field carrying the resolved record id, exactly as the client
+#            tab shape declares it (app/src/event-editor/workspace/types.ts:
+#            run.runId, project.studyId, record-edit.recordId,
+#            protocol-review.recordId). The VALUE is always the resolved record's
+#            canonical recordId.
+# idPrefix — mirrors the tab-id helpers in the same file (runTabId → `run:`,
+#            projectTabId → `project:`, recordEditTabId → `record:`,
+#            protocolReviewTabId → `protocol-review:`) so a server-derived
+#            activeTabId matches what app/src/shared/session/tabId.ts re-derives.
+#
+# Honest limits (by design, recorded in the PB-CH-2 report):
+# - tab kinds project-details/splash have no stable record derivation and are
+#   NOT producible from a proposal.
+# - record kinds with no entry here produce an UNMAPPABLE_RECORD_KIND diagnostic
+#   (e.g. local-protocol today), never a guessed tab.
+kinds:
+  planned-run:
+    tabKind: run
+    idField: runId
+    idPrefix: run
+  execution-run:
+    tabKind: run
+    idField: runId
+    idPrefix: run
+  study:
+    tabKind: project
+    idField: studyId
+    idPrefix: project
+  protocol:
+    tabKind: record-edit
+    idField: recordId
+    idPrefix: record
+  vendor-pdf:
+    tabKind: protocol-review
+    idField: recordId
+    idPrefix: protocol-review

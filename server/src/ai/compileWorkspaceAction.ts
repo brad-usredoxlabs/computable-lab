@@ -226,13 +226,17 @@ export interface ResolvedAgentAction {
 // Resolution internals
 // ============================================================================
 
-/** The lab's own tiers (the resolveDraftMaterials precedent: LOCAL_TIERS [0,1]). */
-const LOCAL_TIERS: readonly number[] = [0, 1];
+/** The lab's own tiers (the resolveDraftMaterials precedent: LOCAL_TIERS [0,1]).
+ *  Exported for PB-CH-2: the workstate adapter reuses THE SAME guards rather
+ *  than re-implementing tier/mint discipline (export-only refactor; behavior
+ *  unchanged). */
+export const LOCAL_TIERS: readonly number[] = [0, 1];
 
 /** THE MINT-AFFORDANCE LEAK GUARD: ResolveSpine ALWAYS appends a tier-5
  *  `curie:''` mint candidate (ResolveSpine.ts:218). Minting a local term is
- *  NOT a resolution for a navigation action — filter it out. */
-function isMintAffordance(candidate: ActionCandidate): boolean {
+ *  NOT a resolution for a navigation action — filter it out.
+ *  Exported alongside LOCAL_TIERS for the same reason. */
+export function isMintAffordance(candidate: ActionCandidate): boolean {
   return candidate.tier === 5 || candidate.source === 'mint' || !candidate.curie;
 }
 
