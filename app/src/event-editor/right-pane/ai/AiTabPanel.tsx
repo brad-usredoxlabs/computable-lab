@@ -601,6 +601,10 @@ export function AiTabPanel() {
   // alone). At most one pending draft identity lives in the ref; a newer
   // proposal supersedes an in-flight compile and a late response for a
   // superseded compile is DISCARDED (never resurrected).
+  // PB-CH-5: the SAME flow serves the analysis adapter — `adapter` is a
+  // parameter of the flow (the compile call already takes it as a field), so
+  // analysis is ONE constant, not a fork: same card state, same pending
+  // identity, same supersede/spent-card behavior, same accept/reject handlers.
   const [workstateCard, setWorkstateCard] = useState<WorkstateCardState | null>(null)
   const workstateCardRef = useRef<WorkstateCardState | null>(null)
   const pendingDraftRef = useRef<{ draftId: string; revision: number; reviewHash: string } | null>(null)
@@ -612,12 +616,14 @@ export function AiTabPanel() {
   }, [])
 
   const handleWorkstateProposal = useCallback(
-    async (intent: Record<string, unknown>) => {
-      // PB-CH-4 D1: mark THIS turn as a workstate turn. The server emits
-      // workstate_proposal during run() and `done` only after run() resolves
-      // (AgentOrchestrator.ts:2199 vs AIHandlers.ts:458, assistStream — the
-      // handler behind the client's /ai/assist/stream), so the flag is set
-      // before the same turn's onDraftResult consumes it.
+    async (intent: Record<string, unknown>, adapter: 'workstate' | 'analysis') => {
+      // PB-CH-4 D1: mark THIS turn as a card turn (workstate OR analysis —
+      // tier-2 proposals both fire the event-graph onDraftResult path with
+      // notes-only results, and the card is their ONLY review surface). The
+      // server emits the proposal event during run() and `done` only after
+      // run() resolves (AgentOrchestrator.ts vs AIHandlers.ts:458, the handler
+      // behind the client's /ai/assist/stream), so the flag is set before the
+      // same turn's onDraftResult consumes it.
       workstateTurnRef.current = true
       const seq = compileSeqRef.current + 1
       compileSeqRef.current = seq
@@ -625,7 +631,7 @@ export function AiTabPanel() {
       const pending = pendingDraftRef.current
       try {
         const res = await apiClient.compileWorkstateDraft({
-          adapter: 'workstate',
+          adapter,
           intent,
           ...(pending ? { draftId: pending.draftId, revision: pending.revision } : {}),
         })
@@ -718,7 +724,13 @@ export function AiTabPanel() {
     onDraftResult,
     onAgentAction: handleAgentAction,
     onWorkstateProposal: (intent) => {
-      void handleWorkstateProposal(intent)
+      void handleWorkstateProposal(intent, 'workstate')
+    },
+    // PB-CH-5: the analysis INTENT rides the SAME flow — the only delta is the
+    // adapter constant; card state, pending identity, supersede, accept and
+    // reject are the identical code paths (shared, not forked).
+    onAnalysisProposal: (intent) => {
+      void handleWorkstateProposal(intent, 'analysis')
     },
   })
 

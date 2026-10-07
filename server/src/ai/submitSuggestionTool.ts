@@ -432,7 +432,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), or `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing). Fill only the fields that belong to the intent you chose; never mix intents.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing), or `compose_analysis` to propose opening/creating an ANALYSIS against a method the lab already has (an analysis envelope — the server COMPILES this into a review card; it creates at most a QUEUED run record on Accept; it NEVER executes and NEVER promotes). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes.',
         },
         platformId: {
           type: 'string',
@@ -567,13 +567,40 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             },
           },
         },
+        analysis: {
+          type: 'object',
+          description:
+            'compose_analysis only: the analysis proposal envelope (the analysis-intent schema shape). VERBS AND TERMS ONLY — `operation` is "compose-analysis"; `target` is exactly one of {revision:{term|recordId}, newRun?} (open/create against a METHOD) or {run:{term|recordId}} (open an EXISTING run); optional `focus` (run|revision) picks the landing tab and `open.tabs` appends extra cross-page tabs. THE SERVER compiles this into a review card via POST /api/drafts/compile — terms are spine-resolved, recordIds store-verified, invented ids rejected — and the card only becomes actionable after the user accepts. Accept stages AT MOST one QUEUED analysis-run create; it NEVER executes a run and NEVER promotes an artifact. Nothing is written before Accept.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-analysis'], description: 'The registered analysis verb.' },
+            target: {
+              type: 'object',
+              description: 'Exactly one of: {revision, newRun?} or {run}.',
+              properties: {
+                revision: { type: 'object', description: 'The analysis method: {term:"the biologist words"} or {recordId:"ANREV-…"} — the server resolves/verifies it.', properties: { term: { type: 'string' }, recordId: { type: 'string' } } },
+                run: { type: 'object', description: 'An existing analysis run to open: {term} or {recordId} — the server verifies it; never invent one.', properties: { term: { type: 'string' }, recordId: { type: 'string' } } },
+                newRun: {
+                  type: 'object',
+                  description: 'Optional: stage ONE new QUEUED run against the resolved revision. The run id, revisionRef, status, and initiator are all server-derived.',
+                  properties: {
+                    title: { type: 'string', description: 'Display title for the queued run (optional; the resolved method label is the fallback).' },
+                    parameters: { type: 'object', description: 'Parameter values for the run (per the revision parameterSchema).' },
+                    inputs: { type: 'object', description: 'name → {term|recordId}; the server resolves each through the declared input kinds (data-reference / analysis-output-artifact) and REJECTS a wrong-kind input — never a silently skipped one.' },
+                  },
+                },
+              },
+            },
+            focus: { type: 'string', enum: ['run', 'revision'], description: 'Which landing tab is active (default run). The server derives the tab id — never model-named.' },
+            open: { type: 'object', description: 'Extra cross-page tabs appended after the landing tabs (same {surface, target:{term|recordId}} shape as compose_workstate tabs).', properties: { tabs: { type: 'array', items: { type: 'object', properties: { surface: { type: 'string' }, target: { type: 'object', properties: { term: { type: 'string' }, recordId: { type: 'string' } } }, title: { type: 'string' } } } } } },
+          },
+        },
       },
     },
   },
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -602,12 +629,21 @@ export interface AgentIntentArgs {
    * parser never "helps" and never compiles.
    */
   workstate?: Record<string, unknown>;
+  /**
+   * compose_analysis only (PB-CH-5): the analysis proposal envelope EXACTLY as
+   * the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action`/`workstate` discipline). The orchestrator emits it VERBATIM
+   * as an `analysis_proposal` event; the drafts compile endpoint (Ajv against
+   * the registered analysis-intent $id + canAccept) is the trust boundary. The
+   * parser never "helps" and never compiles.
+   */
+  analysis?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -621,6 +657,9 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
         : {}),
       ...(intent === 'compose_workstate' && args.workstate !== null && typeof args.workstate === 'object' && !Array.isArray(args.workstate)
         ? { workstate: args.workstate as Record<string, unknown> }
+        : {}),
+      ...(intent === 'compose_analysis' && args.analysis !== null && typeof args.analysis === 'object' && !Array.isArray(args.analysis)
+        ? { analysis: args.analysis as Record<string, unknown> }
         : {}),
     };
   }

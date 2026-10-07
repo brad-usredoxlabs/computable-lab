@@ -2259,7 +2259,10 @@ export const apiClient = {
    * existing x-user-id header plumbing (request()); the drafts routes resolve it.
    */
   async compileWorkstateDraft(req: {
-    adapter: 'workstate'
+    /** Registered draft adapters (config/drafting/adapters.yaml). PB-CH-5
+     * widens this to the registered set — 'analysis' is the second compiled
+     * composition target on the SAME seam; the endpoint is adapter-blind. */
+    adapter: 'workstate' | 'analysis'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number

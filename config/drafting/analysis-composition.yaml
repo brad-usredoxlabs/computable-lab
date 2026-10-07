@@ -1,0 +1,27 @@
+# PB-CH-5 — the analysis draft adapter's own policy DATA. Loaded per call
+# (the workstate-tab-kinds.yaml / adapters.yaml precedent — presence-checked,
+# never process-cached). Code INTERPRETS this file; zero kind nouns live in
+# TypeScript (repo rule #1).
+#
+# revisionKinds — kinds a `target.revision` may resolve to.
+# runKinds      — kinds a `target.run` may resolve to (open an existing run).
+# inputKinds    — the shapes a staged run's `inputs` accepts (the runner
+#                 accepts exactly these two — analysisRunner.ts:102,147).
+# referenceKinds— the spine tier-1 kind set for term resolution
+#                 (revisionKinds ∪ runKinds ∪ inputKinds).
+# idPolicy      — staged-create id minting prefixes, mirroring
+#                 AnalysisService.nextId (analysisService.ts:31-46). The minted
+#                 id is a deterministic function of a canonical-store scan
+#                 (max + 1, zero-padded) — never Date.now()/random, so the
+#                 accept-side recompile reproduces reviewHash exactly.
+# landing       — which resolved records get landing tabs (the focus target's
+#                 tab is the active one; ids are server-derived).
+revisionKinds: [analysis-revision]
+runKinds: [analysis-run]
+inputKinds: [data-reference, analysis-output-artifact]
+referenceKinds: [analysis-revision, analysis-run, data-reference, analysis-output-artifact]
+idPolicy:
+  analysis-run: ANR-
+landing:
+  revisionTab: true
+  runTab: true

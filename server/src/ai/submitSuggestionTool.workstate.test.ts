@@ -4,7 +4,7 @@
  * to this item).
  *
  * Pins (spec §4 + matrix row "server emission"):
- *  - the intent menu is exactly the declared six-intent set (the deliberate
+ *  - the intent menu is exactly the declared seven-intent set (the deliberate
  *    five→SIX pin delta — golden-test discipline, diff called out in the report);
  *  - the parser retains the `workstate` envelope VERBATIM (identity, not a copy):
  *    the model's own answer rides to the emission path untouched;
@@ -20,16 +20,16 @@ import {
 } from './submitSuggestionTool.js';
 
 describe('agent_intent — compose_workstate intent (PB-CH-4)', () => {
-  it('exposes a SIX-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate)', () => {
+  it('exposes a SEVEN-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate | compose_analysis)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters as {
       required?: string[];
       properties: Record<string, { type?: string; enum?: string[] }>;
     };
     expect(params.required).toEqual(['intent']);
     expect(params.properties.intent?.type).toBe('string');
-    // PB-CH-4 deliberately widened the menu: compose_workstate is the sixth
-    // intent. It carries the model's workstate INTENT (terms only); the drafts
-    // compile endpoint — not this tool — resolves and gates it.
+    // PB-CH-4 deliberately widened the menu to six; PB-CH-5 deliberately widens
+    // it to seven: compose_analysis carries the model's analysis INTENT (terms
+    // only); the drafts compile endpoint — not this tool — resolves and gates it.
     expect(params.properties.intent?.enum).toEqual([
       'event_graph',
       'deck_layout',
@@ -37,6 +37,7 @@ describe('agent_intent — compose_workstate intent (PB-CH-4)', () => {
       'protocol_edit',
       'workspace_action',
       'compose_workstate',
+      'compose_analysis',
     ]);
   });
 

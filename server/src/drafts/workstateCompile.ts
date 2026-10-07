@@ -155,8 +155,13 @@ export function loadWorkstateTabKindMapping(): Record<string, KindTabMapping> {
  * draft history, never workspace records, and are excluded from resolution.
  * Targeted `get` still goes through the staging proxy, so the records a
  * proposal actually binds to are pinned in `reads` and re-verified at accept.
+ *
+ * PB-CH-5 EXPORT-ONLY lift (the single sanctioned change to this file,
+ * justified in the PB-CH-5 report): analysisCompile.ts reuses this view
+ * EXACTLY rather than re-implementing a second canonical-store reader. No
+ * behavior changed; only the `export` keyword was added.
  */
-function canonicalReadStore(ctx: AppContext): RecordStore {
+export function canonicalReadStore(ctx: AppContext): RecordStore {
   const backing = ctx.store;
   const baseDir = 'records'; // RecordStoreConfig default (RecordStoreImpl.ts)
   let scan: Promise<RecordEnvelope[]> | null = null;

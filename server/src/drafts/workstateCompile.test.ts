@@ -54,6 +54,12 @@ const envelopes: Record<string, RecordEnvelope> = {
   'PRT-TEST1': { recordId: 'PRT-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml', payload: { kind: 'protocol', recordId: 'PRT-TEST1', title: 'ZymoBIOMICS extraction protocol', steps: [{ stepId: 'lysis', label: 'Lysis', ordinal: 1, kind: 'other' }] } },
   'STU-TEST1': { recordId: 'STU-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml', payload: { kind: 'study', recordId: 'STU-TEST1', title: 'Microbiome study', shortSlug: 'microbiome-study' } },
   'VPDF-TEST1': { recordId: 'VPDF-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml', payload: { kind: 'vendor-pdf', recordId: 'VPDF-TEST1', title: 'ZymoBIOMICS kit manual' } },
+  // PB-CH-5 genericity proof fixtures: analysis records seeded into the SAME
+  // stub store. NOTHING in this file's compile path is analysis-aware — the
+  // plain compose-workstate compile must resolve these through the two new
+  // workstate-tab-kinds.yaml DATA entries alone.
+  'ANREV-TEST1': { recordId: 'ANREV-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-revision.schema.yaml', payload: { kind: 'analysis-revision', id: 'ANREV-TEST1', title: 'ROS mitochondrial flux analysis', entryScript: 'def run(ctx): ...', sdkVersion: '1.0' } },
+  'ANR-TEST1': { recordId: 'ANR-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-run.schema.yaml', payload: { kind: 'analysis-run', id: 'ANR-TEST1', title: 'Seeded analysis run', revisionRef: { kind: 'record', type: 'analysis-revision', id: 'ANREV-TEST1' }, status: 'succeeded' } },
   // A real record kind with NO entry in config/drafting/workstate-tab-kinds.yaml.
   'BUD-TEST1': { recordId: 'BUD-TEST1', schemaId: 'https://computable-lab.com/schema/computable-lab/budget.schema.yaml', payload: { kind: 'budget', recordId: 'BUD-TEST1', title: 'Q4 reagent budget' } },
 };
@@ -80,6 +86,8 @@ const spine = fakeSpine({
   'Microbiome study': [{ curie: 'local:STU-TEST1', label: 'Microbiome study', tier: 1, source: 'local-record', namespace: 'local', score: 1.15 }],
   'ZymoBIOMICS kit manual': [{ curie: 'local:VPDF-TEST1', label: 'ZymoBIOMICS kit manual', tier: 1, source: 'local-record', namespace: 'local', score: 1.15 }],
   'Q4 reagent budget': [{ curie: 'local:BUD-TEST1', label: 'Q4 reagent budget', tier: 1, source: 'local-record', namespace: 'local', score: 1.15 }],
+  'ROS mitochondrial flux analysis': [{ curie: 'local:ANREV-TEST1', label: 'ROS mitochondrial flux analysis', tier: 1, source: 'local-record', namespace: 'local', score: 1.15 }],
+  'Seeded analysis run': [{ curie: 'local:ANR-TEST1', label: 'Seeded analysis run', tier: 1, source: 'local-record', namespace: 'local', score: 1.15 }],
   cell: [{ curie: 'CL:0000182', label: 'cell', tier: 0, source: 'oak', namespace: 'CL', score: 1.2 }],
 });
 
@@ -234,6 +242,26 @@ describe('workstate proposal compilation (pure module)', () => {
     expect(compiled.result.sessionDocument.tabs[0]).toMatchObject({ kind: 'project', studyId: 'STU-TEST1' });
     expect(compiled.result.sessionDocument.activeTabId).toBe('project:STU-TEST1');
     expect(validate(compiled.result.sessionDocument, LAB_SESSION_SCHEMA_ID).valid).toBe(true);
+  });
+
+  it('genericity (PB-CH-5): a plain compose-workstate resolves a seeded analysis-revision with ZERO analysis-aware code', async () => {
+    // The ONLY change that makes this pass is the two new DATA entries in
+    // config/drafting/workstate-tab-kinds.yaml (analysis-revision, analysis-run
+    // → record-edit). This module, the spine composition, and this harness
+    // contain no analysis-specific branch. If this case needed special-casing
+    // in workstateCompile.ts, the design would be wrong (spec stop-boundary).
+    const compiled = await compileWorkstateIntent(intent([{ surface: 'knowledge', target: { term: 'ROS mitochondrial flux analysis' } }], { index: 0 }), deps);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    expect(compiled.result.sessionDocument.tabs[0]).toMatchObject({ kind: 'record-edit', recordId: 'ANREV-TEST1' });
+    expect(compiled.result.sessionDocument.activeTabId).toBe('record:ANREV-TEST1');
+    expect(validate(compiled.result.sessionDocument, LAB_SESSION_SCHEMA_ID).valid).toBe(true);
+    // And the analysis-run kind maps through the same DATA entry.
+    const runCompiled = await compileWorkstateIntent(intent([{ surface: 'knowledge', target: { recordId: 'ANR-TEST1' } }], { index: 0 }), deps);
+    expect(runCompiled.ok).toBe(true);
+    if (!runCompiled.ok) return;
+    expect(runCompiled.result.sessionDocument.tabs[0]).toMatchObject({ kind: 'record-edit', recordId: 'ANR-TEST1' });
+    expect(runCompiled.result.sessionDocument.activeTabId).toBe('record:ANR-TEST1');
   });
 
   it('kernel assumption: an empty plan compiles with zero error diagnostics and all-allowed policy decisions', () => {
