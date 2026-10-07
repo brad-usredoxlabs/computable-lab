@@ -599,6 +599,50 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   },
 };
 
+/**
+ * PB-CH-4b — render the forced draft tool with the REGISTERED surface ids in
+ * its two surface descriptions.
+ *
+ * WHY: gate run-5 showed the model cannot know the legal surface ids — the
+ * static descriptions name a hardcoded example pair, and the model guessed
+ * `surface: "protocol"` and was (correctly) rejected by the compiler's
+ * UNSUPPORTED_SURFACE. The menu was blind; the vocabulary is DATA
+ * (schema/registry/surfaces/surfaces.yaml via deps.surfaces), so it arrives
+ * here as data (repo rule #1).
+ *
+ * WHAT THIS IS NOT: no enum, no validation, no membership branch. The single
+ * membership authority stays `workstateCompile.ts` UNSUPPORTED_SURFACE (repo
+ * rule #3) — an enum here would duplicate policy in a second place and break
+ * dynamic registry edits. This is pure rendering of declared ids into the two
+ * description strings.
+ *
+ * Fallback: with no ids the static const is returned BY REFERENCE —
+ * byte-identical, so every existing pin on AGENT_INTENT_TOOL_DEF keeps
+ * passing. The static const is never mutated (the def is cloned).
+ */
+export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDefinition {
+  if (surfaceIds === undefined || surfaceIds.length === 0) {
+    return AGENT_INTENT_TOOL_DEF;
+  }
+  const def = structuredClone(AGENT_INTENT_TOOL_DEF);
+  const params = def.function.parameters as {
+    properties: {
+      action?: { properties?: { surface?: { description?: string } } };
+      workstate?: { properties?: { tabs?: { items?: { properties?: { surface?: { description?: string } } } } } };
+    };
+  };
+  const registeredIds = surfaceIds.join(', ');
+  const actionSurface = params.properties.action?.properties?.surface;
+  if (actionSurface) {
+    actionSurface.description = `open-surface: a registered surface id — registered ids: ${registeredIds}. Nothing else is valid.`;
+  }
+  const tabSurface = params.properties.workstate?.properties?.tabs?.items?.properties?.surface;
+  if (tabSurface) {
+    tabSurface.description = `A registered surface id — registered ids: ${registeredIds}. Nothing else is valid.`;
+  }
+  return def;
+}
+
 export interface AgentIntentArgs {
   intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'unknown';
   platformId?: string;
