@@ -2250,6 +2250,50 @@ export const apiClient = {
     })
   },
 
+  /**
+   * PB-CH-4 — compile a tier-2 workstate proposal (THE trust boundary for the
+   * chat card). The client relays the model's INTENT here; the server's Ajv +
+   * spine + registry resolution decides `canAccept`. A blocked compile returns
+   * canAccept:false + diagnostics — never an actionable card. With draftId +
+   * revision it bumps the pending draft (the revise path). The actor rides the
+   * existing x-user-id header plumbing (request()); the drafts routes resolve it.
+   */
+  async compileWorkstateDraft(req: {
+    adapter: 'workstate'
+    intent: Record<string, unknown>
+    draftId?: string
+    revision?: number
+  }): Promise<{
+    draftId: string
+    revision: number
+    reviewHash: string
+    canAccept: boolean
+    diagnostics: Array<{ code?: string; severity?: string; outcome?: string; message: string }>
+    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }
+  }> {
+    return request(`/drafts/compile`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    })
+  },
+
+  /**
+   * PB-CH-4 — accept a compiled draft. Sends ONLY {draftId, revision,
+   * reviewHash}: the server returns the STORED compiled result (the flat
+   * {sessionDocument, summary, resolvedTerms} body) — the client can never
+   * resubmit a document. NO AI call is involved at accept time, ever.
+   */
+  async acceptWorkstateDraft(body: {
+    draftId: string
+    revision: number
+    reviewHash: string
+  }): Promise<{ sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }> {
+    return request(`/drafts/accept`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   /** GET /api/storage/devices — external storage devices (S3/NAS/USB). */
   async listStorageDevices(): Promise<{
     devices: Array<{ id: string; label: string; kind: string; default: boolean }>;

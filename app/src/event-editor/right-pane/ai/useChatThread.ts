@@ -18,7 +18,7 @@ import {
   initialChatState,
   type ChatMessage,
 } from './chatReducer'
-import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest } from './assistStream'
+import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest, type AgentActionEnvelope } from './assistStream'
 import type { AiClarificationAnswer } from '../../../types/ai'
 
 interface SendOptions {
@@ -37,6 +37,12 @@ interface SendOptions {
     highlightedSection: string
     selectedText: string
   }
+  /**
+   * PB-CH-4 — the structured working focus (ChatContextHeader's focused step).
+   * Rides the request TOP-LEVEL so the server renders the WORKING FOCUS block;
+   * never folded into `context` (per-turn churn would break the KV warm prefix).
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
 }
 
 export interface UseChatThreadResult {
@@ -56,17 +62,58 @@ function makeMessageId(role: 'user' | 'assistant'): string {
   return `msg-${nextMessageId}-${role}`
 }
 
+/**
+ * PB-CH-4 — fallback trace evidence for a tier-1 agent action when the mount
+ * reports nothing. Derived from the compiled payload only (never from raw
+ * model prose) and always states that NOTHING was written — tier-1 actions
+ * move the workspace, they do not mutate records.
+ */
+function describeAgentAction(action: AgentActionEnvelope): string {
+  const target = action.target
+  const label =
+    target?.label ??
+    (target?.kind === 'protocol-step' ? target.stepId : undefined) ??
+    (target && target.kind !== 'protocol-step' ? target.id : undefined) ??
+    'the target'
+  if (action.action === 'open-surface') {
+    return `Opened ${action.surface ?? label} — nothing was written.`
+  }
+  return `Focused on ${label} — nothing was written.`
+}
+
 export interface UseChatThreadOptions {
   /** Stable surface id derived from the active viewer kind. */
   surface: string
   /** Whatever the agent should know about the active viewer/study. */
   context: Record<string, unknown>
   /**
+   * PB-CH-4 — the structured working focus (the step ChatContextHeader shows).
+   * Rides the request TOP-LEVEL (like protocolStepContext) so the server
+   * renders the WORKING FOCUS block; never folded into `context` — focus
+   * changes per turn and would churn the KV warm prefix.
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
+  /**
    * Called when a stream finishes with a draft-tool result, before the turn
    * commits to chat history. Deck surfaces use this to promote the draft
    * into the event editor's ghost preview.
    */
   onDraftResult?: (result: AssistDraftResult, prompt: string) => void
+  /**
+   * PB-CH-4 — tier-1 mount: fires when the server's workspace-action compiler
+   * emits a compiled `agent_action` (Ajv + spine + registry resolution already
+   * happened server-side). The mount (AiTabPanel via useWorkstateExecutor)
+   * applies it; returned text (if any) becomes the trace evidence. A raw model
+   * proposal NEVER rides this event — assistStream only relays compiled frames.
+   */
+  onAgentAction?: (action: AgentActionEnvelope) => string | void
+  /**
+   * PB-CH-4 — tier-2 mount: fires when the model proposes a workstate. Forwards
+   * the INTENT verbatim; the mount relays it to POST /api/drafts/compile. The
+   * hook itself touches NOTHING (no trace, no store) — the card owns the
+   * compile→review→accept flow.
+   */
+  onWorkstateProposal?: (workstate: Record<string, unknown>) => void
   /**
    * Test seam — override the SSE runner. Real callers leave this unset
    * to use the default fetch-based client.
@@ -78,6 +125,9 @@ export function useChatThread({
   surface,
   context,
   onDraftResult,
+  onAgentAction,
+  onWorkstateProposal,
+  workingFocus,
   runStream,
 }: UseChatThreadOptions): UseChatThreadResult {
   const [state, dispatch] = useReducer(chatReducer, initialChatState)
@@ -130,6 +180,9 @@ export function useChatThread({
         ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
         ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
         ...(options?.protocolStepContext ? { protocolStepContext: options.protocolStepContext } : {}),
+        // PB-CH-4: focus rides the request top-level; ABSENT when nothing is
+        // focused (exactOptionalPropertyTypes — never `workingFocus: undefined`).
+        ...(workingFocus ? { workingFocus } : {}),
       }
 
       const stream = runStream ?? runAssistStream
@@ -191,6 +244,30 @@ export function useChatThread({
               case 'draft':
                 dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'draft', evidence: `${event.events.length} event(s) drafted` } })
                 return
+              case 'agent_action': {
+                // PB-CH-4 tier-1: the frame is the OUTPUT of the server's
+                // workspace-action compiler (Ajv + spine + registry already
+                // resolved). Hand it to the mount; whatever the mount reports
+                // becomes the trace evidence. A throwing mount must never
+                // break the chat turn (same wrapper as onDraftResult).
+                let mountText: string | void
+                try {
+                  mountText = onAgentAction?.(event.action)
+                } catch {
+                  mountText = 'Agent action failed to apply — nothing was written.'
+                }
+                dispatch({
+                  type: 'stream-trace',
+                  entry: { seq: traceSeq++, kind: 'action', evidence: mountText || describeAgentAction(event.action) },
+                })
+                return
+              }
+              case 'workstate_proposal':
+                // PB-CH-4 tier-2: forward the model's INTENT verbatim. The hook
+                // touches NOTHING else — no trace, no store, no compile. The
+                // card mount owns the compile→review→accept flow.
+                onWorkstateProposal?.(event.workstate)
+                return
               default: {
                 const _exhaustive: never = event
                 return _exhaustive
@@ -206,7 +283,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, onDraftResult, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, runStream],
   )
 
   const stop = useCallback(() => {

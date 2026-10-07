@@ -25,6 +25,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { OpenTabsProvider } from '../../../shared/shell/OpenTabsContext'
 import { WorkspaceProvider } from '../../workspace/WorkspaceContext'
 import { defaultWorkspaceState } from '../../workspace/types'
 
@@ -129,18 +130,22 @@ function renderPanel(
   const base = defaultWorkspaceState('STU-000001')
   return render(
     <MemoryRouter>
-      <WorkspaceProvider
-        studyId="STU-000001"
-        saveDebounceMs={0}
-        loadFn={async () => ({
-          state: { ...base, ...(initialState as Record<string, unknown>) } as ReturnType<
-            typeof defaultWorkspaceState
-          >,
-        })}
-        saveFn={async (_id, s) => ({ state: s })}
-      >
-        <AiTabPanel />
-      </WorkspaceProvider>
+      {/* PB-CH-4: the panel consumes useWorkstateExecutor (needs
+          OpenTabsProvider — production mounts it app-wide). */}
+      <OpenTabsProvider>
+        <WorkspaceProvider
+          studyId="STU-000001"
+          saveDebounceMs={0}
+          loadFn={async () => ({
+            state: { ...base, ...(initialState as Record<string, unknown>) } as ReturnType<
+              typeof defaultWorkspaceState
+            >,
+          })}
+          saveFn={async (_id, s) => ({ state: s })}
+        >
+          <AiTabPanel />
+        </WorkspaceProvider>
+      </OpenTabsProvider>
     </MemoryRouter>,
   )
 }
@@ -273,16 +278,18 @@ describe('R-Defect-2 — Apply can never strand the pane in committing', () => {
     }
     rerender(
       <MemoryRouter>
-        <WorkspaceProvider
-          studyId="STU-000001"
-          saveDebounceMs={0}
-          loadFn={async () => ({
-            state: defaultWorkspaceState('STU-000001'),
-          })}
-          saveFn={async (_id, s) => ({ state: s })}
-        >
-          <AiTabPanel />
-        </WorkspaceProvider>
+        <OpenTabsProvider>
+          <WorkspaceProvider
+            studyId="STU-000001"
+            saveDebounceMs={0}
+            loadFn={async () => ({
+              state: defaultWorkspaceState('STU-000001'),
+            })}
+            saveFn={async (_id, s) => ({ state: s })}
+          >
+            <AiTabPanel />
+          </WorkspaceProvider>
+        </OpenTabsProvider>
       </MemoryRouter>,
     )
     await screen.findByTestId('changes-panel')

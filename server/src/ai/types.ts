@@ -446,6 +446,20 @@ export interface EditorContext {
     selectedText?: string;
   };
   /**
+   * PB-CH-4 — the structured WORKING FOCUS: the step the ChatContextHeader
+   * shows (ProtocolSelectionContext.focusedStep, display-only until now).
+   * Rides the request TOP-LEVEL (like protocolStepContext, which it must NOT
+   * be merged into — protocolStepContext ghosts the deck; workingFocus names
+   * what the user means by "the step I'm looking at"). Rendered as the
+   * WORKING FOCUS prompt block ONLY when present.
+   */
+  workingFocus?: {
+    protocolId: string;
+    stepId: string;
+    label: string;
+    ordinal?: number;
+  };
+  /**
    * The protocol ATTACHED to this editor chat (resolved app-side). Present →
    * the prompt carries a compact ground-truth context block (identity + steps
    * + declared roles) and the protocol_edit instruction section; absent →
@@ -862,6 +876,15 @@ export type AgentEvent =
   | { type: 'error'; message: string }
   | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> }
   | { type: 'agent_action'; action: AgentActionPayload }
+  /**
+   * PB-CH-4 — the model's workstate INTENT, retained verbatim (compose_workstate).
+   * This is NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — Ajv against the registered
+   * workstate-intent $id + canAccept), NOT this stream, is the trust boundary.
+   * The event stays thin because the draft service — not this event — is the
+   * compilation trust boundary (OQ1 ruling, spec §4).
+   */
+  | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
   | AgentProtocolExtractedEvent;
 
 // ============================================================================

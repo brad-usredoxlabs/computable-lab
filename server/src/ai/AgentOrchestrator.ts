@@ -2147,6 +2147,82 @@ export function createAgentOrchestrator(
               console.log(`[agent ${tid}] done workspace_action compile-rejected ${diagnostics.map((d) => d.code).join(',')} elapsedMs=${elapsed}`);
               return wsResult;
             }
+
+            // intent=compose_workstate (PB-CH-4): propose the workspace TABS to
+            // open. THE THIN-EVENT DESIGN (OQ1 ruling): this branch emits the
+            // model's workstate INTENT VERBATIM as ONE `workstate_proposal`
+            // event and runs NOTHING else — no compile, no store write, no
+            // session push, no shadow route. The drafts compile endpoint
+            // (POST /api/drafts/compile — Ajv against the registered
+            // workstate-intent $id + canAccept), NOT this stream, is the trust
+            // boundary: a raw term crossing the wire here is structurally
+            // non-actionable (the client renders a compiling slot, never an
+            // Accept, until the compile response says canAccept:true). An
+            // invalid envelope is NOT rejected here — the compile endpoint owns
+            // the diagnostic (canAccept:false + path-named diagnostics).
+            if (agentIntent.intent === 'compose_workstate') {
+              const workstate = agentIntent.workstate;
+              const elapsed = Date.now() - t0;
+              if (!workstate) {
+                // The existing error channel (create_record's missing-`records`
+                // precedent): success:false with a corrective `error` string,
+                // and NO workstate_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const envelopeError = 'compose_workstate requires a `workstate` envelope: {operation:"compose-workstate", tabs:[{surface, target:{term|recordId}}], activeTab?} — VERBS AND TERMS ONLY; the server compiles it into a review card and writes nothing.';
+                const emptyResult: AgentResult = {
+                  success: false,
+                  error: envelopeError,
+                };
+                const emptySummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: envelopeError,
+                };
+                logAgentSummary(tid, emptySummary);
+                console.log(`[agent ${tid}] done compose_workstate no-envelope elapsedMs=${elapsed}`);
+                return emptyResult;
+              }
+              onEvent?.({ type: 'workstate_proposal', workstate });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const wsProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed a workspace — review the card to accept; nothing was written.'],
+              };
+              const wsProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, wsProposalSummary);
+              console.log(`[agent ${tid}] done compose_workstate emitted elapsedMs=${elapsed}`);
+              return wsProposalResult;
+            }
           }
 
           // Instruments the USER named this turn (`[[equipment:EQP-…]]`) outrank

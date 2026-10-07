@@ -59,6 +59,16 @@ export interface AssistStreamRequest {
     highlightedSection: string
     selectedText: string
   }
+  /**
+   * PB-CH-4 — structured working focus: the step the ChatContextHeader shows
+   * (`ProtocolSelectionContext.focusedStep`, display-only until now). Rides the
+   * request TOP-LEVEL (like protocolStepContext) so the server renders it as
+   * the WORKING FOCUS prompt block and the model can resolve "the step I'm
+   * looking at". NOT folded into `context`: focus changes per turn and would
+   * churn the KV warm prefix (attachedProtocol's stability precedent does not
+   * apply). Mirrors `server/src/api/handlers/AIHandlers.ts#AssistBody.workingFocus`.
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
 }
 
 /**
@@ -153,6 +163,28 @@ export interface DraftEventProposal {
   [key: string]: unknown
 }
 
+/**
+ * PB-CH-4 — transport mirror of `schema/workflow/agent-action.schema.yaml`
+ * after PB-CH-1's server-side compilation (THE SCHEMA IS THE AUTHORITY; this
+ * is typing convenience for the stream, mirroring `server/src/ai/types.ts#
+ * AgentActionPayload` — no import from server/**). A frame of this shape exists
+ * ONLY as the output of the workspace-action compiler: a raw model proposal
+ * never rides it. exactOptionalPropertyTypes discipline: optional fields are
+ * OMITTED, never `undefined`.
+ */
+export type AgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AgentActionTargetEnvelope[]
+}
+
 export type AssistStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; delta: string }
@@ -166,6 +198,16 @@ export type AssistStreamEvent =
   | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
   | { type: 'pipeline_diagnostics'; outcome: string; diagnostics: PipelineDiagnosticItem[] }
   | { type: 'draft'; events: DraftEventProposal[] }
+  // PB-CH-1's emission, mounted by PB-CH-4: the server-compiled tier-1 action.
+  // Before this item the app union had no member for it and dispatchFrame
+  // silently dropped it (grep agent_action app/src = 0).
+  | { type: 'agent_action'; action: AgentActionEnvelope }
+  // PB-CH-4 tier-2: the model's workstate INTENT — verbs and terms only. This
+  // is NOT a compiled draft and is NOT actionable alone: POST /api/drafts/compile
+  // (Ajv + canAccept) is the trust boundary, not this stream. Field name
+  // `workstate` mirrors the server frame (AgentOrchestrator emits
+  // {type:'workstate_proposal', workstate}).
+  | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -299,7 +341,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[] }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown> }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -332,6 +374,23 @@ function dispatchFrame(
       return
     case 'draft':
       onEvent({ type: 'draft', events: Array.isArray(parsed.events) ? parsed.events : [] })
+      return
+    case 'agent_action':
+      // PB-CH-1's compiled action (the server only emits this after Ajv +
+      // spine + registry resolution). Relay the envelope as-is — the mount
+      // hands it to the executor; a malformed frame carries no action and is
+      // dropped rather than guessed into one.
+      if (parsed.action && typeof parsed.action === 'object' && (parsed.action.action === 'focus' || parsed.action.action === 'open-surface')) {
+        onEvent({ type: 'agent_action', action: parsed.action })
+      }
+      return
+    case 'workstate_proposal':
+      // PB-CH-4 tier-2: relay the model's INTENT verbatim. NOT actionable
+      // alone — the mount relays it to POST /api/drafts/compile, which is the
+      // Ajv/canAccept trust boundary.
+      if (parsed.workstate && typeof parsed.workstate === 'object' && !Array.isArray(parsed.workstate)) {
+        onEvent({ type: 'workstate_proposal', workstate: parsed.workstate })
+      }
       return
     case 'protocol_extracted':
       if (parsed.candidate) {

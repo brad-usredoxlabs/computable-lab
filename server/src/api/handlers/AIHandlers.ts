@@ -57,6 +57,18 @@ export interface AssistBody {
     highlightedSection: string;
     selectedText?: string;
   };
+  /**
+   * PB-CH-4 — the structured working focus (the step ChatContextHeader shows).
+   * Rides the request TOP-LEVEL (like protocolStepContext) and renders as the
+   * WORKING FOCUS prompt block only when present. NOT folded into `context`
+   * (per-turn churn would break the KV warm prefix).
+   */
+  workingFocus?: {
+    protocolId: string;
+    stepId: string;
+    label: string;
+    ordinal?: number;
+  };
 }
 
 /**
@@ -298,6 +310,7 @@ export function createAIHandlers(
       let enableThinking: boolean | undefined;
       let clarificationAnswers: AgentClarificationAnswer[] | undefined;
       let protocolStepContext: NonNullable<AssistBody['protocolStepContext']> | undefined;
+      let workingFocus: NonNullable<AssistBody['workingFocus']> | undefined;
       let fileAttachments: FileAttachment[] = [];
       let uploadedFiles: UploadedFile[] = [];
 
@@ -331,6 +344,7 @@ export function createAIHandlers(
         enableThinking = fields['enableThinking'] === 'true' ? true : undefined;
         clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
         protocolStepContext = fields['protocolStepContext'] ? JSON.parse(fields['protocolStepContext']) as NonNullable<AssistBody['protocolStepContext']> : undefined;
+        workingFocus = fields['workingFocus'] ? JSON.parse(fields['workingFocus']) as NonNullable<AssistBody['workingFocus']> : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
         fileAttachments = uploadedFiles.map((f) => ({
@@ -348,6 +362,7 @@ export function createAIHandlers(
         enableThinking = body.enableThinking;
         clarificationAnswers = body.clarificationAnswers;
         protocolStepContext = body.protocolStepContext;
+        workingFocus = body.workingFocus;
       }
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -412,6 +427,10 @@ export function createAIHandlers(
         availableVerbs: [],
         ...context,
         ...(protocolStepContext ? { protocolStepContext } : {}),
+        // PB-CH-4: focus rides the top-level and renders as the WORKING FOCUS
+        // block; conditional spread — never `{workingFocus: undefined}`
+        // (exactOptionalPropertyTypes, server tsconfig:13).
+        ...(workingFocus ? { workingFocus } : {}),
       };
 
       // NOTE: File attachments are passed directly to orchestrator.run(),

@@ -18,6 +18,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { OpenTabsProvider } from '../../../shared/shell/OpenTabsContext'
 import { WorkspaceProvider } from '../../workspace/WorkspaceContext'
 import { defaultWorkspaceState } from '../../workspace/types'
 
@@ -94,20 +95,24 @@ function renderPanel() {
   const base = defaultWorkspaceState('STU-000001')
   return render(
     <MemoryRouter>
-      <WorkspaceProvider
-        studyId="STU-000001"
-        saveDebounceMs={0}
-        loadFn={async () => ({
-          state: {
-            ...base,
-            tabs: [{ id: 't1', kind: 'deck' as const, eventGraphId: 'EVG-1', title: 'Deck' }],
-            activeTabId: 't1',
-          } as ReturnType<typeof defaultWorkspaceState>,
-        })}
-        saveFn={async (_id, s) => ({ state: s })}
-      >
-        <AiTabPanel />
-      </WorkspaceProvider>
+      {/* PB-CH-4: the panel consumes useWorkstateExecutor (needs
+          OpenTabsProvider — production mounts it app-wide). */}
+      <OpenTabsProvider>
+        <WorkspaceProvider
+          studyId="STU-000001"
+          saveDebounceMs={0}
+          loadFn={async () => ({
+            state: {
+              ...base,
+              tabs: [{ id: 't1', kind: 'deck' as const, eventGraphId: 'EVG-1', title: 'Deck' }],
+              activeTabId: 't1',
+            } as ReturnType<typeof defaultWorkspaceState>,
+          })}
+          saveFn={async (_id, s) => ({ state: s })}
+        >
+          <AiTabPanel />
+        </WorkspaceProvider>
+      </OpenTabsProvider>
     </MemoryRouter>,
   )
 }
@@ -218,14 +223,16 @@ describe('AiTabPanel protocol_edit wiring', () => {
     mocks.protocolIdentity.current = { recordId: 'PROT-OTHER', title: 'Other assay', sha: 'sha-2' }
     rerender(
       <MemoryRouter>
-        <WorkspaceProvider
-          studyId="STU-000001"
-          saveDebounceMs={0}
-          loadFn={async () => ({ state: defaultWorkspaceState('STU-000001') })}
-          saveFn={async (_id, s) => ({ state: s })}
-        >
-          <AiTabPanel />
-        </WorkspaceProvider>
+        <OpenTabsProvider>
+          <WorkspaceProvider
+            studyId="STU-000001"
+            saveDebounceMs={0}
+            loadFn={async () => ({ state: defaultWorkspaceState('STU-000001') })}
+            saveFn={async (_id, s) => ({ state: s })}
+          >
+            <AiTabPanel />
+          </WorkspaceProvider>
+        </OpenTabsProvider>
       </MemoryRouter>,
     )
     await waitFor(() => {
