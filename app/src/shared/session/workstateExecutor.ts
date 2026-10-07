@@ -114,9 +114,11 @@ function noop(...diagnostics: ExecutorDiagnostic[]): ExecutorOutcome {
  * tabForSurface + openContent directly instead of calling openSurface() and
  * squinting at a bare null.
  *
- * Conservative focus policy (orchestrator OQ2 resolution): a bare ref focus
- * navigates ONLY when the action itself carries a routable surface; otherwise
- * it is activate-existing-or-diagnostic. No deep-linking is pre-implemented.
+ * Conservative focus policy (orchestrator OQ2 resolution): the `focus` variant
+ * of Tier1ActionLike carries NO surface field (spec §1's verbatim type), so a
+ * focus action can NEVER deep-link — it is activate-existing-or-diagnostic
+ * only. A bare focus with no existing slot ends in the UNROUTABLE_SURFACE
+ * diagnostic (see applyTier1Action); no deep-linking is pre-implemented.
  */
 export function planTier1Action(action: Tier1ActionLike, registry: SurfaceSpec[] | null): Tier1Plan {
   if (action.action === 'focus') {
@@ -228,13 +230,26 @@ export function applyTier1Action(plan: Tier1Plan, deps: Tier1ApplyDeps): Executo
  * never on document bytes: a legitimate later revision carries a new reviewHash
  * (the drafts service content-hashes the projection) and is therefore NEVER
  * blocked, while a repeat delivery of the same accepted revision is.
- * Records the key on 'fresh'.
+ *
+ * Record-on-success discipline (adversarial review D1): the key is SPLIT into
+ * a non-consuming `peekAcceptGuard` (check only) and `recordAcceptedApply`
+ * (called by the executor ONLY after validate + apply actually succeeded). A
+ * delivery that failed validation must NOT consume the identity — otherwise a
+ * corrected re-delivery of the SAME accept identity would be silently dropped
+ * as 'duplicate-ignored' for the mount lifetime.
  */
-export function acceptGuard(identity: AcceptedWorkstateIdentity, seenKeys: Set<AcceptGuardKey>): 'fresh' | 'duplicate' {
-  const key = `${identity.draftId}:${identity.revision}:${identity.reviewHash}`
-  if (seenKeys.has(key)) return 'duplicate'
-  seenKeys.add(key)
-  return 'fresh'
+export function peekAcceptGuard(identity: AcceptedWorkstateIdentity, seenKeys: Set<AcceptGuardKey>): 'fresh' | 'duplicate' {
+  return seenKeys.has(acceptGuardKey(identity)) ? 'duplicate' : 'fresh'
+}
+
+/** Record the identity key after a SUCCESSFUL apply. Never call for a rejected
+ *  (unattested) or malformed delivery — see peekAcceptGuard. */
+export function recordAcceptedApply(identity: AcceptedWorkstateIdentity, seenKeys: Set<AcceptGuardKey>): void {
+  seenKeys.add(acceptGuardKey(identity))
+}
+
+function acceptGuardKey(identity: AcceptedWorkstateIdentity): AcceptGuardKey {
+  return `${identity.draftId}:${identity.revision}:${identity.reviewHash}`
 }
 
 /**

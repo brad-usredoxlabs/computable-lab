@@ -19,9 +19,11 @@ import { openTabsReducer } from '../shell/OpenTabsContext'
 import { sessionToYaml } from './sessionYaml'
 import type { WorkspaceTab } from '../../event-editor/workspace/types'
 import {
-  acceptGuard,
+  peekAcceptGuard,
+  recordAcceptedApply,
   applyTier1Action,
   planTier1Action,
+  validateAcceptedWorkstate,
   type AcceptGuardKey,
   type AcceptedWorkstateIdentity,
 } from './workstateExecutor'
@@ -390,27 +392,154 @@ describe('applyTier1Action — activate-or-navigate only, never replace/close', 
   })
 })
 
-describe('acceptGuard — dedup on accept identity, never document bytes', () => {
+describe('accept guard — dedup on accept identity, key recorded ONLY on the successful-apply path (D1 fix)', () => {
   const identity: AcceptedWorkstateIdentity = { draftId: 'D-1', revision: 1, reviewHash: 'hash-aaa' }
 
-  it('first delivery is fresh, repeat of the same identity is duplicate', () => {
+  it('peek does NOT consume: peeking fresh repeatedly stays fresh until a record happens', () => {
     const seen = new Set<AcceptGuardKey>()
-    expect(acceptGuard(identity, seen)).toBe('fresh')
-    expect(acceptGuard(identity, seen)).toBe('duplicate')
+    expect(peekAcceptGuard(identity, seen)).toBe('fresh')
+    expect(peekAcceptGuard(identity, seen)).toBe('fresh') // peek alone never records
+    expect(seen.size).toBe(0)
+    recordAcceptedApply(identity, seen)
+    expect(peekAcceptGuard(identity, seen)).toBe('duplicate')
+  })
+
+  it('a failed apply (validation would reject) that records NOTHING leaves the identity fresh — a corrected re-delivery of the SAME identity is NOT duplicate-ignored', () => {
+    const seen = new Set<AcceptGuardKey>()
+    // Delivery 1: identity is fresh, but the body is malformed → the caller
+    // never reaches recordAcceptedApply (the executor only records after a
+    // successful validate+apply).
+    expect(peekAcceptGuard(identity, seen)).toBe('fresh')
+    expect(seen.size).toBe(0) // the failed path consumed nothing
+    // Delivery 2: same identity, corrected body → still fresh, applies.
+    expect(peekAcceptGuard(identity, seen)).toBe('fresh')
+    recordAcceptedApply(identity, seen)
+    // Delivery 3: genuine repeat of the SUCCESSFULLY applied identity → duplicate.
+    expect(peekAcceptGuard(identity, seen)).toBe('duplicate')
   })
 
   it('a later revision (new reviewHash) is NEVER blocked, even with identical tabs', () => {
     const seen = new Set<AcceptGuardKey>()
-    expect(acceptGuard(identity, seen)).toBe('fresh')
-    expect(acceptGuard({ draftId: 'D-1', revision: 2, reviewHash: 'hash-bbb' }, seen)).toBe('fresh')
+    recordAcceptedApply(identity, seen)
+    expect(peekAcceptGuard({ draftId: 'D-1', revision: 2, reviewHash: 'hash-bbb' }, seen)).toBe('fresh')
   })
 
-  it('the key is identity, not JSON: same identity re-delivered is duplicate regardless of body bytes', () => {
+  it('the key is identity, not JSON: same identity recorded on success then re-delivered is duplicate regardless of body bytes', () => {
     const seen = new Set<AcceptGuardKey>()
-    expect(acceptGuard(identity, seen)).toBe('fresh')
+    recordAcceptedApply(identity, seen)
     // Same draftId:revision:reviewHash — a re-delivery of the same accepted
     // revision whose body bytes differ in irrelevant ways — must be duplicate.
-    expect(acceptGuard({ ...identity }, seen)).toBe('duplicate')
+    expect(peekAcceptGuard({ ...identity }, seen)).toBe('duplicate')
+  })
+
+  it('key format stays draftId:revision:reviewHash (never document bytes)', () => {
+    const seen = new Set<AcceptGuardKey>()
+    recordAcceptedApply(identity, seen)
+    expect([...seen]).toEqual(['D-1:1:hash-aaa'])
+  })
+})
+
+describe('validateAcceptedWorkstate — pure-layer coverage of the shared accept-body rules (D2)', () => {
+  const flatBody = (sessionDocument: unknown): Record<string, unknown> => ({
+    sessionDocument,
+    summary: 'open the titration run',
+    resolvedTerms: [],
+  })
+
+  it('accepts the FLAT accept body (no {result:{...}} wrapper — OQ1) and returns the validated doc', () => {
+    const result = validateAcceptedWorkstate(
+      flatBody({
+        version: 1,
+        activeTabId: 'run:RUN-7',
+        tabs: [
+          { kind: 'project', studyId: 'STU-1', title: 'DHVC' },
+          { kind: 'run', runId: 'RUN-7', title: 'Titration' },
+        ],
+      }),
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.doc.version).toBe(1)
+      expect(result.doc.activeTabId).toBe('run:RUN-7')
+      expect(result.doc.tabs.map((t) => t.kind)).toEqual(['project', 'run'])
+    }
+  })
+
+  it('non-object body (null / array / string) yields MALFORMED_ACCEPTED_DOCUMENT', () => {
+    for (const bad of [null, undefined, [1, 2], 'version: 1', 42]) {
+      const result = validateAcceptedWorkstate(bad)
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.diagnostic.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+        expect(result.diagnostic.path).toBe('body')
+      }
+    }
+  })
+
+  it('body without sessionDocument yields MALFORMED_ACCEPTED_DOCUMENT at body.sessionDocument', () => {
+    const result = validateAcceptedWorkstate({ summary: 'no doc here' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostic.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+      expect(result.diagnostic.path).toBe('body.sessionDocument')
+    }
+  })
+
+  it('version !== 1 yields MALFORMED_ACCEPTED_DOCUMENT', () => {
+    const result = validateAcceptedWorkstate(flatBody({ version: 2, tabs: [] }))
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostic.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+      expect(result.diagnostic.path).toBe('body.sessionDocument')
+      expect(result.diagnostic.message).toContain('version')
+    }
+  })
+
+  it('missing tabs array yields MALFORMED_ACCEPTED_DOCUMENT', () => {
+    const result = validateAcceptedWorkstate(flatBody({ version: 1 }))
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostic.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+      expect(result.diagnostic.message).toContain('tabs')
+    }
+  })
+
+  it('tab without a string kind yields MALFORMED_ACCEPTED_DOCUMENT naming the tab index', () => {
+    const result = validateAcceptedWorkstate(flatBody({ version: 1, tabs: [{ title: 'no kind' }] }))
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.diagnostic.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+      expect(result.diagnostic.message).toContain('tab 0')
+    }
+  })
+
+  it('activeTabId null-vs-absent: absent normalizes to null, explicit null stays null, a string is preserved (no invented active tab)', () => {
+    const absent = validateAcceptedWorkstate(flatBody({ version: 1, tabs: [{ kind: 'run', runId: 'RUN-7' }] }))
+    expect(absent.ok).toBe(true)
+    if (absent.ok) {
+      expect(absent.doc.activeTabId).toBe(null)
+      expect('activeTabId' in absent.doc).toBe(true) // normalized to explicit null, not dropped
+    }
+    const explicitNull = validateAcceptedWorkstate(
+      flatBody({ version: 1, activeTabId: null, tabs: [{ kind: 'run', runId: 'RUN-7' }] }),
+    )
+    expect(explicitNull.ok).toBe(true)
+    if (explicitNull.ok) expect(explicitNull.doc.activeTabId).toBe(null)
+    const present = validateAcceptedWorkstate(
+      flatBody({ version: 1, activeTabId: 'run:RUN-7', tabs: [{ kind: 'run', runId: 'RUN-7' }] }),
+    )
+    expect(present.ok).toBe(true)
+    if (present.ok) expect(present.doc.activeTabId).toBe('run:RUN-7')
+  })
+
+  it('validate ≠ rebuild: no slot-id minting, and the returned tabs array never aliases the caller-held body array', () => {
+    const tabs = [{ kind: 'run', runId: 'RUN-7' }]
+    const result = validateAcceptedWorkstate(flatBody({ version: 1, tabs }))
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.doc.tabs[0]).not.toHaveProperty('id') // ids stay in sessionDocumentToState
+      expect(result.doc.tabs).not.toBe(tabs) // shallow copy: no aliasing into the caller's value
+    }
   })
 })
 

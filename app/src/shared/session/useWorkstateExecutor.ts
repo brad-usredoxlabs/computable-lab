@@ -28,7 +28,8 @@ import { useApplySessionDocument } from './useSessionSync'
 import { sessionDocumentToState, type SessionDocument } from './sessionYaml'
 import { stableTabId } from './tabId'
 import {
-  acceptGuard,
+  peekAcceptGuard,
+  recordAcceptedApply,
   applyTier1Action,
   planTier1Action,
   validateAcceptedWorkstate,
@@ -90,15 +91,18 @@ export function useWorkstateExecutor(): WorkstateExecutor {
           ],
         }
       }
-      if (acceptGuard(identity, seenKeys) === 'duplicate') {
+      if (peekAcceptGuard(identity, seenKeys) === 'duplicate') {
         return { ok: true, kind: 'duplicate-ignored', diagnostics: [] }
       }
       const validated = validateAcceptedWorkstate(body)
       if (!validated.ok) {
+        // A malformed delivery must NOT consume the identity key (D1): the
+        // key is recorded only after a successful apply below.
         return { ok: false, kind: 'noop', diagnostics: [validated.diagnostic] }
       }
       const doc: SessionDocument = validated.doc
       applyDocument(doc)
+      recordAcceptedApply(identity, seenKeys)
       // The hook's dispatch is async, so the post-apply route is computed from
       // the SAME sessionDocumentToState result the hook just applied —
       // mirroring the adopt pattern (useSessionSync.ts activeTabPath).

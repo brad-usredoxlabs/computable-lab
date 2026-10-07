@@ -402,6 +402,33 @@ describe('useWorkstateExecutor — tier 2 accept contract + exactly-once push', 
     await advance(600)
     expect(putSession.mock.calls.length).toBe(0)
   })
+
+  it('D1: a malformed first delivery does NOT consume the accept identity — a corrected re-delivery of the SAME identity applies, and only then does a genuine repeat become duplicate-ignored (exactly ONE putSession)', async () => {
+    const r = mountExecutor({ withSync: true })
+    await settleBaseline()
+    // Delivery 1: SAME identity as the good body below, but malformed (no tabs).
+    const malformed = runAccept(r, { sessionDocument: { version: 1 } }, { accepted: true }, IDENTITY_1)
+    expect(malformed.ok).toBe(false)
+    if (!malformed.ok) expect(malformed.diagnostics[0]?.code).toBe('MALFORMED_ACCEPTED_DOCUMENT')
+    await advance(600)
+    expect(putSession.mock.calls.length).toBe(0) // nothing applied, nothing pushed
+    // Delivery 2: corrected body, SAME draftId:revision:reviewHash. The failed
+    // delivery must not have consumed the key — this must APPLY, not be
+    // duplicate-ignored (the D1 defect: it used to return ok:true/duplicate-ignored).
+    const corrected = runAccept(r, ACCEPT_BODY, { accepted: true }, IDENTITY_1)
+    expect(corrected.ok).toBe(true)
+    if (corrected.ok) expect(corrected.kind).toBe('replaced')
+    await advance(600)
+    expect(putSession.mock.calls.length).toBe(1) // the corrected apply pushed exactly once
+    expect(tabIds(r.result.current.tabs.state)).toEqual(['project:STU-1', 'run:RUN-7'])
+    // Delivery 3: genuine repeat of the now SUCCESSFULLY applied identity →
+    // duplicate-ignored, still exactly ONE putSession for the whole sequence.
+    const repeat = runAccept(r, ACCEPT_BODY, { accepted: true }, IDENTITY_1)
+    expect(repeat.ok).toBe(true)
+    if (repeat.ok) expect(repeat.kind).toBe('duplicate-ignored')
+    await advance(600)
+    expect(putSession.mock.calls.length).toBe(1)
+  })
 })
 
 describe('useWorkstateExecutor — two-client harness: only applied state reaches the sync path', () => {

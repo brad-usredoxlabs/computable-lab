@@ -75,10 +75,10 @@ One honest fixture note: the spec matrix's "non-tabbable objectType yields UNMAP
 | accepted replaceState pushes EXACTLY ONCE | `accept-body apply advances 600 ms and putSession is called exactly once with the document tabs`; `second apply of the same accept identity is duplicate-ignored: putSession STILL exactly once` | hook |
 | idempotence without blocking later revisions | `apply v/rev1 twice then accept rev2 (new reviewHash): the second revision applies and pushes` | hook; pure: `a later revision (new reviewHash) is NEVER blocked, even with identical tabs` |
 | two-client harness | `client A accept-applies and pushes; shared store bytes equal the ACCEPTED doc; client B adopts exactly the accepted tabs; an unaccepted doc never enters the store` | hook (§6.6 excerpt) |
-| malformed accept body diagnostic-only | `sessionDocument with version 2 / missing tabs / tab without kind yields MALFORMED_ACCEPTED_DOCUMENT, no replaceState, no push` (pure + hook) | both |
+| malformed accept body diagnostic-only | `sessionDocument with version 2 / missing tabs / tab without kind yields MALFORMED_ACCEPTED_DOCUMENT, no replaceState, no push` (hook) | hook only at this writing — CORRECTED: the spec matrix names Where=both but NO pure test existed (reviewer D2). Pure `validateAcceptedWorkstate` tests added in FIX RUN l2t0120 (§10.2) |
 | extras (hardcode-boundary + reuse) | `renamed surface ids in the fixture still route` (pure + hook fixture); `executor module source contains no putSession/import of apiClient session calls` + no replaceState( + no surface-name literals (source-text); `sessionFromYaml behavior unchanged` — the three pinned files green UNCHANGED | pure/suite |
 
-OQ1 reflected in tests: accept body is FLAT (no {result:{...}} wrapper test: `accepts the FLAT body ... and preserves activeTabId null-vs-absent`), and identity is passed as SEPARATE params: `applyAcceptedWorkstate(body, attestation, identity)`.
+OQ1 reflected in tests: accept body is FLAT (no {result:{...}} wrapper test: `accepts the FLAT body ... and preserves activeTabId null-vs-absent`), and identity is passed as SEPARATE params: `applyAcceptedWorkstate(body, attestation, identity)`. CORRECTION (reviewer D2): at this writing the named pure test did NOT exist — the FLAT-body + activeTabId null-vs-absent pure tests were only actually added in FIX RUN l2t0120 (§10.2).
 
 Justified ordering note: the hook checks ATTESTATION before acceptGuard (spec §2 listed guard first). Checking attestation first is strictly safer: a rejected (unattested) call must NOT consume the identity key — otherwise a later genuine accept of the same draftId:revision:reviewHash would be wrongly duplicate-ignored. All matrix tests pass under this ordering.
 
@@ -206,3 +206,90 @@ The tab store persists only OpenTabsState (tab values, modes, breadcrumbs, conte
 - The `tabs: [...doc.tabs]` shallow copy in sessionDocumentFromValue is a deliberate anti-aliasing hardening beyond the literal extraction; all pinned tests green unchanged.
 - Full-suite unhandled-error count (5–6) is pre-existing flake, itemized in §6.3; AddMaterialForm.biological.test.tsx flaked in the no-changes baseline run and passes in isolation both with and without my changes.
 - PB-CH-4 mount: executeTier1/applyAcceptedWorkstate are ready to wire; focusProtocolStep is supplied by the hook from useProtocolSelection when a provider exists (null outside ⇒ NO_FOCUS_PROVIDER diagnostic, per OQ3 conservative ruling).
+
+---
+
+# FIX RUN l2t0120 — adversarial review D1/D2/D3 (review report PB-CH-3-review-l2t0115.md, VERDICT: fix)
+
+Prev HEAD: e6e87cd1. This section documents the fix commit only; §1–§9 above stand as written except where explicitly corrected below.
+
+## 10.1 D1 (MEDIUM) — dedup key consumed before validation: FIXED via record-on-success discipline
+
+Fix (app/src/shared/session/workstateExecutor.ts + useWorkstateExecutor.ts):
+- `acceptGuard(identity, seenKeys)` (which ADDED the key on 'fresh') is SPLIT into two pure exports:
+  - `peekAcceptGuard(identity, seenKeys): 'fresh' | 'duplicate'` — check ONLY, never records.
+  - `recordAcceptedApply(identity, seenKeys): void` — records the key; the hook calls it ONLY after `validateAcceptedWorkstate` succeeded AND `applyDocument(doc)` ran.
+- Hook tier-2 order is now: attestation check → `peekAcceptGuard` (duplicate ⇒ `{ok:true, kind:'duplicate-ignored'}`) → `validateAcceptedWorkstate` (malformed ⇒ `{ok:false, MALFORMED_ACCEPTED_DOCUMENT}`, key NOT consumed) → `applyDocument(doc)` → `recordAcceptedApply(identity, seenKeys)` → navigate. Public entry-point shape `applyAcceptedWorkstate(body, attestation, identity)` UNCHANGED; key format `draftId:revision:reviewHash` UNCHANGED; genuine repeat of a successfully-applied identity is still duplicate-ignored.
+- Red-first proof: the new hook test below was run against the DEFECTIVE implementation first and failed exactly as the reviewer predicted:
+  `AssertionError: expected 'duplicate-ignored' to be 'replaced'` (useWorkstateExecutor.test.tsx:420) — i.e. the malformed-then-corrected same-identity delivery WAS being silently dropped with ok:true.
+
+New tests pinning the discipline:
+- Hook (`useWorkstateExecutor.test.tsx`): `D1: a malformed first delivery does NOT consume the accept identity — a corrected re-delivery of the SAME identity applies, and only then does a genuine repeat become duplicate-ignored (exactly ONE putSession)` — malformed delivery → MALFORMED_ACCEPTED_DOCUMENT + zero pushes; corrected same-identity delivery → 'replaced' + exactly ONE putSession; genuine repeat → 'duplicate-ignored' + STILL exactly ONE putSession.
+- Pure (`workstateExecutor.test.ts`, describe `accept guard — ... key recorded ONLY on the successful-apply path (D1 fix)`): peek does not consume (repeated peek stays fresh, seen.size 0); failed-apply path leaves identity fresh then success records and repeat is duplicate; later revision never blocked; identity-not-JSON; key format pinned to `D-1:1:hash-aaa`.
+
+## 10.2 D2 (LOW) — pure-layer validator coverage: ADDED + report claims corrected
+
+New pure describe in `workstateExecutor.test.ts`: `validateAcceptedWorkstate — pure-layer coverage of the shared accept-body rules (D2)` — 8 tests: FLAT accept body accepted (OQ1, no {result:{...}} wrapper); non-object body (null/undefined/array/string/number ⇒ path 'body'); body without sessionDocument (path 'body.sessionDocument'); version !== 1; missing tabs array; tab without string kind (names tab index); activeTabId null-vs-absent (absent normalizes to explicit null, explicit null stays null, string preserved); validate ≠ rebuild (no slot-id minting, tabs array not aliased to the caller's array).
+Report corrections applied above: §4 matrix row 'malformed accept body diagnostic-only' now states hook-only at original writing (pure tests added here), and the §4/OQ1 sentence now states the FLAT/null-vs-absent pure test did NOT exist at this writing. The §7 bullet 'activeTabId null-vs-absent preserved (pure test)' was likewise aspirational at writing and is TRUE only from this fix run onward.
+
+## 10.3 D3 (LOW) — comment drift: FIXED documentation-only
+
+`workstateExecutor.ts` planTier1Action doc-comment rewritten: the `focus` variant of Tier1ActionLike carries NO surface field (spec §1's verbatim type is pinned), so a focus action can NEVER deep-link — it is activate-existing-or-diagnostic only; a bare focus with no existing slot ends in the UNROUTABLE_SURFACE diagnostic. No `surface` field was added to the focus variant and no routing behavior changed (OQ2 conservative ruling stands).
+
+## 10.4 Verification (verbatim)
+
+RED (new tests against the defective implementation, before the fix):
+```
+$ cd /mnt/vast/home/brad/git/wt/PB-CH-3-lane2-l2t2357/app && npx vitest run src/shared/session/workstateExecutor.test.ts src/shared/session/useWorkstateExecutor.test.tsx
+ FAIL  src/shared/session/useWorkstateExecutor.test.tsx > ... > D1: a malformed first delivery does NOT consume the accept identity ...
+AssertionError: expected 'duplicate-ignored' to be 'replaced' // Object.is equality
+TypeError: recordAcceptedApply is not a function   (pure guard-discipline tests, functions not yet split)
+ Test Files  2 failed (2)
+      Tests  6 failed | 45 passed (51)
+```
+
+1) Targeted new tests (post-fix):
+```
+$ cd /mnt/vast/home/brad/git/wt/PB-CH-3-lane2-l2t2357/app && npx vitest run src/shared/session/workstateExecutor.test.ts src/shared/session/useWorkstateExecutor.test.tsx
+ ✓ src/shared/session/workstateExecutor.test.ts  (35 tests) 16ms
+ ✓ src/shared/session/useWorkstateExecutor.test.tsx  (16 tests) 52ms
+ Test Files  2 passed (2)
+      Tests  51 passed (51)
+```
+40 previous + 11 new = 51. Exact: pure file 25→35 (guard describe 3→5 = +2, new validateAcceptedWorkstate describe = +8); hook file 15→16 (+1: the D1 malformed→corrected→repeat sequence test).
+
+2) Adjacent targeted set:
+```
+$ cd app && npx vitest run src/shared/session src/shared/surfaces src/shared/lib src/shared/shell
+ Test Files  23 passed (23)
+      Tests  157 passed (157)
+```
+146 previous + 11 new = 157, zero failures.
+
+3) App typecheck (34-line pin + file-set identity):
+```
+$ cd app && npx tsc --noEmit | grep -c "error TS"
+34
+$ comm -3 <(grep "error TS" /tmp/pbch3-tsc-trunk.txt | sed 's/(.*//' | sort) <(grep "error TS" /tmp/pbch3-fix-tsc.txt | sed 's/(.*//' | sort)
+(empty — exit 0)
+$ grep -E "workstateExecutor|useWorkstateExecutor|sessionYaml|useSessionSync" /tmp/pbch3-fix-tsc.txt
+(no output — exit 1: none of the touched files in the error set)
+```
+
+4) Diff scope: see §10.5 command output below (fix commit touches ONLY the 5 named files; server/ schema/ config/ EMPTY).
+
+## 10.5 Diff scope (verbatim)
+
+```
+$ git -c core.fileMode=false diff --stat e6e87cd1..HEAD
+ .hermes/plans/PB-CH-3-report.wip-l2t2357.md        |  75 ++++++++++-
+ .../shared/session/useWorkstateExecutor.test.tsx   |  27 ++++
+ app/src/shared/session/useWorkstateExecutor.ts     |   8 +-
+ app/src/shared/session/workstateExecutor.test.ts   | 149 +++++++++++++++++++--
+ app/src/shared/session/workstateExecutor.ts        |  33 +++--
+ 5 files changed, 269 insertions(+), 23 deletions(-)
+
+$ git -c core.fileMode=false diff --stat e6e87cd1..HEAD -- server schema config
+[END EMPTY]
+```
+ONLY the 5 permitted files (2 source, 2 test, the report). server/ schema/ config/ EMPTY. One commit on the branch; no merge, no trunk touch, no stack restart.
