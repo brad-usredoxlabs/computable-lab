@@ -28,6 +28,8 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
     // PB-CH-5 deliberately widened the menu to seven: compose_analysis is the
     // analysis composition mount. It carries the model's analysis INTENT (terms
     // only); the drafts compile endpoint — not this tool — resolves and gates it.
+    // PB-CH-8 deliberately widens it to eight (query_workstate_history — the
+    // ledger READ riding the ONE forced tool; the server owns the time anchor).
     expect(params.properties.intent?.enum).toEqual([
       'event_graph',
       'deck_layout',
@@ -36,6 +38,7 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
       'workspace_action',
       'compose_workstate',
       'compose_analysis',
+      'query_workstate_history',
     ]);
   });
 

@@ -1,0 +1,49 @@
+# PB-CH-8 — workstate-snapshot JOURNAL policy (decision §4, option a).
+#
+# A TRANSPORT-state policy, not a record kind: like lab-session.schema.yaml this
+# describes transient UI workspace history stored under var/sessions/{userId}/
+# journal/ (outside the records git tree, like var/ai-threads). It is NOT a
+# JSON Schema (deliberately named *.policy.yaml, NOT *.schema.yaml — the
+# SchemaLoader DEFAULT_PATTERNS auto-registration trap, SchemaLoader.ts:32), it
+# has no lint/ui companion, and nothing described here is ever written to the
+# record store.
+#
+# THE source of truth for capture eligibility, tagging, event association,
+# query anchoring, and retention: server/src/workspace-session/
+# WorkstateJournal.ts INTERPRETS these values and re-reads this file PER CALL
+# (the config/drafting/workstate-tab-kinds.yaml precedent — hot-reload without
+# restart). Removing this file DISABLES capture (decision §4.2); there is
+# deliberately no TypeScript default mirroring any number below.
+journalVersion: 1
+capture:
+  # enabled:false or a missing file ⇒ capture DISABLED, never defaulted.
+  enabled: true
+  # Debounce floor: a capture closer than this to the previous one is skipped.
+  minIntervalMs: 30000
+  # true ⇒ the 'default' header fallback and unresolved actors never capture
+  # (decision §4.3); main.yaml LWW behavior for the fallback is unchanged.
+  requireResolvedActor: true
+  # true ⇒ a PUT whose content hash equals the last entry's appends nothing
+  # (RecordRevisionService dedupe-on-existing precedent).
+  skipUnchanged: true
+linkage:
+  # Capture window (§4.4): [max(prevCapturedAt+1ms, T - windowMs), T],
+  # inclusive, on the server clock (audit occurredAt), never plate-event `at:`.
+  windowMs: 900000
+  # true ⇒ only audit events whose actor equals the capturing actor link.
+  requireSameActor: true
+  # Hard cap on links per entry (data, not a TS constant).
+  maxLinks: 32
+  # Tab-payload fields carrying record ids — mirrors config/drafting/
+  # workstate-tab-kinds.yaml idField vocabulary (the declared record-id-carrying
+  # fields). Model output NEVER contributes an id here.
+  idFields: [runId, studyId, recordId]
+retention:
+  # Whole-file pruning only, oldest seq first, never the just-appended file
+  # (decision §4.9). No partial rewrites, ever.
+  maxEntries: 500
+  maxAgeDays: 30
+query:
+  # Which audit anchor a multi-event subject uses when asOf needs a `t`:
+  # latest | earliest. A model-proposed timestamp is NEVER an anchor (§4.4).
+  anchor: latest

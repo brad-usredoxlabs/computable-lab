@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". You never supply a timestamp and never invent an id.',
         },
         platformId: {
           type: 'string',
@@ -594,6 +594,16 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             open: { type: 'object', description: 'Extra cross-page tabs appended after the landing tabs (same {surface, target:{term|recordId}} shape as compose_workstate tabs).', properties: { tabs: { type: 'array', items: { type: 'object', properties: { surface: { type: 'string' }, target: { type: 'object', properties: { term: { type: 'string' }, recordId: { type: 'string' } } }, title: { type: 'string' } } } } } },
           },
         },
+        ledgerQuery: {
+          type: 'object',
+          description:
+            'query_workstate_history only: the ledger query — VERBS AND TERMS ONLY. `term` (the biologist\'s words for the run/study/record) OR `recordId` (an existing record id the server verifies). NO timestamp: the SERVER supplies the time anchor from its own audit clock (policy query.anchor), and a model-proposed time or id is never trusted as an anchor or a link.',
+          additionalProperties: false,
+          properties: {
+            term: { type: 'string', description: 'The subject in the biologist\'s words — the server resolves it through the spine.' },
+            recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
+          },
+        },
       },
     },
   },
@@ -644,7 +654,7 @@ export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDef
 }
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -682,12 +692,22 @@ export interface AgentIntentArgs {
    * parser never "helps" and never compiles.
    */
   analysis?: Record<string, unknown>;
+  /**
+   * query_workstate_history only (PB-CH-8): the ledger query envelope EXACTLY
+   * as the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action`/`workstate`/`analysis` discipline). The orchestrator hands
+   * it to ledgerQuery.ts, which resolves the term/recordId through the spine
+   * and takes the time anchor from SERVER-KNOWN audit occurredAt only — a
+   * model-proposed timestamp or id is never trusted (decision §4.4). The
+   * parser never "helps" and never queries.
+   */
+  ledgerQuery?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -704,6 +724,9 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
         : {}),
       ...(intent === 'compose_analysis' && args.analysis !== null && typeof args.analysis === 'object' && !Array.isArray(args.analysis)
         ? { analysis: args.analysis as Record<string, unknown> }
+        : {}),
+      ...(intent === 'query_workstate_history' && args.ledgerQuery !== null && typeof args.ledgerQuery === 'object' && !Array.isArray(args.ledgerQuery)
+        ? { ledgerQuery: args.ledgerQuery as Record<string, unknown> }
         : {}),
     };
   }
