@@ -44,9 +44,8 @@ import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
 import { sidebarReducer, initialSidebarState, isChatEnabled, headerLabel } from './sidebarState'
-import { useWorkstateExecutor } from '../../../shared/session/useWorkstateExecutor'
-import { WorkstateProposalCard, type WorkstateCardDiagnostic, type WorkstateCardPhase, type WorkstateCardTab, type WorkstateCardTerm } from './WorkstateProposalCard'
-import type { AgentActionEnvelope } from './assistStream'
+import { useWorkstateProposalFlow, type WorkstateAdapter } from '../../../shared/ai/useWorkstateProposalFlow'
+import { WorkstateProposalCard } from './WorkstateProposalCard'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -121,19 +120,11 @@ export function WarmIndicator({ status }: { status: AiWarmStatus }) {
 }
 
 /**
- * PB-CH-4 — the panel-side card state. Mirrors WorkstateProposalCard's props
- * so the mount can hold at most ONE pending proposal (the ref + phase machine
- * lives in the mount; the component stays presentational).
+ * PB-CH-4 — the panel-side card state now lives in the shared flow
+ * (`WorkstateProposalCardState` in shared/ai/useWorkstateProposalFlow.ts);
+ * the mount holds at most ONE pending proposal and the component stays
+ * presentational.
  */
-interface WorkstateCardState {
-  phase: WorkstateCardPhase
-  summary?: string
-  tabs?: WorkstateCardTab[]
-  resolvedTerms?: WorkstateCardTerm[]
-  diagnostics?: WorkstateCardDiagnostic[]
-  draftId?: string
-  revision?: number
-}
 
 export function AiTabPanel() {
   const ws = useWorkspace()
@@ -538,16 +529,19 @@ export function AiTabPanel() {
   )
 
   // ── PB-CH-4 — the Wave-1 mount ───────────────────────────────────────────
-  // Tier 1: the frame that reaches this callback is the OUTPUT of the server's
-  // workspace-action compiler (Ajv + spine + registry resolution already
-  // happened — AR-1). The PB-CH-3 shared executor applies it on arrival; the
-  // hook self-wires openTabs/navigate/registry/focus/single-writer, so the
-  // panel passes NOTHING down (AR-3: consume the executor, never re-implement
-  // it). The unsaved-work guarantee (reference identity of non-target tabs,
-  // no replace/close, no confirm dialog) is the EXECUTOR's, mounted here — not
-  // re-implemented. An ok:false outcome surfaces its diagnostic text in the
-  // trace: no dialog, no retry loop, no local fallback (PB-CH-3 OQ2/OQ3).
-  const executor = useWorkstateExecutor()
+  // Tier 1: the frame that reaches the flow's handler is the OUTPUT of the
+  // server's workspace-action compiler (Ajv + spine + registry resolution
+  // already happened — AR-1). The PB-CH-3 shared executor applies it on
+  // arrival; the hook self-wires openTabs/navigate/registry/focus/single-writer,
+  // so the panel passes NOTHING down (AR-3: consume the executor, never
+  // re-implement it). The unsaved-work guarantee (reference identity of
+  // non-target tabs, no replace/close, no confirm dialog) is the EXECUTOR's,
+  // mounted through the flow — not re-implemented. An ok:false outcome surfaces
+  // its diagnostic text in the trace: no dialog, no retry loop, no local
+  // fallback (PB-CH-3 OQ2/OQ3). PB-CH-6: the narrowing + executeTier1 call
+  // moved into `useWorkstateProposalFlow.handleAgentAction` verbatim (the same
+  // code, now shared with the Analysis + protocol-builder mounts).
+  const flow = useWorkstateProposalFlow()
 
   // THE CONTEXT GAP FIX: `focusedStep` is display-only in ChatContextHeader
   // today. Here it leaves the DOM and rides the request contract. Conditional
@@ -567,56 +561,22 @@ export function AiTabPanel() {
     }
   }, [protocolSel?.focusedStep, protocolSel?.protocol?.recordId])
 
-  const handleAgentAction = useCallback(
-    (action: AgentActionEnvelope): string | undefined => {
-      // Narrow to the executor's typed tier-1 shape (no `as any`): a frame the
-      // compiler could not have produced (open-surface without a registered
-      // surface, focus without a target) is a visible diagnostic, not a guess.
-      const targetRef = action.target && 'id' in action.target ? action.target : undefined
-      const tier1 =
-        action.action === 'open-surface'
-          ? action.surface
-            ? { action: 'open-surface' as const, surface: action.surface, ...(targetRef ? { target: targetRef } : {}) }
-            : null
-          : action.target
-            ? { action: 'focus' as const, target: action.target }
-            : null
-      if (!tier1) {
-        return 'Agent action carried no routable target — nothing was written.'
-      }
-      const outcome = executor.executeTier1(tier1)
-      if (outcome.ok) {
-        return undefined
-      }
-      // Conservative diagnostics are CORRECT behavior — surface the text.
-      return outcome.diagnostics.map((d) => d.message).join(' ') || 'The action was not applied — nothing was written.'
-    },
-    [executor],
-  )
-
-  // Tier 2: the model's INTENT arrives here verbatim. The panel relays it to
-  // POST /api/drafts/compile — THE trust boundary. Until that response says
-  // canAccept:true the card is a "compiling…" slot with NO accept control
-  // (never an actionable proposal from raw model output or schema-validity
-  // alone). At most one pending draft identity lives in the ref; a newer
-  // proposal supersedes an in-flight compile and a late response for a
-  // superseded compile is DISCARDED (never resurrected).
+  // Tier 2: the model's INTENT arrives here verbatim. PB-CH-6 lifted the
+  // compile→card→accept/reject orchestration into the shared
+  // `useWorkstateProposalFlow` (the ONE implementation — the compile call site
+  // lives there, not here) so the Analysis mount and the protocol-builder
+  // mount ride the SAME machinery. The trust rule is unchanged: the panel
+  // relays the intent to POST /api/drafts/compile — THE trust boundary; until
+  // that response says canAccept:true the card is a "compiling…" slot with NO
+  // accept control; a newer proposal supersedes an in-flight compile and a
+  // late response for a superseded compile is DISCARDED (never resurrected).
   // PB-CH-5: the SAME flow serves the analysis adapter — `adapter` is a
-  // parameter of the flow (the compile call already takes it as a field), so
-  // analysis is ONE constant, not a fork: same card state, same pending
-  // identity, same supersede/spent-card behavior, same accept/reject handlers.
-  const [workstateCard, setWorkstateCard] = useState<WorkstateCardState | null>(null)
-  const workstateCardRef = useRef<WorkstateCardState | null>(null)
-  const pendingDraftRef = useRef<{ draftId: string; revision: number; reviewHash: string } | null>(null)
-  const compileSeqRef = useRef(0)
-
-  const setCard = useCallback((next: WorkstateCardState | null) => {
-    workstateCardRef.current = next
-    setWorkstateCard(next)
-  }, [])
-
+  // parameter of the flow; analysis is ONE constant, not a fork.
+  // NOT lifted (PB-CH-6 extraction ruling): the workstateTurnRef flag and the
+  // sendChat choke point below — they guard the AiTabPanel turn model, not the
+  // flow, and stay here byte-identical.
   const handleWorkstateProposal = useCallback(
-    async (intent: Record<string, unknown>, adapter: 'workstate' | 'analysis') => {
+    (intent: Record<string, unknown>, adapter: WorkstateAdapter) => {
       // PB-CH-4 D1: mark THIS turn as a card turn (workstate OR analysis —
       // tier-2 proposals both fire the event-graph onDraftResult path with
       // notes-only results, and the card is their ONLY review surface). The
@@ -625,112 +585,25 @@ export function AiTabPanel() {
       // behind the client's /ai/assist/stream), so the flag is set before the
       // same turn's onDraftResult consumes it.
       workstateTurnRef.current = true
-      const seq = compileSeqRef.current + 1
-      compileSeqRef.current = seq
-      setCard({ phase: 'compiling' })
-      const pending = pendingDraftRef.current
-      try {
-        const res = await apiClient.compileWorkstateDraft({
-          adapter,
-          intent,
-          ...(pending ? { draftId: pending.draftId, revision: pending.revision } : {}),
-        })
-        if (seq !== compileSeqRef.current) return // superseded — discard
-        pendingDraftRef.current = { draftId: res.draftId, revision: res.revision, reviewHash: res.reviewHash }
-        const result = (res.result ?? {}) as {
-          sessionDocument?: { tabs?: Array<{ kind?: unknown; title?: unknown }> }
-          summary?: unknown
-          resolvedTerms?: unknown
-        }
-        const docTabs = Array.isArray(result.sessionDocument?.tabs) ? result.sessionDocument?.tabs : undefined
-        const terms = Array.isArray(result.resolvedTerms) ? (result.resolvedTerms as WorkstateCardTerm[]) : undefined
-        setCard({
-          phase: res.canAccept ? 'review' : 'blocked',
-          ...(typeof result.summary === 'string' ? { summary: result.summary } : {}),
-          ...(docTabs
-            ? {
-                tabs: docTabs.map((t) => ({
-                  kind: typeof t.kind === 'string' ? t.kind : String(t.kind ?? ''),
-                  ...(typeof t.title === 'string' ? { title: t.title } : {}),
-                })),
-              }
-            : {}),
-          ...(terms ? { resolvedTerms: terms } : {}),
-          ...(res.diagnostics.length > 0 ? { diagnostics: res.diagnostics } : {}),
-          draftId: res.draftId,
-          revision: res.revision,
-        })
-      } catch (error) {
-        if (seq !== compileSeqRef.current) return // superseded — discard
-        setCard({
-          phase: 'blocked',
-          diagnostics: [{ message: error instanceof Error ? error.message : 'The compile failed — nothing was written.' }],
-        })
-      }
+      void flow.proposeWorkstate(adapter, intent)
     },
-    [setCard],
+    [flow],
   )
-
-  // Accept = the actor-bound compiled draft through the single writer. The
-  // request carries ONLY {draftId, revision, reviewHash}; the server returns
-  // the STORED compiled result (the client can never resubmit a document).
-  // ZERO AI calls here, ever — no /ai/assist/stream, no re-propose, no
-  // "confirmation pass".
-  const handleWorkstateAccept = useCallback(async () => {
-    const identity = pendingDraftRef.current
-    const card = workstateCardRef.current
-    if (!identity || !card || card.phase !== 'review') return
-    try {
-      const body = await apiClient.acceptWorkstateDraft({
-        draftId: identity.draftId,
-        revision: identity.revision,
-        reviewHash: identity.reviewHash,
-      })
-      const outcome = executor.applyAcceptedWorkstate(body, { accepted: true }, identity)
-      if (outcome.ok) {
-        // Spent card: controls disappear (no dead buttons). The accepted apply
-        // pushes exactly once through useSessionSync's existing debounced effect.
-        pendingDraftRef.current = null
-        setCard({ ...card, phase: 'applied' })
-        return
-      }
-      // Nothing moved: the card stays rejectable with the diagnostics visible.
-      setCard({
-        ...card,
-        phase: 'blocked',
-        diagnostics: outcome.diagnostics.map((d) => ({ code: d.code, message: d.message })),
-      })
-    } catch (error) {
-      setCard({
-        ...card,
-        phase: 'blocked',
-        diagnostics: [{ message: error instanceof Error ? error.message : 'Accept failed — nothing was written.' }],
-      })
-    }
-  }, [executor, setCard])
-
-  // Reject = abandon. There is NO reject endpoint (PB-CH-2 §6): zero store
-  // calls, zero fetches, the pending identity cleared.
-  const handleWorkstateReject = useCallback(() => {
-    pendingDraftRef.current = null
-    compileSeqRef.current += 1 // any in-flight compile is now superseded
-    setCard(null)
-  }, [setCard])
 
   const chat = useChatThread({
     surface: systemPrompt.id,
     context,
     ...(workingFocus ? { workingFocus } : {}),
     onDraftResult,
-    onAgentAction: handleAgentAction,
+    onAgentAction: flow.handleAgentAction,
     onWorkstateProposal: (intent) => {
-      void handleWorkstateProposal(intent, 'workstate')
+      handleWorkstateProposal(intent, 'workstate')
     },
     // PB-CH-5: the analysis INTENT rides the SAME flow — the only delta is the
     // adapter constant; card state, pending identity, supersede, accept and
     // reject are the identical code paths (shared, not forked).
     onAnalysisProposal: (intent) => {
-      void handleWorkstateProposal(intent, 'analysis')
+      handleWorkstateProposal(intent, 'analysis')
     },
   })
 
@@ -1189,21 +1062,22 @@ export function AiTabPanel() {
       {activeSubTab === 'chat' ? (
         <section className="ai-tab__section ai-tab__section--log">
           <MessageLog state={chat.state} />
-          {workstateCard ? (
+          {flow.card ? (
             // PB-CH-4 tier-2: the review card rides the chat itself. While a
             // card is pending NO proposed tab is rendered anywhere (no ghosted
             // preview, no store copy) — the workspace adopts a workstate only
-            // through Accept → the single writer.
+            // through Accept → the single writer. PB-CH-6: the card state now
+            // comes from the shared flow (same phases, same identity).
             <WorkstateProposalCard
-              phase={workstateCard.phase}
-              {...(workstateCard.summary !== undefined ? { summary: workstateCard.summary } : {})}
-              {...(workstateCard.tabs ? { tabs: workstateCard.tabs } : {})}
-              {...(workstateCard.resolvedTerms ? { resolvedTerms: workstateCard.resolvedTerms } : {})}
-              {...(workstateCard.diagnostics ? { diagnostics: workstateCard.diagnostics } : {})}
-              {...(workstateCard.draftId !== undefined ? { draftId: workstateCard.draftId } : {})}
-              {...(workstateCard.revision !== undefined ? { revision: workstateCard.revision } : {})}
-              onAccept={() => void handleWorkstateAccept()}
-              onReject={handleWorkstateReject}
+              phase={flow.card.phase}
+              {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+              {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
+              {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+              {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+              {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+              {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+              onAccept={() => void flow.acceptWorkstate()}
+              onReject={flow.rejectWorkstate}
             />
           ) : null}
         </section>

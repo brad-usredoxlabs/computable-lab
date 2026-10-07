@@ -30,6 +30,7 @@ import type {
   AiLabwareAddition,
   InstrumentApplianceJob,
   PromptMention,
+  AiAgentActionEnvelope,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -161,9 +162,21 @@ interface UseAiChatOptions {
   onAcceptEvent?: AcceptEventHandler
   /** Handler called to add labware from a record (for AI-proposed additions). */
   onAddLabwareFromRecord?: AddLabwareFromRecordHandler
+  /**
+   * PB-CH-6 — the wave-1 channel envelopes ride the generic stack now.
+   * `onWorkstateProposal` receives the tier-2 INTENT verbatim (the mount
+   * relays it to POST /api/drafts/compile via `useWorkstateProposalFlow` —
+   * the trust boundary is the compile, not this stream). `onAgentAction`
+   * receives the server-compiled tier-1 envelope and may return a diagnostic
+   * string to surface in the chat. When NO callback is registered the frame
+   * is surfaced as a NAMED system bubble — never swallowed (task verbatim:
+   * "missing capability = explicit tested behavior, never a silent no-op").
+   */
+  onWorkstateProposal?: (intent: Record<string, unknown>) => void
+  onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onWorkstateProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -211,6 +224,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
+
+  // PB-CH-6: same stable-ref convention as aiContext/onAcceptEvent above —
+  // sendPrompt is memoized, so reading the callbacks directly would capture
+  // the FIRST render's versions (e.g. a flow whose registry seam had not
+  // loaded yet). The refs keep the latest host callbacks live.
+  const workstateProposalRef = useRef(onWorkstateProposal)
+  workstateProposalRef.current = onWorkstateProposal
+  const agentActionRef = useRef(onAgentAction)
+  agentActionRef.current = onAgentAction
 
   // ---- Thread persistence ------------------------------------------------
   //
@@ -452,6 +474,83 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 timestamp: Date.now(),
               },
             ])
+            continue
+          }
+
+          // PB-CH-6 — the wave-1 channel envelopes on the generic stack.
+          // Before these branches the frame fell through the loop silently
+          // (the defect class this item closes). Same never-break-the-turn
+          // wrapper style as the pipeline_diagnostics branch above: a
+          // throwing host callback surfaces as a system line, the turn
+          // continues. With NO callback registered the frame becomes a NAMED
+          // system bubble — a missing capability is visible, never a silent
+          // no-op control.
+          if (event.type === 'workstate_proposal') {
+            if (workstateProposalRef.current) {
+              try {
+                workstateProposalRef.current(event.workstate)
+              } catch (err: unknown) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: generateMessageId(),
+                    role: 'system',
+                    content: `The proposal card could not open: ${(err as Error).message || 'Unknown error'}. Nothing was written.`,
+                    timestamp: Date.now(),
+                  },
+                ])
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: 'system',
+                  content: 'The assistant proposed a workspace change but this page cannot show proposal cards yet. Nothing was written.',
+                  timestamp: Date.now(),
+                },
+              ])
+            }
+            continue
+          }
+
+          if (event.type === 'agent_action') {
+            if (agentActionRef.current) {
+              try {
+                const diagnostic = agentActionRef.current(event.action)
+                if (diagnostic) {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: generateMessageId(),
+                      role: 'system',
+                      content: diagnostic,
+                      timestamp: Date.now(),
+                    },
+                  ])
+                }
+              } catch (err: unknown) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: generateMessageId(),
+                    role: 'system',
+                    content: `The workspace action could not run: ${(err as Error).message || 'Unknown error'}. Nothing was written.`,
+                    timestamp: Date.now(),
+                  },
+                ])
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: 'system',
+                  content: 'The assistant requested a workspace action but this page cannot apply workspace actions yet. Nothing was written.',
+                  timestamp: Date.now(),
+                },
+              ])
+            }
             continue
           }
 

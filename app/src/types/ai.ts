@@ -93,6 +93,42 @@ export interface AiProtocolExtractedEvent {
   sourcePdf?: AiSourcePdfSummary
 }
 
+/**
+ * PB-CH-6 — the wave-1 channel envelopes, mirrored into the generic stack's
+ * union. Both unions are fed by the SAME server handler (POST
+ * /ai/assist/stream — AgentOrchestrator emits {type:'workstate_proposal',
+ * workstate} / {type:'agent_action', action}); the shapes here match
+ * `event-editor/right-pane/ai/assistStream.ts` (:204-210) member-for-member,
+ * and `types/aiStreamTypes.pin.test.ts` asserts the pin so the two hand-
+ * maintained unions cannot drift. Before this member existed, useAiChat
+ * silently DROPPED such frames — the defect class PB-CH-6 closes.
+ * exactOptionalPropertyTypes convention: optional fields are ABSENT, never
+ * `undefined`. The payload is forwarded verbatim — the trust boundary is
+ * POST /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export type AiAgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AiAgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AiAgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AiAgentActionTargetEnvelope[]
+}
+
+export interface AiAgentActionEvent {
+  type: 'agent_action'
+  action: AiAgentActionEnvelope
+}
+
+export interface AiWorkstateProposalEvent {
+  type: 'workstate_proposal'
+  workstate: Record<string, unknown>
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -104,6 +140,8 @@ export type AiStreamEvent =
   | AiDoneEvent
   | AiErrorEvent
   | AiProtocolExtractedEvent
+  | AiAgentActionEvent
+  | AiWorkstateProposalEvent
 
 // =============================================================================
 // Agent Result (final output from AI)
