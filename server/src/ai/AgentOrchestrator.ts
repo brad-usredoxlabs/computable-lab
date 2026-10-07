@@ -32,7 +32,7 @@ import {
   SUBMIT_SUGGESTION_INSTRUCTION,
   parseSubmitSuggestionArgs,
   AGENT_INTENT_TOOL_NAME,
-  AGENT_INTENT_TOOL_DEF,
+  buildAgentIntentToolDef,
   parseAgentIntentArgs,
   parseAlsoPlace,
   parseRecordCreations,
@@ -970,6 +970,26 @@ export function createAgentOrchestrator(
   const traceId = () => Math.random().toString(36).slice(2, 8);
 
   /**
+   * PB-CH-4b — the forced draft tool def for THIS orchestrator instance,
+   * computed ONCE at construction from the injected surface registry
+   * (deps.surfaces -> surfaces.yaml ids). The static example pair in the
+   * AGENT_INTENT_TOOL_DEF descriptions left the model's menu blind (gate
+   * run-5: it guessed `surface: "protocol"` and was correctly rejected by
+   * the compiler's UNSUPPORTED_SURFACE — the single membership authority,
+   * untouched). The ids ARRIVE as data (repo rule #1); no enum, no second
+   * membership check here.
+   *
+   * Computed once, NOT per request: buildToolDefs below is shared by run()
+   * and buildPrefixRequest, and the warm/real prefix parity contract (see the
+   * buildToolDefs comment) requires both paths to carry the IDENTICAL tool
+   * object. Reference identity is what guarantees it. No registry -> the
+   * static const by reference (byte-identical fallback).
+   */
+  const intentToolDef = buildAgentIntentToolDef(
+    deps.surfaces ? deps.surfaces.list().map((surface) => surface.id) : undefined,
+  );
+
+  /**
    * Tool definitions offered to the LLM for a non-doc turn. Shared by run()
    * and buildPrefixRequest: the chat template renders tool schemas into the
    * prompt, so warm and real requests must carry IDENTICAL tools or their
@@ -981,7 +1001,10 @@ export function createAgentOrchestrator(
       // Draft mode offers the model a SINGLE forced emission tool whose own
       // schema is the constrained menu (event_graph | deck_layout), keeping
       // every turn a structured emission while widening beyond the lone draft.
-      return [AGENT_INTENT_TOOL_DEF];
+      // PB-CH-4b: the registry-vocabulary variant computed ONCE at
+      // construction (see intentToolDef above) — the same reference on the
+      // warm and the real path, per the parity contract in this comment.
+      return [intentToolDef];
     }
     const allToolDefs = toolBridge.getToolDefinitions();
     const baseToolDefs = toolFilter
