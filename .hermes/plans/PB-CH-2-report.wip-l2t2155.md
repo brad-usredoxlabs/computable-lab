@@ -166,3 +166,39 @@ NOT hit. Nothing required new mutation semantics or session-payload versioning: 
 - report commit (this file).
 Verify with:
 `git -c core.fileMode=false log --oneline -3` and `git -c core.fileMode=false show --stat 23c92476`.
+
+---
+
+## API receipts — EXECUTED BY ORCHESTRATOR POST-RESTART (closes PENDING-RESTART / adversarial DEFECT 1)
+Restart of :3093 at 23:20 EDT loaded the new YAML (health: 185 schemas, +1 = workstate-intent).
+Backend serves merged trunk 35f28cbb. All receipts against :3093 ONLY. Lane data dir
+`/home/brad/.computable-lab-lane2/worktrees/main`.
+
+BYTE-HASH PAIR (real lane-data-dir, USR-BRAD) through compile + accept x2 + negatives:
+- BEFORE: file `8107ef6e1b88ee296dd29fc552e1709c8bf844366bfe45fcd5afe6008b1e85b9` / GET `43d245a2676e19b56b6bf6cffce40792fae05b89399e2fdb057f52680d2ff804`
+- AFTER (post-accept-x2, post-negatives): file `8107ef6e…` GET `43d245a2…` — BYTE-IDENTICAL (SESSION-BYTE-PAIR-IDENTICAL-THROUGH-COMPILE-ACCEPT-X2).
+
+HAPPY PATH (real :3093, actor USR-BRAD, draft DRAFT-560baaba-20da-4ce5-a6f2-a3f2dba5c443,
+tabs: run-plan target recordId PLR-plan-cellrox-flow-cytometry-assay-kits-34e5af82 + protocol-review
+target recordId PRT-4iaey2, activeTab index 0):
+- compile → 200 canAccept:true writes:[] projection:{} reads pinned both records.
+- sessionDocument (real): {version:1, tabs:[{kind:run, runId:PLR-plan-cellrox-flow-cytometry-assay-kits-34e5af82, title:"Plan: CellROX® Flow Cytometry Assay Kits"},{kind:record-edit, recordId:PRT-4iaey2, title:"PureLink Genomic DNA Extraction (Thermo Fisher)"}], activeTabId:"run:PLR-plan-cellrox-flow-cytometry-assay-kits-34e5af82"}
+- accept x2 → BYTE-IDENTICAL responses; accept deep-equals compile `result` (ACCEPT-EQUALS-COMPILE).
+
+TERM-VARIANT COMPILE (spec example, term "Plan: Assist Plus Transfer" + CAN-protocol-1788724639561):
+compile → 200, canAccept:true, writes:[], RESOLVED ids (PLR-plan-assist-plus-transfer-866a0306), activeTabId run:… — server-derived ids, never the proposed term.
+
+STEP 6 UNRESOLVED VARIANT: term "nonexistent phantom assay zzz-9999" → compile 200
+canAccept:false diagnostic {code:DRAFT_INVALID,outcome:needs-missing-fact,message:"UNRESOLVED_TERM /tabs/0/target/term: …"}; accept → HTTP 422 "Draft is blocked. Correct the validation or policy diagnostics."
+
+STEP 7 CROSS-ACTOR: seeded USR-RECEIPT-OTHER (test user via POST /api/records, 201); accepting
+USR-BRAD's draft as USR-RECEIPT-OTHER → HTTP 403 "Draft access is restricted to its actor."
+EXACT expected message. NOTE: x-user-id: USR-LOCAL-ADMIN does NOT stay ADMIN — resolveRequestUser's
+ensureLocalAdminUser fallback resolves it to the first non-admin active user (USR-BRAD); a receipt
+attempt as ADMIN compiled actor=USR-BRAD and accept then hit "Record access denied." (403) on the
+private planned-run ACL — independent confirmation that actor binding + ACL re-verification on accept
+reads both work. (Lane store users are test data; USR-RECEIPT-OTHER left in place.)
+
+STEP 8 SMUGGLED DOC: accept body + "sessionDocument":{…} → HTTP 422 "/: Unknown property: sessionDocument" (accept $defs additionalProperties:false).
+
+DEFECT 1 CLOSED: every receipt the reviewer required now exists on the real lane backend.
