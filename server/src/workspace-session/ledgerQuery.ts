@@ -227,8 +227,10 @@ export async function resolveServerAnchor(
 }
 
 /** What the RECORDS honestly show near t — clearly labeled lab events, never
- *  presented as workstate (decision §4.6). */
-function labEventsNear(anchorEvents: AuditEventLike[], asOf: string, max = 8): LedgerLabEventLine[] {
+ *  presented as workstate (decision §4.6). `max` is the policy-declared
+ *  `query.labEventsMax` presentation cap passed in by the caller (adversarial
+ *  defect 3: no TS constant mirrors a policy number). */
+function labEventsNear(anchorEvents: AuditEventLike[], asOf: string, max: number): LedgerLabEventLine[] {
   const near = anchorEvents
     .filter((e) => Date.parse(e.occurredAt) <= Date.parse(asOf))
     .slice(-max);
@@ -248,9 +250,17 @@ function labEventsNear(anchorEvents: AuditEventLike[], asOf: string, max = 8): L
  * transport tab, so the lookup runs the mapping INSIDE-OUT: find the mapping
  * entries whose `tabKind` equals the snapshot tab's kind, take the id from the
  * field those entries name, and pick the surface as the INVERSE of the surfaces
- * registry (the registered surface whose `params` bind that idField — registry
- * order decides when several surfaces share a token; data order, never a TS
- * allow-list, never a guessed route).
+ * registry — a registered surface qualifies only when its DECLARED data names
+ * the tab kind it would restore (a params token's objectType equals the
+ * mapping's tabKind, or the surface id equals the tabKind and the surface is
+ * deep-linkable on that mapping's idField token). Registry order decides when
+ * several surfaces qualify; data order, never a TS allow-list, never a guessed
+ * route. Matching on the idField TOKEN NAME alone is the defect this discipline
+ * exists to prevent: `recordId` is the vendor-PDF `protocol-review` route token,
+ * so a token-name match would claim that surface for every `record-edit` tab
+ * (protocol and the whole analysis chain) — a surface for reviewing a source
+ * DOCUMENT, not a record editor (adversarial defect 2). A `record-edit` tab has
+ * no registered inverse today and names itself instead.
  *
  * Record existence and record KIND mapping are deliberately NOT re-checked
  * here: that is the compile endpoint's trust boundary (the same thin-event
@@ -290,16 +300,27 @@ export function serverWorkstateEnvelopeFromSnapshot(
       continue;
     }
     const recordId = (tab[matched.idField] as string).trim();
-    // INVERSE of the registry: the registered surface whose params bind this
-    // idField token. Data lookup in registry order, never a literal table.
+    // INVERSE of the registry, joined on the mapping's tabKind (adversarial
+    // defect 2: never on the idField TOKEN NAME). A registered surface is the
+    // inverse of this mapping entry only when its DECLARED data names the tab
+    // kind it restores: either a params token's objectType equals the mapping
+    // tabKind (run-plan: runId→run restores a `run` tab), or the surface id
+    // equals the tabKind AND the surface is deep-linkable on that mapping's
+    // idField token (protocol-review: id 'protocol-review', params recordId —
+    // the route the envelope's target.recordId fills). Registry order decides
+    // when several qualify. `record-edit` has no such surface today: it names
+    // itself below instead of borrowing the vendor-PDF review surface.
     const surface = specs.find((spec) =>
-      spec.params !== undefined && Object.keys(spec.params).includes(matched.idField),
+      spec.params !== undefined && (
+        spec.params[matched.idField] === matched.tabKind ||
+        (spec.id === matched.tabKind && Object.keys(spec.params).includes(matched.idField))
+      ),
     );
     if (!surface) {
       diagnostics.push({
         code: 'UNMAPPABLE_SNAPSHOT_TAB',
         path: `/snapshot/tabs/${i}/surface`,
-        message: `Snapshot tab "${tab.kind}" (${recordId}) no longer maps to a registered surface in schema/registry/surfaces/surfaces.yaml. No route is guessed; the compile gate reports it.`,
+        message: `Snapshot tab "${tab.kind}" (${recordId}) no longer maps to a registered surface in schema/registry/surfaces/surfaces.yaml (no surface's declared params objectType or id names the tab kind "${matched.tabKind}"). No route is guessed; the compile gate reports it.`,
       });
       continue;
     }
@@ -365,6 +386,9 @@ export interface LedgerJournalLike {
   /** Policy state read PER call — the verification-9 proof depends on it. */
   policyDisabled(): boolean;
   queryAnchor(): 'latest' | 'earliest';
+  /** The lab-events presentation cap — policy data re-read PER call
+   *  (adversarial defect 3). */
+  queryLabEventsMax(): number;
 }
 
 /**
@@ -417,7 +441,7 @@ export async function runLedgerQuery(
       asOf: result.asOf,
       reason: result.reason,
       integrity: result.integrity,
-      ...(result.integrity.length > 0 ? {} : { labEvents: labEventsNear(anchor.events, result.asOf) }),
+      ...(result.integrity.length > 0 ? {} : { labEvents: labEventsNear(anchor.events, result.asOf, journal.queryLabEventsMax()) }),
     };
     return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
   }

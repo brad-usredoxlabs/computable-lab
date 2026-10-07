@@ -58,6 +58,7 @@ retention:
   maxAgeDays: 30
 query:
   anchor: latest
+  labEventsMax: 8
 `;
 
 const snapshot = (overrides: Partial<StoredWorkspaceSession> = {}): StoredWorkspaceSession => ({

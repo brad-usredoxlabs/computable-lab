@@ -72,6 +72,9 @@ export interface JournalPolicy {
   };
   query: {
     anchor: 'latest' | 'earliest';
+    /** Presentation cap on the no-history answer's lab-event lines (policy
+     *  data, re-read per query — adversarial defect 3). */
+    labEventsMax: number;
   };
 }
 
@@ -204,7 +207,10 @@ function interpretPolicy(raw: unknown): JournalPolicy | null {
         maxEntries: requiredNumber(retention.maxEntries, 'retention.maxEntries'),
         maxAgeDays: requiredNumber(retention.maxAgeDays, 'retention.maxAgeDays'),
       },
-      query: { anchor },
+      query: {
+        anchor,
+        labEventsMax: requiredNumber(query.labEventsMax, 'query.labEventsMax'),
+      },
     };
   } catch (err) {
     console.warn(`WorkstateJournal: policy file invalid — capture treated as DISABLED: ${err instanceof Error ? err.message : String(err)}`);
@@ -510,6 +516,14 @@ export class WorkstateJournal {
   queryAnchor(): 'latest' | 'earliest' {
     const policy = this.readPolicy();
     return policy ? policy.query.anchor : 'latest';
+  }
+
+  /** The declared lab-events presentation cap for the honest no-history answer
+   *  (policy data, re-read PER call — adversarial defect 3: the one number the
+   *  answer path renders is YAML data, never a TS constant). */
+  queryLabEventsMax(): number {
+    const policy = this.readPolicy();
+    return policy ? policy.query.labEventsMax : 0;
   }
 }
 

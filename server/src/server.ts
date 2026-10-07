@@ -78,7 +78,7 @@ import {
   createProtocolBuilderHandlers,
   createCheckinHandlers,
 } from './api/handlers/index.js';
-import { createResolveSpineFromContext, createCompileOntologyResolver } from './resolve/index.js';
+import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -149,7 +149,7 @@ import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
 import { createLedgerQueryHost } from './workspace-session/ledgerQuery.js';
 import { journalPolicyPath } from './workspace-session/WorkstateJournal.js';
-import { canonicalReadStore } from './drafts/workstateCompile.js';
+import { canonicalReadStore, loadWorkstateTabKindMapping } from './drafts/workstateCompile.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
@@ -1073,16 +1073,30 @@ export async function createServer(
         surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
         // PB-CH-8: the ledger query host for the query_workstate_history intent.
         // Parts are re-evaluated PER QUERY: the journal re-reads its policy YAML
-        // per call (hot-reload, verification 9) and canonicalReadStore re-scans
-        // per call (a run created after boot must be queryable). Canonical READ
-        // view only — the ledger never receives a write-capable store.
-        ledgerQuery: createLedgerQueryHost(() => ({
-          workspaceRoot: ctx.workspaceRoot,
-          policyPath: journalPolicyPath(resolve(ctx.schemaDir)),
-          store: canonicalReadStore(ctx),
-          resolveSpine,
-          surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
-        })),
+        // per call (hot-reload, verification 9), canonicalReadStore re-scans
+        // per call (a run created after boot must be queryable), and the SPINE
+        // IS RE-CREATED PER QUERY from that fresh read view (adversarial defect
+        // 4: the boot-captured `resolveSpine` closure at :733 memoizes a
+        // boot-time scan, so a post-boot record could resolve in store.get and
+        // still miss term resolution). Composed exactly like
+        // workstateDepsFromContext (workstateCompile.ts:207-231): tier-1 searches
+        // the kinds the DECLARATIVE mapping can project, not the material-family
+        // DEFAULT_KINDS. Canonical READ view only — the ledger never receives a
+        // write-capable store.
+        ledgerQuery: createLedgerQueryHost(() => {
+          const readStore = canonicalReadStore(ctx);
+          return {
+            workspaceRoot: ctx.workspaceRoot,
+            policyPath: journalPolicyPath(resolve(ctx.schemaDir)),
+            store: readStore,
+            resolveSpine: createResolveSpine({
+              ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
+              termProvider: createTermProvider(readStore),
+              recordProvider: createRecordProvider(readStore, Object.keys(loadWorkstateTabKindMapping())),
+            }),
+            surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+          };
+        }),
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       

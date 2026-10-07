@@ -47,3 +47,11 @@ query:
   # Which audit anchor a multi-event subject uses when asOf needs a `t`:
   # latest | earliest. A model-proposed timestamp is NEVER an anchor (§4.4).
   anchor: latest
+  # Presentation cap on the honest no-history answer's lab-event lines (the
+  # "what the records honestly show at that time" list, decision §4.6). This
+  # is a DISPLAY cap on how many server-known audit rows are listed — it does
+  # NOT gate capture, linkage, retention, or which anchor is chosen; the rows
+  # themselves are never truncated in the journal. It lives here (not as a TS
+  # constant) because every number the ledger answer path reads is policy data
+  # (adversarial defect 3), and it is re-read PER query like every other value.
+  labEventsMax: 8

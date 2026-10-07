@@ -55,6 +55,7 @@ retention:
   maxAgeDays: 30
 query:
   anchor: latest
+  labEventsMax: 8
 `;
 
 /** A surfaces document mirroring the SHIPPED registry's run/project bindings
@@ -66,6 +67,8 @@ const SURFACES_DOC = {
     { id: 'run-plan', label: 'Run Plan', path: '/runs/:runId', params: { runId: 'run' }, objectTypes: ['run'], selectableKinds: [] },
     { id: 'run-design', label: 'Run Design', path: '/runs/:runId', params: { runId: 'run' }, objectTypes: ['run'], selectableKinds: [] },
     { id: 'project', label: 'Project', path: '/project/:studyId', params: { studyId: 'project' }, objectTypes: ['project'], selectableKinds: [] },
+    { id: 'knowledge', label: 'Knowledge', path: '/knowledge', objectTypes: ['claim', 'protocol', 'material', 'document'], selectableKinds: [] },
+    { id: 'analysis', label: 'Analysis', path: '/analysis', objectTypes: ['project', 'run', 'collection'], selectableKinds: [] },
     { id: 'protocol-review', label: 'Protocol review', path: '/ingestion/vendor-pdf/:recordId', params: { recordId: 'document' }, objectTypes: ['document'], selectableKinds: [] },
   ],
 };
@@ -373,6 +376,128 @@ describe('ledgerQuery — policy-off answers honestly per call (verification 9)'
     await writeFile(policyPath, POLICY_ON, 'utf8');
     const after = await host.run({ term: 'ROS run' }, 'USR-A');
     expect(after.answer.status).toBe('found');
+  });
+});
+
+// ------------------------------------------------- adversarial defect 2 -------
+
+describe('serverWorkstateEnvelopeFromSnapshot — record-edit tabs (adversarial defect 2)', () => {
+  it('a record-edit snapshot tab (protocol/analysis chain) does NOT claim the vendor-PDF protocol-review surface — it names UNMAPPABLE_SNAPSHOT_TAB instead (no guessed route)', () => {
+    // The shipped workstate-tab-kinds.yaml maps protocol/analysis-revision/
+    // analysis-run to tabKind record-edit + idField recordId. The ONLY registry
+    // surface binding a `recordId` param is protocol-review (objectTypes
+    // [document], params recordId: document) — a surface for reviewing a
+    // source DOCUMENT, not a record editor. The old token-name heuristic
+    // claimed it for every record-edit tab. The inverse must hold: a surface
+    // qualifies only when its declared data (params objectType, or its id)
+    // names the mapping's tabKind. record-edit has no such surface ⇒ named
+    // diagnostic, no proposal, no guessed route.
+    const snapshot: StoredWorkspaceSession = {
+      version: 1,
+      userId: 'USR-A',
+      tabs: [{ kind: 'record-edit', recordId: 'PRT-1', recordKind: 'protocol' }],
+      activeTabId: 'record:PRT-1',
+      updatedAt: '2026-10-07T10:00:00.000Z',
+    };
+    const built = serverWorkstateEnvelopeFromSnapshot(snapshot, surfacesRegistry());
+    expect('envelope' in built).toBe(false);
+    if ('envelope' in built) return;
+    expect(built.diagnostics.some((d) => d.code === 'UNMAPPABLE_SNAPSHOT_TAB' && d.message.includes('record-edit'))).toBe(true);
+    // The refusal names the registry as the authority — never a silent guess.
+    expect(built.diagnostics[0]!.message).toContain('surfaces.yaml');
+  });
+
+  it('the registry-qualified inverse still holds for run/project/protocol-review tabs (data equality, not token name)', () => {
+    // run-plan declares params {runId: run} — the objectType filling the
+    // token EQUALS the mapping's tabKind 'run'. project: {studyId: project}
+    // === tabKind 'project'. protocol-review: its surface id EQUALS the
+    // mapping's tabKind 'protocol-review'. These are the shipped data joins;
+    // the record-edit tab above fails both.
+    const snapshot: StoredWorkspaceSession = {
+      version: 1,
+      userId: 'USR-A',
+      tabs: [
+        { kind: 'run', runId: 'RUN-1' },
+        { kind: 'project', studyId: 'STU-9' },
+        { kind: 'protocol-review', recordId: 'DOC-3' },
+      ],
+      activeTabId: null,
+      updatedAt: '2026-10-07T10:00:00.000Z',
+    };
+    const built = serverWorkstateEnvelopeFromSnapshot(snapshot, surfacesRegistry());
+    expect('envelope' in built).toBe(true);
+    if (!('envelope' in built)) return;
+    expect(built.envelope.tabs).toEqual([
+      { surface: 'run-plan', target: { recordId: 'RUN-1' } },
+      { surface: 'project', target: { recordId: 'STU-9' } },
+      { surface: 'protocol-review', target: { recordId: 'DOC-3' } },
+    ]);
+  });
+});
+
+// ------------------------------------------------- adversarial defect 3 -------
+
+describe('ledgerQuery — lab-events cap is policy data (adversarial defect 3)', () => {
+  it('the no-history lab-event lines cap at query.labEventsMax from the policy YAML, and the cap is re-read PER call (flip 8→3 changes the answer, no restart)', async () => {
+    // 10 server-known audit events for the subject; the journal is empty ⇒
+    // honest no-history with lab events. The shipped cap is policy data.
+    const audit = Array.from({ length: 10 }, (_, i) =>
+      auditEnvelope(`EVT-${i + 1}`, 'USR-A', 'RUN-1', `2026-10-07T09:${String(i).padStart(2, '0')}:00.000Z`),
+    );
+    const journal = makeJournal(audit);
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+
+    const first = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, 'USR-A'));
+    expect(first.answer.status).toBe('no-history');
+    // The shipped policy declares labEventsMax: 8 → the 10 near events render
+    // as the LAST 8 (nearest to t first).
+    expect(first.answer.labEvents?.length).toBe(8);
+    expect(first.answer.labEvents?.[0]?.recordId).toBe('EVT-3');
+
+    // Flip the cap IN PLACE to 3 — the SAME journal instance answers with 3
+    // lines on the very next query (per-call policy re-read; a TS constant
+    // could not move).
+    await writeFile(policyPath, POLICY_ON.replace('labEventsMax: 8', 'labEventsMax: 3'), 'utf8');
+    const second = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, 'USR-A'));
+    expect(second.answer.labEvents?.length).toBe(3);
+    expect(second.answer.labEvents?.[0]?.recordId).toBe('EVT-8');
+  });
+});
+
+// ------------------------------------------------- adversarial defect 4 -------
+
+describe('createLedgerQueryHost — parts re-evaluated PER query (adversarial defect 4)', () => {
+  it('every host.run() re-reads the parts accessor — a boot-captured part can never be memoized across queries', async () => {
+    const audit = [auditEnvelope('EVT-1', 'USR-A', 'RUN-1', '2026-10-07T10:05:00.000Z')];
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+    const journal = makeJournal(audit);
+    await journal.maybeCapture({
+      userId: 'USR-A',
+      actor: 'USR-A',
+      snapshot: { version: 1, userId: 'USR-A', tabs: [{ kind: 'run', runId: 'RUN-1' }], activeTabId: 'run:RUN-1', updatedAt: '2026-10-07T10:00:00.000Z' },
+    });
+
+    // The production wiring (server.ts) builds the store view, the SPINE, and
+    // the surfaces registry INSIDE this accessor so each query gets fresh
+    // ones (a post-boot record must resolve, not just store.get). The pin:
+    // the accessor is called once per run(), never cached by the host.
+    let partsCalls = 0;
+    const host = createLedgerQueryHost(() => {
+      partsCalls += 1;
+      return {
+        workspaceRoot: root,
+        policyPath,
+        store,
+        resolveSpine: spineWith({ 'ROS run': [RUN_CANDIDATE] }),
+        surfaces: surfacesRegistry(),
+      };
+    });
+
+    const first = await host.run({ term: 'ROS run' }, 'USR-A');
+    const second = await host.run({ term: 'ROS run' }, 'USR-A');
+    expect(first.answer.status).toBe('found');
+    expect(second.answer.status).toBe('found');
+    expect(partsCalls).toBe(2);
   });
 });
 

@@ -90,6 +90,29 @@ describe('useChatThread — ledger_answer case (PB-CH-8)', () => {
     expect(h.onWorkstateProposal).not.toHaveBeenCalled()
   })
 
+  it('a pipeline_diagnostics frame from the ledger refusal (adversarial defect 1) becomes VISIBLE kind:"diagnostic" trace lines', async () => {
+    // The server forwards the refused-reattachment diagnostic through the
+    // EXISTING pipeline_diagnostics channel (AgentOrchestrator). The app must
+    // render it — the spec's "visible diagnostic" ends here, in the trace.
+    const h = harness()
+    await sendOnce(h)
+    await act(async () => {
+      h.emitters[0]?.({ type: 'ledger_answer', answer: FOUND })
+      h.emitters[0]?.({
+        type: 'pipeline_diagnostics',
+        outcome: 'gap',
+        diagnostics: [{ pass_id: 'ledger-query', code: 'UNMAPPABLE_SNAPSHOT_TAB', severity: 'error', message: 'Snapshot tab "record-edit" (PRT-1) no longer maps to a registered surface in schema/registry/surfaces/surfaces.yaml. No route is guessed; the compile gate reports it.' }],
+      })
+    })
+    const diagEntries = h.result.current.state.trace.filter((t) => t.kind === 'diagnostic')
+    expect(diagEntries).toHaveLength(1)
+    expect(diagEntries[0]?.code).toBe('UNMAPPABLE_SNAPSHOT_TAB')
+    expect(diagEntries[0]?.message).toContain('no longer maps to a registered surface')
+    // The honest answer line and the diagnostic coexist; still no card.
+    expect(h.result.current.state.trace.filter((t) => t.kind === 'ledger')).toHaveLength(1)
+    expect(h.onWorkstateProposal).not.toHaveBeenCalled()
+  })
+
   it('the never-default forcing seam survives and the ledger case exists (source-pin)', async () => {
     const source = readFileSync('src/event-editor/right-pane/ai/useChatThread.ts', 'utf8')
     expect(source).toContain('const _exhaustive: never = event')

@@ -2416,6 +2416,28 @@ export function createAgentOrchestrator(
                 // server-known), riding the SAME tier-2 card flow.
                 onEvent?.({ type: 'workstate_proposal', workstate: outcome.workstateProposal as unknown as Record<string, unknown> });
               }
+              if (outcome.diagnostics !== undefined && outcome.diagnostics.length > 0) {
+                // Adversarial defect 1 (spec §4: "historical-surface
+                // incompatibility ⇒ visible diagnostic, never a guessed
+                // route"): the host NAMED the refusal (UNMAPPABLE_SNAPSHOT_TAB
+                // / NO_ANCHOR / UNKNOWN_RECORD) and ledgerQuery.ts explicitly
+                // relies on the CALLER surfacing it. Absorbing it here would
+                // ship a bare `found` line with no visible diagnostic and no
+                // blocked card. Forward through the EXISTING
+                // pipeline_diagnostics channel — same outcome/severity choice
+                // as the workspace_action compile refusal above (:2156) — so
+                // the client renders it as a diagnostic trace line.
+                onEvent?.({
+                  type: 'pipeline_diagnostics',
+                  outcome: 'gap',
+                  diagnostics: outcome.diagnostics.map((d) => ({
+                    pass_id: 'ledger-query',
+                    code: d.code,
+                    severity: 'error' as const,
+                    message: d.message,
+                  })),
+                });
+              }
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
               const ledgerNote = ledgerAnswerText(outcome.answer);
               const ledgerResult: AgentResult = {
