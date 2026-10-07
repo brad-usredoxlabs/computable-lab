@@ -87,3 +87,13 @@ PB-CH-4 run3 -> PB-CH-8 gate); coder fleet lock held by 654116 (PB-CH-8 fix1).
 Invoked ~17:51, checkpoint ~18:40 (~49 min incl. the 10-min run-3d gate execution). Live at
 checkpoint: cl-coder fix1 (654116/654173, expected ~20:20), cl-browser-reviewer run-6 (705835,
 expected ~19:10). NOT killed, NOT duplicated. Next tick: reconcile both, then queue above.
+
+## TRUNK RECONCILIATION + PITFALL (appended 18:45, same tick)
+The trunk worktree was found in DETACHED HEAD (a prior tick's reflog shows 'checkout: moving
+from cl/integration-2 to 3b9e2a18' at 15:15); every handoff commit 15:30-18:40 landed on the
+detached line while the BRANCH tip stayed at 8643e8ce (14:20 handoff). Code identical both
+sides (== 43cddb26; diff non-.hermes empty). Fixed: checked cl/integration-2 back out and
+merged the detached docs line --no-ff (dc9069d2); branch now contains ALL handoffs incl. the
+14:20 (verified present). PITFALL for every tick: BEFORE any trunk commit run
+`git rev-parse --abbrev-ref HEAD` — must print cl/integration-2; if detached, reattach+merge
+first. The gate serving checks read the checked-out tree (unaffected — code identical).
