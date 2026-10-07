@@ -1,0 +1,115 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/sequence-endpoint.schema.yaml
+title: Sequence Endpoint
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon
+- if:
+    properties:
+      runtime:
+        const: local
+  then:
+    required:
+    - executable
+    - executableSha256
+- if:
+    properties:
+      runtime:
+        const: container
+  then:
+    required:
+    - image
+- if:
+    properties:
+      engine:
+        const: virtual-pcr
+  then:
+    properties:
+      runtime:
+        const: builtin
+- if:
+    properties:
+      engine:
+        const: blastn
+      runtime:
+        const: local
+  then:
+    required:
+    - databaseBuilder
+    - databaseBuilderSha256
+properties:
+  kind:
+    const: sequence-endpoint
+  id:
+    type: string
+  label:
+    type: string
+  engine:
+    type: string
+    enum:
+    - virtual-pcr
+    - mafft
+    - blastn
+  runtime:
+    type: string
+    enum:
+    - builtin
+    - local
+    - container
+  executable:
+    type: string
+  executableSha256:
+    type: string
+    pattern: ^[a-f0-9]{64}$
+  version:
+    type: string
+    minLength: 1
+  image:
+    type: string
+    pattern: '@sha256:[a-f0-9]{64}$'
+  databaseBuilder:
+    type: string
+  databaseBuilderSha256:
+    type: string
+    pattern: ^[a-f0-9]{64}$
+  timeoutSeconds:
+    type: integer
+    minimum: 1
+    maximum: 86400
+  threads:
+    type: integer
+    minimum: 1
+    maximum: 128
+  source:
+    type: object
+    additionalProperties: false
+    properties:
+      sourceRef:
+        $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+      page:
+        type: integer
+        minimum: 1
+      text:
+        type: string
+      sha256:
+        type: string
+        pattern: ^[a-f0-9]{64}$
+      accession:
+        type: string
+      retrievedAt:
+        type: string
+        format: date-time
+      url:
+        type: string
+  engineSha256:
+    type: string
+    pattern: ^[a-f0-9]{64}$
+required:
+- kind
+- id
+- engine
+- runtime
+- version
+- timeoutSeconds
+- threads

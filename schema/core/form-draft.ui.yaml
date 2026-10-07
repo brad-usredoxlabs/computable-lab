@@ -1,0 +1,15 @@
+uiVersion: 1
+schemaId: https://computable-lab.com/schema/computable-lab/form-draft.schema.yaml
+form:
+  layout: sections
+  sections:
+    - title: Draft review
+      fields:
+        - {path: $.id, label: Draft, widget: text, readonly: true}
+        - {path: $.status, label: Status, widget: text, readonly: true}
+display:
+  titleField: $.id
+list:
+  columns:
+    - {path: $.id, label: Draft}
+    - {path: $.status, label: Status}

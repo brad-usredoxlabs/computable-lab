@@ -1,0 +1,9 @@
+# Only side-effect-free authoring operations may use the staged authoring adapter.
+adapters:
+  sequence-authoring:
+    domain: sequences
+    operations: [save_sequence, create_oligo]
+    projection:
+      sequence: sequence
+      modifications: modifications
+      vendor: vendor

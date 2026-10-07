@@ -1,0 +1,92 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/oligo-spec.schema.yaml
+title: Oligo Spec
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon
+properties:
+  kind:
+    const: oligo-spec
+  id:
+    type: string
+  label:
+    type: string
+  sequenceRef:
+    type: object
+    additionalProperties: false
+    properties:
+      kind:
+        const: record
+      type:
+        const: record-revision
+      id:
+        type: string
+    required:
+    - kind
+    - type
+    - id
+  materialSpecRef: &id001
+    $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+  modifications:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        position:
+          type: string
+          enum:
+          - 5-prime
+          - 3-prime
+          - internal
+        label:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum:
+          - reporter
+          - quencher
+          - other
+        baseIndex:
+          type: integer
+          minimum: 1
+      required:
+      - position
+      - label
+      - role
+  vendor:
+    type: string
+  catalogNumber:
+    type: string
+  orderId:
+    type: string
+  purification:
+    type: string
+  synthesisScale:
+    type: string
+  source:
+    type: object
+    additionalProperties: false
+    properties:
+      sourceRef: *id001
+      page:
+        type: integer
+        minimum: 1
+      text:
+        type: string
+      sha256:
+        type: string
+        pattern: ^[a-f0-9]{64}$
+      accession:
+        type: string
+      retrievedAt:
+        type: string
+        format: date-time
+      url:
+        type: string
+required:
+- kind
+- id
+- sequenceRef
