@@ -432,7 +432,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), or `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing). Fill only the fields that belong to the intent you chose; never mix intents.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), or `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing).',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing.',
         },
         platformId: {
           type: 'string',
@@ -530,13 +530,50 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             contextNote: { type: 'string', description: 'A human-readable note. It never overrides the authoritative resolved label.' },
           },
         },
+        workstate: {
+          type: 'object',
+          description:
+            'compose_workstate only: the workstate proposal envelope (the workstate-intent schema shape). VERBS AND TERMS ONLY — `operation` is "compose-workstate"; `tabs` each carry a registered `surface` and a `target` that is either a TERM ({term:"the biologist words"}) or an explicit recordId ({recordId:"RUN-7"}); optional `activeTab` selects one proposed tab ({index} | {term} | {recordId}). THE SERVER compiles this into a review card via POST /api/drafts/compile — terms are spine-resolved, recordIds store-verified, invented ids rejected — and the card only becomes actionable after the user accepts. Nothing is written.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-workstate'], description: 'The registered workstate verb.' },
+            tabs: {
+              type: 'array',
+              minItems: 1,
+              description: 'Proposed workspace tabs, in strip order.',
+              items: {
+                type: 'object',
+                properties: {
+                  surface: { type: 'string', description: 'A registered surface id (e.g. "run-design", "analysis").' },
+                  target: {
+                    type: 'object',
+                    description: 'A TERM the server must resolve, or an explicit recordId the server verifies.',
+                    properties: {
+                      term: { type: 'string', description: 'The target in the biologist\u2019s words — the server resolves it.' },
+                      recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
+                    },
+                  },
+                  title: { type: 'string', description: 'Optional display title; the resolved record\u2019s authoritative label wins when absent.' },
+                },
+              },
+            },
+            activeTab: {
+              type: 'object',
+              description: 'Which proposed tab is active: {index}, {term}, or {recordId}.',
+              properties: {
+                index: { type: 'integer', minimum: 0 },
+                term: { type: 'string' },
+                recordId: { type: 'string' },
+              },
+            },
+          },
+        },
       },
     },
   },
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -556,12 +593,21 @@ export interface AgentIntentArgs {
    * and resolves it; the parser never "helps".
    */
   action?: Record<string, unknown>;
+  /**
+   * compose_workstate only (PB-CH-4): the workstate proposal envelope EXACTLY
+   * as the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action` discipline). The orchestrator emits it VERBATIM as a
+   * `workstate_proposal` event; the drafts compile endpoint (Ajv against the
+   * registered workstate-intent $id + canAccept) is the trust boundary. The
+   * parser never "helps" and never compiles.
+   */
+  workstate?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -572,6 +618,9 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
         : {}),
       ...(intent === 'workspace_action' && args.action !== null && typeof args.action === 'object' && !Array.isArray(args.action)
         ? { action: args.action as Record<string, unknown> }
+        : {}),
+      ...(intent === 'compose_workstate' && args.workstate !== null && typeof args.workstate === 'object' && !Array.isArray(args.workstate)
+        ? { workstate: args.workstate as Record<string, unknown> }
         : {}),
     };
   }

@@ -478,8 +478,27 @@ export function buildSystemPrompt(
     formatProtocolStepContext(context),
     formatLocalProtocolSetup(context),
     formatAttachedProtocol(context),
+    formatWorkingFocus(context),
   ].filter(Boolean);
   return extraContexts.length > 0 ? `${gated}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : gated;
+}
+
+/**
+ * PB-CH-4 — the WORKING FOCUS block: the step the ChatContextHeader shows,
+ * finally in the request contract. Rendered ONLY when present (the byte-stable
+ * prefix otherwise stays byte-stable for the KV warm cache). Cites protocolId +
+ * stepId so "the step I'm looking at" resolves to exactly that step — the model
+ * never invents one.
+ */
+export function formatWorkingFocus(context: EditorContext): string | null {
+  const focus = context.workingFocus;
+  if (!focus) return null;
+  const ordinal = focus.ordinal ?? '?';
+  return [
+    'WORKING FOCUS:',
+    `- Step ${ordinal} — ${focus.label} (stepId ${focus.stepId}) of protocol ${focus.protocolId}.`,
+    '- Interpret "this step" / "the step I\'m looking at" as exactly this step; cite its stepId, never invent one.',
+  ].join('\n');
 }
 
 /**

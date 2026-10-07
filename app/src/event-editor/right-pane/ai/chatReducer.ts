@@ -33,7 +33,9 @@ export interface ChatMessage {
 export interface TraceEntry {
   /** t=N ordinal within the turn — stable key for rendering. */
   seq: number
-  kind: 'tool_call' | 'tool_result' | 'diagnostic' | 'draft'
+  /** PB-CH-4 adds 'action': a tier-1 compiled agent action applied on arrival
+   *  (or its conservative diagnostic). Additive kind — nothing else changed. */
+  kind: 'tool_call' | 'tool_result' | 'diagnostic' | 'draft' | 'action'
   toolName?: string
   args?: Record<string, unknown>
   success?: boolean

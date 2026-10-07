@@ -18,22 +18,25 @@ import {
 } from './submitSuggestionTool.js';
 
 describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
-  it('exposes a five-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit | workspace_action)', () => {
+  it('exposes a six-intent menu, exactly (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters as {
       required?: string[];
       properties: Record<string, { type?: string; enum?: string[] }>;
     };
     expect(params.required).toEqual(['intent']);
     expect(params.properties.intent?.type).toBe('string');
-    // PB-CH-1 deliberately widened the menu: workspace_action is the fifth
-    // intent (the server compiles its `action` envelope; see
-    // compileWorkspaceAction.test.ts + AgentOrchestrator.workspaceAction.test.ts).
+    // PB-CH-1 deliberately widened the menu to five; PB-CH-4 deliberately widens
+    // it to SIX: compose_workstate is the chat→draft proposal-emission mount
+    // (the orchestrator emits the workstate envelope VERBATIM; POST
+    // /api/drafts/compile — Ajv + canAccept — is the trust boundary; see
+    // AgentOrchestrator.workstateProposal.test.ts).
     expect(params.properties.intent?.enum).toEqual([
       'event_graph',
       'deck_layout',
       'create_record',
       'protocol_edit',
       'workspace_action',
+      'compose_workstate',
     ]);
   });
 

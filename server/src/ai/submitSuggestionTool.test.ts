@@ -266,7 +266,7 @@ describe('parseSubmitSuggestionArgs', () => {
 });
 
 describe('agent_intent — the constrained emission menu', () => {
-  it('exposes a single forced tool with a five-intent menu (event_graph | deck_layout | create_record | protocol_edit | workspace_action)', () => {
+  it('exposes a single forced tool with a six-intent menu (event_graph | deck_layout | create_record | protocol_edit | workspace_action | compose_workstate)', () => {
     const params = AGENT_INTENT_TOOL_DEF.function.parameters;
     expect(params).toHaveProperty('required', ['intent']);
     const props = (params as { properties: Record<string, { type?: string; enum?: string[] }> }).properties;
@@ -280,7 +280,11 @@ describe('agent_intent — the constrained emission menu', () => {
     // envelope; the SERVER compiles it (terms -> refs via spine + surface
     // registry) and only a resolved, Ajv-revalidated action emits. Invented ids
     // are rejected; nothing is written.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action']);
+    // Sixth intent added PB-CH-4: compose_workstate proposes the workspace TABS
+    // via the workstate envelope; the orchestrator emits the intent VERBATIM as a
+    // workstate_proposal event and the drafts compile endpoint (Ajv + canAccept)
+    // is the trust boundary. Nothing is written.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool
