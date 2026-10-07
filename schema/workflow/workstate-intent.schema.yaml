@@ -1,0 +1,95 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/workstate-intent.schema.yaml"
+title: "Workstate Intent"
+description: >-
+  A tier-2 workstate PROPOSAL envelope for the drafts compile|accept lifecycle
+  (PB-CH-2). The model proposes TERMS for the workspace tabs it wants open; the
+  server resolves them (ResolveSpine tiers [0,1], mint affordance excluded) and
+  projects a valid version:1 lab-session document. Like agent-action.schema.yaml
+  this is a TRANSPORT envelope, not a record kind: no lint/ui companion, and
+  nothing described here is ever written to the record store (projection-only).
+  The model never gets to name records it invented: `recordId` targets are
+  store-verified, terms are spine-resolved, and the activeTabId is derived by
+  the server from the projected tabs — never proposed.
+type: object
+additionalProperties: false
+required:
+- operation
+- tabs
+properties:
+  operation:
+    const: compose-workstate
+    description: "The registered workstate verb (config/drafting/adapters.yaml operations list)."
+  requestId:
+    type: string
+    description: >-
+      Injected by the draft compiler (FormDraftService.evaluate) before staging;
+      the model never supplies it. Declared here so a real compile validates.
+  tabs:
+    type: array
+    minItems: 1
+    description: "Proposed workspace tabs, in strip order."
+    items:
+      type: object
+      additionalProperties: false
+      required:
+      - surface
+      - target
+      properties:
+        surface:
+          type: string
+          minLength: 1
+          description: "Registered surface id (schema/registry/surfaces/surfaces.yaml). Membership is checked through the registry, never a TS allow-list."
+        target:
+          description: "A proposed target: a TERM the server must resolve, or an explicit recordId the server verifies against the store."
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - term
+            properties:
+              term:
+                type: string
+                minLength: 1
+          - type: object
+            additionalProperties: false
+            required:
+            - recordId
+            properties:
+              recordId:
+                type: string
+                minLength: 1
+        title:
+          type: string
+          description: "Optional display title; the resolved record's authoritative label wins when absent."
+  activeTab:
+    description: >-
+      Which PROPOSED tab is active: by index into `tabs`, or by the same target
+      shape. The server derives the tab id from the kind→tab mapping
+      (config/drafting/workstate-tab-kinds.yaml); an id referencing a tab that
+      was not projected is structurally impossible.
+    oneOf:
+    - type: object
+      additionalProperties: false
+      required:
+      - index
+      properties:
+        index:
+          type: integer
+          minimum: 0
+    - type: object
+      additionalProperties: false
+      required:
+      - term
+      properties:
+        term:
+          type: string
+          minLength: 1
+    - type: object
+      additionalProperties: false
+      required:
+      - recordId
+      properties:
+        recordId:
+          type: string
+          minLength: 1
