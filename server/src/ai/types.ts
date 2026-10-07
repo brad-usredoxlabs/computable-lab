@@ -202,6 +202,15 @@ export interface AgentRequest {
    * The orchestrator injects them as grounded context for the next compile.
    */
   clarificationAnswers?: AgentClarificationAnswer[];
+  /**
+   * PB-CH-8 — the RESOLVED request user for this turn (OQ1 ruling:
+   * `LocalIdentityService.resolveRequestUser` — session token first, then
+   * header; inactive users refused). The assist handler resolves it BEFORE
+   * calling run(); a `query_workstate_history` turn with no resolved actor is
+   * REFUSED by the ledger (never the raw-header 'default' fallback — the
+   * session route's main.yaml path keeps that fallback, the ledger does not).
+   */
+  ledgerActor?: string | null;
 }
 
 /**
@@ -895,6 +904,17 @@ export type AgentEvent =
    * design — same shape as workstate_proposal).
    */
   | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
+  /**
+   * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
+   * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors
+   * ledgerQuery.ts LedgerAnswerEnvelope field-for-field (status, asOf,
+   * capturedAt + disclosure for `found`, reason + lab-event lines for
+   * `no-history`, optional fields OMITTED — exactOptionalPropertyTypes).
+   * A `found` answer is followed by ONE server-built `workstate_proposal`
+   * (built FROM THE SNAPSHOT, riding the existing compile→card→accept flow);
+   * a `no-history` answer emits NO proposal — no card, zero session movement.
+   */
+  | { type: 'ledger_answer'; answer: import('../workspace-session/ledgerQuery.js').LedgerAnswerEnvelope }
   | AgentProtocolExtractedEvent;
 
 // ============================================================================

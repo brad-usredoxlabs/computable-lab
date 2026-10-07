@@ -185,6 +185,42 @@ export interface AgentActionEnvelope {
   supportedBy?: AgentActionTargetEnvelope[]
 }
 
+/**
+ * PB-CH-8 — transport mirror of `server/src/workspace-session/ledgerQuery.ts#
+ * LedgerAnswerEnvelope` (no import from server/**; the same mirror discipline
+ * as `AgentActionEnvelope` above). The frame is SERVER-BUILT fetched evidence:
+ * the journal snapshot + server-known audit rows, never model narration.
+ * exactOptionalPropertyTypes discipline: optional fields are OMITTED, never
+ * `undefined`. `answerText` is the server's single wording authority — the
+ * client renders it verbatim instead of re-composing reason prose.
+ */
+export type LedgerNoHistoryReason =
+  | 'policy-disabled'
+  | 'journal-empty'
+  | 'predates-first-capture'
+  | 'pruned'
+  | 'no-anchor'
+  | 'actor-unresolved'
+
+export interface LedgerLabEventLine {
+  recordId: string
+  action: string
+  occurredAt: string
+  subjectId: string
+}
+
+export interface LedgerAnswerEnvelope {
+  status: 'found' | 'no-history'
+  asOf: string
+  capturedAt?: string
+  disclosure?: string
+  links?: string[]
+  reason?: LedgerNoHistoryReason
+  labEvents?: LedgerLabEventLine[]
+  integrity?: Array<{ file: string; reason: string }>
+  answerText?: string
+}
+
 export type AssistStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; delta: string }
@@ -214,6 +250,12 @@ export type AssistStreamEvent =
   // stream. Field name `analysis` mirrors the server frame (AgentOrchestrator
   // emits {type:'analysis_proposal', analysis}).
   | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
+  // PB-CH-8: the ledger ANSWER — SERVER-BUILT fetched evidence (never model
+  // narration). The client relays the envelope verbatim; `answerText` is the
+  // server's single wording authority. Deliberately assistStream-only: the
+  // generic `types/ai.ts` AiStreamEvent stack does not consume ledger answers
+  // this task (the aiStreamTypes.pin.test.ts rationale — stated, not silent).
+  | { type: 'ledger_answer'; answer: LedgerAnswerEnvelope }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -347,7 +389,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown> }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -404,6 +446,16 @@ function dispatchFrame(
       // 'analysis'), which is the Ajv/canAccept trust boundary.
       if (parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)) {
         onEvent({ type: 'analysis_proposal', analysis: parsed.analysis })
+      }
+      return
+    case 'ledger_answer':
+      // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot + server-
+      // known audit rows — fetched evidence, never model narration). Relay the
+      // envelope verbatim; a frame without a recognized status is DROPPED,
+      // never guessed into an answer.
+      if (parsed.answer && typeof parsed.answer === 'object' && !Array.isArray(parsed.answer)
+        && (parsed.answer.status === 'found' || parsed.answer.status === 'no-history')) {
+        onEvent({ type: 'ledger_answer', answer: parsed.answer as LedgerAnswerEnvelope })
       }
       return
     case 'protocol_extracted':

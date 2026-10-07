@@ -147,6 +147,9 @@ import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
+import { createLedgerQueryHost } from './workspace-session/ledgerQuery.js';
+import { journalPolicyPath } from './workspace-session/WorkstateJournal.js';
+import { canonicalReadStore } from './drafts/workstateCompile.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
@@ -1068,6 +1071,18 @@ export async function createServer(
         // compiler (surface MEMBERSHIP is registry data, never a TS allow-list).
         // Validated on load; cheap (routes/surfaces.ts has the same precedent).
         surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+        // PB-CH-8: the ledger query host for the query_workstate_history intent.
+        // Parts are re-evaluated PER QUERY: the journal re-reads its policy YAML
+        // per call (hot-reload, verification 9) and canonicalReadStore re-scans
+        // per call (a run created after boot must be queryable). Canonical READ
+        // view only — the ledger never receives a write-capable store.
+        ledgerQuery: createLedgerQueryHost(() => ({
+          workspaceRoot: ctx.workspaceRoot,
+          policyPath: journalPolicyPath(resolve(ctx.schemaDir)),
+          store: canonicalReadStore(ctx),
+          resolveSpine,
+          surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+        })),
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       
@@ -1105,7 +1120,15 @@ export async function createServer(
         );
         void currentWarmup.restoreLibraryAtBoot();
       }
-      aiHandlersImpl = createAIHandlers(orchestrator, () => currentWarmup);
+      aiHandlersImpl = createAIHandlers(
+        orchestrator,
+        () => currentWarmup,
+        // PB-CH-8 (OQ1 ruling): the ledger actor is the RESOLVED request user
+        // (token > header, inactive refused) — the same resolution the drafts
+        // and session-capture paths use (draftRoutes.ts:9, server.ts:824
+        // precedent). Unresolved ⇒ null ⇒ the ledger REFUSES the read.
+        async (request) => (await ctx.localIdentityService.resolveRequestUser(request)).userId,
+      );
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
       aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);

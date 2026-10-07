@@ -50,6 +50,7 @@ import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
 import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS } from './coerceAgentIntent.js';
+import { ledgerAnswerText } from '../workspace-session/ledgerQuery.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import {
   compileWorkspaceAction,
@@ -903,6 +904,15 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * cannot compile and surfaces a COMPILE_INTERNAL diagnostic.
    */
   surfaces?: import('../surfaces/surfaces.js').SurfacesRegistry;
+  /**
+   * PB-CH-8 — the ledger query host (workspace-session/ledgerQuery.ts
+   * createLedgerQueryHost). The `query_workstate_history` intent runs through
+   * it: spine resolution + server-known audit anchor + journal asOf + the
+   * SERVER-BUILT frames (OQ2 ruling). Optional — without it the intent answers
+   * honestly that no ledger is wired (the workspace_action COMPILE_INTERNAL
+   * precedent), never a silent no-op and never a header-fallback identity.
+   */
+  ledgerQuery?: import('../workspace-session/ledgerQuery.js').LedgerQueryHost;
   /**
    * Ontology config — gives draft-time material labeling access to the
    * on-box OAK terms endpoint, so grounded CURIEs render as names in well
@@ -2324,6 +2334,103 @@ export function createAgentOrchestrator(
               logAgentSummary(tid, analysisProposalSummary);
               console.log(`[agent ${tid}] done compose_analysis emitted elapsedMs=${elapsed}`);
               return analysisProposalResult;
+            }
+
+            // intent=query_workstate_history (PB-CH-8): the ledger READ riding
+            // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
+            // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the
+            // ledger host resolves the term/recordId through the spine, takes
+            // the time anchor from SERVER-KNOWN audit occurredAt only (policy
+            // query.anchor breaks ties), and answers from the journal. This
+            // branch emits the answer as ONE `ledger_answer` event whose text
+            // and envelope are the SERVER'S fetched evidence — never model
+            // narration — and, for `found`, ONE `workstate_proposal` built FROM
+            // THE SNAPSHOT BYTES (rides the existing compile→card→accept→shared-
+            // executor flow unchanged). `no-history` emits NO proposal: no card,
+            // zero session movement, never the current session as a stand-in.
+            // ZERO writes: the ledger reads (row 10).
+            if (agentIntent.intent === 'query_workstate_history') {
+              const elapsed = Date.now() - t0;
+              const ledgerHost = deps.ledgerQuery;
+              if (!ledgerHost) {
+                // Honest declared failure (the workspace_action COMPILE_INTERNAL
+                // precedent): never a silent no-op, never a header-fallback read.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const ledgerUnwired = 'query_workstate_history cannot answer: this orchestrator has no ledger query host wired.';
+                const unwiredResult: AgentResult = { success: false, error: ledgerUnwired };
+                const unwiredSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  error: ledgerUnwired,
+                };
+                logAgentSummary(tid, unwiredSummary);
+                console.log(`[agent ${tid}] done query_workstate_history no-host elapsedMs=${elapsed}`);
+                return unwiredResult;
+              }
+              // OQ1 ruling: the actor is the RESOLVED request user the handler
+              // passed in (resolveRequestUser). Absent ⇒ the ledger REFUSES
+              // (reason 'actor-unresolved'); the raw-header 'default' is NEVER
+              // substituted for a ledger read.
+              const query = agentIntent.ledgerQuery ?? {};
+              const term = typeof query.term === 'string' ? query.term : undefined;
+              const recordId = typeof query.recordId === 'string' ? query.recordId : undefined;
+              const outcome = await ledgerHost.run(
+                { ...(term !== undefined ? { term } : {}), ...(recordId !== undefined ? { recordId } : {}) },
+                request.ledgerActor ?? null,
+              ).catch((err) => {
+                // A ledger read failure is an honest no-history, never a crash
+                // of the turn (the assistStream error-channel precedent).
+                console.warn(`[agent ${tid}] ledger query failed: ${err instanceof Error ? err.message : String(err)}`);
+                return null;
+              });
+              if (!outcome) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const failed = 'The ledger could not answer this query. Nothing was retrieved and nothing was written.';
+                const failedResult: AgentResult = { success: false, error: failed };
+                const failedSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: false, elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: { turns: turn + 1, toolCalls: totalToolCalls, promptTokens: totalUsage.promptTokens, completionTokens: totalUsage.completionTokens, totalTokens: totalUsage.promptTokens + totalUsage.completionTokens },
+                  resolvedMentions: resolvedMentionsCount, bypass: null, error: failed,
+                };
+                logAgentSummary(tid, failedSummary);
+                return failedResult;
+              }
+              onEvent?.({ type: 'ledger_answer', answer: outcome.answer });
+              if (outcome.answer.status === 'found' && outcome.workstateProposal) {
+                // The reattachment half: the SERVER-built envelope FROM THE
+                // SNAPSHOT (targets are recordIds already in the snapshot —
+                // server-known), riding the SAME tier-2 card flow.
+                onEvent?.({ type: 'workstate_proposal', workstate: outcome.workstateProposal as unknown as Record<string, unknown> });
+              }
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const ledgerNote = ledgerAnswerText(outcome.answer);
+              const ledgerResult: AgentResult = {
+                success: true,
+                notes: [ledgerNote],
+              };
+              const ledgerSummary: AgentSummary = {
+                traceId: tid, surface: surfaceName, model, success: true, elapsedMs: elapsed,
+                turns: turnStats,
+                totals: { turns: turn + 1, toolCalls: totalToolCalls, promptTokens: totalUsage.promptTokens, completionTokens: totalUsage.completionTokens, totalTokens: totalUsage.promptTokens + totalUsage.completionTokens },
+                resolvedMentions: resolvedMentionsCount, bypass: null,
+              };
+              logAgentSummary(tid, ledgerSummary);
+              console.log(`[agent ${tid}] done query_workstate_history ${outcome.answer.status} elapsedMs=${elapsed}`);
+              return ledgerResult;
             }
           }
 

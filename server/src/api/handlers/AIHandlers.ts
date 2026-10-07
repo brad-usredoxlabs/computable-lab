@@ -164,10 +164,17 @@ function buildProtocolExtractedEvent(
 
 /**
  * Create AI handlers backed by the given orchestrator.
+ *
+ * PB-CH-8: the optional `resolveLedgerActor` seam supplies the RESOLVED request
+ * user (production passes `ctx.localIdentityService.resolveRequestUser`) so a
+ * `query_workstate_history` turn runs against a resolved identity. Omitted or
+ * unresolved ⇒ the ledger REFUSES the read (OQ1 ruling: never a raw-header
+ * fallback for ledger reads).
  */
 export function createAIHandlers(
   orchestrator: AgentOrchestrator,
   getWarmup?: () => PromptWarmupManager | undefined,
+  resolveLedgerActor?: (request: FastifyRequest) => Promise<string | null>,
 ): AIHandlers {
   return {
     async draftEvents(
@@ -444,6 +451,13 @@ export function createAIHandlers(
 
         sendEvent({ type: 'status', message: `Processing ${surface} request...` });
 
+        // PB-CH-8 (OQ1 ruling): resolve the ledger actor BEFORE the turn runs.
+        // A resolved user rides into the orchestrator; an unresolved one is
+        // null — the ledger refuses, never falls back to the header 'default'.
+        const ledgerActor = resolveLedgerActor
+          ? await resolveLedgerActor(request).catch(() => null)
+          : null;
+
         const result = await orchestrator.run({
           prompt,
           context: editorContext,
@@ -452,6 +466,7 @@ export function createAIHandlers(
           ...(fileAttachments.length > 0 ? { attachments: fileAttachments } : {}),
           ...(clarificationAnswers ? { clarificationAnswers } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
+          ...(ledgerActor !== null ? { ledgerActor } : {}),
           onEvent: sendEvent,
         });
 

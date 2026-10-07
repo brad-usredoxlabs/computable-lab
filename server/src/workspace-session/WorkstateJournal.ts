@@ -125,6 +125,17 @@ function sanitizeSegment(value: string): string {
 
 const ENTRY_FILE_RE = /^(\d{6})-(.+)\.yaml$/;
 
+/**
+ * THE policy path derivation — one authority (schema/workflow/
+ * workstate-journal.policy.yaml; deliberately NOT *.schema.yaml, the
+ * SchemaLoader DEFAULT_PATTERNS auto-registration trap, SchemaLoader.ts:32).
+ * Every production seam (the session route, the ledger host wiring in
+ * server.ts) calls this instead of re-spelling the path.
+ */
+export function journalPolicyPath(schemaDir: string): string {
+  return resolve(schemaDir, 'workflow', 'workstate-journal.policy.yaml');
+}
+
 function requiredString(value: unknown, context: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`workstate journal policy: ${context} must be a non-empty string`);
@@ -500,6 +511,31 @@ export class WorkstateJournal {
     const policy = this.readPolicy();
     return policy ? policy.query.anchor : 'latest';
   }
+}
+
+/**
+ * Project the record store's audit-event envelopes onto the journal's read-only
+ * view (AuditEventService.ts:24-31 payload shape). ONE projection shared by
+ * every production seam (the session route, the ledger query wiring) so no
+ * caller re-implements the mapping. Rows without a usable recordId or a
+ * non-parsable occurredAt are dropped — the journal only ever links against
+ * rows the server clock actually stamped.
+ */
+export function auditRowsToJournalView(
+  envelopes: readonly { recordId: string; payload?: unknown }[],
+): AuditEventLike[] {
+  return envelopes
+    .map((envelope) => {
+      const payload = (envelope.payload ?? {}) as Record<string, unknown>;
+      return {
+        recordId: typeof payload.recordId === 'string' ? payload.recordId : envelope.recordId,
+        actor: typeof payload.actor === 'string' ? payload.actor : '',
+        action: typeof payload.action === 'string' ? payload.action : '',
+        subjectId: typeof payload.subjectId === 'string' ? payload.subjectId : '',
+        occurredAt: typeof payload.occurredAt === 'string' ? payload.occurredAt : '',
+      };
+    })
+    .filter((row) => row.recordId.length > 0 && Number.isFinite(Date.parse(row.occurredAt)));
 }
 
 /**

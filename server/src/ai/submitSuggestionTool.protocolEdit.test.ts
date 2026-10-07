@@ -30,6 +30,9 @@ describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
     // analysis composition mount (the orchestrator emits the analysis envelope
     // VERBATIM; POST /api/drafts/compile — Ajv + canAccept — is the trust
     // boundary; see AgentOrchestrator.analysisProposal.test.ts).
+    // PB-CH-8 deliberately widens it to EIGHT: query_workstate_history is the
+    // ledger READ riding the ONE forced tool (the server owns the time anchor;
+    // see AgentOrchestrator.ledgerQuery.test.ts).
     expect(params.properties.intent?.enum).toEqual([
       'event_graph',
       'deck_layout',
@@ -38,6 +41,7 @@ describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
       'workspace_action',
       'compose_workstate',
       'compose_analysis',
+      'query_workstate_history',
     ]);
   });
 

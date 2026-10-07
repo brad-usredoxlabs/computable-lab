@@ -534,6 +534,16 @@
   background: color-mix(in srgb, var(--cl-accent) 20%, transparent);
   color: var(--cl-accent);
 }
+/* PB-CH-8: the ledger answer chip — fetched read-only evidence, same visual
+   family as the draft chip (evidence, not an applied action). */
+.message-log__trace-icon--ledger {
+  background: color-mix(in srgb, var(--cl-accent) 14%, transparent);
+  color: var(--cl-accent);
+}
+.message-log__trace-provenance {
+  color: var(--cl-text-muted);
+  font-size: 11px;
+}
 .message-log__trace-icon--warning {
   background: color-mix(in srgb, var(--cl-warn) 30%, transparent);
   color: var(--cl-warn);

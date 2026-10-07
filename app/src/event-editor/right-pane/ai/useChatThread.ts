@@ -291,6 +291,31 @@ export function useChatThread({
                   // end the turn or the chat.
                 }
                 return
+              case 'ledger_answer': {
+                // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot +
+                // server-known audit rows — fetched evidence, never model
+                // narration). The hook renders it as a trace entry from the
+                // server's own answerText VERBATIM (one wording authority) and
+                // touches NOTHING else: no compile relay, no store, no card.
+                // The found half's reattach card rides the SEPARATE
+                // workstate_proposal event the server emits — zero new app
+                // flow here.
+                dispatch({
+                  type: 'stream-trace',
+                  entry: {
+                    seq: traceSeq++,
+                    kind: 'ledger',
+                    evidence: event.answer.answerText ?? (event.answer.status === 'found'
+                      ? `Workstate ${event.answer.disclosure ?? `as captured at ${event.answer.capturedAt}`}.`
+                      : 'The ledger has no stored workstate history for that time.'),
+                    ...(event.answer.links ? { links: event.answer.links } : {}),
+                    ...(event.answer.labEvents
+                      ? { labEvents: event.answer.labEvents.map((e) => ({ occurredAt: e.occurredAt, action: e.action, subjectId: e.subjectId, recordId: e.recordId })) }
+                      : {}),
+                  },
+                })
+                return
+              }
               default: {
                 const _exhaustive: never = event
                 return _exhaustive

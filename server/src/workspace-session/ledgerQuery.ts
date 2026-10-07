@@ -37,7 +37,7 @@ import {
 // re-read per call through the SAME loader workstateCompile uses — never a
 // second interpreter of that data, never a TS table here.
 import { loadWorkstateTabKindMapping } from '../drafts/workstateCompile.js';
-import type { AsOfResult, AuditEventLike, IntegrityNote } from './WorkstateJournal.js';
+import { WorkstateJournal, auditRowsToJournalView, type AsOfResult, type AuditEventLike, type AuditSourceLike, type IntegrityNote } from './WorkstateJournal.js';
 import type { StoredWorkspaceSession } from './WorkspaceSessionStore.js';
 
 // ============================================================================
@@ -73,6 +73,12 @@ export interface LedgerAnswerEnvelope {
    *  clearly labeled lab events, not workstate (decision §4.6). */
   labEvents?: LedgerLabEventLine[];
   integrity?: IntegrityNote[];
+  /**
+   * THE server-built honest answer text (from `ledgerAnswerText` — ONE wording
+   * authority). The app renders it verbatim rather than re-composing reason
+   * prose locally; a frame is fetched evidence, never model narration (OQ2).
+   */
+  answerText?: string;
 }
 
 /** The server-built workstate envelope (the registered workstate-intent shape:
@@ -102,9 +108,10 @@ export interface LedgerQueryDeps {
   /** Canonical READ view (workstateCompile.ts canonicalReadStore precedent). */
   store: Pick<RecordStore, 'get' | 'list'>;
   /** Server-known audit rows (the same rows the journal links against). */
-  auditSource: { list(filter: { kind: 'audit-event' }): Promise<readonly AuditEventLike[]> };
-  /** The resolved actor (OQ1 ruling: resolveRequestUser, never a header fallback). */
-  actor: string;
+  auditSource: AuditSourceLike;
+  /** The resolved actor (OQ1 ruling: resolveRequestUser, never a header
+   *  fallback). null = unresolved ⇒ the query REFUSES (row 5). */
+  actor: string | null;
   /** Policy `query.anchor` — read from the journal's policy read, never hardcoded. */
   anchor: 'latest' | 'earliest';
 }
@@ -233,21 +240,32 @@ function labEventsNear(anchorEvents: AuditEventLike[], asOf: string, max = 8): L
 // ============================================================================
 
 /**
- * Derive the workstate proposal envelope FROM THE SNAPSHOT BYTES: for each tab
- * payload, the policy-declared mapping names the record-id field, and the
- * surface is the INVERSE of the surfaces registry (the registry's `params`
- * token bound to that idField with the tab kind as its object type is the
- * forward direction; the same registered-surface authority `workstateCompile`
- * uses decides membership — no TS allow-list, no invented surface). A tab with
- * no registered inverse produces a NAMED diagnostic; the compile endpoint's
- * generic gate (UNSUPPORTED_SURFACE / UNMAPPABLE_RECORD_KIND) then renders the
- * card's blocked phase. Zero guessed routes.
+ * Derive the workstate proposal envelope FROM THE SNAPSHOT BYTES.
+ *
+ * The direction matters and is easy to get backwards: config/drafting/
+ * workstate-tab-kinds.yaml is keyed by RECORD kind and its VALUES name the
+ * transport tab (tabKind + idField + idPrefix). A snapshot tab is already a
+ * transport tab, so the lookup runs the mapping INSIDE-OUT: find the mapping
+ * entries whose `tabKind` equals the snapshot tab's kind, take the id from the
+ * field those entries name, and pick the surface as the INVERSE of the surfaces
+ * registry (the registered surface whose `params` bind that idField — registry
+ * order decides when several surfaces share a token; data order, never a TS
+ * allow-list, never a guessed route).
+ *
+ * Record existence and record KIND mapping are deliberately NOT re-checked
+ * here: that is the compile endpoint's trust boundary (the same thin-event
+ * discipline PB-CH-4 established). A snapshot whose record was deleted or whose
+ * kind lost its mapping reaches the compile gate and renders the EXISTING
+ * UNKNOWN_RECORD / UNMAPPABLE_RECORD_KIND blocked card (diagnostics, no accept
+ * control). A tab with no mapping entry or no registered inverse surface at all
+ * produces a NAMED diagnostic here and NO proposal — the ledger never invents a
+ * surface to make a card appear.
  */
 export function serverWorkstateEnvelopeFromSnapshot(
   snapshot: StoredWorkspaceSession,
   surfaces: SurfacesRegistry,
 ): { envelope: ServerBuiltWorkstateEnvelope } | { diagnostics: LedgerDiagnostic[] } {
-  const mapping = loadWorkstateTabKindMapping();
+  const mapping = Object.values(loadWorkstateTabKindMapping());
   const specs = surfaces.list();
   const diagnostics: LedgerDiagnostic[] = [];
   const tabs: ServerBuiltWorkstateEnvelope['tabs'] = [];
@@ -259,22 +277,23 @@ export function serverWorkstateEnvelopeFromSnapshot(
       diagnostics.push({ code: 'UNMAPPABLE_SNAPSHOT_TAB', path: `/snapshot/tabs/${i}`, message: 'A snapshot tab is not a transport tab object; it cannot be reattached.' });
       continue;
     }
-    const map = mapping[tab.kind];
-    if (!map) {
-      diagnostics.push({ code: 'UNMAPPABLE_SNAPSHOT_TAB', path: `/snapshot/tabs/${i}`, message: `Snapshot tab kind "${tab.kind}" has no mapping in config/drafting/workstate-tab-kinds.yaml; it cannot be reattached.` });
+    // Mapping entries (record kinds) that can PRODUCE this tab kind, in YAML order.
+    const candidates = mapping.filter((m) => m.tabKind === tab.kind);
+    if (candidates.length === 0) {
+      diagnostics.push({ code: 'UNMAPPABLE_SNAPSHOT_TAB', path: `/snapshot/tabs/${i}`, message: `Snapshot tab kind "${tab.kind}" has no entry in config/drafting/workstate-tab-kinds.yaml; it cannot be reattached.` });
       continue;
     }
-    const idValue = tab[map.idField];
-    if (typeof idValue !== 'string' || idValue.trim().length === 0) {
-      diagnostics.push({ code: 'UNMAPPABLE_SNAPSHOT_TAB', path: `/snapshot/tabs/${i}/${map.idField}`, message: `Snapshot tab "${tab.kind}" carries no ${map.idField}; nothing to reattach.` });
+    const matched = candidates.find((m) => typeof tab[m.idField] === 'string' && (tab[m.idField] as string).trim().length > 0);
+    if (!matched) {
+      const fields = candidates.map((m) => m.idField).join(', ');
+      diagnostics.push({ code: 'UNMAPPABLE_SNAPSHOT_TAB', path: `/snapshot/tabs/${i}`, message: `Snapshot tab "${tab.kind}" carries none of the id fields the mapping names (${fields}); nothing to reattach.` });
       continue;
     }
-    const recordId = idValue.trim();
+    const recordId = (tab[matched.idField] as string).trim();
     // INVERSE of the registry: the registered surface whose params bind this
-    // idField to this tab's object type. Data lookup, never a literal table.
+    // idField token. Data lookup in registry order, never a literal table.
     const surface = specs.find((spec) =>
-      spec.params !== undefined &&
-      Object.entries(spec.params).some(([token, objectType]) => token === map.idField && objectType === map.tabKind),
+      spec.params !== undefined && Object.keys(spec.params).includes(matched.idField),
     );
     if (!surface) {
       diagnostics.push({
@@ -285,7 +304,7 @@ export function serverWorkstateEnvelopeFromSnapshot(
       continue;
     }
     tabs.push({ surface: surface.id, target: { recordId } });
-    if (snapshot.activeTabId && `${map.idPrefix}:${recordId}` === snapshot.activeTabId) activeIndex = tabs.length - 1;
+    if (snapshot.activeTabId && `${matched.idPrefix}:${recordId}` === snapshot.activeTabId) activeIndex = tabs.length - 1;
   }
 
   if (diagnostics.length > 0) return { diagnostics };
@@ -340,28 +359,49 @@ export function ledgerAnswerText(answer: LedgerAnswerEnvelope): string {
   return lines.join('\n');
 }
 
+/** The journal surface the query needs (WorkstateJournal satisfies it structurally). */
+export interface LedgerJournalLike {
+  asOf(userId: string, t: string): Promise<AsOfResult>;
+  /** Policy state read PER call — the verification-9 proof depends on it. */
+  policyDisabled(): boolean;
+  queryAnchor(): 'latest' | 'earliest';
+}
+
 /**
- * Run one ledger query end-to-end: resolve the subject with the spine, take
+ * Run one ledger query end-to-end: policy-off and unresolved-actor refuse
+ * FIRST (before any resolution work — the ledger never touches a subject it
+ * cannot honestly answer for), then resolve the subject with the spine, take
  * the anchor from server-known audit time, ask the journal asOf(t), and build
  * the frames. `no-history` NEVER carries a workstate proposal (row 9).
  */
 export async function runLedgerQuery(
   query: { term?: string; recordId?: string },
-  asOfReader: (userId: string, t: string) => Promise<AsOfResult>,
+  journal: LedgerJournalLike,
   deps: LedgerQueryDeps,
 ): Promise<LedgerQueryResult> {
+  // Policy-off first: capture was never on ⇒ the honest §4.6 answer, no reads.
+  if (journal.policyDisabled()) {
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'policy-disabled', integrity: [] };
+    return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
+  }
+  // OQ1 ruling / row 5: an unresolved actor is REFUSED for ledger reads —
+  // never a header fallback, never a cross-user peek.
+  if (deps.actor === null || deps.actor === 'default') {
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'actor-unresolved', integrity: [] };
+    return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
+  }
+
   const subject = await resolveLedgerSubject(query, deps);
   if ('code' in subject) {
-    return {
-      answer: { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] },
-      diagnostics: [subject],
-    };
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] };
+    return { answer: { ...answer, answerText: ledgerAnswerText(answer) }, diagnostics: [subject] };
   }
 
   const anchor = await resolveServerAnchor(subject.subjectId, deps);
   if (!anchor) {
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] };
     return {
-      answer: { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] },
+      answer: { ...answer, answerText: ledgerAnswerText(answer) },
       diagnostics: [{
         code: 'NO_ANCHOR',
         path: '/ledgerQuery',
@@ -370,7 +410,7 @@ export async function runLedgerQuery(
     };
   }
 
-  const result = await asOfReader(deps.actor, anchor.asOf);
+  const result = await journal.asOf(deps.actor, anchor.asOf);
   if (result.status === 'no-history') {
     const answer: LedgerAnswerEnvelope = {
       status: 'no-history',
@@ -379,7 +419,7 @@ export async function runLedgerQuery(
       integrity: result.integrity,
       ...(result.integrity.length > 0 ? {} : { labEvents: labEventsNear(anchor.events, result.asOf) }),
     };
-    return { answer };
+    return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
   }
 
   const built = serverWorkstateEnvelopeFromSnapshot(result.snapshot, deps.surfaces);
@@ -391,13 +431,14 @@ export async function runLedgerQuery(
     ...(result.links ? { links: result.links } : {}),
     ...(result.integrity.length > 0 ? { integrity: result.integrity } : {}),
   };
+  const answered: LedgerAnswerEnvelope = { ...answer, answerText: ledgerAnswerText(answer) };
   if ('diagnostics' in built) {
     // The snapshot exists but a tab no longer maps: the ledger still answers
     // honestly with the disclosure, and the reattachment half is reported as
     // a NAMED diagnostic — the generic compile gate owns the blocked card.
-    return { answer, diagnostics: built.diagnostics };
+    return { answer: answered, diagnostics: built.diagnostics };
   }
-  return { answer, workstateProposal: built.envelope };
+  return { answer: answered, workstateProposal: built.envelope };
 }
 
 /** Convenience: the audit rows a subject carries (tests share this rather than
@@ -405,4 +446,55 @@ export async function runLedgerQuery(
 export async function subjectAuditEvents(subjectId: string, deps: LedgerQueryDeps): Promise<RecordEnvelope[]> {
   const rows = await deps.store.list({ kind: 'audit-event' });
   return rows.filter((r) => asRecord(r.payload)?.subjectId === subjectId);
+}
+
+// ============================================================================
+// Production host (the ONE wiring point the orchestrator deps seam receives)
+// ============================================================================
+
+/**
+ * The host the orchestrator's `query_workstate_history` handler calls. It binds
+ * the reader to the actor passed in per query: no user parameter ever crosses
+ * the wire, and the reader path is derived from the resolved actor alone
+ * (row 5). PARTS ARE EVALUATED PER QUERY (the `parts()` accessor pattern the
+ * handlers use for live config): the journal re-reads its policy YAML per call,
+ * and the canonical record view must not memoize a boot-time scan — a run
+ * created after boot must be visible to a ledger query about it.
+ */
+export interface LedgerQueryHost {
+  run(query: { term?: string; recordId?: string }, actor: string | null): Promise<LedgerQueryResult>;
+}
+
+export interface LedgerQueryHostParts {
+  workspaceRoot: string;
+  /** Absolute path to schema/workflow/workstate-journal.policy.yaml. */
+  policyPath: string;
+  /** Canonical READ view only (canonicalReadStore precedent): get + list. */
+  store: Pick<RecordStore, 'get' | 'list'>;
+  resolveSpine: ActionSpineLike;
+  surfaces: SurfacesRegistry;
+}
+
+export function createLedgerQueryHost(partsSource: () => LedgerQueryHostParts): LedgerQueryHost {
+  return {
+    async run(query, actor) {
+      const parts = partsSource();
+      const auditSource: AuditSourceLike = {
+        list: async (filter) => auditRowsToJournalView(await parts.store.list(filter)),
+      };
+      const journal = new WorkstateJournal({
+        workspaceRoot: parts.workspaceRoot,
+        policyPath: parts.policyPath,
+        auditSource,
+      });
+      return runLedgerQuery(query, journal, {
+        resolveSpine: parts.resolveSpine,
+        surfaces: parts.surfaces,
+        store: parts.store,
+        auditSource,
+        actor,
+        anchor: journal.queryAnchor(),
+      });
+    },
+  };
 }
