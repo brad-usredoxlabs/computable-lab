@@ -141,17 +141,13 @@ export function composeIntentPrompt(prompt: string, inventory?: LabInventory): s
 }
 
 /**
- * Full closed action vocabulary — overrides the schema enum. Kept in one place
- * so the tool schema, the prompt, and the parser can't drift.
+ * Full closed action vocabulary — GENERATED from the vocabulary YAML
+ * (schema/scientist-intent/scientist-intent-vocabulary.yaml). No hand-maintained
+ * list: the parser's injected enum, the tool schema, and the prompt all read the
+ * same authority, so they cannot drift. Declaration order is the vocabulary's.
  */
-export const INTENT_ACTIONS = [
-  'seed', 'incubate', 'mix', 'resuspend', 'dilute', 'shake', 'count', 'read',
-  'add_material', 'create_container', 'transfer', 'stain', 'fix', 'permeabilize',
-  'block', 'quench', 'label', 'transfect', 'aliquot', 'wash', 'elute', 'harvest',
-  'passage', 'freeze', 'thaw', 'spin', 'pellet', 'serial_dilution',
-  'media_swap_duplicate_columns', 'source_wells_to_duplicate_target_columns',
-  'repeat_rows',
-] as const;
+export const INTENT_ACTIONS: readonly string[] =
+  defaultScientistIntentVocabulary().verbs();
 
 export const SCIENTIST_INTENT_TOOL_NAME = 'emit_scientist_intent';
 
@@ -162,7 +158,9 @@ export const SCIENTIST_INTENT_TOOL_NAME = 'emit_scientist_intent';
  * and the arguments come back as pure JSON — no prose, fences, or `parameters:`
  * wrappers to strip.
  */
-export function buildScientistIntentToolSchema(): Record<string, unknown> {
+export function buildScientistIntentToolSchema(
+  vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary(),
+): Record<string, unknown> {
   return {
     type: 'object',
     properties: {
@@ -172,7 +170,7 @@ export function buildScientistIntentToolSchema(): Record<string, unknown> {
         items: {
           type: 'object',
           properties: {
-            action: { type: 'string', enum: INTENT_ACTIONS as unknown as string[] },
+            action: { type: 'string', enum: vocab.toolActionEnum() },
             // symbolic noun labels (never deck slots / record ids)
             source: { type: 'string', description: 'symbolic source label, e.g. standards' },
             target: { type: 'string', description: 'symbolic target label, e.g. fresh plate' },
