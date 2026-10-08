@@ -122,6 +122,16 @@ export interface UseChatThreadOptions {
    */
   onAnalysisProposal?: (analysis: Record<string, unknown>) => void
   /**
+   * PB-CH-8 fix1 — turn marker (NOT a content relay): fires when the server's
+   * ledger_answer frame arrives during the turn. The hook still owns the
+   * kind:'ledger' trace render VERBATIM (the dispatch below is unchanged);
+   * this callback exists only so the mount can mark THIS turn a ledger turn —
+   * the ledger trace is that turn's only review surface and the event-graph
+   * draft-ready arm must not park the sidebar over an empty change list
+   * (defect: lanes/2/decisions/PB-CH-8-ledger-render-defect.md).
+   */
+  onLedgerAnswer?: () => void
+  /**
    * Test seam — override the SSE runner. Real callers leave this unset
    * to use the default fetch-based client.
    */
@@ -135,6 +145,7 @@ export function useChatThread({
   onAgentAction,
   onWorkstateProposal,
   onAnalysisProposal,
+  onLedgerAnswer,
   workingFocus,
   runStream,
 }: UseChatThreadOptions): UseChatThreadResult {
@@ -300,6 +311,19 @@ export function useChatThread({
                 // The found half's reattach card rides the SEPARATE
                 // workstate_proposal event the server emits — zero new app
                 // flow here.
+                // PB-CH-8 fix1: mark the turn BEFORE the dispatch so the mount
+                // (AiTabPanel.ledgerTurnRef) can suppress the event-graph
+                // draft-ready park for this turn (defect
+                // lanes/2/decisions/PB-CH-8-ledger-render-defect.md). The
+                // marker is fire-and-forget; a throwing mount must never break
+                // the chat turn (the agent_action wrapper precedent). The
+                // dispatch below is byte-identical.
+                try {
+                  onLedgerAnswer?.()
+                } catch {
+                  // The trace render below is the answer's surface; a mount
+                  // explosion must not end the turn or the chat.
+                }
                 dispatch({
                   type: 'stream-trace',
                   entry: {
@@ -331,7 +355,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onLedgerAnswer, runStream],
   )
 
   const stop = useCallback(() => {
