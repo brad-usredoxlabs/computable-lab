@@ -7,6 +7,10 @@ import { parse as parseYaml } from 'yaml';
 import { join } from 'node:path';
 import { createValidator, type AjvValidator } from '../../validation/AjvValidator.js';
 import { readFileSync } from 'node:fs';
+import {
+  defaultScientistIntentVocabulary,
+  type ScientistIntentVocabulary,
+} from './vocabulary.js';
 import type {
   ScientistIntent,
   ScientistIntentActionKind,
@@ -17,18 +21,33 @@ import type {
 export const SCIENTIST_INTENT_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/scientist-intent.schema.yaml';
 
-let _validator: AjvValidator | undefined;
+/**
+ * Validator cache keyed per vocabulary instance (SPINE-2 5.1): the production
+ * default vocabulary is a cached singleton, so production keeps ONE validator
+ * (unchanged behavior); fixture-vocabulary tests inject their own vocabulary
+ * and get a FRESH validator with the fixture's enum injected (bait 2 — a test
+ * must never patch schema text against the shared cache).
+ */
+const validatorCache = new Map<ScientistIntentVocabulary, AjvValidator>();
 
-function getValidator(): AjvValidator {
-  if (_validator) return _validator;
+function getValidator(vocabulary: ScientistIntentVocabulary): AjvValidator {
+  const cached = validatorCache.get(vocabulary);
+  if (cached) return cached;
   const validator = createValidator({ strict: false });
   const schemaText = readFileSync(
     join(process.cwd(), 'schema', 'workflow', 'scientist-intent.schema.yaml'),
     'utf-8',
   );
-  const schema = parseYaml(schemaText) as unknown;
+  const schema = parseYaml(schemaText) as Record<string, unknown>;
+  // MACHINE INJECTION (precedent: server.ts approved-predicate registry
+  // injection): the vocabulary's verb enum replaces the wire schema's
+  // $defs/actionVerb enum BEFORE addSchema, so the fabrication gate follows
+  // the YAML authority — the on-disk enum stays the human-readable mirror,
+  // equality gated by scientist-intent-vocabulary.mirror-drift.
+  const defs = schema.$defs as Record<string, unknown>;
+  (defs.actionVerb as Record<string, unknown>).enum = vocabulary.toolActionEnum();
   validator.addSchema(schema as Parameters<AjvValidator['addSchema']>[0], SCIENTIST_INTENT_SCHEMA_ID);
-  _validator = validator;
+  validatorCache.set(vocabulary, validator);
   return validator;
 }
 
@@ -41,6 +60,15 @@ export class ScientistIntentValidationError extends Error {
   }
 }
 
+/**
+ * BLOCKED-DELETION NOTE (SPINE-2 l2t1145, escalated to orchestrator): this
+ * literal verb set is the copy SPINE-2 4/7 mandates deleting (derive from the
+ * vocabulary YAML), but SPINE-1's frozen verb-inventory contract test
+ * regex-extracts THIS literal form and its pin may not be edited without
+ * orchestrator adjudication. The Ajv fabrication gate is now vocabulary-driven
+ * via the $defs/actionVerb enum injection in getValidator(); this literal is
+ * retained ONLY for the pinned preserveActionLocation defense layer below.
+ */
 const KNOWN_ACTIONS: ReadonlySet<string> = new Set<ScientistIntentActionKind>([
   'seed', 'incubate', 'mix', 'resuspend', 'dilute', 'shake', 'count', 'read',
   'add_material', 'create_container', 'transfer', 'stain', 'fix', 'permeabilize',
@@ -50,7 +78,7 @@ const KNOWN_ACTIONS: ReadonlySet<string> = new Set<ScientistIntentActionKind>([
   'repeat_rows',
 ]);
 
-function normalizeDocument(value: unknown): ScientistIntent {
+function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary): ScientistIntent {
   const obj = value as Record<string, unknown>;
   const actions = (Array.isArray(obj.actions) ? obj.actions : []) as Array<
     Record<string, unknown>
@@ -65,7 +93,7 @@ function normalizeDocument(value: unknown): ScientistIntent {
     ...(typeof obj.sourcePrompt === 'string' ? { sourcePrompt: obj.sourcePrompt } : {}),
     actions: actions.flatMap((a) => {
       const actionName = a.action as ScientistIntentActionKind;
-      if (!KNOWN_ACTIONS.has(actionName)) return [];
+      if (!vocabulary.has(actionName)) return [];
       const clean: Record<string, unknown> = { action: actionName };
       for (const key of [
         'source', 'sourceHint', 'target', 'targetHint', 'labware', 'labwareHint',
@@ -136,7 +164,17 @@ function preserveActionLocation(value: unknown): ScientistIntentActionLocation |
  * Parse & validate a scientist-intent YAML document.
  * @throws ScientistIntentValidationError when the document violates the schema.
  */
-export function parseScientistIntent(yamlText: string): ScientistIntent {
+export interface ParseScientistIntentOptions {
+  /** Vocabulary override (fixture injection). Production callers omit it and
+   *  get the shipped vocabulary singleton. */
+  vocabulary?: ScientistIntentVocabulary;
+}
+
+export function parseScientistIntent(
+  yamlText: string,
+  opts?: ParseScientistIntentOptions,
+): ScientistIntent {
+  const vocabulary = opts?.vocabulary ?? defaultScientistIntentVocabulary();
   let parsed: unknown;
   try {
     parsed = parseYaml(yamlText);
@@ -153,7 +191,7 @@ export function parseScientistIntent(yamlText: string): ScientistIntent {
     );
   }
 
-  const result = getValidator().validate(parsed, SCIENTIST_INTENT_SCHEMA_ID);
+  const result = getValidator(vocabulary).validate(parsed, SCIENTIST_INTENT_SCHEMA_ID);
   if (!result.valid) {
     throw new ScientistIntentValidationError(
       `scientist-intent failed schema validation: ${result.errors.length} error(s)`,
@@ -161,5 +199,5 @@ export function parseScientistIntent(yamlText: string): ScientistIntent {
     );
   }
 
-  return normalizeDocument(parsed) as ScientistIntent;
+  return normalizeDocument(parsed, vocabulary) as ScientistIntent;
 }
