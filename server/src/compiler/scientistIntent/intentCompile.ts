@@ -15,6 +15,7 @@
  * volume, and robot action is owned by the deterministic compiler.
  */
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
+import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
 import { compileScientistIntent, type ScientistIntentCompileDeps } from './compileScientistIntent.js';
 import { liftScientistIntent } from './liftScientistIntent.js';
 import { parse as parseYaml } from 'yaml';
@@ -47,13 +48,20 @@ export interface ScientistIntentLlmClient {
 export const INTENT_COMPILE_MAX_TOKENS = 8000;
 
 /**
- * Closed-vocabulary system prompt for the small model. Kept as an inline
- * constant by design: it is an I/O contract, not a mutable registry template,
- * and hardcoding it here is the deterministic handoff point the compiler
- * advertises. (The reusable `intent.compile.system` template is also shipped in
- * schema/registry/prompt-templates/ for the registry/UI layer.)
+ * Closed-vocabulary system prompt for the small model. The ALLOWED ACTIONS verb
+ * block is GENERATED from the vocabulary YAML (schema/scientist-intent/
+ * scientist-intent-vocabulary.yaml) — TypeScript keeps no verb list here. The
+ * PARAMETERS/RULES prose stays hand-written this wave: it is prose, not a verb
+ * list (per-verb argument contracts already exist in the vocabulary data for
+ * SPINE-3 to generate richer prompts).
+ * (The reusable `intent.compile.system` template is also shipped in
+ * schema/registry/prompt-templates/ for the registry/UI layer — a drift-gated
+ * mirror, checked by scientist-intent-vocabulary.mirror-drift.)
  */
-export const INTENT_COMPILE_SYSTEM_PROMPT = `You translate a scientist's free-text experiment description into a compact, portable scientist-intent YAML document. You do NOT produce low-level events, well addresses, deck slots, record IDs, or robot actions — the deterministic compiler does that. You only express the SCIENTIST'S INTENT.
+export function intentCompileSystemPrompt(
+  vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary(),
+): string {
+  return `You translate a scientist's free-text experiment description into a compact, portable scientist-intent YAML document. You do NOT produce low-level events, well addresses, deck slots, record IDs, or robot actions — the deterministic compiler does that. You only express the SCIENTIST'S INTENT.
 
 OUTPUT ONLY YAML. No prose, no code fences.
 
@@ -77,12 +85,7 @@ unresolved:
 NEVER write a literal 'action:' key. The verb IS the map key. Use 'volumeUl' (not volume_ul).
 
 ALLOWED ACTIONS (never invent another):
-seed | incubate | mix | resuspend | dilute | shake | count | read |
-add_material | create_container | transfer | stain | fix | permeabilize |
-block | quench | label | transfect | aliquot | wash | elute | harvest |
-passage | freeze | thaw | spin | pellet | serial_dilution |
-media_swap_duplicate_columns | source_wells_to_duplicate_target_columns |
-repeat_rows
+${vocab.promptVerbBlock()}
 
 PARAMETERS (only these; ordinary words/numbers):
 - source / target / labware: SYMBOLIC label (e.g. "standards", "cells", "media"). NEVER a deck slot or record id.
@@ -96,6 +99,10 @@ RULES:
 - Do not add wells/volumes the scientist did not state.
 - serial_dilution / media_swap / repeat macros are ONE action — do not unroll.
 - If a parameter is ambiguous or missing, put it under unresolved instead of inventing it.`;
+}
+
+/** Production default: the prompt generated from the shipped vocabulary. */
+export const INTENT_COMPILE_SYSTEM_PROMPT = intentCompileSystemPrompt();
 
 export interface IntentCompileFromPromptArgs {
   prompt: string;
@@ -239,7 +246,7 @@ export function buildScientistIntentTool(): { type: 'function'; function: { name
 export async function compileFromSmallLlm(
   args: IntentCompileFromPromptArgs,
 ): Promise<{ intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileScientistIntent>> }> {
-  const system = args.systemPrompt ?? INTENT_COMPILE_SYSTEM_PROMPT;
+  const system = args.systemPrompt ?? intentCompileSystemPrompt();
   const userPrompt = composeIntentPrompt(args.prompt, args.labInventory);
   const baseRequest = {
     model: args.model ?? 'small-model',
