@@ -147,6 +147,16 @@ function byRecordId(a: RecordEnvelope, b: RecordEnvelope): number {
  * and the real prefix must be byte-identical or the KV warm cache dies),
  * capped at maxPerKind. null when nothing is listable or grounding is absent
  * (never an empty block: an empty candidate list is noise, not grounding).
+ *
+ * Scan-failure degradation (adversarial review DEFECT 1): a store/list error
+ * must NOT sink the chat turn. Each kind read is guarded; on failure the
+ * whole block degrades to null — the block claims to list the ONLY records
+ * compose_analysis may target, so a partial candidate list is worse than
+ * none (and a partial render would silently diverge warm vs real). The
+ * failure is console.warn'd loudly with the failing kind and the store's own
+ * error text, mirroring the tier-1 provider's defensive catch
+ * (src/resolve/providers/records.ts:63-67 — "a missing kind index must not
+ * sink the rest").
  */
 export async function buildAnalysisReferenceBlock(
   store: RecordStore,
@@ -156,7 +166,15 @@ export async function buildAnalysisReferenceBlock(
   const { maxPerKind, title } = scan.grounding;
   const lines: string[] = [title];
   for (const kind of scan.referenceKinds) {
-    const records = (await store.list({ kind })).slice().sort(byRecordId).slice(0, maxPerKind);
+    let records: RecordEnvelope[];
+    try {
+      records = (await store.list({ kind })).slice().sort(byRecordId).slice(0, maxPerKind);
+    } catch (err) {
+      console.warn(
+        `[analysis-grounding] store.list failed for kind ${kind}; grounding block omitted for this turn: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
     for (const record of records) {
       lines.push(`- ${recordKind(record) ?? kind} | ${record.recordId} | ${recordLabel(record)}`);
     }

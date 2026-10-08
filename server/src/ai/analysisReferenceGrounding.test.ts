@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import {
+  buildAnalysisGroundingBlockForSurface,
   buildAnalysisReferenceBlock,
   loadAnalysisGroundingSection,
   type AnalysisGroundingPolicy,
@@ -299,5 +300,92 @@ describe('outbound request capture — grounded analysis reference block (PB-CH-
     const first = await runCapture('analysis', stubStore(GROUNDING_RECORDS).store);
     const second = await runCapture('analysis', stubStore([...GROUNDING_RECORDS].reverse()).store);
     expect(first).toBe(second);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scan-failure degradation (adversarial review PB-CH-10 DEFECT 1)
+// A store error on the grounding path must degrade to "no block, chat turn
+// proceeds" — loudly (console.warn naming the failing kind), never a crash.
+// ---------------------------------------------------------------------------
+
+/** Store whose list() throws — `boomKind: null` fails every kind, a named
+ * kind fails only that one (the partial-scan arm). */
+function failingStore(boomKind: string | null): { store: RecordStore; listCalls: RecordFilter[] } {
+  const listCalls: RecordFilter[] = [];
+  const store = {
+    list: vi.fn(async (filter?: RecordFilter) => {
+      listCalls.push(filter ?? {});
+      if (boomKind === null || filter?.kind === boomKind) {
+        throw new Error(`REVIEW-STORE-BOOM: repo read failed for ${filter?.kind ?? '(no kind)'}`);
+      }
+      const kind = filter?.kind;
+      return GROUNDING_RECORDS.filter((r) => (r.payload as Record<string, unknown>).kind === kind);
+    }),
+  } as unknown as RecordStore;
+  return { store, listCalls };
+}
+
+const groundingWarns = (calls: unknown[][]) =>
+  calls.filter((c) => String(c[0]).includes('analysis-grounding'));
+
+describe('scan-failure degradation — store error must not sink the chat turn (DEFECT 1)', () => {
+  it('store.list throwing on the first kind => buildAnalysisReferenceBlock RESOLVES null (no block), not a rejection; console.warn names the failing kind', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { store } = failingStore(null);
+      await expect(buildAnalysisReferenceBlock(store, SCAN)).resolves.toBeNull();
+      const loud = groundingWarns(warn.mock.calls);
+      expect(loud.length).toBeGreaterThan(0);
+      // The warn is diagnosable: it carries the failing kind (a DATA value,
+      // first in referenceKinds order) and the store's own error text.
+      expect(String(loud[0]![0])).toContain('analysis-revision');
+      expect(String(loud[0]![0])).toContain('REVIEW-STORE-BOOM');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('partial failure (one kind throws, others fine) => still null: a partial candidate list is worse than none', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { store } = failingStore('analysis-run');
+      await expect(buildAnalysisReferenceBlock(store, SCAN)).resolves.toBeNull();
+      expect(groundingWarns(warn.mock.calls).length).toBeGreaterThan(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('buildAnalysisGroundingBlockForSurface (the orchestrator entry point) degrades to null, never rejects', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { store } = failingStore(null);
+      await expect(buildAnalysisGroundingBlockForSurface(store, 'analysis')).resolves.toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('capture: a store whose list() throws => the chat turn PROCEEDS (outbound request still sent) and its system message carries NO block', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { store } = failingStore(null);
+      // runCapture asserts the outbound request WAS captured — i.e. the model
+      // call happened and the turn completed instead of erroring out.
+      const system = await runCapture('analysis', store);
+      expect(system).not.toContain('ANALYSIS REFERENCES');
+      expect(system).not.toContain('ANREV-000001');
+      expect(groundingWarns(warn.mock.calls).length).toBeGreaterThan(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('capture: a non-listed surface with a throwing store still costs ZERO scans (degradation is not a blanket try/catch)', async () => {
+    const { store, listCalls } = failingStore(null);
+    const system = await runCapture('event-editor', store);
+    expect(system).not.toContain('ANALYSIS REFERENCES');
+    expect(listCalls).toHaveLength(0);
   });
 });
