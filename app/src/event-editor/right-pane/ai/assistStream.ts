@@ -211,7 +211,14 @@ export interface LedgerLabEventLine {
 
 export interface LedgerAnswerEnvelope {
   status: 'found' | 'no-history'
-  asOf: string
+  /**
+   * The server-known audit time the query was answered at (never
+   * model-supplied). OPTIONAL (adversarial r2 F2, mirroring the server
+   * envelope): present exactly when a server-known audit time exists; the
+   * refusal paths (policy-disabled / actor-unresolved / no-anchor) OMIT the
+   * key — the server never emits a fabricated epoch as observed time.
+   */
+  asOf?: string
   capturedAt?: string
   disclosure?: string
   links?: string[]

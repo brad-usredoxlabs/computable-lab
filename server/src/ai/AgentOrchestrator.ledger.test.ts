@@ -243,7 +243,8 @@ describe('AgentOrchestrator — query_workstate_history branch (PB-CH-8)', () =>
     const runSpy = vi.fn(async () => ({
       answer: {
         status: 'no-history' as const,
-        asOf: '1970-01-01T00:00:00.000Z',
+        // Adversarial r2 F2: the refusal has NO server-known audit time, so
+        // the host OMITS asOf — the epoch placeholder is gone from the shape.
         reason: 'actor-unresolved' as const,
         answerText: 'The ledger answers only for a resolved user. Sign in or select a user to query your own workstate history.',
       },
@@ -258,6 +259,10 @@ describe('AgentOrchestrator — query_workstate_history branch (PB-CH-8)', () =>
     expect(runSpy).toHaveBeenCalledWith({ term: 'ROS run' }, null);
     const answers = events.filter((e) => e.type === 'ledger_answer');
     expect(answers).toHaveLength(1);
-    expect((answers[0] as Extract<AgentEvent, { type: 'ledger_answer' }>).answer.reason).toBe('actor-unresolved');
+    const answer = (answers[0] as Extract<AgentEvent, { type: 'ledger_answer' }>).answer;
+    expect(answer.reason).toBe('actor-unresolved');
+    // The forwarded frame carries NO fabricated asOf (r2 F2): a client that
+    // discloses envelope.asOf can never be handed 1970 as "server-known time".
+    expect('asOf' in answer).toBe(false);
   });
 });

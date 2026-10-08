@@ -54,4 +54,8 @@ query:
   # themselves are never truncated in the journal. It lives here (not as a TS
   # constant) because every number the ledger answer path reads is policy data
   # (adversarial defect 3), and it is re-read PER query like every other value.
+  # Boundary semantics (adversarial r2 F1): 0 is legal and means SHOW NONE;
+  # a negative value is malformed data — interpretPolicy rejects it and the
+  # whole policy is treated as invalid (capture/query honestly OFF), never
+  # silently clamped.
   labEventsMax: 8

@@ -62,8 +62,17 @@ export interface LedgerLabEventLine {
 
 export interface LedgerAnswerEnvelope {
   status: 'found' | 'no-history';
-  /** The server-known audit time the query was answered at (never model-supplied). */
-  asOf: string;
+  /**
+   * The server-known audit time the query was answered at (never
+   * model-supplied). OPTIONAL BY CONTRACT (adversarial r2 F2): it is present
+   * exactly when a server-known audit time EXISTS — the audit anchor the query
+   * resolved to (journal answers, `found` answers). On the refusal paths
+   * (policy-disabled / actor-unresolved / no-anchor) NO such time exists, so
+   * the key is OMITTED (exactOptionalPropertyTypes: absent, never `undefined`).
+   * A fabricated placeholder — the epoch — masquerading as server-known time is
+   * exactly the honesty class the ledger exists to protect; it is never emitted.
+   */
+  asOf?: string;
   /** Present iff status:'found' — the disclosure anchor (decision §4.5). */
   capturedAt?: string;
   disclosure?: string;
@@ -229,8 +238,17 @@ export async function resolveServerAnchor(
 /** What the RECORDS honestly show near t — clearly labeled lab events, never
  *  presented as workstate (decision §4.6). `max` is the policy-declared
  *  `query.labEventsMax` presentation cap passed in by the caller (adversarial
- *  defect 3: no TS constant mirrors a policy number). */
+ *  defect 3: no TS constant mirrors a policy number).
+ *
+ *  The cap is honored at its boundary (adversarial r2 F1): `max <= 0` means
+ *  SHOW NONE. Reading the number straight through `slice(-max)` is the sign
+ *  trap — `slice(-0)` IS `slice(0)`, the FULL array — so a zero cap would have
+ *  listed every audit row the cap existed to bound. `interpretPolicy` now also
+ *  rejects a NEGATIVE cap as malformed data (honest off); this guard is the
+ *  belt-and-braces so no caller can ever re-introduce the leak.
+ */
 function labEventsNear(anchorEvents: AuditEventLike[], asOf: string, max: number): LedgerLabEventLine[] {
+  if (!(max > 0)) return [];
   const near = anchorEvents
     .filter((e) => Date.parse(e.occurredAt) <= Date.parse(asOf))
     .slice(-max);
@@ -404,26 +422,31 @@ export async function runLedgerQuery(
   deps: LedgerQueryDeps,
 ): Promise<LedgerQueryResult> {
   // Policy-off first: capture was never on ⇒ the honest §4.6 answer, no reads.
+  // NO asOf (adversarial r2 F2): no read happened, so no server-known audit
+  // time exists — the epoch would be a fabricated "server-known" timestamp.
   if (journal.policyDisabled()) {
-    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'policy-disabled', integrity: [] };
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', reason: 'policy-disabled', integrity: [] };
     return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
   }
   // OQ1 ruling / row 5: an unresolved actor is REFUSED for ledger reads —
-  // never a header fallback, never a cross-user peek.
+  // never a header fallback, never a cross-user peek. No asOf: the refusal
+  // never resolved an audit time (r2 F2).
   if (deps.actor === null || deps.actor === 'default') {
-    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'actor-unresolved', integrity: [] };
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', reason: 'actor-unresolved', integrity: [] };
     return { answer: { ...answer, answerText: ledgerAnswerText(answer) } };
   }
 
   const subject = await resolveLedgerSubject(query, deps);
   if ('code' in subject) {
-    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] };
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', reason: 'no-anchor', integrity: [] };
     return { answer: { ...answer, answerText: ledgerAnswerText(answer) }, diagnostics: [subject] };
   }
 
   const anchor = await resolveServerAnchor(subject.subjectId, deps);
   if (!anchor) {
-    const answer: LedgerAnswerEnvelope = { status: 'no-history', asOf: new Date(0).toISOString(), reason: 'no-anchor', integrity: [] };
+    // NO_ANCHOR is precisely "there is no server-known time" — the envelope
+    // must not assert one (r2 F2).
+    const answer: LedgerAnswerEnvelope = { status: 'no-history', reason: 'no-anchor', integrity: [] };
     return {
       answer: { ...answer, answerText: ledgerAnswerText(answer) },
       diagnostics: [{

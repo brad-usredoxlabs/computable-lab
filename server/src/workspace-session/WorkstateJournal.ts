@@ -153,6 +153,23 @@ function requiredNumber(value: unknown, context: string): number {
   return value;
 }
 
+/**
+ * A "how many" cap (adversarial r2 F1): a finite number that is NEVER negative.
+ * 0 is meaningful data — it means "show none" / "keep none". A NEGATIVE cap is
+ * malformed data and is rejected here, so interpretPolicy treats the whole file
+ * the way it treats a malformed file (honest off, never a silent clamp to a
+ * "reasonable" number). The sign trap this exists for: `arr.slice(-0)` IS
+ * `arr.slice(0)` — the FULL array — so a zero cap read straight through a
+ * negative-slice would leak every row the cap was supposed to bound.
+ */
+function countCap(value: unknown, context: string): number {
+  const n = requiredNumber(value, context);
+  if (n < 0) {
+    throw new Error(`workstate journal policy: ${context} must not be negative (0 means "none")`);
+  }
+  return n;
+}
+
 function requiredBoolean(value: unknown, context: string): boolean {
   if (typeof value !== 'boolean') {
     throw new Error(`workstate journal policy: ${context} must be a boolean`);
@@ -200,7 +217,7 @@ function interpretPolicy(raw: unknown): JournalPolicy | null {
       linkage: {
         windowMs: requiredNumber(linkage.windowMs, 'linkage.windowMs'),
         requireSameActor: requiredBoolean(linkage.requireSameActor, 'linkage.requireSameActor'),
-        maxLinks: requiredNumber(linkage.maxLinks, 'linkage.maxLinks'),
+        maxLinks: countCap(linkage.maxLinks, 'linkage.maxLinks'),
         idFields: idFields.map((f) => String(f).trim()),
       },
       retention: {
@@ -209,7 +226,7 @@ function interpretPolicy(raw: unknown): JournalPolicy | null {
       },
       query: {
         anchor,
-        labEventsMax: requiredNumber(query.labEventsMax, 'query.labEventsMax'),
+        labEventsMax: countCap(query.labEventsMax, 'query.labEventsMax'),
       },
     };
   } catch (err) {

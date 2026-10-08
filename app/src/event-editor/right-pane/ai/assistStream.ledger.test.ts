@@ -139,6 +139,32 @@ describe('assistStream — ledger_answer frame (PB-CH-8 transport mirror)', () =
     expect('disclosure' in event.answer).toBe(false)
   })
 
+  it('a no-history refusal frame WITHOUT asOf relays verbatim — the client never fabricates a time (adversarial r2 F2)', async () => {
+    // The server omits asOf on the policy-disabled / actor-unresolved /
+    // no-anchor refusals (no server-known audit time exists). The mirror must
+    // relay that absence: asOf stays ABSENT, never synthesized client-side.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      makeStreamResponse([
+        frame({
+          type: 'ledger_answer',
+          answer: {
+            status: 'no-history',
+            reason: 'actor-unresolved',
+            integrity: [],
+            answerText: 'The ledger answers only for a resolved user. Sign in or select a user to query your own workstate history.',
+          },
+        }),
+      ]),
+    )
+
+    const events = await collect()
+    const event = events.find((e) => e.type === 'ledger_answer') as LedgerEvent
+    expect(event.answer.status).toBe('no-history')
+    expect(event.answer.reason).toBe('actor-unresolved')
+    expect('asOf' in event.answer).toBe(false)
+    expect(JSON.stringify(event.answer)).not.toContain('1970-01-01')
+  })
+
   it('a malformed ledger_answer frame (no status / unknown status) parses to NOTHING — the client never guesses an answer', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       makeStreamResponse([

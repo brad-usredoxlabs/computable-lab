@@ -29,6 +29,7 @@ import {
   ledgerAnswerText,
   runLedgerQuery,
   serverWorkstateEnvelopeFromSnapshot,
+  type LedgerAnswerEnvelope,
   type LedgerQueryDeps,
 } from './ledgerQuery.js';
 import type { ActionCandidate } from '../ai/compileWorkspaceAction.js';
@@ -531,6 +532,112 @@ describe('ledgerQuery — zero record writes (row 10)', () => {
     // The tripwire store throws from create/update/delete; reaching here with
     // a found answer proves the ledger performed ZERO record-store writes.
     expect(store.writes.count).toBe(0);
+  });
+});
+
+// --------------------------------- adversarial r2 F1: labEventsMax boundary --
+
+describe('ledgerQuery — lab-events cap boundary (adversarial r2 F1)', () => {
+  it('query.labEventsMax: 0 means SHOW NONE — the no-history answer lists ZERO lab-event lines, never all N audit rows', async () => {
+    // The `.slice(-0)` === `.slice(0)` trap: a zero cap silently returned the
+    // FULL array. A cap of 0 is legal policy data and must mean "show none".
+    const audit = Array.from({ length: 10 }, (_, i) =>
+      auditEnvelope(`EVT-${i + 1}`, 'USR-A', 'RUN-1', `2026-10-07T09:${String(i).padStart(2, '0')}:00.000Z`),
+    );
+    const journal = makeJournal(audit);
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+
+    await writeFile(policyPath, POLICY_ON.replace('labEventsMax: 8', 'labEventsMax: 0'), 'utf8');
+    expect(journal.policyDisabled()).toBe(false); // 0 is VALID policy data, not a malformed file
+
+    const result = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, 'USR-A'));
+    expect(result.answer.status).toBe('no-history');
+    expect(result.answer.reason).toBe('journal-empty');
+    expect(result.answer.labEvents ?? []).toHaveLength(0);
+    const text = ledgerAnswerText(result.answer);
+    expect(text).not.toContain('lab events, not workstate');
+    for (const e of audit) expect(text).not.toContain(e.recordId);
+  });
+
+  it('a NEGATIVE query.labEventsMax is rejected at interpret time — the policy is invalid (honest off), never a silent mis-slice', async () => {
+    const audit = Array.from({ length: 10 }, (_, i) =>
+      auditEnvelope(`EVT-${i + 1}`, 'USR-A', 'RUN-1', `2026-10-07T09:${String(i).padStart(2, '0')}:00.000Z`),
+    );
+    const journal = makeJournal(audit);
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+
+    await writeFile(policyPath, POLICY_ON.replace('labEventsMax: 8', 'labEventsMax: -2'), 'utf8');
+    // Malformed policy data is treated exactly like a malformed file: honest
+    // OFF, never a silent clamp to a "reasonable" number.
+    expect(journal.policyDisabled()).toBe(true);
+    expect(journal.queryLabEventsMax()).toBe(0);
+
+    const captured = await journal.maybeCapture({
+      userId: 'USR-A',
+      actor: 'USR-A',
+      snapshot: { version: 1, userId: 'USR-A', tabs: [{ kind: 'run', runId: 'RUN-1' }], activeTabId: 'run:RUN-1', updatedAt: '2026-10-07T10:00:00.000Z' },
+    });
+    expect(captured.captured).toBe(false);
+
+    const result = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, 'USR-A'));
+    expect(result.answer.status).toBe('no-history');
+    expect(result.answer.reason).toBe('policy-disabled');
+    expect(result.answer.labEvents ?? []).toHaveLength(0);
+  });
+});
+
+// --------------------------------- adversarial r2 F2: no fabricated asOf -----
+
+describe('ledgerQuery — no fabricated asOf on the no-history refusals (adversarial r2 F2)', () => {
+  it('policy-disabled / actor-unresolved / no-anchor answers OMIT asOf — the epoch is never emitted as a server-known time', async () => {
+    const audit = [auditEnvelope('EVT-1', 'USR-A', 'RUN-1', '2026-10-07T10:05:00.000Z')];
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+    const answers: LedgerAnswerEnvelope[] = [];
+
+    // (a) policy-disabled: no reads happened, so there is NO server-known audit time.
+    const journalOff = makeJournal(audit);
+    await rm(policyPath);
+    const off = await runLedgerQuery({ term: 'ROS run' }, journalOff, deps(store, 'USR-A'));
+    expect(off.answer.reason).toBe('policy-disabled');
+    expect('asOf' in off.answer).toBe(false);
+    answers.push(off.answer);
+
+    // (b) actor-unresolved: null and the 'default' header fallback.
+    await writeFile(policyPath, POLICY_ON, 'utf8');
+    const journal = makeJournal(audit);
+    for (const actor of [null, 'default']) {
+      const refused = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, actor));
+      expect(refused.answer.reason).toBe('actor-unresolved');
+      expect('asOf' in refused.answer).toBe(false);
+      answers.push(refused.answer);
+    }
+
+    // (c) no-anchor: an unresolvable term, and a record with no audit rows.
+    const noAuditStore = readTripwireStore([recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+    const noTerm = await runLedgerQuery({ term: 'the thing I did last spring' }, journal, deps(noAuditStore, 'USR-A'));
+    expect(noTerm.answer.reason).toBe('no-anchor');
+    expect('asOf' in noTerm.answer).toBe(false);
+    answers.push(noTerm.answer);
+
+    const noAudit = await runLedgerQuery({ term: 'ROS run' }, journal, deps(noAuditStore, 'USR-A'));
+    expect(noAudit.answer.reason).toBe('no-anchor');
+    expect('asOf' in noAudit.answer).toBe(false);
+    answers.push(noAudit.answer);
+
+    // The fabricated epoch appears NOWHERE in any refusal envelope.
+    for (const answer of answers) expect(JSON.stringify(answer)).not.toContain('1970-01-01');
+  });
+
+  it('asOf is KEPT exactly where it IS server-known: the journal no-history answer carries the audit anchor verbatim', async () => {
+    const audit = [auditEnvelope('EVT-1', 'USR-A', 'RUN-1', '2026-10-07T09:50:00.000Z')];
+    const journal = makeJournal(audit); // journal dir never written ⇒ journal-empty
+    const store = readTripwireStore([...audit, recordEnvelope('RUN-1', 'planned-run', 'ROS run')]);
+    const result = await runLedgerQuery({ term: 'ROS run' }, journal, deps(store, 'USR-A'));
+    expect(result.answer.status).toBe('no-history');
+    expect(result.answer.reason).toBe('journal-empty');
+    // This asOf IS server-known (the audit occurredAt the query anchored on) —
+    // the fix omits the field only where no such time exists.
+    expect(result.answer.asOf).toBe('2026-10-07T09:50:00.000Z');
   });
 });
 
