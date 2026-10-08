@@ -1,0 +1,21 @@
+version: 1
+verbs: []
+policies:
+  strategyOrder:
+    - explicit_wells
+    - hint_search
+    - symbolic_label
+    - ontology_resolution
+    - mint_local
+  ambiguity:
+    mode: clarify
+    confidenceAccept:
+      min: 0.7
+      max: 1
+    strategyRef: symbolic_label
+  hintAuthority:
+    mode: lab_hint_first
+    strategyRef: hint_search
+  ruleIds:
+    - hint-authority
+    - ambiguity-clarify

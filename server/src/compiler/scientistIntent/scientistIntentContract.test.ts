@@ -26,11 +26,11 @@ import {
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { liftScientistIntent } from './liftScientistIntent.js';
 import { INTENT_ACTIONS, INTENT_COMPILE_SYSTEM_PROMPT } from './intentCompile.js';
+import { defaultScientistIntentVocabulary } from './vocabulary.js';
 
 const SCHEMA_PATH = join(process.cwd(), '..', 'schema', 'workflow', 'scientist-intent.schema.yaml');
 const FIXTURE_PATH = join(process.cwd(), 'src', 'compiler', 'scientistIntent', 'fixtures', 'verb-inventory.yaml');
 const TYPES_PATH = join(process.cwd(), 'src', 'compiler', 'scientistIntent', 'types.ts');
-const PARSE_PATH = join(process.cwd(), 'src', 'compiler', 'scientistIntent', 'parseScientistIntent.ts');
 
 /** Inline fixture bodies copied verbatim from scientistIntent.test.ts. */
 const THREE_ACTION = `
@@ -148,31 +148,33 @@ describe('verb-inventory', () => {
   const unionMatch = unionSrc.match(/export type ScientistIntentActionKind =\s*([\s\S]*?);\n/);
   const unionVerbs = unionMatch ? [...unionMatch[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]) : [];
 
-  const parseSrc = readFileSync(PARSE_PATH, 'utf-8');
-  const knownMatch = parseSrc.match(/const KNOWN_ACTIONS[^=]*=\s*new Set<ScientistIntentActionKind>\(\[([\s\S]*?)\]\);/);
-  const knownVerbs = knownMatch ? [...knownMatch[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]) : [];
+  // SPINE-2 fix1 (orchestrator-adjudicated pin edit): copy C (the parse-side
+  // verb-set literal, now deleted from parseScientistIntent.ts) is replaced in
+  // this leg by the SHIPPED VOCABULARY itself, read through the vocabulary
+  // loader API (order-preserving verbs()).
+  const vocabularyVerbs = [...defaultScientistIntentVocabulary().verbs()];
 
   const schemaDoc = loadSchemaDocument();
   const schemaEnum = actionEnumFromSchema(schemaDoc);
 
-  it('fixture == types.ts union == schema enum == KNOWN_ACTIONS == INTENT_ACTIONS, length 31, declaration order', () => {
+  it('fixture == types.ts union == schema enum == shipped vocabulary == INTENT_ACTIONS, length 31, declaration order', () => {
     // Set equality AND declaration-order equality (bait §8.7: sorted-alphabetical
     // would silently pass a set test yet lose the migration-baseline order).
     expect(fixtureVerbs).toHaveLength(31);
     expect(unionVerbs).toHaveLength(31);
-    expect(knownVerbs).toHaveLength(31);
+    expect(vocabularyVerbs).toHaveLength(31);
     expect(schemaEnum).toHaveLength(31);
     expect([...INTENT_ACTIONS]).toHaveLength(31);
 
     expect(fixtureVerbs).toEqual(unionVerbs);
-    expect(knownVerbs).toEqual(unionVerbs);
+    expect(vocabularyVerbs).toEqual(unionVerbs);
     expect(schemaEnum).toEqual(unionVerbs);
     expect([...INTENT_ACTIONS]).toEqual(unionVerbs);
 
     // Set identity as an explicit second assertion so a reviewer sees the diff
     // trip on divergence in EITHER direction (add or remove), not just length.
     expect(new Set(fixtureVerbs)).toEqual(new Set(unionVerbs));
-    expect(new Set(knownVerbs)).toEqual(new Set(unionVerbs));
+    expect(new Set(vocabularyVerbs)).toEqual(new Set(unionVerbs));
     expect(new Set(schemaEnum)).toEqual(new Set(unionVerbs));
     expect(new Set([...INTENT_ACTIONS])).toEqual(new Set(unionVerbs));
   });
@@ -357,11 +359,11 @@ actions:
 `)).toThrow(ScientistIntentValidationError);
   });
 
-  it('KNOWN_ACTIONS is defense-in-depth behind the enum; the verb-inventory diff test above is what catches a future enum-widening without a KNOWN_ACTIONS update', () => {
-    // normalizeDocument's KNOWN_ACTIONS filter (:67) is unreachable through
+  it('the vocabulary-driven defense layer is defense-in-depth behind the enum; the verb-inventory diff test above is what catches a future enum-widening without a vocabulary update', () => {
+    // normalizeDocument's vocabulary.has() filter is unreachable through
     // parseScientistIntent today because the schema enum rejects first. Both
     // layers are pinned: this test pins the Ajv layer; the verb-inventory test
-    // pins KNOWN_ACTIONS == enum so the defense layer cannot silently drift.
+    // pins shipped vocabulary == enum so the defense layer cannot silently drift.
     expect(() => parseScientistIntent(`
 intentId: bad2
 actions:

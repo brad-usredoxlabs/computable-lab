@@ -22,6 +22,7 @@
  */
 import type { ProtocolIntent, ProtocolPatternIntent } from '../protocolIntent/ProtocolIntent.js';
 import type { ScientistIntent } from './types.js';
+import { defaultScientistIntentVocabulary } from './vocabulary.js';
 
 export interface ScientistIntentNormalized {
   protocolIntent?: ProtocolIntent;
@@ -29,8 +30,9 @@ export interface ScientistIntentNormalized {
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
 }
 
-/** Actions already covered by the geometric-macro pattern expanders. */
-const PATTERN_ACTIONS = new Set(['serial_dilution', 'media_swap_duplicate_columns', 'source_wells_to_duplicate_target_columns', 'repeat_rows']);
+/** Actions covered by the geometric-macro pattern expanders — DERIVED from the
+ *  vocabulary YAML's declared class field (Q3 ruling; no hand-maintained set). */
+const PATTERN_ACTIONS: ReadonlySet<string> = defaultScientistIntentVocabulary().patterns();
 
 function firstString(record: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {

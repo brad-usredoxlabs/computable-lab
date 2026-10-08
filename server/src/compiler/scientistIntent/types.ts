@@ -9,6 +9,14 @@
  * knows how to expand.
  */
 
+/**
+ * Drift-checked MIRROR of the verb vocabulary (Q1 ruling: a TS type has no
+ * runtime YAML source without a codegen step, which would be a second policy
+ * home). AUTHORITY = schema/scientist-intent/scientist-intent-vocabulary.yaml;
+ * equality with this union is enforced by scientist-intent-vocabulary.mirror-drift
+ * (set diff both directions + declaration order vs fixtures/verb-inventory.yaml).
+ * No runtime code reads this union as a verb set — see vocabulary.ts.
+ */
 export type ScientistIntentActionKind =
   // simple biology verbs
   | 'seed'
