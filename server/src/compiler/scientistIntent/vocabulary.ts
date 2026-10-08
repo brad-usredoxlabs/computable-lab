@@ -124,7 +124,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const structural = validator.validate(doc, SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID);
   if (!structural.valid) {
     const detail = structural.errors
-      .map((e) => `${e.instancePath || '/'}: ${e.message}`)
+      .map((e) => `${e.path || '/'} [${e.keyword}]: ${e.message}`)
       .join('; ');
     throw new Error(
       `scientist-intent vocabulary failed schema validation (${dataPath}): ` +
@@ -189,15 +189,15 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   const patternsFrozen: ReadonlySet<string> = patterns;
   const policies: ScientistIntentVocabularyPolicies = raw.policies;
 
-  // Deterministic wrap for the prompt block (width-bounded, declaration order).
+  // Deterministic wrap for the prompt block (width-bounded, declaration order;
+  // reproduces the historical hand-wrapped block byte-for-byte at width 74).
   const promptVerbBlock = (): string => {
     const lines: string[] = [];
     let current = '';
-    for (let i = 0; i < verbsFrozen.length; i += 1) {
-      const verb = verbsFrozen[i] as string;
+    for (const verb of verbsFrozen) {
       const candidate = current === '' ? verb : `${current} | ${verb}`;
-      if (candidate.length > 78 && current !== '') {
-        lines.push(current);
+      if (candidate.length > 74 && current !== '') {
+        lines.push(`${current} |`);
         current = verb;
       } else {
         current = candidate;
