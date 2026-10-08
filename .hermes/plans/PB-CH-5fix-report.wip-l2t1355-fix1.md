@@ -105,7 +105,10 @@ tsc errors (34 lines / 24 files, identical to the prior run's baseline and final
 
 ## Commit
 
-Fix commit on `pbch5fix-lane2-l2t1355` (hash recorded below).
+`b84e564b965933c8ac7a3991b06e0dc749aab70e` on `pbch5fix-lane2-l2t1355` —
+"fix(app): PB-CH-5fix cycle-1 — pin analysis_proposal union member against
+drift in aiStreamTypes.pin.test.ts (lane2 l2t1355)" (5 files: the pin test +
+this report + red/green/tsc-final captures).
 
 ## Status
 
