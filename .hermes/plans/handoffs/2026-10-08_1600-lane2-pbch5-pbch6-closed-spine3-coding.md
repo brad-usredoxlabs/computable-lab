@@ -71,3 +71,53 @@ PBCH5-TWO-PIN-REGEX-EQUIV.
 
 ## Budget
 Invoked ~15:31, checkpoint ~16:00 (~29 min). No new worker launches after reconciliation.
+
+## APPENDED post-checkpoint 16:06 EDT (same tick l2t1535, ~15:31-16:06)
+4. SPINE-4 SPEC PROMOTED. Composer exited code=0 (SPINE4_SPEC_DONE 605). Orch cite-review
+   first-hand at fac6648e: cascade-skip barrier PipelineRunner.ts:272-293 CONFIRMED, 16 '- id:'
+   passes + zero 'when:' CONFIRMED, parseScientistIntent 'SPINE-3 widens' comment CONFIRMED
+   (line :114 today, spec cites :102-105 = line drift, same comment), SPINE-2 triplet LIVE
+   (claim-gate item 1 satisfied). Canonical:
+   .hermes/plans/2026-10-08_1605-SPINE-4-resolution-pass-registration-spec.md (commit 0bb7a5e9).
+   OQ RULINGS BINDING: OQ1=(a) 'needs-clarification' union member + consumer audit,
+   stop-and-report on an outside exhaustive switch; OQ2=NO chatbot registration (29-pin intact);
+   OQ3=(a) total zero-artifact on bar.
+5. SPINE-3 CODER EXITED code=0 (~42 min; appliance-2 Strata fast lane confirmed): tip 69597f98
+   (feat b73e08e0 + report commit), base 39a5311b = trunk ancestor, diff 16 files +5336, stat
+   shows ALL under server/src/compiler/resolution/ + report files. Report wip-l2t1440.md
+   (16KB) incl. §9 probe transcript + tsc comm-3 EMPTY 26/6 claim (trunk is 27/6 NOW — orch
+   verification must re-capture vs CURRENT trunk, count drift expected from SPINE-2 merge,
+   set-identity is the gate). Fleet coder lock released at exit.
+6. SPINE-3 ADVERSARIAL GATE IN FLIGHT (dispatched ~16:00, OpenRouter deepseek family — no
+   coder-slot contention): bash 3161636, log lanes/2/logs/review-SPINE-3-adversarial-l2t1600.log,
+   report reviews/review-SPINE-3-adversarial-l2t1600.md.
+
+## LIVE AT FINAL CHECKPOINT
+- cl-adversarial-reviewer SPINE-3 gate bash 3161636 (~5 min in; log buffered until exit).
+- No coder live (fleet lock FREE — SPINE-4 dispatchable next tick once SPINE-3 merges).
+
+## QUEUE (next tick priority)
+1. SPINE-3 gate exit: ACCEPT -> orch self-verify (open real diff; run
+   npx vitest run src/compiler/resolution + scientistIntent + protocolIntent in worktree; tsc
+   SET identity vs fresh trunk capture 27/6; six §6 criteria named) -> merge --no-ff -> restart
+   not needed if no YAML (verify) -> done. FIX -> defect list verbatim to SAME worktree, fix run
+   under fleet lock (cl-coder), re-gate.
+2. SPINE-3 merged -> CLAIM SPINE-4 (spec promoted; OQ rulings binding) -> worktree prep off
+   SPINE-3 merge commit, background, node_modules symlinks + server/schema symlink per SPINE-4
+   spec §10 recipe -> dispatch cl-coder under fleet lock + cl-spec-composer for SPINE-5 behind it.
+3. PB-CH-9: claim gates now = PB-CH-1..6 + PB-CH-8 (ALL merged+gated except the ledger item?) —
+   verify PB-CH-8 state at claim; fold the two carried dispositions (run-channel-regression
+   re-run clean + ANR-UISPEC gap) into its integrated gate.
+4. OBS-1 non-blocking (rides a future AiTabPanel run).
+
+## assumptions: (delta to section above)
+- CLEARED: none further.
+- OPEN carried: PBCH5-MODEL-PROMPT-COMPLIANCE-ITEM, APP-TSC-PIN-47-24,
+  PBCH4B-LEGACY-RUN-FIXTURE-ROOTCAUSE, S2-TSC-PIN-27, PBCH6-ANR-UISPEC-GAP (new, evidence debt),
+  PB-CH-9 run-channel-regression carry.
+- NOTE (not an assumption): SPINE-3 report cites tsc 26/6 (captured before SPINE-2's trunk
+  merge landed in its worktree base? base 39a5311b HAS 27/6) — treat the report's baseline
+  capture as suspect; set-identity vs CURRENT trunk is the only gate. If comm-3 is non-empty,
+  this is a FIX-cycle item, not a note.
+
+## Budget final: invoked 15:31, final checkpoint 16:06 (~35 min). No launches after 16:00.
