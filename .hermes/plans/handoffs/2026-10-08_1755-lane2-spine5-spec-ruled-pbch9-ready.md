@@ -88,3 +88,23 @@ NEW THIS TICK: none. SPINE-5 OQ rulings are decisions, not assumptions (recorded
 ## Budget
 Invoked ~17:31, checkpoint ~17:55 (~24 min). No further launches (coder lock held; PB-CH-9 and
 SPINE-5 both wait on it). Queue state durable; next tick has two claim-ready items queued.
+
+## ADDENDUM (same tick l2t1735, ~18:15): SPINE-6 SPEC COMMISSIONED + RULED
+
+- SPINE-6 composer ran (thunderbeast subagent, ~19 min) ->
+  .hermes/plans/2026-10-08_1755-SPINE-6-endtoend-goldens-spec-DRAFT-l2t1755.md (485 ln),
+  committed 8235d71e. Orch independently confirmed its contested-state absence checks at
+  0873c47b (needs-clarification absent at CompileContracts:78, resolveNounsPass absent).
+  OQ RULINGS BINDING, appended in-file: OQ1=(a) golden-replay.ts script + pure replayKernel;
+  OQ2=(a) home server/src/compiler/scientistIntent/goldens/; OQ3=(a) post-normalization JSON
+  deep-equal + typed expects; OQ4=(a) live smoke exits 0 on any completed call, verdict in the
+  artifact, never CI-wired; OQ5=(a) transfer+read free-text prompt. Claim gate = SPINE-5 merged
+  + adv ACCEPT. NOT promoted yet.
+- CONSEQUENCE FOR NEXT TICK: the whole SPINE spec chain (4 promoted, 5 + 6 reviewed-with-OQs)
+  is pre-staged. Remaining lane work is purely execution-gated on the SPINE-4 coder
+  (bash 3324671, alive ~47 min at 18:10, expected exit ~18:15-18:45). No new dispatches this
+  tick: coder lock held; PB-CH-9, SPINE-5, SPINE-6 all wait on SPINE-4.
+- Coder-watch (7b): expected-duration basis 90 min -> 2x assessment ~19:45, 3x change-approach
+  ~22:00. Log buffered 0 B is NORMAL for this harness until exit; state.db motion is the
+  forward-progress signal if in doubt.
+- assumptions: unchanged (no new entries this addendum).
