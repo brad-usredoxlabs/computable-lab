@@ -24,6 +24,7 @@ import type {
 } from './types.js';
 import type { AiSurface } from './systemPrompt.js';
 import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage, deriveContextCacheKey } from './systemPrompt.js';
+import { buildAnalysisGroundingBlockForSurface } from './analysisReferenceGrounding.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
@@ -1030,22 +1031,39 @@ export function createAgentOrchestrator(
    * ONE render path shared by run() and the background prompt warmer — if the
    * two ever drifted, warmed prefixes would never match real requests and the
    * KV cache would miss silently.
+   *
+   * PB-CH-10: the analysis reference grounding block is computed HERE — the
+   * one site both the warm and the real render pass through — so every surface
+   * the policy's `grounding.surfaces` list names gets the same ground-truth
+   * candidate list from one source. Async because the candidate scan is a store
+   * read; the warm manager already accepts a Promise prefix
+   * (WarmTarget.buildPrefix), so warm/real parity holds by construction.
    */
-  function buildPrefixRequest(args: {
+  async function buildPrefixRequest(args: {
     context: EditorContext;
     surface?: AiSurface;
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
-  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'> {
+  }): Promise<Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>> {
     const forceDraftTool = args.forceDraftTool ?? defaultForceDraftTool;
     const systemPrompt = args.surface
       ? buildSurfaceAwarePrompt(args.surface, args.context)
       : buildSystemPrompt(args.context, systemPromptPath);
+    // Surface membership + cap + title are DATA (config/drafting/
+    // analysis-composition.yaml `grounding:`); the kind set is that policy's
+    // own referenceKinds. Zero surface names, zero kind nouns here (repo rule
+    // #1). No store ⇒ no scan, no block.
+    const groundingBlock = deps.store
+      ? await buildAnalysisGroundingBlockForSurface(deps.store, args.surface)
+      : null;
     const systemSections: string[] = [systemPrompt];
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+    // Pushed LAST so it sits adjacent to the forced-tool instruction (OQ1
+    // ruling: the grounding block carries the compose_analysis routing rule).
+    if (groundingBlock) systemSections.push(groundingBlock);
 
     const historyMessages = Array.isArray(args.history)
       ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
@@ -1414,13 +1432,13 @@ export function createAgentOrchestrator(
           ? `${volatileParts.join('\n\n')}\n\n[User request]\n${prompt}`
           : prompt;
         messages = [
-          ...buildPrefixRequest({
+          ...(await buildPrefixRequest({
             context,
             ...(surface ? { surface } : {}),
             ...(history ? { history } : {}),
             ...(forceDraftTool ? { forceDraftTool } : {}),
             ...(toolFilter ? { toolFilter } : {}),
-          }).messages,
+          })).messages,
           { role: 'user', content: userContent },
         ];
       }
