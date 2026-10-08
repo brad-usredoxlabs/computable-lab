@@ -213,4 +213,4 @@ model-side compliance per the run-7 rule and OQ1 escalation territory, not groun
  8 files changed, 593 insertions(+), 12 deletions(-)
 ```
 
-Final commit hash: 41659c903b8aef7ae9a779b73db43209767bfec7 (branch pb-ch-10-lane2-l2t2120, 8 files, +760/-12 vs base 973bb2de)
+Final commit hash: 775a69cfb6623185f1323cdd7e8286676fe4d797 (branch pb-ch-10-lane2-l2t2120, 8 files, +760/-12 vs base 973bb2de; a report-only follow-up commit records this hash line)
