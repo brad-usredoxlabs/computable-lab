@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import type {
   ScientistIntent,
   ScientistIntentActionKind,
+  ScientistIntentActionLocation,
   ScientistIntentActionValue,
 } from './types.js';
 
@@ -70,6 +71,8 @@ function normalizeDocument(value: unknown): ScientistIntent {
         'source', 'sourceHint', 'target', 'targetHint', 'labware', 'labwareHint',
         'source_name', 'material', 'mode', 'wavelength', 'instrument', 'readout',
         'ratio', 'duration',
+        // SPINE-1 expected-domain slots (declaration only; nothing consumes them yet)
+        'expectedSourceDomain', 'expectedTargetDomain', 'expectedLabwareDomain',
       ] as const) {
         if (typeof a[key] === 'string' && (a[key] as string).trim()) clean[key] = a[key];
       }
@@ -96,13 +99,37 @@ function normalizeDocument(value: unknown): ScientistIntent {
               : [];
           })
         : [];
+      // SPINE-1: preserve argument-location identity on the PARSED document
+      // (parse-level contract). The normalizeScientistIntent unresolvedRefs
+      // boundary stays {kind,label,reason} — SPINE-3 widens it.
+      const actionLocation = preserveActionLocation(rec.actionLocation);
       return [{
         label: rec.label,
         reason: rec.reason,
         ...(candidates.length > 0 ? { candidates } : {}),
+        ...(actionLocation ? { actionLocation } : {}),
       }];
     }),
   };
+}
+
+/**
+ * Carry actionLocation through normalizeDocument member-by-member (defense in
+ * depth behind the schema), preserving ONLY well-typed members and omitting the
+ * whole object when nothing survives. exactOptionalPropertyTypes: conditional
+ * spread, never `x: undefined`.
+ */
+function preserveActionLocation(value: unknown): ScientistIntentActionLocation | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const loc = value as Record<string, unknown>;
+  const preserved: ScientistIntentActionLocation = {
+    ...(typeof loc.actionIndex === 'number' && Number.isInteger(loc.actionIndex) ? { actionIndex: loc.actionIndex } : {}),
+    ...(typeof loc.action === 'string' && loc.action.trim() && KNOWN_ACTIONS.has(loc.action as ScientistIntentActionKind)
+      ? { action: loc.action as ScientistIntentActionKind }
+      : {}),
+    ...(typeof loc.argument === 'string' && loc.argument.trim() ? { argument: loc.argument } : {}),
+  };
+  return Object.keys(preserved).length > 0 ? preserved : undefined;
 }
 
 /**

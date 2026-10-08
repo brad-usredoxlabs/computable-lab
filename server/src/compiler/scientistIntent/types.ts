@@ -58,6 +58,14 @@ export interface ScientistIntentActionValue {
   targetWells?: string[];
   labware?: string;
   labwareHint?: string;
+  // expected-domain slots (SPINE-1 declaration ONLY): free-text domain tags
+  // naming which KIND of thing the argument is expected to be. Nothing consumes
+  // them until SPINE-2's vocabulary YAML declares per-verb per-argument domains
+  // and SPINE-3's resolution engine evaluates them. No ontology-term validation
+  // fires here (that would be a second policy home before the vocabulary exists).
+  expectedSourceDomain?: string;
+  expectedTargetDomain?: string;
+  expectedLabwareDomain?: string;
   // auth
   source_name?: string;
   // quantities / parameters
@@ -80,10 +88,25 @@ export interface ScientistIntentActionValue {
   params?: Record<string, unknown>;
 }
 
+/**
+ * Argument-location identity (SPINE-1 contract extension): WHERE in the
+ * document a clarification bites — which action (by index and/or canonical
+ * verb) and which argument of it ('source' | 'target' | 'labware' | a param
+ * name). All members optional; `action` is constrained to the same 31-verb
+ * union the schema's $defs/actionVerb references — the verb enum is the
+ * fabrication gate at the contract layer.
+ */
+export interface ScientistIntentActionLocation {
+  actionIndex?: number;
+  action?: ScientistIntentActionKind;
+  argument?: string;
+}
+
 export interface ScientistIntentUnresolvedFact {
   label: string;
   reason: string;
   candidates?: Array<{ label: string; confidence?: number }>;
+  actionLocation?: ScientistIntentActionLocation;
 }
 
 export interface ScientistIntent {

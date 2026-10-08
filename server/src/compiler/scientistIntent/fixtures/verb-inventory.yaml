@@ -1,0 +1,36 @@
+# SPINE-1 migration baseline; SPINE-2 moves authority to vocabulary YAML;
+# this file changes only together with a deliberate vocabulary change.
+# Order is types.ts declaration order (the pin), NOT alphabetical.
+version: 1
+verbs:
+- seed
+- incubate
+- mix
+- resuspend
+- dilute
+- shake
+- count
+- read
+- add_material
+- create_container
+- transfer
+- stain
+- fix
+- permeabilize
+- block
+- quench
+- label
+- transfect
+- aliquot
+- wash
+- elute
+- harvest
+- passage
+- freeze
+- thaw
+- spin
+- pellet
+- serial_dilution
+- media_swap_duplicate_columns
+- source_wells_to_duplicate_target_columns
+- repeat_rows
