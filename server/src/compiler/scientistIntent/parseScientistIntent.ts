@@ -60,24 +60,6 @@ export class ScientistIntentValidationError extends Error {
   }
 }
 
-/**
- * BLOCKED-DELETION NOTE (SPINE-2 l2t1145, escalated to orchestrator): this
- * literal verb set is the copy SPINE-2 4/7 mandates deleting (derive from the
- * vocabulary YAML), but SPINE-1's frozen verb-inventory contract test
- * regex-extracts THIS literal form and its pin may not be edited without
- * orchestrator adjudication. The Ajv fabrication gate is now vocabulary-driven
- * via the $defs/actionVerb enum injection in getValidator(); this literal is
- * retained ONLY for the pinned preserveActionLocation defense layer below.
- */
-const KNOWN_ACTIONS: ReadonlySet<string> = new Set<ScientistIntentActionKind>([
-  'seed', 'incubate', 'mix', 'resuspend', 'dilute', 'shake', 'count', 'read',
-  'add_material', 'create_container', 'transfer', 'stain', 'fix', 'permeabilize',
-  'block', 'quench', 'label', 'transfect', 'aliquot', 'wash', 'elute', 'harvest',
-  'passage', 'freeze', 'thaw', 'spin', 'pellet', 'serial_dilution',
-  'media_swap_duplicate_columns', 'source_wells_to_duplicate_target_columns',
-  'repeat_rows',
-]);
-
 function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary): ScientistIntent {
   const obj = value as Record<string, unknown>;
   const actions = (Array.isArray(obj.actions) ? obj.actions : []) as Array<
@@ -130,7 +112,7 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
       // SPINE-1: preserve argument-location identity on the PARSED document
       // (parse-level contract). The normalizeScientistIntent unresolvedRefs
       // boundary stays {kind,label,reason} — SPINE-3 widens it.
-      const actionLocation = preserveActionLocation(rec.actionLocation);
+      const actionLocation = preserveActionLocation(rec.actionLocation, vocabulary);
       return [{
         label: rec.label,
         reason: rec.reason,
@@ -145,14 +127,19 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
  * Carry actionLocation through normalizeDocument member-by-member (defense in
  * depth behind the schema), preserving ONLY well-typed members and omitting the
  * whole object when nothing survives. exactOptionalPropertyTypes: conditional
- * spread, never `x: undefined`.
+ * spread, never `x: undefined`. Membership comes from the vocabulary that owns
+ * this parse (SPINE-2: no TS-side verb list — the defense layer follows the
+ * same YAML authority as the fabrication gate).
  */
-function preserveActionLocation(value: unknown): ScientistIntentActionLocation | undefined {
+function preserveActionLocation(
+  value: unknown,
+  vocabulary: ScientistIntentVocabulary,
+): ScientistIntentActionLocation | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const loc = value as Record<string, unknown>;
   const preserved: ScientistIntentActionLocation = {
     ...(typeof loc.actionIndex === 'number' && Number.isInteger(loc.actionIndex) ? { actionIndex: loc.actionIndex } : {}),
-    ...(typeof loc.action === 'string' && loc.action.trim() && KNOWN_ACTIONS.has(loc.action as ScientistIntentActionKind)
+    ...(typeof loc.action === 'string' && loc.action.trim() && vocabulary.has(loc.action)
       ? { action: loc.action as ScientistIntentActionKind }
       : {}),
     ...(typeof loc.argument === 'string' && loc.argument.trim() ? { argument: loc.argument } : {}),
