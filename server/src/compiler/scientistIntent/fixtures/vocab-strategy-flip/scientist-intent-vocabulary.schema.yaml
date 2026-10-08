@@ -1,0 +1,181 @@
+# SPINE-2 vocabulary meta-schema — STRUCTURAL rules only (JSON Schema).
+# Conditional business policy lives in scientist-intent-vocabulary.lint.yaml (DSL),
+# never here and never in TypeScript (CLAUDE.md: business logic lives in lint YAML).
+# Representation ruling (spec 5.0): verbs and args are ARRAYS of name-keyed
+# declarations, in declaration order — the lint DSL's everyItem/allIn predicates
+# quantify over arrays, and order is the migration baseline (verb-inventory).
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/scientist-intent/vocabulary.schema.yaml"
+title: ScientistIntent Verb Vocabulary
+description: >
+  Authority document for the scientist-intent closed verb vocabulary and its
+  per-argument contracts. The parser, tool schema, prompt, lifter, and the
+  normalizer's pattern-set all consume THIS document; TypeScript keeps no
+  hand-maintained verb list. Domains/capabilities are DECLARATION SLOTS naming
+  where a symbolic noun must land (SPINE-3's adapters consume them); no
+  knowledge-layer term validation fires here.
+type: object
+additionalProperties: false
+unevaluatedProperties: false
+required:
+- version
+- verbs
+- policies
+properties:
+  version:
+    type: integer
+    const: 1
+
+  verbs:
+    type: array
+    minItems: 1
+    description: >-
+      The closed verb vocabulary, in declaration order (the migration baseline
+      order pinned against fixtures/verb-inventory.yaml).
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - name
+      - class
+      - args
+      properties:
+        name:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          description: Canonical verb id (the wire-schema action value).
+        class:
+          type: string
+          enum: [simple, compound, pattern]
+          description: >-
+            Vocabulary class. class: pattern marks the geometric macro verbs the
+            normalizer routes to the pattern expanders (PATTERN_ACTIONS source).
+        policyRef:
+          type: string
+          minLength: 1
+          description: >-
+            Id of the policy in policies.ruleIds that governs this verb's
+            argument handling (e.g. hint-authority). Lint resolves every ref
+            against policies.ruleIds and requires a ref on any verb with a
+            hintEligible argument.
+        args:
+          type: array
+          description: >-
+            Per-argument contracts for this verb. Field names match the wire
+            schema's action-item properties.
+          items:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required:
+            - name
+            - kind
+            - required
+            properties:
+              name:
+                type: string
+                pattern: "^[a-z][a-zA-Z0-9_]*$"
+              kind:
+                type: string
+                enum: [resolvable, scalar, wells, quantity]
+                description: >-
+                  resolvable = a symbolic noun the resolver spine must bind;
+                  wells = a well-address list; quantity = a numeric parameter;
+                  scalar = free-text/scalar parameter.
+              required:
+                type: boolean
+              domain:
+                type: string
+                minLength: 1
+                description: >-
+                  DECLARATION SLOT — free-text domain tag naming where the noun
+                  must land (e.g. labware, material, instrument). Required for
+                  resolvable args by lint policy (not by structure).
+              capability:
+                type: string
+                minLength: 1
+                description: >-
+                  DECLARATION SLOT — capability tag for SPINE-3 adapters.
+              hintEligible:
+                type: boolean
+                description: >-
+                  True when the wire contract carries a *Hint companion for this
+                  argument (sourceHint/targetHint/labwareHint).
+
+  policies:
+    type: object
+    additionalProperties: false
+    unevaluatedProperties: false
+    required:
+    - strategyOrder
+    - ambiguity
+    - hintAuthority
+    - ruleIds
+    properties:
+      strategyOrder:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          pattern: "^[a-z][a-z0-9_-]*$"
+        description: >-
+          Resolution-strategy precedence (policy VALUES as data; SPINE-3
+          consumes the order).
+      ambiguity:
+        type: object
+        additionalProperties: false
+        unevaluatedProperties: false
+        required:
+        - mode
+        - confidenceAccept
+        - strategyRef
+        properties:
+          mode:
+            type: string
+            minLength: 1
+          confidenceAccept:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required: [min, max]
+            properties:
+              min:
+                type: number
+                minimum: 0
+                maximum: 1
+              max:
+                type: number
+                minimum: 0
+                maximum: 1
+            description: >-
+              DECLARED acceptance window on the SAME 0..1 candidate-confidence
+              scale SPINE-1 froze (declared, not calibrated).
+          strategyRef:
+            type: string
+            description: >-
+              Strategy id this policy arm delegates to (lint: member of strategyOrder).
+      hintAuthority:
+        type: object
+        additionalProperties: false
+        unevaluatedProperties: false
+        required:
+        - mode
+        - strategyRef
+        properties:
+          mode:
+            type: string
+            minLength: 1
+          strategyRef:
+            type: string
+      ruleIds:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+        description: >-
+          Declared policy ids that argument policyRefs may name (lint resolves
+          every policyRef against this list — "missing rule refs").

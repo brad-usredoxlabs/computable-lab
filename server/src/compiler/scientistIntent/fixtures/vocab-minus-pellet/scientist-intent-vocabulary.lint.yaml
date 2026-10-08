@@ -1,0 +1,157 @@
+# SPINE-2 vocabulary lint — conditional business policy for the scientist-intent
+# verb vocabulary document (bound by schemaId to the vocabulary $id).
+# DSL-only (exists/nonEmpty/equals/allIn/everyItem/all/any/not — no interpreter
+# changes). Policy VALUES live in the vocabulary data (policies:); policy
+# WELL-FORMEDNESS lives here; NO conditional is re-implemented in TypeScript.
+# NB server.ts skips empty-rule specs silently at boot — resolver-spec.validation
+# is the backstop that the shipped spec has rules and they fire.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/scientist-intent/vocabulary.schema.yaml"
+
+rules:
+# P1: every resolvable argument declares a non-empty domain (declaration slot).
+- id: vocab-resolvable-args-declare-domain
+  title: "resolvable args declare a domain"
+  description: >-
+    Every argument of kind resolvable must declare a non-empty domain tag
+    naming where the symbolic noun must land (SPINE-3's adapters consume it).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: everyItem
+    collectionPath: verbs
+    assert:
+      op: everyItem
+      collectionPath: args
+      assert:
+        op: any
+        predicates:
+        - op: not
+          not:
+            op: equals
+            path: kind
+            value: resolvable
+        - op: nonEmpty
+          path: domain
+  message:
+    template: "a resolvable vocabulary argument must declare a non-empty domain"
+
+# P2: every verb policyRef names a policy declared in policies.ruleIds
+# ("missing rule refs"), and any verb with a hintEligible argument must carry
+# one. (Verb-level refs: the DSL's [*] projection cannot flatten nested
+# verbs[*].args[*] selections — one wildcard level per path.)
+- id: vocab-policy-refs-declared
+  title: "verb policyRefs are declared policies"
+  description: >-
+    Every policyRef carried by a verb must be a member of policies.ruleIds.
+    Undeclared refs fail loudly.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: allIn
+    path: verbs[*].policyRef
+    collectionPath: policies.ruleIds
+  message:
+    template: "vocabulary verb policyRef is not declared in policies.ruleIds"
+
+- id: vocab-hint-verbs-carry-policy-ref
+  title: "hint-eligible verbs carry a policyRef"
+  description: >-
+    A verb with any hintEligible argument must declare a policyRef (the policy
+    that governs its hint surface).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: everyItem
+    collectionPath: verbs
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: everyItem
+          collectionPath: args
+          assert:
+            op: not
+            not:
+              op: equals
+              path: hintEligible
+              value: true
+      - op: exists
+        path: policyRef
+  message:
+    template: "a verb with a hintEligible argument must declare a policyRef"
+
+# P3: pattern-class verbs forbid a REQUIRED resolvable argument (pattern-macro
+# shape: geometry is expanded by the compiler, mandatory nouns are not owed).
+- id: vocab-pattern-verbs-forbid-required-resolvable
+  title: "pattern verbs forbid required resolvable args"
+  description: >-
+    A verb of class pattern must not declare an argument that is both kind
+    resolvable and required true.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: everyItem
+    collectionPath: verbs
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: class
+          value: pattern
+      - op: everyItem
+        collectionPath: args
+        assert:
+          op: any
+          predicates:
+          - op: not
+            not:
+              op: equals
+              path: kind
+              value: resolvable
+          - op: not
+            not:
+              op: equals
+              path: required
+              value: true
+  message:
+    template: "pattern-class verbs must not require a resolvable argument"
+
+# P4: strategy ids referenced by ambiguity/hintAuthority are members of
+# policies.strategyOrder (precedence is data, not code).
+- id: vocab-strategy-refs-declared
+  title: "policy strategyRefs are members of strategyOrder"
+  description: >-
+    policies.ambiguity.strategyRef and policies.hintAuthority.strategyRef must
+    each be a member of policies.strategyOrder.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: all
+    predicates:
+    - op: allIn
+      path: policies.ambiguity.strategyRef
+      collectionPath: policies.strategyOrder
+    - op: allIn
+      path: policies.hintAuthority.strategyRef
+      collectionPath: policies.strategyOrder
+  message:
+    template: "a vocabulary policy strategyRef is not a member of policies.strategyOrder"
