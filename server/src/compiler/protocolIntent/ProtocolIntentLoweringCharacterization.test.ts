@@ -212,14 +212,18 @@ actions:
       expect(instance).not.toHaveProperty('deckSlot');
     }
 
-    const { terminalArtifacts } = await compileScientistIntent(doc, {
+    // SPINE-4 DELIBERATE GOLDEN CHANGE (compile leg only; the normalize-side
+    // deckSlot pin above is untouched). BEFORE: unbindable hints minted
+    // deckSlot-free labwareAdditions. AFTER: unbindable nouns bar the compile
+    // atomically — resolve_labware never runs, so labwareAdditions is ABSENT
+    // and the outcome is 'needs-clarification' with structured clarifications.
+    const { terminalArtifacts, outcome, clarifications } = await compileScientistIntent(doc, {
       searchLabwareByHint: async () => [],
     });
-    const additions = terminalArtifacts.labwareAdditions ?? [];
-    expect(additions.length).toBeGreaterThan(0);
-    for (const addition of additions) {
-      expect(addition).not.toHaveProperty('deckSlot');
-    }
+    expect(outcome).toBe('needs-clarification');
+    expect(Object.keys(terminalArtifacts)).not.toContain('labwareAdditions');
+    expect(terminalArtifacts.events).toEqual([]);
+    expect(clarifications.map((c) => c.label).sort()).toEqual(['mystery_source', 'mystery_target']);
   });
 });
 
