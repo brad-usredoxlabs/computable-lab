@@ -79,3 +79,8 @@ prior 26/6 pin superseded - verified identical worktree vs trunk both at 27).
 ## Budget
 Invoked ~14:31, checkpoint ~15:20 (~49 min - SPINE-3 dispatch made at ~44 min, inside the soft
 budget; nothing launched after).
+
+APPENDED to handoff 2026-10-08_1520 post-checkpoint: PB-CH-5fix re-gate ACCEPTED and MERGED
+fac6648e; stack restarted. OPEN EXPLICIT OBLIGATION: browser gate on served fac6648e (:5193),
+orch deterministic-playwright route, receipts/PB-CH-5/<ts>/ - PB-CH-5 stays in-progress until a
+real VERDICT renders. Next tick priority #1.
