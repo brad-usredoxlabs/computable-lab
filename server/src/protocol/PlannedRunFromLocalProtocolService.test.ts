@@ -7,12 +7,14 @@ import { PlannedRunFromLocalProtocolService } from './PlannedRunFromLocalProtoco
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 
 function makeMockStore(getResult?: RecordEnvelope | null, createResult?: { success: boolean }): RecordStore {
+  const records = new Map<string, RecordEnvelope>();
+  if (getResult) records.set(getResult.recordId, getResult);
   return {
-    get: async (recordId: string) => getResult ?? null,
+    get: async (recordId: string) => records.get(recordId) ?? null,
     getByPath: async () => null,
     getWithValidation: async () => ({ success: true }),
     list: async () => [],
-    create: async () => ({ success: createResult?.success ?? true }),
+    create: async ({ envelope }: { envelope: RecordEnvelope }) => { records.set(envelope.recordId, envelope); return { success: createResult?.success ?? true, envelope }; },
     update: async () => ({ success: true }),
     delete: async () => ({ success: true }),
     validate: async () => ({ valid: true, errors: [] }),
@@ -80,11 +82,13 @@ describe('PlannedRunFromLocalProtocolService', () => {
         kind: 'record',
         type: 'local-protocol',
         id: localProtocolId,
+        revisionRef: { kind: 'record', type: 'record-revision', id: expect.stringMatching(/^REV-/) },
       });
       expect(payload.localProtocolRef).toEqual({
         kind: 'record',
         type: 'local-protocol',
         id: localProtocolId,
+        revisionRef: { kind: 'record', type: 'record-revision', id: expect.stringMatching(/^REV-/) },
       });
 
       // Empty bindings

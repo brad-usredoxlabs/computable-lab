@@ -182,7 +182,7 @@ describe('BranchQuestionsPanel — send a branch back to the AI', () => {
     fireEvent.click(screen.getByLabelText('Feces'))
     fireEvent.click(screen.getByLabelText('ZR BashingBead Lysis Tubes (0.1 & 0.5 mm)'))
 
-    fireEvent.change(screen.getByPlaceholderText(/the 550 µl volume/), {
+    fireEvent.change(screen.getByLabelText('Send this branch back to the AI'), {
       target: { value: 'keep the rack format at 750 µl' },
     })
     fireEvent.click(screen.getByText('Redraft this branch'))
@@ -199,7 +199,7 @@ describe('BranchQuestionsPanel — send a branch back to the AI', () => {
     render(<BranchQuestionsPanel axes={[AXIS_BRANCH, AXIS_SAMPLE]} proposals={PROPOSALS} />)
     fireEvent.click(screen.getByLabelText('Feces'))
     fireEvent.click(screen.getByLabelText('ZR BashingBead Lysis Tubes (0.1 & 0.5 mm)'))
-    fireEvent.change(screen.getByPlaceholderText(/the 550 µl volume/), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Send this branch back to the AI'), { target: { value: 'x' } })
     fireEvent.click(screen.getByText('Redraft this branch'))
     await waitFor(() => expect(screen.getByTestId('redraft-error').textContent).toContain('compile runner unavailable'))
   })

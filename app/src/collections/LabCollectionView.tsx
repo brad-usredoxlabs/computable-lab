@@ -22,10 +22,11 @@ import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
+  { id: 'sequences', label: 'Sequences & assays', kind: 'sequence' },
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
   { id: 'equipment', label: 'Instruments & Equipment', kind: 'equipment' },

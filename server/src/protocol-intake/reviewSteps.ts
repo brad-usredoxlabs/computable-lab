@@ -114,17 +114,9 @@ export function reviewStepsFromCandidate(input: {
     const rawId = asString(step.id);
     const stepId = rawId || `step-${String(index + 1).padStart(3, '0')}`;
     const description = asString(step.sourceText);
-    // Ordinal = the step's position in the document (its id), because a manual
-    // may restart its OWN numbering mid-protocol: showing two "1." rows would
-    // hide that a later list is a separate procedure. `stepNumber` (the
-    // manual's number) stays on the candidate for cross-reference and is the
-    // fallback when the step carries no id of its own.
-    const fromId = rawId ? Number.parseInt(/^step-(\d+)/.exec(rawId)?.[1] ?? '', 10) : Number.NaN;
-    const ordinal = Number.isFinite(fromId)
-      ? fromId
-      : typeof step.stepNumber === 'number' && Number.isFinite(step.stepNumber)
-        ? step.stepNumber
-        : index + 1;
+    // Execution order can jump backwards in the PDF when a pretreatment
+    // continues into purification. Source ids are identity, not sequence.
+    const ordinal = index + 1;
     const { pages, sectionId } = pagesFrom(step.provenance);
     const entry = gating.get(stepId);
     return {

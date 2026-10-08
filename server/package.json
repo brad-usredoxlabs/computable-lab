@@ -14,6 +14,7 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "mcp": "npx tsx src/mcp-stdio.ts",
+    "bootstrap-admin": "npx tsx src/scripts/bootstrapAdmin.ts",
     "import:opentrons-labware": "npx tsx src/tools/importOpentronsLabware.ts",
     "compile:fixtures": "npx tsx scripts/run-compile-fixtures.ts",
     "corpus:intake": "npx tsx src/tools/corpusIntake.ts",

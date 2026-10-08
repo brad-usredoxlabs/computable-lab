@@ -1,4 +1,5 @@
 import type { RecordStore } from '../store/types.js';
+import { getEquipmentKindRegistry } from '../registry/EquipmentKindRegistry.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type {
   CapabilityResolutionRequest,
@@ -66,6 +67,17 @@ export class EquipmentCapabilityService {
     }
 
     const equipmentClassId = payloadRecordId(equipment.equipmentClassRef);
+    // A generic kind and its evidenced realizations are the same concept at
+    // different specificity, so a capability attached to either applies to an
+    // instance of either. Resolve the closure in BOTH directions: the equipment's
+    // class may be a realization of a kind, and a capability may name a kind the
+    // equipment's class realizes.
+    const classIds = new Set<string>();
+    if (equipmentClassId) classIds.add(equipmentClassId);
+    for (const kind of getEquipmentKindRegistry().list()) {
+      if (kind.classRealizations.includes(equipmentClassId ?? '')) classIds.add(kind.id);
+      if (kind.id === equipmentClassId) for (const realization of kind.classRealizations) classIds.add(realization);
+    }
 
     const [equipmentClassEnvelopes, capabilityEnvelopes] = await Promise.all([
       equipmentClassId ? this.store.list({ kind: 'equipment-class' }) : Promise.resolve([]),
@@ -83,7 +95,7 @@ export class EquipmentCapabilityService {
         const source =
           payload.equipmentRef?.id === equipmentId
             ? 'equipment'
-            : payload.equipmentClassRef?.id === equipmentClassId
+            : classIds.has(payload.equipmentClassRef?.id ?? '')
               ? 'equipment-class'
               : null;
 

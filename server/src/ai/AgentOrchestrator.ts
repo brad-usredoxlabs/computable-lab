@@ -1,3 +1,5 @@
+import { sequenceIntentTool, decodeSequenceAction, sequenceAuthoringGuidance } from '../sequences/sequenceIntent.js';
+import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity.js';
 /**
  * Core agent orchestrator — runs a multi-turn tool-calling loop
  * against an LLM inference endpoint, returning validated event
@@ -495,7 +497,7 @@ export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   '- ALWAYS return the events for an add-materials request (with {mint} for unknowns). NEVER return "events": [] for such a request, and never ask the user to confirm a volume or concentration they already stated.',
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
-  '- THREE intents, ONE call. `event_graph` drafts events onto the deck; `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
+  '- Choose ONE intent from the supplied tool schema in ONE call. `event_graph` drafts events onto the deck; `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
   '- For operations, use canonical operation names when possible: dispense, transfer, mix, shake, incubate, centrifuge, wash, read, seed, harvest, etc. The system normalizes verbs automatically.',
@@ -752,7 +754,7 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
   }
   // Bare argument object: require a known draft key so unrelated prose-JSON
   // (an example, a code block) is never fed to the compiler.
-  if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
+  if (DRAFT_ARG_KEYS.some((k) => k in obj) || 'sequenceAction' in obj) return obj;
   return null;
 }
 
@@ -849,6 +851,10 @@ function countDraftedEvents(partialArgs: string): number {
  * Create an agent orchestrator.
  */
 export interface AgentOrchestratorDeps extends ResolveMentionDeps {
+  sequenceActionSchema?: Record<string, unknown>;
+  sequenceOligoGuidance?: Record<string, unknown>;
+  validateSequenceAction?: (request: unknown) => { valid: boolean; errors?: Array<{ path: string; message: string }> };
+
   extractionService?: import('../extract/ExtractionRunnerService.js').ExtractionRunnerService;
   llmClient?: import('../compiler/pipeline/passes/ChatbotCompilePasses.js').LlmClient;
   /**
@@ -932,7 +938,7 @@ export function createAgentOrchestrator(
       // Draft mode offers the model a SINGLE forced emission tool whose own
       // schema is the constrained menu (event_graph | deck_layout), keeping
       // every turn a structured emission while widening beyond the lone draft.
-      return [AGENT_INTENT_TOOL_DEF];
+      return [deps.sequenceActionSchema ? sequenceIntentTool(AGENT_INTENT_TOOL_DEF, deps.sequenceActionSchema) : AGENT_INTENT_TOOL_DEF];
     }
     const allToolDefs = toolBridge.getToolDefinitions();
     const baseToolDefs = toolFilter
@@ -956,11 +962,17 @@ export function createAgentOrchestrator(
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
   }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'> {
-    const forceDraftTool = args.forceDraftTool ?? defaultForceDraftTool;
+    const forceDraftTool = args.surface === 'sequences' ? true : args.forceDraftTool ?? defaultForceDraftTool;
     const systemPrompt = args.surface
       ? buildSurfaceAwarePrompt(args.surface, args.context)
       : buildSystemPrompt(args.context, systemPromptPath);
     const systemSections: string[] = [systemPrompt];
+    if(args.surface==='sequences' && deps.sequenceActionSchema)systemSections.push(
+      sequenceAuthoringGuidance,
+      'Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.',
+      'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
+      'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
+    );
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
@@ -996,8 +1008,8 @@ export function createAgentOrchestrator(
       // Draft-flow gating: an explicit request value always wins (the
       // event-editor dock sends forceDraftTool: true; Precompile mode sends
       // deterministicOnly). Otherwise agentConfig.draftFlowMode decides.
-      const forceDraftTool = request.forceDraftTool ?? (!deterministicOnly && defaultForceDraftTool);
-      const runPreflight = deterministicOnly
+      const forceDraftTool = surface === 'sequences' ? true : request.forceDraftTool ?? (!deterministicOnly && defaultForceDraftTool);
+      const runPreflight = surface === 'sequences' ? false : deterministicOnly
         ? true
         : request.forceDraftTool === true
           ? false
@@ -1338,6 +1350,7 @@ export function createAgentOrchestrator(
 
       const endpointLabel = inferenceEndpointLabel(inferenceConfig);
 
+      let sequenceRepairAttempts = 0;
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -1628,6 +1641,15 @@ export function createAgentOrchestrator(
               `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
             );
           } else {
+          if(surface==='sequences') {
+            if(sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
+              sequenceRepairAttempts++;
+              messages.push({role:'user',content:'Return the requested proposal with agent_intent, intent=sequence_action and a schema-valid sequenceAction. Use create_oligo for new bases and modifications. Do not claim to have saved anything; no action has executed.'});
+              onEvent?.({type:'status',message:'Requesting the structured sequence proposal…'});
+              continue;
+            }
+            return {success:false,error:'The model did not return a structured sequence proposal. Nothing was saved.'};
+          }
           onEvent?.({
             type: 'status',
             message: `${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} was not emitted natively; asking AI for compiler arguments…`,
@@ -1844,6 +1866,24 @@ export function createAgentOrchestrator(
           // result the client applies to the live editor + persists.
           if (submitCall.function.name === AGENT_INTENT_TOOL_NAME) {
             const agentIntent = parseAgentIntentArgs(submitArgs);
+            if (agentIntent.intent === 'sequence_action') {
+              const sequenceAction=decodeSequenceAction(submitArgs.sequenceAction);
+              const validation = deps.validateSequenceAction?.(sequenceAction);
+              const fidelity = validation?.valid ? sequenceRequestDiagnostics(sequenceAction, prompt) : [];
+              if (!validation?.valid || fidelity.length) {
+                const errors=fidelity.length?fidelity.map(e=>`${e.path}: ${e.message}`):validation?.errors?.map(e=>`${e.path}: ${e.message}`)??['Sequence actions are not configured.'];
+                if(validation && sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
+                  sequenceRepairAttempts++;
+                  onEvent?.({type:'status',message:'Correcting the proposed sequence action…'});
+                  onEvent?.({type:'tool_result',toolName:submitCall.function.name,success:false,durationMs:0});
+                  for(const call of assistantMsg.tool_calls??[])messages.push({role:'tool',tool_call_id:call.id,content:call===submitCall?JSON.stringify({valid:false,errors,instruction:'Correct this proposal using the supplied action schema and the original user request. For new oligo bases with modifications use create_oligo; each modification needs position, label and role. Do not invent existing record references. Nothing has been saved.'}):'Ignored extra proposal; no action executed.'});
+                  continue;
+                }
+                return {success:false,error:`I could not prepare a valid sequence proposal. Nothing was saved. ${errors.slice(0,3).join('; ')}`};
+              }
+              return { success: true, sequenceProposal: sequenceAction as Record<string, unknown>, notes: ['Review the sequence action proposal before applying it.'] };
+            }
+
 
             // intent=create_record: AUTHOR records (equipment/material/labware) the lab
             // does not have yet. Distinct from drafting events, and it writes nothing

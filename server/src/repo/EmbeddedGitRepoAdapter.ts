@@ -146,6 +146,18 @@ export class EmbeddedGitRepoAdapter implements RepoAdapter {
     return join(this.worktreePath, path);
   }
 
+  async getVerifiedCommit(path: string): Promise<string | undefined> {
+    const git = await this.ensureInitialized();
+    const file = await this.getFile(path);
+    if (!file) return undefined;
+    try {
+      const log = await git.log({ file: path, maxCount: 1 });
+      const sha = log.latest?.hash;
+      if (!sha) return undefined;
+      return await git.show([`${sha}:${path}`]) === file.content ? sha : undefined;
+    } catch { return undefined; }
+  }
+
   async getFile(path: string): Promise<RepoFile | null> {
     await this.ensureInitialized();
     const fullPath = this.resolvePath(path);

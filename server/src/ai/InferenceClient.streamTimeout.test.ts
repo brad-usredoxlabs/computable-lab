@@ -8,7 +8,7 @@
  * These tests use real timers and tiny delays to keep that behaviour honest.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInferenceClient } from './InferenceClient.js';
+import { createInferenceClient, listInferenceModels } from './InferenceClient.js';
 import type { StreamChunk } from './types.js';
 
 function frame(text: string): string {
@@ -123,5 +123,32 @@ describe('completeStream timeouts', () => {
     await expect(
       collect(client.completeStream({ model: 'm', messages: [{ role: 'user', content: 'go' }] })),
     ).rejects.toThrow(/exceeded the configured maximum 60ms/);
+  });
+});
+
+describe('listInferenceModels — the shapes model servers actually answer with', () => {
+  it('reads OpenAI\'s { data: [{ id }] }', async () => {
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ data: [{ id: 'qwen3.8-flash-next' }] }), { status: 200 }));
+    const models = await listInferenceModels('http://llm.test:8080/v1');
+    expect(models).toEqual({ available: true, models: ['qwen3.8-flash-next'] });
+  });
+
+  it('reads the { models: [{ name }] } that Ollama/llama.cpp answer with', async () => {
+    // Live: localhost:8080 serves the LFM model this way, and reading only
+    // `data` made a working server look like it did not serve its own model.
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ models: [{ name: 'lfm2.5-2.6b', model: 'lfm2.5-2.6b' }] }), { status: 200 }));
+    const models = await listInferenceModels('http://localhost:8080/v1');
+    expect(models).toEqual({ available: true, models: ['lfm2.5-2.6b'] });
+  });
+
+  it('reports an unreachable endpoint instead of an empty list', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('fetch failed');
+    });
+    const models = await listInferenceModels('http://nope.test:9/v1');
+    expect(models.available).toBe(false);
+    expect(models.error).toContain('nope.test');
   });
 });

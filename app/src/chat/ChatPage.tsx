@@ -6,14 +6,12 @@
  * Ollama's native /api/chat) and shows live prompt-processing (PP) and
  * decode tokens/s readouts from the stream's final timing event.
  *
- * Model switching reuses the app's ModelSwitcher (lists /api/config/ai/profiles
- * and hot-swaps the active profile server-side). Because the server resolves
- * the active profile for every request, a switch here takes effect on the
- * next message with no reload.
+ * The model is a deployment setting (settings → AI), not a per-chat choice. The
+ * server resolves the active profile for every request, so this page simply
+ * reflects whatever is configured.
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { ModelSwitcher } from '../event-editor/right-pane/ai/ModelSwitcher'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { streamChat, type ChatMessageInput } from './chatClient'
@@ -123,7 +121,6 @@ export function ChatPage() {
       <header className="chat-page__header">
         <div className="chat-page__title-row">
           <h1 className="chat-page__title">Local AI Chat</h1>
-          <ModelSwitcher />
         </div>
         <div className="chat-page__timing" data-testid="chat-timing">
           <div className="chat-page__stat" data-testid="chat-stat-pp">

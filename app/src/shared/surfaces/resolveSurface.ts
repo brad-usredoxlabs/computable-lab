@@ -18,6 +18,7 @@ export interface ResolvedSurface {
 
 /** Route pattern → surface id. Longer/more specific first. */
 const SURFACE_BY_PATH: Array<{ pattern: RegExp; surface: SurfaceId }> = [
+  { pattern: /^\/(?:sequences|lab\/sequences)(?:\/|$)/, surface: 'sequences' },
   { pattern: /^\/find(?:\/|$)/, surface: 'find' },
   { pattern: /^\/literature(?:\/|$)/, surface: 'knowledge' },
   { pattern: /^\/knowledge(?:\/|$)/, surface: 'knowledge' },
@@ -28,13 +29,16 @@ const SURFACE_BY_PATH: Array<{ pattern: RegExp; surface: SurfaceId }> = [
   { pattern: /^\/run\//, surface: 'run-design' },
   { pattern: /^\/deck\//, surface: 'run-design' },
   { pattern: /^\/project\//, surface: 'project' },
-  { pattern: /^\/claims?\//, surface: 'knowledge' },
+  // Bare /claims must match too — the previous `/^\/claims?\//` required a
+  // trailing slash, so the Claims collection page fell through to 'project'.
+  { pattern: /^\/claims?(\/|$)/, surface: 'knowledge' },
   { pattern: /^\/record\//, surface: 'knowledge' },
   { pattern: /^\/splash/, surface: 'project' },
   { pattern: /^\/$/, surface: 'project' },
 ]
 
 const SURFACE_LABELS: Record<SurfaceId, string> = {
+  sequences: 'Sequences',
   project: 'Project',
   'run-plan': 'Run · Plan',
   'run-design': 'Run · Design',

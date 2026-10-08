@@ -269,13 +269,12 @@ describe('protocol UI projection', () => {
       'Consumables / Labware',
       'Equipment',
       'Steps',
-      'Full Protocol Text',
       'Notes',
     ])
     expect(labels).not.toContain('Overview')
     expect(labels).not.toContain('Protocol Structure')
     expect(labels).not.toContain('Structure Suggestions')
-    expect(widgets.filter((widget) => widget === 'protocol-prose-authoring')).toHaveLength(3)
+    expect(widgets.filter((widget) => widget === 'protocol-prose-authoring')).toHaveLength(2)
     expect(widgets).not.toContain('protocol-ai-suggestions')
     expect(widgets).toContain('protocol-labware-roles')
   })

@@ -1,7 +1,7 @@
 /* Live working-focus header above the AI chat — --cl-* tokens. */
 .chat-context-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--cl-border);
@@ -23,10 +23,16 @@
 
 .chat-context-header__value {
   flex: 1 1 auto;
+  min-width: 0;
   color: var(--cl-text);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chat-context-header--active {

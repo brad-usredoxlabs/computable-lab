@@ -25,3 +25,8 @@ capacity:
   min_working_volume_uL: 500
 render_hints:
   profile: reservoir
+
+physical_geometry:
+  overall_dimensions_mm:
+    length: 127
+    width: 85

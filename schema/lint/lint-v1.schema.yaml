@@ -138,6 +138,16 @@ definitions:
     type: "object"
     description: "Predicate for rule conditions and assertions"
     oneOf:
+    # Numeric comparison: no string coercion or implicit missing-value defaults.
+    - type: object
+      additionalProperties: false
+      required: [op, path, operator, value]
+      properties:
+        op: {const: compare}
+        path: {type: string, minLength: 1}
+        operator: {type: string, enum: [lt, lte, gt, gte]}
+        value: {type: number}
+
     # Exists predicate
     - type: "object"
       required: [ "op", "path" ]

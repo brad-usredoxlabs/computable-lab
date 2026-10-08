@@ -75,6 +75,7 @@ export function SearchResultCard({ result, onExtract, extracting }: SearchResult
         )}
 
         <div className="search-result-card__actions">
+          {['ncbi_gene', 'uniprot', 'pdb'].includes(result.source) && <button onClick={() => navigate(`/sequences?source=${encodeURIComponent(result.source)}&accession=${encodeURIComponent(result.sourceId)}`)}>Import sequences</button>}
           <button
             className="search-result-card__build-btn"
             onClick={handleBuildProtocol}

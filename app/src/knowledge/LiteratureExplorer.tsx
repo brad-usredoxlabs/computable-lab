@@ -8,6 +8,9 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { activeProjectFromTabs } from '../shared/shell/activeProject'
+import { linkClaimsToProject } from './claimProjectLink'
 import { SourceSelector } from './literature/SourceSelector'
 import { SearchResultCard } from './literature/SearchResultCard'
 import { KnowledgePreviewPanel } from './literature/KnowledgePreviewPanel'
@@ -49,6 +52,13 @@ export function LiteratureExplorer() {
   const [extractingSourceId, setExtractingSourceId] = useState<string | null>(null)
   const [confidenceMap, setConfidenceMap] = useState<Map<string, number>>(new Map())
   const [duplicatesMap, setDuplicatesMap] = useState<Map<string, string>>(new Map())
+  const [projectLinkNotice, setProjectLinkNotice] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null)
+
+  // Which project the accepted claims belong to. The route can't say (this
+  // surface is /ingestion/literature or /literature), so it comes from the
+  // open-tabs store — the project tab the user is working in.
+  const openTabs = useOptionalOpenTabs()
+  const activeProject = useMemo(() => activeProjectFromTabs(openTabs?.state), [openTabs?.state])
 
   // AI panel
   const aiContext = useMemo((): AiContext => ({
@@ -148,16 +158,63 @@ export function LiteratureExplorer() {
     extract(result.source, result.sourceId, result.raw)
   }, [extract])
 
-  // Handle accept selected — no material resolution needed for literature
+  // Handle accept selected — no material resolution needed for literature.
+  // The claim itself is global; "adding it to the project" means writing the
+  // project→claim link onto the active study (claimRelationships[]).
   const handleAcceptSelected = useCallback(async (selectedClaimIds: Set<string>) => {
     setAccepting(true)
+    setProjectLinkNotice(null)
     try {
-      await acceptSelected(selectedClaimIds, { confidenceMap, duplicatesMap })
+      const result = await acceptSelected(selectedClaimIds, { confidenceMap, duplicatesMap })
+
+      // Link whatever claims actually saved — NOT gated on overall success.
+      // saveKnowledgeRecords posts claim/assertion/evidence sequentially and
+      // reports per-record outcomes, so a partial failure (or an interrupted
+      // request) still leaves real claim records behind. Those must not be
+      // silently orphaned from the project.
+      const savedClaimIds = result.saved.filter((id) => id.startsWith('CLM-'))
+
+      let linkNotice: { tone: 'ok' | 'error'; message: string } | null = null
+      if (activeProject && savedClaimIds.length > 0) {
+        try {
+          const { linked } = await linkClaimsToProject(activeProject.studyId, savedClaimIds)
+          if (linked.length > 0) {
+            linkNotice = {
+              tone: 'ok',
+              message: `Linked ${linked.length} claim${linked.length === 1 ? '' : 's'} to ${activeProject.title}.`,
+            }
+          }
+        } catch (err) {
+          linkNotice = {
+            tone: 'error',
+            message: `Saved, but could not link to ${activeProject.title}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          }
+        }
+      }
+
+      if (result.success) {
+        if (linkNotice) setProjectLinkNotice(linkNotice)
+        return
+      }
+
+      // Surface the partial failure instead of swallowing it.
+      const detail = result.failed
+        .slice(0, 3)
+        .map((f) => `${f.id}: ${f.error}`)
+        .join('; ')
+      setProjectLinkNotice({
+        tone: 'error',
+        message: `${result.failed.length} record${result.failed.length === 1 ? '' : 's'} failed to save${
+          detail ? ` — ${detail}` : ''
+        }${linkNotice ? ` (${linkNotice.message})` : ''}`,
+      })
     } finally {
       setAccepting(false)
       setExtractingSourceId(null)
     }
-  }, [acceptSelected, confidenceMap, duplicatesMap])
+  }, [acceptSelected, confidenceMap, duplicatesMap, activeProject])
 
   // Handle reject
   const handleReject = useCallback(() => {
@@ -248,6 +305,21 @@ export function LiteratureExplorer() {
                 confidenceMap={confidenceMap}
                 onConfidenceChange={handleConfidenceChange}
               />
+            )}
+
+            {/* Project-link feedback: the claim saved, but did it land in the
+                project the user is working in? Never fail silently. */}
+            {!isExtracting && projectLinkNotice && (
+              <div
+                className={
+                  projectLinkNotice.tone === 'error'
+                    ? 'lit-explorer__error'
+                    : 'lit-explorer__notice'
+                }
+                data-testid="project-link-notice"
+              >
+                {projectLinkNotice.message}
+              </div>
             )}
 
             {!isExtracting && preview && !preview.success && (
@@ -399,6 +471,14 @@ export function LiteratureExplorer() {
           border: 1px solid #ffc9c9;
           border-radius: 8px;
           color: #c92a2a;
+          font-size: 0.8rem;
+        }
+        .lit-explorer__notice {
+          padding: 0.75rem;
+          background: #ebfbee;
+          border: 1px solid #b2f2bb;
+          border-radius: 8px;
+          color: #2b8a3e;
           font-size: 0.8rem;
         }
         .lit-explorer__raw-response {

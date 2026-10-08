@@ -1,0 +1,26 @@
+uiVersion: 1
+schemaId: https://computable-lab.com/schema/bio/oligo-spec.schema.yaml
+form:
+  sections:
+  - title: Identity
+    fields:
+    - path: $.id
+      label: ID
+      widget: text
+      readonly: true
+    - path: $.label
+      label: Name
+      widget: text
+      readonly: false
+    - {path: $.vendor, label: Vendor, widget: text}
+    - {path: $.sequenceRef, label: Sequence revision, widget: ref}
+    - {path: $.modifications, label: Modifications, widget: array}
+  layout: sections
+display:
+  titleField: $.label
+list:
+  columns:
+  - path: $.label
+    label: Name
+  - path: $.id
+    label: ID

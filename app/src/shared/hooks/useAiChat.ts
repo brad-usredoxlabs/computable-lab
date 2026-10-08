@@ -158,12 +158,14 @@ interface UseAiChatOptions {
    */
   endpoint?: ApplianceEndpoint
   /** Handler called for each accepted preview event. */
+  proposalScopeKey?: string
+  onSequenceProposal?: (proposal: Record<string, unknown>, userRequest?: string) => void
   onAcceptEvent?: AcceptEventHandler
   /** Handler called to add labware from a record (for AI-proposed additions). */
   onAddLabwareFromRecord?: AddLabwareFromRecordHandler
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -202,6 +204,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   const resolvedCache = useRef<Map<string, RecordRef>>(new Map())
 
   // Keep a stable ref to the latest aiContext so callbacks don't go stale.
+  const proposalScopeRef = useRef(proposalScopeKey)
+  proposalScopeRef.current = proposalScopeKey
+  const sequenceProposalRef = useRef(onSequenceProposal)
+  sequenceProposalRef.current = onSequenceProposal
   const aiContextRef = useRef(aiContext)
   aiContextRef.current = aiContext
 
@@ -238,6 +244,8 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               id: `persisted-${idx}-${m.createdAt}`,
               role: m.role as 'user' | 'assistant',
               content: m.content,
+              ...(m.metadata?.sequenceProposal ? { sequenceProposal: m.metadata.sequenceProposal as Record<string, unknown> } : {}),
+              ...(typeof m.metadata?.sequenceProposalRequest === 'string' ? { sequenceProposalRequest: m.metadata.sequenceProposalRequest } : {}),
               timestamp: Date.parse(m.createdAt) || Date.now(),
             }))
           hydrated.forEach((m) => persistedIdsRef.current.add(m.id))
@@ -270,6 +278,8 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       // body. The schema's `messages[].metadata` accepts an open object;
       // we forward every structured field that isn't already a primitive.
       const metadata: Record<string, unknown> = {}
+      if (m.sequenceProposal) metadata.sequenceProposal = m.sequenceProposal
+      if (m.sequenceProposalRequest) metadata.sequenceProposalRequest = m.sequenceProposalRequest
       if (m.events && m.events.length > 0) metadata.events = m.events
       if (m.labwareAdditions && m.labwareAdditions.length > 0)
         metadata.labwareAdditions = m.labwareAdditions
@@ -345,6 +355,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   const sendPrompt = useCallback(
     async (prompt: string, attachments?: FileAttachment[]) => {
       if (isStreaming) return
+      const submittedProposalScope = proposalScopeRef.current
 
       // Auto-reject existing preview before starting new stream
       if (previewEvents.length > 0 || previewLabwareAdditions.length > 0) {
@@ -457,6 +468,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
           if (event.type === 'done') {
             const result = event.result
+            if (result.sequenceProposal && submittedProposalScope === proposalScopeRef.current) sequenceProposalRef.current?.(result.sequenceProposal, prompt)
             const isConfirm = result.assurance?.decision === 'CONFIRM'
             const normalizedPreviewEvents = isConfirm
               ? []
@@ -493,8 +505,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 m.id === assistantId
                   ? {
                       ...m,
-                      content: result.clarification?.prompt ?? result.clarificationNeeded ?? content,
+                      content: result.error ?? (result.sequenceProposal ? 'Proposal ready for review in the sequence workspace.' : result.clarification?.prompt ?? result.clarificationNeeded ?? content),
                       streamEvents: [...accumulated],
+                      ...(result.sequenceProposal ? { sequenceProposal: result.sequenceProposal, sequenceProposalRequest: prompt } : {}),
                       events: normalizedPreviewEvents,
                       clarification: result.clarification,
                       labwareAdditions: result.labwareAdditions,
@@ -516,7 +529,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             const hasEvents = (result.events?.length ?? 0) > 0
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
             const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
-            if (result.success && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
+            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
               setMessages((prev) => [
                 ...prev,
                 {

@@ -62,9 +62,9 @@ describe('reviewStepsFromCandidate', () => {
     expect(rows[2]!.provenancePages).toEqual([3])
   })
 
-  it('numbers rows in DOCUMENT order, even when the manual restarts its numbering', () => {
+  it('numbers rows in execution order, keeping original ids for provenance', () => {
     // ZymoBIOMICS Quick-DNA: a main list, then a second list numbered from 1.
-    // The rows must read 13, 14 (position), not 1, 2 twice.
+    // Display positions follow the selected path, independent of source numbering.
     const rows = reviewStepsFromCandidate({
       steps: [
         { id: 'step-12', stepNumber: 12, sourceText: 'Twelfth' },
@@ -72,13 +72,13 @@ describe('reviewStepsFromCandidate', () => {
         { id: 'step-14', stepNumber: 2, sourceText: 'Continue from Step 2 of the main protocol.' },
       ],
     })
-    expect(rows.map((r) => r.ordinal)).toEqual([12, 13, 14])
+    expect(rows.map((r) => r.ordinal)).toEqual([1, 2, 3])
     expect(rows.map((r) => r.stepId)).toEqual(['step-12', 'step-13', 'step-14'])
   })
 
-  it('falls back to stepNumber, then position, when the id carries no number', () => {
+  it('uses execution position when source ids are missing', () => {
     const rows = reviewStepsFromCandidate({ steps: [{ sourceText: 'First' }, { stepNumber: 9, sourceText: 'Ninth' }] })
-    expect(rows.map((r) => r.ordinal)).toEqual([1, 9])
+    expect(rows.map((r) => r.ordinal)).toEqual([1, 2])
     expect(rows.map((r) => r.stepId)).toEqual(['step-001', 'step-002'])
   })
 
@@ -122,3 +122,11 @@ describe('reviewRolesFromCandidate', () => {
     expect(roles.equipment).toEqual([])
   })
 })
+
+it('keeps a pretreatment before its continuation into an earlier PDF section', () => {
+  const rows = reviewStepsFromCandidate({steps: [
+    {id: 'step-70', stepNumber: 1, sourceText: 'Lyse bacteria.'},
+    {id: 'step-15', stepNumber: 4, sourceText: 'Bind DNA.'},
+  ]});
+  expect(rows.map((r) => [r.stepId, r.ordinal])).toEqual([['step-70', 1], ['step-15', 2]]);
+});

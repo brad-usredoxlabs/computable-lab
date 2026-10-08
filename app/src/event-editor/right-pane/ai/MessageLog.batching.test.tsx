@@ -26,6 +26,35 @@ function stateWithTrace(trace: ChatState['trace']): ChatState {
 
 afterEach(() => cleanup())
 
+// Regression (2026-09-19): a tool call whose arguments were EMPTY looked exactly
+// like a successful one ("Tool: agent_intent"), so a turn that proposed nothing read
+// as a crash. The trace now names the fields it carried.
+describe('MessageLog tool-call trace shows what the model actually sent', () => {
+  it('says "no fields" for an empty call', () => {
+    render(<MessageLog state={stateWithTrace([
+      { seq: 1, kind: 'tool_call', toolName: 'agent_intent', args: { intent: 'event_graph' } },
+    ])} />)
+    const entry = document.querySelector('[data-testid="trace-tool_call"]')
+    expect(entry?.textContent).toContain('Tool: agent_intent')
+    expect(entry?.textContent).toContain('no fields')
+  })
+
+  it('names the fields when there are any', () => {
+    render(<MessageLog state={stateWithTrace([
+      {
+        seq: 1,
+        kind: 'tool_call',
+        toolName: 'agent_intent',
+        args: { intent: 'event_graph', equipmentAdditions: [], notes: ['x'] },
+      },
+    ])} />)
+    const entry = document.querySelector('[data-testid="trace-tool_call"]')
+    expect(entry?.textContent).toContain('2 fields')
+    expect(entry?.textContent).toContain('equipmentAdditions')
+    expect(entry?.textContent).toContain('notes')
+  })
+})
+
 describe('MessageLog clarification summary', () => {
   it('shows a summary line for clarification requests instead of inline cards', () => {
     render(<MessageLog state={stateWith([{ id: 'a', kind: 'material', prompt: 'X', menuProvider: 'choice', options: [] }])} />)

@@ -1,0 +1,12 @@
+pipelineId: form-draft-compile
+entrypoint: form-draft-compile
+description: Compile structured intent into an editable native form without canonical writes.
+passes:
+  - id: stage_authoring
+    family: normalize
+  - id: evaluate_draft
+    family: validate
+    depends_on: [stage_authoring]
+  - id: project_form
+    family: project
+    depends_on: [evaluate_draft]

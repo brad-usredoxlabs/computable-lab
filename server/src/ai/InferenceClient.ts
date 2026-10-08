@@ -1,8 +1,8 @@
 /**
  * Thin OpenAI-compatible HTTP client for LLM inference.
  *
- * Uses native fetch — no SDK dependency. Targets vLLM's
- * OpenAI-compatible /chat/completions endpoint.
+ * Uses native fetch — no SDK dependency. Supports local OpenAI-compatible
+ * endpoints and OpenRouter's provider-specific reasoning/tool conventions.
  */
 
 import type { InferenceConfig } from '../config/types.js';
@@ -61,6 +61,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     enableThinking,
   } = config;
   const baseUrl = normalizeBaseUrl(config.baseUrl);
+  const isOpenRouter = new URL(baseUrl).hostname === 'openrouter.ai';
 
   // Build common headers
   const headers: Record<string, string> = {
@@ -72,8 +73,8 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
 
   // Normalize max_tokens → max_completion_tokens for newer OpenAI models
   // (gpt-4o, gpt-5.x, o-series require max_completion_tokens).
-  // Most OpenAI-compatible providers accept both, but OpenAI rejects max_tokens
-  // on newer models. Send max_completion_tokens universally for compatibility.
+  // Local/OpenAI-compatible requests retain max_completion_tokens; OpenRouter
+  // uses its documented max_tokens field and unified reasoning controls.
   //
   // Forward enableThinking as `enable_thinking` inside chat_template_kwargs
   // (Qwen3+ template control). Request-level values win on key collision so
@@ -81,6 +82,20 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
     const { max_tokens, chat_template_kwargs, enableThinking: requestEnableThinking, ...rest } = req;
     const effectiveEnableThinking = requestEnableThinking ?? enableThinking;
+    if (isOpenRouter) {
+      const { cache_key: _key, cache_prompt: _cache, id_slot: _slot, reasoning, ...cloud } = rest;
+      const thinking = requestEnableThinking ?? (typeof chat_template_kwargs?.enable_thinking === 'boolean' ? chat_template_kwargs.enable_thinking : enableThinking);
+      const body: Record<string, unknown> = {
+        ...cloud,
+        ...(max_tokens != null ? { max_tokens } : {}),
+        ...((thinking !== undefined || reasoning) ? { reasoning: { ...(thinking !== undefined ? { enabled: thinking } : {}), ...reasoning } } : {}),
+      };
+      // Alibaba's Qwen routes cannot force a tool while thinking (often on by default).
+      // Preserve thinking and restrict a named choice to that tool; the caller still validates its result.
+      if (/^qwen\//i.test(req.model) && (reasoning?.enabled ?? thinking) !== false) allowAutomaticToolChoice(body);
+      return body;
+    }
+
     const mergedKwargs =
       effectiveEnableThinking !== undefined
         ? { enable_thinking: effectiveEnableThinking, ...(chat_template_kwargs ?? {}) }
@@ -92,6 +107,37 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     };
   }
 
+
+  function allowAutomaticToolChoice(body: Record<string, unknown>): boolean {
+    const choice = body.tool_choice;
+    if (choice !== 'required' && (!choice || typeof choice !== 'object')) return false;
+    if (typeof choice === 'object') {
+      const name = (choice as {function?: {name?: string}}).function?.name;
+      const tools = body.tools as CompletionRequest['tools'];
+      const selected = tools?.filter(tool => tool.function.name === name);
+      if (!selected?.length) throw new Error('The requested inference tool is not in the supplied tool list.');
+      body.tools = selected;
+    }
+    body.tool_choice = 'auto';
+    return true;
+  }
+
+  async function fetchCompletion(request: CompletionRequest, stream: boolean, signal: AbortSignal): Promise<Response> {
+    const body = { ...normalizeRequest(request), ...(stream ? {stream:true,stream_options:{include_usage:true}} : {}) };
+    for (let attempt=0; attempt<2; attempt++) {
+      const response = await fetch(`${baseUrl}/chat/completions`, {method:'POST',headers,body:JSON.stringify(body),signal});
+      if (response.ok) return response;
+      const detail = await response.text();
+      // Provider routing can change. Retry this specific rejected combination once,
+      // before any generated output or tool execution, without disabling reasoning.
+      if (isOpenRouter && attempt===0 && response.status===400 && /tool_choice/i.test(detail)
+        && /thinking|reasoning/i.test(detail) && /not support|unsupported|not allowed|cannot|incompatible/i.test(detail)
+        && allowAutomaticToolChoice(body)) continue;
+      throw new Error(`Inference error ${response.status}: ${detail}`);
+    }
+    throw new Error('Inference compatibility retry failed.');
+  }
+
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -101,19 +147,11 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(normalizeRequest(request)),
-        signal: controller.signal,
-      });
+      const res = await fetchCompletion(request, false, controller.signal);
 
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`Inference error ${res.status}: ${body}`);
-      }
-
-      return normalizeReasoningContent((await res.json()) as CompletionResponse);
+      const response = await res.json() as CompletionResponse & {error?: unknown};
+      if(response.error)throw new Error(`Inference response error: ${JSON.stringify(response.error)}`);
+      return normalizeReasoningContent(response);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         throw new Error(`Inference timeout after ${timeoutMs}ms`);
@@ -185,17 +223,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
           : null;
 
       try {
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ ...normalizeRequest(request), stream: true, stream_options: { include_usage: true } }),
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(`Inference error ${res.status}: ${body}`);
-        }
+        const res = await fetchCompletion(request, true, controller.signal);
 
         if (!res.body) {
           throw new Error('No response body for streaming');
@@ -222,11 +250,12 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
             const data = trimmed.slice(6);
             if (data === '[DONE]') return;
 
-            try {
-              yield normalizeReasoningDelta(JSON.parse(data) as StreamChunk);
-            } catch {
-              // Skip malformed SSE chunks
-            }
+            let parsed: StreamChunk & {error?: unknown};
+            try { parsed = JSON.parse(data); } catch { continue; }
+            // OpenRouter may report provider failures inside an HTTP 200 SSE stream.
+            // Do not swallow them as malformed chunks or pass them off as an empty answer.
+            if (parsed.error) throw new Error(`Inference stream error: ${JSON.stringify(parsed.error)}`);
+            yield normalizeReasoningDelta(parsed);
           }
         }
       } catch (err) {
@@ -303,10 +332,21 @@ export async function listInferenceModels(
         };
       }
 
-      const json = (await res.json()) as { data?: Array<{ id?: string }> };
-      const models = (json.data ?? [])
-        .map((entry) => entry.id)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      // Two shapes are common: OpenAI's { data: [{ id }] } and the
+      // { models: [{ name|model }] } that Ollama and llama.cpp servers answer
+      // with. Reading only the first made a working local server look wrong
+      // ("Model X not returned by provider /models list") in the settings test.
+      const json = (await res.json()) as {
+        data?: Array<{ id?: string }>;
+        models?: Array<{ id?: string; name?: string; model?: string }>;
+      };
+      const ids = [
+        ...(json.data ?? []).map((entry) => entry.id),
+        ...(json.models ?? []).map((entry) => entry.id ?? entry.name ?? entry.model),
+      ];
+      const models = [...new Set(ids)].filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      );
       return { available: true, models };
     } finally {
       clearTimeout(timer);

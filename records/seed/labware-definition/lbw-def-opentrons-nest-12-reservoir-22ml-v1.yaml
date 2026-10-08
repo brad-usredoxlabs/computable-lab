@@ -31,3 +31,8 @@ aspiration_hints:
 render_hints:
   profile: reservoir
   linear_well_style: trough
+
+physical_geometry:
+  overall_dimensions_mm:
+    length: 127
+    width: 85

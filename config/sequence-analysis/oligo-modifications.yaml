@@ -1,0 +1,20 @@
+# Reference data for interpreting explicitly named probe chemistry, not defaults
+# to attach to every primer/probe. Preserve the user's requested labels.
+version: 1
+instructions: >
+  Preserve every explicitly requested reporter and quencher in the proposal.
+  QSY is a quencher, not a primer type. A request for a FAM probe using
+  Thermo QSY chemistry means both the FAM reporter and QSY quencher below.
+  If chemistry or placement remains ambiguous, ask rather than silently
+  dropping a named modification. Do not infer target species or an assay.
+modifications:
+- label: FAM
+  role: reporter
+  position: 5-prime
+  context: Thermo Fisher TaqMan probe
+  source: https://www.thermofisher.com/za/en/home/technical-resources/technical-reference-library/real-time-digital-PCR-applications-support-center/taqman-primers-probes-support/taqman-primers-probes-support-getting-started.html
+- label: QSY
+  role: quencher
+  position: 3-prime
+  context: Thermo Fisher TaqMan QSY probe
+  source: https://documents.thermofisher.com/TFS-Assets/GSD/Flyers/taqman-qsy-probes-flyer.pdf

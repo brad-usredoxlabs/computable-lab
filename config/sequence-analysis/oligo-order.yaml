@@ -1,0 +1,20 @@
+# Vendor spelling belongs in data. Unknown modifications remain visible for review.
+namePattern: '^(?:Oligo\s+Name|Name|Primer\s+Name|Probe\s+Name)\s*[:\t]\s*(.+)$'
+sequencePattern: '^(?:Sequence|Oligo\s+Sequence)\s*[:\t]\s*(.+)$'
+modifications:
+  - { pattern: '(?:/56-FAM/|/6-FAM/|\[FAM\]|\(FAM\)|^FAM[- ])', label: FAM, role: reporter, position: 5-prime }
+  - { pattern: '(?:/3BHQ_1/|\[BHQ-?1\]|\(BHQ-?1\)|[- ]BHQ-?1$)', label: BHQ-1, role: quencher, position: 3-prime }
+  - { pattern: '(?:\[MGBNFQ\]|\(MGBNFQ\)|[- ]MGBNFQ$)', label: MGBNFQ, role: quencher, position: 3-prime }
+metadata:
+  vendor: '^(?:Vendor|Supplier)\s*:\s*(.+)$'
+  orderId: '^(?:Order\s*(?:Number|No\.?|ID)|Order\s*#)\s*[:#]?\s*(.+)$'
+  purification: '^Purification\s*:\s*(.+)$'
+  synthesisScale: '^(?:Scale|Synthesis\s+Scale)\s*:\s*(.+)$'
+ocr:
+  enabled: true
+  rasterizer: pdftoppm
+  executable: tesseract
+  language: eng
+  dpi: 200
+  maxPages: 20
+  timeoutSeconds: 120

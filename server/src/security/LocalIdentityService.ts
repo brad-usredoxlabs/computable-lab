@@ -28,6 +28,14 @@ export class LocalIdentityService {
   constructor(
     private readonly store: RecordStore,
     private readonly sessionStore?: SessionStore,
+    /**
+     * Optional `hasCredential` hook (typically CredentialStore.hasCredential).
+     * Wired => the explicit USR-LOCAL-ADMIN header is honored ONLY while the
+     * admin has no credential (the bootstrap window), and self-closes the
+     * moment a credential exists. Absent => fail closed on the admin header
+     * (no bootstrap window; the system works with the hook ripped out).
+     */
+    private readonly hasCredential?: (userId: string) => Promise<boolean>,
   ) {}
 
   /* Resolve the strongest identity signal: a valid session token first, then
@@ -45,6 +53,12 @@ export class LocalIdentityService {
     const activeUser = existingUsers.find((user) => isActiveUser(user) && user.recordId !== LOCAL_ADMIN_USER_ID);
     if (activeUser) return activeUser;
 
+    return this.upsertAdminRecord();
+  }
+
+  /* Fetch the ADMIN record specifically, creating it if missing/invalid —
+     WITHOUT ensureLocalAdminUser()'s "first active non-admin user" preference. */
+  private async upsertAdminRecord(): Promise<RecordEnvelope | null> {
     const existingAdmin = await this.store.get(LOCAL_ADMIN_USER_ID);
     if (isActiveUser(existingAdmin)) return existingAdmin;
 
@@ -101,6 +115,21 @@ export class LocalIdentityService {
 
     if (explicitUserId) {
       if (explicitUserId === LOCAL_ADMIN_USER_ID) {
+        /* Self-closing bootstrap window: the admin header resolves to the
+           ADMIN record (isSystem true) ONLY while the predicate is wired AND
+           the admin has NO credential. Once a credential exists — or if the
+           predicate is not wired at all (fail closed) — the header is dead
+           and we fall through to the ensureLocalAdminUser() fallback below. */
+        const bootstrapWindowOpen =
+          this.hasCredential !== undefined && !(await this.hasCredential(LOCAL_ADMIN_USER_ID));
+        if (bootstrapWindowOpen) {
+          // Fetch/create the ADMIN record directly — do NOT route through
+          // ensureLocalAdminUser()'s "first active non-admin user" preference.
+          const admin = await this.upsertAdminRecord();
+          if (isActiveUser(admin)) {
+            return { userId: LOCAL_ADMIN_USER_ID, userRecord: admin, isSystem: true };
+          }
+        }
         const fallback = await this.ensureLocalAdminUser();
         if (isActiveUser(fallback)) {
           return {

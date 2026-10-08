@@ -26,6 +26,16 @@ properties:
     description: >
       Human-readable label for display. Required for ontology refs, optional for record refs (can be derived from record).
 
+  revisionRef:
+    type: object
+    additionalProperties: false
+    required: [kind, type, id]
+    properties:
+      kind: { const: record }
+      type: { const: record-revision }
+      id: { type: string, pattern: '^REV-[A-F0-9]+$' }
+    description: "Optional immutable revision; resolves instead of the mutable record head."
+
   # Ontology-specific fields
   namespace:
     type: string

@@ -464,7 +464,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
 };
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'sequence_action' | 'unknown';
   platformId?: string;
   variantId?: string;
 }
@@ -472,7 +472,7 @@ export interface AgentIntentArgs {
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),

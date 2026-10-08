@@ -14,6 +14,8 @@ import { useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import type { SurfaceSpec } from '../../shared/surfaces'
 import { resolveSurfaceFromPath } from '../../shared/surfaces/resolveSurface'
+import { useOptionalOpenTabs } from './OpenTabsContext'
+import { activeProjectFromTabs } from './activeProject'
 import './SurfaceIndicator.css'
 
 export interface SurfaceIndicatorProps {
@@ -50,12 +52,24 @@ export function SurfaceIndicator({ runMode, selectionCount }: SurfaceIndicatorPr
     [location.pathname, runMode, selectionCount],
   )
 
+  // The route can't answer "which project am I in?" (there is no studyId in
+  // /ingestion, /claims, ...), so read it from the open-tabs store.
+  const openTabs = useOptionalOpenTabs()
+  const activeProject = useMemo(
+    () => activeProjectFromTabs(openTabs?.state),
+    [openTabs?.state],
+  )
+
   // Prefer the registry's label (declarative); fall back to the resolver's.
   const registryLabel = registry?.find((s) => s.id === resolved.surface)?.label
   const surfaceLabel = registryLabel ?? resolved.label
   const role = registry?.find((s) => s.id === resolved.surface)?.aiRole
 
   const hasSelection = (selectionCount ?? 0) > 0
+  // 'root' is the resolver's filler for routes that name no active object
+  // (e.g. /claims). Rendering it produced a meaningless trailing "Home".
+  const hasActiveObject = resolved.active.objectType !== 'root'
+  const showProject = activeProject !== null && resolved.surface !== 'project'
 
   return (
     <span className="surface-indicator" data-testid="surface-indicator" data-surface={resolved.surface}>
@@ -63,9 +77,20 @@ export function SurfaceIndicator({ runMode, selectionCount }: SurfaceIndicatorPr
       <span className="surface-indicator__label" title={role ?? undefined}>
         {surfaceLabel}
       </span>
-      <span className="surface-indicator__active" title={resolved.active.objectId}>
-        {resolved.active.label}
-      </span>
+      {hasActiveObject && (
+        <span className="surface-indicator__active" title={resolved.active.objectId}>
+          {resolved.active.label}
+        </span>
+      )}
+      {showProject && (
+        <span
+          className="surface-indicator__project"
+          data-testid="surface-indicator-project"
+          title={`Project ${activeProject.studyId}`}
+        >
+          {activeProject.title}
+        </span>
+      )}
       {hasSelection && (
         <span className="surface-indicator__sel" data-testid="surface-indicator-sel">
           {selectionCount} selected

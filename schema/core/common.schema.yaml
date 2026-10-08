@@ -39,6 +39,28 @@ $defs:
         items:
           type: string
 
+      derivedFromRevisionRef:
+        readOnly: true
+        type: object
+        additionalProperties: false
+        required: [kind, type, id]
+        properties:
+          kind: { const: record }
+          type: { const: record-revision }
+          id: { type: string, pattern: '^REV-[A-F0-9]+$' }
+        description: "Immutable source of a new draft or Save As copy."
+
+      protocolRevisionRef:
+        readOnly: true
+        type: object
+        additionalProperties: false
+        required: [kind, type, id]
+        properties:
+          kind: { const: record }
+          type: { const: record-revision }
+          id: { type: string, pattern: '^REV-[A-F0-9]+$' }
+        description: "Exact protocol content used by this record."
+
       createdAt:
         type: string
         format: date-time

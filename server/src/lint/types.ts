@@ -22,6 +22,7 @@ export type PredicateOp =
   | 'exists'
   | 'nonEmpty'
   | 'regex'
+  | 'compare'
   | 'equals'
   | 'in'
   | 'all'
@@ -195,7 +196,12 @@ export interface MentionKindMatchesPredicate extends BasePredicate {
 /**
  * Union of all predicate types.
  */
+export interface ComparePredicate extends BasePredicate {
+  op: 'compare'; path: string; operator: 'lt' | 'lte' | 'gt' | 'gte'; value: number;
+}
+
 export type Predicate =
+  | ComparePredicate
   | ExistsPredicate
   | NonEmptyPredicate
   | RegexPredicate
@@ -260,6 +266,37 @@ export interface LintGlobalConfig {
 }
 
 /**
+ * One requirement of an authoring policy, evaluated against the ACTOR
+ * context (not the record). All values come from lint YAML; the evaluator
+ * (AuthoringGuard.ts) contains zero domain literals.
+ */
+export interface AuthoringRequirement {
+  /** Pass when the actor is a trusted system identity. */
+  systemActor?: true;
+  /** Pass when the actor's user id is the platform local-admin bootstrap. */
+  localAdmin?: true;
+  /** Pass when the actor holds this role via role-grant records. */
+  role?: string;
+  /** Pass when the actor's user id equals this value. */
+  userId?: string;
+}
+
+/**
+ * Declarative authoring gate declared in a *.lint.yaml `authoring:` block.
+ * Interpreted at record create/update against the resolved session actor.
+ */
+export interface AuthoringPolicy {
+  /** The actor must satisfy at least one requirement (OR). */
+  require: { anyOf: AuthoringRequirement[] };
+  /** Error code returned on denial (default AUTHORING_FORBIDDEN). */
+  denyCode?: string;
+  /** On update, the guard fires only when one of these payload paths changes. */
+  guardWhenChanged?: string[];
+  /** On an accepted create, stamp the resolved actor's user id into this payload field. */
+  stampActorAs?: string;
+}
+
+/**
  * A lint specification (contents of a *.lint.yaml file).
  */
 export interface LintSpec {
@@ -271,6 +308,8 @@ export interface LintSpec {
   global?: LintGlobalConfig;
   /** Array of lint rule definitions */
   rules: LintRule[];
+  /** Optional actor-side authoring gate (evaluated at create/update time) */
+  authoring?: AuthoringPolicy;
 }
 
 /**

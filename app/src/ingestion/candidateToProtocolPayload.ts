@@ -49,6 +49,8 @@ function asProseString(value: unknown): string | undefined {
  *  string`). Pure + side-effect-free. */
 export function normalizeProtocolPayload<T extends Record<string, unknown>>(payload: T): T {
   const out: Record<string, unknown> = { ...payload }
+  out.version = typeof out.version === 'string' && out.version.trim()
+    ? out.version.trim() : typeof out.version === 'number' ? String(out.version) : '0.1.1'
   for (const key of PROSE_STRING_FIELDS) {
     if (key in out) {
       const s = asProseString(out[key])
@@ -96,6 +98,9 @@ export interface MappedProvenanceAnchor {
 
 export interface MappedProtocolPayload {
   kind: 'protocol'
+  version?: string
+  state?: string
+  createdBy?: string
   recordId: string
   title: string
   steps: MappedProtocolStep[]
@@ -105,6 +110,7 @@ export interface MappedProtocolPayload {
     instrumentRoles: Array<{ roleId: string; description: string; allowedInstrumentIds?: string[] }>
   }
   humanStepsText?: string
+  notes?: string
   /** Declarative if/then questions carried by the promoted protocol. */
   branch_axes?: MappedBranchAxis[]
 }
@@ -202,6 +208,8 @@ export function candidateToProtocolPayload(
 
   return {
     kind: 'protocol',
+    version: '0.1.1',
+    state: 'draft',
     recordId,
     title: candidate.title?.trim() ? candidate.title.trim() : 'Untitled protocol',
     steps: (candidate.steps ?? []).map(mapStep),
@@ -323,6 +331,8 @@ export function reviewCandidateToProtocolPayload(
 
   return {
     kind: 'protocol',
+    version: '0.1.1',
+    state: 'draft',
     recordId,
     title: candidate.title?.trim() ? candidate.title.trim() : 'Untitled protocol',
     steps,

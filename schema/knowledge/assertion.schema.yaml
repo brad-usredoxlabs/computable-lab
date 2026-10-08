@@ -63,6 +63,11 @@ properties:
         type: string
       target:
         $ref: "./datatypes/ref.schema.yaml"
+      detection:
+        type: string
+        enum: [detected, not_detected, indeterminate, invalid]
+      interpretationRuleRef:
+        $ref: "./datatypes/ref.schema.yaml"
       direction:
         type: string
         enum: [ increased, decreased, no_change, mixed, unknown ]

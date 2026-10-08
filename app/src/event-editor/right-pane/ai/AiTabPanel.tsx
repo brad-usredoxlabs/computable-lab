@@ -261,6 +261,12 @@ export function AiTabPanel() {
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
     (result: AssistDraftResult, prompt: string) => {
+      if (result.sequenceProposal) {
+        sessionStorage.setItem('cl-sequence-proposal', JSON.stringify(result.sequenceProposal))
+        sidebarDispatch({ type: 'reset' })
+        navigate('/sequences')
+        return
+      }
       // Transition sidebar state FIRST — this must happen even when the
       // draft has no preview events (e.g. forceMaterialClarifications held
       // the whole draft because of an ungrounded material).
@@ -350,7 +356,7 @@ export function AiTabPanel() {
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
-    [activeDeckScope, editor],
+    [activeDeckScope, editor, navigate],
   )
 
   const chat = useChatThread({

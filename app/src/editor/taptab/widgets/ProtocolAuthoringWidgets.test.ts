@@ -194,3 +194,54 @@ describe('protocol mention role sync', () => {
   })
 
 })
+
+
+describe('protocol step notes and PDF footnotes', () => {
+  const source = `Seal the rack.
+
+Note: If sealing foils cannot be used, remove the lysis rack cover before bead
+beating, and secure the clamp.
+
+1
+  For water samples, cut the filter into small pieces and place into ZR
+  BashingBead Lysis Tubes.
+2
+  Swabs can also be cut or broken and placed directly in the tube. For more information on processing
+  swab samples, see Appendix B.
+3
+  See Appendix A for sample collection.
+
+7`;
+
+  it('formats note labels and rejoins wrapped footnotes without swallowing their numbers', () => {
+    const doc = protocolTextToDoc(source, true)
+    expect(doc.content?.map((p) => p.attrs?.protocolBlock)).toEqual(['instruction', 'note', 'footnote', 'footnote', 'footnote', 'instruction'])
+    expect(doc.content?.[1]?.content?.[0]).toEqual({type: 'text', text: 'NOTE:', marks: [{type: 'protocolNoteLabel'}]})
+    for (const block of doc.content!.slice(1, 5)) {
+      expect(block.content?.some((node) => node.type === 'hardBreak')).toBe(false)
+    }
+    const text = editorContentToReadableText(doc)
+    expect(text).toContain('before bead beating, and secure the clamp.')
+    expect(text).toContain('1 For water samples, cut the filter into small pieces and place into ZR BashingBead Lysis Tubes.')
+    expect(text).toContain('2 Swabs can also be cut or broken')
+    expect(text).toContain('3 See Appendix A')
+    expect(text.endsWith('\n\n7')).toBe(true)
+    expect(protocolTextToDoc(text, true)).toEqual(doc)
+  })
+
+  it('splits a note on its own line even without a blank paragraph before it', () => {
+    const doc = protocolTextToDoc('Mix sample.\n  NOTE: Keep beads\n suspended.', true)
+    expect(doc.content).toHaveLength(2)
+    expect(editorContentToReadableText(doc)).toBe('Mix sample.\n\nNOTE: Keep beads suspended.')
+  })
+
+  it('preserves mention identities, normal numbered instructions, and hyphens', () => {
+    const doc = protocolTextToDoc('1. Mix sample.\n2. Incubate.\n\nNote: Avoid the brown-\ncolored pellet in [[labware:plate-1|the plate]].', true)
+    expect(doc.content?.[0]?.attrs?.protocolBlock).toBe('instruction')
+    expect(doc.content?.[0]?.content?.some((node) => node.type === 'hardBreak')).toBe(true)
+    expect(editorContentToReadableText(doc)).toContain('brown-colored pellet in the plate.')
+    expect(collectMentions(doc)).toEqual([{type: 'labware', id: 'plate-1', label: 'the plate'}])
+    // Other prose/role editors keep their existing newline behavior.
+    expect(protocolTextToDoc('Note: Keep beads\nsuspended.').content?.[0]?.content?.some((node) => node.type === 'hardBreak')).toBe(true)
+  })
+})

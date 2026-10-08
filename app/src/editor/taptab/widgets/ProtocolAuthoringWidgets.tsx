@@ -5,7 +5,8 @@ import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import HardBreak from '@tiptap/extension-hard-break'
 import Placeholder from '@tiptap/extension-placeholder'
-import type { JSONContent } from '@tiptap/core'
+import { Mark, type JSONContent } from '@tiptap/core'
+import { splitProtocolStepText } from './protocolStepText'
 import { apiClient, type ProtocolStructureSuggestion } from '../../../shared/api/client'
 import {
   buildSlashMenuExtension,
@@ -20,6 +21,35 @@ import { focusAdjacentTapTabField } from '../tabNavPlugin'
 // in every context (including the right-pane Protocol tab of protocol-planning
 // mode, which does not import taptab.css on its own).
 import '../taptab.css'
+
+const ProtocolParagraph = Paragraph.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      protocolBlock: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-protocol-block'),
+        renderHTML: (attributes: Record<string, unknown>) => attributes.protocolBlock
+          ? { 'data-protocol-block': attributes.protocolBlock } : {},
+      },
+    }
+  },
+})
+
+const ProtocolNoteLabel = Mark.create({
+  name: 'protocolNoteLabel',
+  parseHTML: () => [{tag: 'strong[data-protocol-note-label]'}],
+  renderHTML: () => ['strong', {'data-protocol-note-label': ''}, 0],
+})
+
+function ProtocolStepText({value}: {value: string}) {
+  return <div className="taptab-protocol-step-text">{splitProtocolStepText(value).map((block, index) => (
+    <p key={index} data-protocol-block={block.kind}>
+      {block.kind === 'note' ? <><strong>NOTE:</strong>{' '}</> : block.marker ? `${block.marker} ` : null}
+      {block.text}
+    </p>
+  ))}</div>
+}
 
 interface ProtocolWidgetProps {
   value: unknown
@@ -178,10 +208,6 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
     onCommit(next)
     syncMentions(mentions)
   }
-  const updateStepField = (index: number, field: string, fieldValue: unknown) => {
-    const next = steps.map((step, i) => i === index ? { ...step, [field]: fieldValue } : step)
-    onCommit(next)
-  }
   const stepProvenance = (step: Record<string, unknown>) =>
     Array.isArray(step.provenance) ? (step.provenance as Array<Record<string, unknown>>) : []
   return (
@@ -193,28 +219,19 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
         <li className="taptab-protocol-step-item" key={`${step.stepId ?? index}`}>
           <div className="taptab-protocol-step">
           {readOnly ? (
-            <span>{String(step.description ?? step.label ?? step.kind ?? 'Step')}</span>
+            <ProtocolStepText value={String(step.description ?? step.label ?? step.kind ?? 'Step')} />
           ) : (
             <ProtocolMentionEditor
               value={String(step.description ?? step.label ?? '')}
               placeholder="Describe this step"
               className="taptab-protocol-step-editor"
+              formatStepText
               serialize="readable"
               onCommit={(description, mentions) => updateStepDescription(index, description, mentions)}
             />
           )}
           {!readOnly && <button type="button" onClick={() => onCommit(steps.filter((_, i) => i !== index))} aria-label={`Remove step ${index + 1}`}>x</button>}
           </div>
-          {!readOnly && (
-            <label className="taptab-protocol-step-optional">
-              <input
-                type="checkbox"
-                checked={Boolean(step.isOptional)}
-                onChange={(e) => updateStepField(index, 'isOptional', e.target.checked)}
-              />
-              Optional
-            </label>
-          )}
           {stepProvenance(step).length > 0 ? (
             <details className="taptab-protocol-provenance">
               <summary className="taptab-protocol-provenance__summary">View provenance</summary>
@@ -239,6 +256,7 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
             value={newStep}
             className="taptab-protocol-step-editor"
             placeholder="Add plain-text step"
+            formatStepText
             serialize="readable"
             onDraftChange={(text, mentions) => {
               setNewStep(text)
@@ -413,6 +431,7 @@ export function ProtocolMentionEditor({
   defaultSlashQuery,
   onMentionSelected,
   focusSignal,
+  formatStepText = false,
 }: {
   value: string
   placeholder: string
@@ -432,6 +451,7 @@ export function ProtocolMentionEditor({
   defaultSlashQuery?: string
   onMentionSelected?: (mention: SlashMention) => void
   focusSignal?: number
+  formatStepText?: boolean
 }) {
   const commitRef = useRef(onCommit)
   commitRef.current = onCommit
@@ -447,7 +467,8 @@ export function ProtocolMentionEditor({
   const editor = useEditor({
     extensions: [
       Document,
-      Paragraph,
+      ProtocolParagraph,
+      ProtocolNoteLabel,
       Text,
       HardBreak,
       Placeholder.configure({ placeholder }),
@@ -469,7 +490,7 @@ export function ProtocolMentionEditor({
       }),
       buildOntologyCopilotExtension({ kinds: ['material', 'labware'] }),
     ],
-    content: protocolTextToDoc(value),
+    content: protocolTextToDoc(value, formatStepText),
     editorProps: {
       attributes: { class: 'taptab-protocol-mention-editor__content' },
       handleDOMEvents: {
@@ -508,22 +529,22 @@ export function ProtocolMentionEditor({
     if (!editor) return
     if (value === latestValueRef.current) return
     latestValueRef.current = value
-    editor.commands.setContent(protocolTextToDoc(value), { emitUpdate: false })
+    editor.commands.setContent(protocolTextToDoc(value, formatStepText), { emitUpdate: false })
     setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
-  }, [defaultSlashCommand, editor, value])
+  }, [defaultSlashCommand, editor, value, formatStepText])
 
   useEffect(() => {
     if (!editor || focusSignal === undefined || focusSignalRef.current === focusSignal) return
     focusSignalRef.current = focusSignal
     latestValueRef.current = value
-    editor.commands.setContent(protocolTextToDoc(value), { emitUpdate: false })
+    editor.commands.setContent(protocolTextToDoc(value, formatStepText), { emitUpdate: false })
     setHasPrimedSlash(false)
     window.setTimeout(() => {
       editor.chain().focus().run()
       primeDefaultSlashCommand(editor, defaultSlashCommand, slashQueryRef.current)
       setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
     }, 0)
-  }, [defaultSlashCommand, editor, focusSignal, value])
+  }, [defaultSlashCommand, editor, focusSignal, value, formatStepText])
 
   return (
     <div className={`taptab-protocol-mention-editor ${hasPrimedSlash ? 'taptab-protocol-mention-editor--primed' : ''} ${className}`}>
@@ -579,7 +600,20 @@ export function stripPrimedSlashCommandText(text: string, defaultSlashCommand?: 
   return text.replace(pattern, '').trimStart()
 }
 
-export function protocolTextToDoc(value: string): JSONContent {
+export function protocolTextToDoc(value: string, formatStepText = false): JSONContent {
+  if (formatStepText) {
+    const blocks = splitProtocolStepText(value)
+    return {
+      type: 'doc',
+      content: blocks.length ? blocks.map((block) => ({
+        type: 'paragraph',
+        attrs: { protocolBlock: block.kind },
+        content: block.kind === 'note'
+          ? [{type: 'text', text: 'NOTE:', marks: [{type: 'protocolNoteLabel'}]}, ...paragraphToContent(` ${block.text}`)]
+          : paragraphToContent(`${block.marker ? `${block.marker} ` : ''}${block.text}`),
+      })) : [{type: 'paragraph'}],
+    }
+  }
   const paragraphs = (value || '').split(/\n{2,}/)
   return {
     type: 'doc',

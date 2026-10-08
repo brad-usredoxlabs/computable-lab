@@ -17,6 +17,7 @@ export interface LabSettingsHandlers {
     materialTracking: MaterialTrackingConfig;
     policyBundleId: string;
     activePolicyBundle: PolicyBundle | null;
+    availablePolicyBundles: Array<{ id: string; label: string; level: number; description?: string }>;
   }>;
 }
 
@@ -32,6 +33,10 @@ export function createLabSettingsHandlers(
         materialTracking: effectiveMaterialTracking(config),
         policyBundleId,
         activePolicyBundle,
+        availablePolicyBundles: (bundleService?.listBundles() ?? []).map(
+          ({ id, label, level, description }) =>
+            description === undefined ? { id, label, level } : { id, label, level, description },
+        ),
       });
     },
   };

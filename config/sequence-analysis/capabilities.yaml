@@ -1,0 +1,34 @@
+version: 1
+actionSchema: https://computable-lab.com/schema/bio/sequence-action.schema.yaml
+engines:
+- id: virtual-pcr
+  label: Virtual PCR
+  runtime:
+  - builtin
+  version: 1.0.0
+  operation: run_virtual_pcr
+- id: mafft
+  label: Multiple sequence alignment (MAFFT)
+  runtime:
+  - local
+  - container
+  operation: run_mafft
+  versionArgs:
+  - --version
+- id: blastn
+  label: Nucleotide BLAST
+  runtime:
+  - local
+  - container
+  operation: run_blastn
+  versionArgs:
+  - -version
+frozenRunFields:
+- revisionRef
+- frozenRevisionRef
+- inputs
+- parameters
+limits:
+  maxReferenceResidues: 20000000
+  maxOligoResidues: 2000
+  maxSequenceCount: 10000

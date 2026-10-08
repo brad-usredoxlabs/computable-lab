@@ -75,7 +75,7 @@ surfaces:
     selectableKinds: []
     aiRole: "project home"
   - id: ingestion
-    label: "Ingestion · Vendor PDFs"
+    label: "Ingestion"
     path: "/ingestion"
     objectTypes: [document]
     selectableKinds: [material, labware]
@@ -88,3 +88,10 @@ surfaces:
     objectTypes: [document]
     selectableKinds: [material, labware, protocol-step]
     aiRole: "extract a protocol from a source document"
+
+  - id: sequences
+    label: "Sequences"
+    path: "/sequences"
+    objectTypes: [sequence, oligo-spec, assay-definition, analysis-run]
+    selectableKinds: [sequence, sequence_interval, oligo-spec]
+    aiRole: "sequence authoring and reproducible analysis"

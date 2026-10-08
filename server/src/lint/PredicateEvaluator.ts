@@ -566,6 +566,12 @@ export function evaluatePredicate(
   predicate: Predicate, 
   data: unknown
 ): PredicateResult {
+  if (predicate.op === 'compare') {
+    const value=getPath(data,predicate.path);
+    if(typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(predicate.value)) return {result:false,path:predicate.path,reason:'Expected finite numeric operands'};
+    const result=predicate.operator==='lt'?value<predicate.value:predicate.operator==='lte'?value<=predicate.value:predicate.operator==='gt'?value>predicate.value:value>=predicate.value;
+    return {result,path:predicate.path};
+  }
   if (isExistsPredicate(predicate)) {
     return evalExists(predicate, data);
   }

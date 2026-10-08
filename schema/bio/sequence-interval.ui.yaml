@@ -1,0 +1,23 @@
+uiVersion: 1
+schemaId: https://computable-lab.com/schema/bio/sequence-interval.schema.yaml
+form:
+  sections:
+  - title: Sequence
+    fields:
+    - path: $.id
+      label: ID
+      widget: text
+      readonly: true
+    - path: $.label
+      label: Name
+      widget: text
+      readonly: false
+  layout: sections
+display:
+  titleField: $.label
+list:
+  columns:
+  - path: $.label
+    label: Name
+  - path: $.id
+    label: ID

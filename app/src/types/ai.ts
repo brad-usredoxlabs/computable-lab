@@ -391,6 +391,7 @@ export interface DraftOntologyBinding {
 }
 
 export interface AiAgentResult {
+  sequenceProposal?: Record<string, unknown>;
   success: boolean
   events: PlateEvent[]
   notes: string[]
@@ -458,6 +459,8 @@ export interface ChatMessageAttachment {
 }
 
 export interface ChatMessage {
+  sequenceProposal?: Record<string, unknown>
+  sequenceProposalRequest?: string
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string

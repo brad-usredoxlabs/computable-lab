@@ -1,0 +1,16 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/computable-lab/form-draft.schema.yaml
+title: Form Draft
+# Draft history, never a canonical scientific record or a QMS signature.
+type: object
+additionalProperties: false
+required: [kind, id, actor, revision, createdAt, status, input, compiled]
+properties:
+  kind: {const: form-draft}
+  id: {type: string}
+  actor: {type: string}
+  revision: {type: integer, minimum: 1}
+  createdAt: {type: string}
+  status: {enum: [review, incomplete, accepted]}
+  input: {type: object}
+  compiled: {type: object}

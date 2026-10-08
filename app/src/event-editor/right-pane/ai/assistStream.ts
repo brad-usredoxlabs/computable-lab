@@ -48,6 +48,7 @@ export interface AssistStreamRequest {
  * lives in this payload, so dropping it renders as "(no response)".
  */
 export interface AssistDraftResult {
+  sequenceProposal?: Record<string, unknown>
   success?: boolean
   events?: unknown[]
   /**

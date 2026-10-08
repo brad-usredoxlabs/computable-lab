@@ -48,6 +48,12 @@ describe('Protocol prose fields schema', () => {
           ordinal: 1,
           kind: 'other',
           description: 'Review protocol prose before execution.',
+          descriptionRichText: {
+            plainText: 'Review protocol prose before execution.',
+            document: { type: 'doc', content: [{ type: 'paragraph', content: [
+              { type: 'text', text: 'Review protocol prose before execution.', marks: [{ type: 'bold' }] },
+            ] }] },
+          },
         },
       ],
     }, 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml');

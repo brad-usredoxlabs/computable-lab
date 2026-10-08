@@ -23,6 +23,7 @@ export type SurfaceId =
   | 'knowledge'
   | 'find'
   | 'ingestion'
+  | 'sequences'
   | 'protocol-review'
 
 export interface ActiveObject {

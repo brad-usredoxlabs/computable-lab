@@ -8,7 +8,8 @@
  */
 
 import { useEffect } from 'react'
-import { ClarificationPicker } from './ClarificationPicker'
+import { ClarificationPicker, requestHasPicker } from './ClarificationPicker'
+import { ParameterAnswerInput } from './ParameterAnswerInput'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 
 export interface QuestionsPanelProps {
@@ -89,10 +90,19 @@ export function QuestionsPanel({
                     Change
                   </button>
                 </div>
-              ) : (
+              ) : requestHasPicker(request) ? (
                 <ClarificationPicker
+                  key={request.id}
                   request={request}
                   onPick={(ans) => onAnswer(request.id, ans)}
+                />
+              ) : (
+                // Nothing to choose from — the question wants a value ("what
+                // volume?"). Render the box that lets them answer it.
+                <ParameterAnswerInput
+                  key={request.id}
+                  requestId={request.id}
+                  onAnswer={(ans) => onAnswer(request.id, ans)}
                 />
               )}
             </section>

@@ -1139,10 +1139,23 @@ Implemented via `.hermes/plans/2026-09-26_203123-qms-governance-gap-plan.md`. Ve
 | §11–12 | Documents vs records; correction vs revision | PARTIAL | lifecycles split the two classes; `record_correction` schema DEFERRED |
 | §13–15 | Policy packages; research vs regulated mode | DONE | `enforceTransitionRoles` bundle setting (sandbox/notebook allow, tracked/regulated deny); same schemas, different strictness — proved by `governanceStrictness.test.ts` |
 | §16 | Seven QMS primitives | DONE | identity (pre-existing auth), roles+grants, versioned objects (git), state machines, signatures, audit events, policy bundles |
-| §17–20 | QMS features as ordinary records; controlled-use enforcement | PARTIAL | deviation/competency/calibration records pre-existed; controlled-use preconditions on planned→in_progress not yet wired to the new policy engine |
+| §17–20 | QMS features as ordinary records; controlled-use enforcement | DONE (run-start slice, 2026-09-27) | POST /runs/:runId/start now evaluates the readiness report against the active policy bundle: deny→403 CONTROLLED_USE_BLOCKED, confirm→409 CONFIRMATION_REQUIRED satisfied only by explicit acknowledgements (recorded in the run_started audit event), unevaluable plannedRunRef→422 fail-closed. Runs with no plannedRunRef are unguarded by design (nothing declared). Deviation workflow (§18) still has no lifecycle records; deviation capture remains step-metadata. |
 | §21 | Policy engine queries | PARTIAL | transition-time evaluation implemented; general "can this actor do X" query API DEFERRED |
 | §22 | AI operates through governance | DONE by construction | AI writes flow through `RecordHandlers.updateRecord` → same gate; agent identities are user records |
 | §23–24 | Git substrate; governance envelope | PARTIAL | git commits recorded in audit-event data; no embedded `governance:` block (queryable via graph, per §24's own allowance) |
 | §25–27 | Runtime architecture; TYF deployment | DONE (core) | deployment-specific TYF package DEFERRED (own spec drop) |
 
 Deliberately deferred, not faked: `record_correction`, retention rules, WebAuthn/passkey re-auth, TYF domain package, general policy-query API, lifecycle-state bypass audit of non-RecordHandlers `store.update` callers.
+
+
+## Revision foundation correction (2026-10-03)
+
+New signatures bind an immutable `record-revision` snapshot plus its SHA-256
+content hash. The historical `meta.commitSha` name conflated repository content
+tokens with Git commits; it must not be passed to `git show` as proof of a signed
+revision. `gitCommit` is now included only when verified against committed bytes.
+Snapshots remain reconstructable without Git. Transition application rejects
+stale signatures and combined content edits, and storage rejects mutation of
+snapshots and approved/effective controlled content. See
+[the revision integration contract](../docs/qms-manual-testing-cheatsheet.md#protocol-revisions-and-signature-integrity-2026-10-03)
+for API behavior and compatibility with existing signatures.

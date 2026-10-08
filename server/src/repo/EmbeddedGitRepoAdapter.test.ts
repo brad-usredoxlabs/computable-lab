@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmbeddedGitRepoAdapter } from './EmbeddedGitRepoAdapter.js';
@@ -49,6 +49,9 @@ describe('EmbeddedGitRepoAdapter', () => {
     const reopened = await makeAdapter(dataDir);
     const file = await reopened.getFile('records/studies/STU-001.yaml');
     expect(file?.content).toContain('Durable Study');
+    expect(await reopened.getVerifiedCommit('records/studies/STU-001.yaml')).toBe(created.commit?.sha);
+    await writeFile(join(reopened.worktreePath, 'records/studies/STU-001.yaml'), 'uncommitted change');
+    expect(await reopened.getVerifiedCommit('records/studies/STU-001.yaml')).toBeUndefined();
 
     const history = await reopened.getHistory({ path: 'records/studies/STU-001.yaml', limit: 5 });
     expect(history.map((entry) => entry.message)).toContain('Create durable study');

@@ -14,6 +14,18 @@ function handlers(store: ReturnType<typeof memoryStore>['store'], readAllowed = 
   });
 }
 describe('protocol save and revision HTTP contracts', () => {
+  it('stamps new projects with session provenance instead of draft display values', async () => {
+    const { store } = memoryStore();
+    const result = await handlers(store).createRecord({ body: { schemaId: 'study', payload: {
+      kind: 'study', recordId: 'STU-NEW', title: 'New project', shortSlug: 'new-project', state: 'draft',
+      createdBy: 'Display name', createdAt: '2000-01-01T00:00:00.000Z', updatedAt: '2000-01-01T00:00:00.000Z',
+    } } } as any, reply());
+    expect(result).toMatchObject({ success: true, record: { payload: { state: 'draft', createdBy: 'USR-SESSION' } } });
+    const saved = (await store.get('STU-NEW'))!.payload as Record<string, unknown>;
+    expect(saved.createdAt).not.toBe('2000-01-01T00:00:00.000Z');
+    expect(saved.updatedAt).toBe(saved.createdAt);
+  });
+
   it('repairs a null version, stamps the session author, and never approves on Save', async () => {
     const { store } = memoryStore();
     const h = handlers(store);

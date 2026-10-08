@@ -15,17 +15,20 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { VendorPdfWorkflowTab } from './VendorPdfWorkflowTab'
+import { SequenceImport } from '../sequences/SequenceImport'
+import '../sequences/SequencesPage.css'
 import './IngestionPage.css'
 
 const LiteratureExplorer = lazy(() =>
   import('../knowledge/LiteratureExplorer').then((m) => ({ default: m.LiteratureExplorer })),
 )
 
-type IngestionTab = 'vendor-pdf' | 'literature'
+type IngestionTab = 'vendor-pdf' | 'literature' | 'oligo-orders'
 
 const TABS: { id: IngestionTab; label: string }[] = [
   { id: 'vendor-pdf', label: 'Vendor PDFs' },
   { id: 'literature', label: 'Literature' },
+  { id: 'oligo-orders', label: 'Primer / probe orders' },
 ]
 
 export function IngestionPage() {
@@ -66,7 +69,7 @@ export function IngestionPage() {
           </nav>
 
           <div className="ingestion-page__body" data-testid={`ingestion-body-${active}`}>
-            {active === 'vendor-pdf' ? (
+            {active === 'oligo-orders' ? <SequenceImport orderOnly /> : active === 'vendor-pdf' ? (
               <VendorPdfWorkflowTab />
             ) : (
               <Suspense fallback={<p className="ingestion-page__loading">Loading literature…</p>}>

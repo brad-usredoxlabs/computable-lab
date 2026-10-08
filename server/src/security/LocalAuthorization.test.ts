@@ -154,14 +154,64 @@ describe('local identity and authorization substrate', () => {
     expect(resolved.isSystem).toBe(false);
   });
 
-  it('falls back to the active local user for a stale local-admin header', async () => {
+  it('resolves an explicit non-admin header without any session token (header-trusted path, Phase 0 pin)', async () => {
+    // Pins TODAY's behavior: no token + x-user-id: USR-BRAD => USR-BRAD.
+    // To be tightened in Phase 2 (login becomes the only identity path).
+    const store = new MemoryRecordStore([user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': 'USR-BRAD' } }));
+
+    expect(resolved.userId).toBe('USR-BRAD');
+    expect(resolved.isSystem).toBe(false);
+  });
+
+  it('pin (a): admin header resolves the ADMIN record (isSystem) while the bootstrap window is open', async () => {
+    // hasCredential wired AND admin has NO credential => the header resolves
+    // to the admin specifically, even though another active user exists.
+    const store = new MemoryRecordStore([user(LOCAL_ADMIN_USER_ID), user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store, undefined, async () => false);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': LOCAL_ADMIN_USER_ID } }));
+
+    expect(resolved.userId).toBe(LOCAL_ADMIN_USER_ID);
+    expect(resolved.userRecord?.recordId).toBe(LOCAL_ADMIN_USER_ID);
+    expect(resolved.isSystem).toBe(true);
+  });
+
+  it('pin (a2): open bootstrap window creates the admin record when missing, without routing through the first-active-user preference', async () => {
+    const store = new MemoryRecordStore([user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store, undefined, async () => false);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': LOCAL_ADMIN_USER_ID } }));
+
+    expect(resolved.userId).toBe(LOCAL_ADMIN_USER_ID);
+    expect(resolved.isSystem).toBe(true);
+    expect(await store.get(LOCAL_ADMIN_USER_ID)).toBeTruthy();
+  });
+
+  it('pin (b): admin header is DEAD once the admin has a credential — falls back to the first active user', async () => {
+    // The self-closing window: credential exists => header no longer resolves
+    // to admin; behavior matches the pre-Phase-1 fallback exactly.
+    const store = new MemoryRecordStore([user(LOCAL_ADMIN_USER_ID), user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store, undefined, async (userId) => userId === LOCAL_ADMIN_USER_ID);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': LOCAL_ADMIN_USER_ID } }));
+
+    expect(resolved.userId).toBe('USR-BRAD');
+    expect(resolved.userRecord?.recordId).toBe('USR-BRAD');
+    expect(resolved.isSystem).toBe(false);
+  });
+
+  it('pin (b2): admin header fails closed when no hasCredential predicate is wired (optional-wiring posture)', async () => {
+    // Predicate ripped out => no bootstrap window, ever. The header may NOT
+    // reach the admin even with zero credentials on record.
     const store = new MemoryRecordStore([user(LOCAL_ADMIN_USER_ID), user('USR-BRAD')]);
     const identity = new LocalIdentityService(store);
 
     const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': LOCAL_ADMIN_USER_ID } }));
 
     expect(resolved.userId).toBe('USR-BRAD');
-    expect(resolved.userRecord?.recordId).toBe('USR-BRAD');
     expect(resolved.isSystem).toBe(false);
   });
 

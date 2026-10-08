@@ -13,6 +13,7 @@ export const APPLIANCE_ENDPOINTS = [
   'event-editor',
   'protocols',
   'literature',
+  'sequences',
 ] as const;
 export type ApplianceEndpoint = (typeof APPLIANCE_ENDPOINTS)[number];
 

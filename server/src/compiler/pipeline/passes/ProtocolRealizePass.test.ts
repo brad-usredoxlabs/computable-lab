@@ -30,9 +30,10 @@ function buildMockStore(options: {
   get: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
 } {
+  const records = new Map<string, any>();
   return {
-    get: vi.fn().mockResolvedValue(options.getResponse ?? null),
-    create: vi.fn().mockResolvedValue(options.createResponse ?? {}),
+    get: vi.fn(async (id: string) => records.get(id) ?? (id.startsWith('REV-') ? null : id.startsWith('PRT-') ? { recordId: id, schemaId: 'protocol', payload: { kind: 'protocol', recordId: id, title: 'Source', steps: [] } } : options.getResponse ?? null)),
+    create: vi.fn(async ({ envelope }: any) => { records.set(envelope.recordId, envelope); return options.createResponse ?? { success: true, envelope }; }),
   };
 }
 
@@ -136,13 +137,13 @@ describe('createProtocolRealizePass', () => {
     });
     expect(result.diagnostics).toEqual([]);
     expect(mockPromotion).toHaveBeenCalledTimes(1);
-    expect(mockStore.create).toHaveBeenCalledTimes(1);
+    expect(mockStore.create).toHaveBeenCalledTimes(2);
   });
 
   // ------------------------------------------------------------------------
   // 2. Multi-variant first-pick with info diagnostic
   // ------------------------------------------------------------------------
-  it('multi-variant: picks first variant, emits info diagnostic', async () => {
+  it('multi-variant: waits for a choice before promoting or pinning a source', async () => {
     const mockStore = buildMockStore({
       getResponse: {
         payload: {
@@ -191,18 +192,11 @@ describe('createProtocolRealizePass', () => {
     const result = await pass.run({ pass_id: 'protocol_realize', state });
 
     expect(result.ok).toBe(true);
-    expect(result.output).toMatchObject({
-      protocolRef: 'PRT-realized-xyz789',
-      localProtocolRef: expect.stringMatching(/^LPR-realized-/),
-      selectedVariantLabel: 'cell-culture',
-    });
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics![0]).toMatchObject({
-      severity: 'info',
-      code: 'protocol_realize_multivariant_auto_pick',
-      message: expect.stringContaining('2 variants'),
-      pass_id: 'protocol_realize',
-    });
+    expect(result.output).toEqual({});
+    expect(mockPromotion).not.toHaveBeenCalled();
+    expect(result.diagnostics).toEqual([expect.objectContaining({
+      code: 'protocol_realize_awaiting_variant_selection',
+    })]);
   });
 
   // ------------------------------------------------------------------------
@@ -500,8 +494,8 @@ describe('createProtocolRealizePass', () => {
 
     await pass.run({ pass_id: 'protocol_realize', state });
 
-    const createCall = mockStore.create.mock.calls[0];
-    const envelope = createCall[0].envelope as Record<string, unknown>;
+    const createCall = mockStore.create.mock.calls.find(call => call[0].envelope.payload.kind === 'local-protocol')!;
+    const envelope = createCall[0].envelope.payload as Record<string, unknown>;
 
     expect(envelope.kind).toBe('local-protocol');
     expect(envelope.recordId).toMatch(/^LPR-realized-/);
@@ -510,6 +504,7 @@ describe('createProtocolRealizePass', () => {
       kind: 'record',
       type: 'protocol',
       id: 'PRT-realized-abc123',
+      revisionRef: { kind: 'record', type: 'record-revision', id: expect.stringMatching(/^REV-/) },
     });
     expect(envelope.status).toBe('draft');
     expect(envelope.protocolLayer).toBe('lab');

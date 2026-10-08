@@ -14,12 +14,13 @@
  * one answer is possible.
  */
 
-export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout';
+export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout' | 'sequence_action';
 
 const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
   event_graph: ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'unresolvedRefs'],
   create_record: ['records', 'alsoPlace'],
   deck_layout: ['variantId'],
+  sequence_action: ['sequenceAction'],
 };
 
 export function isAgentIntentName(value: unknown): value is AgentIntentName {

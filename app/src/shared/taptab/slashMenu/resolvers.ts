@@ -30,14 +30,28 @@ const MATERIAL_PAGE = 12
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
-  // First paint: workspace records + formulations only. Both come from
-  // the local SQLite-backed indices and return in <50ms, so the menu
-  // pops the instant the user finishes typing the query — no waiting on
-  // OAK SQLite scans or remote OLS4 calls. The ontology tiers stream
-  // in via onUpdate below.
+  const layer = ctx.materialLayer
+
+  // A scoped question offers that layer ONLY. Offering a bare concept beside a
+  // formulation beside an aliquot (the old flat menu) is what left the biologist
+  // with "no godly idea which one to pick" — the layer is the question's, not
+  // theirs to guess.
+  if (layer === 'material-spec') return resolveFormulationLayer(q, ctx)
+  if (layer === 'material-instance' || layer === 'aliquot') return resolveInstanceLayer(q, ctx, layer)
+  if (layer === 'vendor-product') return resolveVendorLayer(q, ctx)
+
+  const scopedToConcept = layer === 'material'
+
+  // First paint: workspace records (+ formulations, unless the question is about
+  // the concept itself). Both come from the local SQLite-backed indices and
+  // return in <50ms, so the menu pops the instant the user finishes typing the
+  // query — no waiting on OAK SQLite scans or remote OLS4 calls. The ontology
+  // tiers stream in via onUpdate below.
   const [materialRes, formulations] = await Promise.all([
     apiClient.searchMaterials({ q, limit: MATERIAL_PAGE * 2 }),
-    apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
+    scopedToConcept
+      ? Promise.resolve([] as FormulationSummary[])
+      : apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
   ])
   abortIfNeeded(ctx)
 
@@ -107,12 +121,72 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
         /* remote-tail failure — silently drop, user has earlier paints */
       }
       // Exa vendor-product tier streams in last — real web products, minted
-      // locally on select so the funnel never emits a bare ontology CURIE.
-      appendVendorExaHits(ctx, seen, q, 'catalog')
+      // locally on select so the funnel never emits a bare ontology CURIE. Not
+      // for a concept-scoped question: a catalog item is a different layer.
+      if (!scopedToConcept) appendVendorExaHits(ctx, seen, q, 'catalog')
     })()
   }
 
   return initial
+}
+
+/**
+ * "Which prepared solution?" — formulations ONLY.
+ *
+ * The layer is the question's: a biologist asked which prepared solution to use
+ * must not be offered a bare compound or a freezer tube. Offering all three (the
+ * old flat /m menu) made the choice a modelling decision instead of a lab one.
+ */
+async function resolveFormulationLayer(
+  query: string,
+  ctx: SlashResolverContext,
+): Promise<SlashSuggestion[]> {
+  const formulations = await apiClient.getFormulationsSummary({
+    ...(query ? { q: query } : {}),
+    limit: MATERIAL_PAGE,
+  })
+  abortIfNeeded(ctx)
+  return materialSuggestions([], formulations)
+}
+
+/**
+ * "Which tube / lot?" — instances and aliquots ONLY, searched as lab records
+ * (kind `material-instance` / `aliquot`) so the biologist picks the physical
+ * thing in front of them, not the concept it realises.
+ */
+async function resolveInstanceLayer(
+  query: string,
+  ctx: SlashResolverContext,
+  layer: 'material-instance' | 'aliquot',
+): Promise<SlashSuggestion[]> {
+  const found = await apiClient.searchRecordsByKind(query, layer, MATERIAL_PAGE)
+  abortIfNeeded(ctx)
+  const items: MaterialSearchItem[] = found.records.map((record) => ({
+    recordId: record.recordId,
+    kind: layer,
+    title: record.title || record.recordId,
+    category: layer === 'aliquot' ? 'prepared-material' : 'saved-stock',
+    subtitle: layer === 'aliquot' ? 'a specific aliquot in the lab' : 'a specific preparation in the lab',
+  }))
+  return materialSuggestions(items, [])
+}
+
+/** "Which catalog item?" — vendor products ONLY (a catalog identity is its own layer). */
+async function resolveVendorLayer(
+  query: string,
+  ctx: SlashResolverContext,
+): Promise<SlashSuggestion[]> {
+  if (!query) return []
+  const found = await apiClient.searchVendorProducts({ q: query, limit: MATERIAL_PAGE })
+  abortIfNeeded(ctx)
+  const items: MaterialSearchItem[] = found.items.map((hit) => ({
+    recordId: `${hit.vendor}:${hit.catalogNumber}`,
+    kind: 'vendor-product',
+    title: hit.name,
+    category: 'vendor-reagent',
+    subtitle: [hit.vendor, hit.catalogNumber].filter(Boolean).join(' '),
+  }))
+  return materialSuggestions(items, [])
 }
 
 function appendOntologyHits(

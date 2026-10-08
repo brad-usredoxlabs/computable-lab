@@ -81,3 +81,21 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
+
+  oligos:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [role, oligoRef]
+      properties:
+        role: {type: string, enum: [forward_primer, reverse_primer, probe]}
+        oligoRef:
+          $ref: "./datatypes/ref.schema.yaml"
+        readoutRef:
+          $ref: "./datatypes/ref.schema.yaml"
+  expectedProductLength:
+    type: integer
+    minimum: 1
+  referenceCollectionRef:
+    $ref: "./datatypes/ref.schema.yaml"

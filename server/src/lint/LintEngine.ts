@@ -8,6 +8,7 @@
  */
 
 import type {
+  AuthoringPolicy,
   LintSpec,
   LintRule,
   LintContext,
@@ -69,6 +70,20 @@ export class LintEngine {
     }
   }
   
+  /**
+   * Get the declarative authoring policy declared for a schema, if any.
+   * Authoring policies gate the ACTOR at create/update time (see
+   * AuthoringGuard.ts); specs without rules can still carry one.
+   */
+  authoringPolicyForSchema(schemaId: string): AuthoringPolicy | undefined {
+    for (const spec of this.specs.values()) {
+      if (spec.authoring && (spec.schemaId === undefined || spec.schemaId === schemaId)) {
+        return spec.authoring;
+      }
+    }
+    return undefined;
+  }
+
   /**
    * Remove a lint specification.
    * 

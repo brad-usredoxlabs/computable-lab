@@ -4,7 +4,7 @@
  * against the REAL committed PDT/SGP schemas (full registry, topological
  * order) so a schema/service drift fails here, not in production.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,7 @@ import {
   SUBGRAPH_PROPOSAL_SCHEMA_ID,
 } from './ProtocolIntakeService.js';
 import type { ProtocolDecisionTree } from './deriveDecisionTree.js';
+import { readCandidateArtifact } from '../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { ProtocolCandidate } from '../ingestion/vendor-protocol/types.js';
 import type { RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
 
@@ -69,6 +70,10 @@ function makeMockStore() {
       return { success: true, envelope };
     }),
     list: vi.fn(async () => [...records.values()]),
+    delete: vi.fn(async ({ recordId }: { recordId: string }) => {
+      records.delete(recordId);
+      return { success: true };
+    }),
   };
   return { store: store as unknown as RecordStoreImpl, records };
 }
@@ -257,6 +262,134 @@ describe('ProtocolIntakeService.ingestDocument', () => {
       expect(result.diagnostics.some((d) => d.code === 'scale_registry_empty' && d.severity === 'error')).toBe(true);
     });
   });
+});
+
+describe('ProtocolIntakeService.refreshTree', () => {
+  const DISPATCH_STEPS = [
+    {
+      id: 'step-20',
+      stepNumber: 1,
+      sourceText:
+        'For blood with non-nucleated erythrocytes, follow step 1a; for blood with nucleated erythrocytes, follow step 1b; for cultured cells, follow step 1c.',
+      branches: [
+        'blood with nucleated erythrocytes (follow step 1b)',
+        'cultured cells (follow step 1c)',
+      ],
+    },
+    { id: 'step-21', stepNumber: 1, substep: 'a', sourceText: 'Pipet 20 ul Proteinase K.' },
+    { id: 'step-22', stepNumber: 1, substep: 'b', sourceText: 'Pipet 90 ul blood.' },
+    { id: 'step-23', stepNumber: 1, substep: 'c', sourceText: 'Centrifuge the cells.' },
+    { id: 'step-24', stepNumber: 2, sourceText: 'Add Buffer AL.' },
+  ];
+
+  function seedCandidate(workspaceRoot: string): Record<string, unknown> {
+    return {
+      kind: 'vendor-protocol-candidate',
+      source: { documentId: 'dispatch-doc', vendor: 'Example Vendor' },
+      steps: DISPATCH_STEPS,
+      sections: [],
+      tables: [],
+    };
+  }
+
+  async function writeCandidate(workspaceRoot: string, candidate: Record<string, unknown>): Promise<void> {
+    const rel = join('artifacts', 'foundry', 'protocol-candidates', 'dispatch-doc.json');
+    await mkdir(join(workspaceRoot, 'artifacts', 'foundry', 'protocol-candidates'), { recursive: true });
+    await writeFile(join(workspaceRoot, rel), JSON.stringify(candidate));
+  }
+
+  function makeService(workspaceRoot: string, store: unknown) {
+    return new ProtocolIntakeService({
+      workspaceRoot,
+      store: store as never,
+      validator,
+      compileRunner: compileStub,
+      scaleOptions: [
+        { level: 'manual_tubes', profileId: 'execution-scale-profile/manual-tubes' },
+        { level: 'bench_plate_multichannel' },
+        { level: 'robot_deck', profileId: 'execution-scale-profile/robot-opentrons-ot2-96' },
+      ],
+    });
+  }
+
+  it('re-derives WITHOUT re-extraction, suppresses the degenerate axis, and invalidates stale proposals', async () => {
+    await withWorkspace(async (workspaceRoot) => {
+      const { store, records } = makeMockStore();
+      const candidate = seedCandidate(workspaceRoot);
+      await writeCandidate(workspaceRoot, candidate);
+
+      // A stale tree in the OLD shape (the degenerate axis present, variant
+      // axis nested) + proposals under positional ids from that axis set.
+      const staleTree = deriveDecisionTreeFromSteps(candidate);
+      records.set(staleTree.recordId, {
+        recordId: staleTree.recordId,
+        schemaId: PROTOCOL_DECISION_TREE_SCHEMA_ID,
+        payload: staleTree as unknown as Record<string, unknown>,
+      });
+      const staleProposalId = `SGP-${staleTree.recordId.slice(4)}-b0-s0`;
+      records.set(staleProposalId, {
+        recordId: staleProposalId,
+        schemaId: SUBGRAPH_PROPOSAL_SCHEMA_ID,
+        payload: {
+          kind: 'subgraph-proposal',
+          recordId: staleProposalId,
+          treeRef: { kind: 'record', id: staleTree.recordId, type: 'protocol-decision-tree' },
+          documentId: staleTree.documentId,
+          branchPath: [{ axisId: staleTree.axes[0]!.axisId, conditionId: 'branch-1' }],
+          scaleLevel: 'manual_tubes',
+          state: 'proposed',
+          revision: 1,
+          generatedAt: FIXED_NOW,
+        },
+      });
+
+      const service = makeService(workspaceRoot, store);
+      const result = await service.refreshTree({ documentId: 'dispatch-doc', now: FIXED_NOW });
+
+      // The refreshed tree dropped the degenerate duplicate (D1) — only the
+      // variant axis (3 distinct gated steps) remains.
+      const refreshed = records.get(staleTree.recordId)!.payload as unknown as ProtocolDecisionTree;
+      expect(refreshed.axes.map((a) => a.axisId)).toEqual(['axis-step-20-variant']);
+      expect(refreshed.notes ?? '').toContain('degenerate_branch_axis_suppressed');
+
+      // The proposal whose positional id no longer denotes the same binding is
+      // invalidated, not silently kept (its id now means a different branch).
+      expect(records.has(staleProposalId)).toBe(false);
+      expect(result.diagnostics.some((d) => d.code === 'stale_proposals_invalidated')).toBe(true);
+
+      // No LLM: extraction was never invoked (no artifactPath/text given; the
+      // candidate came from disk). refresh never drafts — drafting stays
+      // on-demand.
+      expect(result.proposalRecordIds).toEqual([]);
+      // The tree is validated against the schema.
+      expect(validator.validate(records.get(staleTree.recordId)!.payload, PROTOCOL_DECISION_TREE_SCHEMA_ID).valid).toBe(true);
+    });
+  });
+
+  function deriveDecisionTreeFromSteps(candidate: Record<string, unknown>): ProtocolDecisionTree {
+    // The OLD derivation for the same steps: degenerate branch axis FIRST.
+    const axes = [
+      {
+        axisId: 'branch-axis-step-20',
+        question: 'Which branch applies: blood with nucleated erythrocytes (follow step 1b) / cultured cells (follow step 1c)?',
+        choiceKey: 'branchSelection',
+        origin: 'document_branch',
+        conditions: [
+          { id: 'branch-1', label: 'blood with nucleated erythrocytes (follow step 1b)', predicate: { op: 'equals', path: '$.branchSelection.branch-axis-step-20', value: 'blood-with-nucleated-erythrocytes-follow-step-1b' }, then_stepIds: ['step-20'] },
+          { id: 'branch-2', label: 'cultured cells (follow step 1c)', predicate: { op: 'equals', path: '$.branchSelection.branch-axis-step-20', value: 'cultured-cells-follow-step-1c' }, then_stepIds: ['step-20'] },
+        ],
+      },
+    ];
+    return {
+      kind: 'protocol-decision-tree',
+      recordId: 'PDT-dispatch-doc',
+      documentId: 'dispatch-doc',
+      axes,
+      scaleAxis: { question: 'At what execution scale should this protocol run?', options: [{ level: 'manual_tubes' }, { level: 'bench_plate_multichannel' }, { level: 'robot_deck' }] },
+      status: 'proposed',
+      generatedAt: FIXED_NOW,
+    } as unknown as ProtocolDecisionTree;
+  }
 });
 
 describe('buildDecisionBlock', () => {
@@ -449,6 +582,12 @@ Protocol: Purification of Total DNA from Animal Tissues (Spin-Column Protocol)
         `PDT-handbook-dneasy__${tissueSlug}`,
       ]);
       expect(records.has('PDT-handbook-dneasy')).toBe(false);
+      for (const slug of [bloodSlug, tissueSlug]) {
+        const persisted = await readCandidateArtifact(workspaceRoot, `handbook-dneasy__${slug}`);
+        expect(persisted?.steps.length).toBeGreaterThan(0);
+        expect(persisted?.sections).toHaveLength(1);
+      }
+
 
       // Blood child: its dispatch question is real and gates its OWN steps.
       const blood = records.get(`PDT-handbook-dneasy__${bloodSlug}`)!;
@@ -477,6 +616,10 @@ Protocol: Purification of Total DNA from Animal Tissues (Spin-Column Protocol)
       expect(result.proposalRecordIds.some((id) => id.includes(bloodSlug))).toBe(true);
       expect(result.proposalRecordIds.some((id) => id.includes(tissueSlug))).toBe(true);
       expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+      // Refresh must reconstruct the review candidates as well as the trees.
+      await service.refreshTree({ documentId: 'handbook-dneasy', now: FIXED_NOW });
+      expect((await readCandidateArtifact(workspaceRoot, `handbook-dneasy__${tissueSlug}`))?.title).toContain('Tissues');
+
     });
   });
 

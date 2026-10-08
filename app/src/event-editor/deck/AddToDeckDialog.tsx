@@ -3,9 +3,11 @@ import {
   LABWARE_CATEGORIES,
   LABWARE_TYPE_LABELS,
   createLabware,
+  createLabwareFromDefinitionPayload,
   isLawnOnlyLabwareType,
   labwareRecordToEditorLabware,
   type Labware,
+  type LabwareDefinitionSearchHit,
   type LabwareRecordPayload,
   type LabwareType,
 } from '../../types/labware'
@@ -21,6 +23,7 @@ import { useVendorExaSearch } from '../../shared/vendor-exa/useVendorExaSearch'
 import { InstrumentGlyph } from './InstrumentGlyphs'
 import {
   isPlateCategory,
+  labwareRowMatches,
   mergeAndRankDeckSources,
   TAB_KINDS,
   type AddDeckSourceItem,
@@ -61,12 +64,16 @@ interface LabDbHit {
   /** True when this is an equipment record (minted EQP-… or seeded) rather
    *  than a labware definition. */
   isInstrument: boolean
+  /** The raw definition hit (topology, capacity, render hints) when this row
+   *  came from the labware-definition search — present rows place via the
+   *  definition factory with their grid intact (spec decision 1). */
+  hit?: LabwareDefinitionSearchHit
 }
 
 /** One rendered, selectable row, carrying the payload needed to build on submit. */
 type DeckRow =
   | { source: 'catalog'; key: string; label: string; labwareType?: LabwareType; instrumentKind?: InstrumentKind }
-  | { source: 'lab-db'; key: string; label: string; record: LabwareRecordPayload; isInstrument: boolean }
+  | { source: 'lab-db'; key: string; label: string; record: LabwareRecordPayload; isInstrument: boolean; def?: LabwareDefinitionSearchHit }
   | { source: 'exa'; key: string; label: string; hit: VendorExaHit; isInstrument: boolean }
   | { source: 'ontology'; key: string; label: string; isInstrument: boolean }
 
@@ -149,7 +156,12 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
             .map((r) => ({ recordId: r.recordId as string, label: r.title, isInstrument: true })))
         } else {
           const res = await apiClient.searchLabwareDefinitions({ q: trimmed, limit: 12 })
-          setLabDbHits(res.hits.map((h) => ({ recordId: h.recordId, label: h.label, isInstrument: false })))
+          setLabDbHits(res.hits.map((h) => ({
+            recordId: h.recordId,
+            label: h.label,
+            isInstrument: false,
+            hit: h,
+          })))
         }
       } catch {
         setLabDbHits([])
@@ -201,7 +213,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
     // bucket, so local-first holds regardless of tab. Insulate each from the
     // catalog key-space (LabwareType names) by prefixing with `lab-db:`.
     for (const hit of labDbHits) {
-      if (trimmed && !hit.label.toLowerCase().includes(trimmed)) continue
+      if (trimmed && !labwareRowMatches(trimmed, hit.label)) continue
       const key = `lab-db:${hit.recordId}`
       labDb.push({ key, source: 'lab-db', label: hit.label, kind: hit.isInstrument ? 'instrument' : 'labware' })
       by[key] = {
@@ -209,6 +221,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
         key,
         label: hit.label,
         isInstrument: hit.isInstrument,
+        ...(hit.hit ? { def: hit.hit } : {}),
         record: {
           kind: 'labware',
           recordId: hit.recordId,
@@ -221,11 +234,14 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
     if (activeTab !== 'equipment') {
       for (const [type, label] of Object.entries(LABWARE_TYPE_LABELS) as Array<[LabwareType, string]>) {
         if (type === 'instrument') continue
+        // The arbitrary-topology sentinel is a build-time tag, not a pickable
+        // catalog entry — definitions arrive through the lab-db tier.
+        if (type === 'definition') continue
         const cat = LABWARE_CATEGORIES[type]
         const belongs = activeTab === 'plates' ? isPlateCategory(cat) : !isPlateCategory(cat)
         if (!belongs) continue
         if (surfaceKind === 'slot' && isLawnOnlyLabwareType(type)) continue
-        if (trimmed && !label.toLowerCase().includes(trimmed)) continue
+        if (trimmed && !labwareRowMatches(trimmed, label)) continue
         catalog.push({ key: type, source: 'catalog', label, kind: 'labware' })
         by[type] = { source: 'catalog', key: type, label, labwareType: type }
       }
@@ -307,6 +323,12 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
           lab.sourceRecordId = row.record.recordId
           lab.instrumentKind = inferInstrumentKind(row.label)
           return lab
+        }
+        // Definition hits with topology place through the definition factory —
+        // arbitrary rows × columns survive, no legacy-enum collapse (spec B1).
+        // Topology-less payloads keep the legacy record mapper.
+        if (row.def?.topology) {
+          return createLabwareFromDefinitionPayload(row.def, name || row.def.label)
         }
         return labwareRecordToEditorLabware({
           kind: 'labware',

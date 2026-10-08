@@ -40,3 +40,34 @@ describe('normalizeDraftMaterialRefs', () => {
     expect(normalizeDraftMaterialRefs([ev], resolved)[0]).toBe(ev);
   });
 });
+
+describe('normalizeDraftMaterialRefs — a minted ref is bindable by its label', () => {
+  it('binds  the mint shape lfm-local emitted to the resolved mention', () => {
+    // Observed loop: the model emitted {mint:{label:…}} (no id), the previous
+    // repair returned null for anything without an id, so the user's answer was
+    // stranded and the same card came back forever.
+    const events = [addMaterial({ mint: { label: 'clofibrate', domain: 'chemical' } })];
+    const [out] = normalizeDraftMaterialRefs(events, resolved) as typeof events;
+    expect(out.details.material_ref).toEqual({
+      kind: 'record',
+      id: 'MAT-clofibrate-wzj2',
+      type: 'material',
+      label: 'clofibrate',
+    });
+  });
+
+  it('matches the label case-insensitively and ignores surrounding space', () => {
+    const events = [addMaterial({ mint: { label: '  CloFibraTe ' } })];
+    const [out] = normalizeDraftMaterialRefs(events, resolved) as typeof events;
+    expect(out.details.material_ref).toEqual({
+      kind: 'record', id: 'MAT-clofibrate-wzj2', type: 'material', label: 'clofibrate',
+    });
+  });
+
+  it('leaves a minted ref alone when nothing resolved matches it', () => {
+    // The gate then asks which material — a question the picker can answer.
+    const events = [addMaterial({ mint: { label: 'unobtainium' } })];
+    const [out] = normalizeDraftMaterialRefs(events, resolved) as typeof events;
+    expect(out.details.material_ref).toEqual({ mint: { label: 'unobtainium' } });
+  });
+});

@@ -27,6 +27,11 @@ describe('resolveSurfaceFromPath', () => {
     expect(resolveSurfaceFromPath('/artifact/pdf/ART-1').surface).toBe('knowledge')
   })
 
+  it('maps the bare /claims collection route to the knowledge surface', () => {
+    expect(resolveSurfaceFromPath('/claims').surface).toBe('knowledge')
+    expect(resolveSurfaceFromPath('/claims/CLM-1').surface).toBe('knowledge')
+  })
+
   it('maps /project/:id to the project surface', () => {
     const r = resolveSurfaceFromPath('/project/STU-1')
     expect(r.surface).toBe('project')

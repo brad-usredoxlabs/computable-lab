@@ -1,0 +1,453 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/sequence-action.schema.yaml
+title: Sequence action proposal
+description: Structured agent_intent payload. Proposals never execute until accepted.
+  The same contract serves human editors and AI.
+type: object
+required: [operation]
+discriminator:
+  propertyName: operation
+oneOf:
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_sequence
+    requestId: &id002
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    sequence: &id003
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          minLength: 1
+        alphabet:
+          type: string
+          enum:
+          - dna
+          - rna
+          - iupac_dna
+          - iupac_rna
+          - protein
+        residues:
+          type: string
+          minLength: 1
+        topology:
+          type: string
+          enum:
+          - linear
+          - circular
+        source:
+          type: object
+          additionalProperties: false
+          properties:
+            sourceRef: &id001
+              $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+            page:
+              type: integer
+              minimum: 1
+            text:
+              type: string
+            sha256:
+              type: string
+              pattern: ^[a-f0-9]{64}$
+            accession:
+              type: string
+            retrievedAt:
+              type: string
+              format: date-time
+            url:
+              type: string
+        parentRevisionRef:
+          type: object
+          additionalProperties: false
+          properties:
+            kind:
+              const: record
+            type:
+              const: record-revision
+            id:
+              type: string
+          required:
+          - kind
+          - type
+          - id
+      required:
+      - label
+      - alphabet
+      - residues
+      - topology
+  required:
+  - operation
+  - requestId
+  - sequence
+- type: object
+  description: Create an oligo from new bases and modifications in one reviewed action. Prefer this when the user supplies a new primer or probe sequence. The server creates and pins the sequence and assigns record IDs; no existing sequenceRef is needed. Roles in a particular assay are assigned separately.
+  additionalProperties: false
+  properties:
+    operation:
+      const: create_oligo
+    requestId: *id002
+    sequence: *id003
+    modifications:
+      $ref: ./oligo-spec.schema.yaml#/properties/modifications
+    vendor:
+      type: string
+  required: [operation, requestId, sequence, modifications]
+  examples:
+  - operation: create_oligo
+    requestId: example-probe-001
+    sequence:
+      label: Example FAM-QSY probe
+      residues: ACGTACGT
+      alphabet: dna
+      topology: linear
+    vendor: Thermo Fisher Scientific
+    modifications:
+    - {position: 5-prime, label: FAM, role: reporter}
+    - {position: 3-prime, label: QSY, role: quencher}
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_oligo
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    oligo:
+      $ref: ./oligo-spec.schema.yaml
+  required:
+  - operation
+  - requestId
+  - oligo
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_collection
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    label:
+      type: string
+    members:
+      type: array
+      items: *id001
+      minItems: 1
+      uniqueItems: true
+  required:
+  - operation
+  - requestId
+  - label
+  - members
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_readout
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    readout:
+      $ref: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+  required: [operation, requestId, readout]
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_assay
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    assay:
+      $ref: https://computable-lab.com/schema/computable-lab/assay-definition.schema.yaml
+  required:
+  - operation
+  - requestId
+  - assay
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: configure_endpoint
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    endpoint:
+      $ref: ./sequence-endpoint.schema.yaml
+  required:
+  - operation
+  - requestId
+  - endpoint
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: run_virtual_pcr
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    endpointRef: *id001
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        references: *id001
+        forward: *id001
+        reverse: *id001
+        probe: *id001
+      required:
+      - references
+      - forward
+      - reverse
+    parameters:
+      type: object
+      additionalProperties: false
+      properties:
+        minLength:
+          type: integer
+          minimum: 1
+        maxLength:
+          type: integer
+          minimum: 1
+        maxMismatches:
+          type: integer
+          minimum: 0
+        exactThreePrime:
+          type: integer
+          minimum: 0
+        maxProducts:
+          type: integer
+          minimum: 1
+          maximum: 10000
+      required:
+      - minLength
+      - maxLength
+      - maxMismatches
+      - exactThreePrime
+      - maxProducts
+    label:
+      type: string
+      minLength: 1
+  required:
+  - operation
+  - requestId
+  - endpointRef
+  - inputs
+  - parameters
+  - label
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: run_mafft
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    endpointRef: *id001
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        queries: *id001
+      required:
+      - queries
+    parameters:
+      type: object
+      additionalProperties: false
+      properties:
+        strategy:
+          type: string
+          enum:
+          - auto
+          - globalpair
+          - localpair
+        maxIterations:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      required:
+      - strategy
+      - maxIterations
+    label:
+      type: string
+      minLength: 1
+  required:
+  - operation
+  - requestId
+  - endpointRef
+  - inputs
+  - parameters
+  - label
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: run_blastn
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    endpointRef: *id001
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        queries: *id001
+        references: *id001
+      required:
+      - queries
+      - references
+    parameters:
+      type: object
+      additionalProperties: false
+      properties:
+        task:
+          type: string
+          enum:
+          - blastn
+          - blastn-short
+          - megablast
+        evalue:
+          type: number
+          exclusiveMinimum: 0
+        maxHits:
+          type: integer
+          minimum: 1
+          maximum: 10000
+      required:
+      - task
+      - evalue
+      - maxHits
+    label:
+      type: string
+      minLength: 1
+  required:
+  - operation
+  - requestId
+  - endpointRef
+  - inputs
+  - parameters
+  - label
+- type: object
+  additionalProperties: false
+  properties:
+    operation:
+      const: interpret
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    ruleRef: *id001
+    claimRef: *id001
+    contextRef: *id001
+    measurementContextRef: *id001
+    resultRef: *id001
+    statement:
+      type: string
+      minLength: 1
+    controls:
+      type: object
+      additionalProperties: *id001
+  required:
+  - operation
+  - requestId
+  - ruleRef
+  - claimRef
+  - contextRef
+  - resultRef
+  - statement
+  - controls
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  - candidateRef
+  - sequence
+  - modifications
+  properties:
+    operation:
+      const: promote_oligo
+    requestId: *id002
+    candidateRef: &id004
+      $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+    sequence: *id003
+    modifications:
+      $ref: ./oligo-spec.schema.yaml#/properties/modifications
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  - label
+  - sequenceRef
+  - start
+  - end
+  - strand
+  properties:
+    operation:
+      const: save_interval
+    requestId: *id002
+    label:
+      type: string
+      minLength: 1
+    sequenceRef: *id004
+    start:
+      type: integer
+      minimum: 1
+    end:
+      type: integer
+      minimum: 1
+    strand:
+      type: string
+      enum:
+      - +
+      - '-'
+      - na
+      - unknown
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  - rule
+  properties:
+    operation:
+      const: save_interpretation_rule
+    requestId: *id002
+    rule:
+      $ref: ./sequence-interpretation-rule.schema.yaml
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  - sequenceRef
+  properties:
+    operation:
+      const: pin_sequence
+    requestId: *id002
+    sequenceRef:
+      $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  properties:
+    operation:
+      const: discover_endpoints
+    requestId: *id002
+- type: object
+  additionalProperties: false
+  required:
+  - operation
+  - requestId
+  - endpoint
+  properties:
+    operation:
+      const: deploy_endpoint
+    requestId: *id002
+    endpoint:
+      $ref: ./sequence-endpoint.schema.yaml

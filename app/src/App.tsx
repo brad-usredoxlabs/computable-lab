@@ -66,6 +66,7 @@ const DeckHostPage = lazy(async () => import('./shared/shell/DeckHostPage').then
 const ExtractionDraftsListPage = lazy(async () => import('./extraction/ExtractionDraftsListPage').then((m) => ({ default: m.ExtractionDraftsListPage })))
 const ExtractionReviewPage = lazy(async () => import('./extraction/ExtractionReviewPage').then((m) => ({ default: m.ExtractionReviewPage })))
 const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage').then((m) => ({ default: m.GraphSearchPage })))
+const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(m => ({ default: m.SequencesPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
 
@@ -203,6 +204,8 @@ export function App() {
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}
               <Route path="/find" element={<DeferredRoute><GraphSearchPage /></DeferredRoute>} />
+              <Route path="/sequences" element={<DeferredRoute><SequencesPage /></DeferredRoute>} />
+              <Route path="/lab/sequences" element={<DeferredRoute><SequencesPage /></DeferredRoute>} />
               <Route path="/analysis" element={<DeferredRoute><AnalysisPage /></DeferredRoute>} />
               {/* Standalone ChatGPT-style chat against the local AI model. */}
               <Route path="/chat" element={<DeferredRoute><ChatPage /></DeferredRoute>} />

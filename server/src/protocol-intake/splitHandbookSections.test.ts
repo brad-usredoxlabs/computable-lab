@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitHandbookSections } from './splitHandbookSections.js';
+import { childCandidateFrom, splitHandbookSections } from './splitHandbookSections.js';
 import type {
   ProtocolCandidate,
   ProtocolStepCandidate,
@@ -140,11 +140,7 @@ describe('splitHandbookSections', () => {
     }
   });
 
-  it('a pretreatment section filed as kind:protocol attaches — never fans out as a child', () => {
-    // The DNeasy case: the literal extractor filed "Pretreatment for
-    // Gram-Positive Bacteria" under kind:'protocol'. A pretreatment is
-    // auxiliary: it must attach to the protocols that mention it, not become
-    // a fifth standalone document.
+  it('keeps a printed pretreatment as a selectable entry path', () => {
     const c = candidate({
       sections: [
         { id: 'sec-a', kind: 'protocol', title: 'Blood Spin', provenance },
@@ -158,16 +154,13 @@ describe('splitHandbookSections', () => {
       ],
     });
     const children = splitHandbookSections(c);
-    expect(children.map((ch) => ch.sectionId)).toEqual(['sec-a', 'sec-b']);
-    expect(children[0]!.attachedSectionIds).toEqual(['sec-gram']);
+    expect(children.map((ch) => ch.sectionId)).toEqual(['sec-a', 'sec-b', 'sec-gram']);
+    expect(children[0]!.attachedSectionIds).toEqual([]);
     expect(children[1]!.attachedSectionIds).toEqual([]);
-    // The pretreatment's steps ride the attaching child's step set? No —
-    // stepIds carries the CHILD's own section steps; attachments ride via
-    // attachedSectionIds (the scoping fn pulls their steps in at scope time).
     expect(children[0]!.stepIds).toEqual(['step-1']);
   });
 
-  it('two pretreatment-kind sections do NOT count as a handbook (no split on pretreatments alone)', () => {
+  it('does not discard a handbook containing only pretreatments', () => {
     const c = candidate({
       sections: [
         { id: 'sec-p1', kind: 'protocol', title: 'Pretreatment for Paraffin', provenance },
@@ -178,8 +171,44 @@ describe('splitHandbookSections', () => {
         step('step-2', 1, 'sec-p2', 'Deparaffinize twice.'),
       ],
     });
-    // Only pretreatments, zero real protocols -> caller keeps whole-document
-    // behavior rather than fabricating a two-way protocol choice.
-    expect(splitHandbookSections(c)).toEqual([]);
+    expect(splitHandbookSections(c)).toHaveLength(2);
+  });
+});
+
+
+describe('explicit handbook continuations', () => {
+  const tissue = 'Purification of Total DNA from Animal Tissues (Spin-Column Protocol)';
+  function handbook(reference: string) {
+    return candidate({
+      sections: [
+        { id: 'tissue', kind: 'protocol', title: tissue, provenance },
+        { id: 'bacteria', kind: 'protocol', title: 'Pretreatment for Gram-Positive Bacteria', provenance },
+      ],
+      steps: [
+        step('step-1', 1, 'tissue', 'Prepare tissue.'),
+        step('step-2', 4, 'tissue', 'Bind DNA.'),
+        step('step-3', 5, 'tissue', 'Elute DNA.'),
+        step('step-4', 1, 'bacteria', 'Lyse bacteria.'),
+        step('step-5', 7, 'bacteria', reference),
+      ],
+    });
+  }
+  it('joins the real DNeasy Gram-positive cross-reference at step 4, in execution order', () => {
+    // The PDF drops an opening parenthesis and wraps Spin-Column across lines.
+    const parent = handbook('Continue with step 4 of the protocol “Purification of Total DNA from Animal Tissues Spin-\nColumn Protocol)”, page 33.');
+    const child = splitHandbookSections(parent)[1]!;
+    expect(child.continuationStepIds).toEqual(['step-2', 'step-3']);
+    const scoped = childCandidateFrom(parent, child, 'gram-positive');
+    expect(scoped.steps.map((s) => s.id)).toEqual(['step-4', 'step-5', 'step-2', 'step-3']);
+    expect(scoped.sections.map((s) => s.id)).toEqual(['bacteria']);
+    expect(scoped.steps[2]!.sectionId).toBe('tissue');
+    expect(parent.steps).toHaveLength(5);
+  });
+  it.each([
+    'Continue with step 99 of the protocol “'+tissue+'”.',
+    'Continue with step 4 of the protocol “Unknown purification”.',
+    'See the protocol “'+tissue+'” for more information.',
+  ])('does not guess a continuation for %s', (reference) => {
+    expect(splitHandbookSections(handbook(reference))[1]!.continuationStepIds).toEqual([]);
   });
 });

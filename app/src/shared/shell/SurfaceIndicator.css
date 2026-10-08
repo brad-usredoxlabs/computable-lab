@@ -44,3 +44,14 @@
   font-size: 0.68rem;
   font-weight: 600;
 }
+
+/* The project this surface is being worked in (from the open-tabs store). */
+.surface-indicator__project {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  padding-left: 0.4rem;
+  border-left: 1px solid #ced4da;
+  font-weight: 600;
+  color: #364fc7;
+}

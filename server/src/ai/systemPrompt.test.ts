@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSystemPrompt } from './systemPrompt.js';
+import { buildSystemPrompt, buildVolatileContextMessage } from './systemPrompt.js';
 
 describe('buildSystemPrompt', () => {
   it('renders protocol-step context (protocol planning) as a dedicated block', () => {
@@ -179,4 +179,35 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('## GraphLemur Context');
   });
 
+});
+
+describe('the selection states its own COUNT (never left to the model)', () => {
+  // Observed 2026-09-20: a real selection of A2:H10 (72 wells) reached the agent
+  // as a bare list, and it reported "30 well groups x 10 = 300 wells". The
+  // arithmetic was the model's; the missing number was ours.
+  const wells = ['A2', 'B2', 'C2', 'D2', 'E2', 'F2', 'G2', 'H2'];
+
+  it('states how many wells are selected', () => {
+    const block = buildVolatileContextMessage({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      selectedWells: wells,
+    });
+    expect(block).toContain('Wells (8 selected)');
+    expect(block).toContain('A2');
+  });
+
+  it('states the count alongside the labware when the selection is scoped', () => {
+    const block = buildVolatileContextMessage({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      selectedWells: { labwareId: 'plate-1', wells },
+    });
+    expect(block).toContain('Labware: plate-1');
+    expect(block).toContain('Wells (8 selected)');
+  });
 });

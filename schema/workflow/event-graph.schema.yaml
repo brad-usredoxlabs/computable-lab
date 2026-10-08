@@ -13,6 +13,18 @@ required:
 - labwares
 
 properties:
+  protocolRevisionRef:
+    $ref: "./datatypes/revision-ref.schema.yaml"
+  protocolSource:
+    type: object
+    additionalProperties: false
+    required: [recordId, contentHash, sourceToken]
+    properties:
+      recordId: { type: string }
+      contentHash: { type: string }
+      sourceToken: { type: string }
+    description: "Saved source observed when drafting; checked at graph acceptance."
+
   kind:
     const: "event-graph"
     description: "Record kind discriminator."

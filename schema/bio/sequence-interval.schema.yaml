@@ -10,7 +10,7 @@ type: object
 unevaluatedProperties: false
 
 allOf:
-  - $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+  - $ref: "https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon"
 
 required:
   - kind
@@ -34,7 +34,7 @@ properties:
     type: string
 
   on_sequence:
-    $ref: "../core/datatypes/ref.schema.yaml"
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
     description: "Ref to the parent sequence node that this interval is defined on."
 
   start:
@@ -62,7 +62,7 @@ properties:
       'unknown' if not specified.
 
   corresponds_to_sequence:
-    $ref: "../core/datatypes/ref.schema.yaml"
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
     description: >
       Optional: ref to a child sequence node that is asserted to be the substring
       (or reverse-complement substring) implied by (on_sequence, start, end, strand).

@@ -1,3 +1,7 @@
+import { registerDraftRoutes } from './drafts/draftRoutes.js';
+import { sequenceConfig } from './sequences/sequenceRuntime.js';
+import { sequenceActionPromptSchema } from './sequences/sequenceIntent.js';
+import { registerSequenceRoutes } from './sequences/sequenceRoutes.js';
 /**
  * Server entry point for computable-lab API.
  * 
@@ -264,6 +268,12 @@ export interface AppContext {
   /** Shared metrics instance owned by extractionRunner; read by extract handlers. */
   extractionMetrics?: ExtractionMetrics;
   storageService: StorageService;
+  /**
+   * Best-effort audit trail. Run-start (§17-20) and future spec-paragraph-10
+   * hooks consume it. Constructed during initializeApp wiring and attached to
+   * ctx there (constructed after the ctx literal, hence optional).
+   */
+  auditService?: AuditEventService;
 }
 
 /**
@@ -403,7 +413,9 @@ export async function initializeApp(
   let lintSpecCount = 0;
   let lintRuleCount = 0;
   for (const { name, spec } of lintLoadResult.specs) {
-    if (spec.rules.length === 0) continue;
+    // A spec with no rules may still declare an actor-side `authoring:`
+    // policy — it must reach the engine either way.
+    if (spec.rules.length === 0 && spec.authoring === undefined) continue;
 
     // Inject registry values into the approved-predicate rule
     if (predicateRegistry) {
@@ -490,7 +502,7 @@ export async function initializeApp(
   const authDir = join(dataDir, 'auth');
   const credentialStore = new CredentialStore(authDir);
   const sessionStore = new SessionStore(authDir);
-  const localIdentityService = new LocalIdentityService(store, sessionStore);
+  const localIdentityService = new LocalIdentityService(store, sessionStore, (userId) => credentialStore.hasCredential(userId));
   await localIdentityService.ensureLocalAdminUser();
   const authorizationService = new AuthorizationService(store);
   // Backfill owner policies for pre-existing policy-root records that have no
@@ -669,6 +681,14 @@ export async function createServer(
       level: opts.logLevel,
     },
     bodyLimit: opts.bodyLimit,
+    // find-my-way defaults to maxParamLength 100 and answers with a bare
+    // router 404 for any :param match longer than that — the handler never
+    // runs. Corpus-intake record ids are legitimately longer: the handbook
+    // section-split mints tree ids like
+    // PDT-vendor-protocol-dneasy-blood-pdf__purification-of-total-dna-... (109
+    // chars) and derived EVG ids exceed 120. Long ids must reach the handlers
+    // so their real 404/400 envelopes surface, not "Route ... not found".
+    maxParamLength: 512, // long intake ids must reach handlers, not router 404s
   });
   
   // Register CORS if enabled
@@ -696,6 +716,13 @@ export async function createServer(
 
   const roleResolver = new RoleResolver(ctx.store);
   const auditService = new AuditEventService(ctx.store);
+  // Expose on ctx so route handlers (run-start gate) can append audit events.
+  ctx.auditService = auditService;
+  // Lifecycle-bypass self-report (spec §10 gap): lazily wire the store's
+  // detector now that lifecycleEngine + auditService exist (same late-binding
+  // pattern as requestRunWarm / setWriteHook). Direct store.update writers
+  // that flip a managed record's state without the API gate get audited.
+  ctx.store.setLifecycleBypassAudit({ engine: ctx.lifecycleEngine, audit: auditService });
   const recordHandlers = createRecordHandlers(
     ctx.store,
     ctx.indexManager,
@@ -708,6 +735,8 @@ export async function createServer(
       authorizationService: ctx.authorizationService,
       roleResolver,
       auditService,
+      // Declarative authoring gates (*.lint.yaml `authoring:` blocks).
+      getAuthoringPolicy: (schemaId) => ctx.lintEngine.authoringPolicyForSchema(schemaId),
       // Live accessor: ctx.appConfig is reassigned at runtime (PATCH /api/config),
       // so resolve the bundle id per call, same pattern as materialTracking.
       getPolicySettings: () => ctx.policyBundleService.resolveSettings(
@@ -825,9 +854,10 @@ export async function createServer(
     store: ctx.store,
     credentialStore: ctx.credentialStore,
     identityService: ctx.localIdentityService,
+    authorizationService: ctx.authorizationService,
     auditService,
   });
-  const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
+  const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry, ctx.localIdentityService);
 
   // AI thread store: per-(user, endpoint) live conversations. Lives outside
   // the records git tree so chat-rate writes do not pollute commit history;
@@ -1055,6 +1085,9 @@ export async function createServer(
         ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
         residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store, labProfileFor(ctx, appConfig)),
         store: ctx.store,
+        sequenceActionSchema: sequenceActionPromptSchema(ctx.schemaRegistry),
+        sequenceOligoGuidance: await sequenceConfig('oligo-modifications'),
+        validateSequenceAction: (request: unknown) => ctx.validator.validate(request, 'https://computable-lab.com/schema/bio/sequence-action.schema.yaml'),
         // The declarative material-layer policy: what a pick at a layer still
         // owes (a formulation owes a volume, an aliquot nothing) lives in the
         // registry, so the follow-up question is derived from data.
@@ -1249,6 +1282,33 @@ export async function createServer(
       await initializeAiRuntime(updated);
     },
     () => aiInfo,
+    // Fail closed on unknown policy bundle ids: validate lab.policyBundleId
+    // against the live bundle catalog loaded from schema/core/policy-bundles/.
+    () => ctx.policyBundleService.listBundles().map((b) => b.id),
+    // Bundle-switch authorization + audit: any PATCH /config attempt carrying
+    // lab.policyBundleId requires an admin actor; accepted switches are
+    // audited. Fail closed — unresolvable identity is treated as non-admin.
+    {
+      resolveActor: async (request) => {
+        const resolved = await ctx.localIdentityService.resolveRequestUser(request);
+        return { userId: resolved.userId, isSystem: resolved.isSystem };
+      },
+      isAdmin: async (actor) => {
+        if (actor.isSystem || actor.userId === LOCAL_ADMIN_USER_ID) return true;
+        if (!actor.userId) return false;
+        const roles = await roleResolver.rolesFor(actor.userId);
+        return roles.includes('admin');
+      },
+      appendAudit: async ({ from, to, actor }) => {
+        await auditService.append({
+          actor,
+          action: 'policy_bundle_changed',
+          subjectType: 'config',
+          subjectId: 'lab.policyBundleId',
+          data: { from, to },
+        });
+      },
+    },
   );
 
   // Standalone ChatGPT-style chat — resolves the AI endpoint live from the
@@ -1353,6 +1413,8 @@ export async function createServer(
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
+    registerSequenceRoutes(instance, ctx, toolRegistry);
+    registerDraftRoutes(instance, ctx);
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
       recordSearchHandlers,

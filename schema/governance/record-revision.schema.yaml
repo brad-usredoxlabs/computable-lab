@@ -1,0 +1,20 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/computable-lab/record-revision.schema.yaml
+title: Record revision
+type: object
+additionalProperties: false
+required: [kind, recordId, sourceRecordId, sourceSchemaId, snapshot, contentHash, recipeHash, purpose, createdBy, createdAt]
+properties:
+  kind: { const: record-revision }
+  recordId: { type: string, pattern: '^REV-[A-F0-9]+$' }
+  sourceRecordId: { type: string }
+  sourceSchemaId: { type: string }
+  snapshot: { type: object }
+  contentHash: { type: string, pattern: '^[a-f0-9]{64}$' }
+  recipeHash: { type: string, pattern: '^[a-f0-9]{64}$' }
+  sourceToken: { type: string }
+  gitCommit: { type: string, pattern: '^[a-f0-9]{40,64}$' }
+  purpose: { enum: [signature, research-use, derivation] }
+  version: { type: string }
+  createdBy: { type: string }
+  createdAt: { type: string, format: date-time }

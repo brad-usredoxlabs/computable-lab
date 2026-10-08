@@ -1,0 +1,38 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/sequence-collection.schema.yaml
+title: Sequence Collection
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon
+properties:
+  kind:
+    const: sequence-collection
+  id:
+    type: string
+  label:
+    type: string
+  members:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          const: record
+        type:
+          const: record-revision
+        id:
+          type: string
+      required:
+      - kind
+      - type
+      - id
+    uniqueItems: true
+  description:
+    type: string
+required:
+- kind
+- id
+- members

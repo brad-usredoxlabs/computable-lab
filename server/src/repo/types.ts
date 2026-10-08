@@ -15,6 +15,8 @@ export interface RepoFile {
   content: string;
   /** SHA of the file (for updates/deletes) */
   sha: string;
+  /** Verified commit whose file contents match this read. */
+  gitCommit?: string;
   /** File size in bytes */
   size: number;
   /** File encoding (usually 'utf-8' or 'base64') */
@@ -177,6 +179,8 @@ export interface RepoAdapter {
    * @returns Array of commit info
    */
   getHistory(options: HistoryOptions): Promise<CommitInfo[]>;
+  /** Return a real commit only if its bytes equal the current file. */
+  getVerifiedCommit?(path: string): Promise<string | undefined>;
   
   /**
    * Initialize the adapter (optional).

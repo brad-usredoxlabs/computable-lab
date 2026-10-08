@@ -82,6 +82,17 @@ export interface UpdateRecordOptions {
   skipValidation?: boolean;
   /** Skip linting (use with caution) */
   skipLint?: boolean;
+  /**
+   * Set by the record API when the write already passed through the
+   * lifecycle gate (checkLifecycleTransition) AND actually changes the
+   * lifecycle state value. Suppresses the lifecycle-bypass audit detector.
+   */
+  viaLifecycleApi?: boolean;
+  /**
+   * Acting user/agent identifier, when the caller knows one. Used only as
+   * the preferred actor for bypass audit events.
+   */
+  actor?: string;
 }
 
 /**
@@ -116,6 +127,7 @@ export interface RecordStore {
    * Get a record by ID.
    */
   get(recordId: string): Promise<RecordEnvelope | null>;
+  getVerifiedCommit?(recordId: string, expectedSha?: string): Promise<string | undefined>;
 
   /**
    * Get a record by its repo-relative file path. Skips the recordId→path

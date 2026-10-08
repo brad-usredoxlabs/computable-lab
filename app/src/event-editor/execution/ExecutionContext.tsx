@@ -5,12 +5,14 @@
  * notes, timestamps) and lifecycle actions (start, setStep, complete,
  * abort). Consumed by ExecutionTabPanel and child execution UI.
  *
- * On start, persists the execution to the backend via POST /api/runs/:runId/start
- * so the run record transitions from 'planned' to 'in_progress'. This
- * survives page reloads — the run's executionTracking field holds the state.
+ * Start is server-authoritative: we await POST /api/runs/:runId/start and
+ * only enter the executing state once the server accepts the transition
+ * (run moves 'planned' -> 'in_progress'). On 4xx the local state stays
+ * untouched and the failure reason (server error code + precondition
+ * findings) is stored in state.executionError for the UI to surface.
  */
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useReducer, useCallback, useRef, type ReactNode } from 'react'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -40,6 +42,10 @@ export interface ExecutionContextState {
   currentStepId: string | null
   /** Event graph driving this execution. */
   eventGraphId: string | null
+  /** Human-readable reason the last start attempt was rejected by the
+   *  server (error code + failed preconditions). Cleared on the next
+   *  successful start or an abort. */
+  executionError: string | null
 }
 
 export type ExecutionContextAction =
@@ -47,6 +53,7 @@ export type ExecutionContextAction =
   | { type: 'setStep'; stepId: string }
   | { type: 'complete' }
   | { type: 'abort' }
+  | { type: 'startFailed'; message: string }
 
 /* ------------------------------------------------------------------ */
 /* Reducer                                                              */
@@ -59,6 +66,7 @@ const initialState: ExecutionContextState = {
   protocolId: null,
   currentStepId: null,
   eventGraphId: null,
+  executionError: null,
 }
 
 function executionReducer(
@@ -74,6 +82,7 @@ function executionReducer(
         protocolId: action.protocolId,
         currentStepId: null,
         eventGraphId: action.eventGraphId,
+        executionError: null,
       }
     case 'setStep':
       return { ...state, currentStepId: action.stepId }
@@ -81,6 +90,8 @@ function executionReducer(
       return { ...state, isActive: false }
     case 'abort':
       return initialState
+    case 'startFailed':
+      return { ...state, executionError: action.message }
     default: {
       const _exhaustive: never = action
       return _exhaustive
@@ -112,6 +123,8 @@ export interface ExecutionProviderProps {
 
 export function ExecutionProvider({ children }: ExecutionProviderProps) {
   const [state, dispatch] = useReducer(executionReducer, initialState)
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   const startExecution = useCallback(
     async (metadata: Omit<ExecutionMetadata, 'timestamp'>, protocolId: string, eventGraphId: string): Promise<ExecutionContextState> => {
@@ -119,31 +132,59 @@ export function ExecutionProvider({ children }: ExecutionProviderProps) {
         ...metadata,
         timestamp: new Date().toISOString(),
       }
-      dispatch({ type: 'start', metadata: withTimestamp, protocolId, eventGraphId })
 
-      // Persist to backend so the run transitions from 'planned' to 'in_progress'.
-      // This is fire-and-forget — the local state is already updated and the
-      // user can proceed immediately. If the API call fails, the run record
-      // stays in 'planned' but the UI still works (step execution PATCH calls
-      // will fail with INVALID_STATE_TRANSITION, surfacing the error).
+      // Server-authoritative start: only enter the executing state once the
+      // backend accepts the planned -> in_progress transition. A rejected
+      // start (controlled-use block, confirmation required, etc.) leaves the
+      // local state untouched and records why in state.executionError.
       const runId = protocolId
-      void fetch(`/api/runs/${encodeURIComponent(runId)}/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          executedBy: metadata.operatorName,
-          startedAt: withTimestamp.timestamp,
-        }),
-      }).catch((err) => {
-        console.warn('Failed to persist run start to backend:', err)
-      })
+      let response: Response
+      try {
+        response = await fetch(`/api/runs/${encodeURIComponent(runId)}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            executedBy: metadata.operatorName,
+            startedAt: withTimestamp.timestamp,
+          }),
+        })
+      } catch (err) {
+        const message = `Run start failed: ${err instanceof Error ? err.message : String(err)}`
+        dispatch({ type: 'startFailed', message })
+        return stateRef.current
+      }
 
-      return executionReducer(undefined as never, {
-        type: 'start',
-        metadata: withTimestamp,
-        protocolId,
-        eventGraphId,
-      }) as ExecutionContextState
+      if (response.ok) {
+        dispatch({ type: 'start', metadata: withTimestamp, protocolId, eventGraphId })
+        return executionReducer(stateRef.current, {
+          type: 'start',
+          metadata: withTimestamp,
+          protocolId,
+          eventGraphId,
+        })
+      }
+
+      // Rejected: parse the error body defensively and surface which
+      // preconditions failed.
+      let message = `Run start failed (HTTP ${response.status}).`
+      try {
+        const body = (await response.json()) as {
+          error?: unknown
+          message?: unknown
+          details?: { findings?: Array<{ message?: unknown }> }
+        }
+        const code = typeof body.error === 'string' ? body.error : `HTTP ${response.status}`
+        const findings = Array.isArray(body.details?.findings)
+          ? body.details.findings
+              .map((f) => (typeof f?.message === 'string' ? f.message : null))
+              .filter((m): m is string => m !== null)
+          : []
+        message = findings.length > 0 ? `${code}: ${findings.join('; ')}` : `${code}: ${typeof body.message === 'string' ? body.message : 'Run start rejected.'}`
+      } catch {
+        // Body was not JSON — keep the generic HTTP message above.
+      }
+      dispatch({ type: 'startFailed', message })
+      return stateRef.current
     },
     [],
   )

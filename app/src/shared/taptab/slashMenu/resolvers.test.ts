@@ -360,3 +360,85 @@ describe('resolveSource / resolveTarget', () => {
     })
   })
 })
+
+describe('resolveMaterial — the QUESTION’s layer scopes the menu', () => {
+  const formulationResponse = () => ({
+    ok: true,
+    json: async () => ({
+      items: [
+        {
+          recipeId: 'REC-ROT',
+          recipeName: 'Rotenone stock',
+          recipeTags: [],
+          outputSpec: {
+            id: 'MSP-ROT-1MM',
+            name: '1 mM rotenone in DMSO',
+            concentration: { value: 1, unit: 'mM' },
+            solventLabel: 'DMSO',
+          },
+          inputRoles: [],
+          steps: [],
+          availableInstances: [],
+        },
+      ],
+    }),
+  } as Response)
+
+  it('a FORMULATION question offers prepared solutions only — no concepts, no mint', async () => {
+    fetchSpy.mockResolvedValueOnce(formulationResponse())
+    const out = await resolveMaterial('rotenone', ctx({ materialLayer: 'material-spec' }))
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/materials/formulations/summary'))).toBe(true)
+    // The concept search is not consulted at all: a question about a prepared
+    // solution must not be answerable with a bare compound.
+    expect(urls.some((u) => u.includes('/records/search'))).toBe(false)
+    expect(out[0]).toMatchObject({ key: 'material-spec:MSP-ROT-1MM', badge: 'Formulation' })
+    expect(out.some((s) => s.key.startsWith('mint:'))).toBe(false)
+  })
+
+  it('a CONCEPT question offers no formulations and no vendor products', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [{ recordId: 'MAT-TRIS', kind: 'material', title: 'Tris', category: 'concept-only' }],
+      }),
+    } as Response)
+    const out = await resolveMaterial('tris', ctx({ materialLayer: 'material' }))
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/materials/formulations/summary'))).toBe(false)
+    expect(out.some((s) => s.key.startsWith('material-spec:'))).toBe(false)
+  })
+
+  it('an ALIQUOT question searches aliquots and returns them as aliquots', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: [{ recordId: 'ALQ-1', title: 'clofibrate aliquot A1', kind: 'aliquot' }], total: 1 }),
+    } as Response)
+    const out = await resolveMaterial('clofibrate', ctx({ materialLayer: 'aliquot' }))
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('kind=aliquot')
+    expect(out[0]).toMatchObject({ key: 'aliquot:ALQ-1', badge: 'Instance' })
+    expect(out[0]!.mention).toMatchObject({ type: 'material', entityKind: 'aliquot', id: 'ALQ-1' })
+  })
+
+  it('an INSTANCE question searches material-instance records', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: [{ recordId: 'MINST-1', title: 'HepG2 P12', kind: 'material-instance' }], total: 1 }),
+    } as Response)
+    const out = await resolveMaterial('hepg2', ctx({ materialLayer: 'material-instance' }))
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('kind=material-instance')
+    expect(out[0]!.mention).toMatchObject({ entityKind: 'material-instance', id: 'MINST-1' })
+  })
+
+  it('the general /m menu still browses everything (no layer set)', async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ items: [{ recordId: 'MAT-TRIS', kind: 'material', title: 'Tris', category: 'concept-only' }] }),
+      } as Response)
+      .mockResolvedValueOnce(formulationResponse())
+    await resolveMaterial('tris', ctx())
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/materials/formulations/summary'))).toBe(true)
+  })
+});

@@ -75,4 +75,10 @@ export class SessionStore {
   async revoke(token: string): Promise<void> {
     if (this.load().delete(token)) this.persist()
   }
+
+  /** Revoke ALL sessions (clear the map + persist). Used by the bootstrap-admin CLI. */
+  async clear(): Promise<void> {
+    this.load().clear()
+    this.persist()
+  }
 }

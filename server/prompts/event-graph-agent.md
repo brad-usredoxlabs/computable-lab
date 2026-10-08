@@ -361,12 +361,23 @@ per-well state are unaffected.
 
 ### add_material
 
-Use exactly one of `aliquot_ref`, `material_spec_ref`, or `material_ref` when possible.
-Prefer `material_spec_ref` for planned experiment additions.
+Use exactly one ref field, chosen by the LAYER of the material — never invent a
+field name (`materials`, `materials_ref`, … are ignored):
+
+| the material is…              | field               |
+|-------------------------------|---------------------|
+| the compound/concept          | `material_ref`      |
+| a prepared solution/stock     | `material_spec_ref` |
+| a preparation or lot          | `material_instance_ref` |
+| an aliquot                    | `aliquot_ref`       |
+| a catalog item                | `vendor_product_ref`|
+
+The harness BINDS the material the user picks (from a clarification answer or a
+`[[…]]` mention) onto the event itself — you do not need to re-emit a resolved
+reference, and guessing one is worse than omitting it.
 
 ```json
 {
-  "aliquot_ref": { "kind": "record", "id": "ALQ-001", "type": "aliquot", "label": "optional" },
   "material_spec_ref": { "kind": "record", "id": "MSP-001", "type": "material-spec", "label": "optional" },
   "material_ref": { "kind": "record" | "ontology", "id": "MAT-001", "type": "material", "label": "optional" },
   "wells": ["A1", "A2"],

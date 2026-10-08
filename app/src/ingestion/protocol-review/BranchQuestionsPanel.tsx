@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
 import type { IntakeAxis, IntakeProposal } from '../../shared/api/client'
-import { compactAxisLabels, isAxisVisible } from './axisLabels'
+import { compactAxisLabels, isAxisVisible, selectedChoiceLabel } from './axisLabels'
 
 export interface ResolvedReviewBranch {
   axes: IntakeAxis[]
@@ -120,7 +120,7 @@ export default function BranchQuestionsPanel({
   }, [onBuildBranch, choices])
 
   const activeStepIds = useMemo<string[]>(
-    () => (matchedProposal && Array.isArray(matchedProposal.activeStepIds) ? matchedProposal.activeStepIds : []),
+    () => matchedProposal?.resolvedCandidate?.steps.map((step) => step.stepId) ?? (matchedProposal && Array.isArray(matchedProposal.activeStepIds) ? matchedProposal.activeStepIds : []),
     [matchedProposal],
   )
 
@@ -181,6 +181,13 @@ export default function BranchQuestionsPanel({
         </p>
       </header>
 
+      {answeredAll ? (
+        <p role="status" data-testid="branch-selection-summary">
+          <strong>{building ? 'Building selected branch' : matchedProposal ? 'Selected branch' : 'Your selection'}:</strong>{' '}
+          {visibleAxes.map((axis) => selectedChoiceLabel(axis.conditions.find((condition) => condition.id === choices[axis.axisId])?.label ?? choices[axis.axisId]!, axis.origin)).join(' · ')}
+        </p>
+      ) : null}
+
       {visibleAxes.map((axis) => {
         // A handbook names every protocol with the same boilerplate; the options
         // read as "sample type × method" only once the shared words are gone.
@@ -228,8 +235,7 @@ export default function BranchQuestionsPanel({
         ) : (
           <div className="branch-questions__unbuilt" data-testid="branch-questions-unbuilt">
             <p className="branch-questions__muted">
-              No realization exists for this selection yet — the intake drafts an eager, capped product, and a branch
-              nested under a protocol you just chose is drafted on demand.
+              This branch is not pre-built. Build it for your selected answers.
             </p>
             {onBuildBranch ? (
               <>
@@ -276,7 +282,7 @@ export default function BranchQuestionsPanel({
               className="branch-questions__prompt"
               rows={2}
               value={prompt}
-              placeholder="e.g. the 550 µl volume is for the tube format; keep the rack format at 750 µl"
+              placeholder="Describe what needs to change in this branch’s draft"
               disabled={redrafting}
               onChange={(e) => setPrompt(e.target.value)}
             />

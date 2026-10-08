@@ -258,7 +258,7 @@ function buildSourceLabel(sourceData: Record<string, unknown>): string {
   return 'Source record';
 }
 
-function generateAssertionsAndEvidence(
+export function generateAssertionsAndEvidence(
   claims: ClaimObject[],
   source: string,
   sourceId: string,
@@ -296,7 +296,11 @@ function generateAssertionsAndEvidence(
         label: claim.statement,
       },
       statement: claim.statement,
-      scope: {},
+      // scope: 'global' — a claim-only assertion: no experimental scope, the
+      // literature claim is the world statement (compiler-specs/40-knowledge §5.2).
+      // An empty object here fails assertion.schema.yaml (scope is a string enum),
+      // which silently dropped every assertion from this pipeline.
+      scope: 'global',
       confidence: 3,
       evidence_refs: [
         {

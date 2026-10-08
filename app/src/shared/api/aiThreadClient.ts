@@ -7,13 +7,14 @@
  * record. See `specifications/lab-appliance-ui-plan.md` §5 + §5a.
  */
 
-import { API_BASE } from './base'
+import { API_BASE, getCurrentUserId, getSessionToken } from './base'
 
 export type ApplianceEndpoint =
   | 'browser'
   | 'event-editor'
   | 'protocols'
   | 'literature'
+  | 'sequences'
 
 export type ThreadRole = 'user' | 'assistant' | 'system' | 'tool'
 
@@ -65,7 +66,7 @@ export interface PromoteResponse {
 }
 
 export async function getThread(endpoint: ApplianceEndpoint): Promise<AiThread> {
-  const res = await fetch(threadUrl(endpoint), { credentials: 'same-origin' })
+  const res = await fetch(threadUrl(endpoint), { credentials: 'same-origin', headers: threadHeaders() })
   if (!res.ok) {
     throw new Error((await safeError(res)) ?? `getThread failed: ${res.status}`)
   }
@@ -78,7 +79,7 @@ export async function appendThreadMessage(
 ): Promise<AiThread> {
   const res = await fetch(threadUrl(endpoint), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...threadHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
     credentials: 'same-origin',
   })
@@ -96,7 +97,7 @@ export async function promoteThread(
 ): Promise<PromoteResponse> {
   const res = await fetch(`${threadUrl(endpoint)}/promote`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...threadHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
     credentials: 'same-origin',
   })
@@ -118,3 +119,5 @@ async function safeError(res: Response): Promise<string | null> {
     return null
   }
 }
+
+function threadHeaders(): Record<string,string> { const headers: Record<string,string>={}; const user=getCurrentUserId();const session=getSessionToken();if(user)headers['x-user-id']=user;if(session)headers['x-cl-session']=session;return headers; }

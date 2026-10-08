@@ -1,0 +1,31 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-80x2ml-tube-rack
+type: labware_definition
+id: generic/80x2ml_tube_rack@v1
+display_name: "Generic 80-Position 1.5/2 mL Bench Tube Rack (5×16)"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tubeset_80x2ml
+topology:
+  addressing: grid
+  rows: 5
+  columns: 16
+  well_pitch_mm: 13
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 2000
+  min_working_volume_uL: 100
+render_hints:
+  profile: tubeset
+# Intentionally duplicated in schema/registry/labware-definitions/80x2ml-tube-rack.yaml
+# until record-store-union search is deployed everywhere (a fresh appliance loads the
+# registry dir; the lab's record store loads this seed copy). The classic dense bench
+# rack — the most common 1.5/2 mL format. No overall_dimensions_mm: vendor-typical
+# ~207×130 is not sheet-confirmed; omitted per schema rule ("omit unknown values
+# rather than inventing them") — lawn footprint derives from pitch topology instead.
+notes: "Duplicated between seed and registry dir intentionally until record-store-union labware-definition search is deployed. Footprint intentionally omitted (no vendor sheet); derive from 5×16 @ 13 mm pitch."

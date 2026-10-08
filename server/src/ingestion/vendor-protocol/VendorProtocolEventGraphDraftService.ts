@@ -12,6 +12,7 @@ export interface VendorProtocolEventGraphDraftInput {
   candidatePath?: string;
   /** When present, the compile prompt covers only these steps (and their entities). */
   activeStepIds?: readonly string[];
+  decisionContext?: string;
   compile?: boolean;
   deterministicOnly?: boolean;
   persist?: boolean;
@@ -75,7 +76,7 @@ export async function draftVendorProtocolEventGraph(
   input: VendorProtocolEventGraphDraftInput,
 ): Promise<VendorProtocolEventGraphDraftResult> {
   const candidate = await loadCandidate(input);
-  const compilePrompt = buildVendorProtocolCompilePrompt(candidate, input.activeStepIds);
+  const compilePrompt = [input.decisionContext, buildVendorProtocolCompilePrompt(candidate, input.activeStepIds)].filter(Boolean).join("\n\n");
   const shouldCompile = input.compile === true || Boolean(input.compileRunner && input.compile !== false);
   const sourceProtocolRef = compact({
     documentId: candidate.source.documentId,
@@ -162,8 +163,6 @@ export function buildVendorProtocolCompilePrompt(
   const labware = labels(activeStepIds ? candidate.labware.filter(isActiveEntity) : candidate.labware);
   const equipment = labels(activeStepIds ? candidate.equipment.filter(isActiveEntity) : candidate.equipment);
   const steps = activeSteps
-    .slice()
-    .sort((a, b) => a.stepNumber - b.stepNumber || (a.substep ?? '').localeCompare(b.substep ?? ''))
     .map((step) => `${step.stepNumber}${step.substep ? step.substep : ''}. ${normalizeLine(step.sourceText)}`);
 
   return [

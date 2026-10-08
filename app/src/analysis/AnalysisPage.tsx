@@ -222,6 +222,7 @@ export function AnalysisPage() {
     <div className="analysis" data-testid="analysis-page">
       <header className="analysis__header">
         <h1>Analysis</h1>
+        <a href="/sequences">Sequences, virtual PCR, BLAST and alignment</a>
         <p>Define a method (Python), run it against storage-referenced data, and render the outputs.</p>
       </header>
 

@@ -1,0 +1,122 @@
+dna:
+  symbols:
+    A: A
+    C: C
+    G: G
+    T: T
+  complements:
+    A: T
+    C: G
+    G: C
+    T: A
+  family: dna
+rna:
+  symbols:
+    A: A
+    C: C
+    G: G
+    U: U
+  complements:
+    A: U
+    C: G
+    G: C
+    U: A
+  family: rna
+iupac_dna:
+  symbols:
+    A: A
+    C: C
+    G: G
+    T: T
+    R: AG
+    Y: CT
+    S: CG
+    W: AT
+    K: GT
+    M: AC
+    B: CGT
+    D: AGT
+    H: ACT
+    V: ACG
+    N: ACGT
+  complements:
+    A: T
+    C: G
+    G: C
+    T: A
+    R: Y
+    Y: R
+    S: S
+    W: W
+    K: M
+    M: K
+    B: V
+    D: H
+    H: D
+    V: B
+    N: N
+  family: dna
+iupac_rna:
+  symbols:
+    A: A
+    C: C
+    G: G
+    U: U
+    R: AG
+    Y: CU
+    S: CG
+    W: AU
+    K: GU
+    M: AC
+    B: CGU
+    D: AGU
+    H: ACU
+    V: ACG
+    N: ACGU
+  complements:
+    A: U
+    C: G
+    G: C
+    U: A
+    R: Y
+    Y: R
+    S: S
+    W: W
+    K: M
+    M: K
+    B: V
+    D: H
+    H: D
+    V: B
+    N: N
+  family: rna
+protein:
+  symbols:
+    A: A
+    C: C
+    D: D
+    E: E
+    F: F
+    G: G
+    H: H
+    I: I
+    K: K
+    L: L
+    M: M
+    N: N
+    P: P
+    Q: Q
+    R: R
+    S: S
+    T: T
+    V: V
+    W: W
+    Y: Y
+    B: B
+    X: X
+    Z: Z
+    J: J
+    U: U
+    O: O
+    '*': '*'
+  family: protein

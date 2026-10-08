@@ -137,11 +137,34 @@ export function relevantChoices(
   axes: DecisionTreeAxis[],
   choices: Record<string, string>,
 ): Record<string, string> {
+  // A nested answer is foreign ONLY when a protocol-choice answer explicitly
+  // picked a DIFFERENT section. The detection follows the tree's own
+  // invariant (98ec1e28): the protocol choice's condition ids ARE section
+  // ids, so an axis whose condition names a section referenced by a nested
+  // question IS the protocol choice. Post-section-split every tree IS one
+  // protocol: the variant question carries sectionId but no choice axis
+  // exists to gate it — the old blanket `!Object.values(choices).includes(
+  // sectionId)` test dropped that answer silently and collapsed every
+  // realization to the degenerate dispatcher step ("runs 1 step").
+  const sectionIds = new Set(
+    axes.map((axis) => axis.sectionId).filter((s): s is string => typeof s === 'string'),
+  );
+  const isProtocolChoiceAxis = (candidate: DecisionTreeAxis): boolean =>
+    candidate.conditions.some((cond) => sectionIds.has(cond.id));
   const relevant: Record<string, string> = {};
   for (const axis of axes) {
     const chosen = choices[axis.axisId];
     if (typeof chosen !== 'string' || chosen.length === 0) continue;
-    if (axis.sectionId && !Object.values(choices).includes(axis.sectionId)) continue;
+    if (axis.sectionId) {
+      const choseOther = axes.some(
+        (protocolAxis) =>
+          protocolAxis.axisId !== axis.axisId &&
+          isProtocolChoiceAxis(protocolAxis) &&
+          typeof choices[protocolAxis.axisId] === 'string' &&
+          choices[protocolAxis.axisId] !== axis.sectionId,
+      );
+      if (choseOther) continue;
+    }
     relevant[axis.axisId] = chosen;
   }
   return relevant;

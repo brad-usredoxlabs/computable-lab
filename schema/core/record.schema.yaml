@@ -65,3 +65,9 @@ oneOf:
 - $ref: "../ingestion/ingestion-candidate-bundle.schema.yaml"
 - $ref: "../ingestion/ingestion-candidate.schema.yaml"
 - $ref: "../ingestion/ingestion-issue.schema.yaml"
+
+- $ref: "../bio/sequence-collection.schema.yaml"
+- $ref: "../bio/oligo-spec.schema.yaml"
+- $ref: "../bio/sequence-endpoint.schema.yaml"
+- $ref: "../bio/sequence-action-receipt.schema.yaml"
+- $ref: "../bio/sequence-interpretation-rule.schema.yaml"

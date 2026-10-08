@@ -9,9 +9,13 @@
  * Status enum: [ planned, in_progress, completed, aborted, failed, superseded ]
  */
 
+import { pinRunProtocol } from '../../revisions/ProtocolUseService.js';
+import { token, RevisionError } from '../../revisions/RecordRevisionService.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import { computeDiff, type EventDiff, type GraphEvent } from '../../utils/eventGraphDiff.js';
+import { buildReadinessReport } from '../../readiness/ReadinessReportService.js';
+import { evaluateRunStartGate } from '../../readiness/RunStartGateService.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,10 +32,20 @@ interface ErrorResponse {
  * Request body for starting a run execution.
  */
 interface StartRunRequest {
-  /** Operator/user reference executing this run. */
-  executedBy: string;
+  /**
+   * DEPRECATED: Operator/user reference executing this run. The authoritative
+   * actor is the authenticated session identity resolved server-side; this
+   * field is accepted only for backward compatibility and, when present, MUST
+   * equal the session user id (otherwise 403 OPERATOR_MISMATCH).
+   */
+  executedBy?: string;
   /** ISO-8601 timestamp when execution started. */
   startedAt?: string;
+  /**
+   * Diagnostic codes the operator explicitly acknowledges for
+   * needs-confirmation controlled-use findings (spec §17-20).
+   */
+  acknowledgements?: string[];
 }
 
 /**
@@ -188,7 +202,8 @@ export function registerRunExecutionRoutes(
    * Sets executedBy, startedAt, and creates a planned event graph ID if not
    * already present.
    *
-   * Body: { executedBy: string, startedAt?: string }
+   * Body: { startedAt?: string, acknowledgements?: string[] } (executedBy is
+   * DEPRECATED — the session identity is authoritative).
    * Returns: { success: true, run: { recordId, status, executedBy, startedAt, plannedEventGraphId } }
    */
   fastify.post<
@@ -204,10 +219,27 @@ export function registerRunExecutionRoutes(
         const runId = request.params.runId;
         const body = request.body ?? {};
 
-        // Validate required fields
-        if (!body.executedBy) {
-          reply.status(400);
-          return { error: 'MISSING_FIELD', message: 'executedBy is required' };
+        // -------------------------------------------------------------------
+        // Session identity binding: the audit actor and payload executedBy
+        // must be session-proven, never a client-supplied body value.
+        // Resolved BEFORE any mutation and before the controlled-use gate —
+        // an anonymous caller must not even get a gate evaluation.
+        // -------------------------------------------------------------------
+        const identity = await ctx.localIdentityService.resolveRequestUser(request);
+        if (!identity.userId) {
+          reply.status(401);
+          return {
+            error: 'IDENTITY_REQUIRED',
+            message: `Cannot start run '${runId}': authenticated identity required.${identity.reason ? ` (${identity.reason})` : ''}`,
+          };
+        }
+        const sessionUserId = identity.userId;
+        if (body.executedBy !== undefined && body.executedBy !== sessionUserId) {
+          reply.status(403);
+          return {
+            error: 'OPERATOR_MISMATCH',
+            message: `Body executedBy '${body.executedBy}' does not match authenticated session user '${sessionUserId}'`,
+          };
         }
 
         // Load the run record
@@ -235,17 +267,67 @@ export function registerRunExecutionRoutes(
           return transition;
         }
 
-        // Build updated payload
+        // -------------------------------------------------------------------
+        // Controlled-use gate (spec §17-20): evaluate the run's readiness
+        // report against the ACTIVE policy bundle before planned→in_progress.
+        // No bindings declared (no plannedRunRef) means nothing to evaluate —
+        // skip the gate entirely; never fabricate a report.
+        // -------------------------------------------------------------------
+        const plannedRunRefId = (payload as { plannedRunRef?: { id?: string } }).plannedRunRef?.id;
+        let policyBundleId = 'POL-SANDBOX';
+        if (plannedRunRefId) {
+          let report;
+          try {
+            report = await buildReadinessReport(plannedRunRefId, ctx.store);
+          } catch (err) {
+        if (err instanceof RevisionError) return reply.code(err.status).send({ error: err.code, message: err.message });
+            // Fail closed: a run referencing a missing planned run cannot start.
+            reply.status(422);
+            return {
+              error: 'CONTROLLED_USE_UNEVALUABLE',
+              message: err instanceof Error ? err.message : 'Readiness report could not be built',
+            };
+          }
+
+          // Live accessor, same pattern as server.ts: ctx.appConfig is
+          // reassigned at runtime, so resolve the bundle id per request.
+          policyBundleId = ctx.appConfig?.lab?.policyBundleId ?? 'POL-SANDBOX';
+          const policy = ctx.policyBundleService.resolveSettings(policyBundleId);
+          const gate = evaluateRunStartGate(report, policy);
+
+          if (gate.decision === 'deny') {
+            reply.status(403);
+            return {
+              error: 'CONTROLLED_USE_BLOCKED',
+              message: `Controlled-use preconditions failed for run ${runId}`,
+              details: { findings: gate.findings },
+            };
+          }
+          if (gate.decision === 'confirm') {
+            const acked = body.acknowledgements ?? [];
+            const missing = gate.confirmationRequired.filter((c) => !acked.includes(c));
+            if (missing.length > 0) {
+              reply.status(409);
+              return {
+                error: 'CONFIRMATION_REQUIRED',
+                message: 'Run start requires explicit acknowledgement',
+                details: { confirmationRequired: missing, findings: gate.findings },
+              };
+            }
+          }
+        }
+
+        // Build updated payload — executedBy is the session-proven user.
         const updated: RunPayload = { ...payload };
         updated.status = 'in_progress';
-        updated.executedBy = body.executedBy;
+        updated.executedBy = sessionUserId;
         updated.startedAt = body.startedAt ?? new Date().toISOString();
 
         // Initialize executionTracking
         if (!updated.executionTracking) {
           updated.executionTracking = {
             startedAt: updated.startedAt,
-            executedBy: body.executedBy,
+            executedBy: sessionUserId,
             currentEventIndex: 0,
             totalEvents: 0,
             completedEvents: 0,
@@ -258,11 +340,32 @@ export function registerRunExecutionRoutes(
           updated.plannedEventGraphId = generatePlannedEventGraphId(runId);
         }
 
-        // Save updated run record
-        await ctx.store.update({
+        Object.assign(updated, await pinRunProtocol(ctx.store, record, sessionUserId));
+        // Save only against the run version that passed the gates.
+        const startResult = await ctx.store.update({
           envelope: { ...record, payload: updated },
-          message: `Start execution of run '${runId}' by ${body.executedBy}`,
+          message: `Start execution of run '${runId}' by ${sessionUserId}`,
+          ...(token(record) ? { expectedSha: token(record)! } : {}),
         });
+        if (!startResult.success) {
+          reply.status(409); return { error: 'RUN_START_FAILED', message: startResult.error ?? 'Could not start the run. Reload and retry.' };
+        }
+
+        // Audit the start (best-effort; append is try/catch internally).
+        // exactOptionalPropertyTypes: only include plannedRunRefId when present.
+        void ctx.auditService?.append({
+          actor: sessionUserId,
+          action: 'run_started',
+          subjectType: 'run',
+          subjectId: runId,
+          data: {
+            from: 'planned',
+            to: 'in_progress',
+            ...(plannedRunRefId !== undefined ? { plannedRunRefId } : {}),
+            policyBundleId,
+            acknowledgements: body.acknowledgements ?? [],
+          },
+        }).catch(() => {});
 
         reply.status(200);
         return {
@@ -423,6 +526,18 @@ export function registerRunExecutionRoutes(
         const runId = request.params.runId;
         const body = request.body ?? {};
 
+        // Session identity binding: the run_completed audit actor must be the
+        // authenticated session user, never a payload/client-supplied value.
+        const identity = await ctx.localIdentityService.resolveRequestUser(request);
+        if (!identity.userId) {
+          reply.status(401);
+          return {
+            error: 'IDENTITY_REQUIRED',
+            message: `Cannot complete run '${runId}': authenticated identity required.${identity.reason ? ` (${identity.reason})` : ''}`,
+          };
+        }
+        const sessionUserId = identity.userId;
+
         // Load the run record
         const record = await ctx.store.get(runId);
         if (!record) {
@@ -473,6 +588,21 @@ export function registerRunExecutionRoutes(
           envelope: { ...record, payload: updated },
           message: `Complete execution of run '${runId}'`,
         });
+
+        // Audit the completion (best-effort; append is try/catch internally).
+        // Actor is the session-proven user, not the payload's executedBy.
+        void ctx.auditService?.append({
+          actor: sessionUserId,
+          action: 'run_completed',
+          subjectType: 'run',
+          subjectId: runId,
+          data: {
+            from: 'in_progress',
+            to: 'completed',
+            completedAt,
+            executedEventGraphId: updated.executedEventGraphId,
+          },
+        }).catch(() => {});
 
         reply.status(200);
         return {

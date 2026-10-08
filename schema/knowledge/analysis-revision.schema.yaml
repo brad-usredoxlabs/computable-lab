@@ -36,6 +36,15 @@ properties:
       type: { const: "analysis-revision" }
       label: { type: string }
 
+  sequenceMethod:
+    type: object
+    additionalProperties: false
+    required: [operation, endpointRevisionRef]
+    properties:
+      operation: {type: string, enum: [virtual-pcr, mafft, blastn]}
+      endpointRevisionRef:
+        $ref: "./datatypes/ref.schema.yaml"
+
   entryScript:
     type: string
     description: "The Python analysis entry script (exports run(ctx))."
@@ -60,7 +69,7 @@ properties:
         description: { type: string }
         dataKind:
           type: string
-          enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric ]
+          enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric, sequence, sequence-collection, alignment, sequence-hits ]
         required: { type: boolean }
 
   # A JSON-Schema fragment that constrains `parameters` for a run of this

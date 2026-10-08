@@ -50,7 +50,7 @@ export interface CompletionRequest {
   model: string;
   messages: ChatMessage[];
   tools?: ToolDefinition[];
-  tool_choice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
   temperature?: number;
   max_tokens?: number;
   response_format?:
@@ -67,6 +67,8 @@ export interface CompletionRequest {
    * When undefined, construction config is used.
    */
   enableThinking?: boolean;
+  /** OpenRouter unified reasoning controls; retained separately from local template options. */
+  reasoning?: { enabled?: boolean; effort?: string; max_tokens?: number; exclude?: boolean };
   /**
    * llama.cpp extension: ask the server to keep this request's prompt in its
    * KV/prompt cache for prefix reuse. Ignored by other providers.
@@ -620,6 +622,7 @@ export interface AgentEquipmentRequirement {
 }
 
 export interface AgentResult {
+  sequenceProposal?: Record<string, unknown>;
   /** Whether the agent completed successfully. */
   success: boolean;
   /** The proposed events to preview in the editor. */

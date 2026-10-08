@@ -1,0 +1,24 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/sequence-action-receipt.schema.yaml
+title: Sequence Action Receipt
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon
+properties:
+  kind:
+    const: sequence-action-receipt
+  id:
+    type: string
+  label:
+    type: string
+  requestHash:
+    type: string
+  result:
+    type: object
+    additionalProperties: true
+required:
+- kind
+- id
+- requestHash
+- result

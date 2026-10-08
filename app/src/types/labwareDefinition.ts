@@ -41,6 +41,27 @@ export interface LabwareDefinition {
     profile?: 'plate' | 'tiprack' | 'reservoir' | 'tubeset' | 'tube'
     linear_well_style?: 'trough' | 'channels'
   }
+  /**
+   * Optional physical geometry passthrough from the definition record
+   * (schema/workflow/labware-definition.schema.yaml `physical_geometry`).
+   * Omitted unknown values mean the source vendor sheet doesn't declare them —
+   * consumers must derive or fall back, never invent.
+   */
+  physical_geometry?: {
+    overall_dimensions_mm?: { length?: number; width?: number; height?: number }
+    main_material?: string
+    main_color?: string
+    bottom_material?: string
+    bottom_color?: string
+    bottom_thickness_mm?: number
+    bottom_shape?: string
+    well_shape?: string
+    well_diameter_mm?: number
+    well_depth_mm?: number
+    well_length_mm?: number
+    well_width_mm?: number
+    deck_height_mm?: number
+  }
 }
 
 function gridDefinition(
@@ -80,6 +101,7 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
     source: 'opentrons',
     specificity: 'concrete',
     read_only: true,
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
     platform_aliases: [
       { platform: 'opentrons_ot2', alias: 'nest_96_wellplate_200ul_flat' },
       { platform: 'opentrons_flex', alias: 'nest_96_wellplate_200ul_flat' },
@@ -91,6 +113,7 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
     source: 'opentrons',
     specificity: 'concrete',
     read_only: true,
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
     platform_aliases: [
       { platform: 'opentrons_ot2', alias: 'corning_384_wellplate_112ul_flat' },
       { platform: 'opentrons_flex', alias: 'corning_384_wellplate_112ul_flat' },
@@ -102,6 +125,7 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
     source: 'opentrons',
     specificity: 'concrete',
     read_only: true,
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
     platform_aliases: [
       { platform: 'opentrons_ot2', alias: 'nest_96_wellplate_2ml_deep' },
       { platform: 'opentrons_flex', alias: 'nest_96_wellplate_2ml_deep' },
@@ -133,6 +157,7 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
       single_well_multichannel_source: true,
       per_channel_source_expected: false,
     },
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
     render_hints: {
       profile: 'reservoir',
       linear_well_style: 'trough',
@@ -164,6 +189,7 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
       single_well_multichannel_source: false,
       per_channel_source_expected: true,
     },
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
     render_hints: {
       profile: 'reservoir',
       linear_well_style: 'channels',
@@ -225,17 +251,39 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
     },
     render_hints: { profile: 'tubeset' },
   },
-  gridDefinition('opentrons/tiprack_20ul@v1', 'OT-2 Tip Rack 20 uL', ['tiprack_ot2_20'], 8, 12, 20, 9, 'tiprack'),
-  gridDefinition('opentrons/tiprack_200ul@v1', 'OT-2 Tip Rack 200 uL', ['tiprack_ot2_200'], 8, 12, 200, 9, 'tiprack'),
-  gridDefinition('opentrons/tiprack_300ul@v1', 'OT-2 Tip Rack 300 uL', ['tiprack_ot2_300'], 8, 12, 300, 9, 'tiprack'),
-  gridDefinition('opentrons/tiprack_1000ul@v1', 'OT-2 Tip Rack 1000 uL', ['tiprack_ot2_1000'], 8, 12, 1000, 9, 'tiprack'),
-  gridDefinition('opentrons_flex/tiprack_50ul@v1', 'Flex Tip Rack 50 uL', ['tiprack_flex_50'], 8, 12, 50, 9, 'tiprack'),
-  gridDefinition('opentrons_flex/tiprack_200ul@v1', 'Flex Tip Rack 200 uL', ['tiprack_flex_200'], 8, 12, 200, 9, 'tiprack'),
-  gridDefinition('opentrons_flex/tiprack_1000ul@v1', 'Flex Tip Rack 1000 uL', ['tiprack_flex_1000'], 8, 12, 1000, 9, 'tiprack'),
-  gridDefinition('integra/tiprack_12_5ul_384@v1', 'Assist Tip Rack 12.5 uL (384)', ['tiprack_assist_12_5_384'], 16, 24, 12.5, 4.5, 'tiprack'),
-  gridDefinition('integra/tiprack_125ul_384@v1', 'Assist Tip Rack 125 uL (384)', ['tiprack_assist_125_384'], 16, 24, 125, 4.5, 'tiprack'),
-  gridDefinition('integra/tiprack_300ul_96@v1', 'Assist Tip Rack 300 uL (96)', ['tiprack_assist_300'], 8, 12, 300, 9, 'tiprack'),
-  gridDefinition('integra/tiprack_1250ul_96@v1', 'Assist Tip Rack 1250 uL (96)', ['tiprack_assist_1250'], 8, 12, 1250, 9, 'tiprack'),
+  { ...gridDefinition('opentrons/tiprack_20ul@v1', 'OT-2 Tip Rack 20 uL', ['tiprack_ot2_20'], 8, 12, 20, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons/tiprack_200ul@v1', 'OT-2 Tip Rack 200 uL', ['tiprack_ot2_200'], 8, 12, 200, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons/tiprack_300ul@v1', 'OT-2 Tip Rack 300 uL', ['tiprack_ot2_300'], 8, 12, 300, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons/tiprack_1000ul@v1', 'OT-2 Tip Rack 1000 uL', ['tiprack_ot2_1000'], 8, 12, 1000, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons_flex/tiprack_50ul@v1', 'Flex Tip Rack 50 uL', ['tiprack_flex_50'], 8, 12, 50, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons_flex/tiprack_200ul@v1', 'Flex Tip Rack 200 uL', ['tiprack_flex_200'], 8, 12, 200, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('opentrons_flex/tiprack_1000ul@v1', 'Flex Tip Rack 1000 uL', ['tiprack_flex_1000'], 8, 12, 1000, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('integra/tiprack_12_5ul_384@v1', 'Assist Tip Rack 12.5 uL (384)', ['tiprack_assist_12_5_384'], 16, 24, 12.5, 4.5, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('integra/tiprack_125ul_384@v1', 'Assist Tip Rack 125 uL (384)', ['tiprack_assist_125_384'], 16, 24, 125, 4.5, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('integra/tiprack_300ul_96@v1', 'Assist Tip Rack 300 uL (96)', ['tiprack_assist_300'], 8, 12, 300, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
+  { ...gridDefinition('integra/tiprack_1250ul_96@v1', 'Assist Tip Rack 1250 uL (96)', ['tiprack_assist_1250'], 8, 12, 1250, 9, 'tiprack'),
+    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
+  },
 ]
 
 const BY_ID = new Map(LABWARE_DEFINITIONS.map((d) => [d.id, d]))

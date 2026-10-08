@@ -46,7 +46,7 @@ export async function withRecordLock<T>(store: RecordStore, id: string, fn: () =
 }
 
 export class RecordRevisionService {
-  constructor(private store: RecordStore) {}
+  constructor(private store: RecordStore, private now: () => string = () => new Date().toISOString()) {}
   async list(sourceRecordId: string): Promise<Array<RecordEnvelope<RevisionPayload>>> {
     const records = await this.store.list({ kind: 'record-revision' });
     return records.filter(r => object(r.payload).sourceRecordId === sourceRecordId) as Array<RecordEnvelope<RevisionPayload>>;
@@ -71,7 +71,7 @@ export class RecordRevisionService {
       snapshot, contentHash: hash, recipeHash: recipeHash(snapshot), purpose,
       ...(version ? { version } : {}), ...(token(source) ? { sourceToken: token(source)! } : {}),
       ...(gitCommit ? { gitCommit } : {}),
-      createdBy: actor, createdAt: new Date().toISOString(),
+      createdBy: actor, createdAt: this.now(),
     };
     const result = await this.store.create({ envelope: { recordId, schemaId: REVISION_SCHEMA, payload }, message: `Snapshot ${source.recordId}${version ? ` v${version}` : ''}` });
     if (!result.success) {

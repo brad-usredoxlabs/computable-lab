@@ -12,6 +12,8 @@
  *    never in git).
  * 5. Transition the run to succeeded/failed.
  */
+import { RecordRevisionService, withRecordLock, contentHash } from '../revisions/RecordRevisionService.js';
+import { executeSequenceMethod, sequenceConfig } from '../sequences/sequenceRuntime.js';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -63,6 +65,7 @@ export interface RunInputs {
 
 export interface ManifestArtifact {
   name: string;
+  sourceRelations?: Array<{ kind: 'record'; id: string; type: string }>;
   dataKind: string;
   value: unknown;
   units?: Record<string, unknown>;
@@ -329,6 +332,7 @@ export class AnalysisRunner {
       title: page.name,
       runRef: { kind: 'record', id: runId, type: 'analysis-run' },
       name: page.name,
+      ...(page.sourceRelations ? { sourceRelations: page.sourceRelations } : {}),
       dataKind: page.dataKind,
       ...(page.units ? { units: page.units } : {}),
       ...(page.schema ? { schema: page.schema } : {}),
@@ -402,7 +406,11 @@ export class AnalysisRunner {
   }
 
   /** Execute a run (assumes queued). Transitions status + persists outputs. */
-  async executeRun(runId: string): Promise<{
+  async executeRun(runId: string): Promise<{ recordId: string; status: string; manifest: OutputManifest; artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }> }> {
+    return withRecordLock(this.ctx.store, `analysis:${runId}`, () => this.executeLocked(runId));
+  }
+
+  private async executeLocked(runId: string): Promise<{
     recordId: string;
     status: string;
     manifest: OutputManifest;
@@ -416,13 +424,23 @@ export class AnalysisRunner {
       inputs?: RunInputs;
       status?: string;
       parameters?: Record<string, unknown>;
+      frozenRevisionRef?: { id: string };
+      frozenExecutionRef?: { id: string };
+      outputManifest?: OutputManifest & { artifactRefs?: Record<string, { artifactRecordId: string; dataReferenceId?: string }> };
     };
 
+    if(runPayload.frozenExecutionRef) {
+      const frozen=(await new RecordRevisionService(this.ctx.store).read(runPayload.frozenExecutionRef,runId)).payload.snapshot;
+      const fields=(await sequenceConfig('capabilities')).frozenRunFields as string[];
+      for(const field of fields) if(contentHash(frozen[field]) !== contentHash((runPayload as Record<string,unknown>)[field])) throw new AnalysisServiceError('FROZEN_INPUT_CHANGED', `Frozen run field ${field} changed. Create a new run.`,409);
+    }
+    if (runPayload.status === 'succeeded' && runPayload.outputManifest) return { recordId: runId, status: 'succeeded', manifest: runPayload.outputManifest, artifactRefs: runPayload.outputManifest.artifactRefs ?? {} };
+    if (runPayload.frozenRevisionRef && runPayload.status !== 'queued') throw new AnalysisServiceError('RUN_ALREADY_STARTED', 'This run has already started. Create a new run to try again.', 409);
     const revId = runPayload.revisionRef?.id;
     if (!revId) throw new AnalysisServiceError('BAD_RUN', `run ${runId} missing revisionRef`, 400);
     const revEnv = await service.getRevision(revId);
     if (!revEnv) throw new AnalysisServiceError('NOT_FOUND', `revision not found: ${revId}`, 404);
-    const revPayload = revEnv.payload as { entryScript?: string; sdkVersion?: string };
+    const revPayload = (runPayload.frozenRevisionRef ? (await new RecordRevisionService(this.ctx.store).read(runPayload.frozenRevisionRef)).payload.snapshot : revEnv.payload) as { entryScript?: string; sdkVersion?: string; sequenceMethod?: Record<string, unknown> };
 
     if (!revPayload.entryScript) throw new AnalysisServiceError('BAD_REVISION', `revision ${revId} missing entryScript`, 400);
 
@@ -431,13 +449,15 @@ export class AnalysisRunner {
 
     const inputDir = await mkdtemp(join(tmpdir(), 'cl-analysis-inputs-'));
     try {
-      const inputs = await this.provisionInputs(runPayload.inputs, inputDir);
+      const inputs = revPayload.sequenceMethod ? {} : await this.provisionInputs(runPayload.inputs, inputDir);
       const entryScriptPath = join(inputDir, 'entry.py');
       await writeFile(entryScriptPath, revPayload.entryScript);
 
       let manifest: OutputManifest;
       try {
-        manifest = await this.runPython(entryScriptPath, inputs, inputDir, runPayload.parameters);
+        manifest = revPayload.sequenceMethod
+          ? await executeSequenceMethod(this.ctx, revPayload.sequenceMethod, runPayload.inputs ?? {}, runPayload.parameters ?? {}, inputDir)
+          : await this.runPython(entryScriptPath, inputs, inputDir, runPayload.parameters);
       } catch (err) {
         await service.setRunStatus(runId, 'failed');
         throw err;
@@ -446,11 +466,19 @@ export class AnalysisRunner {
       // Persist each artifact + its views
       const artifactRefs: Record<string, { artifactRecordId: string; dataReferenceId?: string }> = {};
       for (const artifact of manifest.artifacts) {
+        artifact.sourceRelations = Object.values(runPayload.inputs ?? {});
         const ref = await this.persistArtifactRecord(runId, artifact, manifest.views);
         artifactRefs[artifact.name] = ref;
       }
 
-      await service.setRunStatus(runId, 'succeeded');
+      const current = (await service.getRun(runId))!;
+      const storedArtifacts = await Promise.all(Object.values(artifactRefs).map(r => this.ctx.store.get(r.artifactRecordId)));
+      const persistedManifest = { ...manifest, artifacts: storedArtifacts.map(e => {
+        const p = e!.payload as Record<string, unknown>;
+        return { name: p.name, dataKind: p.dataKind, ...(p.inlineValue !== undefined ? { value: p.inlineValue } : {}), ...(p.dataReferenceRef ? { dataReferenceRef: p.dataReferenceRef } : {}) };
+      }), artifactRefs };
+      const saved = await this.ctx.store.update({ envelope: { ...current, payload: { ...(current.payload as Record<string, unknown>), status: 'succeeded', completedAt: new Date().toISOString(), outputManifest: persistedManifest, outputArtifactRefs: Object.values(artifactRefs).map(r => ({ kind: 'record', id: r.artifactRecordId, type: 'analysis-output-artifact' })) } }, message: `Complete analysis ${runId}` });
+      if (!saved.success) throw new AnalysisServiceError('SAVE_FAILED', saved.error ?? 'Could not persist analysis results', 500);
 
       // Capture a corpus training pair (surface:analysis → accepted manifest).
       // Opt-in via CLA_CORPUS_LOCAL_PATH; never throws.
@@ -468,6 +496,9 @@ export class AnalysisRunner {
       }
 
       return { recordId: runId, status: 'succeeded', manifest, artifactRefs };
+    } catch (err) {
+      await service.setRunStatus(runId, 'failed');
+      throw err;
     } finally {
       await rm(inputDir, { recursive: true, force: true });
     }

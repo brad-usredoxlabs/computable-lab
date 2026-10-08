@@ -165,6 +165,54 @@ describe('deriveDecisionTree', () => {
     expect(tree.axes.map((a) => a.axisId)).toEqual(raw.map((a) => a.axisId));
   });
 
+  it('suppresses a degenerate branch axis that duplicates a richer variant axis', () => {
+    // The DNeasy 96 dispatch step: the model transcribed the "follow step 1b /
+    // 1c" prose into branches[] (non-empty, so the spine left it alone), and
+    // deriveBranchAxes turned that into an axis whose EVERY condition gates the
+    // dispatch step itself — the answer changes nothing ("runs 1 step"). The
+    // variant axis over the same step gates the DISTINCT variant steps (1a/1b/
+    // 1c), so it is the authoritative expression of the same question. The
+    // degenerate axis must be suppressed with a declared note, not silently
+    // asked as the document's only question.
+    const DISPATCH = {
+      stepId: 'step-20',
+      stepNumber: 1,
+      sourceText:
+        'For blood with non-nucleated erythrocytes, follow step 1a; for blood with nucleated erythrocytes, follow step 1b; for cultured cells, follow step 1c.',
+      branches: [
+        'blood with nucleated erythrocytes (follow step 1b)',
+        'cultured cells (follow step 1c)',
+      ],
+    };
+    const VARIANTS = [
+      { stepId: 'step-21', stepNumber: 1, substep: 'a', sourceText: 'Pipet 20 ul Proteinase K …' },
+      { stepId: 'step-22', stepNumber: 1, substep: 'b', sourceText: 'Pipet 90 ul blood …' },
+      { stepId: 'step-23', stepNumber: 1, substep: 'c', sourceText: 'Centrifuge the cells …' },
+    ];
+    const tree = deriveDecisionTree({
+      documentId: 'd',
+      steps: [DISPATCH, ...VARIANTS],
+      scaleOptions: ALL_LEVELS,
+      now: '2026-09-18T00:00:00.000Z',
+    });
+
+    const axisIds = tree.axes.map((a) => a.axisId);
+    expect(axisIds).not.toContain('branch-axis-step-20');
+    expect(axisIds).toContain('axis-step-20-variant');
+    // The suppression is declared, never silent.
+    expect(tree.notes ?? '').toContain('degenerate_branch_axis_suppressed');
+
+    // A legacy single-step branch axis WITHOUT a variant sibling is untouched
+    // (its alternatives live inside the step text; no step-set change exists).
+    const legacy = deriveDecisionTree({
+      documentId: 'd',
+      steps: [{ stepId: 'step-001', stepNumber: 1, branches: ['Bacterial DNA', 'Mammalian cell culture'] }],
+      scaleOptions: ALL_LEVELS,
+      now: '2026-09-18T00:00:00.000Z',
+    });
+    expect(legacy.axes.map((a) => a.axisId)).toContain('branch-axis-step-001');
+  });
+
   it('omits sourcePdf/notes when absent, includes them when provided', () => {
     const bare = deriveDecisionTree({
       documentId: 'd',

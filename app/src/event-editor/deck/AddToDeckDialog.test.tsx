@@ -227,4 +227,65 @@ describe('AddToDeckDialog', () => {
     expect(picked()!.labwareType).toBe('instrument')
     expect(picked()!.sourceRecordId).toBe('EQP-KUHNER-LS-Z-BENCHTOP-SHA-3776')
   })
+
+  it('lab-db definition hit with topology places WITH ITS GRID INTACT (no enum collapse)', async () => {
+    // The headline regression (spec B1): a 5×16 definition hit must NOT become
+    // plate_96/tubeset_24 through pickEditorLabwareType's legacy collapse.
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [{
+        recordId: 'lbw-def-generic-80x2ml-tube-rack',
+        label: 'Generic 80-Position 1.5/2 mL Bench Tube Rack (5×16)',
+        kind: 'labware-definition',
+        definitionId: 'generic/80x2ml_tube_rack@v1',
+        topology: { addressing: 'grid', rows: 5, columns: 16, well_pitch_mm: 13, orientation_allowed: ['landscape', 'portrait'] },
+        capacity: { max_well_volume_uL: 2000, min_working_volume_uL: 100 },
+        render_hints: { profile: 'tubeset' },
+        legacy_labware_types: ['tubeset_80x2ml'],
+      }],
+      total: 1,
+    })
+
+    const { picked } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    // Tokenized filter (spec D1): "5x16" must surface the "(5×16)" LAB row.
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: '5x16' } })
+
+    const row = await screen.findByRole('button', { name: /Bench Tube Rack/i })
+    expect(row.textContent).toContain('LAB')
+    fireEvent.click(row)
+    fireEvent.click(screen.getByRole('button', { name: /^Add to deck$/i }))
+
+    await waitFor(() => expect(picked()).not.toBeNull())
+    const lw = picked()!
+    expect(lw.addressing.type).toBe('grid')
+    expect(lw.addressing.rows).toBe(5)
+    expect(lw.addressing.columns).toBe(16)
+    expect(lw.definitionSource).toBe('registry')
+    expect(lw.sourceRecordId).toBe('lbw-def-generic-80x2ml-tube-rack')
+    expect(lw.physicalFootprintMm).toEqual({ length: 220, width: 77 })
+  })
+
+  it('a LAB hit WITHOUT topology keeps the legacy record mapping (exa-tier behavior)', async () => {
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [{ recordId: 'LBW-SOMETHING', label: 'Odd Local Rack', kind: 'labware-definition' }],
+      total: 1,
+    })
+    const { picked } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: 'odd local' } })
+    const row = await screen.findByRole('button', { name: /Odd Local Rack/i })
+    fireEvent.click(row)
+    fireEvent.click(screen.getByRole('button', { name: /^Add to deck$/i }))
+    await waitFor(() => expect(picked()).not.toBeNull())
+    // Topology-less payloads stay on the documented legacy collapse.
+    expect(picked()!.labwareType).toBe('plate_96')
+    expect(picked()!.sourceRecordId).toBe('LBW-SOMETHING')
+  })
+
+  it('the arbitrary-topology sentinel never shows as a catalog row', async () => {
+    searchLabwareDefinitions.mockResolvedValue({ hits: [], total: 0 })
+    openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    expect(screen.queryByRole('button', { name: /definition-driven/i })).toBeNull()
+  })
 })

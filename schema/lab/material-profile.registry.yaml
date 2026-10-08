@@ -6,6 +6,50 @@ description: >
   schemas; they describe which schema fields UI and AI authoring surfaces show,
   which values are app-owned, and which reference controls must be grounded.
 
+# ── Clarification policy ──────────────────────────────────────────────────────
+# What an AI clarification about a material may be asked AT, and what a pick at
+# that layer still owes before the add is well-formed.
+#
+# Why it lives here: the layers are a provenance hierarchy (concept < formulation
+# < instance < aliquot) and must never be collapsed. A question about a prepared
+# solution must not be answerable with a bare compound, and picking a formulation
+# still leaves a VOLUME owed (a spec fixes its own concentration). Wording is
+# data too — the biologist reads `question`, and code must not invent it.
+#
+# `field` is the canonical add_material details field for the layer (the one an
+# answer is written into and the gate trusts). `requires` lists the details keys
+# still owed once that layer is chosen; `[]` means the pick is well-formed as-is.
+clarification:
+  # DEFAULTS, used when a profile declares no override. A profile may override any
+  # layer's `requires` (and `question`) under its own `clarification:` key — the
+  # first real case is a cell line, which is COUNTED, not dosed.
+  layers:
+    material:
+      label: "the compound"
+      field: material_ref
+      question: 'Which material is "{label}"? Pick an ontology term or create a local record.'
+      requires: [concentration, volume]
+    material-spec:
+      label: "the prepared solution"
+      field: material_spec_ref
+      question: 'Which prepared solution of "{label}" should this use?'
+      requires: [volume]
+    material-instance:
+      label: "the preparation"
+      field: material_instance_ref
+      question: 'Which preparation or lot of "{label}" should this run use?'
+      requires: []
+    aliquot:
+      label: "the aliquot"
+      field: aliquot_ref
+      question: 'Which aliquot of "{label}" should this use?'
+      requires: []
+    vendor-product:
+      label: "the catalog item"
+      field: vendor_product_ref
+      question: 'Which catalog item for "{label}" should this use?'
+      requires: [volume]
+
 profiles:
   chemical:
     label: "Chemical"
@@ -93,6 +137,16 @@ profiles:
     label: "Cell line"
     applies_when:
       domain: [cell_line]
+    # A cell line is COUNTED, never dosed — and adherent cells may have ZERO
+    # volume. Both of these are complete additions and neither is questioned:
+    #   "add 10,000 HepG2 cells in 72 µL of DMEM"   → the volume is taken as given
+    #   "add 10,000 HepG2 cells"                    → an adhered layer, no volume
+    # So the concept layer owes a count and nothing else. NEVER ask a biologist
+    # for a volume here: capture what happened; do not slow them down.
+    clarification:
+      material:
+        requires: [count]
+        question: 'How many "{label}" per well?'
     layers: [concept, formulation, instance]
     fields:
     - path: kind

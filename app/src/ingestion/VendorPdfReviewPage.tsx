@@ -32,6 +32,7 @@ import {
   nudgeSplitPct,
   splitPctFromDrag,
 } from './splitGeometry'
+import { selectedChoiceLabel } from './protocol-review/axisLabels'
 import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
 import {
   reviewCandidateToProtocolPayload,
@@ -39,6 +40,7 @@ import {
   type MappedBranchAxis,
 } from './candidateToProtocolPayload'
 import { candidateToProtocolPayload, normalizeProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
+import { useOptionalCurrentUser } from '../shared/identity/CurrentUserProvider'
 import './VendorPdfReviewPage.css'
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml'
@@ -69,6 +71,8 @@ export interface VendorPdfReviewPageProps {
 export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPageProps = {}) {
   const { recordId } = useParams<{ recordId: string }>()
   const navigate = useNavigate()
+  const identity = useOptionalCurrentUser()
+  const [savedSha, setSavedSha] = useState<string | undefined>()
 
   const [record, setRecord] = useState<RecordEnvelope | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -100,6 +104,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   // The document's if/then questions, answered by the reviewer (branch panel).
   const [reviewBranch, setReviewBranch] = useState<ResolvedReviewBranch | null>(null)
+  const appliedBranchRef = useRef<string | null>(null)
   // The intake read model for this artifact: which questions the document asks,
   // and the candidate whose step ids they gate. Loaded ONCE here (not per
   // panel) so the questions and the step list cannot drift or double-fetch.
@@ -566,21 +571,62 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
   const handleReviewResolved = useCallback((resolved: ResolvedReviewBranch | null) => {
     setReviewBranch(resolved)
-  }, [])
+    const proposal = resolved?.proposal
+    const branchCandidate = proposal?.resolvedCandidate
+    const signature = proposal && branchCandidate ? `${proposal.recordId}:${proposal.revision ?? 1}` : null
+    if (signature === appliedBranchRef.current) return
+    const previouslyApplied = appliedBranchRef.current !== null
+    appliedBranchRef.current = signature
+    if (branchCandidate && resolved) {
+      const labels = resolved.axes.flatMap((axis) => {
+        const answer = axis.conditions.find((condition) => condition.id === resolved.choices[axis.axisId])
+        return answer ? [selectedChoiceLabel(answer.label ?? answer.id, axis.origin)] : []
+      })
+      setCandidate(null)
+      setProtocolPayload({
+        ...reviewCandidateToProtocolPayload(branchCandidate, 'DRAFT-' + recordId),
+        notes: `Selected branch: ${labels.join(' · ')}`,
+      })
+    } else if (previouslyApplied) {
+      // A new answer must never leave the previous branch presented as current.
+      setProtocolPayload(null)
+    }
+    setSavedRecordId(null)
+    setSaveError(null)
+    setSaveNote(null)
+  }, [recordId])
 
   // The promoted protocol carries the document's questions as `branch_axes`:
   // the global recipe keeps every step AND asks which branch applies, so the
   // lab realization can answer it (protocol-worldview: recipes carry questions,
   // localizations carry answers).
   const branchAxesForSave = useCallback((): MappedBranchAxis[] | undefined => {
-    if (!reviewBranch) return undefined
+    if (!reviewBranch || reviewBranch.proposal?.resolvedCandidate) return undefined
     const axes = treeAxesToBranchAxes(reviewBranch.axes)
     return axes.length > 0 ? axes : undefined
   }, [reviewBranch])
 
-  // Save = accept the current version of the protocol, promoted to a usable
-  // protocol: state approved + the real (current) title. Reuses the stable id
-  // on subsequent saves.
+  const importProvenance = useCallback(() => ({
+    type: 'vendor',
+    ref: { kind: 'record', type: 'vendor-pdf', id: recordId },
+    ingestion: {
+      ...(review?.artifact.sha256 ? { sha256: review.artifact.sha256 } : {}),
+      ...(activeReview?.candidate?.documentId ? { candidateId: activeReview.candidate.documentId } : {}),
+      ...(activeReview?.tree.recordId ? { decisionTreeId: activeReview.tree.recordId } : {}),
+      branches: (reviewBranch?.axes ?? []).flatMap(axis => {
+        const answer = axis.conditions.find(c => c.id === reviewBranch?.choices[axis.axisId])
+        return answer ? [{ axisId: axis.axisId, choiceId: answer.id, label: selectedChoiceLabel(answer.label ?? answer.id, axis.origin) }] : []
+      }),
+    },
+  }), [recordId, review, activeReview, reviewBranch])
+
+  const applySavedRecord = useCallback((saved: RecordEnvelope) => {
+    setSavedRecordId(saved.recordId)
+    setSavedSha(saved.meta?.contentSha ?? saved.meta?.commitSha)
+    setProtocolPayload(saved.payload as unknown as MappedProtocolPayload)
+  }, [])
+
+  // Saving changes the working draft, never asserts QMS approval.
   const handleSave = useCallback(async () => {
     if (!protocolPayload) return
     setSaving(true)
@@ -591,15 +637,16 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       const payload = normalizeProtocolPayload({
         ...(protocolPayload as unknown as Record<string, unknown>),
         ...(axes ? { branch_axes: axes } : {}),
+        source: importProvenance(),
       })
       if (savedRecordId) {
-        await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId, state: 'approved' })
+        const result = await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId }, { expectedSha: savedSha })
+        applySavedRecord(result.record)
         setSaveNote('Saved.')
       } else {
         const recId = `PRT-${shortId()}`
-        await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
-        setSavedRecordId(recId)
-        setProtocolPayload({ ...(payload as unknown as MappedProtocolPayload), recordId: recId })
+        const result = await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'draft' })
+        applySavedRecord(result.record)
         setSaveNote('Saved.')
       }
     } catch (err) {
@@ -607,10 +654,10 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     } finally {
       setSaving(false)
     }
-  }, [protocolPayload, savedRecordId, branchAxesForSave])
+  }, [protocolPayload, savedRecordId, savedSha, branchAxesForSave, importProvenance, applySavedRecord])
 
   // Save As — open a modal pre-loaded with the real protocol title so the
-  // user can overwrite it, then save as a fresh approved copy.
+  // user can overwrite it, then save as a fresh draft copy.
   const handleSaveAs = useCallback(async () => {
     if (!protocolPayload) return
     setSaveAsTitle(protocolPayload.title)
@@ -631,15 +678,17 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         ...(axes ? { branch_axes: axes } : {}),
       } as unknown as Record<string, unknown>)
       const recId = `PRT-${shortId()}`
-      await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
-      setSavedRecordId(recId)
+      const result = savedRecordId
+        ? await apiClient.createDraftCopy(savedRecordId, { recordId: recId, payload: { ...payload, source: importProvenance() }, expectedSha: savedSha })
+        : await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, source: importProvenance(), recordId: recId, version: '0.1.1', state: 'draft' })
+      applySavedRecord(result.record)
       setSaveNote('Saved as copy.')
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save As failed')
     } finally {
       setSaving(false)
     }
-  }, [protocolPayload, saveAsTitle, branchAxesForSave])
+  }, [protocolPayload, saveAsTitle, savedRecordId, savedSha, branchAxesForSave, importProvenance, applySavedRecord])
 
   // TapTab onUpdate: keep the edited payload when dirty.
   const handleTapTabUpdate = useCallback((serialized: Record<string, unknown>, dirty?: boolean) => {
@@ -777,6 +826,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         )}
         {protocolPayload ? (
           <div className="vpdf-review__save-actions" data-testid="vpdf-save-actions">
+            <span className="vpdf-review__meta">Draft · {protocolPayload.version ?? '0.1.1'}</span>
             <button
               type="button"
               className="vpdf-review__save"
@@ -933,7 +983,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           ) : null}
           {recordId ? (
             <div className="vpdf-review__questions">
-              {reviewLoading ? (
+              {reviewLoading && !review ? (
                 <p className="vpdf-review__hint">Reading the document’s questions…</p>
               ) : reviewError ? (
                 <p className="vpdf-review__error" role="alert">
@@ -946,7 +996,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                       questions. Single-tree documents render no selector. */}
                   {review && (review.count ?? 1) > 1 ? (
                     <label className="vpdf-review__tree-select">
-                      <span>Protocol </span>
+                      <span>Which protocol applies? ({review.trees?.length ?? review.count} available) </span>
                       <select
                         value={reviewTreeIndex}
                         onChange={(e) => setReviewTreeIndex(Number(e.target.value))}
@@ -954,19 +1004,21 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                       >
                         {(review.trees ?? []).map((entry, i) => (
                           <option key={entry.tree.recordId} value={i}>
-                            {entry.tree.documentId.split('__').pop() ?? entry.tree.recordId}
+                            {entry.candidate?.title ?? (entry.tree.documentId.split('__').pop() ?? entry.tree.recordId).replace(/-/g, ' ')}
                             {' '}({entry.proposals.length} proposal{entry.proposals.length === 1 ? '' : 's'})
                           </option>
                         ))}
                       </select>
                     </label>
                   ) : null}
+                  {reviewLoading ? <p role="status">Updating the selected branch…</p> : null}
                   <BranchQuestionsPanel
+                    key={activeReview?.tree.recordId ?? recordId}
                     axes={activeReview?.tree.axes ?? []}
                     proposals={activeReview?.proposals ?? []}
                     gap={
                       activeReview
-                        ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
+                        ? 'No additional branch questions were derived for this protocol. Review its steps before building a draft.'
                         : 'No decision tree is attributable to this PDF yet — run intake on it first.'
                     }
                     onResolved={handleReviewResolved}
@@ -982,7 +1034,12 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
             <div className="vpdf-review__taptab" data-testid="vpdf-taptab">
               <ProjectionTapTabEditor
                 blocks={projection.blocks}
-                slots={projection.slots}
+                slots={projection.slots.map(slot => slot.path === '$.createdBy' ? {
+                  ...slot,
+                  value: savedRecordId
+                    ? identity?.users.find(user => user.recordId === protocolPayload.createdBy)?.displayName ?? protocolPayload.createdBy
+                    : identity?.currentUser?.displayName ?? identity?.currentUserId ?? 'Session user',
+                } : slot)}
                 data={protocolPayload as unknown as Record<string, unknown>}
                 onUpdate={handleTapTabUpdate}
               />

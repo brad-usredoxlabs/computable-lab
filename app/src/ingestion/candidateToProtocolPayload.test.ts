@@ -229,3 +229,16 @@ describe('reviewCandidateToProtocolPayload (the step ids the questions gate)', (
     expect(payload.roles.materialRoles).toEqual([])
   })
 })
+
+
+describe('draft version defaults', () => {
+  it.each([undefined, null, ''])('replaces missing/null/blank versions with a string draft version (%s)', version => {
+    expect(normalizeProtocolPayload({ version }).version).toBe('0.1.1')
+  })
+  it('preserves textual version labels and starts extracted protocols as drafts', () => {
+    expect(normalizeProtocolPayload({ version: '1.0' }).version).toBe('1.0')
+    const protocol = candidateToProtocolPayload({ kind: 'vendor-protocol-candidate', title: 'Soil' }, 'PRT-test')
+    expect(protocol.version).toBe('0.1.1')
+    expect(protocol.state).toBe('draft')
+  })
+})

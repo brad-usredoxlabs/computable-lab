@@ -14,7 +14,7 @@
  */
 
 import { deriveBranchAxes, slugify } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
-import { deriveStepVariantAxes } from '../ingestion/vendor-protocol/deriveStepVariantAxes.js';
+import { deriveStepVariantAxes, type StepVariantAxis } from '../ingestion/vendor-protocol/deriveStepVariantAxes.js';
 import { deriveSampleSourceAxis } from './deriveDocumentTableAxis.js';
 import { deriveProtocolChoiceAxis } from './deriveProtocolChoiceAxis.js';
 import type { BranchAxisLike, BranchConditionLike } from '../protocol/BranchResolver.js';
@@ -176,7 +176,37 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
     protocolNote = `protocol_choice_axis_not_derived: ${protocolAxis.reason}`;
   }
 
+  // A branch axis is DEGENERATE when every condition gates the same step set
+  // (the answer changes nothing) and a variant axis over the same dispatch
+  // step already gates the DISTINCT variant steps. The DNeasy 96 dispatch step
+  // produced exactly this: the model transcribed "follow step 1b / 1c" prose
+  // into branches[] (non-empty, so the branch-marker spine left it alone), and
+  // deriveBranchAxes — which gates on the branchy step itself — emitted an
+  // axis whose conditions all gate step-20. Asked as the document's only
+  // question, with the real (variant) question hidden by nesting, it collapsed
+  // every realization to "runs 1 step". The variant axis is the authoritative
+  // expression of the same prose, so the duplicate is suppressed — declared,
+  // never silently dropped.
+  const variantAxisByDispatch = new Map<string, StepVariantAxis>();
+  for (const va of variantAxes) {
+    const dispatchStepId = va.axisId.replace(/^axis-/, '').replace(/-variant$/, '');
+    if (dispatchStepId && va.conditions.length >= 2) variantAxisByDispatch.set(dispatchStepId, va);
+  }
+  const degenerateSuppressions: string[] = [];
   for (const a of deriveBranchAxes(input.steps)) {
+    const gatedSets = (a.conditions ?? []).map((cond) => cond.then_stepIds ?? []);
+    const union = new Set(gatedSets.flat());
+    const degenerate =
+      gatedSets.length >= 2 &&
+      gatedSets.every((steps) => steps.length > 0 && steps.every((s) => union.has(s)) && union.size === steps.length) &&
+      [...union].every((stepId) => variantAxisByDispatch.has(stepId));
+    if (degenerate) {
+      const twin = variantAxisByDispatch.get([...union][0]!)!;
+      degenerateSuppressions.push(
+        `degenerate_branch_axis_suppressed: ${a.axisId} — every condition gates the same step set (${[...union].join(', ')}), which changes nothing; ${twin.axisId} is the authoritative question over the same prose ("${twin.question}")`,
+      );
+      continue;
+    }
     axes.push({
       axisId: a.axisId,
       question: buildQuestion(a),
@@ -239,7 +269,7 @@ export function deriveDecisionTree(input: DeriveDecisionTreeInput): ProtocolDeci
     tableNote = `sample_source_axis_not_derived: ${tableAxis.reason}`;
   }
 
-  const notes = [input.notes, protocolNote, tableNote].filter(
+  const notes = [input.notes, protocolNote, tableNote, ...degenerateSuppressions].filter(
     (n): n is string => typeof n === 'string' && n.length > 0,
   );
 

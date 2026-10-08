@@ -60,6 +60,14 @@ describe('isAxisVisible — a nested question waits for its protocol', () => {
     expect(isAxisVisible({ axisId: 'axis-sample-type' }, {}, [])).toBe(true);
   });
 
+  it('shows a nested question on a child tree (no protocol-choice axis exists)', () => {
+    // Post-section-split, every tree IS one protocol: the variant question
+    // carries sectionId but no protocol-choice axis can ever gate it. Hiding
+    // it left the panel asking only a degenerate duplicate question.
+    const nested = { axisId: 'axis-step-20-variant', sectionId: NINETY_SIX };
+    expect(isAxisVisible(nested, {}, [])).toBe(true);
+  });
+
   it('hides a protocol’s own question until that protocol is chosen', () => {
     const nested = { axisId: 'axis-step-1-variant', sectionId: SPIN };
 

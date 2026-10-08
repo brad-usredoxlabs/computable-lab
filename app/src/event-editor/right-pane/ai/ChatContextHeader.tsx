@@ -24,7 +24,12 @@ export function ChatContextHeader() {
     )
   }
 
-  const title = `Step ${focused.ordinal ?? '?'}: ${focused.label}`
+  const step = sel?.steps.find(step => step.stepId === focused.stepId) ?? focused
+  const description = 'description' in step && typeof step.description === 'string' ? step.description.trim() : ''
+  const text = description || step.label
+  const title = `Step ${step.ordinal ?? '?'}: ${text}`
+  const tooltip = description && !description.startsWith(step.label)
+    ? `Step ${step.ordinal ?? '?'}: ${step.label}\n\n${description}` : title
   return (
     <div
       className="chat-context-header chat-context-header--active"
@@ -32,7 +37,7 @@ export function ChatContextHeader() {
       data-ctx-step={focused.stepId}
     >
       <span className="chat-context-header__label">EDITING</span>
-      <span className="chat-context-header__value">{title}</span>
+      <span className="chat-context-header__value" title={tooltip}>{title}</span>
     </div>
   )
 }

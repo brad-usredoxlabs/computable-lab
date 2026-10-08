@@ -377,15 +377,16 @@ export class UIHandlers {
       '__draft__'
     );
 
-    // Pre-fill Created By with the current user's display name so a new record
-    // shows who will own it before the first save (display-only; the real
-    // createdBy is written server-side at creation from the request identity).
+    // Draft provenance is display-only. Record creation stamps the actual
+    // timestamps and creator from the save request, not these preview values.
+    const now = new Date().toISOString();
+    const provenance: Record<string, unknown> = { createdAt: now, updatedAt: now };
     const resolvedUser = await this.identityService?.resolveRequestUser(request);
     const userId = resolvedUser?.userId;
     if (userId) {
-      const name = await this.resolveUserDisplayName(userId);
-      applyDisplayValuesToSlots(projection, { createdBy: name });
+      provenance.createdBy = await this.resolveUserDisplayName(userId);
     }
+    applyDisplayValuesToSlots(projection, provenance);
 
     return projection;
   }

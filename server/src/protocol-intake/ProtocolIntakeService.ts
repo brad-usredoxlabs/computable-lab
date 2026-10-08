@@ -22,6 +22,8 @@ import { createEnvelope } from '../types/RecordEnvelope.js';
 import type { RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
 import {
   extractVendorProtocolCandidateFromInput,
+  readCandidateArtifact,
+  writeCandidateArtifact,
 } from '../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { ProtocolCandidate } from '../ingestion/vendor-protocol/types.js';
 import {
@@ -36,6 +38,7 @@ import {
   relevantChoices,
   type ChoiceBinding,
 } from './enumerateChoiceBindings.js';
+import { materializeBranchCandidate } from './materializeBranchCandidate.js';
 import { resolveBranchAxes } from '../protocol/BranchResolver.js';
 import { draftVendorProtocolEventGraph } from '../ingestion/vendor-protocol/VendorProtocolEventGraphDraftService.js';
 import { promoteVendorProtocolEventGraph } from '../ingestion/vendor-protocol/VendorProtocolEventGraphPromotionService.js';
@@ -552,6 +555,7 @@ export class ProtocolIntakeService {
     const { parent, child, documentId, extraction, input, scaleOptions } = args;
     const childDocumentId = `${documentId}__${slugify(child.sectionTitle)}`;
     const childCandidate = childCandidateFrom(parent, child, childDocumentId);
+    await writeCandidateArtifact(this.deps.workspaceRoot, childCandidate, childDocumentId);
     const attached = child.attachedSectionIds.length > 0
       ? `; attached sections: ${child.attachedSectionIds.join(', ')}`
       : '';
@@ -804,6 +808,162 @@ export class ProtocolIntakeService {
     };
   }
 
+  /**
+   * Re-derive stored decision trees from their PERSISTED candidate artifacts —
+   * no PDF decode, no extraction, no LLM. Trees are records, and records go
+   * stale when the derivation rules change (degenerate-axis suppression,
+   * nesting semantics); the fix only lands once the trees are re-derived.
+   *
+   * Deterministic inputs only: the candidate the extractor already wrote under
+   * artifacts/foundry/protocol-candidates/, plus the spine annotation and the
+   * handbook split (both pure functions of the candidate). After a tree's axis
+   * SET changes, proposals keyed by position (SGP-…-b<i>-s<j>) no longer denote
+   * the binding encoded in their id — the eager pass would then reuse a stale
+   * proposal under a new binding's id. Those proposals are deleted (embedded
+   * git keeps their history) whenever their tree changed shape; accepted/
+   * rejected proposals are reviewer decisions and are NEVER deleted. Drafting
+   * stays on demand: refresh produces questions, not compile passes.
+   */
+  async refreshTree(input: { documentId: string; now?: string }): Promise<IngestPdfResult> {
+    const diagnostics: IntakeDiagnostic[] = [];
+    const { workspaceRoot, store } = this.deps;
+
+    const candidate = await readCandidateArtifact(workspaceRoot, input.documentId);
+    if (!candidate) {
+      return {
+        documentId: input.documentId,
+        treeRecordId: '',
+        proposalRecordIds: [],
+        eventGraphRecordIds: [],
+        diagnostics: [{
+          severity: 'error',
+          code: 'candidate_artifact_missing',
+          message: `No persisted candidate artifact for ${input.documentId}; run a full intake instead of a refresh`,
+        }],
+      };
+    }
+
+    const patterns = await spinePatterns();
+    const spine = annotateStepVariants(candidate.steps, patterns);
+    const annotated: ProtocolCandidate = { ...candidate, steps: spine.steps };
+    const scaleOptions = this.deps.scaleOptions ?? scaleOptionsFromRegistry();
+
+    const children = splitHandbookSections(annotated);
+    const units: Array<{ documentId: string; candidate: ProtocolCandidate; treeDocumentId: string }> =
+      children.length >= 2
+        ? children.map((child) => {
+            const childDocumentId = `${input.documentId}__${slugify(child.sectionTitle)}`;
+            return {
+              documentId: childDocumentId,
+              candidate: childCandidateFrom(annotated, child, childDocumentId),
+              treeDocumentId: childDocumentId,
+            };
+          })
+        : [{ documentId: input.documentId, candidate: annotated, treeDocumentId: sanitizeIdSegment(input.documentId) }];
+
+    let inheritedSource: Record<string, unknown> | undefined;
+    for (const id of [sanitizeIdSegment(input.documentId), ...units.map((unit) => unit.treeDocumentId)]) {
+      const record = await store.get(`PDT-${id}`);
+      const source = (record?.payload as Record<string, unknown> | undefined)?.['sourcePdf'];
+      if (source && typeof source === 'object') { inheritedSource = source as Record<string, unknown>; break; }
+    }
+    const refreshedTreeRecordIds: string[] = [];
+    for (const unit of units) {
+      await writeCandidateArtifact(workspaceRoot, unit.candidate, unit.documentId);
+      const treeRecordId = `PDT-${unit.treeDocumentId}`;
+      const before = await store.get(treeRecordId);
+      const beforeAxes = before
+        ? JSON.stringify((before.payload as Record<string, unknown>)['axes'] ?? [])
+        : null;
+
+      const derived = deriveDecisionTree({
+        documentId: unit.treeDocumentId,
+        steps: unit.candidate.steps,
+        tables: unit.candidate.tables,
+        protocolSections: unit.candidate.sections,
+        scaleOptions,
+        // sourcePdf (artifactPath + sha256) is what redraft/realize re-extract
+        // from — refresh has no PDF input, so carry the stored tree's forward.
+        ...((before?.payload as Record<string, unknown> | undefined)?.['sourcePdf'] || inheritedSource
+          ? { sourcePdf: ((before?.payload as Record<string, unknown> | undefined)?.['sourcePdf'] ?? inheritedSource) as Record<string, unknown> }
+          : {}),
+        ...(input.now ? { now: input.now } : {}),
+      });
+      const refreshed = await this.persistTree(derived, diagnostics, { refresh: true });
+      if (!refreshed) continue;
+      refreshedTreeRecordIds.push(refreshed.recordId);
+
+      const afterAxes = JSON.stringify(refreshed.axes);
+      if (beforeAxes !== null && beforeAxes !== afterAxes) {
+        const invalidated = await this.invalidatePositionalProposals(refreshed.recordId, diagnostics);
+        if (invalidated > 0) {
+          diagnostics.push({
+            severity: 'info',
+            code: 'stale_proposals_invalidated',
+            message: `${refreshed.recordId}: axis shape changed; ${invalidated} positional proposal(s) whose ids no longer denote their binding were deleted (history lives in the embedded git repo). Rebuild needed branches on demand.`,
+          });
+        }
+      }
+    }
+
+    return {
+      documentId: input.documentId,
+      treeRecordId: refreshedTreeRecordIds[0] ?? '',
+      proposalRecordIds: [],
+      eventGraphRecordIds: [],
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: 'info',
+          code: 'tree_refreshed_deterministic',
+          message: `Re-derived ${refreshedTreeRecordIds.length} tree(s) from the persisted candidate (no extraction): ${refreshedTreeRecordIds.join(', ')}`,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Delete every non-reviewed proposal under a tree (and the event graph it
+   * drafted). Only `proposed`/`needs_prompt`/`redrafted` states are reviewer-
+   * untouched; accepted/rejected records a decision and survives.
+   */
+  private async invalidatePositionalProposals(
+    treeRecordId: string,
+    diagnostics: IntakeDiagnostic[],
+  ): Promise<number> {
+    const { store } = this.deps;
+    const envelopes = await store.list({ kind: 'subgraph-proposal' });
+    let deleted = 0;
+    for (const envelope of envelopes) {
+      const payload = envelope.payload as Record<string, unknown>;
+      const treeRef = payload['treeRef'] as { id?: string } | undefined;
+      if (treeRef?.id !== treeRecordId) continue;
+      const state = typeof payload['state'] === 'string' ? payload['state'] : 'proposed';
+      if (state === 'accepted' || state === 'rejected') continue;
+      const eventGraphRef = payload['eventGraphRef'] as { id?: string } | undefined;
+      const result = await store.delete({
+        recordId: envelope.recordId,
+        message: `intake: invalidate stale proposal ${envelope.recordId} (tree ${treeRecordId} re-derived)`,
+      });
+      if (!result.success) {
+        diagnostics.push({
+          severity: 'warning',
+          code: 'stale_proposal_delete_failed',
+          message: `${envelope.recordId}: ${result.error ?? 'store.delete failed'}`,
+        });
+        continue;
+      }
+      if (eventGraphRef?.id) {
+        await store.delete({
+          recordId: eventGraphRef.id,
+          message: `intake: invalidate draft graph ${eventGraphRef.id} with its proposal`,
+        }).catch(() => undefined);
+      }
+      deleted += 1;
+    }
+    return deleted;
+  }
+
   private async persistTree(
     tree: ProtocolDecisionTree,
     diagnostics: IntakeDiagnostic[],
@@ -931,6 +1091,10 @@ export class ProtocolIntakeService {
       activeStepIds = resolution.activeStepIds;
     }
 
+    candidate = materializeBranchCandidate(candidate, tree.axes,
+      Object.fromEntries(binding.branchPath.map((entry) => [entry.axisId, entry.conditionId])));
+    // Include shared steps as well as selected conditional steps.
+    activeStepIds = candidate.steps.map((step) => step.id);
     const decisionBlock = buildDecisionBlock(tree, binding, scaleOption, args.reviewPrompt);
 
     const shouldCompile = Boolean(this.deps.compileRunner);
@@ -940,6 +1104,7 @@ export class ProtocolIntakeService {
       // THE FILTER: the compile prompt is a function of this binding's active
       // steps — never the whole handbook (2026-09-21 giant-protocol failure).
       activeStepIds,
+      decisionContext: decisionBlock,
       compile: shouldCompile,
       ...(this.deps.compileRunner
         ? { compileRunner: this.deps.compileRunner, deterministicOnly: false }

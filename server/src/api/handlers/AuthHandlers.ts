@@ -3,13 +3,20 @@ import type { RecordStore } from '../../store/types.js';
 import type { CredentialStore } from '../../security/CredentialStore.js';
 import type { SessionStore } from '../../security/SessionStore.js';
 import type { LocalIdentityService } from '../../security/LocalIdentityService.js';
+import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
 import { verifyPassword, hashPassword } from '../../security/CredentialStore.js';
+import type { AuditEventService } from '../../governance/AuditEventService.js';
 
 export interface AuthHandlerOptions {
   store: RecordStore;
   credentialStore: CredentialStore;
   sessionStore: SessionStore;
   identityService?: LocalIdentityService;
+  /**
+   * Best-effort §10 audit hooks (login_success / login_failed). Absent →
+   * no events emitted (system works with the wiring ripped out).
+   */
+  auditService?: AuditEventService;
 }
 
 function payloadOf(env: { payload?: unknown } | null | undefined): Record<string, unknown> {
@@ -36,7 +43,21 @@ async function findUserByUsername(store: RecordStore, username: string) {
 }
 
 export function createAuthHandlers(options: AuthHandlerOptions) {
-  const { store, credentialStore, sessionStore, identityService } = options;
+  const { store, credentialStore, sessionStore, identityService, auditService } = options;
+
+  /** §10 login audit — best-effort, never fails or alters the auth response. */
+  const auditLogin = (outcome: 'login_success' | 'login_failed', actor: string, username: string, reason?: string): void => {
+    if (!auditService) return;
+    void auditService
+      .append({
+        actor,
+        action: outcome,
+        subjectType: 'session',
+        subjectId: actor,
+        data: { username, ...(reason !== undefined ? { reason } : {}) },
+      })
+      .catch(() => {});
+  };
 
   return {
     // POST /auth/login  { username, password }
@@ -53,6 +74,7 @@ export function createAuthHandlers(options: AuthHandlerOptions) {
 
       const user = await findUserByUsername(store, username);
       if (!user || payloadOf(user).status !== 'active') {
+        auditLogin('login_failed', 'unknown', username, user ? 'inactive' : 'unknown_user');
         reply.status(401);
         return { error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' };
       }
@@ -61,15 +83,18 @@ export function createAuthHandlers(options: AuthHandlerOptions) {
       const verifier = await credentialStore.getVerifier(userId);
       if (!verifier) {
         // Existing users without a password can't log in yet (see A4/A5).
+        auditLogin('login_failed', userId, username, 'no_verifier');
         reply.status(401);
         return { error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' };
       }
       if (!verifyPassword(password, verifier)) {
+        auditLogin('login_failed', userId, username, 'bad_password');
         reply.status(401);
         return { error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' };
       }
 
       const token = await sessionStore.create(userId);
+      auditLogin('login_success', userId, username);
       return { success: true, token, userId };
     },
 
@@ -98,7 +123,16 @@ export function createAuthHandlers(options: AuthHandlerOptions) {
         return { error: 'BAD_REQUEST', message: 'password is required (min 8 chars)' };
       }
       const resolved = await identityService.resolveRequestUser(request);
-      if (!resolved.userId || resolved.isSystem || !(await store.get(resolved.userId))) {
+      /* Platform primitive (like `localAdmin` in the authoring DSL), not a
+         business rule: the local admin may set its OWN password only inside
+         the first-run bootstrap window — it is a system identity, but with no
+         credential yet there is no other way to give it one. The window
+         self-closes the moment a verifier exists; everything else that
+         resolves as isSystem stays rejected. */
+      const adminBootstrapWindow =
+        resolved.userId === LOCAL_ADMIN_USER_ID &&
+        !(await credentialStore.hasCredential(LOCAL_ADMIN_USER_ID));
+      if (!resolved.userId || (resolved.isSystem && !adminBootstrapWindow) || !(await store.get(resolved.userId))) {
         reply.status(403);
         return { error: 'NO_CURRENT_USER', message: 'No concrete current user to set a password for (system identity).' };
       }

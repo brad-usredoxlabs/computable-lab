@@ -298,7 +298,7 @@ export function extractSavedEventGraphId(
 
 export async function persistAcceptedEventGraph(
   input: PersistAcceptedEventGraphInput,
-  saveEventGraph: SaveEventGraphFn = apiClient.saveEventGraph,
+  saveEventGraph: SaveEventGraphFn = (id, payload) => apiClient.saveEventGraph(id, payload, true),
   ensureDeckLock: EnsureRunDeckLockFn = ensureRunDeckLock,
   corpusSave: CorpusSaveFn = apiClient.saveCorpusEntry,
 ): Promise<PersistAcceptedEventGraphResult> {

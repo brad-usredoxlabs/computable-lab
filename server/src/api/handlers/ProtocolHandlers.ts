@@ -138,7 +138,10 @@ export function createProtocolHandlers(ctx: AppContext) {
     ) {
       try {
         const body = request.body ?? {};
+        const actor = await ctx.localIdentityService.resolveRequestUser(request);
+        if (!actor.userId) return reply.code(401).send({ error: 'IDENTITY_REQUIRED' });
         const result = await protocolContext.useProtocolInRun({
+          actor: actor.userId,
           protocolId: body.protocolId,
           runId: body.runId,
           ...(body.studyId ? { studyId: body.studyId } : {}),
@@ -165,7 +168,10 @@ export function createProtocolHandlers(ctx: AppContext) {
     ) {
       try {
         const body = request.body ?? {};
+        const actor = await ctx.localIdentityService.resolveRequestUser(request);
+        if (!actor.userId) return reply.code(401).send({ error: 'IDENTITY_REQUIRED' });
         const envelope = await protocolContext.specializeForExperiment({
+          actor: actor.userId,
           protocolId: body.protocolId,
           studyId: body.studyId,
           experimentId: body.experimentId,

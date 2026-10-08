@@ -173,6 +173,12 @@ repositories:
 #         defaultThinkingLevel: off
 #         # Streaming: abort only after this much SILENCE (not total duration).
 #         # A large document chunk with thinking on legitimately runs minutes.
+#         # The AGENT's output budget (not the extractor's). A model that reasons
+#         # before it drafts needs room to finish: at the legacy 4096 default it is
+#         # cut off mid-thought (finish_reason "length"), emits an agent_intent with
+#         # no fields, and the biologist gets no proposal at all. Set it to a
+#         # meaningful fraction of the model server's window (262144 here).
+#         # maxTokens: 65536
 #         streamIdleTimeoutMs: 600000
 #         # Optional hard ceiling for one streamed request (omit for none).
 #         # streamMaxMs: 1800000

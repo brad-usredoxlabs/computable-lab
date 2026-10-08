@@ -29,6 +29,10 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
       const path = node.attrs.path as string;
       const value = node.attrs.value as unknown;
 
+      // A missing read-only display slot must not introduce null into an
+      // optional non-nullable field (e.g. a run with no protocol version yet).
+      if (node.attrs.readOnly && value == null) continue;
+
       if (typeof path === 'string') {
         // Use stripJsonPath to remove $. prefix, then set the value
         const cleanPath = stripJsonPath(path);

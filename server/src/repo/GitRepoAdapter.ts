@@ -293,6 +293,19 @@ export class GitRepoAdapter implements RepoAdapter {
   /**
    * Get a file from the repository.
    */
+  async getVerifiedCommit(path: string): Promise<string | undefined> {
+    const git = await this.ensureInitialized();
+    const file = await this.getFile(path);
+    if (!file) return undefined;
+    try {
+      const log = await git.log({ file: path, maxCount: 1 });
+      const sha = log.latest?.hash;
+      if (!sha) return undefined;
+      const committed = await git.show([`${sha}:${path}`]);
+      return committed === file.content ? sha : undefined;
+    } catch { return undefined; }
+  }
+
   async getFile(path: string): Promise<RepoFile | null> {
     await this.pullIfNeeded();
     

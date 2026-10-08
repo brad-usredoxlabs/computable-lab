@@ -13,6 +13,7 @@ const getRecordMock = vi.fn()
 const getIntakeReviewMock = vi.fn()
 const blobUrlMock = vi.fn((_recordId: string) => '')
 const realizeMock = vi.fn()
+const projectionMock = vi.fn()
 
 vi.mock('../shared/api/client', () => ({
   apiClient: {
@@ -20,7 +21,7 @@ vi.mock('../shared/api/client', () => ({
     getIntakeReview: (...args: unknown[]) => getIntakeReviewMock(...args),
     vendorPdfBlobUrl: (recordId: string) => blobUrlMock(recordId),
     realizeIntakeBranch: (...args: unknown[]) => realizeMock(...args),
-    getEditorDraftProjection: () => Promise.reject(new Error('no projection in test')),
+    getEditorDraftProjection: () => projectionMock(),
   },
 }))
 
@@ -29,6 +30,10 @@ vi.mock('../shared/api/client', () => ({
 vi.mock('pdfjs-dist', () => ({
   getDocument: () => ({ promise: Promise.reject(new Error('no pdf in test')), destroy: () => {} }),
   GlobalWorkerOptions: {},
+}))
+
+vi.mock('../editor/taptab/TapTabEditor', () => ({
+  ProjectionTapTabEditor: ({data}: {data: unknown}) => <pre data-testid="editor-payload">{JSON.stringify(data)}</pre>,
 }))
 
 import { VendorPdfReviewPage } from './VendorPdfReviewPage'
@@ -73,6 +78,8 @@ beforeEach(() => {
   getRecordMock.mockReset()
   getIntakeReviewMock.mockReset()
   realizeMock.mockReset()
+  projectionMock.mockReset()
+  projectionMock.mockRejectedValue(new Error('no projection in test'))
   getRecordMock.mockResolvedValue(record)
 })
 
@@ -96,8 +103,8 @@ describe('handbook tree selector', () => {
     expect(select).toBeInTheDocument()
     const options = screen.getAllByRole('option')
     expect(options).toHaveLength(2)
-    expect(options[0]!.textContent).toContain('blood-spin')
-    expect(options[1]!.textContent).toContain('tissue-spin')
+    expect(options[0]!.textContent).toContain('blood spin')
+    expect(options[1]!.textContent).toContain('tissue spin')
 
     // First render shows tree[0]'s question.
     expect(await screen.findByText(/Which blood prep\?/)).toBeInTheDocument()
@@ -137,4 +144,35 @@ describe('handbook tree selector', () => {
     expect(await screen.findByText(/Which blood prep\?/)).toBeInTheDocument()
     expect(screen.queryByTestId('vpdf-tree-select')).not.toBeInTheDocument()
   })
+})
+
+
+it('keeps rack + soil answers through the build reload and displays specialized instructions', async () => {
+  projectionMock.mockResolvedValue({blocks: [], slots: []})
+  const axes = [
+    {axisId: 'lysis', question: 'Which lysis module?', origin: 'document_branch', conditions: [{id: 'rack', label: 'Lysis rack'}, {id: 'tubes', label: 'Lysis tubes'}]},
+    {axisId: 'sample', question: 'Which sample?', origin: 'document_table', conditions: [{id: 'soil', label: 'Soil'}, {id: 'feces', label: 'Feces'}]},
+  ]
+  const tree = {...blood.tree, axes}
+  const base = {matchVia: 'sha256', artifact: {recordId: 'VPDF-HB1'}, tree, candidate: null, proposals: []}
+  const resolvedCandidate = {documentId: 'zymo', title: 'Zymo', roles: {}, steps: [{stepId: 'step-1', ordinal: 1, label: 'Add soil', description: 'Add up to 100 mg soil and 550 µl Lysis Solution.', branches: [], gatedByQuestions: [], provenancePages: [9]}]}
+  const proposal = {recordId: 'SGP-rack-soil', branchPath: [{axisId: 'lysis', conditionId: 'rack'}, {axisId: 'sample', conditionId: 'soil'}], scaleLevel: 'manual_tubes', revision: 1, resolvedCandidate}
+  let finishReload!: (value: unknown) => void
+  getIntakeReviewMock.mockResolvedValueOnce(base).mockImplementationOnce(() => new Promise((resolve) => {finishReload = resolve}))
+  realizeMock.mockResolvedValue({proposalRecordIds: ['SGP-rack-soil']})
+  renderPage()
+  fireEvent.click(await screen.findByLabelText('Lysis rack'))
+  fireEvent.click(screen.getByLabelText('Soil'))
+  fireEvent.click(screen.getByTestId('build-branch'))
+  await screen.findByText('Updating the selected branch…')
+  expect(screen.getByLabelText('Lysis rack')).toBeChecked()
+  expect(screen.getByLabelText('Soil')).toBeChecked()
+  finishReload({...base, proposals: [proposal]})
+  await waitFor(() => expect(screen.getByTestId('editor-payload')).toHaveTextContent('550 µl'))
+  expect(screen.getByTestId('branch-selection-summary')).toHaveTextContent('Selected branch: Lysis rack · Soil')
+  expect(screen.getByTestId('editor-payload')).not.toHaveTextContent('750 µl')
+  expect(screen.getByTestId('editor-payload')).not.toHaveTextContent('branch_axes')
+  fireEvent.click(screen.getByLabelText('Lysis tubes'))
+  await waitFor(() => expect(screen.queryByTestId('editor-payload')).not.toBeInTheDocument())
+  expect(screen.getByTestId('branch-selection-summary')).toHaveTextContent('Lysis tubes · Soil')
 })

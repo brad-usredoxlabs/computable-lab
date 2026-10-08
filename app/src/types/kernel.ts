@@ -14,6 +14,8 @@ export interface RecordEnvelope {
     kind?: string
     path?: string
     commitSha?: string
+    contentSha?: string
+    gitCommit?: string
     createdAt?: string
     updatedAt?: string
     createdBy?: string

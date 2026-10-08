@@ -24,6 +24,7 @@ export const VALID_ENTRYPOINTS = [
   'chatbot-compile',
   'protocol-ide-extract-and-realize',
   'scientist-intent-compile',
+  'form-draft-compile',
 ] as const;
 
 type Entrypoint = (typeof VALID_ENTRYPOINTS)[number];

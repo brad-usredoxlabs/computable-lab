@@ -1,0 +1,10 @@
+# Conservative grounding for literal sequence authoring, not general NLP.
+# Only one unambiguous DNA/RNA literal in the latest request is binding.
+operations: [save_sequence, create_oligo]
+literalPattern: '(?<![A-Za-z0-9_])[ACGTUacgtu]{10,}(?![A-Za-z0-9_])'
+transformationPattern: '\b(reverse(?!\s+primer\b)|complement|mutat\w*|substitut\w*|insert\w*|delet\w*|remov\w*|truncat\w*|trim\w*|transcrib\w*|translat\w*|replace|change|convert|append|prepend|extend|extension|design|derive)\b'
+rule:
+  op: in
+  path: proposed
+  valuesPath: requested
+message: The proposed bases do not match the sequence supplied in the latest request. Use the requested sequence instead of copying a previous proposal.

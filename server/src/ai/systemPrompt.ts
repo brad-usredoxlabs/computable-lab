@@ -64,13 +64,21 @@ function formatEventSummary(eventSummary: EditorContext['eventSummary']): string
 
 function formatSelectedWells(selectedWells?: EditorContext['selectedWells']): string {
   if (!selectedWells) return '(none selected)';
+  // The COUNT is stated, never left to the model to work out: a selection of
+  // A2:H10 reached the agent as a bare list and it reported "30 well groups x 10
+  // = 300 wells" for 72 real wells — the arithmetic was the model's, the missing
+  // number was ours. State it; the model cannot misread a fact it is given.
+  const describe = (wells: string[]): string => {
+    const count = wells.length;
+    return `Wells (${count} selected): ${wells.join(', ')}`;
+  };
   // Frontend sends string[]
   if (Array.isArray(selectedWells)) {
-    return selectedWells.length === 0 ? '(none selected)' : `Wells: ${selectedWells.join(', ')}`;
+    return selectedWells.length === 0 ? '(none selected)' : describe(selectedWells);
   }
   // Structured format
   if (selectedWells.wells.length === 0) return '(none selected)';
-  return `Labware: ${selectedWells.labwareId}, Wells: ${selectedWells.wells.join(', ')}`;
+  return `Labware: ${selectedWells.labwareId}, ${describe(selectedWells.wells)}`;
 }
 
 function formatPaneSelection(
@@ -285,13 +293,15 @@ export type AiSurface =
   | 'materials'
   | 'formulations'
   | 'ingestion'
+  | 'sequences'
   | 'literature'
   | 'protocol-ide'
   | 'protocol-builder';
 
-type BaseSurface = 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature' | 'protocol-ide' | 'protocol-builder';
+type BaseSurface = 'sequences' | 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature' | 'protocol-ide' | 'protocol-builder';
 
 const SURFACE_PREAMBLES: Record<BaseSurface, string> = {
+  'sequences': 'Help the scientist author sequences, oligos and assays, configure local sequence analysis, and run reproducible analyses. Emit declarative sequence_action proposals using the supplied contract. Roles belong to assays; reporter modifications belong to oligos. Computational predictions and observed evidence have distinct provenance. Use only grounded references from context.',
   'event-editor': '',  // Default — uses the full event-graph-agent template
   'run-workspace': `
 You are an AI assistant helping a scientist navigate a run workspace.

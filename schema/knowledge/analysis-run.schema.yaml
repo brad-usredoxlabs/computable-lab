@@ -52,6 +52,12 @@ properties:
     description: "Validated parameter values for this run (per revision.parameterSchema)."
     additionalProperties: true
 
+  frozenExecutionRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  frozenRevisionRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
   outputArtifactRefs:
     type: array
     description: "Refs to analysis-output-artifact records produced by this run."

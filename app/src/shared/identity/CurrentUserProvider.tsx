@@ -63,8 +63,20 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const setCurrentUser = useCallback((id: string | null) => {
+  const setCurrentUser = useCallback(async (id: string | null) => {
     setCurrentUserId(id)
+    // Identity precedence: a live session token is STRONGER than x-user-id —
+    // the server resolves the session user over the header. A local-first
+    // user switch while logged in can therefore only take effect once the
+    // old session is revoked; without this the selection silently no-ops and
+    // every request keeps acting as the logged-in user. Revoking is also the
+    // honest posture: you must not "become" another user while still holding
+    // someone else's authenticated session. Re-login restores the strong path.
+    try {
+      await apiClient.logout()
+    } catch {
+      // best-effort revoke; the local token is cleared regardless
+    }
     // Hard-navigate to the homescreen (not just reload): the current URL may
     // point at a project the new user can't access, and the open-tab session
     // is per-user (it re-reads under the new user's scoped key). A full load to

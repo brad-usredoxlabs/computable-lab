@@ -105,7 +105,7 @@ export interface IngestionCandidatePayload {
   id: string;
   job_ref: Record<string, unknown>;
   bundle_ref?: Record<string, unknown> | undefined;
-  candidate_type: 'material' | 'vendor_product' | 'vendor_offer' | 'formulation' | 'recipe' | 'plate_layout' | 'labware_instance' | 'well_assignment';
+  candidate_type: 'material' | 'vendor_product' | 'vendor_offer' | 'formulation' | 'recipe' | 'plate_layout' | 'labware_instance' | 'well_assignment' | 'sequence' | 'oligo';
   title: string;
   status: 'draft' | 'needs_review' | 'approved' | 'rejected' | 'published';
   source_refs?: Array<Record<string, unknown>> | undefined;

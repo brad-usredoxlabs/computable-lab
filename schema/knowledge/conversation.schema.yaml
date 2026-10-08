@@ -22,7 +22,7 @@ properties:
 
   endpoint:
     type: string
-    enum: [browser, event-editor, protocols, literature]
+    enum: [browser, event-editor, protocols, literature, sequences]
     description: "Which appliance endpoint this thread belongs to."
 
   userId:

@@ -28,8 +28,8 @@ interface OllamaChunk {
 
 /**
  * Stream a chat reply. Omit profileName to use the server's configured
- * ai.activeProfile (this is what the UI does — switching profiles via
- * ModelSwitcher activates it server-side, so the next message follows it).
+ * ai.activeProfile — which is what the UI does, since the model is chosen once
+ * in settings (settings → AI) and every surface follows it.
  */
 export async function* streamChat(
   messages: ChatMessageInput[],

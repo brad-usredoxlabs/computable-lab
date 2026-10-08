@@ -139,5 +139,22 @@ export function isAxisVisible(
   if (!axis.sectionId) {
     return true;
   }
+  // Post-section-split every tree IS one protocol: the variant question
+  // carries sectionId but NO protocol-choice axis exists to gate it. Nothing
+  // gates a nested question when no choice was ever askable — it is this
+  // protocol's own question and must show. (Silence here hid the ONLY real
+  // question on the DNeasy 96 tree behind a degenerate duplicate.)
+  if (protocolAxisIds.length === 0) {
+    return true;
+  }
   return protocolAxisIds.some((axisId) => choices[axisId] === axis.sectionId);
+}
+
+
+/** Summarize an answered branch by its condition, leaving the action in the steps. */
+export function selectedChoiceLabel(label: string, origin?: string): string {
+  if (origin !== 'document_branch') return label
+  return label.replace(/^\(?[a-z]\)?[.):]\s*/i, '')
+    .replace(/^(?:if|when)\s+(?:using\s+)?/i, '')
+    .replace(/\([^)]*\)/g, '').split(/[,;]/)[0]!.trim() || label
 }

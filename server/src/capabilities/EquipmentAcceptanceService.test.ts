@@ -85,6 +85,12 @@ const records = [
     'QuantStudio 5',
     { kind: 'record', type: 'equipment-class', id: 'EQC-QUANTSTUDIO5' },
   ),
+  ...instanceSeed(
+    baseRecords,
+    'EQP-MINTED-BATH',
+    'Water bath 1',
+    { kind: 'ontology', id: 'CL:water_bath', namespace: 'CL', label: 'Water bath' },
+  ),
   ...instanceSeed(baseRecords, 'EQP-MYSTERY', 'Mystery box', undefined),
 ];
 
@@ -206,6 +212,20 @@ describe('equipment acceptance (data-driven)', () => {
     expect(result.verdict).toBe('unknown');
     expect(result.reason).toMatch(/no capability data/i);
     expect(result.reason).toMatch(/flagged/i);
+  });
+
+  it('a freshly minted CL: kind instance answers like the lab\'s class record', async () => {
+    // The AI mints `equipment:water_bath` → `CL:water_bath`. Acceptance is
+    // declared on its realization (ECP-WATER-BATH → EQC-WATER-BATH), and the two
+    // are one concept: the minted bath must not read "unknown" while the lab's
+    // class record is fully described.
+    const minted = await acceptance.evaluate({
+      equipmentId: 'EQP-MINTED-BATH',
+      verbId: 'VERB-HEAT',
+      item: TUBE_15,
+    });
+    expect(minted.verdict, minted.reason).toBe('accepted');
+    expect(minted.seat).toBe('immerse');
   });
 
   it('an equipment id that does not exist is `unknown`, not a rejection of the item', async () => {

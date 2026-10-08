@@ -12,6 +12,7 @@ export type AiSurface =
   | 'materials'
   | 'formulations'
   | 'ingestion'
+  | 'sequences'
   | 'literature'
   | 'protocol-ide'
   | 'protocol-builder'

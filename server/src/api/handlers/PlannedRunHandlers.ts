@@ -116,9 +116,11 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         ...(experimentId ? { experimentId } : {}),
         ...(runId ? { runId } : {}),
       };
+      const actor = await ctx.localIdentityService?.resolveRequestUser(request);
       const result = await service.createFromLocalProtocol(
         localProtocolRef,
         {
+          ...(actor?.userId ? { actor: actor.userId } : {}),
           ...(title ? { title } : {}),
           ...(Object.keys(links).length > 0 ? { links } : {}),
         },

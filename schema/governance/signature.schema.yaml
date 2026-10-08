@@ -3,7 +3,7 @@ $id: "https://computable-lab.com/schema/computable-lab/signature.schema.yaml"
 title: "Signature"
 description: >
   Electronic signature binding a person, an explicit meaning, and the exact
-  git version of the subject record at signing time. Signatures are immutable.
+  immutable revision of the subject record at signing time. Signatures are immutable.
 
 type: object
 unevaluatedProperties: false
@@ -54,6 +54,11 @@ properties:
     properties:
       recordId:
         type: string
+      revisionRef:
+        $ref: "./datatypes/revision-ref.schema.yaml"
+      contentHash:
+        type: string
+        pattern: "^[a-f0-9]{64}$"
       gitCommit:
         type: string
         pattern: "^[a-f0-9]{7,40}$"

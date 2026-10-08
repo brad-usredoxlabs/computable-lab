@@ -21,8 +21,7 @@ import type { RecordStoreImpl } from '../../store/RecordStoreImpl.js';
 import type { RunChatbotCompileResult } from '../../ai/runChatbotCompile.js';
 
 const zymoPdfPath = resolve(
-  process.cwd(),
-  '..',
+  new URL('../../../../', import.meta.url).pathname,
   'resources/vendor_pdfs/_d4302_d4306_d4308_zymobiomics-96_magbead_dna_kit.pdf',
 );
 
@@ -116,6 +115,7 @@ async function buildApp(store: RecordStore, workspaceRoot = '/tmp') {
     instance.get('/protocol-ide/intake/trees', handlers.listTrees.bind(handlers));
     instance.get('/protocol-ide/intake/trees/:treeId', handlers.getTree.bind(handlers));
     instance.get('/protocol-ide/intake/review/:artifactId', handlers.getReviewByArtifact.bind(handlers));
+    instance.post('/protocol-ide/intake/refresh', handlers.refreshTrees.bind(handlers));
     instance.post('/protocol-ide/intake/trees/:treeId/realize', handlers.realizeBranch.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/prompt', handlers.setProposalPrompt.bind(handlers));
     instance.post('/protocol-ide/intake/proposals/:proposalId/redraft', handlers.redraftProposal.bind(handlers));
@@ -489,6 +489,31 @@ describe('GET /protocol-ide/intake/review/:artifactId — the steps the tree gat
   });
 });
 
+
+describe('POST /protocol-ide/intake/refresh', () => {
+  it('refuses a missing documentId', async () => {
+    const { store } = makeMockStore([]);
+    const app = await buildApp(store);
+    const res = await app.inject({ method: 'POST', url: '/api/protocol-ide/intake/refresh', payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe('BAD_REQUEST');
+    await app.close();
+  });
+
+  it('reports candidate_artifact_missing when no persisted candidate exists', async () => {
+    const { store } = makeMockStore([]);
+    const app = await buildApp(store);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/protocol-ide/intake/refresh',
+      payload: { documentId: 'no-such-doc' },
+    });
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { diagnostics: Array<{ code: string }> };
+    expect(body.diagnostics[0]?.code).toBe('candidate_artifact_missing');
+    await app.close();
+  });
+});
 
 describe('POST /protocol-ide/intake/trees/:treeId/realize', () => {
   it('refuses an incomplete answer and names the axis that is missing', async () => {

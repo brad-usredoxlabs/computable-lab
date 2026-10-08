@@ -5,11 +5,12 @@
  * with no way to tell a working run from a dead one. This panel shows the
  * server's own stage line, an elapsed clock, how long ago the last event
  * arrived (an idle model is normal — a silent SERVER is not), and the model's
- * reasoning as it streams in. It also carries the thinking-level picker, since
+ * reasoning as it streams in. The model it talks to is a deployment setting
+ * (settings → AI), not a per-extraction choice, so this panel carries no model
+ * or thinking control:
  * how hard the model thinks is a per-extraction choice, not a global setting.
  */
 import { useEffect, useRef } from 'react'
-import type { ExtractionOptions, ExtractionThinkingLevel } from '../../shared/api/client'
 
 export interface ExtractionLogLine {
   kind: 'reasoning' | 'note'
@@ -17,10 +18,6 @@ export interface ExtractionLogLine {
 }
 
 export interface ExtractionProgressPanelProps {
-  /** null = this deployment offers no levels (no picker rendered). */
-  options: ExtractionOptions | null
-  level: string
-  onLevelChange: (level: string) => void
   running: boolean
   /** The server's current stage sentence, e.g. "Extracting chunk 1 of 3 (…)"; */
   stage: string | null
@@ -46,9 +43,6 @@ function seconds(ms: number | null): string {
 }
 
 export default function ExtractionProgressPanel({
-  options,
-  level,
-  onLevelChange,
   running,
   stage,
   log,
@@ -68,31 +62,12 @@ export default function ExtractionProgressPanel({
     if (el) el.scrollTop = el.scrollHeight
   }, [log])
 
-  const levels: ExtractionThinkingLevel[] = options?.thinkingLevels ?? []
   const idle = running && sinceLastEventMs !== null && sinceLastEventMs > IDLE_WARN_MS
   const shown = log.slice(-MAX_LOG_LINES)
 
   return (
     <section className="vpdf-review__extract-panel" data-testid="extraction-panel">
       <div className="vpdf-review__extract-controls">
-        {levels.length > 0 ? (
-          <label className="vpdf-review__level" data-testid="extraction-level-picker">
-            <span>Thinking</span>
-            <select
-              value={level}
-              disabled={running}
-              onChange={(e) => onLevelChange(e.target.value)}
-              aria-label="Thinking level"
-            >
-              {levels.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
         {running ? (
           <button type="button" className="vpdf-review__extract" onClick={onCancel} data-testid="vpdf-extract-cancel">
             Cancel extraction

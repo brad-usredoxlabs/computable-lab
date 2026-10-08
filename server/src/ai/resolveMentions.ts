@@ -13,7 +13,7 @@ import { parsePromptMentionMatches, type ParsedPromptMention } from './promptMen
  */
 export interface ResolvedMention {
   raw: string;                              // the original [[...]] token
-  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'equipment' | 'selection' | 'protocol' | 'graph-component';
+  kind: 'material-spec' | 'aliquot' | 'material' | 'material-instance' | 'vendor-product' | 'labware' | 'equipment' | 'selection' | 'protocol' | 'graph-component';
   id: string;
   label: string;
   resolved?: Record<string, unknown>;       // entity data, if lookup succeeded

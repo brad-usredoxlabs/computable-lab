@@ -732,7 +732,9 @@ export function useResultsMode(args: {
         id: assertionId,
         claim_ref: { kind: 'record', id: claimId, type: 'claim' },
         statement: assertionStatement,
-        scope: {},
+        // Claim-only assertion anchored to a published claim (no experimental
+        // scope) — assertion.schema.yaml requires a string enum, not {}.
+        scope: 'global',
         confidence: qcFindings.some((finding) => finding.status === 'fail') ? 2 : 3,
         evidence_refs: [{ kind: 'record', id: evidenceId, type: 'evidence' }],
       }

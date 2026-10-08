@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { slugify } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
 import { deriveDecisionTree, type DecisionTreeScaleOption } from './deriveDecisionTree.js';
-import { enumerateChoiceBindings } from './enumerateChoiceBindings.js';
+import { enumerateChoiceBindings, relevantChoices } from './enumerateChoiceBindings.js';
 
 const SCALE: DecisionTreeScaleOption[] = [
   { level: 'manual_tubes' },
@@ -67,6 +67,60 @@ describe('enumerateChoiceBindings', () => {
     expect(result.productSize).toBe(4);
     expect(result.bindings).toHaveLength(4);
     expect(result.bindings[0].branchPath).toHaveLength(2);
+  });
+
+  it('counts a nested answer on a tree with NO protocol-choice axis (handbook child)', () => {
+    // Post-section-split every tree IS one protocol: the variant question
+    // carries sectionId, but no document_section axis exists to gate it.
+    // Dropping the answer because its section was never "chosen" collapses
+    // every realization to the degenerate dispatcher step (the DNeasy 96
+    // "runs 1 step (step-20)" bug).
+    const axes = [
+      {
+        axisId: 'axis-step-20-variant',
+        question: 'Which variant applies for step 1?',
+        choiceKey: 'branchSelection',
+        origin: 'document_branch' as const,
+        sectionId: 'section-dneasy-96',
+        conditions: [
+          { id: 'cultured-cells', predicate: { op: 'equals', path: '$.branchSelection.axis-step-20-variant', value: 'cultured-cells' }, then_stepIds: ['step-23'] },
+          { id: 'blood-nucleated', predicate: { op: 'equals', path: '$.branchSelection.axis-step-20-variant', value: 'blood-nucleated' }, then_stepIds: ['step-22'] },
+        ],
+      },
+    ];
+    const relevant = relevantChoices(axes, { 'axis-step-20-variant': 'cultured-cells' });
+    expect(relevant).toEqual({ 'axis-step-20-variant': 'cultured-cells' });
+  });
+
+  it('drops a nested answer only when ANOTHER protocol was chosen', () => {
+    const axes = [
+      {
+        axisId: 'axis-protocol-choice',
+        question: 'Which protocol?',
+        choiceKey: 'branchSelection',
+        origin: 'document_section' as const,
+        conditions: [
+          { id: 'section-spin', predicate: { op: 'equals', path: '$.branchSelection.axis-protocol-choice', value: 'section-spin' }, then_stepIds: ['s1'] },
+          { id: 'section-96', predicate: { op: 'equals', path: '$.branchSelection.axis-protocol-choice', value: 'section-96' }, then_stepIds: ['s2'] },
+        ],
+      },
+      {
+        axisId: 'axis-step-1-variant',
+        question: 'Which variant?',
+        choiceKey: 'branchSelection',
+        origin: 'document_branch' as const,
+        sectionId: 'section-spin',
+        conditions: [
+          { id: 'cultured', predicate: { op: 'equals', path: '$.branchSelection.axis-step-1-variant', value: 'cultured' }, then_stepIds: ['s4'] },
+        ],
+      },
+    ];
+    // Spin chosen: its nested answer is relevant.
+    expect(relevantChoices(axes, { 'axis-protocol-choice': 'section-spin', 'axis-step-1-variant': 'cultured' }))
+      .toEqual({ 'axis-protocol-choice': 'section-spin', 'axis-step-1-variant': 'cultured' });
+    // 96 chosen: the spin protocol's nested answer belongs to another run.
+    expect(relevantChoices(axes, { 'axis-protocol-choice': 'section-96', 'axis-step-1-variant': 'cultured' }))
+      .toEqual({ 'axis-protocol-choice': 'section-96' });
   });
 
   it('falls back to "*" when a predicate value is not a string', () => {

@@ -21,8 +21,10 @@ export interface RecordMeta {
   createdBy?: string;
   /** ISO 8601 timestamp of last modification (from repo) */
   updatedAt?: string;
-  /** Git commit SHA of last modification */
+  /** @deprecated Legacy repository concurrency token; not necessarily a Git commit. */
   commitSha?: string;
+  /** Verified Git commit, only when supplied by the repository adapter. */
+  gitCommit?: string;
   /** Repository path where record is stored */
   path?: string;
   /** Content SHA (blob hash) for cache invalidation */

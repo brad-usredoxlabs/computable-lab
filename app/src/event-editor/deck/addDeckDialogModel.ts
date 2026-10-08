@@ -11,6 +11,31 @@ import type { LabwareCategory } from '../../types/labware'
 
 export type AddDeckTab = 'plates' | 'labware' | 'equipment'
 
+/**
+ * Tokenize a deck-search query like the backend does
+ * (server/src/api/labwareDefinitionSearch.ts fold + every): lowercase, fold the
+ * × glyph to x and word-joining punctuation (`-`, `_`, en/em dash) to spaces,
+ * split on whitespace. Catalog labels use the glyph ("(5×16)") and compound
+ * words ("80-Tube", "Bench Rack —"); a raw substring match on the user's
+ * "5x16" / "tube rack" would hide the most common bench rack (spec decision 4).
+ */
+export function tokenizeLabwareQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .replace(/[×]/g, 'x')
+    .replace(/[-_–—]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+/** True when every query token appears in the label (empty query matches all). */
+export function labwareRowMatches(query: string, label: string): boolean {
+  const tokens = tokenizeLabwareQuery(query)
+  if (tokens.length === 0) return true
+  const hay = tokenizeLabwareQuery(label).join(' ')
+  return tokens.every((token) => hay.includes(token))
+}
+
 export interface AddDeckSourceItem {
   /** Stable key for dedupe across sources. */
   key: string

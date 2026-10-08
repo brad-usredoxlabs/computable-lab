@@ -54,7 +54,7 @@ properties:
 
   revision:
     type: string
-    description: "Human document-revision label (e.g. 'Rev A', 'v2.1'). NOT a git identity — git stays the authoritative revision substrate; a signature's gitCommit binds content cryptographically (QMS-1 (h))."
+    description: "Human document-revision label (e.g. 'Rev A', 'v2.1'); immutable record-revision snapshots and content hashes identify signed content."
 
   authorRef:
     allOf:

@@ -96,6 +96,23 @@ properties:
         type: string
         enum: [vendor, literature, internal, derived]
         description: "vendor = vendor kit PDF; literature = publication; internal = lab-authored; derived = promoted from an event-graph."
+      ingestion:
+        type: object
+        additionalProperties: false
+        properties:
+          sha256: { type: string }
+          candidateId: { type: string }
+          decisionTreeId: { type: string }
+          branches:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [axisId, choiceId, label]
+              properties:
+                axisId: { type: string }
+                choiceId: { type: string }
+                label: { type: string }
       ref:
         $ref: "./datatypes/ref.schema.yaml"
         description: "Optional pointer to the source record (publication-ref, document-ref, or event-graph-ref)."
@@ -233,8 +250,8 @@ properties:
 
   lifecycleId:
     type: string
-    const: "document-control"
-    description: "Lifecycle governing this record's state transitions."
+    enum: [document-control, document-controlled-signing]
+    description: "Optional controlled workflow; absent for research drafts. Signing uses the shared QMS lifecycle."
 
   reviewerRef:
     allOf:
@@ -242,8 +259,8 @@ properties:
     - type: object
       properties:
         kind: { const: record }
-        type: { const: person }
-    description: "Person assigned to review this protocol."
+        type: { enum: [user, person] }
+    description: "Session user assigned to review this protocol. Legacy person refs remain readable."
 
   approverRef:
     allOf:
@@ -251,8 +268,8 @@ properties:
     - type: object
       properties:
         kind: { const: record }
-        type: { const: person }
-    description: "Person with authority to approve this protocol for use."
+        type: { enum: [user, person] }
+    description: "Session user with authority to approve this protocol for use. Legacy person refs remain readable."
 
   componentInstanceRefs:
     type: array
@@ -761,6 +778,21 @@ $defs:
       description:
         type: string
         description: "Optional detailed description of what this step does and why."
+      descriptionRichText:
+        type: object
+        additionalProperties: false
+        required: [plainText, document]
+        description: "Optional formatted step instructions. Use only while plainText matches description; description remains the text consumed by AI and compilers."
+        properties:
+          plainText: { type: string }
+          document:
+            type: object
+            required: [type, content]
+            properties:
+              type: { const: doc }
+              content:
+                type: array
+                items: { type: object }
       ordinal:
         type: integer
         minimum: 1

@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPlateCategory,
+  labwareRowMatches,
   mergeAndRankDeckSources,
+  tokenizeLabwareQuery,
   type AddDeckSourceItem,
 } from './addDeckDialogModel'
 
 describe('addDeckDialogModel', () => {
+  it('tokenizes and glyph-folds queries like the backend search (spec D1)', () => {
+    expect(tokenizeLabwareQuery('Tube_Rack')).toEqual(['tube', 'rack'])
+    expect(tokenizeLabwareQuery('5X16')).toEqual(['5x16'])
+    expect(tokenizeLabwareQuery('  ')).toEqual([])
+  })
+
+  it('labwareRowMatches: "tube rack" finds the em-dash/glyph bench-rack label', () => {
+    expect(labwareRowMatches('tube rack', '80-Tube Bench Rack — 1.5/2 mL (5×16)')).toBe(true)
+    expect(labwareRowMatches('5x16', '80-Tube Bench Rack — 1.5/2 mL (5×16)')).toBe(true)
+    expect(labwareRowMatches('96 well', '1536-Well Plate')).toBe(false)
+    expect(labwareRowMatches('', 'anything')).toBe(true)
+  })
+
   it('splits plate category out from the rest of labware', () => {
     expect(isPlateCategory('plate')).toBe(true)
     expect(isPlateCategory('reservoir')).toBe(false)

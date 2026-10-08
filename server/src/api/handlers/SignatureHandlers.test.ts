@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore, RecordEnvelope } from '../../store/types.js';
+import { contentHash } from '../../revisions/RecordRevisionService.js';
 import { createSignatureHandlers } from './SignatureHandlers.js';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +27,7 @@ function makeMockStore(overrides: Record<string, unknown> = {}): RecordStore {
     validate: vi.fn().mockResolvedValue({ valid: true }),
     lint: vi.fn().mockResolvedValue({ valid: true }),
     exists: vi.fn().mockResolvedValue(false),
+    getVerifiedCommit: vi.fn().mockResolvedValue('a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2'),
     ...overrides,
   } as unknown as RecordStore;
 }
@@ -161,8 +163,8 @@ describe('SignatureHandlers.mintSignature', () => {
     );
 
     expect((result as any).success).toBe(true);
-    expect(store.create).toHaveBeenCalledTimes(1);
-    const envelope = (store.create as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope as RecordEnvelope;
+    expect(store.create).toHaveBeenCalledTimes(2);
+    const envelope = (store.create as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0].envelope.payload.kind === 'signature')![0].envelope as RecordEnvelope;
     const payload = envelope.payload as Record<string, unknown>;
     expect(payload.signedBy).toBe('USR-REV');
     expect(payload.signedBy).not.toBe('USR-EVIL');
@@ -175,6 +177,8 @@ describe('SignatureHandlers.mintSignature', () => {
     expect((result as any).signatureId).toBe(payload.recordId);
     expect((result as any).subject).toEqual({
       recordId: 'DOC-1',
+      revisionRef: { kind: 'record', type: 'record-revision', id: expect.stringMatching(/^REV-/) },
+      contentHash: contentHash(docRecord.payload),
       gitCommit: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
     });
     // The minted signature payload must itself validate against the recordId
@@ -195,7 +199,7 @@ describe('SignatureHandlers.mintSignature', () => {
 
     await handlers.mintSignature(makeRequest({}), reply as FastifyReply);
 
-    const envelope = (store.create as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope as RecordEnvelope;
+    const envelope = (store.create as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0].envelope.payload.kind === 'signature')![0].envelope as RecordEnvelope;
     const payload = envelope.payload as Record<string, unknown>;
     expect((payload.subject as Record<string, unknown>).gitCommit).toBe(
       'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
@@ -222,10 +226,12 @@ describe('SignatureHandlers.mintSignature', () => {
       reply as FastifyReply,
     );
 
-    const payload = (store.create as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope.payload as Record<string, unknown>;
+    const payload = (store.create as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0].envelope.payload.kind === 'signature')![0].envelope.payload as Record<string, unknown>;
     expect(payload.meaning).toEqual({ code: 'approved', statement: 'I approve this SOP' });
     expect(payload.subject).toEqual({
       recordId: 'DOC-1',
+      revisionRef: { kind: 'record', type: 'record-revision', id: expect.stringMatching(/^REV-/) },
+      contentHash: contentHash(docRecord.payload),
       gitCommit: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
       lifecycleId: 'document-controlled-signing',
       targetState: 'approved',

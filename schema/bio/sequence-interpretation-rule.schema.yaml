@@ -1,0 +1,49 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/bio/sequence-interpretation-rule.schema.yaml
+title: Sequence Interpretation Rule
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: https://computable-lab.com/schema/computable-lab/common.schema.yaml#/$defs/FAIRCommon
+properties:
+  kind:
+    const: sequence-interpretation-rule
+  id:
+    type: string
+  label:
+    type: string
+  assayRef:
+    $ref: https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml
+  layer:
+    type: string
+    enum:
+    - model_derived
+    - observed
+  requiredControls:
+    type: array
+    items:
+      type: string
+    uniqueItems: true
+  detectedWhen:
+    $ref: ../lint/lint-v1.schema.yaml#/definitions/predicate
+  notDetectedWhen:
+    $ref: ../lint/lint-v1.schema.yaml#/definitions/predicate
+  description:
+    type: string
+  controlsPassWhen:
+    $ref: ../lint/lint-v1.schema.yaml#/definitions/predicate
+  supportsOutcome:
+    type: string
+    enum:
+    - detected
+    - not_detected
+required:
+- kind
+- id
+- assayRef
+- layer
+- requiredControls
+- detectedWhen
+- notDetectedWhen
+- controlsPassWhen
+- supportsOutcome

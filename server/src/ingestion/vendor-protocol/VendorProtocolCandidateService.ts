@@ -115,7 +115,7 @@ async function loadProtocolSource(input: ExtractVendorProtocolCandidateInput): P
   };
 }
 
-async function writeCandidateArtifact(
+export async function writeCandidateArtifact(
   workspaceRoot: string,
   candidate: ProtocolCandidate,
   documentId: string,
@@ -142,14 +142,15 @@ export async function readCandidateArtifact(
   workspaceRoot: string,
   documentId: string,
 ): Promise<ProtocolCandidate | null> {
-  const path = resolve(workspaceRoot, candidateArtifactRelPath(documentId));
-  try {
-    const raw = await readFile(path, 'utf-8');
-    const parsed = JSON.parse(raw) as ProtocolCandidate;
-    return parsed && parsed.kind === 'vendor-protocol-candidate' ? parsed : null;
-  } catch {
-    return null;
+  const names = [safeFileName(documentId), legacySafeFileName(documentId)];
+  for (const name of new Set(names)) {
+    try {
+      const raw = await readFile(resolve(workspaceRoot, 'artifacts/foundry/protocol-candidates', `${name}.json`), 'utf-8');
+      const parsed = JSON.parse(raw) as ProtocolCandidate;
+      if (parsed?.kind === 'vendor-protocol-candidate' && typeof parsed.source?.documentId === 'string' && safeFileName(parsed.source.documentId) === safeFileName(documentId)) return parsed;
+    } catch { /* Try the legacy filename for existing artifacts. */ }
   }
+  return null;
 }
 
 function resolveInsidePdfArtifacts(workspaceRoot: string, path: string): string {
@@ -162,11 +163,12 @@ function resolveInsidePdfArtifacts(workspaceRoot: string, path: string): string 
   throw new Error(`artifactPath must be inside ${artifactRoot}`);
 }
 
-function safeFileName(value: string): string {
-  return value
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 100) || 'vendor-protocol-candidate';
+function artifactKey(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'vendor-protocol-candidate';
+}
+
+function legacySafeFileName(value: string): string {
+  return artifactKey(value).slice(0, 100);
 }
 
 function compact<T extends Record<string, unknown>>(record: T): T {
@@ -174,4 +176,10 @@ function compact<T extends Record<string, unknown>>(record: T): T {
     if (record[key] === undefined) delete record[key];
   }
   return record;
+}
+
+function safeFileName(value: string): string {
+  const key = artifactKey(value);
+  if (key.length <= 100) return key;
+  return `${key.slice(0, 80)}-${createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
 }

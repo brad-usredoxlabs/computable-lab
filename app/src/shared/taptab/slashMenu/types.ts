@@ -127,6 +127,17 @@ export interface SlashResolverContext {
    * case, so well-behaved resolvers can bail early.
    */
   onUpdate?: (more: SlashSuggestion[]) => void
+  /**
+   * Which material LAYER the menu is answering for. Set by the clarification
+   * picker from the request's `materialLayer`; absent for the general `/m`
+   * menu, where the biologist browses everything on purpose.
+   *
+   * When set, the menu offers ONLY that layer: a question about a prepared
+   * solution must not offer a bare compound, and "which compound?" must not
+   * offer an aliquot. Asking the biologist to choose between layers is asking
+   * them to do the data modelling.
+   */
+  materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
 }
 
 /**

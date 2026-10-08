@@ -9,7 +9,11 @@ unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, supports, sources ]
+required: [ kind, id, sources ]
+anyOf:
+- required: [supports]
+- required: [refutes]
+- required: [assesses]
 
 properties:
   kind:
@@ -27,11 +31,30 @@ properties:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true
 
+  refutes:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    description: "Assertions contradicted by this evidence."
+
+  assesses:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    description: "Assertions assessed with an inconclusive or invalid result."
+
   sources:
     type: array
     minItems: 1
     items:
       $ref: "#/$defs/EvidenceSource"
+
+  assessment:
+    type: string
+    enum: [supports, refutes, inconclusive]
+    description: "How this bundle bears on the referenced assertion; QC failure is inconclusive."
 
   quality:
     type: object

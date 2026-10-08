@@ -30,50 +30,10 @@ describe('parseSseBlocks', () => {
   })
 })
 
-const OPTIONS = {
-  model: 'qwen3',
-  defaultThinkingLevel: 'off',
-  thinkingLevels: [
-    { id: 'off', label: 'Off — direct JSON' },
-    { id: 'on', label: 'Thinking — watch the reasoning' },
-  ],
-}
-
 describe('ExtractionProgressPanel', () => {
-  it('offers the config levels and reports the choice', () => {
-    const onLevelChange = vi.fn()
-    render(
-      <ExtractionProgressPanel
-        options={OPTIONS}
-        level="off"
-        onLevelChange={onLevelChange}
-        running={false}
-        stage={null}
-        log={[]}
-        elapsedMs={0}
-        sinceLastEventMs={null}
-        canStart
-        onStart={vi.fn()}
-        onCancel={vi.fn()}
-        error={null}
-        note={null}
-      />,
-    )
-    const select = screen.getByLabelText('Thinking level') as HTMLSelectElement
-    expect([...select.options].map((o) => o.textContent)).toEqual([
-      'Off — direct JSON',
-      'Thinking — watch the reasoning',
-    ])
-    fireEvent.change(select, { target: { value: 'on' } })
-    expect(onLevelChange).toHaveBeenCalledWith('on')
-  })
-
   it('shows stage, elapsed, liveness and the streamed reasoning while running', () => {
     render(
       <ExtractionProgressPanel
-        options={OPTIONS}
-        level="on"
-        onLevelChange={vi.fn()}
         running
         stage="Extracting chunk 1 of 3 (12,345 characters)"
         log={[{ kind: 'note', text: 'stage 1' }, { kind: 'reasoning', text: 'Thinking about step 1… ' }]}
@@ -94,16 +54,11 @@ describe('ExtractionProgressPanel', () => {
     // running ⇒ the button cancels rather than starts
     expect(screen.getByTestId('vpdf-extract-cancel')).toBeTruthy()
     expect(screen.queryByTestId('vpdf-extract')).toBeNull()
-    // and the level picker is locked for the duration
-    expect((screen.getByLabelText('Thinking level') as HTMLSelectElement).disabled).toBe(true)
   })
 
   it('says the model is quiet but the connection is fine (never a silent hang)', () => {
     render(
       <ExtractionProgressPanel
-        options={OPTIONS}
-        level="off"
-        onLevelChange={vi.fn()}
         running
         stage="Extracting chunk 1 of 1 (900,000 characters)"
         log={[]}
@@ -122,9 +77,6 @@ describe('ExtractionProgressPanel', () => {
   it('labels the last stage once the run has stopped (no phantom "Extracting…")', () => {
     render(
       <ExtractionProgressPanel
-        options={OPTIONS}
-        level="on"
-        onLevelChange={vi.fn()}
         running={false}
         stage="Extracting chunk 2 of 6 (9,840 characters)"
         log={[{ kind: 'note', text: 'chunk 1 done\n' }]}
@@ -141,12 +93,9 @@ describe('ExtractionProgressPanel', () => {
     expect(screen.getByTestId('extraction-status').textContent).not.toContain('elapsed')
   })
 
-  it('surfaces an error and a note, and renders no picker when no levels are configured', () => {
+  it('carries no model or thinking control — that is a deployment setting', () => {
     render(
       <ExtractionProgressPanel
-        options={null}
-        level=""
-        onLevelChange={vi.fn()}
         running={false}
         stage={null}
         log={[]}
@@ -162,5 +111,7 @@ describe('ExtractionProgressPanel', () => {
     expect(screen.getByTestId('extraction-error').textContent).toContain('UNKNOWN_THINKING_LEVEL')
     expect(screen.getByTestId('extraction-note').textContent).toContain('cancelled')
     expect(screen.queryByTestId('extraction-level-picker')).toBeNull()
+    // no model switch either: one model, set once, in settings
+    expect(screen.queryByLabelText('Thinking level')).toBeNull()
   })
 })

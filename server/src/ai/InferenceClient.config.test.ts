@@ -70,7 +70,7 @@ describe('InferenceClient honors construction-time config', () => {
       .toBeUndefined();
   });
 
-  it('does NOT set enable_thinking when enableThinking is true', async () => {
+  it('forwards explicit enableThinking true to a local endpoint', async () => {
     let capturedBody: Record<string, unknown> = {};
 
     globalThis.fetch = vi.fn(async (_url, init) => {
@@ -90,7 +90,7 @@ describe('InferenceClient honors construction-time config', () => {
     await client.complete({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
 
     expect((capturedBody.chat_template_kwargs as Record<string, unknown> | undefined)?.enable_thinking)
-      .toBeUndefined();
+      .toBe(true);
   });
 
   it('normalizes reasoning-only responses into message content', async () => {
@@ -138,7 +138,7 @@ describe('InferenceClient honors construction-time config', () => {
     expect(capturedBody.chat_template_kwargs?.enable_thinking).toBe(false);
   });
 
-  it('construct false, request true → no kwarg in body', async () => {
+  it('construct false, request true → kwarg true', async () => {
     let capturedBody: Record<string, unknown> = {};
 
     globalThis.fetch = vi.fn(async (_url, init) => {
@@ -162,7 +162,7 @@ describe('InferenceClient honors construction-time config', () => {
     });
 
     expect((capturedBody.chat_template_kwargs as Record<string, unknown> | undefined)?.enable_thinking)
-      .toBeUndefined();
+      .toBe(true);
   });
 
   it('construct undefined, request false → kwarg false', async () => {
