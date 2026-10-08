@@ -129,6 +129,25 @@ export interface AiWorkstateProposalEvent {
   workstate: Record<string, unknown>
 }
 
+/**
+ * PB-CH-5 repair — the analysis INTENT frame, mirrored into the generic
+ * stack's union the same way as the two members above. The SAME server
+ * handler emits it (POST /ai/assist/stream — AgentOrchestrator.ts:2337 emits
+ * {type:'analysis_proposal', analysis}); the shape matches
+ * `event-editor/right-pane/ai/assistStream.ts` (:259 — the wire-shape
+ * authority, `| { type: 'analysis_proposal'; analysis: Record<string,
+ * unknown> }`) member-for-member, and the pin test keeps the unions from
+ * drifting. Before this member existed, useAiChat silently DROPPED such
+ * frames on the /analysis mount — the defect class PB-CH-6 closes on the
+ * channel PB-CH-5 introduced. exactOptionalPropertyTypes convention: the
+ * payload is forwarded verbatim — the trust boundary is POST
+ * /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export interface AiAnalysisProposalEvent {
+  type: 'analysis_proposal'
+  analysis: Record<string, unknown>
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -142,6 +161,7 @@ export type AiStreamEvent =
   | AiProtocolExtractedEvent
   | AiAgentActionEvent
   | AiWorkstateProposalEvent
+  | AiAnalysisProposalEvent
 
 // =============================================================================
 // Agent Result (final output from AI)
