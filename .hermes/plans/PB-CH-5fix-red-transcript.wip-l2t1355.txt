@@ -1,0 +1,266 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+(node:2926515) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2926515) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx  (3 tests | 3 failed) 172ms
+   ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > analysis_proposal frame fires onAnalysisProposal with the verbatim analysis payload
+     → expected "spy" to be called 1 times, but got 0 times
+   ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > analysis_proposal with NO callback registered surfaces a NAMED system bubble — the frame is never swallowed
+     → expected undefined not to be undefined
+   ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > a throwing onAnalysisProposal does not break the turn (workstate-branch wrapper style)
+     → expected "spy" to be called 1 times, but got 0 times
+stderr | src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ❯ src/analysis/AnalysisChatPanel.analysisProposal.test.tsx  (1 test | 1 failed) 3042ms
+   ❯ src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+     → expected "spy" to be called 1 times, but got 0 times
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"analysis-chat"[39m
+        [33mdata-testid[39m=[32m"analysis-chat-panel"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__header"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"analysis-chat__title"[39m
+          [36m>[39m
+            [0mAsk about this analysis[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"analysis-chat__hint"[39m
+          [36m>[39m
+            [0mProposals arrive as a card — nothing is written until you Accept.[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__messages"[39m
+          [33mdata-testid[39m=[32m"analysis-chat-messages"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--user"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mYou[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mcreate a new analysis run that analyzes the results of run RUN-42[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--assistant"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mAI[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mPrompt received. Starting compiler pipeline...
+Proposed an analysis — review the card; nothing executed.
+No events generated.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--system"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mSystem[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mAI completed the task but did not propose any changes.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__input-area"[39m
+        [36m>[39m
+          [36m<textarea[39m
+            [33mdata-testid[39m=[32m"analysis-chat-input"[39m
+            [33mplaceholder[39m=[32m"e.g. compose the workspace: open the analysis surface"[39m
+            [33mrows[39m=[32m"2"[39m
+          [36m/>[39m
+          [36m<button[39m
+            [33mdata-testid[39m=[32m"analysis-chat-send"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mSend[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+AssertionError: expected "spy" to be called 1 times, but got 0 times
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"analysis-chat"[39m
+        [33mdata-testid[39m=[32m"analysis-chat-panel"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__header"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"analysis-chat__title"[39m
+          [36m>[39m
+            [0mAsk about this analysis[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"analysis-chat__hint"[39m
+          [36m>[39m
+            [0mProposals arrive as a card — nothing is written until you Accept.[0m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__messages"[39m
+          [33mdata-testid[39m=[32m"analysis-chat-messages"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--user"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mYou[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mcreate a new analysis run that analyzes the results of run RUN-42[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--assistant"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mAI[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mPrompt received. Starting compiler pipeline...
+Proposed an analysis — review the card; nothing executed.
+No events generated.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"analysis-chat__message analysis-chat__message--system"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__role"[39m
+            [36m>[39m
+              [0mSystem[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"analysis-chat__content"[39m
+            [36m>[39m
+              [0mAI completed the task but did not propose any changes.[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"analysis-chat__input-area"[39m
+        [36m>[39m
+          [36m<textarea[39m
+            [33mdata-testid[39m=[32m"analysis-chat-input"[39m
+            [33mplaceholder[39m=[32m"e.g. compose the workspace: open the analysis surface"[39m
+            [33mrows[39m=[32m"2"[39m
+          [36m/>[39m
+          [36m<button[39m
+            [33mdata-testid[39m=[32m"analysis-chat-send"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mSend[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ __vi_import_1__.waitFor.timeout src/analysis/AnalysisChatPanel.analysisProposal.test.tsx:94:56
+     92|     fireEvent.click(screen.getByTestId('analysis-chat-send'))
+     93| 
+     94|     await waitFor(() => expect(mocks.proposeWorkstate).toHaveBeenCalle…
+       |                                                        ^
+     95|     expect(mocks.proposeWorkstate).toHaveBeenCalledWith('analysis', AN…
+     96|   })
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > analysis_proposal frame fires onAnalysisProposal with the verbatim analysis payload
+AssertionError: expected "spy" to be called 1 times, but got 0 times
+ ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx:84:32
+     82| 
+     83|     await waitFor(() => expect(result.current.isStreaming).toBe(false))
+     84|     expect(onAnalysisProposal).toHaveBeenCalledTimes(1)
+       |                                ^
+     85|     expect(onAnalysisProposal).toHaveBeenCalledWith(ANALYSIS_FRAME.ana…
+     86|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > analysis_proposal with NO callback registered surfaces a NAMED system bubble — the frame is never swallowed
+AssertionError: expected undefined not to be undefined
+ ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx:103:26
+    101|       (m) => m.role === 'system' && m.content.includes('proposed an an…
+    102|     )
+    103|     expect(systemBubble).toBeDefined()
+       |                          ^
+    104|     expect(systemBubble!.content).toContain('cannot show proposal card…
+    105|     expect(systemBubble!.content).toContain('Nothing was written.')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/shared/hooks/useAiChat.analysisProposal.test.tsx > useAiChat — analysis_proposal envelope (PB-CH-5 repair) > a throwing onAnalysisProposal does not break the turn (workstate-branch wrapper style)
+AssertionError: expected "spy" to be called 1 times, but got 0 times
+ ❯ src/shared/hooks/useAiChat.analysisProposal.test.tsx:124:32
+    122| 
+    123|     await waitFor(() => expect(result.current.isStreaming).toBe(false))
+    124|     expect(onAnalysisProposal).toHaveBeenCalledTimes(1)
+       |                                ^
+    125|     // The turn completed normally despite the callback throwing.
+    126|     const assistant = result.current.messages.find((m) => m.role === '…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  2 failed (2)
+      Tests  4 failed (4)
+   Start at  14:07:32
+   Duration  27.26s (transform 1.44s, setup 5.03s, collect 4.20s, tests 3.21s, environment 32.82s, prepare 1.52s)
+

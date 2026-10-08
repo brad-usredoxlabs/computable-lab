@@ -45,6 +45,13 @@ export function AnalysisChatPanel() {
     onWorkstateProposal: (intent) => {
       void flow.proposeWorkstate('workstate', intent)
     },
+    // PB-CH-5 repair: the analysis INTENT rides the SAME flow — the only
+    // delta is the adapter constant (AiTabPanel.tsx:635-637 discipline;
+    // 'analysis' is a valid WorkstateAdapter). Before this wire the frame
+    // the server emits was silently dropped on this mount.
+    onAnalysisProposal: (intent) => {
+      void flow.proposeWorkstate('analysis', intent)
+    },
     onAgentAction: flow.handleAgentAction,
   })
 

@@ -1,0 +1,36 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+(node:2930263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2930263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2930263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2930263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2930263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/shared/hooks/useAiChat.analysisProposal.test.tsx  (3 tests) 174ms
+ ✓ src/shared/hooks/useAiChat.channelEnvelopes.test.tsx  (5 tests) 286ms
+stderr | src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/AnalysisChatPanel.analysisProposal.test.tsx  (1 test) 58ms
+stderr | src/analysis/AnalysisPage.chat.test.tsx > AnalysisPage chat mount (PB-CH-6) > mount fires ONLY listAnalysisRevisions + listAnalysisRuns — no assist/compile/execute/promote
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/AnalysisPage.chat.test.tsx  (5 tests) 286ms
+stderr | src/analysis/analysisChat.health.test.tsx > AnalysisChatPanel — missing-capability arms > AI unhealthy (aiAvailable false): disabled input + NAMED reason line; a send attempt fires ZERO stream calls
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/analysisChat.health.test.tsx  (2 tests) 83ms
+
+ Test Files  5 passed (5)
+      Tests  16 passed (16)
+   Start at  14:09:09
+   Duration  10.64s (transform 1.03s, setup 923ms, collect 4.48s, tests 887ms, environment 33.42s, prepare 3.76s)
+

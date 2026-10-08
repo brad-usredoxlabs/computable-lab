@@ -173,10 +173,18 @@ interface UseAiChatOptions {
    * "missing capability = explicit tested behavior, never a silent no-op").
    */
   onWorkstateProposal?: (intent: Record<string, unknown>) => void
+  /**
+   * PB-CH-5 repair — the analysis INTENT rides the same discipline: the
+   * mount relays it verbatim to POST /api/drafts/compile (adapter
+   * 'analysis') via `useWorkstateProposalFlow`; the trust boundary is the
+   * compile, not this stream. With NO callback registered the frame becomes
+   * a NAMED system bubble — never swallowed (same rule as above).
+   */
+  onAnalysisProposal?: (analysis: Record<string, unknown>) => void
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onWorkstateProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onWorkstateProposal, onAnalysisProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -231,6 +239,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // loaded yet). The refs keep the latest host callbacks live.
   const workstateProposalRef = useRef(onWorkstateProposal)
   workstateProposalRef.current = onWorkstateProposal
+  // PB-CH-5 repair: same stable-ref convention for the analysis INTENT.
+  const analysisProposalRef = useRef(onAnalysisProposal)
+  analysisProposalRef.current = onAnalysisProposal
   const agentActionRef = useRef(onAgentAction)
   agentActionRef.current = onAgentAction
 
@@ -507,6 +518,44 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   id: generateMessageId(),
                   role: 'system',
                   content: 'The assistant proposed a workspace change but this page cannot show proposal cards yet. Nothing was written.',
+                  timestamp: Date.now(),
+                },
+              ])
+            }
+            continue
+          }
+
+          // PB-CH-5 repair — the analysis INTENT frame on the generic stack.
+          // Same block shape as the workstate_proposal branch above (no
+          // forked logic): callback -> verbatim relay, a throwing host
+          // surfaces a system line and the turn continues, and with NO
+          // callback the frame becomes a NAMED system bubble naming the
+          // analysis proposal — never a silent drop (the frame the server
+          // emits at AgentOrchestrator.ts:2337 fell through the loop before
+          // this branch existed). The bubble text is distinct per frame kind
+          // (the existing test pins the workstate wording).
+          if (event.type === 'analysis_proposal') {
+            if (analysisProposalRef.current) {
+              try {
+                analysisProposalRef.current(event.analysis)
+              } catch (err: unknown) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: generateMessageId(),
+                    role: 'system',
+                    content: `The analysis proposal card could not open: ${(err as Error).message || 'Unknown error'}. Nothing was written.`,
+                    timestamp: Date.now(),
+                  },
+                ])
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: 'system',
+                  content: 'The assistant proposed an analysis but this page cannot show proposal cards yet. Nothing was written.',
                   timestamp: Date.now(),
                 },
               ])

@@ -1,0 +1,22 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+(node:3038307) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3038307) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3038307) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/types/aiStreamTypes.pin.test.ts  (6 tests) 4ms
+ ✓ src/shared/hooks/useAiChat.analysisProposal.test.tsx  (3 tests) 168ms
+stderr | src/analysis/AnalysisChatPanel.analysisProposal.test.tsx > AnalysisChatPanel — analysis_proposal reaches the flow (PB-CH-5 repair) > an analysis_proposal frame calls flow.proposeWorkstate with adapter "analysis" and the verbatim intent
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/analysis/AnalysisChatPanel.analysisProposal.test.tsx  (1 test) 51ms
+
+ Test Files  3 passed (3)
+      Tests  10 passed (10)
+   Start at  15:02:06
+   Duration  3.87s (transform 521ms, setup 148ms, collect 2.72s, tests 223ms, environment 1.27s, prepare 200ms)
+
