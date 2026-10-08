@@ -184,6 +184,50 @@ describe('verb-inventory', () => {
   });
 });
 
+describe('expected-domain slots (declaration only, Q2 ruling: three fixed tags)', () => {
+  it('accepts expectedSourceDomain/expectedTargetDomain/expectedLabwareDomain as free-text tags and parse preserves them', () => {
+    const doc = parseScientistIntent(`
+intentId: domain-1
+actions:
+  - action: transfer
+    source: cells
+    target: plate
+    labware: tiprack
+    expectedSourceDomain: cell_suspension
+    expectedTargetDomain: microplate
+    expectedLabwareDomain: pipette_tip_rack
+`);
+    expect(doc.actions[0]).toMatchObject({
+      expectedSourceDomain: 'cell_suspension',
+      expectedTargetDomain: 'microplate',
+      expectedLabwareDomain: 'pipette_tip_rack',
+    });
+    // Declaration ONLY: normalizeScientistIntent does not consume them — the
+    // candidate event is unchanged by their presence (zero behavioral diff).
+    const out = normalizeScientistIntent(doc);
+    expect(out.candidateEvents[0]).toMatchObject({ verb: 'transfer', source_labware: 'cells' });
+    expect(out.candidateEvents[0]).not.toHaveProperty('expectedSourceDomain');
+  });
+
+  it('rejects a blank expected*Domain (minLength 1) and an unknown domain-key spelling (additionalProperties false)', () => {
+    expect(() => parseScientistIntent(`
+intentId: domain-bad
+actions:
+  - { action: transfer, source: a, target: b, expectedSourceDomain: "" }
+`)).toThrow(ScientistIntentValidationError);
+    // No ad-hoc per-argument domain map (Q2: a free map re-introduces the
+    // policy-in-ad-hoc-keys pattern the campaign kills).
+    expect(() => parseScientistIntent(`
+intentId: domain-map
+actions:
+  - action: transfer
+    source: a
+    target: b
+    expectedDomains: { source: cell_suspension }
+`)).toThrow(ScientistIntentValidationError);
+  });
+});
+
 describe('characterization: hint precedence (firstString priority)', () => {
   it('source beats a non-blank sourceHint', () => {
     const doc = parseScientistIntent(`
