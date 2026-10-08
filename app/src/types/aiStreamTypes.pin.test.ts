@@ -55,4 +55,22 @@ describe('AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6)', () 
     expect(assistSrc).toMatch(/\| \{ type: 'agent_action'; action: AgentActionEnvelope \}/)
     expect(assistSrc).toMatch(/\| \{ type: 'workstate_proposal'; workstate: Record<string, unknown> \}/)
   })
+
+  it('the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member', () => {
+    // types/ai.ts: the export interface with the verbatim wire shape
+    // (server emits {type:'analysis_proposal', analysis} —
+    // AgentOrchestrator.ts:2337).
+    expect(aiTypesSrc).toMatch(
+      /export interface AiAnalysisProposalEvent \{\s*\n\s*type: 'analysis_proposal'\s*\n\s*analysis: Record<string, unknown>\s*\n\s*\}/,
+    )
+    // types/ai.ts: the member is actually IN the AiStreamEvent union.
+    expect(aiTypesSrc).toMatch(/\|\s*AiAnalysisProposalEvent/)
+    // assistStream.ts:259 (the wire-shape authority) carries the inline
+    // member; types/ai.ts mirrors it member-for-member via the interface +
+    // union assertions above — the same pin style the workstate/agent_action
+    // members use. Without these assertions the analysis member — the exact
+    // member PB-CH-5 adds — is the only one with no drift protection, which
+    // is what the ai.ts comment claims the pin does.
+    expect(assistSrc).toMatch(/\| \{ type: 'analysis_proposal'; analysis: Record<string, unknown> \}/)
+  })
 })
