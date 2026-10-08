@@ -289,7 +289,12 @@ describe('agent_intent — the constrained emission menu', () => {
     // VERBATIM as an analysis_proposal event and the drafts compile endpoint
     // (Ajv + canAccept) is the trust boundary. Accept stages at most a QUEUED
     // run; nothing executes, nothing promotes, nothing writes before Accept.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis']);
+    // Eighth intent added PB-CH-8 (DELIBERATE golden diff): query_workstate_history
+    // asks the ledger for stored workstate history — VERBS AND TERMS ONLY via
+    // `ledgerQuery`; the SERVER supplies the time anchor from its own audit
+    // clock and answers honestly (found with capturedAt disclosure, or "no
+    // workstate history exists for that time"). It reads; it writes nothing.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

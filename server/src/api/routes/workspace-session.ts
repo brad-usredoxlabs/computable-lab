@@ -15,6 +15,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../../server.js';
 import { WorkspaceSessionStore } from '../../workspace-session/index.js';
+import { WorkstateJournal, auditRowsToJournalView, journalPolicyPath } from '../../workspace-session/WorkstateJournal.js';
+import { resolve } from 'node:path';
 
 const LAB_SESSION_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/workflow/lab-session.schema.yaml';
@@ -31,6 +33,22 @@ interface PutBody {
 
 export function registerWorkspaceSessionRoutes(fastify: FastifyInstance, ctx: AppContext) {
   const store = new WorkspaceSessionStore(ctx.workspaceRoot);
+  // PB-CH-8: the append-only workstate-snapshot journal. The store stays
+  // byte-frozen — capture lives at the ROUTE's call site, never in put()
+  // (WorkstateDraftAdapter.test.ts:308-319 is the load-bearing proof why).
+  // Every seam is optional-chained: a harness ctx without schemaDir/store/
+  // localIdentityService yields a journal whose policy file is absent ⇒ capture
+  // DISABLED (decision §4.2), and the main.yaml behavior is byte-unchanged.
+  const journal = new WorkstateJournal({
+    workspaceRoot: ctx.workspaceRoot,
+    policyPath: ctx.schemaDir ? journalPolicyPath(ctx.schemaDir) : resolve(ctx.workspaceRoot, 'var', 'journal-policy-missing.yaml'),
+    // The audit seam: the store's audit-event envelopes projected onto the
+    // journal's read-only view (the ONE shared projection, AuditEventService.ts:
+    // 24-31 payload shape).
+    auditSource: {
+      list: async (filter) => auditRowsToJournalView(await (ctx.store?.list(filter) ?? Promise.resolve([]))),
+    },
+  });
 
   fastify.get('/session', async (request: FastifyRequest) => ({
     session: await store.get(resolveUserId(request)),
@@ -54,7 +72,19 @@ export function registerWorkspaceSessionRoutes(fastify: FastifyInstance, ctx: Ap
       if (!validation.valid) {
         return reply.status(400).send({ error: 'INVALID_SESSION', message: validation.errors });
       }
+      // main.yaml path BYTE-UNCHANGED: raw-header actor + LWW (decision §4.3).
       const session = await store.put(resolveUserId(request), body.tabs, body.activeTabId ?? null);
+      // The journal actor is the RESOLVED identity (token > header), never the
+      // header fallback: an unresolved/inactive actor captures nothing
+      // (decision §4.3). No identity service ⇒ no resolved actor ⇒ no capture.
+      const resolved = ctx.localIdentityService
+        ? await ctx.localIdentityService.resolveRequestUser(request)
+        : null;
+      await journal.maybeCapture({
+        userId: resolved?.userId ?? 'default',
+        actor: resolved?.userId ?? null,
+        snapshot: session,
+      });
       return reply.send({ session });
     },
   );

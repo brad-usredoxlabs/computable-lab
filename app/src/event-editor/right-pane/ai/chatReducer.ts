@@ -34,8 +34,11 @@ export interface TraceEntry {
   /** t=N ordinal within the turn — stable key for rendering. */
   seq: number
   /** PB-CH-4 adds 'action': a tier-1 compiled agent action applied on arrival
-   *  (or its conservative diagnostic). Additive kind — nothing else changed. */
-  kind: 'tool_call' | 'tool_result' | 'diagnostic' | 'draft' | 'action'
+   *  (or its conservative diagnostic). Additive kind — nothing else changed.
+   *  PB-CH-8 adds 'ledger': the SERVER-BUILT ledger answer (journal snapshot +
+   *  server-known audit rows) rendered as honest chat evidence — additive, the
+   *  same pattern as 'action'. */
+  kind: 'tool_call' | 'tool_result' | 'diagnostic' | 'draft' | 'action' | 'ledger'
   toolName?: string
   args?: Record<string, unknown>
   success?: boolean
@@ -47,6 +50,10 @@ export interface TraceEntry {
   severity?: 'info' | 'warning' | 'error'
   message?: string
   evidence?: string
+  /** PB-CH-8 ledger provenance: the audit-event links of a found answer… */
+  links?: string[]
+  /** …and the labeled lab events a no-history answer honestly shows. */
+  labEvents?: Array<{ occurredAt: string; action: string; subjectId: string; recordId: string }>
 }
 
 export interface ChatState {
