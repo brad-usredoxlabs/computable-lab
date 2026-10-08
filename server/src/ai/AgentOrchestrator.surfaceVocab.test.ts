@@ -71,9 +71,9 @@ const CONTEXT = {
 };
 
 describe('AgentOrchestrator — forced tool def carries the registered surface ids (PB-CH-4b)', () => {
-  it('stub registry ids appear in BOTH surface descriptions of the offered def', () => {
+  it('stub registry ids appear in BOTH surface descriptions of the offered def', async () => {
     const orchestrator = makeOrchestrator(stubRegistry(['alpha', 'beta']));
-    const prefix = orchestrator.buildPrefixRequest!({
+    const prefix = await orchestrator.buildPrefixRequest!({
       context: CONTEXT,
       forceDraftTool: true,
     });
@@ -97,16 +97,16 @@ describe('AgentOrchestrator — forced tool def carries the registered surface i
     expect(tabSurface).not.toContain('run-design');
   });
 
-  it('the offered def is REFERENCE-STABLE across two forced renders (warm/real parity)', () => {
+  it('the offered def is REFERENCE-STABLE across two forced renders (warm/real parity)', async () => {
     const orchestrator = makeOrchestrator(stubRegistry(['alpha', 'beta']));
-    const first = orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
-    const second = orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
+    const first = await orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
+    const second = await orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
     expect(first.tools![0]).toBe(second.tools![0]);
   });
 
-  it('no registry: the offered def is AGENT_INTENT_TOOL_DEF by reference (fallback intact)', () => {
+  it('no registry: the offered def is AGENT_INTENT_TOOL_DEF by reference (fallback intact)', async () => {
     const orchestrator = makeOrchestrator();
-    const prefix = orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
+    const prefix = await orchestrator.buildPrefixRequest!({ context: CONTEXT, forceDraftTool: true });
     expect(prefix.tools![0]).toBe(AGENT_INTENT_TOOL_DEF);
   });
 });

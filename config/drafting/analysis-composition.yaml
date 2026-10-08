@@ -16,10 +16,23 @@
 #                 accept-side recompile reproduces reviewHash exactly.
 # landing       — which resolved records get landing tabs (the focus target's
 #                 tab is the active one; ids are server-derived).
+# grounding     — PB-CH-10: the draft-args grounding block. `surfaces` are the
+#                 AI surface ids the block is pushed on (membership is DATA —
+#                 the orchestrator never branches on a surface name);
+#                 `maxPerKind` caps the per-kind candidate list (prompt delta
+#                 stays ~1KB); `title` is the block heading rendered verbatim.
+#                 The candidate kinds are THIS file's referenceKinds — the same
+#                 set the analysis spine indexes and the compiler's kind gate
+#                 accepts, so every printed id is resolvable by construction.
+#                 ABSENT section = feature off (no block, no store scan).
 revisionKinds: [analysis-revision]
 runKinds: [analysis-run]
 inputKinds: [data-reference, analysis-output-artifact]
 referenceKinds: [analysis-revision, analysis-run, data-reference, analysis-output-artifact]
+grounding:
+  surfaces: [analysis, workspace.deck]
+  maxPerKind: 6
+  title: "ANALYSIS REFERENCES (the ONLY records compose_analysis may target):"
 idPolicy:
   analysis-run: ANR-
 landing:

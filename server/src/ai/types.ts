@@ -917,6 +917,11 @@ export interface AgentOrchestrator {
    * the template-rendered tool definitions) for a (surface, context) pair —
    * the same render path run() uses. Consumed by the background prompt
    * warmer; optional so test doubles stay minimal.
+   *
+   * PB-CH-10: ASYNC — the analysis reference grounding block is computed
+   * inside this shared render path (a store scan), and WarmTarget.buildPrefix
+   * already accepts a Promise prefix, so the warm and the real render stay
+   * byte-identical by construction.
    */
   buildPrefixRequest?(args: {
     context: EditorContext;
@@ -924,7 +929,7 @@ export interface AgentOrchestrator {
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
-  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>;
+  }): Promise<Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>>;
 }
 
 // ============================================================================
