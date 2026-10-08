@@ -157,15 +157,14 @@ describe('noun-resolution.hint-parity', () => {
     expect(Object.keys(adapted[0]!).sort()).toEqual(['hint', 'reason']);
     expect(adapted[0]).not.toHaveProperty('deckSlot');
   });
-
-  it('mutation leg (scratch): the adapter has NO reason-string copy of its own — its output is the lowering return value, so any perturbation of the adapter pass-through breaks parity (transcript of the scratch mutation run lives in the SPINE-3 report)', async () => {
-    const intent = scenarios[0]!.intent;
-    const lowered = lowerProtocolIntentLabwareCandidates(intent);
-    const adapted = (await adapterCandidates(intent)) as ProtocolIntentLoweredCandidateLabware[];
-    // A perturbed copy (what a re-implementing adapter would produce) must NOT
-    // equal the lowering — the parity assertion is sensitive to reason wording.
-    const perturbed = adapted.map((c) => ({ ...c, reason: `${c.reason} MUTATED` }));
-    expect(perturbed).not.toEqual(lowered);
-    expect(adapted).toEqual(lowered);
-  });
+  // §11.9 mutation leg: proven by SCRATCH RUN, transcript in the fix report
+  // (fix1 §3): appending text to createHintEvidenceAdapter's returned reason
+  // turns the seven deep-equal PARITY assertions above RED (7 failed | 1
+  // passed), restored byte-clean with sha256 proof. The previous in-suite
+  // "mutation leg" test was DELETED per adversarial review D2: it perturbed a
+  // locally-suffixed COPY (`{...c, reason: c.reason + ' MUTATED'}`) and asserted
+  // that copy did not equal the lowering — an assertion that can never fail —
+  // plus a duplicate of the expectParity deep-equal already exercised above.
+  // Net coverage: zero. No vacuous stand-in is kept; the scratch transcript is
+  // the evidence.
 });

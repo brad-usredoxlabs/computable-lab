@@ -245,12 +245,29 @@ export function declaredNamespacesForDomain(domain: string | undefined): Set<str
   return namespaces;
 }
 
+/** Local landing-zone policy (fix1 / D1): when a declared domain tag has NO
+ *  entry in ONTOLOGY_DOMAINS, the tag ITSELF is the landing zone. The shipped
+ *  vocabulary's tags (labware 74 args, material 12, instrument 1) are term
+ *  kinds of the canonical term spine's own taxonomy — schema/core/
+ *  term.schema.yaml `kind` enum (material|vendor|labware|instrument|verb|kit|
+ *  organism|condition|other; docs/canonical-term-spine.md: every named thing
+ *  is ONE term record whose kind names what it is) — and providers/terms.ts
+ *  carries that kind on every tier-0 hit as RankedCandidate.termKind. A
+ *  candidate that POSITIVELY claims a different landing zone is REJECTED for
+ *  the argument; a candidate that makes no landing-zone claim stays eligible
+ *  (absence of a claim is not a conflict — "prefer what the lab has"). NO
+ *  domain NAME is branched on: the check compares two declared data fields
+ *  (the vocabulary's domain tag vs the candidate's term kind). */
+function claimsConflictingLandingZone(candidate: RankedCandidate, domain: string): boolean {
+  return candidate.termKind !== undefined && candidate.termKind.toLowerCase() !== domain.toLowerCase();
+}
+
 export function filterCandidatesByDeclaredDomain(
   candidates: RankedCandidate[],
   domain: string | undefined,
 ): { eligible: RankedCandidate[]; rejected: RankedCandidate[] } {
+  if (!domain) return { eligible: candidates, rejected: [] };
   const namespaces = declaredNamespacesForDomain(domain);
-  if (!namespaces) return { eligible: candidates, rejected: [] };
   const eligible: RankedCandidate[] = [];
   const rejected: RankedCandidate[] = [];
   for (const candidate of candidates) {
@@ -258,8 +275,16 @@ export function filterCandidatesByDeclaredDomain(
       eligible.push(candidate); // the mint affordance is not a namespace claim
       continue;
     }
-    if (namespaces.has(candidate.namespace.toUpperCase())) eligible.push(candidate);
-    else rejected.push(candidate);
+    if (namespaces) {
+      // Ontology bridge declared for this tag: the namespace filter is the authority.
+      if (namespaces.has(candidate.namespace.toUpperCase())) eligible.push(candidate);
+      else rejected.push(candidate);
+    } else if (claimsConflictingLandingZone(candidate, domain)) {
+      // No ontology bridge: the term-spine landing-zone taxonomy is the authority.
+      rejected.push(candidate);
+    } else {
+      eligible.push(candidate);
+    }
   }
   return { eligible, rejected };
 }

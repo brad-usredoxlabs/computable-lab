@@ -106,13 +106,67 @@ function request(over: Partial<ResolutionRequest> & { verb: string; argument: st
 
 // ---------------------------------------------------------------------------
 // 1. noun-resolution.verb-constrained-domain
-// ONE candidate pool (ambiguous label 'Gemini'), TWO requests — same label,
-// fixture vocabulary declaring arg `source` domain: chemical and arg `labware`
-// domain: cellType → eligible sets DISJOINT (asserted both directions).
+// PRIMARY LEG (production bridge): the SHIPPED vocabulary's own domain tags —
+// transfer.labware declares domain: labware, read.instrument declares
+// domain: instrument. ONE candidate pool (ambiguous label 'Gemini': a
+// labware-kind term hit + an instrument-kind term hit, shaped exactly like
+// production tier-0 hits from providers/terms.ts) → the domain filter itself
+// rejects the labware-design candidate for the instrument arg and vice versa
+// (asserted both directions, rejections named in traces). No fixture
+// vocabulary edit is involved in this leg.
+// SECOND LEG (ontology bridge axis): a fixture COPY flips domains to tags
+// ONTOLOGY_DOMAINS declares (chemical/cellType) → the namespace axis bites.
 // ---------------------------------------------------------------------------
 
 describe('noun-resolution.verb-constrained-domain', () => {
-  it('same ambiguous label + different declared argument domains => disjoint eligible sets', async () => {
+  it('SHIPPED domain tags: same ambiguous label, transfer.labware (labware) vs read.instrument (instrument) => disjoint eligible sets from the domain filter', async () => {
+    const vocab = shippedVocab();
+    // The tags the shipped vocabulary ACTUALLY uses (grep: labware 74,
+    // material 12, instrument 1 — no fixture flip involved).
+    const labwareContract = vocab.argContracts('transfer').find((a) => a.name === 'labware')!;
+    const instrumentContract = vocab.argContracts('read').find((a) => a.name === 'instrument')!;
+    expect(labwareContract.domain).toBe('labware');
+    expect(instrumentContract.domain).toBe('instrument');
+
+    // ONE pool, ambiguous label 'Gemini': two tier-0 canonical-term hits
+    // shaped exactly like production terms-provider hits (namespace 'local',
+    // local:TERM-… curie, termKind = the term record's kind per
+    // schema/core/term.schema.yaml). 'Gemini' names both a labware design and
+    // an instrument in the lab's own vocabulary.
+    const labwareDesign = { curie: 'local:TERM-Gemini-plate-a1b2', label: 'Gemini', namespace: 'local', level: 'unknown', termKind: 'labware' };
+    const instrumentDesign = { curie: 'local:TERM-Gemini-reader-c3d4', label: 'Gemini', namespace: 'local', level: 'unknown', termKind: 'instrument' };
+    const { spine, tracker } = spineWith(hits(labwareDesign, instrumentDesign), hits());
+    const deps = depsFor({ spine, tracker, vocab });
+
+    const asLabware = await resolveNoun(
+      request({ verb: 'transfer', argument: 'labware', label: 'Gemini', declared: labwareContract }),
+      vocab,
+      deps,
+    );
+    const asInstrument = await resolveNoun(
+      request({ verb: 'read', argument: 'instrument', label: 'Gemini', declared: instrumentContract }),
+      vocab,
+      deps,
+    );
+
+    const labwareCuries = asLabware.bindings.map((b) => b.curie);
+    const instrumentCuries = asInstrument.bindings.map((b) => b.curie);
+    // The labware-domain arg binds the labware-design term; the instrument-
+    // design candidate is REJECTED by the domain filter and NAMED in a trace.
+    expect(labwareCuries).toEqual(['local:TERM-Gemini-plate-a1b2']);
+    expect(labwareCuries).not.toContain('local:TERM-Gemini-reader-c3d4');
+    expect(asLabware.traces.some((t) => t.startsWith('domain-mismatch: local:TERM-Gemini-reader-c3d4') && t.includes('declared domain labware'))).toBe(true);
+    // And the reverse: instrument-domain arg binds the instrument design,
+    // labware design rejected + named.
+    expect(instrumentCuries).toEqual(['local:TERM-Gemini-reader-c3d4']);
+    expect(instrumentCuries).not.toContain('local:TERM-Gemini-plate-a1b2');
+    expect(asInstrument.traces.some((t) => t.startsWith('domain-mismatch: local:TERM-Gemini-plate-a1b2') && t.includes('instrument'))).toBe(true);
+    // disjoint both directions
+    expect(labwareCuries.filter((c) => instrumentCuries.includes(c))).toEqual([]);
+    expect(instrumentCuries.filter((c) => labwareCuries.includes(c))).toEqual([]);
+  });
+
+  it('ontology bridge axis (fixture copy flips to ONTOLOGY_DOMAINS tags): same ambiguous label + different declared argument domains => disjoint eligible sets', async () => {
     const vocab = fixtureVocab('vocab-domain-flip');
     // transfer.source is declared domain: chemical; transfer.labware domain: cellType (fixture flip).
     const sourceContract = vocab.argContracts('transfer').find((a) => a.name === 'source')!;
@@ -208,7 +262,10 @@ describe('noun-resolution.material-levels', () => {
 describe('noun-resolution.local-term-identity', () => {
   it('alias spellings land on one canonical entity; no duplicate term coined', async () => {
     const vocab = shippedVocab();
-    const sourceContract = vocab.argContracts('transfer').find((a) => a.name === 'source')!;
+    // wash.material declares domain: material — the shipped tag this term's
+    // kind actually lands in (fix1: the domain bridge is live, so the alias
+    // family rides a material-domain argument, not a labware-domain one).
+    const materialContract = vocab.argContracts('wash').find((a) => a.name === 'material')!;
 
     // Tier-0 alias-first provider (the F-praus fix shape from providers/terms.ts):
     // every spelling resolves to the SAME canonical term record → same CURIE.
@@ -226,7 +283,7 @@ describe('noun-resolution.local-term-identity', () => {
     const bindings = [];
     for (const label of spellings) {
       const outcome = await resolveNoun(
-        request({ verb: 'transfer', argument: 'source', label, declared: sourceContract }),
+        request({ verb: 'wash', argument: 'material', label, declared: materialContract }),
         vocab,
         deps,
       );
@@ -257,10 +314,10 @@ describe('noun-resolution.local-term-identity', () => {
     const doc = parseScientistIntent(`
 intentId: alias-identity
 actions:
-  - { action: transfer, source: "F praus", target: plate_A }
-  - { action: transfer, source: "FPRAUS", target: plate_A }
-  - { action: transfer, source: "f pruas", target: plate_A }
-  - { action: transfer, source: "f praaus", target: plate_A }
+  - { action: wash, material: "F praus" }
+  - { action: wash, material: "FPRAUS" }
+  - { action: wash, material: "f pruas" }
+  - { action: wash, material: "f praaus" }
 `);
     const aliasHit: ProviderHit = {
       curie: 'local:term-fpraus',
@@ -272,7 +329,7 @@ actions:
     const { spine, tracker } = spineWith(hits(aliasHit), hits());
     const deps = depsFor({ spine, tracker, vocab });
     const outcome = await resolveScientistIntentNouns(doc, vocab, deps);
-    const sourceBindings = outcome.bindings.filter((b) => b.argument === 'source');
+    const sourceBindings = outcome.bindings.filter((b) => b.argument === 'material');
     expect(sourceBindings).toHaveLength(4);
     expect(new Set(sourceBindings.map((b) => b.curie))).toEqual(new Set(['local:term-fpraus']));
   });
