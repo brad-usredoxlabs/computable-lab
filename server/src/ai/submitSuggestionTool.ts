@@ -542,15 +542,33 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
               description: 'Proposed workspace tabs, in strip order.',
               items: {
                 type: 'object',
+                // PB-CH-6 fix1 F2: mirror of workstate-intent.schema.yaml
+                // tabs.items — the compile envelope already requires both;
+                // the menu was blind and the model emitted bare-surface tabs
+                // the compiler honestly rejected (MALFORMED_ENVELOPE).
+                required: ['surface', 'target'],
                 properties: {
                   surface: { type: 'string', description: 'A registered surface id (e.g. "run-design", "analysis").' },
                   target: {
-                    type: 'object',
-                    description: 'A TERM the server must resolve, or an explicit recordId the server verifies.',
-                    properties: {
-                      term: { type: 'string', description: 'The target in the biologist\u2019s words — the server resolves it.' },
-                      recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
-                    },
+                    description: 'A TERM the server must resolve, OR an explicit recordId the server verifies — exactly one shape (schema oneOf). A surface name is never a target.',
+                    oneOf: [
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['term'],
+                        properties: {
+                          term: { type: 'string', description: 'The target in the biologist\u2019s words — the server resolves it.' },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['recordId'],
+                        properties: {
+                          recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
+                        },
+                      },
+                    ],
                   },
                   title: { type: 'string', description: 'Optional display title; the resolved record\u2019s authoritative label wins when absent.' },
                 },
@@ -591,7 +609,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
               },
             },
             focus: { type: 'string', enum: ['run', 'revision'], description: 'Which landing tab is active (default run). The server derives the tab id — never model-named.' },
-            open: { type: 'object', description: 'Extra cross-page tabs appended after the landing tabs (same {surface, target:{term|recordId}} shape as compose_workstate tabs).', properties: { tabs: { type: 'array', items: { type: 'object', properties: { surface: { type: 'string' }, target: { type: 'object', properties: { term: { type: 'string' }, recordId: { type: 'string' } } }, title: { type: 'string' } } } } } },
+            open: { type: 'object', description: 'Extra cross-page tabs appended after the landing tabs (same {surface, target:{term|recordId}} shape as compose_workstate tabs).', properties: { tabs: { type: 'array', items: { type: 'object', required: ['surface', 'target'], properties: { surface: { type: 'string' }, target: { oneOf: [ { type: 'object', additionalProperties: false, required: ['term'], properties: { term: { type: 'string' } } }, { type: 'object', additionalProperties: false, required: ['recordId'], properties: { recordId: { type: 'string' } } } ] }, title: { type: 'string' } } } } } },
           },
         },
         ledgerQuery: {

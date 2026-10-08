@@ -25,6 +25,7 @@ import type {
 import type { AiSurface } from './systemPrompt.js';
 import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage, deriveContextCacheKey } from './systemPrompt.js';
 import { buildAnalysisGroundingBlockForSurface } from './analysisReferenceGrounding.js';
+import { buildWorkstateRulesBlockForSurface } from './workstateComposeRules.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
@@ -1057,13 +1058,20 @@ export function createAgentOrchestrator(
     const groundingBlock = deps.store
       ? await buildAnalysisGroundingBlockForSurface(deps.store, args.surface)
       : null;
+    // PB-CH-6 fix1 F1: the WORKSTATE COMPOSE RULES block. Membership is DATA
+    // (config/drafting/workstate-composition.yaml `rules.surfaces`); zero
+    // surface names here (repo rule #1). No store scan — pure policy text.
+    const workstateRulesBlock = buildWorkstateRulesBlockForSurface(args.surface);
     const systemSections: string[] = [systemPrompt];
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
-    // Pushed LAST so it sits adjacent to the forced-tool instruction (OQ1
-    // ruling: the grounding block carries the compose_analysis routing rule).
+    // Pushed LAST so they sit adjacent to the forced-tool instruction (OQ1
+    // ruling: the grounding block carries the compose_analysis routing rule;
+    // the rules block carries the compose_workstate tab/target rule — pinned
+    // order: instruction, forced, grounding, rules).
     if (groundingBlock) systemSections.push(groundingBlock);
+    if (workstateRulesBlock) systemSections.push(workstateRulesBlock);
 
     const historyMessages = Array.isArray(args.history)
       ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
