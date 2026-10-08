@@ -342,6 +342,21 @@ export function AiTabPanel() {
   // untested ordering beyond that verified one).
   const workstateTurnRef = useRef(false)
 
+  // PB-CH-8 fix1 (defect lanes/2/decisions/PB-CH-8-ledger-render-defect.md,
+  // receipts PB-CH-8/2026-10-08 probe1/capture1/witness1): a ledger turn
+  // (the server's ledger_answer frame) ends with a notes-only `done` result,
+  // so without a flag onDraftResult fell to the final else and dispatched
+  // draft-ready with an EMPTY changes list — sidebar 'reviewing', auto subtab
+  // 'changes', the chat section (where the kind:'ledger' trace renders)
+  // UNMOUNTED before 'done' commits the trace; MutationObserver proved the
+  // answer NEVER entered the DOM. Same failure class as PB-CH-4 D1, replayed
+  // for ledger turns. The ledger trace IS that turn's ONLY surface. Same
+  // discipline as workstateTurnRef: set when the ledger_answer frame arrives
+  // (server emits it during run(), before the post-run `done` frame — the
+  // ordering the workstate comment above cites), CONSUMED first by the same
+  // turn's onDraftResult, cleared at the single sendChat choke point.
+  const ledgerTurnRef = useRef(false)
+
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
@@ -352,11 +367,14 @@ export function AiTabPanel() {
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
 
-      // PB-CH-4 D1: consume the turn flag FIRST, on every path, so a stale
+      // PB-CH-4 D1: consume the turn flags FIRST, on every path, so a stale
       // flag can never leak into a later turn (a no-envelope compose_workstate
       // turn ends with an `error` result and never reaches the flag branch).
+      // PB-CH-8 fix1: the ledger flag is consumed in the same breath.
       const workstateTurn = workstateTurnRef.current
       workstateTurnRef.current = false
+      const ledgerTurn = ledgerTurnRef.current
+      ledgerTurnRef.current = false
 
       // R-Defect-1 (PROTO-AI-9 fix): a failed turn — the server result
       // carries `error` (schema rejection, model failure; assistStream
@@ -379,6 +397,18 @@ export function AiTabPanel() {
       // usable. The turn still commits its chat message/trace —
       // summarizeDraftResult covers the notes (useChatThread 'done').
       if (workstateTurn) {
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
+      // PB-CH-8 fix1: this turn carried the server's ledger_answer — the
+      // kind:'ledger' trace (answerText verbatim + provenance) rendered in
+      // the chat section is its ONLY surface. Same discipline as the
+      // workstate guard above: no draft-ready, no 'reviewing' mode, no empty
+      // actionable 'Apply to run', the chat section stays mounted and the
+      // input stays usable. The turn still commits its chat message/trace —
+      // summarizeDraftResult covers the notes (useChatThread 'done').
+      if (ledgerTurn) {
         sidebarDispatch({ type: 'reset' })
         return
       }
@@ -605,6 +635,12 @@ export function AiTabPanel() {
     onAnalysisProposal: (intent) => {
       handleWorkstateProposal(intent, 'analysis')
     },
+    // PB-CH-8 fix1: the ledger_answer frame marks THIS turn as a ledger turn
+    // (the hook still renders the trace verbatim — this is the flag-set site,
+    // mirroring handleWorkstateProposal's workstateTurnRef set).
+    onLedgerAnswer: () => {
+      ledgerTurnRef.current = true
+    },
   })
 
   // PB-CH-4 review fix1 D1: THE single choke point every turn starts through.
@@ -619,6 +655,7 @@ export function AiTabPanel() {
   const sendChat = useCallback(
     (text: string, options?: Parameters<typeof chat.send>[1]) => {
       workstateTurnRef.current = false // PB-CH-4 D1: a fresh turn starts here — no leak
+      ledgerTurnRef.current = false // PB-CH-8 fix1: same choke point, same no-leap guarantee
       return chat.send(text, options)
     },
     [chat],
