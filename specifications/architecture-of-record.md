@@ -166,7 +166,7 @@ Schemas: `schema/knowledge/{analysis-revision,analysis-run,analysis-output-artif
 1. **Cross-page page composition is spec, not runtime.** `agent_intent` emits event_graph / deck_layout / create_record (+ sequence coercion); there is no declarative "compose arbitrary page view" intent yet. The universal contract exists; per-surface adoption is tracked in the projection doc's table. Coders: when a task claims to "emit a page view," its real deliverable is either a surface-registry entry + openSurface target, or a compiler adapter — name which.
 2. **AI draft compile path is split**: `POST /api/drafts/compile|accept` is the contract-shaped path (`server/src/drafts/`); the older chat compile path (`server/src/ai/runChatbotCompile.ts`, used by event-graph drafts via ToolBridge) predates the draft envelope. Converging them is open work.
 3. **Analysis AI** is revision-drafting only; full AI-authored analysis through ghosted review on the analysis surface is still maturing.
-4. **`specifications/` file permissions/ownership** have drifted (root-owned files unreadable to brad at times); specs referenced by agents must stay readable and, where meant to be canonical, tracked in git (`ai-drafting-and-ui-projection.md` was untracked at time of writing).
+4. **`specifications/` file permissions/ownership** have drifted (root-owned files; several lacked a+r until 2026-10-06). `architecture-of-record.md` and `ai-drafting-and-ui-projection.md` are now tracked (commit b30b36dc); keep canonical specs in git and readable.
 
 ## 9. Where truth lives (quick index)
 

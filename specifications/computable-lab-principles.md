@@ -2,9 +2,11 @@
 
 > The foundational principles that distinguish computable-lab from laboratory information management hacks. These principles govern how the system is designed, how data is captured, and how the AI reasons over experimental knowledge.
 
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-10-04
 **Author:** Brad (computable-lab founder)
 **Status:** Canonical — these are the principles that define the project.
+
+Every agent must read this document on startup, regardless of its model, harness, or tool-specific instruction files. These principles govern every workflow and page. Supporting specifications elaborate this contract; the foundational requirements must remain here where every agent encounters them.
 
 ---
 
@@ -70,6 +72,31 @@ The pipeline: Data → Schema → Lint → Code reads all three → Creates reco
 
 Every record type has three YAML specs: schema (structural validation), lint (business rules), UI (rendering hints). Before editing TypeScript, identify what belongs in schema/lint/UI specs. Specs first, code second. No hard-coded domain logic in TypeScript. No schema-name branching. No inline business rules.
 
+## 12. Declarative Page Invocation: AI Proposes; the Compiler Projects; the Scientist Accepts
+
+**In every workflow, the user should be able to tell the AI what they want, and the AI should be able to invoke the appropriate workflow and redraw the screen around that request.** This is foundational to computable-lab. It applies to page navigation, page composition, forms, event graphs, protocol editing, sequence analysis, tool setup, and every other AI-driven interaction. A request can span pages and operations, independently of the page currently open.
+
+The AI expresses the requested page invocation, context, layout, proposed values, and actions as declarative structured intent. The system's UI and operation definitions describe what can be invoked and rendered. New capabilities extend those definitions so both human and AI interactions can use them. The AI can select and compose the screens needed to fulfill the user's request; the deterministic compiler determines their valid interpretation.
+
+**Every AI return that invokes a page or proposes an action must pass through the deterministic compiler before it is ghosted onto the screen.** This applies equally to navigation and scientific operations. The compiler resolves references and context, normalizes intent, validates schemas and lint, applies policy, and produces the page projection and action plan. A schema-valid AI response alone does not authorize rendering an actionable proposal or executing it. Missing capabilities or facts become visible compiler diagnostics.
+
+```
+User request → AI declarative page/workflow invocation → Deterministic compiler
+             → Ghosted native page → Accept / Reject / Revise with the AI
+```
+
+The compiled proposal redraws the actual page: the user sees the requested sequence in its sequence controls, the proposed events in their graph, or the requested workflow in its appropriate native review surface. The page makes proposed values, context, and effects visible and keeps review controls accessible. Rendering this page is a preview of the requested invocation; it does not commit records or execute the proposed work.
+
+The user always has three paths:
+
+1. **Accept:** invoke or commit exactly the compiled, reviewed proposal through the ordinary authorized paths. Recheck source versions and policy before applying it. Acceptance requires no additional AI round trip and never expands the reviewed action plan.
+2. **Reject:** discard the proposal and restore the prior working page, context, and unsaved values. No proposed records or operations are committed.
+3. **Revise:** edit the ghosted values directly or send the proposal back to the AI with modifications. Direct edits recompile deterministically. AI revisions receive the current proposal, user corrections, and compiler diagnostics, then pass through the compiler again before being ghosted for another review.
+
+Pending, invalid, stale, or policy-blocked proposals cannot be accepted. Superseded AI responses cannot redraw a newer working state. Existing authorization, provenance, immutable revision, and QMS signoff requirements remain authoritative; accepting an AI proposal does not grant a regulated approval.
+
+**Every new AI-driven workflow must implement this request → compile → ghost → review loop.** Existing native review surfaces, including event previews and the protocol ChangesPanel, implement the same principle in their own form. The universal requirement applies now; the adoption inventory must accurately identify surfaces still awaiting implementation. See [AI drafting, declarative page invocation, and native UI projection](ai-drafting-and-ui-projection.md) for implementation contracts and adoption status.
+
 ---
 
 ## Examples
@@ -117,12 +144,15 @@ The conditioned medium **is** the context. You can't describe the material witho
 5. **Stop and ask the user** when missing configuration — never fabricate
 6. **Propose evidence** by referencing complete context: "supports assertion because context contains all necessary components for [role] and measurement shows [quantitative result]"
 7. **Liberate data from vendor lock-in** — ingest from proprietary formats, export to open YAML, keep the scientist in control
+8. **Invoke pages and workflows declaratively** from the user's request, including the context, controls, and operations needed across pages
+9. **Compile every proposed invocation before ghosting it** into the native UI; let the user accept, reject, or revise it, and recompile every revision before review
 
 ---
 
 ## References
 
-- `CLAUDE.md` — non-negotiable rules enforced by AI
+- [Architecture of record](architecture-of-record.md) — what is implemented today vs specified-not-shipped, the four pillars, the superseded-ideas ledger, and the "where truth lives" index. Read before authoring or implementing against any pillar; §7 ledger items are dead ideas and must not be resurrected.
+- [AI drafting, declarative page invocation, and native UI projection](ai-drafting-and-ui-projection.md) — implementation contract and adoption inventory for principle 12
 - `docs/knowledge-layer-canonical-example.md` — PPARα → ROS hypothesis worked through the full record graph
 - `schema/knowledge/` — knowledge layer schemas (claim, context, assertion, evidence, context-role)
 - `schema/lab/` — lab schemas (measurement-context, well-group)

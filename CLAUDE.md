@@ -65,6 +65,8 @@ The knowledge layer captures WHY things work, not WHERE they sit.
 
 Before authoring or editing anything that touches `claim`, `context`, `context-role`, `assertion`, `evidence`, `mechanism-model`, or `experiment-narrative` records — or any UI/orchestration that drives them — read `docs/knowledge-layer-canonical-example.md`. It works the PPARα → ROS hypothesis through the full record graph and pins down the model that conflates easily otherwise (claim ≠ context ≠ assertion; mechanism chains live in `mechanism-model`, not as nested claims; context-roles are reusable records with optional machine-checkable prerequisites).
 
+Before changing AI authoring or editor review flows, read `specifications/computable-lab-principles.md` and `specifications/ai-drafting-and-ui-projection.md`. These define the proposal/compiler/native-preview/accept boundary, including compatibility with event and protocol review.
+
 ## Backend Architecture (server/)
 
 **computable-lab** is a schema-driven laboratory information system. The core principle: **if something can be expressed as data, it must be expressed as data.** Business logic lives in declarative YAML specs, not in TypeScript.
