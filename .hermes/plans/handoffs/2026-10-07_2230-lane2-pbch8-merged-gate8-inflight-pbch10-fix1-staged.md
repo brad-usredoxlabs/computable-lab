@@ -97,3 +97,23 @@ Invoked ~21:10, checkpoint ~22:30 (~80 min — overran; PB-CH-8 merge+gate-harne
 dominated). Live at checkpoint: gate run 8 (node pid 1201626, expected ~22:35 given ~110s of
 model turns left; NOT killed, NOT duplicated). All coder/reviewer processes exited. NO new coder
 dispatched at checkpoint (fix1 prompt staged for next tick).
+
+## ADDENDUM 22:58 (same tick, post-checkpoint observations on gate run 8 + leg-2)
+- Gate run 8 EXITED code=0. Legs 1/3/4/5 PASS with receipts; ledger-restored-A.png vision-verified
+  by orch (tab adopted+active, card spent "Applied — the workspace adopted the accepted draft",
+  chat input ready); ledger-grounded-result.png shows the ▤ ledger trace with capturedAt +
+  linked EVT- ids; leg4 trail: acceptDelta=1, assistDuringAccept=0, sessionPutDelta=1,
+  hashAdvanced=true; leg5 adoptedVisible=true. USR-BRAD main.yaml pin restored by the script.
+- LEG 2 (honest no-history) NOT YET PRODUCED — orch-script seed flaw, product honest throughout:
+  the query anchor is the LATEST audit event per subject; prior seeds (C/D/E) left AI10's anchor
+  AFTER journal 000001 capturedAt (02:26:10Z), so the ledger correctly answered 'found' — twice.
+  RESUME CONDITION (leg2c script prepared, NOT run this tick): use a FRESH resolvable run fixture
+  with EXACTLY ONE audit event whose occurredAt < 2026-10-08T02:26:10Z (no later events for that
+  subject), ask the proven phrasing 'What is the stored workstate history of run <X>?', expect
+  trace text 'no stored workstate history' + lab-event lines + cardCount=0 + session hash stable.
+  trail-leg2.json/leg2b.json + ledger-no-history.png (found-state) are in the receipts dir; the
+  honest-text no-history screenshot is still OWED. NOTE leg2b screenshot showed a Proposed
+  workspace card with Accept for the ACTIVE run tab (PLR-LANE2-PBCH4B) while cardCount=0 at
+  measure time — a card-render timing race worth one look when leg 2 re-runs.
+- Also restored USR-BRAD/main.yaml after the leg2 probes (the probes PUT-captured a session
+  change; pin verified 8107ef6e... again at 22:58).
