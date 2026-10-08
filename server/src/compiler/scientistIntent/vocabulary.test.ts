@@ -119,6 +119,19 @@ describe('resolver-spec.validation', () => {
     ).toThrow(/vocab-strategy-refs-declared/);
   });
 
+  it('P2-hint mutation: a verb with a hintEligible arg and NO policyRef fails with the NAMED rule', () => {
+    expect(() =>
+      loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-mutations', 'vocab-hint-missing-policyref.yaml') }),
+    ).toThrow(/vocab-hint-verbs-carry-policy-ref/);
+  });
+
+  it('P2-hint control: a plain verb (no hintEligible arg) with NO policyRef loads CLEAN (no false positive)', () => {
+    const vocab = loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-mutations', 'vocab-plain-verb-no-policyref.yaml') });
+    expect(vocab.verbs()).toHaveLength(31);
+    expect(vocab.argContracts('spin').some((a) => a.hintEligible === true)).toBe(false);
+    expect(vocab.argContracts('spin').some((a) => a.name === 'labware')).toBe(true);
+  });
+
   it('structurally incomplete contract: an arg without kind fails schema validation', () => {
     expect(() =>
       loadScientistIntentVocabulary({ path: join(FIXTURES, 'vocab-mutations', 'struct-missing-kind.yaml') }),

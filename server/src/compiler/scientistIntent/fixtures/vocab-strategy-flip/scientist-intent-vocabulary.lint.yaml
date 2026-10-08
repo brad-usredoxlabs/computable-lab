@@ -76,16 +76,17 @@ rules:
     assert:
       op: any
       predicates:
-      - op: not
-        not:
-          op: everyItem
-          collectionPath: args
-          assert:
-            op: not
-            not:
-              op: equals
-              path: hintEligible
-              value: true
+      # Branch 1: NO hintEligible argument exists (bare everyItem — the old
+      # outer `not:` wrapper inverted this and made the OR pass hint verbs
+      # that lack a policyRef while failing plain verbs).
+      - op: everyItem
+        collectionPath: args
+        assert:
+          op: not
+          not:
+            op: equals
+            path: hintEligible
+            value: true
       - op: exists
         path: policyRef
   message:
