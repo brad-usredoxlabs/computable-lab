@@ -1215,6 +1215,23 @@ export function createResolveReferencesPass(
       const diagnostics: PassDiagnostic[] = [];
 
       for (const ref of refs) {
+        // SPINE-4 seam: a ref whose label the resolve_nouns pass bound
+        // authoritatively is NOT re-fuzzy-matched here (a second noun lookup
+        // on an already-decided identity). Refs the engine left unresolved
+        // never reach this pass at all — the bar already fired upstream and
+        // this pass was skipped by the cascade barrier. Slot absent (chatbot
+        // pipeline) => today's dispatch runs byte-identically.
+        const boundRef = authoritativeNounSlot(state)?.resolvedByLabel?.[ref.label];
+        if (boundRef) {
+          resolved.push({
+            kind: ref.kind,
+            label: ref.label,
+            resolvedId: boundRef.recordId,
+            resolvedName: boundRef.resolvedLabel ?? ref.label,
+          });
+          continue;
+        }
+
         switch (ref.kind) {
           case 'protocol': {
             const found = deps.protocolRegistry.list().find(
@@ -1534,6 +1551,31 @@ export interface CreateLabwareResolvePassDeps {
  * - Carries deckSlot from candidateLabwares through to labwareAdditions
  * - Output shape: { labwareAdditions, resolvedLabwares }
  */
+/**
+ * SPINE-4 consumption seam (structural, slot-guarded). When the pipeline
+ * declares the `resolve_nouns` pass, its output slot carries authoritative
+ * bindings the noun-consuming stages use INSTEAD of re-interpreting hints.
+ * When the slot is ABSENT (chatbot pipeline, extraction pipeline — any
+ * pipeline without the pass), today's code runs byte-identically.
+ */
+interface AuthoritativeNounBinding {
+  verb: string;
+  argument: string;
+  label: string;
+  recordId: string;
+  resolvedLabel?: string;
+  addresses?: string[];
+  actionIndex?: number;
+}
+
+interface AuthoritativeNounSlot {
+  resolvedByLabel?: Record<string, AuthoritativeNounBinding>;
+}
+
+function authoritativeNounSlot(state: PipelineState): AuthoritativeNounSlot | undefined {
+  return state.outputs.get('resolve_nouns') as AuthoritativeNounSlot | undefined;
+}
+
 export function createLabwareResolvePass(
   deps: CreateLabwareResolvePassDeps,
 ): Pass {
@@ -1580,6 +1622,30 @@ export function createLabwareResolvePass(
         // Mention-shortcut: the LLM is told not to do this, but if a hint
         // exactly matches a mention id, honor it without a record-store hit.
         if (runtimeMentionLabwareIds.has(hint)) continue;
+
+        // SPINE-4 seam: when the resolve_nouns slot carries an authoritative
+        // binding for this label, the identity is PRE-DECIDED — push it without
+        // a second noun lookup (searchLabwareByHint) and without the
+        // multi-match top-pick arm below. Slot absent (chatbot/extraction
+        // pipelines) => the legacy arms below run byte-identically.
+        const authoritative = authoritativeNounSlot(state)?.resolvedByLabel?.[hint];
+        if (authoritative) {
+          resolvedLabwares.push({
+            hint,
+            recordId: authoritative.recordId,
+            ...(authoritative.resolvedLabel !== undefined
+              ? { title: authoritative.resolvedLabel }
+              : {}),
+          });
+          if (cand.deckSlot) {
+            labwareAdditions.push({
+              recordId: authoritative.recordId,
+              reason: cand.reason ?? 'placed via prompt',
+              deckSlot: cand.deckSlot,
+            });
+          }
+          continue;
+        }
 
         const matches = await deps.searchLabwareByHint(hint);
 
@@ -2307,6 +2373,15 @@ export function createResolveRolesPass(): Pass {
       // Get the ontology term registry for cell_type_id resolution
       const ontologyTermRegistry = getOntologyTermRegistry();
 
+      // SPINE-4 seam: engine address bindings for 'wells'-contract arguments.
+      // When the resolve_nouns slot binds concrete wells for an event's role,
+      // they are authoritative — defaultRoleResolver is NOT consulted and the
+      // unknown-role pass-through below is never taken for an argument the
+      // vocabulary declares resolvable (an unbound declared-address argument
+      // already barred upstream at resolve_nouns; this pass was skipped).
+      // Slot absent (chatbot pipeline) => today's code runs byte-identically.
+      const nounBindings = authoritativeNounSlot(state)?.resolvedByLabel;
+
       const out: PlateEventPrimitive[] = [];
       let counter = 0;
       const allDiagnostics: PassDiagnostic[] = [];
@@ -2332,7 +2407,10 @@ export function createResolveRolesPass(): Pass {
           args: details as Record<string, unknown>,
         };
 
-        const wells = defaultRoleResolver(role, ctx);
+        const authoritativeWells = nounBindings?.[role]?.addresses;
+        const wells = authoritativeWells && authoritativeWells.length > 0
+          ? authoritativeWells
+          : defaultRoleResolver(role, ctx);
 
         if (wells.length === 0) {
           // Unknown role — pass through unchanged with a warning

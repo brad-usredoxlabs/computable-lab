@@ -111,7 +111,10 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
         : [];
       // SPINE-1: preserve argument-location identity on the PARSED document
       // (parse-level contract). The normalizeScientistIntent unresolvedRefs
-      // boundary stays {kind,label,reason} — SPINE-3 widens it.
+      // boundary stays {kind,label,reason} — SPINE-4's resolve_nouns pass
+      // reconciles the model's unresolved[] against the engine's bindings and
+      // presents the structured clarifications at the compile boundary
+      // (SPINE-3 registered no widening here and none was made).
       const actionLocation = preserveActionLocation(rec.actionLocation, vocabulary);
       return [{
         label: rec.label,

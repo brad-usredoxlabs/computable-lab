@@ -2,15 +2,24 @@
  * compileScientistIntent — run a scientist-intent wire document through the
  * deterministic compiler and produce the canonical TerminalArtifacts bundle.
  *
- * Architecture: the 26-pass chatbot pipeline consumes everything downstream of
- * `ai_precompile`. Instead of an LLM, this runner feeds the SAME seam a
- * synthetic `ai_precompile` output built by normalizeScientistIntent
+ * Architecture: the chatbot pipeline's deterministic passes consume everything
+ * downstream of `ai_precompile`. Instead of an LLM, this runner feeds the SAME
+ * seam a synthetic `ai_precompile` output built by normalizeScientistIntent
  * ({ protocolIntent, candidateEvents, unresolvedRefs }), then runs a focused
  * pipeline (`scientist-intent-compile.yaml`) through the existing pass
- * factories. Every deterministic pass — protocol-intent state planning,
- * validation, lowering, geometric-macro expansion, biology-verb expansion,
- * labware resolution, role resolution, compute_volumes, deck layout, resource
- * manifest, lab-state fold, instrument run-files — runs unchanged.
+ * factories. Every deterministic pass — noun resolution (SPINE-4's
+ * `resolve_nouns`, registered over SPINE-3's resolution engine), protocol-intent
+ * state planning, validation, lowering, geometric-macro expansion,
+ * biology-verb expansion, labware resolution, role resolution, compute_volumes,
+ * deck layout, resource manifest, lab-state fold, instrument run-files — runs
+ * against it.
+ *
+ * SPINE-4 bar: `resolve_nouns` runs ahead of every noun-consuming stage. When
+ * ANY argument remains unresolved after reconciliation, the pass fails with ONE
+ * error diagnostic and the runner's cascade barrier skips every consumer and
+ * graph stage without invoking run(). The compile then reports outcome
+ * 'needs-clarification' with the structured SPINE-1 clarifications and ZERO
+ * artifact-bearing slots — atomically, never a half-resolved graph.
  */
 import { resolve } from 'node:path';
 import { PassRegistry } from '../pipeline/PassRegistry.js';
@@ -51,7 +60,17 @@ import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.j
 import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js';
 import { emptyLabState, type LabStateSnapshot } from '../state/LabState.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
-import type { ScientistIntent } from './types.js';
+import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+import { createResolveSpine } from '../../resolve/ResolveSpine.js';
+import type { EngineSpineLike } from '../resolution/adapters.js';
+import {
+  createResolveNounsPass,
+  UNRESOLVED_ARGUMENTS_CODE,
+  type ResolveNounsEngine,
+  type ResolveNounsOutput,
+} from '../resolution/resolveNounsPass.js';
+import type { TermLike } from '../../materials/termReconciliation.js';
+import type { ScientistIntent, ScientistIntentUnresolvedFact } from './types.js';
 import type { TerminalArtifacts, Gap, CompileOutcome } from '../pipeline/CompileContracts.js';
 import type { ScientistIntentNormalized } from './normalizeScientistIntent.js';
 
@@ -64,6 +83,19 @@ export interface ScientistIntentCompileDeps {
   searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
   priorLabState?: LabStateSnapshot;
   onPassEvent?: (event: PassProgressEvent) => void;
+  /** SPINE-4: vocabulary for the resolve_nouns pass (fixture injection via
+   *  the loader's opts.path discipline; defaults to the shipped singleton). */
+  vocabulary?: ScientistIntentVocabulary;
+  /** SPINE-4: READ-ONLY candidate spine for the engine's spine adapter.
+   *  Production callers pass a store-backed spine; the default is the
+   *  provider-less spine (local tiers empty — nothing binds that the hint
+   *  lookup did not). */
+  spine?: EngineSpineLike;
+  /** SPINE-4: READ-ONLY term list for near-miss clarification evidence. */
+  termsForSuggestions?: () => Promise<readonly TermLike[]>;
+  /** SPINE-4: engine door override (tests stub the engine deps; the pass,
+   *  reconciliation, registration, and the bar are always the real ones). */
+  resolveNounsEngine?: ResolveNounsEngine;
 }
 
 export interface ScientistIntentCompileResult {
@@ -71,6 +103,9 @@ export interface ScientistIntentCompileResult {
   normalized: ScientistIntentNormalized;
   outcome: CompileOutcome;
   diagnostics: Array<{ severity: string; code?: string; message: string }>;
+  /** SPINE-4: the structured SPINE-1 clarifications the bar presents instead
+   *  of stringified gaps (empty when nothing is unresolved). */
+  clarifications: ScientistIntentUnresolvedFact[];
 }
 
 /**
@@ -78,7 +113,11 @@ export interface ScientistIntentCompileResult {
  * The synthetic `ai_precompile` pass returns the parsed+normalized intent, then
  * every downstream pass is the real, existing implementation.
  */
-function buildRegistry(normalized: ScientistIntentNormalized, deps: ScientistIntentCompileDeps): PassRegistry {
+function buildRegistry(
+  intent: ScientistIntent,
+  normalized: ScientistIntentNormalized,
+  deps: ScientistIntentCompileDeps,
+): PassRegistry {
   const registry = new PassRegistry();
 
   // Seed the seam the whole pipeline consumes.
@@ -87,6 +126,19 @@ function buildRegistry(normalized: ScientistIntentNormalized, deps: ScientistInt
     family: 'parse' as const,
     run: () => ({ ok: true, output: normalized }),
   });
+
+  // SPINE-4: the one noun-resolution door, registered over SPINE-3's engine.
+  // NO degraded no-resolution mode: the vocabulary and a spine are always
+  // present (shipped singleton + provider-less spine as the floor; production
+  // callers inject a store-backed spine).
+  registry.register(createResolveNounsPass({
+    intent,
+    vocabulary: deps.vocabulary ?? defaultScientistIntentVocabulary(),
+    spine: deps.spine ?? createResolveSpine({}),
+    ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+    ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
+    ...(deps.resolveNounsEngine ? { resolve: deps.resolveNounsEngine } : {}),
+  }));
 
   registry.register(createProtocolIntentStatePlanPass());
   registry.register(createValidateProtocolIntentPass());
@@ -147,7 +199,7 @@ export async function compileScientistIntent(
   deps: ScientistIntentCompileDeps = {},
 ): Promise<ScientistIntentCompileResult> {
   const normalized = normalizeScientistIntent(intent);
-  const registry = buildRegistry(normalized, deps);
+  const registry = buildRegistry(intent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);
 
   const input: Record<string, unknown> = {
@@ -159,6 +211,36 @@ export async function compileScientistIntent(
   };
 
   const result = await runPipeline(spec, registry, input, undefined, deps.onPassEvent);
+
+  // SPINE-4 bar: an unresolved argument bars ATOMICALLY. The runner stores a
+  // pass's output slot only for ok:true passes (PipelineRunner.ts:341-384), so
+  // the bar is read from the resolve_nouns error diagnostic — whose details
+  // carry the structured clarifications verbatim. The cascade barrier already
+  // skipped every consumer/graph stage (their output slots are absent); the
+  // assembly below therefore sees empty slots. The structured clarifications —
+  // not stringified error-diag gaps — are the presentation channel, and
+  // 'needs-clarification' keeps 'error' meaning "compile machinery broke"
+  // (OQ1 ruling (a)).
+  const barDiagnostic = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
+  if (barDiagnostic) {
+    const clarifications = (barDiagnostic.details?.['clarifications'] as
+      ScientistIntentUnresolvedFact[] | undefined) ?? [];
+    const terminalArtifacts: TerminalArtifacts = {
+      events: [],
+      directives: [],
+      gaps: [],
+    };
+    if (normalized.protocolIntent) terminalArtifacts.protocolIntent = normalized.protocolIntent;
+    return {
+      terminalArtifacts,
+      normalized,
+      outcome: 'needs-clarification',
+      diagnostics: result.diagnostics,
+      clarifications,
+    };
+  }
+
+  const nounsOutput = result.outputs.get('resolve_nouns') as ResolveNounsOutput | undefined;
 
   const eventOutput = (result.outputs.get('resolve_roles') as { events?: unknown[] } | undefined)?.events ?? [];
   const directiveOutput = (result.outputs.get('apply_directives') as { directives?: unknown[] } | undefined)?.directives ?? [];
@@ -207,5 +289,6 @@ export async function compileScientistIntent(
     normalized,
     outcome,
     diagnostics,
+    clarifications: nounsOutput?.clarifications ?? [],
   };
 }
