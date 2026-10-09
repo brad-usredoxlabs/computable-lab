@@ -1,0 +1,233 @@
+# W2-2 constraint vocabulary lint — conditional cross-reference closure for the
+# constraint vocabulary registry doc AND for constraint-carrying payloads
+# (well-state fixtures today; consuming records in W2-3), bound by schemaId to
+# the vocabulary meta-schema $id (scientist-intent-vocabulary.lint.yaml shape).
+#
+# DSL-only (exists/nonEmpty/equals/allIn/everyItem/any/all/not — no interpreter
+# changes, no arithmetic, no value-set comparisons inside conditional arms).
+# Policy VALUES live in constraint-vocabulary.yaml; policy WELL-FORMEDNESS lives
+# here; NO conditional is re-implemented in TypeScript.
+#
+# Rule ids are namespaced `constraint-vocab-` for GLOBAL uniqueness
+# (LintEngine.addSpec throws on duplicate ids across ALL specs, LintEngine.ts:59-61).
+# NB server.ts:411 skips empty-rule specs silently — this spec ships 7 rules and
+# Wave2ConstraintVocabularyRules.test.ts proves they FIRE, not just load.
+#
+# Vocabulary-doc rules are guarded by `when: exists classes` (or classIds /
+# applicability); payload-closure rules are guarded by `when: exists constraints`
+# so the same bound spec serves both documents without cross-contamination.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/constraint-vocabulary.schema.yaml"
+
+rules:
+# R1: every class overridePolicy names a policy declared in overridePolicies
+# (undeclared refs fail loudly; classes without the optional field are skipped
+# by the [*] projection and are covered by R2 where their binding demands one).
+- id: constraint-vocab-class-policy-refs-declared
+  title: "class overridePolicy refs are declared policies"
+  description: >-
+    Every overridePolicy carried by a constraint class must be a member of
+    overridePolicies[*].id. Undeclared refs fail loudly.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: classes
+  assert:
+    op: allIn
+    path: classes[*].overridePolicy
+    collectionPath: overridePolicies[*].id
+  message:
+    template: "constraint class overridePolicy is not declared in overridePolicies"
+
+# R2: a class whose default binding is vendor_default must declare an override
+# policy. Vendor defaults are by definition overridable UNDER a policy — a
+# vendor_default with no policy is undeclared strictness (spec §2.5 R2).
+- id: constraint-vocab-vendor-default-carries-policy
+  title: "vendor-default classes carry an override policy"
+  description: >-
+    A class whose defaultBindingKind is vendor_default must declare an
+    overridePolicy (the policy that governs how the vendor number may be
+    relaxed or tightened).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: classes
+  assert:
+    op: everyItem
+    collectionPath: classes
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: defaultBindingKind
+          value: vendor_default
+      - op: exists
+        path: overridePolicy
+  message:
+    template: "a constraint class defaulting to vendor_default must declare an overridePolicy"
+
+# R3a: class ids are non-empty and the flat classIds mirror agrees with
+# classes[*].id as SETS (two-way allIn closure — a rename to a duplicate or an
+# orphan mirror entry fails loudly).
+- id: constraint-vocab-class-ids-unique
+  title: "class ids are non-empty and agree with the classIds mirror"
+  description: >-
+    Every class id is non-empty; every classIds entry names a declared class and
+    every declared class appears in classIds. A duplicated class id leaves an
+    orphan in the mirror and fails the reverse membership.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: classes
+  assert:
+    op: all
+    predicates:
+    - op: everyItem
+      collectionPath: classes
+      assert:
+        op: nonEmpty
+        path: id
+    - op: allIn
+      path: classIds
+      collectionPath: classes[*].id
+    - op: allIn
+      path: classes[*].id
+      collectionPath: classIds
+  message:
+    template: "constraint class ids are empty or disagree with the classIds mirror"
+
+# R3b: applicability entries name declared classes.
+- id: constraint-vocab-applicability-names-declared-class
+  title: "applicability entries name declared classes"
+  description: >-
+    Every applicability entry's class must be a member of classIds. Dangling
+    applicability fails loudly.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: applicability
+  assert:
+    op: allIn
+    path: applicability[*].class
+    collectionPath: classIds
+  message:
+    template: "constraint vocabulary applicability names a class that is not declared"
+
+# R4 (payload closure): every constraint's class names a declared class.
+- id: constraint-vocab-constraint-classes-resolve
+  title: "constraint classes resolve to declared classes"
+  description: >-
+    In a constraint-carrying payload, every constraints[*].class must name a
+    class declared in the vocabulary. A constraint whose class was erased or
+    renamed fails here.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: constraints
+  assert:
+    op: allIn
+    path: constraints[*].class
+    collectionPath: classIds
+  message:
+    template: "constraint class does not resolve to a declared constraint-vocabulary class"
+
+# R5 (payload closure): the required classes of the well_state profile are all
+# present. Reverse membership: every requiredClasses.well_state entry must be a
+# member of the payload's constraints[*].class — erasing a required constraint
+# fails (the HepG2 count-erased mutation).
+- id: constraint-vocab-required-classes-present-well-state
+  title: "required well_state constraint classes are present"
+  description: >-
+    Every class listed in requiredClasses.well_state must appear among the
+    payload's constraints[*].class. The HepG2 well-state must carry its minimum
+    (the cell-count floor) and its threshold — erasing either fails.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: constraints
+  assert:
+    op: allIn
+    path: requiredClasses.well_state
+    collectionPath: constraints[*].class
+  message:
+    template: "a required well_state constraint class is missing from the payload's constraints"
+
+# R6 (payload closure, the dimension-preservation law as DATA): every composed
+# subject.dimensionKey ("<role>:<bound dimension>") must be a declared
+# dimensionLaw. Re-typing the 10,000-cell count as a volume yields
+# "cell_count:volume", which is NOT a declared law — the collapse fails.
+- id: constraint-vocab-constraint-dimension-laws
+  title: "constraint dimension keys obey the declared dimension laws"
+  description: >-
+    Counts never collapse into volumes: each constraint's subject.dimensionKey
+    must be a member of the vocabulary's dimensionLaws. The composition lives in
+    the payload because the lint DSL has no collection joins; the LAWS are data.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: constraints
+  assert:
+    op: allIn
+    path: constraints[*].subject.dimensionKey
+    collectionPath: dimensionLaws
+  message:
+    template: "constraint subject.dimensionKey violates the declared dimension laws (dimension collapse)"
+
+# R7 (payload closure, the strictness seam as DATA): every constraint carries an
+# overridePolicy AND its declared policy is a vocabulary policy.
+- id: constraint-vocab-constraint-carries-declared-policy
+  title: "constraints carry a declared override policy"
+  description: >-
+    Every constraint in a payload must declare an overridePolicy, and that policy
+    must be declared in overridePolicies. A vendor_default bound with no policy
+    is undeclared strictness.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: constraints
+  assert:
+    op: all
+    predicates:
+    - op: everyItem
+      collectionPath: constraints
+      assert:
+        op: exists
+        path: overridePolicy
+    - op: allIn
+      path: constraints[*].overridePolicy
+      collectionPath: overridePolicies[*].id
+  message:
+    template: "a constraint lacks an overridePolicy or names an undeclared one"
+
+# R8 (payload closure, the vendor-vs-hard seam as DATA): every composed
+# subject.bindingPolicyKey ("<overridePolicy>:<bindingKind>") must be a declared
+# compatible pair. Same bound value + hard_bound under a relaxable policy yields
+# a key absent from policyBindingKeys — the finding differs from the
+# vendor_default arm entirely because of DATA fields.
+- id: constraint-vocab-binding-kind-policy-compatible
+  title: "bindingKind and overridePolicy are a declared compatible pair"
+  description: >-
+    The vendor-vs-material strictness seam: each constraint's
+    subject.bindingPolicyKey must be a member of the vocabulary's
+    policyBindingKeys. hard_bound under a relaxable policy fails.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: constraints
+  assert:
+    op: allIn
+    path: constraints[*].subject.bindingPolicyKey
+    collectionPath: policyBindingKeys
+  message:
+    template: "constraint bindingKind and overridePolicy are not a declared compatible pair"

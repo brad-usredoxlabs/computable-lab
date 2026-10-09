@@ -1,0 +1,131 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/registry/constraint.schema.yaml"
+title: "Constraint"
+description: >
+  The constraint-object datatype every W2-3 step will embed (this item ships the
+  OBJECT; W2-3 mounts it — nothing consumes this schema yet). A constraint names
+  a class declared in schema/registry/constraint-vocabulary/constraint-vocabulary.yaml,
+  carries a typed bound (Quantity or QuantityRatio), states its applicability as
+  SYMBOLIC refs only (never inline payloads), and declares the strictness seam:
+  bindingKind vendor_default vs hard_bound (the vendor-vs-material distinction
+  SPINE-8/SPINE-3 govern — the DISTINCTION is encoded here, the POLICY of which
+  record gets which is W2-3+ via lint bound to the consuming records) plus an
+  overridePolicy ref to a policy declared in the vocabulary data.
+
+  capabilityRequirement rides the EXISTING equipment-capability machinery
+  (equipment-capability.schema.yaml:39-43,57 — an `ECP-`/`EQC-` record ref or a
+  `CL:` CURIE for a generic physical kind; the bead-beater arm is
+  {kind: ontology, id: CL:bead_beater, ...}). No new prefix is minted (CL: is
+  already doubly-used: OBO CL:<digits> vs computable-lab CL:<snake> kind).
+
+  This is a datatype, NOT a record kind (crosswalk forbidden_kinds lists
+  `constraint-class` and `quantity`; the vocabulary doc's registry-style `kind:`
+  field is a plain data field, never a properties.kind.const).
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- class
+- bindingKind
+
+properties:
+  class:
+    type: string
+    pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      The constraint class id. Must name a class declared in the constraint
+      vocabulary data (closure is enforced by constraint-vocabulary.lint.yaml at
+      the vocabulary level and by W2-3's record-bound lint at the consuming
+      level — the datatype keeps the shape, the DATA keeps the vocabulary).
+
+  bound:
+    description: >-
+      The typed limit. Quantity for scalar classes (minimum, maximum, capacity,
+      threshold, per-unit dose totals...); QuantityRatio for ratio-shaped
+      classes (ratio, per_unit_dose). Which classes demand which shape is
+      declared in the vocabulary data (boundShape), not branched here.
+    oneOf:
+    - $ref: "../datatypes/quantity.schema.yaml"
+    - $ref: "../datatypes/quantity-ratio.schema.yaml"
+
+  subject:
+    type: object
+    additionalProperties: false
+    description: >-
+      Applicability as SYMBOLIC refs only (role/kind/term refs — never inline
+      payloads): which biological context the constraint binds.
+    required: [ ref ]
+    properties:
+      ref:
+        type: string
+        pattern: "^(cf:|CL:)[a-z0-9][a-z0-9_-]*$"
+        description: "Local cf: CURIE (the vocabulary's own namespace) or an existing CL: kind CURIE."
+      role:
+        type: string
+        description: "Optional symbolic role label (e.g. 'culture_well')."
+      kind:
+        type: string
+        description: "Optional symbolic kind label (e.g. 'labware-role')."
+      dimensionKey:
+        type: string
+        pattern: "^[a-z][a-z0-9_]*:[a-z]+$"
+        description: >-
+          Composed "<subject role>:<bound dimension>" key. The lint DSL has no
+          collection joins (lint-v1 ops only), so the payload carries the
+          composition and constraint-vocab-constraint-dimension-laws checks it
+          against the vocabulary's declared dimensionLaws. This is how the
+          dimension-preservation law (counts never collapse into volumes) is
+          enforced as DATA.
+      bindingPolicyKey:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*:[a-z_]+$"
+        description: >-
+          Composed "<overridePolicy>:<bindingKind>" key, checked against the
+          vocabulary's declared policyBindingKeys by
+          constraint-vocab-binding-kind-policy-compatible. The vendor-vs-hard
+          strictness seam as DATA.
+
+  bindingKind:
+    type: string
+    enum: [ vendor_default, hard_bound ]
+    description: >-
+      THE vendor-vs-material strictness seam. vendor_default = the vendor's
+      stated number, overridable UNDER a declared policy; hard_bound = the lab's
+      own material truth, not relaxable. The distinction is data here; which
+      records get which binding is W2-3+ enforcement.
+
+  overridePolicy:
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+    description: >-
+      Ref to an override-policy id declared in the constraint vocabulary's
+      overridePolicies section (lab-may-relax / lab-may-tighten /
+      never-override ...). Undeclared refs fail the vocabulary lint
+      (constraint-vocab-class-policy-refs-declared).
+
+  capabilityRequirement:
+    allOf:
+    - $ref: "../datatypes/ref.schema.yaml"
+    - oneOf:
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: equipment-capability }
+      - type: object
+        properties:
+          kind: { const: ontology }
+          id:
+            type: string
+            pattern: "^CL:"
+    description: >-
+      The equipment capability this constraint presumes (the bead-beater arm:
+      CL:bead_beater). Mirrors equipment-capability.schema.yaml's
+      equipmentClassRef allOf+$ref style (:44-57). References the existing
+      machinery; does not extend it.
+
+  provenance:
+    type: string
+    description: "Optional freeform provenance note (where the bound came from)."

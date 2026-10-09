@@ -1,0 +1,272 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/registry/constraint-vocabulary.schema.yaml"
+title: "Constraint Vocabulary"
+description: >
+  STRUCTURAL rules only (JSON Schema) for the constraint vocabulary registry
+  document (constraint-vocabulary.yaml). Conditional cross-reference closure
+  lives in constraint-vocabulary.lint.yaml (DSL), never here and never in
+  TypeScript (CLAUDE.md: business logic lives in lint YAML). Scientist-intent
+  precedent: scientist-intent-vocabulary.schema.yaml (structure) +
+  scientist-intent-vocabulary.yaml (data) + scientist-intent-vocabulary.lint.yaml
+  (policy) — the same triple.
+
+  DELIBERATE: `kind` is an ENUM, not a const. The crosswalk's admission test
+  enumerates record kinds from properties.kind.const across every
+  *.schema.yaml; a const here would mint `constraint-vocabulary` as a record
+  kind, which D1 forbids (and wave2-naming-crosswalk.yaml forbidden_kinds
+  already lists `constraint-class` and `quantity`). This doc is a registry doc
+  (operations.yaml precedent), not a kind.
+
+type: object
+additionalProperties: false
+unevaluatedProperties: false
+required:
+- kind
+- version
+- authority
+- profiles
+- classIds
+- classes
+- overridePolicies
+- policyBindingKeys
+- requiredClasses
+- dimensionLaws
+- applicability
+- capabilityTerms
+
+properties:
+  kind:
+    enum: [ constraint-vocabulary ]
+    description: >-
+      Registry-doc marker (enum, NOT const — see the description above).
+
+  version:
+    type: integer
+    const: 1
+
+  authority:
+    type: string
+    minLength: 1
+    description: "The ruling this vocabulary rides (D6 + W2-1 cf:constraint-class admission)."
+
+  classIds:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      Flat mirror of classes[*].id. uniqueItems gives Ajv (structural authority)
+      the duplicate arm; the lint's two-way closure
+      (constraint-vocab-class-ids-unique) catches a class renamed to a duplicate
+      without touching this mirror.
+
+  classes:
+    type: array
+    minItems: 1
+    description: >-
+      One entry per constraint class of the 8+1 (D6). Class names, CURIEs,
+      applicability, allowed bindingKinds and override-policy refs are DATA.
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - id
+      - curie
+      - label
+      - description
+      - boundShape
+      - dimensionRule
+      - allowedBindingKinds
+      - defaultBindingKind
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          minLength: 1
+        curie:
+          type: string
+          pattern: "^cf:[a-z0-9][a-z0-9-]*$"
+          description: "Local cf: CURIE per the W2-1 admission (no new prefix, §6.11)."
+        label:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          minLength: 1
+        boundShape:
+          type: string
+          enum: [ quantity, quantity-ratio, quantity-or-ratio, none ]
+          description: >-
+            Which typed bound this class demands (quantity.schema.yaml vs
+            quantity-ratio.schema.yaml; none = sequence/state classes). Data, so
+            W2-3's mount lint consumes it without a TypeScript branch.
+        dimensionRule:
+          type: string
+          enum: [ same-dimension, quantity-per-count, dimension-molar, any-dimension, none ]
+          description: >-
+            The dimension law this class declares (ratio demands
+            same-dimension; per_unit_dose demands quantity-per-count). The
+            datatype stays permissive; the CLASS carries the law as data.
+        allowedBindingKinds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [ vendor_default, hard_bound ]
+        defaultBindingKind:
+          type: string
+          enum: [ vendor_default, hard_bound ]
+        overridePolicy:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+          description: "Ref to an overridePolicies id (closure: constraint-vocab-class-policy-refs-declared)."
+        example_bound:
+          type: object
+          description: >-
+            A representative bound payload for this class (consumed by the
+            instantiation proof; validated structurally by constraint.schema.yaml).
+
+  overridePolicies:
+    type: array
+    minItems: 1
+    description: >-
+      Policy NAMES + attributes only. Enforcement of which policy applies to
+      which consuming record is W2-3+ (lint bound to the consuming records).
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - id
+      - description
+      - relaxable
+      - allowedBindingKinds
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+        description:
+          type: string
+          minLength: 1
+        relaxable:
+          type: boolean
+        allowedBindingKinds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [ vendor_default, hard_bound ]
+
+  policyBindingKeys:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9-]*:[a-z_]+$"
+    description: >-
+      Declared override-policy x bindingKind compatibility as flat
+      "policy:bindingKind" pairs. The lint DSL has no collection joins, so a
+      constraint payload carries the composed key
+      (subject.bindingPolicyKey) and the lint checks membership
+      (constraint-vocab-binding-kind-policy-compatible). The strictness seam is
+      DATA, not a TypeScript branch.
+
+  requiredClasses:
+    type: object
+    minProperties: 1
+    additionalProperties: false
+    patternProperties:
+      "^[a-z][a-z0-9_]*$":
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      Profile-keyed required classes: requiredClasses.<profile> lists the classes
+      a payload of that profile MUST carry. Profile-keyed (underscore spelling —
+      the lint path grammar allows [a-z_]) because the lint DSL has no collection
+      joins: each profile gets its own closure rule reading
+      requiredClasses.<profile> against the payload's constraints[*].class
+      (constraint-vocab-required-classes-present-<profile>). Multi-profile binding
+      is data here, never a TypeScript branch.
+
+  profiles:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      Declared payload profiles (well_state today; step/phase profiles arrive
+      with W2-3 when consuming records mount constraints).
+
+  dimensionLaws:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*:[a-z]+$"
+    description: >-
+      Declared role->dimension laws as flat "role:dimension" pairs (e.g.
+      "cell_count:count"). A constraint payload carries the composed key
+      (subject.dimensionKey = "<role>:<bound dimension>") and the lint checks
+      membership (constraint-vocab-constraint-dimension-laws). The
+      dimension-preservation law as DATA: re-typing a cell count as a volume
+      yields a key absent from the declared laws.
+
+  applicability:
+    type: array
+    minItems: 1
+    description: >-
+      Which biological contexts each class binds (symbolic target labels —
+      never inline payloads). Every entry names a declared class
+      (constraint-vocab-applicability-names-declared-class).
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required: [ class, targets ]
+      properties:
+        class:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+        targets:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9_-]*$"
+
+  capabilityTerms:
+    type: array
+    minItems: 1
+    description: >-
+      Capability terms this vocabulary presumes. They ride the EXISTING
+      equipment-capability machinery (CL: physical-kind CURIEs per the
+      2026-09-19 namespace ruling, equipment-capability.schema.yaml:39-43,57) —
+      no new prefix is minted (§6.11).
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required: [ term, crosswalk_term, kindRef ]
+      properties:
+        term:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+        crosswalk_term:
+          type: string
+          minLength: 1
+          description: "The term as listed in wave2-naming-crosswalk.yaml."
+        kindRef:
+          type: string
+          pattern: "^CL:[a-z][a-z0-9_]*$"
+          description: "Existing computable-lab physical-kind CURIE (CL:<snake> namespace)."
