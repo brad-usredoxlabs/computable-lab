@@ -386,10 +386,12 @@ describe('W2-1 admission leg for W2-2-minted nouns (crosswalk resolves, no colli
 
   it('the bare dimension word `count` WOULD collide (operation-id + verb-action-map) — recorded finding W2-2-F1: dimensions enter the crosswalk qualified, never bare', async () => {
     const namespaces = await enumerateNamespaces();
+    const opIds = namespaces['operation-id'] ?? new Set<string>();
+    const vamVerbs = namespaces['verb-action-map-verb'] ?? new Set<string>();
     const bare = normalize('count');
-    expect(namespaces['operation-id'].has(bare)).toBe(true);
-    expect(namespaces['verb-action-map-verb'].has(bare)).toBe(true);
+    expect(opIds.has(bare)).toBe(true);
+    expect(vamVerbs.has(bare)).toBe(true);
     // The qualified form does not collide:
-    expect(namespaces['operation-id'].has(normalize('quantity-dimension-count'))).toBe(false);
+    expect(opIds.has(normalize('quantity-dimension-count'))).toBe(false);
   });
 });

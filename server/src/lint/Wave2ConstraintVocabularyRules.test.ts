@@ -31,7 +31,7 @@
  *    different findings (the strictness seam is DATA, §2.3).
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
@@ -217,7 +217,7 @@ describe('clean vocabulary document emits ZERO findings', () => {
     const r = engine().lint(vocabDoc(), VOCAB_SCHEMA_ID);
     expect(r.violations.map((v) => `${v.ruleId}: ${v.message}`)).toEqual([]);
     expect(r.valid).toBe(true);
-    expect(r.summary.errors).toBe(0);
+    expect(r.summary?.errors).toBe(0);
   });
 });
 
