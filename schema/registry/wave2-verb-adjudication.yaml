@@ -1,0 +1,125 @@
+# W2-1-NAMING-CROSSWALK — the ONE verb adjudication mapping table.
+# Data-declared mapping between the TWO existing verb vocabularies:
+#   (1) verb-definition record kind (schema/workflow/verb-definition.schema.yaml,
+#       seed records records/seed/verb-definition/verb-*.yaml) — referenced by
+#       protocol.steps[].semanticVerb (protocol.schema.yaml:774-775 ->
+#       $defs/SemanticVerbRef :669-685, type const verb-definition);
+#   (2) the wave-1 31-verb scientist-intent single-source enum
+#       (schema/workflow/scientist-intent.schema.yaml $defs/actionVerb :22,
+#       mirrored 1:1 by schema/scientist-intent/scientist-intent-vocabulary.yaml).
+# This file adds NO verb to either vocabulary and is NEVER a third verb list:
+# it only adjudicates which entries denote the same operation. Counts below
+# were machine-extracted by parsing the YAML sources (see
+# server/src/schema/Wave2NamingCrosswalk.test.ts, which re-derives them).
+kind: verb-adjudication
+version: 0.1.0
+
+vocabularies:
+  scientist_intent_enum:
+    source: schema/workflow/scientist-intent.schema.yaml
+    path: "$defs/actionVerb"
+    count: 31
+    mirror: schema/scientist-intent/scientist-intent-vocabulary.yaml
+    mirror_count: 31
+    mirror_rule: "set equality + declaration order (vocabularyMirrorDrift test)"
+  verb_definition_records:
+    source: records/seed/verb-definition/
+    schema: schema/workflow/verb-definition.schema.yaml
+    count: 10
+  neighboring_operation_registry:
+    source: schema/registry/operations.yaml
+    count: 27
+    note: "third neighboring vocabulary (kind: operation-registry); named, never conflated"
+  neighboring_verb_action_map:
+    source: schema/registry/verb-action-map.yaml
+    count: 26
+    note: "synonym/ontology map over scientist-intent verbs; 5 enum verbs unmapped (see findings)"
+
+# verb-definition record id <-> scientist-intent action (when they denote the
+# same operation). `same_operation` = the mapping; `protocol_semantic_only` =
+# verb-definition with NO compiler verb; `enum_only` = scientist-intent verb
+# with NO verb-definition record.
+mappings:
+  same_operation:
+    - verb_definition_id: VERB-INCUBATE
+      canonical: incubate
+      scientist_intent_action: incubate
+      also: [operation-registry id incubate (operations.yaml:32), verb-action-map incubate]
+    - verb_definition_id: VERB-READ
+      canonical: read
+      scientist_intent_action: read
+      also: [operation-registry id read (operations.yaml:56), verb-action-map read]
+    - verb_definition_id: VERB-SHAKE
+      canonical: shake
+      scientist_intent_action: shake
+      also: ["scientist-intent enum verb (scientist-intent.schema.yaml:27)"]
+      finding: W2-1-F3   # operations.yaml folds shake as an ALIAS of mix (:47)
+  protocol_semantic_only:
+    - verb_definition_id: VERB-AUTOCLAVE
+      canonical: autoclave
+    - verb_definition_id: VERB-HEAT
+      canonical: heat
+      finding: W2-1-F1   # operations.yaml incubate aliases include heat (:36)
+    - verb_definition_id: VERB-MICROWAVE
+      canonical: microwave
+    - verb_definition_id: VERB-ROCK
+      canonical: rock
+    - verb_definition_id: VERB-SET
+      canonical: set
+      finding: W2-1-F2   # operations.yaml add_material aliases include set (:16)
+    - verb_definition_id: VERB-SONICATE
+      canonical: sonicate
+    - verb_definition_id: VERB-STIR
+      canonical: stir
+  enum_only:
+    # 28 of the 31 enum verbs have no verb-definition record (31 - 3 mapped above)
+    - seed
+    - mix
+    - resuspend
+    - dilute
+    - count
+    - add_material
+    - create_container
+    - transfer
+    - stain
+    - fix
+    - permeabilize
+    - block
+    - quench
+    - label
+    - transfect
+    - aliquot
+    - wash
+    - elute
+    - harvest
+    - passage
+    - freeze
+    - thaw
+    - spin
+    - pellet
+    - serial_dilution
+    - media_swap_duplicate_columns
+    - source_wells_to_duplicate_target_columns
+    - repeat_rows
+
+findings:
+  - id: W2-1-F1
+    status: collision
+    term: heat
+    detail: "verb-definition VERB-HEAT canonical `heat` vs operations.yaml incubate aliases [.., heat, ..] (operations.yaml:36)"
+  - id: W2-1-F2
+    status: collision
+    term: set
+    detail: "verb-definition VERB-SET canonical `set` vs operations.yaml add_material aliases [.., set, ..] (operations.yaml:16)"
+  - id: W2-1-F3
+    status: collision
+    term: shake
+    detail: "enum verb (scientist-intent.schema.yaml:27) + verb-definition canonical (verb-shake.yaml:4) + operations.yaml ALIAS of mix (:47); absent from verb-action-map.yaml"
+  - id: W2-1-F4
+    status: collision
+    term: spin/pellet vs centrifuge
+    detail: "enum verbs spin (:53) and pellet (:54) are operations.yaml ALIASES of centrifuge (:66-69); centrifuge is not an enum verb"
+  - id: W2-1-F5
+    status: coverage-gap
+    term: verb-action-map
+    detail: "26 mappings vs 31 enum verbs; unmapped: shake, serial_dilution, media_swap_duplicate_columns, source_wells_to_duplicate_target_columns, repeat_rows"
