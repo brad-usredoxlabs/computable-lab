@@ -115,10 +115,22 @@ that should not is a blocker, not an assumption).
   /mnt/vast/home/brad/git/cl-integration-2/.run/backend.log (binary-ish, use grep -a).
 
 ## LIVE AT CHECKPOINT (none killed)
-- cl-coder SPINE-6 redisp: launcher bash 4178870 (fleet lock pid file), dispatched 00:44,
-  log lanes/2/logs/coder-SPINE-6-redisp-l2t0040.log, report
-  wt/SPINE-6-lane2-l2t2230/.hermes/plans/SPINE-6-report.redispatch-l2t0040.md, branch
-  spine-6-lane2-l2t2230. thunderbeast ~1-2/4. Gate run 1 process EXITED (crash) — none other live.
+- cl-coder SPINE-6 redisp EXITED code=0 ~01:11 (BEFORE this checkpoint closed): legitimate
+  SECOND stop-and-report — 'SPINE-6 STOPPED FIXTURE1-RECORDID-CLAUSE-AND-FIXTURE5-MATERIAL-
+  SPINE-FAILURE-ARM-NOT-ROUTE-REACHABLE'; report §probe committed 2b6de2bb (P6 fixture-6 leg
+  REACHABLE EXACTLY AS RULED; P5a/P5c show shipped behavior gives MATERIAL args
+  unknown-noun+mint-offer, VERBATIM resolution-lookup-failed only on labware-hint args — the
+  ruling's wording contradicts shipped code). Fleet lock measured FREE (flock -n) by orch.
+  Structured blocker recorded in task block (blocker fields + watch path
+  decisions/SPINE-6-ruling-amendment-l2t0140.md).
+- ARCHITECT dispatched at ~01:45 (background bash 118105, log
+  lanes/2/logs/architect-SPINE-6-ruling-amend-l2t0140.log, prompt
+  prompts/architect-SPINE-6-ruling-amend-l2t0140.txt, expected ~30-45 min): bounded ruling-
+  amendment decision (A) amend wording / (B) bless subset 2/3/4+6+manifest+live-smoke /
+  (C) better. Coder lock stays FREE until an amended ruling lands — do NOT re-dispatch SPINE-6
+  coder before the artifact renders. Next tick: read decision, then either re-dispatch coder
+  (amended text folded into prompt verbatim) or accept subset path.
+- thunderbeast ~2/4 (orch + architect). Gate run-1 process exited (crash) — none other live.
 
 ## Budget
 Invoked ~00:55; reconcile + gate run 1 (~25 min incl. crash) + evidence judgement (vision on
