@@ -1,0 +1,261 @@
+# W2-1-NAMING-CROSSWALK — machine-readable naming crosswalk for the wave-2
+# semantic-protocol-family campaign. Registry-style data file (mirrors
+# schema/registry/operations.yaml's style; NOT a schema triplet, NOT registered
+# in SchemaRegistry). The human memo is docs/wave2-naming-crosswalk.md; every
+# `binds_to` pointer below is a real file:line the coder opened (see memo).
+#
+# Binding rulings: D1-D9 in the WAVE-2 campaign header
+# (.hermes plans intake: ~/.hermes/specs/intake/2026-10-09_semantic-protocol-family/).
+# This file MAPS, never merges, and mints NO new record kind and NO new verb.
+kind: naming-crosswalk
+version: 0.1.0
+campaign: semantic-protocol-family
+authority: "docs/wave2-naming-crosswalk.md (memo) + D1-D9 rulings"
+
+entries:
+  # ---- the 8 neighbor nouns: all resolve to EXISTING record kinds ----
+  - term: "Semantic Protocol Family"
+    status: existing
+    binds_to:
+      kind: protocol
+      schema: schema/workflow/protocol.schema.yaml
+      kind_line: "schema/workflow/protocol.schema.yaml:25"
+    source_decision: D1
+    note: >-
+      protocol upgraded IN PLACE to carry semantic operations; NO separate
+      semantic-protocol-family kind. protocolLayer const "universal"
+      (protocol.schema.yaml:21) already marks the universal layer.
+
+  - term: "Lab Realization Plan"
+    status: existing
+    binds_to:
+      kind: local-protocol
+      schema: schema/workflow/local-protocol.schema.yaml
+      kind_line: "schema/workflow/local-protocol.schema.yaml:28"
+    source_decision: D1
+    note: "branch_resolution (local-protocol.schema.yaml:88) holds the lab's branch answers."
+
+  - term: "branch axes"
+    status: existing
+    binds_to:
+      kind: protocol
+      field: protocol.branch_axes
+      field_line: "schema/workflow/protocol.schema.yaml:294"
+      fed_by: protocol-decision-tree
+      fed_by_line: "schema/workflow/protocol-decision-tree.schema.yaml:25"
+    source_decision: D1/D4
+
+  - term: "SAID"
+    status: existing
+    binds_to:
+      kind: vendor-protocol-candidate
+      schema: schema/workflow/vendor-protocol-candidate.schema.yaml
+      kind_line: "schema/workflow/vendor-protocol-candidate.schema.yaml:15"
+      anchors: server/src/ingestion/vendor-protocol/StepPdfAnchor.ts
+    source_decision: D3
+    note: "immutable document truth (schema description, vendor-protocol-candidate.schema.yaml:6) + StepPdfAnchor anchors."
+
+  - term: "MEANT"
+    status: existing
+    binds_to:
+      kind: protocol
+      lifecycle: [extraction-draft, extraction-promotion]
+      lifecycle_lines:
+        - "schema/workflow/extraction-draft.schema.yaml:18"
+        - "schema/workflow/extraction-promotion.schema.yaml:26"
+    source_decision: D3/D5
+    note: "draft semantic protocol = kind 'protocol' under review; NOT a third representation."
+
+  - term: "draft semantic protocol"
+    status: existing
+    binds_to:
+      kind: protocol
+      lifecycle: [extraction-draft, extraction-promotion]
+    source_decision: D3/D5
+
+  - term: "execution-scale choices"
+    status: existing
+    binds_to:
+      kind: execution-scale-profile
+      schema: schema/workflow/execution-scale-profile.schema.yaml
+      kind_line: "schema/workflow/execution-scale-profile.schema.yaml:28"
+      registry_data: schema/registry/execution-scale-profiles/
+    source_decision: D9
+
+  - term: "semantic operation"
+    status: existing
+    binds_to:
+      kind: protocol
+      field: protocol.steps[].semanticVerb
+      field_lines:
+        - "schema/workflow/protocol.schema.yaml:774"
+        - "schema/workflow/protocol.schema.yaml:775"
+      ref_def: "protocol.schema.yaml $defs/SemanticVerbRef (:669)"
+      target_kind: verb-definition
+      target_kind_line: "schema/workflow/verb-definition.schema.yaml:20"
+      seed_records: records/seed/verb-definition/
+    source_decision: D1
+    note: >-
+      The verb-definition vocabulary ALREADY exists as a separate record kind;
+      adjudicated against the scientist-intent 31-verb enum in
+      schema/registry/wave2-verb-adjudication.yaml. The crosswalk maps, never merges.
+
+  - term: "operation-template"
+    status: existing
+    binds_to:
+      kind: operation-template
+      kind_line: "schema/workflow/operation-template.schema.yaml:18"
+    source_decision: neighbor-noun
+
+  - term: "phase-template"
+    status: existing
+    binds_to:
+      kind: phase-template
+      kind_line: "schema/workflow/phase-template.schema.yaml:22"
+    source_decision: neighbor-noun
+
+  - term: "capability terms"
+    status: existing
+    binds_to:
+      kind: equipment-capability
+      kind_line: "schema/workflow/equipment-capability.schema.yaml:21"
+    source_decision: D6
+    note: "bead beater = equipment capability (D6 forcing function); no new capability kind."
+
+  # ---- genuinely-missing datatype (W2-2) ----
+  - term: "Quantity"
+    status: missing-datatype
+    binds_to:
+      planned_schema: schema/core/datatypes/quantity.schema.yaml
+      overlap_check:
+        - "schema/core/datatypes/amount.schema.yaml:6 (required: [value, unit])"
+        - "schema/core/datatypes/concentration.schema.yaml:9 (required: [value, unit, basis])"
+        - "schema/core/datatypes/reference-ratio.schema.yaml"
+        - "schema/lab/datatypes/ (holds ONLY chemical-properties.schema.yaml — no Quantity)"
+    curie_plan: "cf:quantity"
+    source_decision: D6
+    note: >-
+      Genuinely missing today (verified by enumeration). W2-2 must check
+      amount/concentration/reference-ratio overlap before minting names — never
+      two local terms for one entity.
+
+  # ---- wave-2 vocabulary pending admission (minted as enum VALUES/data on
+  #      existing records, never as kinds) ----
+  - term: "VENDOR"
+    status: new-vocab-pending-admission
+    binds_to: { kind: vendor-protocol-candidate }
+    curie_plan: "cf:provenance-vendor"
+    source_decision: D3/W2-4
+  - term: "DERIVED"
+    status: new-vocab-pending-admission
+    curie_plan: "cf:provenance-derived"
+    source_decision: W2-4
+  - term: "INFERRED_INVARIANT"
+    status: new-vocab-pending-admission
+    curie_plan: "cf:provenance-inferred-invariant"
+    source_decision: W2-4
+  - term: "LOCAL_REALIZATION"
+    status: new-vocab-pending-admission
+    curie_plan: "cf:provenance-local-realization"
+    source_decision: D3/W2-4
+  - term: "constraint-classes"
+    status: new-vocab-pending-admission
+    curie_plan: "cf:constraint-class"
+    source_decision: D6
+    note: "ratios, concentrations, per-unit doses, minima/maxima, capacities, thresholds, ordering, completion conditions, vendor defaults — as data on ONE constraint vocabulary (D6)."
+
+# ---- explicit NO-new-record-kind declaration (D1) ----
+forbidden_kinds:
+  - semantic-protocol-family
+  - realization-plan
+  - lab-realization-plan
+  - semantic-extraction-ir
+  - extraction-ir
+  - provenance-ladder
+  - said
+  - meant
+  - constraint-class
+  - quantity
+  - provenance-rung
+
+# ---- findings: genuine TODAY-level collisions found by machine enumeration
+#      (recorded, NOT resolved here — architect call) ----
+findings:
+  - id: W2-1-F1
+    status: collision
+    term: heat
+    detail: >-
+      verb-definition VERB-HEAT canonical `heat` (records/seed/verb-definition/verb-heat.yaml:4)
+      vs operations.yaml `incubate` whose aliases include `heat`
+      (schema/registry/operations.yaml:36). Two local terms for one entity across
+      the two neighboring vocabularies.
+  - id: W2-1-F2
+    status: collision
+    term: set
+    detail: >-
+      verb-definition VERB-SET canonical `set` (records/seed/verb-definition/verb-set.yaml:4)
+      vs operations.yaml `add_material` whose aliases include `set`
+      (schema/registry/operations.yaml:16).
+  - id: W2-1-F3
+    status: collision
+    term: shake
+    detail: >-
+      `shake` is a first-class scientist-intent enum verb
+      (scientist-intent.schema.yaml:31) AND a verb-definition canonical
+      (verb-shake.yaml:4), yet operations.yaml folds it as an ALIAS of `mix`
+      (schema/registry/operations.yaml:47). verb-action-map.yaml (26 mappings)
+      omits `shake` entirely.
+  - id: W2-1-F4
+    status: collision
+    term: spin/pellet vs centrifuge
+    detail: >-
+      `spin` (scientist-intent.schema.yaml:53) and `pellet` (:54) are first-class
+      enum verbs, yet operations.yaml folds both as ALIASES of `centrifuge`
+      (schema/registry/operations.yaml:66-69) — and `centrifuge` is NOT an enum verb.
+  - id: W2-1-F5
+    status: coverage-gap
+    term: verb-action-map
+    detail: >-
+      schema/registry/verb-action-map.yaml holds 26 mappings vs the 31-verb enum;
+      the 5 enum verbs absent are shake + the 4 pattern macros (serial_dilution,
+      media_swap_duplicate_columns, source_wells_to_duplicate_target_columns,
+      repeat_rows). Third neighboring vocabulary — named, not conflated.
+  - id: W2-1-F6
+    status: collision
+    term: warm
+    detail: >-
+      alias `warm` is assigned to TWO distinct operations: operations.yaml
+      `incubate` whose aliases include `warm`
+      (schema/registry/operations.yaml:36) AND operations.yaml `thaw` whose
+      aliases include `warm` (schema/registry/operations.yaml:252). Inverse
+      shape of F1-F5 — one local alias term for two entities; thaw also
+      `expands_to: [incubate]` (operations.yaml:251), so the overlap is
+      semantically real. Recorded for architect adjudication.
+
+# ---- admission predicate: every proposed wave-2 term must pass BEFORE it
+#      enters any schema, lint, or fixture (enforced headlessly by
+#      server/src/schema/Wave2NamingCrosswalk.test.ts) ----
+admission:
+  applies_to: "every proposed wave-2 term (noun, datatype, constraint class, provenance rung, capability term)"
+  rules:
+    - id: resolves-through-crosswalk
+      description: >-
+        The term must appear in this file's `entries` (status existing,
+        missing-datatype, or new-vocab-pending-admission). An unlisted term is
+        rejected: it has no bound existing record.
+    - id: no-collision
+      description: >-
+        A term proposed as NEW (status new-vocab-pending-admission or
+        missing-datatype) must not collide with any existing namespace below
+        (normalized: lowercase, '-' == '_').
+      namespaces:
+        - record-kind            # every properties.kind.const across schema/**/*.schema.yaml
+        - operation-id           # schema/registry/operations.yaml operations[].id
+        - scientist-intent-verb  # $defs/actionVerb enum (scientist-intent.schema.yaml:22)
+        - verb-definition-canonical  # records/seed/verb-definition/*.yaml canonical:
+        - verb-action-map-verb   # schema/registry/verb-action-map.yaml mappings[].verb
+    - id: curie-plan
+      description: >-
+        A new term must carry a CURIE plan in the project `cf:` local-namespace
+        convention (specifications/computable-lab-principles.md:43; schema/registry/lab-profile/lab-profile.yaml:14).
+      pattern: "^cf:[a-z0-9][a-z0-9-]*$"
