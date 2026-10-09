@@ -74,6 +74,53 @@ function firstKeyed(record: Record<string, unknown>, keys: string[]): { key: str
   return undefined;
 }
 
+/** Vocabulary-derived identity of a verb's declared `kind: wells` argument
+ *  names (data, never a verb/field table). SPINE-7 fix2/D1: the candidate
+ *  branch AND the pattern branch share this ONE declared-wells-arg detection
+ *  so a scalar label is classified identically on either route. */
+function declaredWellsArgs(verb: string, vocabulary: ScientistIntentVocabulary): Set<string> {
+  return new Set(
+    vocabulary
+      .argContracts(verb)
+      .filter((contract) => contract.kind === 'wells')
+      .map((contract) => contract.name),
+  );
+}
+
+/** SPINE-7 fix2/D1 (adversarial l2t1110 cycle-2 D1): a SCALAR on a declared
+ *  kind:wells argument of a PATTERN verb. The pattern lowering path has NO
+ *  role consumer — `expand_protocol_intent_patterns` reads pattern wells as
+ *  LITERAL addresses (ProtocolIntentPatternExpanders.ts:137/:167), pattern-
+ *  expanded events never carry `details.role`, and resolve_roles substitutes
+ *  engine addresses only via `details.role` (ChatbotCompilePasses.ts:2391).
+ *  Realizing a symbolic label into the pattern's wells would fabricate a
+ *  well address the engine never bound (and telling label from address would
+ *  need a hardcoded policy — forbidden). So, per the fix-run-1 rule (realize
+ *  only where a consumer genuinely exists downstream; clarify otherwise), the
+ *  producer emits the SAME structured unrealized-well-label clarification the
+ *  candidate branch emits — the compile runner bars atomically on the 422
+ *  needs-clarification arm instead of shipping 'complete' with a dropped
+ *  label. Array forms pass through untouched (byte-identical pins). */
+function unrealizedPatternWellLabels(
+  action: Record<string, unknown>,
+  verb: string,
+  actionIndex: number,
+  vocabulary: ScientistIntentVocabulary,
+  unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }>,
+): void {
+  for (const argument of declaredWellsArgs(verb, vocabulary)) {
+    const value = action[argument];
+    if (Array.isArray(value)) continue;
+    if (typeof value === 'string' && value.trim()) {
+      unrealized.push({
+        label: value.trim(),
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument },
+      });
+    }
+  }
+}
+
 function toPattern(
   action: Record<string, unknown>,
   kind: string,
@@ -173,13 +220,9 @@ function toCandidateEvent(
   // argument names are DECLARED wells contracts comes from the vocabulary
   // (data), never a verb/field table. SPINE-7 fix1/D4: the SAME vocabulary
   // instance the compile threads into resolve_nouns (never the singleton
-  // behind an injected vocab).
-  const wellsLabelArgs = new Set(
-    vocabulary
-      .argContracts(verb)
-      .filter((contract) => contract.kind === 'wells')
-      .map((contract) => contract.name),
-  );
+  // behind an injected vocab). SPINE-7 fix2/D1: the SAME helper the pattern
+  // branch uses (declaredWellsArgs).
+  const wellsLabelArgs = declaredWellsArgs(verb, vocabulary);
   for (const [eventKey, sciKeys] of mappings) {
     const found = firstKeyed(action, sciKeys);
     if (found === undefined) continue;
@@ -261,6 +304,12 @@ export function normalizeScientistIntent(
     if (labware) updateSymbol(symbolicLabels, labware, 'labware');
 
     if (PATTERN_ACTIONS.has(verb)) {
+      // SPINE-7 fix2/D1: a scalar on a declared kind:wells arg of a pattern
+      // verb has NO lowering consumer (pattern wells are literal addresses;
+      // pattern events never carry details.role) — surface it as the same
+      // structured unrealized-well-label clarification instead of dropping it
+      // while the compile reports 'complete'.
+      unrealizedPatternWellLabels(rec, verb, index, vocabulary, unrealized);
       const pattern = verb === 'serial_dilution'
         ? serialDilutionPattern(rec, index)
         : toPattern(rec, verb, index);

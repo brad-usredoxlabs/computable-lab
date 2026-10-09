@@ -355,3 +355,165 @@ wellRole-only; no ChatbotCompilePasses.ts edit.
   fallback context) — verified against adapters.ts:190-224 and ChatbotCompilePasses.ts:2403-2413.
 
 END REPORT: SPINE7_FIX1_COMPLETE
+
+## Fix run 2 (l2t1210) — adversarial cycle-2 (l2t1110) defects D1 + D2
+
+Base: 99ca80ab (fix run 1). Reviewer report read IN FULL (reviews/review-SPINE-7-adversarial-
+l2t1110-cycle2.md; §3 DEFECTS + §1 probe evidence). Files touched by this fix run (3):
+  server/src/compiler/scientistIntent/normalizeScientistIntent.ts   (D1)
+  server/src/compiler/biology/verbs/compoundVerbs.ts                (D2)
+  server/src/compiler/scientistIntent/rolesSeam.test.ts             (D1/D2 tests)
+resolutionEngine.ts / ChatbotCompilePasses.ts: NOT touched.
+
+### D1 (major) — scalar wells label on a PATTERN verb was silently dropped
+
+Root cause (reviewer-confirmed): toPattern (:102-103) and serialDilutionPattern (:124) accepted
+wells only via Array.isArray; the unrealized-well-label producer lived only in toCandidateEvent,
+which the pattern branch never reaches (PATTERN_ACTIONS routes pattern verbs to buildPatterns).
+The four `class: pattern` verbs (serial_dilution, media_swap_duplicate_columns,
+source_wells_to_duplicate_target_columns, repeat_rows) all declare sourceWells/targetWells
+`kind: wells` (shipped vocabulary :694-698/:728-732/:759-763/:787-791) and schema rule 2 accepts
+a scalar — so the drop was route-reachable.
+
+Fix: normalizeScientistIntent.ts
+  • New `declaredWellsArgs(verb, vocabulary)` — the ONE vocabulary-derived
+    (`argContracts(verb).filter(kind === 'wells')`) detection. The candidate branch's inline Set
+    is replaced by a call to it, so BOTH branches classify a wells arg identically from the SAME
+    injected vocabulary instance (fix-run-1 D4 threading preserved). No verb/arg table added.
+  • New `unrealizedPatternWellLabels(action, verb, index, vocabulary, unrealized)` invoked at the
+    top of the PATTERN_ACTIONS branch: for each vocabulary-declared wells arg, an ARRAY passes
+    through untouched (byte-identical pins); a non-empty SCALAR pushes the SAME structured
+    {label, reason: 'unrealized-well-label', actionLocation:{actionIndex, action, argument}} item
+    the candidate branch emits. The compile runner's existing producer-clarification bar
+    (compileScientistIntent.ts, fix-run-1) then bars atomically on the 422 needs-clarification arm.
+  • toPattern/serialDilutionPattern Array.isArray passthroughs are UNCHANGED (arrays byte-identical).
+
+Realization-vs-clarification choice, per verb-class (same rule as fix run 1: realize only where a
+consumer genuinely exists downstream; clarify otherwise):
+
+  CANDIDATE verbs (transfer/aliquot targetWells side) — REALIZED (fix run 1, unchanged): the
+  label rides candidate `wellRole` -> details.role -> the resolve_roles authoritative arm
+  (ChatbotCompilePasses.ts:2391/:2410) substitutes the engine binding's addresses. A consumer
+  exists.
+
+  PATTERN verbs — CLARIFIED (all four, both fields). No consumer exists on the pattern lowering
+  path, and realization would be fabrication, not lowering:
+    - `expand_protocol_intent_patterns` reads pattern wells as LITERAL well addresses
+      (ProtocolIntentPatternExpanders.ts:137/:167 `pattern.sourceWells ?? arrayParam(...)`);
+      writing `control_well` there would emit an event whose source_well is the string
+      "control_well" — a fabricated address the engine never bound.
+    - Pattern-expanded events never carry `details.role` (transferEvent/mixEvent build details
+      from geometric rows/columns only, :83-132/:206-344), so the resolve_roles authoritative
+      arm is unreachable for them regardless.
+    - serial_dilution and repeat_rows don't read pattern.targetWells/sourceWells at all
+      (expandSerialDilution* uses rows/columns/params; expandRepeatRows uses
+      params.sourceWell + rows/columns) — realization would be a no-op that still reports
+      'complete' with the label gone.
+    - media_swap_duplicate_columns / source_wells_to_duplicate_target_columns DO require
+      pattern.sourceWells (ProtocolIntentValidation.ts:390 `missing_pattern_source_wells`), but
+      as literal addresses; a symbolic label cannot satisfy that contract.
+    - Telling a symbolic label from a literal address would require a hardcoded well-label-vs-
+      address policy (forbidden). Vocabulary declares these args `kind: wells` (data); the
+      scalar form is a LABEL, and the honest disposition of a label with no consumer is the
+      structured clarification + 422 bar — identical shape to the candidate-branch arm.
+
+Tests added (rolesSeam.test.ts, 6 new, all green):
+  D1 normalize: serial_dilution scalar sourceWells+targetWells -> BOTH clarifications, pattern
+    carries no wells keys, candidateEvents empty.
+  D1 normalize: repeat_rows (toPattern path) scalar sourceWells -> clarification; ARRAY form
+    byte-identical (sourceWells/targetWells verbatim) with NO clarifications key.
+  D1 route: serial_dilution scalar sourceWells -> outcome 'needs-clarification', clarification
+    verbatim, atomic zero-artifact (events/gaps [], no labwareAdditions/deckLayoutPlan/
+    instrumentRunFiles), NEVER 500.
+  D1 route: repeat_rows scalar targetWells -> same 422 arm (second pattern verb).
+
+### D2 (minor) — aliquot scalar branch: present-but-undefined keys + dropped declared volume
+
+Root cause (reviewer-confirmed): compoundVerbs.ts:58-63 wrote `source_labware: p.source_labware`,
+`destination_labware: p.target_labware`, `volume: p.volume_per_well` unconditionally — undefined
+values became present keys (masked by `details: Record<string, unknown>` and JSON.stringify), and
+`volume_per_well` is never supplied on the scientist-intent chain (the producer maps volumeUl ->
+candidate `volume_uL`, normalizeScientistIntent mappings), so the declared 50 uL was dropped.
+
+Fix: compoundVerbs.ts aliquotExpander
+  • Params type now declares the candidate-chain volume keys the producer actually writes:
+    `volume_uL?: number`, `volume_ul?: number`, `volume?: {value;unit}` (alongside the shipped
+    `volume_per_well`).
+  • One shared `volumeDetails` block built with CONDITIONAL SPREADS (the simpleVerbs.ts:437-448
+    idiom): a numeric `volume_uL`/`volume_ul` emits `volumeUl` + `volume: {value, unit:'uL'}`
+    (same shape the transfer expander emits); a supplied object/string emits `volume`. Absent ->
+    key ABSENT, never present-with-undefined.
+  • Scalar branch: `source_labware`/`destination_labware` are now conditional spreads; `role`
+    stays unconditional (it is the branch's reason to exist).
+  • Array branch: same conditional-spread treatment for the two labware keys + shared
+    volumeDetails (the reviewer flagged the same pre-existing pattern at :79-85; the shipped
+    chatbot/deterministic shape supplies source_labware/target_labware/volume_per_well, so its
+    emitted details are unchanged in content — only undefined-valued keys are now omitted).
+
+Note on the compiled event's `role: undefined`: the shipped resolve_roles pass clears the role
+marker on every expanded event (`role: undefined` at ChatbotCompilePasses.ts:2448, pre-existing
+on BOTH chains and pinned by the chatbot byte-identity test). That file is untouchable per the
+brief, so the D2 test pins the expander's own hygiene: the compiled scalar event's undefined-
+valued keys are EXACTLY ['role'] (the shipped marker), and `volume_per_well` never appears.
+
+Tests added (rolesSeam.test.ts, 2 new, all green):
+  D2 expander unit: scalar carrier with `volume_uL: 50` -> details role + volumeUl 50 + volume
+    {value:50,unit:'uL'}; zero undefined-valued values. Bare params -> NO source_labware /
+    destination_labware / volume / volumeUl keys at all.
+  D2 route: scalar aliquot (volumeUl: 50, targetWells: control_well) -> outcome 'complete',
+    details.well == 'A12' (engine binding intact), volumeUl 50 + volume object PRESENT,
+    undefined-valued keys == ['role'] only, no 'well-0'.
+
+### MANIFEST — NOT re-blessed (no golden content changed)
+
+Before (pinned at 99ca80ab): 6b5e23e93a21544bb4c9c359abfed369f82a51d2809efbc1f44a63107935da93
+After  (this fix run):       6b5e23e93a21544bb4c9c359abfed369f82a51d2809efbc1f44a63107935da93
+Diff: EMPTY. `git status --porcelain -- src/compiler/scientistIntent/goldens/` shows NO golden,
+__records__, fixture, or MANIFEST change. No existing golden's asserted behavior is intentionally
+changed by these fixes: the roles-seam golden uses a `transfer` (candidate) verb; the aliquot
+golden (missing-required-address) exercises the MISSING sweep arm, not the scalar carrier; no
+golden fixture carries a scalar wells label on a pattern verb. All 14 golden tests green
+(goldenRolesSeam 7, goldenIntentToGraph 3, goldenIntentToClarification 4).
+
+### Reviewer probe re-runs (server/tmp/l2t1210-probe.mts, tsx, real parse/vocab/engine/spine)
+
+serial_dilution scalar sourceWells: candidateEvents=0, pattern keys=[id,kind,sourceLabware,
+  targetLabware,params] (NO wells), producerClarifications=[{label:control_well,reason:
+  unrealized-well-label,actionLocation:{actionIndex:0,action:serial_dilution,argument:sourceWells}}],
+  outcome=needs-clarification, events=[]   (was: outcome=complete, clarifications=undefined)
+serial_dilution scalar targetWells: identical shape on argument:targetWells, outcome=
+  needs-clarification, events=[]           (was: outcome=complete, silent)
+aliquot scalar targetWells (volume 50): outcome=complete, compiled details=
+  {source_labware:"source plate",volumeUl:50,volume:{value:50,unit:"uL"},well:"A12"}
+  — hasOwnProperty('volume') true WITH a real value; no undefined-valued expander key; no well-0.
+  (was: volume key present with value undefined, declared 50 dropped)
+serial_dilution ARRAY targetWells [A1,B1]: pattern.targetWells=["A1","B1"] verbatim,
+  producerClarifications=undefined, outcome=complete, 6 geometric events — array form unchanged.
+
+### Verification outputs (all captured live at this fix)
+
+Targeted suite (`npx vitest run src/compiler/scientistIntent/ src/api/handlers/
+IntentCompileFromPromptHandlers.test.ts src/compiler/pipeline/passes/`):
+  Test Files  3 failed | 50 passed (53)
+       Tests  8 failed | 497 passed (505)   [491 pre-existing + 6 new D1/D2 tests]
+  Fail-file set (grep '^\s*FAIL' | sort -u) == baseline trio EXACTLY (diff EMPTY):
+    src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts
+    src/compiler/pipeline/passes/GeminiEmAppliancePath.test.ts
+    src/compiler/pipeline/passes/ProtocolRealizePass.test.ts
+  rolesSeam.test.ts: 20/20 green (14 pre-existing + 6 new). ResolveRolesSpine7Regression 3/3
+  green (chatbot byte-identity, file untouched). Goldens 14/14 green.
+
+src/compiler SET: Test Files 17 failed | 132 passed (149); Tests 37 failed | 1273 passed (1310).
+  Fail-FILE set comm -3 vs /tmp/l2t0810-baseline-compiler-failfiles.txt: EMPTY (17/17).
+src/ai: Test Files 10 failed | 74 passed (84); Tests 21 failed | 644 passed (665) == pin.
+server tsc (`npx tsc -p .`): 26 "error TS" lines / 6 files (AgentOrchestrator,
+  ProtocolIntakeHandlers, RecordHandlers, AuthoringGuard, bootstrapAdmin, RecordStoreImpl).
+  Position-stripped+sorted comm -3 vs /tmp/l2t2230-tsc-server.txt: EMPTY (26/26). No new error.
+
+Constraints honored: resolutionEngine.ts + ChatbotCompilePasses.ts untouched; no new hardcoded
+verb/arg table (wells-arg identity stays vocabulary-derived via the shared declaredWellsArgs
+helper); exactOptionalPropertyTypes (conditional spreads only); chatbot chain byte-identical
+(regression test green); array forms byte-identical (pins + probe); NO schema narrowing (schema
+file untouched); no vi.mock added (existing tests use vi.spyOn only).
+
+END REPORT: SPINE7_FIX2_COMPLETE

@@ -365,3 +365,215 @@ actions:
     expect(Object.keys(shippedRun.candidateEvents[0]!)).not.toContain('wells');
   });
 });
+
+// ===========================================================================
+// FIX RUN 2 (adversarial l2t1110 cycle-2) — D1 (pattern-branch silent drop)
+// and D2 (aliquot scalar present-but-undefined keys / dropped volume).
+// ===========================================================================
+
+describe('SPINE-7 fix2/D1 — a scalar wells label on a PATTERN verb is never silently dropped', () => {
+  it('normalize: serial_dilution scalar sourceWells+targetWells surface BOTH as structured unrealized-well-label clarifications (pattern carries no wells, candidateEvents empty)', () => {
+    const intent = parseScientistIntent(`
+intentId: spine7f2-pattern-scalar
+actions:
+  - action: serial_dilution
+    source: source plate
+    target: destination plate
+    factor: 2
+    points: 3
+    sourceWells: control_well
+    targetWells: control_well
+`);
+    const normalized = normalizeScientistIntent(intent);
+    // The value is NOT silently realized into the pattern either: pattern
+    // wells are LITERAL addresses downstream (ProtocolIntentPatternExpanders
+    // reads them directly); a symbolic label must not masquerade as one.
+    expect(normalized.protocolIntent).toBeDefined();
+    expect(normalized.candidateEvents).toEqual([]);
+    const pattern = normalized.protocolIntent!.patterns[0]!;
+    expect(pattern.kind).toBe('serial_dilution');
+    expect(Object.keys(pattern)).not.toContain('sourceWells');
+    expect(Object.keys(pattern)).not.toContain('targetWells');
+    // Same structured shape as the candidate branch (fix run 1), one item per
+    // scalar declared-wells field, filled actionLocation naming the pattern verb.
+    expect(normalized.clarifications).toEqual([
+      {
+        label: 'control_well',
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex: 0, action: 'serial_dilution', argument: 'sourceWells' },
+      },
+      {
+        label: 'control_well',
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex: 0, action: 'serial_dilution', argument: 'targetWells' },
+      },
+    ]);
+  });
+
+  it('normalize: repeat_rows (toPattern path) scalar sourceWells surfaces the clarification; array forms stay byte-identical with NO clarification key', () => {
+    const scalar = parseScientistIntent(`
+intentId: spine7f2-repeat-scalar
+actions:
+  - action: repeat_rows
+    source: source plate
+    target: destination plate
+    sourceWells: control_well
+`);
+    const normalized = normalizeScientistIntent(scalar);
+    expect(normalized.protocolIntent!.patterns[0]!.kind).toBe('repeat_rows');
+    expect(Object.keys(normalized.protocolIntent!.patterns[0]!)).not.toContain('sourceWells');
+    expect(normalized.clarifications).toEqual([
+      {
+        label: 'control_well',
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex: 0, action: 'repeat_rows', argument: 'sourceWells' },
+      },
+    ]);
+
+    // Array form: verbatim passthrough, key absence (exactOptionalPropertyTypes).
+    const arrayForm = parseScientistIntent(`
+intentId: spine7f2-repeat-array
+actions:
+  - action: repeat_rows
+    source: source plate
+    target: destination plate
+    sourceWells: [A1, B2]
+    targetWells: [C1]
+`);
+    const arrayNormalized = normalizeScientistIntent(arrayForm);
+    const pattern = arrayNormalized.protocolIntent!.patterns[0]!;
+    expect(pattern.sourceWells).toEqual(['A1', 'B2']);
+    expect(pattern.targetWells).toEqual(['C1']);
+    expect(Object.keys(arrayNormalized)).not.toContain('clarifications');
+  });
+
+  it('route: serial_dilution scalar sourceWells bars atomically on the 422 needs-clarification arm — outcome is NEVER complete with a dropped label', async () => {
+    const intent = parseScientistIntent(`
+intentId: spine7f2-route-pattern
+actions:
+  - action: serial_dilution
+    source: source plate
+    target: destination plate
+    factor: 2
+    points: 3
+    sourceWells: control_well
+`);
+    const recorder = recordingStore([
+      { recordId: 'LAB-source-plate', payload: { kind: 'labware', title: 'Source Plate', synonyms: ['source plate'] } },
+      { recordId: 'LAB-dest-plate', payload: { kind: 'labware', title: 'Destination Plate', synonyms: ['destination plate'] } },
+    ]);
+    const spine = createResolveSpineFromContext({ store: recorder.store as never });
+    const result = await compileScientistIntent(intent, { spine });
+    expect(result.outcome).toBe('needs-clarification');
+    expect(result.clarifications).toEqual([
+      {
+        label: 'control_well',
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex: 0, action: 'serial_dilution', argument: 'sourceWells' },
+      },
+    ]);
+    // Atomic bar: zero events/gaps (the cascade barrier skipped every consumer).
+    expect(result.terminalArtifacts.events).toEqual([]);
+    expect(result.terminalArtifacts.gaps).toEqual([]);
+    expect(Object.keys(result.terminalArtifacts)).not.toContain('labwareAdditions');
+    expect(Object.keys(result.terminalArtifacts)).not.toContain('deckLayoutPlan');
+    expect(Object.keys(result.terminalArtifacts)).not.toContain('instrumentRunFiles');
+    expect(result.clarifications.some((c) => c.reason !== UNREALIZED_WELL_LABEL_REASON)).toBe(false);
+  });
+
+  it('route: repeat_rows scalar targetWells bars on the same 422 arm (second pattern verb, toPattern path)', async () => {
+    const intent = parseScientistIntent(`
+intentId: spine7f2-route-repeat
+actions:
+  - action: repeat_rows
+    source: source plate
+    target: destination plate
+    targetWells: control_well
+`);
+    const recorder = recordingStore([
+      { recordId: 'LAB-source-plate', payload: { kind: 'labware', title: 'Source Plate', synonyms: ['source plate'] } },
+      { recordId: 'LAB-dest-plate', payload: { kind: 'labware', title: 'Destination Plate', synonyms: ['destination plate'] } },
+    ]);
+    const spine = createResolveSpineFromContext({ store: recorder.store as never });
+    const result = await compileScientistIntent(intent, { spine });
+    expect(result.outcome).toBe('needs-clarification');
+    expect(result.clarifications).toEqual([
+      {
+        label: 'control_well',
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        actionLocation: { actionIndex: 0, action: 'repeat_rows', argument: 'targetWells' },
+      },
+    ]);
+    expect(result.terminalArtifacts.events).toEqual([]);
+  });
+});
+
+describe('SPINE-7 fix2/D2 — aliquot scalar event carries the declared volume, never an undefined-valued key', () => {
+  it('expander unit: scalar carrier with the candidate volume key (volume_uL) emits volumeUl + volume object; NO present-but-undefined keys when params are absent', () => {
+    const expander = getExpander('aliquot')!;
+    const events = expander.expand({
+      verb: 'aliquot',
+      params: {
+        source_labware: 'source-plate',
+        target_labware: 'target-plate',
+        volume_uL: 50,
+        wellRole: 'control_well',
+      },
+    });
+    expect(events).toHaveLength(1);
+    const details = events[0]!.details as Record<string, unknown>;
+    expect(details['role']).toBe('control_well');
+    expect(details['volumeUl']).toBe(50);
+    expect(details['volume']).toEqual({ value: 50, unit: 'uL' });
+    // exactOptionalPropertyTypes runtime discipline: no key whose value is
+    // undefined (JSON.stringify would mask it — Object.keys is the probe).
+    expect(Object.values(details).some((v) => v === undefined)).toBe(false);
+
+    const bare = expander.expand({ verb: 'aliquot', params: { wellRole: 'control_well' } });
+    const bareDetails = bare[0]!.details as Record<string, unknown>;
+    expect(Object.keys(bareDetails)).not.toContain('source_labware');
+    expect(Object.keys(bareDetails)).not.toContain('destination_labware');
+    expect(Object.keys(bareDetails)).not.toContain('volume');
+    expect(Object.keys(bareDetails)).not.toContain('volumeUl');
+    expect(bareDetails['role']).toBe('control_well');
+  });
+
+  it('route: a compiled scalar aliquot event has NO undefined-valued detail keys and carries the declared 50 uL volume', async () => {
+    const intent = parseScientistIntent(`
+intentId: spine7f2-aliquot-volume
+actions:
+  - action: aliquot
+    source: source plate
+    target: destination plate
+    volumeUl: 50
+    targetWells: control_well
+`);
+    const recorder = recordingStore([
+      { recordId: 'LAB-source-plate', payload: { kind: 'labware', title: 'Source Plate', synonyms: ['source plate'] } },
+      { recordId: 'LAB-dest-plate', payload: { kind: 'labware', title: 'Destination Plate', synonyms: ['destination plate'] } },
+    ]);
+    const spine = createResolveSpineFromContext({ store: recorder.store as never });
+    const result = await compileScientistIntent(intent, { spine });
+    expect(result.outcome).toBe('complete');
+    const events = result.terminalArtifacts.events as unknown as Array<Record<string, unknown>>;
+    expect(events).toHaveLength(1);
+    const details = events[0]!['details'] as Record<string, unknown>;
+    // The engine binding still reaches the event (fix-run-1 behavior intact).
+    expect(details['well']).toBe('A12');
+    // D2: the declared volume is PRESENT (candidate volume_uL -> volumeUl +
+    // volume object), not dropped behind the dead volume_per_well key.
+    expect(details['volumeUl']).toBe(50);
+    expect(details['volume']).toEqual({ value: 50, unit: 'uL' });
+    // D2: no present-but-undefined keys survive from the EXPANDER. The only
+    // undefined-valued key allowed is `role` — the shipped resolve_roles pass
+    // clears the role marker on every expanded event (`role: undefined` at
+    // ChatbotCompilePasses.ts:2448, pre-existing on both chains and pinned by
+    // the chatbot byte-identity test; that file is untouchable per the brief).
+    const undefinedKeys = Object.entries(details)
+      .filter(([, v]) => v === undefined)
+      .map(([k]) => k);
+    expect(undefinedKeys).toEqual(['role']);
+    expect(Object.keys(details)).not.toContain('volume_per_well');
+    expect(JSON.stringify(details)).not.toContain('well-0');
+  });
+});
