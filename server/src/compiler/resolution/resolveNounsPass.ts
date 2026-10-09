@@ -164,6 +164,18 @@ export function reconcileModelUnresolved(
       // evidence, never canonical identity). Corroborated labels are already
       // carried by the engine fact; uncorroborated model candidates are
       // dropped.
+      //
+      // D3 note (adversarial fix1, spec §5.1 wording): the merge is
+      // LABEL-SET-EQUIVALENT BY CONSTRUCTION. A model candidate whose label
+      // corroborates the engine's candidate set is already present in
+      // engineFact.candidates (the engine fact carries the full candidate
+      // set verbatim), so appending it would duplicate a label the fact
+      // already carries; the only delta a model could add for an overlapping
+      // label is its own confidence, and §5.1's "engine clarification wins"
+      // makes the engine's value authoritative. Hence the merge arm keeps the
+      // engine fact untouched — the observable label SET is identical to an
+      // append-and-dedupe implementation; only a superseded model confidence
+      // is discarded, which "engine wins" authorises.
       continue;
     }
 

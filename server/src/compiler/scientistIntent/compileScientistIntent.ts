@@ -61,7 +61,6 @@ import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js'
 import { emptyLabState, type LabStateSnapshot } from '../state/LabState.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
-import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
   createResolveNounsPass,
@@ -87,9 +86,11 @@ export interface ScientistIntentCompileDeps {
    *  the loader's opts.path discipline; defaults to the shipped singleton). */
   vocabulary?: ScientistIntentVocabulary;
   /** SPINE-4: READ-ONLY candidate spine for the engine's spine adapter.
-   *  Production callers pass a store-backed spine; the default is the
-   *  provider-less spine (local tiers empty — nothing binds that the hint
-   *  lookup did not). */
+   *  REQUIRED in practice (fix1/D1): production callers inject a store-backed
+   *  spine built with createResolveSpineFromContext (the server.ts:733
+   *  composition); omitting it throws at pass registration (§3 fail-loud —
+   *  NO degraded no-resolution mode). createResolveSpine({}) is legal only
+   *  as an explicitly injected test seam. */
   spine?: EngineSpineLike;
   /** SPINE-4: READ-ONLY term list for near-miss clarification evidence. */
   termsForSuggestions?: () => Promise<readonly TermLike[]>;
@@ -128,13 +129,26 @@ function buildRegistry(
   });
 
   // SPINE-4: the one noun-resolution door, registered over SPINE-3's engine.
-  // NO degraded no-resolution mode: the vocabulary and a spine are always
-  // present (shipped singleton + provider-less spine as the floor; production
-  // callers inject a store-backed spine).
+  // NO degraded no-resolution mode (fix1/D1, §3 fail-loud doctrine): the
+  // vocabulary is always present (shipped singleton or injected fixture);
+  // the spine MUST be injected — production callers pass a store-backed
+  // spine (createResolveSpineFromContext, the server.ts:733 composition).
+  // A missing deps.spine throws LOUD at registration: silently composing a
+  // provider-less spine would false-bar every store-resolvable noun the
+  // spine adapter cannot see (the adversarial D1 defect). An explicitly
+  // injected provider-less spine is legal only as a declared test seam.
+  if (!deps.spine) {
+    throw new Error(
+      'SPINE-4 resolve_nouns registration requires an injected spine (deps.spine): '
+      + 'production callers pass a store-backed spine via createResolveSpineFromContext; '
+      + 'a provider-less spine is legal only as an explicitly injected test seam '
+      + '(§3: NO degraded no-resolution mode).',
+    );
+  }
   registry.register(createResolveNounsPass({
     intent,
     vocabulary: deps.vocabulary ?? defaultScientistIntentVocabulary(),
-    spine: deps.spine ?? createResolveSpine({}),
+    spine: deps.spine,
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
     ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
     ...(deps.resolveNounsEngine ? { resolve: deps.resolveNounsEngine } : {}),

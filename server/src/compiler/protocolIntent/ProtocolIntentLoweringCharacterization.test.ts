@@ -37,6 +37,7 @@ import {
 import { parseScientistIntent } from '../scientistIntent/parseScientistIntent.js';
 import { normalizeScientistIntent } from '../scientistIntent/normalizeScientistIntent.js';
 import { compileScientistIntent } from '../scientistIntent/compileScientistIntent.js';
+import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 
 interface IntentPatch {
   resources?: Partial<ProtocolIntentResources>;
@@ -218,6 +219,11 @@ actions:
     // atomically — resolve_labware never runs, so labwareAdditions is ABSENT
     // and the outcome is 'needs-clarification' with structured clarifications.
     const { terminalArtifacts, outcome, clarifications } = await compileScientistIntent(doc, {
+      // SPINE-4 fix1/D1: deps.spine is REQUIRED (fail-loud registration).
+      // Provider-less spine injected EXPLICITLY as the declared test seam —
+      // the bar below is a REAL unresolved noun (no store can bind it), not
+      // the D1 false-bar.
+      spine: createResolveSpine({}),
       searchLabwareByHint: async () => [],
     });
     expect(outcome).toBe('needs-clarification');
