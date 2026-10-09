@@ -18,6 +18,28 @@
  * The `localMacro` is the parsed scientist-intent (the ONE-SHOT LOCAL MACRO
  * PROTOCOL). The frontend holds it and folds human refinements into it before
  * Accept, so the corpus trains to the FINAL macro (Q6).
+ *
+ * SPINE-5 response contract (headless, machine-readable; status + stable code):
+ *   200  outcome 'complete'                  → success body (unchanged shape)
+ *   200  outcome 'gap'                       → success body; `clarifications`
+ *        attached ONLY when the compile result carries them (additive, OQ2)
+ *   422  outcome 'needs-clarification'       → { error:'NEEDS_CLARIFICATION',
+ *        outcome, clarifications (verbatim ScientistIntentUnresolvedFact[]),
+ *        localMacro (OQ4: hold-the-macro), terminalArtifacts (zero-artifact on
+ *        the bar per SPINE-4 OQ3(a)) } — the repo's validation-failed convention
+ *   502  ScientistIntentValidationError from the model driver → { error:
+ *        'MALFORMED_MODEL_OUTPUT', message } — upstream model-endpoint fault
+ *        (OQ1); NO outcome/clarifications/localMacro keys (distinguishable from
+ *        resolution uncertainty at BODY level, not just status)
+ *   500  outcome 'error' after a PARSED intent → { error:'INTENT_COMPILE_FAILED',
+ *        message } — the compile's fault; distinct from the catch-all
+ *        INTENT_COMPILE_PROMPT_FAILED (kept for the ask-branch and unforeseen
+ *        throws)
+ * Classification is ORIGIN-based (thrown-from-driver vs compile RESULT object),
+ * never message-substring based. The ask/answer round-trip stays on its own
+ * 200 channel: needsAnswers is NOT needs-clarification.
+ * The route is WRITE-FREE: its only store use is loadLabInventory's read-only
+ * store.list; it never executes a run and never accepts a proposal.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
@@ -26,6 +48,9 @@ import { resolveAiProfile } from '../../config/types.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import type { AppContext } from '../../server.js';
 import type { RecordStore } from '../../store/types.js';
+import { ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
+import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../../compiler/scientistIntent/types.js';
+import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import {
   compileFromSmallLlm,
   extractBranchQuestionsFromSmallLlm,
@@ -74,6 +99,45 @@ interface CompileFromPromptBody {
   protocolText?: string;
   sourceProtocolId?: string;
   answers?: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// SPINE-5 response contract (exported from THIS handler file — the payload
+// type IS ScientistIntentUnresolvedFact, consumed verbatim; no second schema
+// home, no YAML envelope). exactOptionalPropertyTypes: presence is expressed
+// with conditional spreads at the send sites, never `x: undefined`.
+// ---------------------------------------------------------------------------
+
+/** 200 — outcome 'complete' (and 'gap', additively with `clarifications`). */
+export interface CompileFromPromptSuccessResponse {
+  outcome: 'complete' | 'gap';
+  terminalArtifacts: TerminalArtifacts;
+  localMacro: ScientistIntent;
+  axes: Record<string, string>;
+  /** Additive ONLY on a 'gap' that carries structured clarifications (OQ2). */
+  clarifications?: ScientistIntentUnresolvedFact[];
+}
+
+/** 422 — the SPINE-4 bar: the scientist must answer before any artifact exists. */
+export interface CompileFromPromptNeedsClarificationResponse {
+  error: 'NEEDS_CLARIFICATION';
+  outcome: 'needs-clarification';
+  clarifications: ScientistIntentUnresolvedFact[];
+  /** OQ4(a): the parseable macro with unresolved slots is held for the answer round-trip. */
+  localMacro: ScientistIntent;
+  terminalArtifacts: TerminalArtifacts;
+}
+
+/** 502 — upstream model-endpoint fault (OQ1(a)). NO outcome/clarifications. */
+export interface CompileFromPromptMalformedModelOutputResponse {
+  error: 'MALFORMED_MODEL_OUTPUT';
+  message: string;
+}
+
+/** 500 — compile machinery broke after a PARSED intent. */
+export interface CompileFromPromptCompileFailedResponse {
+  error: 'INTENT_COMPILE_FAILED';
+  message: string;
 }
 
 export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: CompileFromPromptDeps = {}) {
@@ -172,28 +236,81 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       }
 
       // Answers present: emit the macro + deterministic compile.
+      // CLASSIFICATION SEAM (origin-based, never message-substring): a
+      // ScientistIntentValidationError escaping the compileFromSmallLlm CALL
+      // SITE is MODEL output (502); anything surfacing from the compile RESULT
+      // object is the compile's (422/500 per the contract table).
+      let emitted: { intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileFromSmallLlm>>['compile'] };
       try {
         const labInventory = await loadLabInventory();
-        const { intent, compile } = await compileFromSmallLlm({
+        emitted = await compileFromSmallLlm({
           prompt: protocolText,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
           deps: { searchLabwareByHint, spine },
           labInventory,
         });
-        return reply.send({
-          outcome: compile.outcome,
-          terminalArtifacts: compile.terminalArtifacts,
-          localMacro: intent,
-          axes: body.answers ?? {},
-        });
       } catch (err) {
+        if (err instanceof ScientistIntentValidationError) {
+          // Malformed model output: an upstream model-endpoint fault, NOT a
+          // client-input failure and NOT resolution uncertainty. The body
+          // carries NO outcome/clarifications/localMacro keys — distinguishable
+          // from the 422 bar at body level, not just status.
+          request.log.error({ err }, 'Model emitted no usable scientist-intent');
+          return reply.status(502).send({
+            error: 'MALFORMED_MODEL_OUTPUT',
+            message: err.message,
+          } satisfies CompileFromPromptMalformedModelOutputResponse);
+        }
         request.log.error({ err }, 'Failed to compile-from-prompt one-shot');
         return reply.status(500).send({
           error: 'INTENT_COMPILE_PROMPT_FAILED',
           message: err instanceof Error ? err.message : String(err),
         });
       }
+
+      const { intent, compile } = emitted;
+
+      if (compile.outcome === 'needs-clarification') {
+        // The SPINE-4 bar: 422 on the repo's validation-failed convention.
+        // Clarifications travel VERBATIM from the compile result — the route
+        // mints no labels, candidates, confidences, or ids. terminalArtifacts
+        // is the bar's zero-artifact bundle (SPINE-4 OQ3(a)); localMacro is
+        // held (OQ4(a)) so the client folds answers into the parseable macro.
+        // axes stay on the ask channel (bait §7.1).
+        return reply.status(422).send({
+          error: 'NEEDS_CLARIFICATION',
+          outcome: compile.outcome,
+          clarifications: compile.clarifications,
+          localMacro: intent,
+          terminalArtifacts: compile.terminalArtifacts,
+        } satisfies CompileFromPromptNeedsClarificationResponse);
+      }
+
+      if (compile.outcome === 'error') {
+        // Compile machinery broke AFTER a parsed intent: the compile's fault.
+        return reply.status(500).send({
+          error: 'INTENT_COMPILE_FAILED',
+          message: compile.diagnostics
+            .filter((d) => d.severity === 'error')
+            .map((d) => d.message)
+            .join('; ') || 'scientist-intent compile reported outcome error',
+        } satisfies CompileFromPromptCompileFailedResponse);
+      }
+
+      // 'complete' | 'gap' — today's success shape, unchanged. On a 'gap' the
+      // structured clarifications (when the compile result carries any) are
+      // ATTACHED additively (OQ2); on 'complete' the key is ABSENT, not
+      // undefined (exactOptionalPropertyTypes conditional-spread idiom).
+      return reply.send({
+        outcome: compile.outcome,
+        terminalArtifacts: compile.terminalArtifacts,
+        localMacro: intent,
+        axes: body.answers ?? {},
+        ...(compile.outcome === 'gap' && compile.clarifications.length > 0
+          ? { clarifications: compile.clarifications }
+          : {}),
+      } satisfies CompileFromPromptSuccessResponse);
     },
   };
 }
