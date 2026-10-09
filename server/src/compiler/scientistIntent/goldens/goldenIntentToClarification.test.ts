@@ -161,6 +161,47 @@ describe('golden.intent-to-clarification.labware-hint-lookup-failure', () => {
   });
 });
 
+describe('golden.intent-to-clarification.material-level-mismatch', () => {
+  it('golden.intent-to-clarification.material-level-mismatch', async () => {
+    // SPINE-8 re-homed fixture (ruling item 2): the SHIPPED vocabulary declares
+    // wash.material level: aliquot (vocabulary DATA — the single source of the
+    // (verb,arg)->MaterialLevel mapping, consumed by the resolve_nouns pass's
+    // deps.levelFor supplier). The fixture store carries 'ethanol' ONLY as a
+    // concept-level `material` record (records.ts KIND_LEVEL: material->concept;
+    // the records provider sets NO termKind — vendor-kind terms are provably
+    // absent by construction). The engine's levelFilter arm
+    // (resolutionEngine.ts:94-111, reached via the vocabulary-declared wantLevel
+    // — NO test-hand-built wantLevel) drops the concept candidate => the
+    // EXISTING unknown-noun arm clarifies with the mint offer. NON-VACUITY:
+    // pre-wire this exact fixture BINDS the concept record (200) — the RED
+    // capture in the SPINE-8 report is the mutation control.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-clarification.material-level-mismatch');
+    const run = await runGolden(fixture);
+    const payload = assertBar(run);
+
+    const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
+    expect(clarifications).toHaveLength(1);
+    const item = clarifications[0]!;
+    expect(item['label']).toBe('ethanol');
+    // The engine's ACTUAL reason (no invented reason code — spec §9.6): the
+    // level-mismatch evidence is the levelFilter trace + this pre-wire control;
+    // the clarification itself rides the existing unknown-noun arm.
+    expect(item['reason']).toBe('unknown-noun');
+    expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'wash', argument: 'material' });
+    const candidates = item['candidates'] as Array<Record<string, unknown>>;
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates[0]).toEqual({ label: 'Create local term “ethanol”', confidence: 0.05 });
+
+    assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
+    expect(run.spies.writeCalls).toBe(0);
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-clarification.material-level-mismatch');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+  });
+});
+
 describe('golden.intent-to-clarification.model-unresolved-passthrough', () => {
   it('golden.intent-to-clarification.model-unresolved-passthrough', async () => {
     // Fixture 6 (stands EXACTLY as ruled; P6 verbatim-reachable): a

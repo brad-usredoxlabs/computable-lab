@@ -1,0 +1,47 @@
+# SPINE-8 re-homed golden fixture — golden.intent-to-clarification.material-level-mismatch
+# (ruling item 2: the leg SPINE-6 moved here because the levelFor seam was unwired).
+#
+# The SHIPPED vocabulary declares wash.material level: aliquot (vocabulary DATA —
+# the single source of the (verb,arg)->MaterialLevel mapping). The fixture store
+# carries 'ethanol' ONLY as a concept-level `material` record: records.ts
+# KIND_LEVEL maps kind material -> level 'concept', and the records provider sets
+# NO termKind — so the material-domain landing-zone check (adapters.ts
+# claimsConflictingLandingZone) is never engaged: the fixture avoids
+# termKind-claiming store rows by construction, so the open SPINE-3 N1
+# material-strictness assumption (id carried in the SPINE-8 report) is not
+# depended on.
+#
+# NON-VACUITY control (spec §5/§6.1): pre-wire, the concept candidate is
+# unfiltered and BINDS (route does NOT 422 on this label — the RED capture).
+# Post-wire, the engine's levelFilter arm (resolutionEngine.ts:94-111, reached
+# via deps.levelFor supplied from the vocabulary) drops the concept candidate =>
+# the EXISTING unknown-noun clarification arm fires with the mint offer; the 422
+# pins the engine's ACTUAL output verbatim. No hand-built wantLevel anywhere.
+#
+# The `labware` arg (a declared labware noun, NO level declaration) exists so
+# the lowering builds labwareInstances -> protocolIntent on the bar's
+# terminalArtifacts, matching the existing clarification goldens' zero-artifact
+# surface; the level leg rides the material arg only.
+name: golden.intent-to-clarification.material-level-mismatch
+request:
+  protocolText: >-
+    Wash the plate with ethanol.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-plate
+      payload:
+        kind: labware
+        name: plate
+    - recordId: MAT-ethanol-concept
+      payload:
+        kind: material
+        name: ethanol
+modelOutput:
+  intentId: golden-material-level-mismatch
+  actions:
+    - action: wash
+      labware: plate
+      material: ethanol
+      cycles: 3
