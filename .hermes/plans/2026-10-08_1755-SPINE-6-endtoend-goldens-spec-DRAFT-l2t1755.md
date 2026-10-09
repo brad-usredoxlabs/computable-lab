@@ -138,6 +138,22 @@ File goldenIntentToGraph.test.ts:
    normalized response deep-equal to `__records__/transfer-read.golden.json` — volumes,
    addresses (wells/deck positions), resolved identities (recordIds), and provenance fields
    inside the golden, byte-exact after normalization (§4.4).
+   ADDENDUM (orch l2t2050, clears AS-LANE2-SPINE4-D4-ROLES-SEAM-COVERAGE evidence debt):
+   fixture 1 MUST also exercise the resolve_roles authoritative-wells seam end-to-end.
+   Verified at the SPINE-4 merge tip: resolve_roles IS registered in the shipped
+   scientist-intent-compile.yaml pipeline (:67, depends_on includes resolve_nouns), and the
+   seam (ChatbotCompilePasses.ts ~:2410-2414) uses `nounBindings?.[role]?.addresses` when
+   non-empty, else falls back to `defaultRoleResolver(role, ctx)`. The D4 gap is that the seam
+   unit test hand-builds the slot, so nothing proves the REAL engine's binding.addresses is
+   what reaches it. Therefore fixture 1 must: (i) bind a role whose single-well address comes
+   from the real engine (SPINE-3 emits binding.addresses only when the role's in-band candidate
+   set is exactly 1 — multi-well clarifies at resolve_nouns, so single-well is the only
+   reachable production path); (ii) assert the emitted event's wells EQUAL the engine binding's
+   addresses AND differ from what `defaultRoleResolver(role, ctx)` would return for that role
+   (either provably different defaults, or a spy/mirror pin in the test proving the
+   authoritative branch was taken — not the fallback); (iii) name this golden leg in the report
+   as the D4 clearance. Without (ii) the golden could pass through the fallback and falsely
+   bless the debt.
 2. `golden.intent-to-graph.labware-hint-regression` — a document exercising the labware-hint
    path (the shape today's route test :129-151 and hintParity pin: labwareHint-carrying emits —
    re-read hintParity.test.ts:79-118); asserts the deep-equal replay AND that the pinned search
