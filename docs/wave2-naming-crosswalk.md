@@ -100,7 +100,7 @@ repeat_rows). 3+7=10 and 3+28=31 — the table partitions both sets exactly
   aliases incl. `heat` (schema/registry/operations.yaml:36).
 - W2-1-F2 `set`: VERB-SET canonical `set` (verb-set.yaml:4) vs operations.yaml
   `add_material` aliases incl. `set` (operations.yaml:16).
-- W2-1-F3 `shake`: first-class enum verb (scientist-intent.schema.yaml:27) AND
+- W2-1-F3 `shake`: first-class enum verb (scientist-intent.schema.yaml:31) AND
   verb-definition canonical (verb-shake.yaml:4), yet operations.yaml folds it
   as an ALIAS of `mix` (operations.yaml:47); absent from verb-action-map.yaml.
 - W2-1-F4 `spin`/`pellet` vs `centrifuge`: enum verbs spin (:53) and pellet
@@ -109,9 +109,16 @@ repeat_rows). 3+7=10 and 3+28=31 — the table partitions both sets exactly
 - W2-1-F5 coverage gap: verb-action-map.yaml has 26 mappings vs 31 enum verbs;
   unmapped = shake + the 4 pattern macros (class: pattern at
   scientist-intent-vocabulary.yaml:660/698/732/763).
+- W2-1-F6 `warm`: alias `warm` is assigned to TWO distinct operations —
+  operations.yaml `incubate` aliases incl. `warm` (schema/registry/operations.yaml:36)
+  AND `thaw` aliases [warm] (schema/registry/operations.yaml:252); thaw also
+  `expands_to: [incubate]` (:251). Inverse shape of F1-F5 — one local alias
+  term for two entities; recorded for architect adjudication.
 
 These are "two local terms for one entity" cases found by machine enumeration
-across the neighboring vocabularies. Per the hard rules they are FINDINGS
+across the neighboring vocabularies (F6 is the inverse shape — one alias term
+shared by two entities — recorded for the same architect adjudication). Per the
+hard rules they are FINDINGS
 (status: collision) in memo + crosswalk data; resolving them is an architect
 call, not a coder call. No triplet, lint, or vocabulary verbs list was edited.
 
@@ -122,7 +129,8 @@ through the crosswalk, (2) no collision with record-kind / operation-id /
 scientist-intent-verb / verb-definition-canonical / verb-action-map-verb
 (normalized lowercase, '-' == '_'), (3) carry a `cf:`-style CURIE plan
 (pattern `^cf:[a-z0-9][a-z0-9-]*$`; convention per
-computable-lab-principles.md:45 and schema/registry/lab-profile/lab-profile.yaml:14
+specifications/computable-lab-principles.md:43 and
+schema/registry/lab-profile/lab-profile.yaml:14
 `ontologyNamespace: "cf"`). Enforcement is
 server/src/schema/Wave2NamingCrosswalk.test.ts — generic set-comparison over
 the data files only; deliberately-colliding fixtures (local-protocol as a NEW

@@ -44,15 +44,15 @@ mappings:
     - verb_definition_id: VERB-INCUBATE
       canonical: incubate
       scientist_intent_action: incubate
-      also: [operation-registry id incubate (operations.yaml:32), verb-action-map incubate]
+      also: [operation-registry id incubate (operations.yaml:33), verb-action-map incubate]
     - verb_definition_id: VERB-READ
       canonical: read
       scientist_intent_action: read
-      also: [operation-registry id read (operations.yaml:56), verb-action-map read]
+      also: [operation-registry id read (operations.yaml:55), verb-action-map read]
     - verb_definition_id: VERB-SHAKE
       canonical: shake
       scientist_intent_action: shake
-      also: ["scientist-intent enum verb (scientist-intent.schema.yaml:27)"]
+      also: ["scientist-intent enum verb (scientist-intent.schema.yaml:31)"]
       finding: W2-1-F3   # operations.yaml folds shake as an ALIAS of mix (:47)
   protocol_semantic_only:
     - verb_definition_id: VERB-AUTOCLAVE
@@ -114,7 +114,7 @@ findings:
   - id: W2-1-F3
     status: collision
     term: shake
-    detail: "enum verb (scientist-intent.schema.yaml:27) + verb-definition canonical (verb-shake.yaml:4) + operations.yaml ALIAS of mix (:47); absent from verb-action-map.yaml"
+    detail: "enum verb (scientist-intent.schema.yaml:31) + verb-definition canonical (verb-shake.yaml:4) + operations.yaml ALIAS of mix (:47); absent from verb-action-map.yaml"
   - id: W2-1-F4
     status: collision
     term: spin/pellet vs centrifuge
@@ -123,3 +123,7 @@ findings:
     status: coverage-gap
     term: verb-action-map
     detail: "26 mappings vs 31 enum verbs; unmapped: shake, serial_dilution, media_swap_duplicate_columns, source_wells_to_duplicate_target_columns, repeat_rows"
+  - id: W2-1-F6
+    status: collision
+    term: warm
+    detail: "alias warm assigned to TWO operations: incubate aliases [.., warm, ..] (operations.yaml:36) AND thaw aliases [warm] (operations.yaml:252); thaw also expands_to [incubate] (:251)"

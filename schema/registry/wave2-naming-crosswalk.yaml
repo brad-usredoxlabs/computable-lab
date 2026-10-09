@@ -201,7 +201,7 @@ findings:
     term: shake
     detail: >-
       `shake` is a first-class scientist-intent enum verb
-      (scientist-intent.schema.yaml:27) AND a verb-definition canonical
+      (scientist-intent.schema.yaml:31) AND a verb-definition canonical
       (verb-shake.yaml:4), yet operations.yaml folds it as an ALIAS of `mix`
       (schema/registry/operations.yaml:47). verb-action-map.yaml (26 mappings)
       omits `shake` entirely.
@@ -220,6 +220,17 @@ findings:
       the 5 enum verbs absent are shake + the 4 pattern macros (serial_dilution,
       media_swap_duplicate_columns, source_wells_to_duplicate_target_columns,
       repeat_rows). Third neighboring vocabulary — named, not conflated.
+  - id: W2-1-F6
+    status: collision
+    term: warm
+    detail: >-
+      alias `warm` is assigned to TWO distinct operations: operations.yaml
+      `incubate` whose aliases include `warm`
+      (schema/registry/operations.yaml:36) AND operations.yaml `thaw` whose
+      aliases include `warm` (schema/registry/operations.yaml:252). Inverse
+      shape of F1-F5 — one local alias term for two entities; thaw also
+      `expands_to: [incubate]` (operations.yaml:251), so the overlap is
+      semantically real. Recorded for architect adjudication.
 
 # ---- admission predicate: every proposed wave-2 term must pass BEFORE it
 #      enters any schema, lint, or fixture (enforced headlessly by
@@ -246,5 +257,5 @@ admission:
     - id: curie-plan
       description: >-
         A new term must carry a CURIE plan in the project `cf:` local-namespace
-        convention (computable-lab-principles.md:45; schema/registry/lab-profile/lab-profile.yaml:14).
+        convention (specifications/computable-lab-principles.md:43; schema/registry/lab-profile/lab-profile.yaml:14).
       pattern: "^cf:[a-z0-9][a-z0-9-]*$"
