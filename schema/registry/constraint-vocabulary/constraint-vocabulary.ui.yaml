@@ -1,0 +1,99 @@
+# UI specification for the constraint vocabulary registry doc (W2-2).
+# UI HINTS ONLY for later review surfaces (derivation.ui.yaml precedent —
+# schema/registry/derivations/derivation.ui.yaml). NO app code, NO UI gate:
+# nothing in app/ consumes this yet; W2-3 mounts constraints on steps.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/constraint-vocabulary.schema.yaml"
+
+display:
+  titleField: "$.kind"
+  icon: "constraint-vocabulary"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.kind"
+      widget: "text"
+      label: "Registry Doc"
+      readonly: true
+    - path: "$.version"
+      widget: "text"
+      label: "Version"
+      readonly: true
+    - path: "$.authority"
+      widget: "textarea"
+      label: "Authority"
+  - title: "Classes"
+    fields:
+    - path: "$.classes"
+      widget: "list"
+      label: "Constraint Classes (8+1)"
+      itemFields:
+      - path: "id"
+        widget: "text"
+        label: "Class Id"
+      - path: "curie"
+        widget: "text"
+        label: "CURIE"
+      - path: "label"
+        widget: "text"
+        label: "Label"
+      - path: "boundShape"
+        widget: "select"
+        label: "Bound Shape"
+        options:
+        - quantity
+        - quantity-ratio
+        - quantity-or-ratio
+        - none
+      - path: "dimensionRule"
+        widget: "select"
+        label: "Dimension Rule"
+        options:
+        - same-dimension
+        - quantity-per-count
+        - dimension-molar
+        - any-dimension
+        - none
+      - path: "defaultBindingKind"
+        widget: "select"
+        label: "Default Binding Kind"
+        options:
+        - vendor_default
+        - hard_bound
+      - path: "overridePolicy"
+        widget: "text"
+        label: "Override Policy"
+  - title: "Override Policies"
+    fields:
+    - path: "$.overridePolicies"
+      widget: "list"
+      label: "Override Policies"
+      itemFields:
+      - path: "id"
+        widget: "text"
+        label: "Policy Id"
+      - path: "relaxable"
+        widget: "checkbox"
+        label: "Relaxable"
+  - title: "Laws"
+    fields:
+    - path: "$.dimensionLaws"
+      widget: "list"
+      label: "Dimension Laws (role:dimension)"
+    - path: "$.policyBindingKeys"
+      widget: "list"
+      label: "Policy x BindingKind Pairs"
+
+list:
+  columns:
+  - path: "$.kind"
+    label: "Doc"
+    width: "200px"
+  - path: "$.classIds"
+    label: "Classes"
+  - path: "$.version"
+    label: "Version"
+    width: "80px"

@@ -122,11 +122,13 @@ entries:
     source_decision: D6
     note: "bead beater = equipment capability (D6 forcing function); no new capability kind."
 
-  # ---- genuinely-missing datatype (W2-2) ----
+  # ---- genuinely-missing datatype (W2-2) — LANDED by W2-2 ----
   - term: "Quantity"
-    status: missing-datatype
+    status: existing
     binds_to:
-      planned_schema: schema/core/datatypes/quantity.schema.yaml
+      schema: schema/core/datatypes/quantity.schema.yaml
+      schema_line: "schema/core/datatypes/quantity.schema.yaml:2 ($id)"
+      ratio_schema: schema/core/datatypes/quantity-ratio.schema.yaml
       overlap_check:
         - "schema/core/datatypes/amount.schema.yaml:6 (required: [value, unit])"
         - "schema/core/datatypes/concentration.schema.yaml:9 (required: [value, unit, basis])"
@@ -135,9 +137,12 @@ entries:
     curie_plan: "cf:quantity"
     source_decision: D6
     note: >-
-      Genuinely missing today (verified by enumeration). W2-2 must check
-      amount/concentration/reference-ratio overlap before minting names — never
-      two local terms for one entity.
+      W2-2 LANDED the datatype (was missing-datatype at W2-1 admission). amount/
+      concentration/reference-ratio COEXIST untouched (W2-1 ruling); migration of
+      existing fields is a later wave. Quantity is a datatype, not a record kind
+      (forbidden_kinds `quantity` remains satisfied — no such record kind exists,
+      verified by server/src/schema/Wave2QuantitySchema.test.ts namespace
+      enumeration).
 
   # ---- wave-2 vocabulary pending admission (minted as enum VALUES/data on
   #      existing records, never as kinds) ----
@@ -159,10 +164,173 @@ entries:
     curie_plan: "cf:provenance-local-realization"
     source_decision: D3/W2-4
   - term: "constraint-classes"
-    status: new-vocab-pending-admission
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml
+      vocabulary_schema: schema/registry/constraint-vocabulary/constraint-vocabulary.schema.yaml
+      vocabulary_lint: schema/registry/constraint-vocabulary/constraint-vocabulary.lint.yaml
+      constraint_datatype: schema/registry/constraint-vocabulary/constraint.schema.yaml
     curie_plan: "cf:constraint-class"
     source_decision: D6
-    note: "ratios, concentrations, per-unit doses, minima/maxima, capacities, thresholds, ordering, completion conditions, vendor defaults — as data on ONE constraint vocabulary (D6)."
+    note: >-
+      ratios, concentrations, per-unit doses, minima/maxima, capacities,
+      thresholds, ordering, completion conditions, vendor defaults — as data on
+      ONE constraint vocabulary (D6). W2-2 LANDED it: 10 class entries (the memo's
+      minima/maxima split into minimum+maximum, vendor_default as the +1),
+      applicability and override policy in the bound lint YAML. Registry doc, NOT
+      a record kind (forbidden_kinds `constraint-class` remains satisfied — the
+      doc's kind is an enum, never a properties.kind.const).
+
+  # ---- W2-2-minted vocabulary (admitted as enum VALUES/data on datatypes and
+  #      the registry doc, never as kinds; collision + cf: CURIE enforced at
+  #      minting time by server/src/schema/Wave2QuantitySchema.test.ts, which
+  #      enumerates the same namespaces this file's admission section names) ----
+  - term: "quantity-dimension-count"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-count"
+    source_decision: D6
+    note: >-
+      QUALIFIED on purpose (finding W2-2-F1): the bare word `count` collides with
+      operations.yaml operation-id `count` and verb-action-map verb `count` — a
+      dimension noun is a different entity from the count OPERATION and must not
+      shadow it.
+  - term: "quantity-dimension-volume"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-volume"
+    source_decision: D6
+  - term: "quantity-dimension-mass"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-mass"
+    source_decision: D6
+  - term: "quantity-dimension-molar"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-molar"
+    source_decision: D6
+  - term: "quantity-ratio"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity-ratio.schema.yaml
+      schema_line: "schema/core/datatypes/quantity-ratio.schema.yaml:2 ($id)"
+      distinct_from: "schema/core/datatypes/reference-ratio.schema.yaml (advisory bare numbers — coexists by W2-1 ruling)"
+    curie_plan: "cf:quantity-ratio"
+    source_decision: D6
+  - term: "quantity-qualifier"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.qualifier.enum
+    curie_plan: "cf:quantity-qualifier"
+    source_decision: D6
+    note: "OQ2 adjudication: [exact, approximately_zero] — ~zero representable, no invented epsilon."
+
+  - term: "constraint-class-ratio"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-ratio"
+    source_decision: D6
+  - term: "constraint-class-concentration"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-concentration"
+    source_decision: D6
+  - term: "constraint-class-per-unit-dose"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-per-unit-dose"
+    source_decision: D6
+  - term: "constraint-class-minimum"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-minimum"
+    source_decision: D6
+  - term: "constraint-class-maximum"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-maximum"
+    source_decision: D6
+  - term: "constraint-class-capacity"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-capacity"
+    source_decision: D6
+  - term: "constraint-class-threshold"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-threshold"
+    source_decision: D6
+  - term: "constraint-class-ordering"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-ordering"
+    source_decision: D6
+  - term: "constraint-class-completion-condition"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-completion-condition"
+    source_decision: D6
+  - term: "constraint-class-vendor-default"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-vendor-default"
+    source_decision: D6
+
+  - term: "binding-kind-vendor-default"
+    status: existing
+    binds_to:
+      schema: schema/registry/constraint-vocabulary/constraint.schema.yaml
+      field: properties.bindingKind.enum
+    curie_plan: "cf:binding-kind-vendor-default"
+    source_decision: D6
+    note: "the vendor side of the strictness seam (SPINE-8/SPINE-3 governs when it binds a material concept)."
+  - term: "binding-kind-hard-bound"
+    status: existing
+    binds_to:
+      schema: schema/registry/constraint-vocabulary/constraint.schema.yaml
+      field: properties.bindingKind.enum
+    curie_plan: "cf:binding-kind-hard-bound"
+    source_decision: D6
+    note: "the material-truth side of the seam."
+
+  - term: "override-policy-lab-may-relax"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-lab-may-relax"
+    source_decision: D6
+  - term: "override-policy-lab-may-tighten"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-lab-may-tighten"
+    source_decision: D6
+  - term: "override-policy-never-override"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-never-override"
+    source_decision: D6
+
+  - term: "bead beater"
+    status: existing
+    binds_to:
+      kind: equipment-capability
+      kind_line: "schema/workflow/equipment-capability.schema.yaml:21"
+      curie: "CL:bead_beater"
+      vocabulary_field: "constraint-vocabulary.yaml capabilityTerms"
+    source_decision: D6
+    note: >-
+      D6 forcing function: bead beater = equipment capability. Referenced through
+      the EXISTING machinery (CL:<snake> physical-kind namespace,
+      equipment-capability.schema.yaml:39-43,57) — no fourth prefix minted (§6.11).
 
 # ---- explicit NO-new-record-kind declaration (D1) ----
 forbidden_kinds:

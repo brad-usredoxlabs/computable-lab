@@ -1,0 +1,273 @@
+# W2-2-QUANTITY-CONSTRAINTS — the constraint vocabulary (D6: ONE vocabulary,
+# ALL memo classes, as DATA). Registry-style pure data doc (operations.yaml
+# precedent): NOT a record kind (wave2-naming-crosswalk.yaml forbidden_kinds
+# lists `constraint-class` and `quantity` — this doc mints neither; `kind` here
+# is a plain registry field, enum-constrained in the meta-schema, never a
+# properties.kind.const).
+#
+# Structural rules: constraint-vocabulary.schema.yaml (Ajv authority).
+# Conditional cross-reference closure: constraint-vocabulary.lint.yaml (DSL).
+# UI hints for later review surfaces: constraint-vocabulary.ui.yaml (hints only,
+# no UI gate, no app code).
+#
+# Class names, CURIEs, applicability, allowed bindingKinds, override policies,
+# dimension laws and the policy x bindingKind seam are ALL declared here.
+# TypeScript keeps NO class list, NO unit list, NO per-vendor branch (principles
+# §6/§9: declarative = law). Enforcement of which policy applies to which
+# consuming record is W2-3+ (lint bound to the consuming records) — this item is
+# the contract only.
+#
+# Counting (D6 "8+1"): the memo names 8 classes with minima/maxima as ONE
+# entry; this vocabulary splits minima/maxima into two class entries (minimum,
+# maximum) and counts vendor_default as the +1 => 10 entries. The merged W2-1
+# crosswalk's constraint-classes note lists the same memo set; the crosswalk
+# does not enumerate a different count, so the draft's split stands (§2.4
+# "THE CROSSWALK WINS" — it does not disagree). Recorded in the report.
+kind: constraint-vocabulary
+version: 1
+authority: >-
+  D6 (lane-2 task-list wave-2 header) + W2-1 crosswalk admission
+  (schema/registry/wave2-naming-crosswalk.yaml constraint-classes entry,
+  cf:constraint-class). Forcing functions: HepG2 aspiration (10,000 cells kept,
+  volume ~0 — counts never collapse into volumes); 5 bashing beads/well
+  (material count-per-well ratio; bead beater = equipment capability).
+
+# Flat mirror of classes[*].id (uniqueItems gives Ajv the duplicate arm; the
+# lint's two-way closure catches a rename-to-duplicate without touching this).
+classIds:
+  - ratio
+  - concentration
+  - per_unit_dose
+  - minimum
+  - maximum
+  - capacity
+  - threshold
+  - ordering
+  - completion_condition
+  - vendor_default
+
+classes:
+  - id: ratio
+    curie: "cf:constraint-ratio"
+    label: "Ratio"
+    description: >-
+      A quantity-per-quantity ratio (quantity-ratio.schema.yaml): e.g. 5 bashing
+      beads per well = {5, beads, count} over {1, wells, count} — same dimension,
+      DIFFERENT units. NOT the advisory reference-ratio datatype (bare numbers,
+      authoring annotation); the two coexist by W2-1 ruling.
+    boundShape: quantity-ratio
+    dimensionRule: same-dimension
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: vendor_default
+    overridePolicy: lab-may-tighten
+    example_bound:
+      numerator: { value: 5, unit: "beads", dimension: count, qualifier: exact }
+      denominator: { value: 1, unit: "wells", dimension: count, qualifier: exact }
+
+  - id: concentration
+    curie: "cf:constraint-concentration"
+    label: "Concentration"
+    description: >-
+      A molar-dimension Quantity bound (working concentration of the active
+      material in the final well — the invariant concentration-first already
+      names). Coexists with concentration.schema.yaml (which stays untouched);
+      this class rides Quantity with dimension molar.
+    boundShape: quantity
+    dimensionRule: dimension-molar
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: vendor_default
+    overridePolicy: lab-may-tighten
+    example_bound: { value: 10, unit: "nM", dimension: molar, qualifier: exact }
+
+  - id: per_unit_dose
+    curie: "cf:constraint-per-unit-dose"
+    label: "Per-unit dose"
+    description: >-
+      A dose expressed per counting unit (quantity-per-count): e.g. reagent uL
+      per 1 well, drug ng per 1000 cells. The denominator is a count; the
+      numerator is any dimension.
+    boundShape: quantity-ratio
+    dimensionRule: quantity-per-count
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: vendor_default
+    overridePolicy: lab-may-tighten
+    example_bound:
+      numerator: { value: 50, unit: "uL", dimension: volume, qualifier: exact }
+      denominator: { value: 1, unit: "wells", dimension: count, qualifier: exact }
+
+  - id: minimum
+    curie: "cf:constraint-minimum"
+    label: "Minimum"
+    description: >-
+      A floor the biological context must meet (e.g. the 10,000-cell count that
+      must SURVIVE aspiration — the count is the floor, dimension count, never
+      converted to a volume).
+    boundShape: quantity
+    dimensionRule: any-dimension
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: never-override
+    example_bound: { value: 10000, unit: "cells", dimension: count, qualifier: exact }
+
+  - id: maximum
+    curie: "cf:constraint-maximum"
+    label: "Maximum"
+    description: >-
+      A ceiling the biological context must not exceed (e.g. a fill volume cap).
+      Split from minimum per the draft's 8+1 counting (minima/maxima as two
+      entries); the memo's single "minima/maxima" class maps to these two.
+    boundShape: quantity
+    dimensionRule: any-dimension
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: lab-may-tighten
+    example_bound: { value: 200, unit: "uL", dimension: volume, qualifier: exact }
+
+  - id: capacity
+    curie: "cf:constraint-capacity"
+    label: "Capacity"
+    description: >-
+      What a container or capability can physically hold (96 wells, 5 beads per
+      well seat). Capacity is a property of the labware/equipment context, not
+      of a material.
+    boundShape: quantity
+    dimensionRule: any-dimension
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: never-override
+    example_bound: { value: 96, unit: "wells", dimension: count, qualifier: exact }
+
+  - id: threshold
+    curie: "cf:constraint-threshold"
+    label: "Threshold"
+    description: >-
+      A decision boundary (e.g. the aspiration volume ~0 threshold that marks a
+      well drained). approximately_zero quantities are first-class here — the
+      ~zero arm lives in the datatype qualifier, not in an epsilon.
+    boundShape: quantity
+    dimensionRule: any-dimension
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: never-override
+    example_bound: { value: 0, unit: "uL", dimension: volume, qualifier: approximately_zero }
+
+  - id: ordering
+    curie: "cf:constraint-ordering"
+    label: "Ordering"
+    description: >-
+      A sequence constraint (step B must follow step A; wash before read). No
+      numeric bound — the constraint is the sequence relation itself, carried as
+      symbolic refs by W2-3.
+    boundShape: none
+    dimensionRule: none
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: never-override
+
+  - id: completion_condition
+    curie: "cf:constraint-completion-condition"
+    label: "Completion condition"
+    description: >-
+      A state constraint that must hold before a step/phase may complete (e.g.
+      "pellet visible", "no bubbles"). State, not quantity; boundShape none.
+    boundShape: none
+    dimensionRule: none
+    allowedBindingKinds: [ vendor_default, hard_bound ]
+    defaultBindingKind: hard_bound
+    overridePolicy: never-override
+
+  - id: vendor_default
+    curie: "cf:constraint-vendor-default"
+    label: "Vendor default"
+    description: >-
+      The +1 of the 8+1: a vendor-stated number (kit volumes, kit bead counts)
+      carried as a constraint whose strictness is vendor_default — overridable
+      UNDER a declared policy, never silently. Distinguishable from hard bounds
+      by bindingKind + the lint-declared override policy (acceptance clause).
+    boundShape: quantity-or-ratio
+    dimensionRule: any-dimension
+    allowedBindingKinds: [ vendor_default ]
+    defaultBindingKind: vendor_default
+    overridePolicy: lab-may-relax
+    example_bound: { value: 400, unit: "uL", dimension: volume, qualifier: exact }
+
+# Policy NAMES + attributes only. Which policy applies to which consuming
+# record is W2-3+ enforcement (lint bound to the consuming records).
+overridePolicies:
+  - id: lab-may-relax
+    description: "The lab may relax the bound (vendor defaults are by definition relaxable under policy)."
+    relaxable: true
+    allowedBindingKinds: [ vendor_default ]
+  - id: lab-may-tighten
+    description: "The lab may tighten (never loosen) the bound."
+    relaxable: false
+    allowedBindingKinds: [ vendor_default ]
+  - id: never-override
+    description: "The lab's own material truth: not overridable at all."
+    relaxable: false
+    allowedBindingKinds: [ hard_bound ]
+
+# Declared override-policy x bindingKind compatibility as flat pairs (the lint
+# DSL has no collection joins; a constraint carries the composed key and the
+# lint checks membership — the strictness seam as DATA).
+policyBindingKeys:
+  - "lab-may-relax:vendor_default"
+  - "lab-may-tighten:vendor_default"
+  - "never-override:hard_bound"
+
+# Profile-keyed required classes (the lint DSL has no collection joins, so each
+# profile gets its own closure rule). well_state today; step/phase profiles land
+# with W2-3 when consuming records mount constraints.
+profiles:
+  - well_state
+
+requiredClasses:
+  well_state:
+    - minimum
+    - threshold
+
+# Declared role->dimension laws as flat "role:dimension" pairs. The count
+# collapse (cell_count re-typed as volume) yields a key absent here — the
+# dimension-preservation law enforced as DATA (no TS branch, no numeric-shape
+# guessing).
+dimensionLaws:
+  - "cell_count:count"
+  - "aspiration_volume:volume"
+  - "bead_count:count"
+  - "well_count:count"
+  - "fill_volume:volume"
+  - "dose_mass:mass"
+  - "working_concentration:molar"
+
+# Capability terms this vocabulary presumes — they ride the EXISTING
+# equipment-capability machinery (CL:<snake> physical-kind CURIEs,
+# equipment-capability.schema.yaml:39-43,57). No new prefix is minted (§6.11);
+# the terms resolve through the crosswalk's "capability terms" entry (existing).
+capabilityTerms:
+  - term: bead_beater
+    crosswalk_term: "capability terms"
+    kindRef: "CL:bead_beater"
+
+# Applicability: which biological contexts each class binds (symbolic target
+# labels only, never inline payloads). Every entry names a declared class.
+applicability:
+  - class: ratio
+    targets: [ well-state, add_material-step ]
+  - class: concentration
+    targets: [ well-state, add_material-step ]
+  - class: per_unit_dose
+    targets: [ add_material-step ]
+  - class: minimum
+    targets: [ well-state ]
+  - class: maximum
+    targets: [ well-state ]
+  - class: capacity
+    targets: [ labware-role, equipment-capability ]
+  - class: threshold
+    targets: [ well-state ]
+  - class: ordering
+    targets: [ protocol-step ]
+  - class: completion_condition
+    targets: [ protocol-step, protocol-phase ]
+  - class: vendor_default
+    targets: [ vendor-protocol-candidate, add_material-step ]
