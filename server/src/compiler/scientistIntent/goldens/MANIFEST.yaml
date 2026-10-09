@@ -1,0 +1,38 @@
+# SPINE-6 goldens manifest — blessed ONCE on the claim base after both amended
+# legs landed RED-first (spec §4.3; ruling amendment l2t0140 sequencing; CR-3:
+# never blessed over pending wording). The golden suite re-hashes every pinned
+# file (golden.manifest.versions-current): rule/spec drift fails LOUD, never
+# silently re-blessed (bait §11.5/§11.9).
+suite: spine6-scientist-intent-goldens
+baseCommit: c74c5214
+treeState:
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 6c5e397c27ee247fc1a1532c0131f4f13f4213907e547a5e1a7d2ac6634bab36}
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 787eff7f9621bea850d1aab965a9aa28a989a9deae4f3b7e47b182f25360566e}
+  - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
+fixtures:
+  - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
+  - {name: golden.intent-to-graph.labware-hint-regression, path: fixtures/labware-hint-regression.yaml, sha256: 17774b3aacbfda6cb385316a8474fa17123c38c90fa6e27145025aa759c100e3}
+  - {name: golden.intent-to-clarification.ambiguous-material, path: fixtures/ambiguous-material.yaml, sha256: ddf5bcb093bb7d9f9b64282945102ff4f6ed65c6752158a98da584f32a350859}
+  - {name: golden.intent-to-clarification.unknown-local-term, path: fixtures/unknown-local-term.yaml, sha256: 23bbac22d9bccc817e2cb7d2c338e13ba74545222b4a288ca65a2d2134c75fd9}
+  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: fixtures/labware-hint-lookup-failure.yaml, sha256: 107d25ab8b56734a6fa99a47fcc8cee2d0b2efc6d7645a7c1d5cdb6f6ab40da8}
+  - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: fixtures/model-unresolved-passthrough.yaml, sha256: 8c50399efe1de45e5ec98550a072b30a01363dfad1eb29e47a3c9c88aa83e492}
+records:
+  - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: f3253369857f6f31ec597a149ee7a045f5010ab8875c49be46a62d4f601ce02a}
+  - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: 11430dc4af75923b57253729a881f2f0a9b0402a81894d3d16ac9400d0b99afd}
+  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 47a15d732c3de98589b5e17fd28d59cd88070af9555546fb6e7b184c345f0089}
+  - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 085526acdc8ab30dd3d419dd2cdbce9b2462ddbce0bf324cacf16f424e60970a}
+  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 9b115f66c8af9071fd5081d61b4c65841a2d832a248d16a658bf8c77547063dd}
+  - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}
+# Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
+outcomeUnionMember: needs-clarification
+# Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):
+# 200 {outcome,terminalArtifacts,localMacro,axes} (+clarifications only on a
+# 'gap' that carries them); 422 {error:NEEDS_CLARIFICATION,outcome,clarifications,
+# localMacro,terminalArtifacts(events/directives/gaps/protocolIntent only,
+# events/gaps empty)}; 502 {error:MALFORMED_MODEL_OUTPUT,message}; 500
+# {error:INTENT_COMPILE_FAILED|INTENT_COMPILE_PROMPT_FAILED,message}.
+routeContract: "200 outcome complete|gap; 422 NEEDS_CLARIFICATION+verbatim clarifications+held localMacro+zero-artifact; 502 MALFORMED_MODEL_OUTPUT; 500 INTENT_COMPILE_FAILED"
+reproduce:
+  - {cmd: "cd <wt>/server && npx vitest run src/compiler/scientistIntent/goldens", expect: "7 tests, 0 failures"}
+  - {cmd: "cd <wt>/server && npx tsx scripts/golden-replay.ts", expect: "exit 0 from a clean checkout, offline"}
+liveSmoke: {cmd: "cd <wt>/server && npx tsx scripts/live-smoke.ts", gating: "NEVER CI; manual/orch only; see spec §6"}

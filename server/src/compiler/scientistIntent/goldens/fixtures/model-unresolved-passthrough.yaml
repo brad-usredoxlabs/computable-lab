@@ -1,0 +1,32 @@
+# SPINE-6 golden fixture 6 — golden.intent-to-clarification.model-unresolved-passthrough
+# (stands EXACTLY as ruled; P6 proved it verbatim-reachable). The model
+# declares an `unresolved:` entry (schema-valid, scientist-intent.schema.yaml
+# :165) naming a fact the engine never touches; reconcileModelUnresolved
+# (resolveNounsPass.ts:260-264) carries it VERBATIM into clarifications.
+name: golden.intent-to-clarification.model-unresolved-passthrough
+request:
+  protocolText: >-
+    Transfer 50 uL from the source plate to the destination plate. The
+    incubation duration was not stated.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-source-plate
+      payload:
+        kind: labware
+        name: source plate
+    - recordId: LAB-dest-plate
+      payload:
+        kind: labware
+        name: destination plate
+modelOutput:
+  intentId: golden-model-unresolved-passthrough
+  actions:
+    - action: transfer
+      source: source plate
+      target: destination plate
+      volumeUl: 50
+  unresolved:
+    - label: incubation duration
+      reason: the scientist did not state how long to incubate

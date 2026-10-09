@@ -1,0 +1,36 @@
+# SPINE-6 golden fixture 5 — golden.intent-to-clarification.labware-hint-lookup-failure
+# (RENAMED + re-worded per SPINE-6-ruling-amendment-l2t0140, "Amended FIXTURE 5":
+# the prior name 'material-lookup-failure' mis-states the shipped route — a
+# MATERIAL lookup failure surfaces as 'unknown-noun' + mint offer, never
+# 'resolution-lookup-failed', because the spine providers swallow errors and
+# createFailureTrackingProvider is unwired in createResolveSpineFromContext).
+#
+# The harness store THROWS on store.list({kind:'labware'}) =>
+# createLabwareLookup throws => the labware-hint adapter records failed:true
+# (adapters.ts:133-140) => the engine failure arm (resolutionEngine.ts:206-207)
+# => VERBATIM 'resolution-lookup-failed' for every failing hintEligible arg,
+# NO mint offer.
+#
+# CONTRAST ARM (amendment clause 4, the leg's soul): the SAME canned intent
+# names a store-unresolvable MATERIAL noun (add_material.material is NOT
+# hintEligible — the labware-hint adapter never runs for it, so no failure is
+# seen) => the SAME 422 pins 'unknown-noun' WITH the 0.05 mint offer.
+name: golden.intent-to-clarification.labware-hint-lookup-failure
+request:
+  protocolText: >-
+    Transfer 50 uL from the source plate to the destination plate, then add
+    10 uL of mystery reagent.
+  answers:
+    sample_type: bacterial
+store:
+  records: []
+  throwOnKind: [labware]
+modelOutput:
+  intentId: golden-labware-hint-lookup-failure
+  actions:
+    - action: transfer
+      source: source plate
+      target: destination plate
+      volumeUl: 50
+    - action: add_material
+      material: mystery reagent
