@@ -1,0 +1,22 @@
+# SPINE-6 golden fixture 4 — golden.intent-to-clarification.unknown-local-term
+# (untouched by both rulings). 'mystery flask' matches nothing: the engine's
+# unknown-noun arm offers the mint affordance (Create local term, 0.05).
+name: golden.intent-to-clarification.unknown-local-term
+request:
+  protocolText: >-
+    Transfer 10 uL from the mystery flask to the destination plate.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-dest-plate
+      payload:
+        kind: labware
+        name: destination plate
+modelOutput:
+  intentId: golden-unknown-local-term
+  actions:
+    - action: transfer
+      source: mystery flask
+      target: destination plate
+      volumeUl: 10
