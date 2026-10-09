@@ -113,3 +113,14 @@ possible despite AMEND; a third stop escalates to architect, not another blind d
 ## Budget
 Invoked ~02:10; reconcile + ruling verification + coder dispatch + harness fixes + gate launch
 + queue/handoff writes ~25 min. Gate-run-2 adjudication and coder-watch belong to the next tick.
+
+## CHECKPOINT ADDENDUM l2t0215-tail (02:56 EDT)
+GATE RUN 2 EXITED in-tick (GATE_EXIT=0, sends<=6). RAW measurements (unadjudicated): leg1
+analysisTab=false 3rd time w/ EMPTY agentFrames (fetch-patch capture missed = harness defect);
+seed leg missed a 3rd time (Protocol-pane scan found no non-empty editable); leg3 proven-ask
+cardRendered=FALSE; leg4 compileDelta=0 (NO drafts/compile at all — model replied freeform;
+contrast run-1 where server DID compile workspace_action). leg2 clean honest refusal. Adjudication
+belongs to next tick: backend.log per-request forensics FIRST (surface= + 'workspace_action
+compiled ok' lines) to split model-routing variance (AS-LANE2-PBCH5 data point) from client
+defect; screenshots next; gate-3 only with a fixed capture route (context.route hook) and a
+seed-leg page precheck. SPINE-6 coder 159902 LIVE 18 min at checkpoint (log buffers until exit).
