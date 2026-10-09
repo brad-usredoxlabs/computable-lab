@@ -511,6 +511,13 @@ verbs:
         kind: resolvable
         required: false
         domain: material
+        # SPINE-8-LEVELFOR: a wash's material must land at the aliquot layer.
+        # This DECLARED level is the single source of the (verb,arg)->MaterialLevel
+        # mapping: the resolve_nouns pass reads it into deps.levelFor and the
+        # engine's levelFilter arm (resolutionEngine.ts:94-111) drops
+        # concept/unknown-level candidates. 'aliquot' is a well-ready layer, so
+        # the filter FIRES (spec §9.4: 'spec'/'concept'/'unknown' would be inert).
+        level: aliquot
       - name: volumeUl
         kind: quantity
         required: false

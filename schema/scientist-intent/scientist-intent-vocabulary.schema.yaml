@@ -102,6 +102,23 @@ properties:
                 description: >-
                   True when the wire contract carries a *Hint companion for this
                   argument (sourceHint/targetHint/labwareHint).
+              level:
+                type: string
+                enum: [concept, spec, instance, aliquot, unknown]
+                description: >-
+                  SPINE-8 DECLARATION SLOT — the MaterialLevel (mirrors
+                  server/src/resolve/types.ts MaterialLevel verbatim) the noun
+                  for this argument must land at. The resolve_nouns pass reads
+                  this declared field and supplies it to the engine as
+                  deps.levelFor; the engine's levelFilter arm then drops
+                  concept/unknown-level candidates for a well-ready requirement.
+                  INERTNESS (SPINE-8 §9.4): the filter FIRES only for well-ready
+                  layers — 'instance' and 'aliquot' (per materialRefFields.ts
+                  LAYER_ALIASES/WELL_READY_LAYERS data). A declared 'spec',
+                  'concept', or 'unknown' normalizes to layer 'material' and the
+                  filter NO-OPS; declaring one is legal but enforces nothing.
+                  This enum mirrors the TS union honestly rather than narrowing
+                  to firing values (OQ2 disposition).
 
   policies:
     type: object

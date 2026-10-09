@@ -23,6 +23,7 @@ import { parse as parseYaml } from 'yaml';
 import { createValidator } from '../../validation/AjvValidator.js';
 import { LintEngine } from '../../lint/LintEngine.js';
 import type { LintSpec } from '../../lint/types.js';
+import type { MaterialLevel } from '../../resolve/types.js';
 
 export const SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID =
   'https://computable-lab.com/schema/scientist-intent/vocabulary.schema.yaml';
@@ -52,6 +53,10 @@ export interface ScientistIntentArgContract {
   domain?: string;
   capability?: string;
   hintEligible?: boolean;
+  /** SPINE-8 DECLARATION SLOT — the MaterialLevel this argument's noun must
+   *  land at (vocabulary-declared; the resolve_nouns pass supplies it to the
+   *  engine as deps.levelFor). Absent = no level requirement. */
+  level?: MaterialLevel;
 }
 
 export interface ScientistIntentVerbEntry {
@@ -156,7 +161,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies }
 
@@ -174,6 +179,9 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       ...(typeof a.domain === 'string' ? { domain: a.domain } : {}),
       ...(typeof a.capability === 'string' ? { capability: a.capability } : {}),
       ...(typeof a.hintEligible === 'boolean' ? { hintEligible: a.hintEligible } : {}),
+      // Generic narrowing of the DECLARED level slot (the meta-schema enum is
+      // the validation authority; no per-value branches, no verb knowledge).
+      ...(typeof a.level === 'string' ? { level: a.level as MaterialLevel } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
