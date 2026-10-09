@@ -16,10 +16,12 @@
  * never toEqual-with-undefined.
  */
 import { describe, expect, it } from 'vitest';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
+import { loadScientistIntentVocabulary, type ScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent } from '../scientistIntent/types.js';
 import { createResolveSpine } from '../../resolve/ResolveSpine.js';
+import { resolveScientistIntentNouns } from './resolutionEngine.js';
 import {
   createResolveNounsPass,
   reconcileModelUnresolved,
@@ -30,6 +32,7 @@ import {
   type ResolveNounsOutput,
 } from './resolveNounsPass.js';
 import type { BoundNoun } from './types.js';
+import type { EngineDeps, EngineOutcome } from './types.js';
 import type { PassRunArgs } from '../pipeline/types.js';
 
 const FIXTURES = 'src/compiler/resolution/fixtures';
@@ -69,6 +72,126 @@ function intentOf(actions: ScientistIntent['actions'], unresolved: ScientistInte
 // ---------------------------------------------------------------------------
 // §5.1 reconciliation — DROP / MERGE / KEEP, decided by identity only
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// SPINE8-LEVELFOR — the production levelFor supplier wired at the pass seam.
+// The (verb, argument) -> MaterialLevel mapping is VOCABULARY DATA (the arg
+// contract's declared `level` slot); the pass reads deps.vocabulary (the
+// instance it ALREADY holds) and puts a generic lookup on engineDeps. Zero TS
+// level tables: the shipped declaration and a fixture flip prove the mapping's
+// only home is the vocabulary file.
+// ---------------------------------------------------------------------------
+
+describe('spine8.levelfor-supplier', () => {
+  it('engineDeps carries levelFor built from the SHIPPED vocabulary declarations (wash.material: aliquot; undeclared args -> undefined)', async () => {
+    let captured: EngineDeps | undefined;
+    const stubEngine = async (_intent: ScientistIntent, _vocab: unknown, deps: EngineDeps) => {
+      captured = deps;
+      return { bindings: [], clarifications: [], failures: [], traces: [] };
+    };
+    await createResolveNounsPass({
+      intent: intentOf([{ action: 'wash', material: 'ethanol' }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({}),
+      resolve: stubEngine,
+    }).run(emptyRunArgs);
+
+    expect(captured).toBeDefined();
+    // The supplier is ALWAYS on the seam (key present, not undefined-valued).
+    expect(Object.keys(captured!)).toContain('levelFor');
+    const levelFor = captured!.levelFor!;
+    // Vocabulary DATA: wash.material declares level: aliquot.
+    expect(levelFor('wash', 'material')).toBe('aliquot');
+    // Undeclared args stay undefined (no requirement, filter no-ops).
+    expect(levelFor('wash', 'source')).toBeUndefined();
+    expect(levelFor('transfer', 'source')).toBeUndefined();
+    expect(levelFor('nonexistent_verb', 'material')).toBeUndefined();
+  });
+
+  it('a fixture vocabulary COPY with wash.material flipped to instance flips the supplier output — the mapping follows the INJECTED vocabulary instance, not a TS table', async () => {
+    // Fixture triplet materialized at runtime under gitignored server/tmp/ (the
+    // shipped triplet copied, the data file's declared level flipped) — the
+    // same opts.path injection idiom as the committed fixture copies, without
+    // adding committed files outside this item's ownership gate (§8.6).
+    const shippedDir = join(process.cwd(), 'schema', 'scientist-intent');
+    const flipDir = join(process.cwd(), 'tmp', 'spine8-vocab-level-flip');
+    mkdirSync(flipDir, { recursive: true });
+    for (const f of ['scientist-intent-vocabulary.schema.yaml', 'scientist-intent-vocabulary.lint.yaml']) {
+      copyFileSync(join(shippedDir, f), join(flipDir, f));
+    }
+    const shippedData = readFileSync(join(shippedDir, 'scientist-intent-vocabulary.yaml'), 'utf-8');
+    const flippedData = shippedData.replace('        level: aliquot\n', '        level: instance\n');
+    expect(flippedData).not.toBe(shippedData); // the flip really differs
+    writeFileSync(join(flipDir, 'scientist-intent-vocabulary.yaml'), flippedData);
+
+    let captured: EngineDeps | undefined;
+    const stubEngine = async (_intent: ScientistIntent, _vocab: unknown, deps: EngineDeps) => {
+      captured = deps;
+      return { bindings: [], clarifications: [], failures: [], traces: [] };
+    };
+    const fixtureVocabulary = loadScientistIntentVocabulary({ path: join(flipDir, 'scientist-intent-vocabulary.yaml') });
+    // Precondition: the fixture really differs from the shipped singleton.
+    expect(shippedVocab().argContracts('wash').find((a) => a.name === 'material')?.level).toBe('aliquot');
+    expect(fixtureVocabulary.argContracts('wash').find((a) => a.name === 'material')?.level).toBe('instance');
+
+    await createResolveNounsPass({
+      intent: intentOf([{ action: 'wash', material: 'ethanol' }]),
+      vocabulary: fixtureVocabulary,
+      spine: spineReturning({}),
+      resolve: stubEngine,
+    }).run(emptyRunArgs);
+
+    expect(captured!.levelFor!('wash', 'material')).toBe('instance');
+  });
+
+  it('end-to-end through the REAL engine at the pass seam: the declared level reaches levelFilter and a concept-only pool clarifies (route-shaped, no hand-built wantLevel)', async () => {
+    // A spine whose tier-1 hit is a CONCEPT-level candidate (what a `material`
+    // record yields via records.ts KIND_LEVEL). The pass supplies wantLevel via
+    // its vocabulary-built levelFor; the REAL engine's levelFilter arm drops the
+    // concept candidate => unknown-noun clarification, never a bind. The engine
+    // is NOT stubbed — the wrapper only captures the deps/outcome the pass built.
+    const conceptSpine = {
+      resolve: async () => [{
+        curie: 'local:MAT-ethanol',
+        label: 'ethanol',
+        namespace: 'local' as const,
+        tier: 1 as const,
+        level: 'concept' as const,
+        score: 1.15,
+        source: 'local-record' as const,
+      }],
+    };
+    let engineOutcome: EngineOutcome | undefined;
+    let capturedDeps: EngineDeps | undefined;
+    const realEngineAtPassSeam = async (intent: ScientistIntent, vocabulary: ScientistIntentVocabulary, deps: EngineDeps): Promise<EngineOutcome> => {
+      capturedDeps = deps;
+      const outcome = await resolveScientistIntentNouns(intent, vocabulary, deps);
+      engineOutcome = outcome;
+      return outcome;
+    };
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'wash', material: 'ethanol' }]),
+      vocabulary: shippedVocab(),
+      spine: conceptSpine,
+      resolve: realEngineAtPassSeam,
+    }).run(emptyRunArgs);
+
+    // The pass-supplied seam carried the vocabulary-declared level.
+    expect(capturedDeps!.levelFor!('wash', 'material')).toBe('aliquot');
+    // The REAL engine's levelFilter arm fired: the concept candidate is named
+    // in a level-mismatch TRACE line (the trace is the evidence — spec §9.6
+    // forbids inventing a reason code) and never binds.
+    expect(engineOutcome!.traces.some((t) => t.includes('level-mismatch') && t.includes('local:MAT-ethanol'))).toBe(true);
+    expect(engineOutcome!.bindings).toEqual([]);
+
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.bindings).toEqual([]);
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.label).toBe('ethanol');
+    expect(output.clarifications[0]!.reason).toBe('unknown-noun');
+  });
+});
 
 describe('spine4.reconcile-model-unresolved', () => {
   const binding: BoundNoun = {

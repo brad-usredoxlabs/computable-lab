@@ -39,6 +39,7 @@ import {
 import { resolveScientistIntentNouns } from './resolutionEngine.js';
 import { buildStrategyRegistry } from './strategies.js';
 import type { BoundNoun, EngineDeps, EngineFailure, EngineOutcome } from './types.js';
+import type { MaterialLevel } from '../../resolve/types.js';
 import type { Pass, PassDiagnostic, PassResult } from '../pipeline/types.js';
 
 export const RESOLVE_NOUNS_PASS_ID = 'resolve_nouns' as const;
@@ -247,9 +248,18 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
           : []),
         createRoleAddressAdapter(),
       ];
+      // SPINE-8-LEVELFOR production supplier: the (verb, argument) ->
+      // MaterialLevel mapping is VOCABULARY DATA (the arg contract's declared
+      // `level` slot — schema-declared, meta-schema-validated). This is a
+      // generic read of the declared contract list, NOT a (verb,arg) table:
+      // zero verb/arg name literals, zero level-value branches here. The
+      // engine's wantLevel arm (resolutionEngine.ts levelFilter) consumes it.
+      const levelFor = (verb: string, argument: string): MaterialLevel | undefined =>
+        deps.vocabulary.argContracts(verb).find((a) => a.name === argument)?.level;
       const engineDeps: EngineDeps = {
         adapters,
         strategies: buildStrategyRegistry(),
+        levelFor,
         ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
       };
 
