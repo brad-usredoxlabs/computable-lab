@@ -17,6 +17,22 @@ import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type VerbI
 /**
  * aliquot: emit N transfer events from source to each target well.
  * Params: { source_labware, target_labware, volume_per_well, n_targets }
+ *
+ * SPINE-7 fix1/D2 — the wells carriers (orchestrator decision: wire the
+ * expander, do NOT move the required declaration to transfer):
+ *   • array carrier: the scientist-intent normalizer maps a targetWells ARRAY
+ *     to candidate `wells` (normalizeScientistIntent mappings); the shipped
+ *     chatbot/deterministic shape carries `target_wells`. Consume BOTH (wells
+ *     first) so the declared addresses reach the compiled event instead of the
+ *     `well-${i}` placeholder. n_targets defaults to the carrier length when a
+ *     carrier is present (module contract: "N transfer events ... to each
+ *     target well"); the shipped default-1 stays when no carrier is present.
+ *   • scalar carrier: a scalar well-LABEL rides candidate `wellRole` (the
+ *     scientist-intent producer key). It lowers to details.role — the exact key
+ *     the resolve_roles authoritative seam (ChatbotCompilePasses.ts
+ *     :2391/:2410) substitutes with the engine binding's addresses — so the
+ *     placeholder well-0 pair is REPLACED by the bound addresses. No
+ *     placeholder wells ride when a role does.
  */
 const aliquotExpander: BiologyVerbExpander = {
   verb: 'aliquot',
@@ -27,11 +43,33 @@ const aliquotExpander: BiologyVerbExpander = {
       volume_per_well?: { value: number; unit: string } | string;
       n_targets?: number;
       target_wells?: string[];
+      wells?: string[];
+      wellRole?: string;
     };
     const events: PlateEventPrimitive[] = [];
-    const nTargets = p.n_targets ?? 1;
-    const targetWells = p.target_wells ?? [];
-    
+
+    // Scalar carrier: role-carrying single event; resolve_roles realizes the
+    // engine-bound addresses (one expanded event per bound well).
+    const wellRole = typeof p.wellRole === 'string' && p.wellRole.trim() ? p.wellRole.trim() : undefined;
+    if (wellRole) {
+      events.push({
+        eventId: makeEventId('aliquot-0'),
+        event_type: 'transfer',
+        details: {
+          source_labware: p.source_labware,
+          destination_labware: p.target_labware,
+          volume: p.volume_per_well,
+          role: wellRole,
+        },
+      });
+      return events;
+    }
+
+    // Array carriers: scientist-intent `wells` first, shipped `target_wells`
+    // second; placeholder only when NO carrier exists.
+    const targetWells = p.wells ?? p.target_wells ?? [];
+    const nTargets = p.n_targets ?? (targetWells.length > 0 ? targetWells.length : 1);
+
     // Emit N transfer events, one per target well
     for (let i = 0; i < nTargets; i++) {
       const well = targetWells[i] ?? `well-${i}`;
@@ -47,7 +85,7 @@ const aliquotExpander: BiologyVerbExpander = {
         },
       });
     }
-    
+
     return events;
   },
 };

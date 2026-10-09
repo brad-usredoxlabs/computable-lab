@@ -212,7 +212,11 @@ export async function compileScientistIntent(
   intent: ScientistIntent,
   deps: ScientistIntentCompileDeps = {},
 ): Promise<ScientistIntentCompileResult> {
-  const normalized = normalizeScientistIntent(intent);
+  // SPINE-7 fix1/D4: the producer reads the SAME vocabulary instance the
+  // resolve_nouns registration below threads (deps.vocabulary ?? shipped
+  // singleton) — never the default singleton behind an injected vocab.
+  const vocabulary = deps.vocabulary ?? defaultScientistIntentVocabulary();
+  const normalized = normalizeScientistIntent(intent, { vocabulary });
   const registry = buildRegistry(intent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);
 
@@ -235,10 +239,19 @@ export async function compileScientistIntent(
   // not stringified error-diag gaps — are the presentation channel, and
   // 'needs-clarification' keeps 'error' meaning "compile machinery broke"
   // (OQ1 ruling (a)).
+  // SPINE-7 fix1/D1: producer-emitted clarifications (a schema-valid scalar
+  // well-label with no lowering consumer) bar on the SAME atomic 422 arm —
+  // the engine may have bound the label cleanly (no engine clarification), yet
+  // the value cannot reach any compiled event; shipping it silently would be
+  // silent data loss. Engine clarifications keep their verbatim precedence;
+  // producer items append after them.
+  const producerClarifications = normalized.clarifications ?? [];
   const barDiagnostic = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
-  if (barDiagnostic) {
-    const clarifications = (barDiagnostic.details?.['clarifications'] as
-      ScientistIntentUnresolvedFact[] | undefined) ?? [];
+  if (barDiagnostic || producerClarifications.length > 0) {
+    const clarifications = [
+      ...((barDiagnostic?.details?.['clarifications'] as ScientistIntentUnresolvedFact[] | undefined) ?? []),
+      ...producerClarifications,
+    ];
     const terminalArtifacts: TerminalArtifacts = {
       events: [],
       directives: [],

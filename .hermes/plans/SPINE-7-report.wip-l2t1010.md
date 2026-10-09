@@ -191,3 +191,167 @@ no vendor-kind terms; SPINE-8's levelFor seam untouched.
 - [x] manifest re-bless (once, final tip, diff above)
 
 END REPORT: SPINE7_ROLES_SEAM_COMPLETE
+
+## Fix run 1 (l2t1110) — adversarial review l2t1050, cycle 1/2
+
+Base: e0426fd9. Fix commit on branch SPINE-7-lane2-l2t0810 (new commit, not amend).
+Tracked edits (5 files + 1 new fixture triplet dir):
+- server/src/compiler/scientistIntent/normalizeScientistIntent.ts (D1 + D4)
+- server/src/compiler/scientistIntent/compileScientistIntent.ts (D1 bar wiring + D4 threading)
+- server/src/compiler/biology/verbs/compoundVerbs.ts (D2 aliquotExpander)
+- server/src/compiler/scientistIntent/rolesSeam.test.ts (D1/D2/D4 legs, +8 tests)
+- server/src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts (D3 spy arm +2 tests, D5 mirror)
+- server/src/compiler/scientistIntent/fixtures/vocab-wells-flip/ (D4 fixture vocabulary triplet)
+resolutionEngine.ts and ChatbotCompilePasses.ts: NOT touched (git diff confirms).
+
+### D1 (major) — scalar sourceWells silent drop: OPTION (b) CHOSEN (fallback arm)
+The orchestrator's preferred symmetric realization is genuinely impossible under
+this item's constraints, and the report says so explicitly:
+- The resolve_roles seam (ChatbotCompilePasses.ts :2391-2454, NOT touched) consumes
+  exactly ONE role per event: details.role -> details.well. That is a DESTINATION-side
+  coordinate. There is no source-side role consumer anywhere in the shipped chain
+  (grep: details.source_wells is read only as an ADDRESS array by eventReducers.ts:207
+  and transferPrograms.ts:389; a label lowered as source_wells:[label] would fabricate
+  an address — labels are not addresses).
+- Realizing a source label would require a NEW consumer in ChatbotCompilePasses.ts
+  (forbidden by the fix brief) or a new (verb,arg)->role-key TS table (new hardcoded
+  policy — forbidden). Schema narrowing is not approved. So: reviewer option (b).
+Implementation: normalizeScientistIntent.ts now exports
+UNREALIZED_WELL_LABEL_REASON ('unrealized-well-label'); toCandidateEvent records
+{label, reason, actionLocation{actionIndex, action, argument}} for a scalar on a
+declared kind:wells arg whose event family has no role consumer (the source_wells
+family); normalizeScientistIntent returns it as an additive `clarifications` field
+(key ABSENT when empty — exactOptionalPropertyTypes). compileScientistIntent.ts bars
+atomically on it on the SAME 422 needs-clarification arm as the engine sweep (engine
+clarifications keep verbatim precedence; producer items append). NO silent drop,
+NO 500.
+Tests (rolesSeam.test.ts, all green):
+- 'scalar sourceWells: NO silent drop — the producer emits the structured
+  unrealized-well-label clarification' — candidate carries NO source_wells key,
+  clarifications deep-equal the structured item.
+- 'array sourceWells form stays byte-identical' — source_wells:['A1','B2'] verbatim,
+  wells:['C1'], NO clarifications KEY at all (byte-identical array behavior pinned).
+- 'route arm: the unrealized label bars atomically on the 422 needs-clarification arm
+  (engine bound it cleanly — the producer bar alone), NEVER 500' — real store-backed
+  spine compile: outcome needs-clarification, clarifications == [the producer item]
+  (engine contributed ZERO clarifications: control_well binds fine via the role-address
+  arm), terminalArtifacts.events/gaps == [], no labwareAdditions/deckLayoutPlan/
+  instrumentRunFiles keys.
+
+### D2 (major) — aliquotExpander consumes BOTH carriers (orchestrator decision executed)
+compoundVerbs.ts aliquotExpander now:
+- SCALAR carrier: candidate `wellRole` (engine-bound label, same producer key transfer
+  uses) lowers to ONE role-carrying transfer event (details.role == label, NO
+  source_well/destination_well placeholders); resolve_roles (:2410 authoritative arm)
+  substitutes the engine binding's addresses — placeholder well-0 pair REPLACED.
+- ARRAY carrier: consumes `wells` (scientist-intent normalizer key) FIRST, then the
+  shipped `target_wells` (chatbot/deterministic shape); n_targets defaults to the
+  carrier LENGTH when a carrier is present (module contract "N transfer events ... to
+  each target well"); the shipped default-1 placeholder stays when NO carrier exists.
+SCOPE DECLARATION (per the fix brief's escape clause): the array-carrier consumption
+is a behavior change for ANY candidate carrying a wells array (the drop was
+pre-existing; the orchestrator's decision explicitly chose wiring over moving the
+required declaration, so the pinned transfer-read golden stays). No shipped test pins
+a chatbot-chain aliquot candidate carrying wells (grep: chatbot candidates with
+target_wells are verb 'transfer'; lowerCandidateActionsToEvents carries `wells` only
+for LLM candidate actions). All suite baselines unchanged (see Verification), and the
+chatbot byte-identity regression (ResolveRolesSpine7Regression, 3 tests) stays green:
+the chatbot producer key stays wellRole-only — a chatbot candidate's own `role`/wells
+params never ride the scalar arm.
+Tests (rolesSeam.test.ts, all green):
+- 'array carrier (scientist-intent wells): bound addresses REPLACE the well-0
+  placeholder pair; n_targets defaults to carrier length' — wells:['A1','B1','C1'] ->
+  3 events, source/destination wells A1/B1/C1, no 'well-' placeholder anywhere.
+- 'array carrier (shipped target_wells shape) unchanged' — n_targets:3 + target_wells
+  -> 3 bound events; no-carrier leg pins the shipped default-1 well-0 placeholder.
+- 'scalar carrier (wellRole): lowers ONE role-carrying transfer event ... NO placeholder
+  wells ride'.
+- 'route: an aliquot with a SCALAR targetWells compiles complete and the emitted event
+  carries the engine-bound address (placeholder well-0 pair replaced); missing targetWells
+  still bars (422 sweep)' — real spine compile: outcome complete, event details.well ==
+  'A12' (engine binding), no source_well/destination_well, no 'well-0' substring; the
+  missing-targetWells document still yields needs-clarification with
+  MISSING_REQUIRED_ARGUMENT_REASON.
+
+### D3 (minor) — spy arm added (ruling's named spy/mirror arm)
+goldenRolesSeam.test.ts new describe 'SPINE-7 D4 spy arm (fix1/D3)' (2 tests, green):
+- 'route run: defaultRoleResolver is NEVER invoked from the resolve_roles FALLBACK arm
+  for the bound label' — vi.spyOn(roleResolverModule, 'defaultRoleResolver') around the
+  REAL runGolden(fixture) route run. The two arms that call defaultRoleResolver on this
+  route are distinguishable by CONTEXT: the ENGINE binding arm (resolve_nouns ->
+  explicit_wells -> createRoleAddressAdapter, adapters.ts:190-224) calls it with NO
+  ctx.args (resolveNounsPass builds createRoleAddressAdapter() with none); the
+  resolve_roles FALLBACK arm (:2413) always passes ctx.args = event details.
+  Assertions: >=1 engine-arm call for 'control_well' (the binding computation) AND
+  ZERO fallback-arm calls — the authoritative slot arm produced the emitted well.
+  vi.restoreAllMocks in finally (no cross-test leakage).
+- 'spy control (non-vacuity)' — the M2 mismatched-key state DOES fire the fallback-arm
+  signature (ctx.args present), proving the zero-assertion above is not vacuous.
+This closes the reviewer's "route golden alone is satisfied by the fallback arm" gap:
+the route run now carries a direct spy assertion, not only synthetic mutation legs.
+
+### D4 (minor) — injected vocabulary threaded into the producer
+normalizeScientistIntent(intent, options?: NormalizeOptions) — options.vocabulary is
+the SAME instance compileScientistIntent threads into resolve_nouns
+(deps.vocabulary ?? defaultScientistIntentVocabulary()); the producer's wellsLabelArgs
+now reads that instance, never the singleton. compileScientistIntent.ts computes the
+instance once and passes it to BOTH normalizeScientistIntent and the resolve_nouns
+registration. All 15 existing single-arg call sites keep working (options optional).
+Test (rolesSeam.test.ts, green): 'a fixture vocabulary that reclassifies
+transfer.targetWells as resolvable (not wells) flips the producer classification' —
+new fixture triplet server/src/compiler/scientistIntent/fixtures/vocab-wells-flip/
+(vocabulary + schema + lint copies; Ajv + lint run REAL on load). Under the injected
+vocab the scalar rides as a raw `wells` value with NO wellRole; under the shipped
+singleton the same document produces wellRole (mutation proof of the seam).
+
+### D5 (minor) — mirror document built from fixture.modelOutput
+goldenRolesSeam.test.ts: engineSlotForFixture(fixture, stringify(fixture.modelOutput))
+— the duplicated literal is GONE; the mirror now re-parses the blessed fixture's own
+canned intent (yaml stringify of the fixture object), so fixture drift can no longer
+make the mirror check a different document. Golden stays green (slot.blocked false,
+binding recordId well:A12, addresses ['A12'] — identical values re-derived from data).
+
+## MANIFEST: NO re-bless needed (before == after)
+No rule file, fixture, or golden record content changed in this fix run (git diff
+--stat: only TS product/test files + the new test-local fixture vocab dir, which the
+manifest does not pin). Independent re-hash vs MANIFEST pins (unchanged):
+- schema/scientist-intent/scientist-intent-vocabulary.yaml 2ae54320... == pin
+- schema/workflow/scientist-intent.schema.yaml bb5cc4d0... == pin
+- schema/registry/compile-pipelines/scientist-intent-compile.yaml b47eee0c... == pin
+- fixtures/roles-seam.yaml 37dbaabb... == pin; fixtures/missing-required-address.yaml 61f6ad87... == pin
+- __records__/roles-seam.golden.json c0ba793e... == pin (UNCHANGED — the roles-seam
+  golden's asserted behavior was not intentionally changed; its emitted event is a
+  transfer, untouched by the aliquot wiring)
+- __records__/missing-required-address.golden.json 0b78c911... == pin (UNCHANGED — the
+  fixture carries NO targetWells, so the expander wiring cannot alter its 422 body)
+- MANIFEST.yaml itself 6b5e23e9... (unchanged). golden.manifest.versions-current green.
+Before/after hash diff: EMPTY. Zero goldens re-blessed; zero existing goldens changed.
+
+## Verification (fix tip, all captured)
+Cmd A targeted suite: cd server && npx vitest run src/compiler/scientistIntent/
+src/api/handlers/IntentCompileFromPromptHandlers.test.ts src/compiler/pipeline/passes/
+-> Test Files 3 failed | 50 passed (53); Tests 8 failed | 491 passed (499).
+Fail-file SET == baseline trio (AiPrecompileShapeMismatch.log 3, GeminiEmAppliancePath 1,
+ProtocolRealizePass 4) — identical to the pre-fix capture /tmp/l2t1110-baseline-targeted.txt
+(3/8). Test count grew 489 -> 499: the 10 new fix1 tests (8 rolesSeam + 2 golden spy)
+are ALL green; no new failing file.
+Cmd B: npx vitest run src/compiler -> 17 failed | 132 passed (149); 37 failed | 1267 passed
+(1304). Fail-FILE set comm -3 vs /tmp/l2t0810-baseline-compiler-failfiles.txt: EMPTY (17/17).
+npx vitest run src/ai -> 10 failed | 74 passed (84); 21 failed | 644 passed (665) == pin.
+Cmd C: npx tsc -p . -> EXIT=2, 26 "error TS" lines / 6 files (AgentOrchestrator,
+ProtocolIntakeHandlers, RecordHandlers, AuthoringGuard, bootstrapAdmin, RecordStoreImpl).
+Position-stripped sorted diff vs pin /tmp/l2t2230-tsc-server.txt: EMPTY — "TSC SET IDENTICAL TO PIN".
+Cmd D: verbose run of the three SPINE-7 files: 24 tests, all ✓ (rolesSeam 14,
+goldenRolesSeam 7, ResolveRolesSpine7Regression 3).
+Chatbot chain: ResolveRolesSpine7Regression.test.ts green unchanged; producer key stays
+wellRole-only; no ChatbotCompilePasses.ts edit.
+
+## Assumptions recorded
+- D1 option (b) is a consequence of the constraints (no source-side role consumer exists
+  without touching ChatbotCompilePasses.ts or adding a hardcoded table); documented above.
+- D2 array-carrier consumption is declared explicitly (not silent): it is the orchestrator's
+  chosen wiring; baselines prove no shipped behavior regressed.
+- The D3 spy classifies arms by ctx.args presence (engine adapter context vs resolve_roles
+  fallback context) — verified against adapters.ts:190-224 and ChatbotCompilePasses.ts:2403-2413.
+
+END REPORT: SPINE7_FIX1_COMPLETE

@@ -27,7 +27,8 @@
  * the ruling's spy/mirror pin arm is the honest clearance path and M1 supplies
  * the provably-different value.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { stringify } from 'yaml';
 import {
   classifyCompileResponse,
   countHintEligibleLabeledArgs,
@@ -44,6 +45,7 @@ import { defaultScientistIntentVocabulary } from '../vocabulary.js';
 import { createResolveNounsPass } from '../../resolution/resolveNounsPass.js';
 import { createResolveSpineFromContext } from '../../../resolve/index.js';
 import { recordingStore } from './replayKernel.js';
+import * as roleResolverModule from '../../roles/RoleResolver.js';
 import { defaultRoleResolver } from '../../roles/RoleResolver.js';
 import { createResolveRolesPass } from '../../pipeline/passes/ChatbotCompilePasses.js';
 import type { PipelineState } from '../../pipeline/types.js';
@@ -135,15 +137,11 @@ describe('golden.intent-to-graph.roles-seam', () => {
 
     // (2) D4: the emitted event's wells EQUAL the real engine binding's
     // addresses — mirror pin against the same store through the real pass.
-    const slot = await engineSlotForFixture(fixture, `
-intentId: golden-roles-seam
-actions:
-  - action: transfer
-    source: source plate
-    target: destination plate
-    volumeUl: 50
-    targetWells: control_well
-`);
+    // SPINE-7 fix1/D5: the mirror document is built from fixture.modelOutput
+    // (the blessed fixture's own canned intent), NOT a duplicated literal —
+    // fixture drift can no longer make the mirror silently check a different
+    // document.
+    const slot = await engineSlotForFixture(fixture, stringify(fixture.modelOutput));
     expect(slot.blocked).toBe(false);
     const binding = slot.resolvedByLabel['control_well'];
     expect(binding).toBeDefined();
@@ -237,6 +235,64 @@ describe('SPINE-7 D4 mutation legs — the authoritative branch is not vacuous',
     expect(events).toHaveLength(1);
     expect(Object.keys(events[0]!.details)).not.toContain('well'); // no expansion happened
     expect(events[0]!.eventId).toBe('evt-transfer-mutationleg'); // untouched
+  });
+});
+
+describe('SPINE-7 D4 spy arm (fix1/D3) — the route run takes the authoritative branch, not the fallback', () => {
+  it('route run: defaultRoleResolver is NEVER invoked from the resolve_roles FALLBACK arm for the bound label', async () => {
+    // The ruling's named spy arm. Two arms call defaultRoleResolver on this
+    // route and they are distinguishable by their CONTEXT:
+    //   • the ENGINE binding arm (resolve_nouns -> explicit_wells strategy ->
+    //     createRoleAddressAdapter, adapters.ts:190-224) calls it to COMPUTE
+    //     the binding's addresses — its context carries NO `args`
+    //     (resolveNounsPass builds createRoleAddressAdapter() with none);
+    //   • the resolve_roles FALLBACK arm (ChatbotCompilePasses.ts :2413)
+    //     always passes ctx.args = the event's details.
+    // A clean authoritative run therefore shows >=1 engine-arm call for the
+    // label and ZERO fallback-arm calls. The emitted well (pinned in the
+    // golden test) equals the slot address; this spy proves the slot arm —
+    // not the fallback — produced it.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-graph.roles-seam');
+    const spy = vi.spyOn(roleResolverModule, 'defaultRoleResolver');
+    try {
+      const run = await runGolden(fixture);
+      expect(run.status).toBe(200);
+
+      const labelCalls = spy.mock.calls.filter(([role]) => role === 'control_well');
+      const engineArmCalls = labelCalls.filter(([, ctx]) => ctx.args === undefined);
+      const fallbackArmCalls = labelCalls.filter(([, ctx]) => ctx.args !== undefined);
+
+      // The engine legitimately computed the binding through the role-address
+      // adapter (this is where 'A12' enters the slot).
+      expect(engineArmCalls.length).toBeGreaterThan(0);
+      // The fallback arm was NOT taken for the bound label: the authoritative
+      // slot arm (ChatbotCompilePasses.ts :2410-2412) resolved it.
+      expect(fallbackArmCalls).toHaveLength(0);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('spy control (non-vacuity): a slot-key mismatch DOES fire the fallback-arm signature the golden asserts zero of', async () => {
+    // Same pass, same spy classification: M2's mismatched slot key takes the
+    // defaultRoleResolver fallback (ctx.args = event details). If the
+    // classification above could never observe a fallback call, the golden's
+    // zero-assertion would be vacuous — this leg proves it is not.
+    const spy = vi.spyOn(roleResolverModule, 'defaultRoleResolver');
+    try {
+      const res = await createResolveRolesPass().run({
+        pass_id: 'resolve_roles',
+        state: rolesState(slotWith(['B5'], 'some_other_label')),
+      });
+      const events = (res.output as { events: Array<{ details: Record<string, unknown> }> }).events;
+      expect(events[0]!.details['well']).toBe('A12'); // the fallback default
+      const fallbackArmCalls = spy.mock.calls.filter(
+        ([role, ctx]) => role === 'control_well' && ctx.args !== undefined,
+      );
+      expect(fallbackArmCalls.length).toBeGreaterThan(0);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

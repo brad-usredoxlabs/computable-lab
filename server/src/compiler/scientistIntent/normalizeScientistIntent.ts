@@ -21,13 +21,36 @@
  * and reuse the entire downstream deterministic stack unchanged.
  */
 import type { ProtocolIntent, ProtocolPatternIntent } from '../protocolIntent/ProtocolIntent.js';
-import type { ScientistIntent } from './types.js';
-import { defaultScientistIntentVocabulary } from './vocabulary.js';
+import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from './types.js';
+import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+
+/** SPINE-7 fix1/D1: stable reason code for a schema-valid SCALAR well-label
+ *  that the lowering chain has NO consumer for (the source-well family: no
+ *  shipped pass maps a source-side label to addresses — the only role consumer
+ *  is `details.role` at ChatbotCompilePasses.ts:2391). Dropping it silently is
+ *  silent data loss; the producer emits this structured clarification instead
+ *  and the compile runner bars atomically (422 needs-clarification arm). */
+export const UNREALIZED_WELL_LABEL_REASON = 'unrealized-well-label' as const;
+
+export interface NormalizeOptions {
+  /** SPINE-7 fix1/D4: the vocabulary instance the compile threads into
+   *  resolve_nouns. Wells-arg detection MUST use the SAME instance the engine
+   *  reads — never the default singleton behind an injected vocab. */
+  vocabulary?: ScientistIntentVocabulary;
+}
 
 export interface ScientistIntentNormalized {
   protocolIntent?: ProtocolIntent;
   candidateEvents: Array<{ verb: string; [key: string]: unknown }>;
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
+  /** SPINE-7 fix1/D1 (additive): structured clarifications the producer emits
+   *  when a schema-valid scalar well-label has no lowering consumer. The
+   *  compile runner bars atomically on them (422 arm, never 500). */
+  clarifications?: Array<{
+    label: string;
+    reason: typeof UNREALIZED_WELL_LABEL_REASON;
+    actionLocation: ScientistIntentActionLocation;
+  }>;
 }
 
 /** Actions covered by the geometric-macro pattern expanders — DERIVED from the
@@ -103,7 +126,12 @@ function serialDilutionPattern(action: Record<string, unknown>, index: number): 
   } as ProtocolPatternIntent;
 }
 
-function toCandidateEvent(action: Record<string, unknown>): { verb: string; [key: string]: unknown } {
+function toCandidateEvent(
+  action: Record<string, unknown>,
+  actionIndex: number,
+  vocabulary: ScientistIntentVocabulary,
+  unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }>,
+): { verb: string; [key: string]: unknown } {
   const verb = (action.action as string) ?? 'unknown';
   const event: { verb: string; [key: string]: unknown } = { verb };
 
@@ -143,9 +171,11 @@ function toCandidateEvent(action: Record<string, unknown>): { verb: string; [key
   ];
   // SPINE-7 role-carrying lowering (scientist-intent chain ONLY): which
   // argument names are DECLARED wells contracts comes from the vocabulary
-  // (data), never a verb/field table.
+  // (data), never a verb/field table. SPINE-7 fix1/D4: the SAME vocabulary
+  // instance the compile threads into resolve_nouns (never the singleton
+  // behind an injected vocab).
   const wellsLabelArgs = new Set(
-    defaultScientistIntentVocabulary()
+    vocabulary
       .argContracts(verb)
       .filter((contract) => contract.kind === 'wells')
       .map((contract) => contract.name),
@@ -157,14 +187,36 @@ function toCandidateEvent(action: Record<string, unknown>): { verb: string; [key
     // an address array. The well-position family ('wells') carries the label as
     // candidate `wellRole` — a producer key written ONLY on this chain (the
     // chatbot chain's candidates never carry it, so chatbot lowering stays
-    // byte-identical). The transfer expander lowers wellRole into event
+    // byte-identical). The transfer/aliquot expanders lower wellRole into event
     // details.role — the exact key the resolve_roles authoritative seam
-    // (ChatbotCompilePasses.ts :2390/:2410) looks up in the resolve_nouns
-    // slot's resolvedByLabel (keyed by the engine-bound LABEL). The source
-    // family is not lowered as an address array: labels are not addresses;
-    // the engine binds them via the slot. Array forms pass through verbatim.
+    // (ChatbotCompilePasses.ts :2391/:2410) looks up in the resolve_nouns
+    // slot's resolvedByLabel (keyed by the engine-bound LABEL), so the emitted
+    // wells EQUAL the engine binding's addresses. Array forms pass through
+    // verbatim.
     if (typeof found.value === 'string' && found.value.trim() && wellsLabelArgs.has(found.key)) {
-      if (eventKey === 'wells') event.wellRole = found.value.trim();
+      if (eventKey === 'wells') {
+        event.wellRole = found.value.trim();
+        continue;
+      }
+      // SPINE-7 fix1/D1 (orchestrator fallback (b), chosen because symmetric
+      // realization is impossible under this item's constraints): the source
+      // family has NO role consumer — the resolve_roles seam resolves exactly
+      // ONE role per event (details.role -> details.well, a DESTINATION-side
+      // coordinate; ChatbotCompilePasses.ts :2391-2454). Realizing a source-side
+      // label would need a new source-role consumer in ChatbotCompilePasses.ts
+      // (untouchable per the fix brief) or a new (verb,arg)->role-key TS table
+      // (new hardcoded policy — forbidden). Silently dropping a schema-valid
+      // scalar the engine already bound is silent data loss, so the producer
+      // emits a structured clarification instead: the compile runner bars
+      // atomically on it (422 needs-clarification arm, never 500).
+      unrealized.push({
+        label: found.value.trim(),
+        reason: UNREALIZED_WELL_LABEL_REASON,
+        // Candidate-chain verbs are non-pattern wire verbs — all members of the
+        // schema's 31-verb union (ScientistIntentActionKind); the parse layer
+        // already enforced that enum before this point.
+        actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: found.key },
+      });
       continue;
     }
     event[eventKey] = found.value;
@@ -180,10 +232,18 @@ function toCandidateEvent(action: Record<string, unknown>): { verb: string; [key
   return event;
 }
 
-export function normalizeScientistIntent(intent: ScientistIntent): ScientistIntentNormalized {
+export function normalizeScientistIntent(
+  intent: ScientistIntent,
+  options?: NormalizeOptions,
+): ScientistIntentNormalized {
+  const vocabulary = options?.vocabulary ?? defaultScientistIntentVocabulary();
   const patterns: ProtocolPatternIntent[] = [];
   const candidateEvents: Array<{ verb: string; [key: string]: unknown }> = [];
   const unresolvedRefs: Array<{ kind: string; label: string; reason: string }> = [];
+  // SPINE-7 fix1/D1: scalar well-labels the lowering chain cannot realize
+  // (see toCandidateEvent) — surfaced as structured clarifications, never
+  // silently dropped.
+  const unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }> = [];
   // every distinct symbolic noun label becomes a candidate labware resource so
   // ProtocolIntent validation + resolve_labware can bind it downstream.
   const symbolicLabels = new Map<string, string>(); // label -> role hint
@@ -208,7 +268,7 @@ export function normalizeScientistIntent(intent: ScientistIntent): ScientistInte
       if (pattern.targetLabware) updateSymbol(symbolicLabels, pattern.targetLabware, 'target');
       patterns.push(pattern);
     } else {
-      candidateEvents.push(toCandidateEvent(rec));
+      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized));
     }
   });
 
@@ -264,6 +324,7 @@ export function normalizeScientistIntent(intent: ScientistIntent): ScientistInte
     ...(protocolIntent ? { protocolIntent } : {}),
     candidateEvents,
     unresolvedRefs,
+    ...(unrealized.length > 0 ? { clarifications: unrealized } : {}),
   };
 }
 
