@@ -23,6 +23,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { resolveAiProfile } from '../../config/types.js';
+import { createResolveSpineFromContext } from '../../resolve/index.js';
 import type { AppContext } from '../../server.js';
 import type { RecordStore } from '../../store/types.js';
 import {
@@ -78,6 +79,19 @@ interface CompileFromPromptBody {
 export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: CompileFromPromptDeps = {}) {
   const store: RecordStore = deps.store ?? ctx.store;
   const searchLabwareByHint = createLabwareLookup(store);
+  // SPINE-4 fix1/D1 (spec §3): the one-shot compile route injects the SAME
+  // store-backed spine the resolve tools build (createResolveSpineFromContext,
+  // server.ts:733 — live config accessor so PATCH /api/config takes effect
+  // without a restart). compileFromSmallLlm threads it into
+  // compileScientistIntent's deps; without it resolve_nouns sees no local
+  // tiers and FALSE-BARS store-resolvable nouns (e.g. add_material.material,
+  // seed.material — resolvable, NO hintEligible). compileScientistIntent
+  // throws LOUD when deps.spine is absent — injection, not a silent floor.
+  const spine = createResolveSpineFromContext({
+    store,
+    ...(ctx.appConfig !== undefined ? { appConfig: ctx.appConfig } : {}),
+    getAppConfig: () => ctx.appConfig,
+  });
 
   // Lab-inventory snapshot for the one-shot localizer: the lab-GLOBAL names of
   // instruments/equipment, labware, and materials. Kept separate per kind so
@@ -164,7 +178,7 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
           prompt: protocolText,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
-          deps: { searchLabwareByHint },
+          deps: { searchLabwareByHint, spine },
           labInventory,
         });
         return reply.send({

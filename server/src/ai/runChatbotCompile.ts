@@ -72,7 +72,7 @@ import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpande
 import type { PassDiagnostic } from '../compiler/pipeline/types.js';
 import type {
   TerminalArtifacts,
-  CompileOutcome,
+  ChatbotCompileOutcome,
   Gap,
   DeckLayoutPlan,
   ResolvedLabwareRef,
@@ -165,7 +165,7 @@ export interface RunChatbotCompileResult {
   clarification?: string;
   diagnostics: PassDiagnostic[];
   terminalArtifacts: TerminalArtifacts;
-  outcome: CompileOutcome;
+  outcome: ChatbotCompileOutcome;
   /**
    * Ontology-CURIE material mentions that were auto-bound to local material
    * records before the precompile ran. Newly-minted bindings carry
@@ -482,7 +482,7 @@ export async function runChatbotCompile(
   }
 
   // Compute outcome
-  let outcome: CompileOutcome;
+  let outcome: ChatbotCompileOutcome;
   if (diagnostics.some((d) => d.severity === 'error')) {
     outcome = 'error';
   } else if (gaps.length > 0) {

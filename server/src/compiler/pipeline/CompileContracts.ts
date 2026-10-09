@@ -75,7 +75,26 @@ export interface Gap {
 // CompileOutcome
 // ---------------------------------------------------------------------------
 
-export type CompileOutcome = 'complete' | 'gap' | 'error';
+/**
+ * CompileOutcome.
+ *
+ * SPINE-4 (OQ1 ruling (a)): 'needs-clarification' is machine-distinguishable
+ * from 'error' ("compile machinery broke") and from 'gap' — it means the
+ * scientist must answer structured clarifications before any artifact exists.
+ * Every audited consumer compares `=== 'complete'` and falls through its
+ * non-complete arm unchanged.
+ */
+export type CompileOutcome = 'complete' | 'gap' | 'error' | 'needs-clarification';
+
+/**
+ * Outcomes the CHATBOT pipeline can produce. 'needs-clarification' is the
+ * scientist-intent resolve_nouns bar (SPINE-4); the chatbot pipeline registers
+ * no resolve_nouns pass (SPINE-4 OQ2 ruling), and runChatbotCompile computes
+ * only complete/gap/error. Consumers whose contracts are bound to that
+ * three-value enum (e.g. the subgraph-proposal compileStatus schema enum)
+ * consume this narrowing — structurally honest, zero schema churn.
+ */
+export type ChatbotCompileOutcome = Exclude<CompileOutcome, 'needs-clarification'>;
 
 // ---------------------------------------------------------------------------
 // TerminalArtifacts

@@ -115,7 +115,6 @@ describe('createIntentCompileFromPromptHandlers', () => {
       reply.r as never,
     );
     const payload = reply.calls[0].payload as any;
-    expect(payload.outcome).toBeDefined();
     expect(payload.localMacro).toBeDefined();
     const actions = payload.localMacro.actions;
     // verb-lift: 'centrifuge' → 'spin'
@@ -123,14 +122,27 @@ describe('createIntentCompileFromPromptHandlers', () => {
     expect(actions.some((a: any) => a.action === 'centrifuge')).toBe(false);
     // numeric coercion: '600' → 600
     expect(actions.some((a: any) => a.action === 'add_material' && a.volumeUl === 600)).toBe(true);
-    expect(payload.terminalArtifacts?.events?.length ?? 0).toBeGreaterThan(0);
+
+    // SPINE-4 DELIBERATE GOLDEN CHANGE (before: outcome 'gap' + mix/transfer
+    // events present). This stub intent names labware nouns ('MagBinding
+    // Buffer', 'block', 'magstand') that the mock store cannot bind, so the
+    // resolve_nouns bar fires: outcome 'needs-clarification', ZERO events, and
+    // the route still answers 200 with the structured clarifications (SPINE-5
+    // owns the response contract; the status code is unchanged here).
+    expect(payload.outcome).toBe('needs-clarification');
+    expect(payload.terminalArtifacts.events).toEqual([]);
   });
 
-  it('surfaces labwareAdditions in terminalArtifacts so the one-shot deck is never blank when events ghost', async () => {
-    // The stub emit intent names a target labware ('magstand' block); the
-    // deterministic resolve_labware pass proposes concrete additions the deck
-    // must materialize. These are folded into terminalArtifacts for the run
-    // workspace's Review-deck gate.
+  it('bars instead of surfacing labwareAdditions when the named labware cannot bind (SPINE-4 OQ3: total zero-artifact)', async () => {
+    // BEFORE (SPINE-4): the deterministic resolve_labware pass minted
+    // labwareAdditions for the unresolvable 'magstand'/'block' labels so the
+    // one-shot deck was never blank.
+    // AFTER (SPINE-4, approved acceptance verbatim: "no graph/planned-run/
+    // run-file artifacts"): an unresolved argument bars the compile ATOMICALLY
+    // — resolve_labware never runs, so labwareAdditions (and every other
+    // artifact slot) are ABSENT. The "unknown label, here are candidates"
+    // affordance now travels inside the clarifications payload; surfacing
+    // additions on a bar is a SPINE-5 presentation decision.
     const handlers = createIntentCompileFromPromptHandlers(ctx, { llmClient: stubLlm() as never });
     const reply = send();
     await handlers.compileFromPrompt(
@@ -138,15 +150,11 @@ describe('createIntentCompileFromPromptHandlers', () => {
       reply.r as never,
     );
     const payload = reply.calls[0].payload as any;
-    expect(payload.terminalArtifacts?.events?.length ?? 0).toBeGreaterThan(0);
-    // Labware plan must be present (additions and/or requirements) — without it
-    // buildPreviewFromDraft computes zero placements and the deck ghosts blank.
-    const hasDeckLabware =
-      Array.isArray(payload.terminalArtifacts?.labwareAdditions) &&
-      payload.terminalArtifacts.labwareAdditions.length > 0;
-    const hasRequirements =
-      Array.isArray(payload.terminalArtifacts?.labwareRequirements) &&
-      payload.terminalArtifacts.labwareRequirements.length > 0;
-    expect(hasDeckLabware || hasRequirements || Array.isArray(payload.terminalArtifacts?.deckLayoutPlan)).toBe(true);
+    expect(payload.outcome).toBe('needs-clarification');
+    expect(payload.terminalArtifacts.events).toEqual([]);
+    const keys = Object.keys(payload.terminalArtifacts);
+    expect(keys).not.toContain('labwareAdditions');
+    expect(keys).not.toContain('labwareRequirements');
+    expect(keys).not.toContain('deckLayoutPlan');
   });
 });

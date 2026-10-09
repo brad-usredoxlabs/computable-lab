@@ -14,12 +14,18 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
+import { createResolveSpineFromContext } from '../../resolve/index.js';
+import type { AppConfig } from '../../config/types.js';
 import type { RecordStore } from '../../store/types.js';
 import { parseScientistIntent, ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../../compiler/scientistIntent/compileScientistIntent.js';
 
 interface IntentCompileDeps {
   store: RecordStore;
+  /** SPINE-4 fix1/D1: live config accessor (server.ts:733 pattern) so the
+   *  store-backed spine's OAK/vendor tiers read the same app config the
+   *  resolve tools use — one resolution path, one answer. */
+  getAppConfig?: () => AppConfig | undefined;
 }
 
 interface IntentCompileBody {
@@ -42,6 +48,18 @@ function asYamlDocument(body: unknown): string {
 
 export function createIntentCompileHandlers(deps: IntentCompileDeps) {
   const searchLabwareByHint = createLabwareLookup(deps.store);
+  // SPINE-4 fix1/D1 (spec §3): production callers inject a store-backed
+  // spine. This is the SAME createResolveSpineFromContext composition the
+  // resolve tools build (server.ts:733). Without it resolve_nouns sees no
+  // local tiers and FALSE-BARS every store-resolvable noun the hint lookup
+  // is not eligible for (e.g. seed.material — vocabulary-declared resolvable,
+  // domain material, NO hintEligible). compileScientistIntent now throws
+  // LOUD when deps.spine is absent — this injection is what keeps the route
+  // compiling, not a silent floor.
+  const spine = createResolveSpineFromContext({
+    store: deps.store,
+    ...(deps.getAppConfig ? { getAppConfig: deps.getAppConfig } : {}),
+  });
 
   return {
     async compile(
@@ -75,7 +93,7 @@ export function createIntentCompileHandlers(deps: IntentCompileDeps) {
       }
 
       try {
-        const result = await compileScientistIntent(doc, { searchLabwareByHint });
+        const result = await compileScientistIntent(doc, { searchLabwareByHint, spine });
         return reply.send({
           outcome: result.outcome,
           terminalArtifacts: result.terminalArtifacts,
@@ -91,7 +109,12 @@ export function createIntentCompileHandlers(deps: IntentCompileDeps) {
   };
 }
 
-export function registerIntentCompileRoutes(instance: FastifyInstance, ctx: { store: RecordStore }): void {
-  const h = createIntentCompileHandlers({ store: ctx.store });
+export function registerIntentCompileRoutes(instance: FastifyInstance, ctx: { store: RecordStore; appConfig?: AppConfig | undefined }): void {
+  const h = createIntentCompileHandlers({
+    store: ctx.store,
+    // Live accessor (server.ts:733 pattern): ctx.appConfig is reassigned at
+    // runtime (PATCH /api/config), so the spine resolves config per call.
+    getAppConfig: () => ctx.appConfig,
+  });
   instance.post('/intent/compile', h.compile.bind(h));
 }

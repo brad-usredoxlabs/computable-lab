@@ -25,6 +25,7 @@ import {
 } from './vocabulary.js';
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
 import { intentCompileSystemPrompt, compileFromSmallLlm } from './intentCompile.js';
+import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 
 const FIXTURES = join(process.cwd(), 'src', 'compiler', 'scientistIntent', 'fixtures');
 
@@ -126,7 +127,12 @@ describe('prompt-exclusivity (scientist-intent YAML only, no line-DSL)', () => {
         };
       }),
     };
-    await compileFromSmallLlm({ prompt: 'incubate 10 minutes', llmClient: llm as never });
+    await compileFromSmallLlm({
+      prompt: 'incubate 10 minutes',
+      llmClient: llm as never,
+      // SPINE-4 fix1/D1: explicit test-seam spine (fail-loud registration).
+      deps: { spine: createResolveSpine({}) },
+    });
 
     expect(capturedSystem).toContain('OUTPUT ONLY YAML');
     const vocab = defaultScientistIntentVocabulary();

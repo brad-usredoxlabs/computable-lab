@@ -37,6 +37,7 @@ import {
 import { parseScientistIntent } from '../scientistIntent/parseScientistIntent.js';
 import { normalizeScientistIntent } from '../scientistIntent/normalizeScientistIntent.js';
 import { compileScientistIntent } from '../scientistIntent/compileScientistIntent.js';
+import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 
 interface IntentPatch {
   resources?: Partial<ProtocolIntentResources>;
@@ -212,14 +213,23 @@ actions:
       expect(instance).not.toHaveProperty('deckSlot');
     }
 
-    const { terminalArtifacts } = await compileScientistIntent(doc, {
+    // SPINE-4 DELIBERATE GOLDEN CHANGE (compile leg only; the normalize-side
+    // deckSlot pin above is untouched). BEFORE: unbindable hints minted
+    // deckSlot-free labwareAdditions. AFTER: unbindable nouns bar the compile
+    // atomically — resolve_labware never runs, so labwareAdditions is ABSENT
+    // and the outcome is 'needs-clarification' with structured clarifications.
+    const { terminalArtifacts, outcome, clarifications } = await compileScientistIntent(doc, {
+      // SPINE-4 fix1/D1: deps.spine is REQUIRED (fail-loud registration).
+      // Provider-less spine injected EXPLICITLY as the declared test seam —
+      // the bar below is a REAL unresolved noun (no store can bind it), not
+      // the D1 false-bar.
+      spine: createResolveSpine({}),
       searchLabwareByHint: async () => [],
     });
-    const additions = terminalArtifacts.labwareAdditions ?? [];
-    expect(additions.length).toBeGreaterThan(0);
-    for (const addition of additions) {
-      expect(addition).not.toHaveProperty('deckSlot');
-    }
+    expect(outcome).toBe('needs-clarification');
+    expect(Object.keys(terminalArtifacts)).not.toContain('labwareAdditions');
+    expect(terminalArtifacts.events).toEqual([]);
+    expect(clarifications.map((c) => c.label).sort()).toEqual(['mystery_source', 'mystery_target']);
   });
 });
 
