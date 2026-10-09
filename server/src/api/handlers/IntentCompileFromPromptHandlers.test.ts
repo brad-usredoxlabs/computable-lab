@@ -403,8 +403,11 @@ describe('intent-compile-api.malformed-model-output', () => {
     expect(llm.complete).toHaveBeenCalledTimes(4);
     zeroWrites(store);
 
-    // Second case: the 502 body ≠ the 422 body byte-shape (no shared fields
-    // beyond the repo-standard error/message pair).
+    // Second case: the 502 body ≠ the 422 body byte-shape. The §3 table gives
+    // the 422 body {error, outcome, clarifications, localMacro,
+    // terminalArtifacts} (no message) and the 502 body {error, message} — the
+    // ONLY shared field is the envelope's error code, which is a stronger
+    // distinction than the spec's "no shared fields beyond message".
     const barReply = send();
     const barHandlers = createIntentCompileFromPromptHandlers(legacyCtx(mockStore()), {
       llmClient: stubLlm([{ action: 'transfer', source: 'mystery-flask', target: 'fresh_plate', volumeUl: 100 }]) as never,
@@ -415,7 +418,7 @@ describe('intent-compile-api.malformed-model-output', () => {
     );
     const barKeys = Object.keys(barReply.calls[0].payload as Record<string, unknown>);
     expect(barReply.calls[0].status).toBe(422);
-    expect(keys.filter((k) => barKeys.includes(k)).sort()).toEqual(['error', 'message']);
+    expect(keys.filter((k) => barKeys.includes(k))).toEqual(['error']);
   });
 });
 
