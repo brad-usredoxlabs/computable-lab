@@ -85,19 +85,31 @@ properties:
           minLength: 1
         sourceHint:
           type: string
+        # SPINE-7: the wells fields carry EITHER an explicit address array OR a
+        # single symbolic well-label (scalar form). The label form is what the
+        # SPINE-3 engine's existing scalar arm binds (resolutionEngine doc-door
+        # reads a trimmed string); the parse layer canonicalizes it. The array
+        # branch is declared FIRST so every currently-valid array document
+        # validates byte-identically.
         sourceWells:
-          type: array
-          items:
-            type: string
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: string
+            minLength: 1
         target:
           type: string
           minLength: 1
         targetHint:
           type: string
         targetWells:
-          type: array
-          items:
-            type: string
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: string
+            minLength: 1
         labware:
           type: string
           minLength: 1

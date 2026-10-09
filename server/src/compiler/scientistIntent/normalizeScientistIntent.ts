@@ -42,9 +42,11 @@ function firstString(record: Record<string, unknown>, keys: string[]): string | 
   return undefined;
 }
 
-function firstValue(record: Record<string, unknown>, keys: string[]): unknown {
+/** Names WHICH key supplied the first present value (SPINE-7 needs the source
+ *  key to tell a declared wells argument from a raw candidate param). */
+function firstKeyed(record: Record<string, unknown>, keys: string[]): { key: string; value: unknown } | undefined {
   for (const key of keys) {
-    if (record[key] !== undefined) return record[key];
+    if (record[key] !== undefined) return { key, value: record[key] };
   }
   return undefined;
 }
@@ -139,9 +141,33 @@ function toCandidateEvent(action: Record<string, unknown>): { verb: string; [key
     ['source_wells', ['sourceWells']],
     ['wells', ['targetWells', 'wells']],
   ];
+  // SPINE-7 role-carrying lowering (scientist-intent chain ONLY): which
+  // argument names are DECLARED wells contracts comes from the vocabulary
+  // (data), never a verb/field table.
+  const wellsLabelArgs = new Set(
+    defaultScientistIntentVocabulary()
+      .argContracts(verb)
+      .filter((contract) => contract.kind === 'wells')
+      .map((contract) => contract.name),
+  );
   for (const [eventKey, sciKeys] of mappings) {
-    const v = firstValue(action, sciKeys);
-    if (v !== undefined) event[eventKey] = v;
+    const found = firstKeyed(action, sciKeys);
+    if (found === undefined) continue;
+    // A SCALAR on a declared kind:wells argument is a symbolic well LABEL, not
+    // an address array. The well-position family ('wells') carries the label as
+    // candidate `wellRole` — a producer key written ONLY on this chain (the
+    // chatbot chain's candidates never carry it, so chatbot lowering stays
+    // byte-identical). The transfer expander lowers wellRole into event
+    // details.role — the exact key the resolve_roles authoritative seam
+    // (ChatbotCompilePasses.ts :2390/:2410) looks up in the resolve_nouns
+    // slot's resolvedByLabel (keyed by the engine-bound LABEL). The source
+    // family is not lowered as an address array: labels are not addresses;
+    // the engine binds them via the slot. Array forms pass through verbatim.
+    if (typeof found.value === 'string' && found.value.trim() && wellsLabelArgs.has(found.key)) {
+      if (eventKey === 'wells') event.wellRole = found.value.trim();
+      continue;
+    }
+    event[eventKey] = found.value;
   }
 
   // carry open params through (verb expanders may read extra fields)

@@ -1,0 +1,30 @@
+# SPINE-7 golden fixture — golden.intent-to-clarification.missing-required-address
+# The shipped vocabulary declares aliquot.targetWells required (kind: wells).
+# An aliquot action WITHOUT targetWells must bar on the 422 needs-clarification
+# arm with the MISSING_REQUIRED_ARGUMENT_REASON sweep — NEVER the 500 arm
+# (the serial_dilution-quantity-to-500 trap this leg must not repeat).
+name: golden.intent-to-clarification.missing-required-address
+request:
+  protocolText: >-
+    Aliquot 10 uL from the source plate to the destination plate.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-source-plate
+      payload:
+        kind: labware
+        title: Source Plate
+        synonyms: [source plate]
+    - recordId: LAB-dest-plate
+      payload:
+        kind: labware
+        title: Destination Plate
+        synonyms: [destination plate]
+modelOutput:
+  intentId: golden-missing-required-address
+  actions:
+    - action: aliquot
+      source: source plate
+      target: destination plate
+      volumeUl: 10
