@@ -121,6 +121,145 @@ rules:
     message:
       template: "Protocol '{{recordId}}': a roleId appears in BOTH categories — roles.labwareRoles roleIds {{roles.labwareRoles[*].roleId}} overlap roles.instrumentRoles roleIds {{roles.instrumentRoles[*].roleId}}."
 
+  # R-4 (W2-3) — legacy bounds: newly authored literal protocols cannot qualify.
+  # The frozen pre-upgrade inventory lives HERE, as lint YAML data (the six
+  # kind:protocol records under records/seed/protocols/ — and ONLY those: the two
+  # protocol-SPEC registry docs under schema/registry/protocols/ are zod-validated
+  # registry docs, never records, so no record-scope lint can ever bound them; the
+  # registry surface is declared frozen for wave 2 in the W2-3 report, OQ2(a)).
+  # `when` scopes the rule to records that DECLARE themselves universal-layer
+  # protocols (protocolLayer: universal — what the authoring pipeline emits,
+  # ProtocolExtractionService) and are NOT on the frozen inventory. Meaning: every
+  # step of a newly authored universal protocol must carry `intent` — a new
+  # all-literal protocol is refused (RecordStore blocks the write), and a MIXED
+  # protocol (one intent step + one literal step) is refused too (OQ1 strict form,
+  # orchestrator-accepted).
+  - id: legacy-literal-bounded
+    title: "Newly authored protocols must be intent-bearing"
+    description: >-
+      Any protocol that declares protocolLayer: universal and is NOT one of the
+      six frozen pre-upgrade seed records must have EVERY step carry an `intent`
+      payload. Literal-only or mixed new protocols are refused: intent-only is the
+      authored future. The allowlist is the frozen pre-upgrade inventory as DATA.
+    severity: error
+    scope: record
+    when:
+      op: all
+      predicates:
+        - op: equals
+          path: protocolLayer
+          value: universal
+        - op: not
+          not:
+            op: in
+            path: recordId
+            values:
+              - prt-seed-biological-transfer
+              - prt-seed-buffer-prep-50ml
+              - prt-seed-incubate-plate
+              - prt-seed-pbs-wash
+              - prt-seed-serial-dilution-96
+              - prt-seed-standard-curve-tubes
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: nonEmpty
+        path: intent
+    message:
+      template: "Protocol '{{recordId}}': newly authored universal protocols must be intent-bearing — every step needs an `intent` payload (legacy literal steps are frozen to the pre-upgrade inventory). step ids without intent: {{steps[*].stepId}}."
+
+  # R-5 (W2-3) — the frozen inventory must not drift toward semantic content
+  # without the W2-5 promotion lifecycle. Warning severity: seed bootstraps keep
+  # working while the drift is surfaced.
+  - id: legacy-inventory-no-intent-drift
+    title: "Frozen legacy inventory records must stay literal"
+    description: >-
+      A record on the frozen pre-upgrade inventory that gains an `intent` step is
+      being edited toward semantic content outside the promotion lifecycle. Warning
+      so the seeds stay writable; the drift is named.
+    severity: warning
+    scope: record
+    when:
+      op: in
+      path: recordId
+      values:
+        - prt-seed-biological-transfer
+        - prt-seed-buffer-prep-50ml
+        - prt-seed-incubate-plate
+        - prt-seed-pbs-wash
+        - prt-seed-serial-dilution-96
+        - prt-seed-standard-curve-tubes
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: not
+        not:
+          op: nonEmpty
+          path: intent
+    message:
+      template: "Protocol '{{recordId}}': frozen legacy inventory record carries intent step(s) — semantic promotion belongs to the W2-5 lifecycle, not an in-place edit. step ids: {{steps[*].stepId}}."
+
+  # R-6 (W2-3) — intent provenance visibility. An intent step without provenance
+  # refs is a VISIBLE review issue, never a silent vendor quotation (the W2-6
+  # extraction-honesty rule pre-stated as a warning; severity matches the
+  # PROTO-AI-4 legacy-tolerance discipline).
+  - id: intent-step-provenance-visible
+    title: "Intent steps should carry provenance refs"
+    description: >-
+      When a protocol carries intent steps, EVERY intent step should carry a
+      non-empty `intent.provenance` array pointing at the SAID
+      (vendor-protocol-candidate record + anchors). Absence is a warning that
+      names the step, so unprovenanced intent never reads as vendor truth.
+    severity: warning
+    scope: record
+    when:
+      op: nonEmpty
+      path: steps[*].intent
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: intent
+          - op: nonEmpty
+            path: intent.provenance
+    message:
+      template: "Protocol '{{recordId}}': intent step(s) lack provenance refs — intent without evidence pointers must not read as vendor truth. step ids: {{steps[*].stepId}}."
+
+  # R-7 (W2-3) — belt-and-braces over the schema's required: [semanticVerb].
+  # Cheap DSL that catches half-authored drafts if a future relaxed arm slips.
+  - id: intent-verb-ref-declared
+    title: "Intent steps must carry the semanticVerb ref"
+    description: >-
+      Every intent step must carry a non-empty `intent.semanticVerb` (the
+      verb-definition ref — the crosswalk's "Semantic operation"). The schema
+      already requires it; this rule keeps it loud at the lint layer too.
+    severity: error
+    scope: record
+    when:
+      op: nonEmpty
+      path: steps[*].intent
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: intent
+          - op: nonEmpty
+            path: intent.semanticVerb
+    message:
+      template: "Protocol '{{recordId}}': intent step(s) without an intent.semanticVerb ref — the semantic verb is a verb-definition record ref, never absent and never a bare string. step ids: {{steps[*].stepId}}."
+
 # Remaining intended rules (deliberately NOT activated — out of PROTO-AI-4
 # scope; track activation separately. The DSL now carries the generic
 # quantifiers several of them need — allIn/everyItem/noneIn, see

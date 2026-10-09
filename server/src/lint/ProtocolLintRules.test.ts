@@ -275,10 +275,17 @@ describe('protocol.lint.yaml declares exactly R1/R2/R3', () => {
   });
 
   it('activates only the three role-integrity rules', () => {
+    // W2-3 note: the three PROTO-AI-4 role-integrity rules remain declared with
+    // their original ids/severities; W2-3 adds the four intent/legacy-bounds rules
+    // to the same spec (spec §2.2), so the pin lists the full declared set.
     expect(spec.rules.map((r) => r.id)).toEqual([
       'step-role-closure',
       'labware-role-identity-bearing',
       'role-id-category-unique',
+      'legacy-literal-bounded',
+      'legacy-inventory-no-intent-drift',
+      'intent-step-provenance-visible',
+      'intent-verb-ref-declared',
     ]);
     expect(spec.rules.find((r) => r.id === 'step-role-closure')?.severity).toBe('error');
     expect(spec.rules.find((r) => r.id === 'labware-role-identity-bearing')?.severity).toBe('warning');

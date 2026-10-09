@@ -21,6 +21,11 @@ describe('Protocol prose fields schema', () => {
       'core/datatypes/concentration.schema.yaml',
       'core/datatypes/reference-ratio.schema.yaml',
       'core/datatypes/condition.schema.yaml',
+      // W2-3: protocol.schema.yaml $defs/IntentStepPayload mounts W2-2's constraint
+      // datatype by $ref; the harness path list mirrors the schema's dependency closure.
+      'registry/constraint-vocabulary/constraint.schema.yaml',
+      'core/datatypes/quantity.schema.yaml',
+      'core/datatypes/quantity-ratio.schema.yaml',
     ];
     const contents = new Map<string, string>();
     for (const path of paths) contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
