@@ -87,7 +87,13 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
         if (typeof a[key] === 'string' && (a[key] as string).trim()) clean[key] = a[key];
       }
       for (const key of ['sourceWells', 'targetWells'] as const) {
+        // SPINE-7: the wire declares both shapes (oneOf [array, string]). The
+        // parse layer canonicalizes: arrays pass through verbatim; the scalar
+        // label form is carried as the TRIMMED string so the engine's EXISTING
+        // scalar arm (resolutionEngine doc-door: typeof raw === 'string') sees
+        // it. No engine-side branch is added.
         if (Array.isArray(a[key])) clean[key] = a[key];
+        else if (typeof a[key] === 'string' && (a[key] as string).trim()) clean[key] = (a[key] as string).trim();
       }
       for (const key of [
         'factor', 'points', 'replicates', 'volumeUl', 'cycles', 'temperatureC', 'rpm',

@@ -60,10 +60,12 @@ export interface ScientistIntentActionValue {
   // symbolic noun labels (never resolved ids)
   source?: string;
   sourceHint?: string;
-  sourceWells?: string[];
+  /** SPINE-7: explicit address array OR a single symbolic well-label (the
+   *  scalar form the SPINE-3 engine's existing scalar arm binds). */
+  sourceWells?: string[] | string;
   target?: string;
   targetHint?: string;
-  targetWells?: string[];
+  targetWells?: string[] | string;
   labware?: string;
   labwareHint?: string;
   // expected-domain slots (SPINE-1 declaration ONLY): free-text domain tags

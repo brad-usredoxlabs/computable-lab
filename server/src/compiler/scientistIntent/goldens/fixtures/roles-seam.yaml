@@ -1,0 +1,36 @@
+# SPINE-7 golden fixture — golden.intent-to-graph.roles-seam
+# A schema-valid document carrying a SCALAR wells label (targetWells:
+# control_well) compiles through the REAL route: the SPINE-3 engine binds the
+# label (explicit_wells role-address arm), the lowering carries the label as
+# event details.role, and resolve_roles takes the AUTHORITATIVE branch
+# (slot addresses), not the defaultRoleResolver fallback.
+# Store seeds are TITLE+SYNONYMS-ONLY (fixture-1 idiom): createLabwareLookup
+# reads payload.name/aliases only, so the hint arm returns [] — the labware
+# bindings demonstrably came from the spine arm.
+name: golden.intent-to-graph.roles-seam
+request:
+  protocolText: >-
+    Transfer 50 uL from the source plate into control_well on the destination
+    plate.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-source-plate
+      payload:
+        kind: labware
+        title: Source Plate
+        synonyms: [source plate]
+    - recordId: LAB-dest-plate
+      payload:
+        kind: labware
+        title: Destination Plate
+        synonyms: [destination plate]
+modelOutput:
+  intentId: golden-roles-seam
+  actions:
+    - action: transfer
+      source: source plate
+      target: destination plate
+      volumeUl: 50
+      targetWells: control_well

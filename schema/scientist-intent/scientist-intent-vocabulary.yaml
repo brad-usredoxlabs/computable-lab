@@ -482,9 +482,12 @@ verbs:
       - name: sourceWells
         kind: wells
         required: false
+      # SPINE-7: an aliquot is defined by WHICH target wells it fills — the
+      # address argument is declared required (data), making the
+      # MISSING_REQUIRED_ARGUMENT_REASON sweep route-reachable on the 422 arm.
       - name: targetWells
         kind: wells
-        required: false
+        required: true
   - name: wash
     class: compound
     policyRef: hint-authority

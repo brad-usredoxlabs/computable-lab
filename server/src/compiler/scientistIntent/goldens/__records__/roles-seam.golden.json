@@ -1,0 +1,127 @@
+{
+  "status": 200,
+  "body": {
+    "outcome": "complete",
+    "terminalArtifacts": {
+      "events": [
+        {
+          "event_type": "transfer",
+          "details": {
+            "source_labware": "source plate",
+            "destination_labware": "destination plate",
+            "volumeUl": 50,
+            "volume": {
+              "value": 50,
+              "unit": "uL"
+            },
+            "well": "A12"
+          },
+          "labwareId": "destination plate"
+        }
+      ],
+      "directives": [],
+      "gaps": [],
+      "labStateDelta": {
+        "events": [
+          {
+            "event_type": "transfer",
+            "details": {
+              "source_labware": "source plate",
+              "destination_labware": "destination plate",
+              "volumeUl": 50,
+              "volume": {
+                "value": 50,
+                "unit": "uL"
+              },
+              "well": "A12"
+            },
+            "labwareId": "destination plate"
+          }
+        ],
+        "snapshotAfter": {
+          "deck": [],
+          "mountedPipettes": [],
+          "labware": {},
+          "reservoirs": {},
+          "mintCounter": 0,
+          "turnIndex": 1
+        }
+      },
+      "deckLayoutPlan": {
+        "pinned": [],
+        "autoFilled": [
+          {
+            "slot": "A1",
+            "labwareHint": "unknown",
+            "reason": "tipRack"
+          }
+        ],
+        "conflicts": []
+      },
+      "resourceManifest": {
+        "tipRacks": [
+          {
+            "pipetteType": "unknown",
+            "rackCount": 1
+          }
+        ],
+        "reservoirLoads": [],
+        "consumables": []
+      },
+      "validationReport": {
+        "findings": []
+      },
+      "instrumentRunFiles": [],
+      "protocolIntent": {
+        "kind": "protocol_intent",
+        "version": "0.1.0",
+        "intentId": "golden-roles-seam",
+        "steps": [],
+        "resources": {
+          "labwareInstances": [
+            {
+              "id": "source plate",
+              "labwareHint": "source plate",
+              "role": "source",
+              "resolutionStatus": "candidate"
+            },
+            {
+              "id": "destination plate",
+              "labwareHint": "destination plate",
+              "role": "target",
+              "resolutionStatus": "candidate"
+            }
+          ],
+          "materialDefinitions": [],
+          "materialFormulations": [],
+          "materialAliquots": [],
+          "pipettes": [],
+          "tips": [],
+          "waste": []
+        },
+        "operations": [],
+        "patterns": [],
+        "assumptions": [],
+        "unresolved": []
+      }
+    },
+    "localMacro": {
+      "kind": "scientist-intent",
+      "version": "0.1.0",
+      "intentId": "golden-roles-seam",
+      "actions": [
+        {
+          "action": "transfer",
+          "source": "source plate",
+          "target": "destination plate",
+          "targetWells": "control_well",
+          "volumeUl": 50
+        }
+      ],
+      "unresolved": []
+    },
+    "axes": {
+      "sample_type": "bacterial"
+    }
+  }
+}

@@ -263,8 +263,13 @@ export async function lookupAgainstFixtureStore(fixture: GoldenFixture, label: s
 // ---------------------------------------------------------------------------
 
 /** Shipped random-eventId shape: `evt-${verb}-${Math.random().toString(36).slice(2,10)}`
- *  (BiologyVerbExpander.ts:74). 8 base36 chars, verb segment lowercase. */
-const INCIDENTAL_EVENT_ID = /^evt-[a-z0-9_]+-[a-z0-9]{8}$/;
+ *  (BiologyVerbExpander.ts:74). 8 base36 chars, verb segment lowercase.
+ *  SPINE-7 extension: the resolve_roles expansion regenerates ids as
+ *  `${eventId}_r${counter}` (ChatbotCompilePasses.ts resolve_roles: "new
+ *  events get regenerated IDs") — the `_rN` suffix is a deterministic counter
+ *  carrying no identity/provenance, so the incidental-id drop extends to it.
+ *  Event COUNT and every well/address value remain asserted in the tests. */
+const INCIDENTAL_EVENT_ID = /^evt-[a-z0-9_]+-[a-z0-9]{8}(_r\d+)?$/;
 
 function isTimestampKey(key: string): boolean {
   return key.endsWith('At') || key.endsWith('Timestamp');

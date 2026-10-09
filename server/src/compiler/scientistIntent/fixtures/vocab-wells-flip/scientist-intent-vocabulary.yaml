@@ -1,0 +1,53 @@
+# SPINE-7 fix1/D4 fixture vocabulary — the classification-flip probe.
+# transfer.targetWells is declared kind: resolvable (NOT kind: wells) here.
+# A normalizeScientistIntent run that reads THIS injected instance must
+# therefore classify a scalar targetWells as a plain noun value (it passes
+# through as the raw `wells` candidate key, no wellRole). A producer still
+# reading the default singleton would classify it as a wells LABEL (wellRole)
+# and this fixture would not trip — the fixture is the mutation proof for the
+# vocabulary-threading seam.
+version: 1
+verbs:
+  - name: transfer
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: resolvable
+        required: false
+        domain: microplate
+policies:
+  strategyOrder:
+    - explicit_wells
+    - hint_search
+    - symbolic_label
+    - ontology_resolution
+    - mint_local
+  ambiguity:
+    mode: clarify
+    confidenceAccept:
+      min: 0.7
+      max: 1
+    strategyRef: symbolic_label
+  hintAuthority:
+    mode: lab_hint_first
+    strategyRef: hint_search
+  ruleIds:
+    - hint-authority
+    - ambiguity-clarify
