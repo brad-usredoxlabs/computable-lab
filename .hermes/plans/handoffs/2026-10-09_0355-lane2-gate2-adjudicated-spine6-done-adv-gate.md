@@ -114,3 +114,21 @@ Invoked ~02:50; reconcile + full run-2 adjudication (backend.log forensics, 3 sc
 reads, shipped-code trace of the tier-1 path) + adv-prompt build + dispatch + architect packet
 + queue writes ~60 min (adjudication ran long; the code-reading paid for itself — all four leg
 failures now have root causes, no blind gate-3 needed).
+
+## CHECKPOINT ADDENDUM l2t0255-tail (04:12 EDT) — SPINE-6 CLOSED THIS TICK
+Adv gate exited FAST: VERDICT: accept (reviews/review-SPINE-6-adversarial-l2t0300.md; D3/D4
+notes only, incl. D4-3: mint-candidate DUPLICATES pinned as shipped engine output — a product
+dedupe decision belongs to a future item, NOT blessed or fixed here). Orch self-verify PASSED:
+ownership grep EMPTY (21 files +1891, additions-only), goldens 7/7 on branch AND merged trunk,
+tsc error-line SET identical to pin 924c18bd, app diff EMPTY, live-smoke artifact honest
+(NOT_SUCCESS_CLARIFICATION). MERGED --no-ff b342b5ee -> e830cffb; report + live-smoke artifact
+promoted (446ee392). NO YAML -> no restart; :3093/:5193 200. SPINE-6 marked done.
+Queue state: SPINE-6 was the LAST enqueued coder item. Fleet coder lock FREE, nothing claimable
+(SPINE-7/8 await Brad's packet; PB-CH-9 gate-3 awaits the architect ruling already live).
+AS-LANE2-SPINE5-TRIPLET-REPAIR-PROVENANCE: STAYS OPEN — the SPINE-6 manifest measured the
+triplet hashes but hashes-pinned != product-content review; clearance needs the triplet files
+adversarially reviewed or superseded (candidate home: any SPINE-7-era gate touching vocabulary
+rule files).
+NEXT TICK unchanged: architect PB-CH-9 ruling -> build gate-3 harness (ruled asks,
+context.route SSE capture, B-PUT forensics) -> gate 3 -> PB-CH-9 close incl.
+AS-LANE2-PBCH6-ANR-UISPEC-GAP disposition.
