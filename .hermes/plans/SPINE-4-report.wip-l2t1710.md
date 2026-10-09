@@ -93,6 +93,12 @@ Registration: server/src/compiler/scientistIntent/compileScientistIntent.ts
     lookups). NO degraded no-resolution mode: shipped vocabulary singleton + provider-less spine
     as the floor; production callers inject a store-backed spine via deps.spine (optional fields,
     conditional spread — exactOptionalPropertyTypes).
+    [FIX1 CORRECTION (adversarial D1, review l2t1830): the claim "production callers inject a
+    store-backed spine via deps.spine" was FALSE against the shipped tree at this commit — the
+    routes left deps.spine undefined and the `?? createResolveSpine({})` floor silently degraded.
+    Fixed in fix1 (commit 4c52faa2, report SPINE-4-fix1-report.wip-l2t1945.md): both production
+    routes now inject createResolveSpineFromContext, the silent floor is REMOVED, and
+    buildRegistry throws LOUD when deps.spine is absent.]
   - Bar handling: the runner stores a pass's output slot only for ok:true passes, so the bar is
     read from the resolve_nouns error diagnostic (details.clarifications). On bar: outcome
     'needs-clarification' (OQ1a), gaps REPLACED by structured clarifications (the error-diag
