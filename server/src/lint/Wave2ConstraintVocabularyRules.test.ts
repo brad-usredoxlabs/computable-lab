@@ -333,19 +333,23 @@ describe('forcing-function fixtures (spec §2.6): the well-state arms', () => {
     expect(v?.severity).toBe('error');
   });
 
-  it('strictness seam: same bound value, bindingKind hard_bound under a relaxable policy -> DIFFERENT finding than the vendor_default arm', () => {
-    // Same 5-beads-per-well bound, same policy name — only the bindingKind (and
-    // its composed key) differ. vendor_default passes (proven in the bead
-    // fixture); hard_bound under lab-may-tighten is not a declared pair.
+  it('strictness seam: same bound value, bindingKind hard_bound under the RELAXABLE policy -> DIFFERENT finding than the vendor_default arm', () => {
+    // Same 5-beads-per-well bound — only the bindingKind and its policy differ.
+    // vendor_default under lab-may-tighten passes (proven in the bead fixture);
+    // hard_bound under lab-may-relax is NOT a declared pair: relaxing a hard
+    // bound is what policy forbids. (hard_bound under lab-may-tighten IS a
+    // declared pair — tightening a hard cap keeps it hard; see the
+    // class-default guard below and the maximum class's declared defaults.)
     const fixture = beadPayload();
     const c = fixture.constraints[0];
     if (c) {
       c.bindingKind = 'hard_bound';
+      c.overridePolicy = 'lab-may-relax';
       c.subject = {
         ref: 'cf:constraint-ratio',
         role: 'bead_count',
         dimensionKey: 'bead_count:count',
-        bindingPolicyKey: 'lab-may-tighten:hard_bound',
+        bindingPolicyKey: 'lab-may-relax:hard_bound',
       };
     }
     const r = engine().lint(fixture, VOCAB_SCHEMA_ID);
@@ -353,5 +357,63 @@ describe('forcing-function fixtures (spec §2.6): the well-state arms', () => {
     const v = r.violations.find((x) => x.ruleId === 'constraint-vocab-binding-kind-policy-compatible');
     expect(v).toBeDefined();
     expect(v?.severity).toBe('error');
+  });
+});
+
+// ============================================================================
+// Class-default guard (fix cycle 1, D1 net): every class's declared default
+// (defaultBindingKind x overridePolicy) pair must be a declared
+// policyBindingKey AND be allowed by that policy's allowedBindingKinds.
+// DATA-DRIVEN, NO TS POLICY: the composed key is built from each class's OWN
+// declared fields in constraint-vocabulary.yaml and checked against the
+// policyBindingKeys + overridePolicies read from the SAME shipped doc. A
+// future class whose declared default pair is incompatible (exactly the D1
+// failure mode: a W2-3 consumer instantiating the class with its own defaults
+// rejected by constraint-vocab-binding-kind-policy-compatible) fails loudly
+// here.
+// ============================================================================
+
+type ClassDefaultDoc = {
+  classes: Array<{ id: string; defaultBindingKind: string; overridePolicy?: string }>;
+  policyBindingKeys: string[];
+  overridePolicies: Array<{ id: string; allowedBindingKinds: string[] }>;
+};
+
+function classDefaultPairViolations(doc: ClassDefaultDoc): string[] {
+  const declared = new Set(doc.policyBindingKeys);
+  const policyKinds = new Map(doc.overridePolicies.map((p) => [p.id, new Set(p.allowedBindingKinds)]));
+  const bad: string[] = [];
+  for (const cls of doc.classes) {
+    if (cls.overridePolicy === undefined) continue; // a class with no policy has no default pair (R2 covers vendor_default classes)
+    const key = `${cls.overridePolicy}:${cls.defaultBindingKind}`;
+    if (!declared.has(key)) bad.push(`${cls.id}: ${key} is not a declared policyBindingKey`);
+    if (!policyKinds.get(cls.overridePolicy)?.has(cls.defaultBindingKind)) {
+      bad.push(`${cls.id}: ${cls.defaultBindingKind} is not in ${cls.overridePolicy}.allowedBindingKinds`);
+    }
+  }
+  return bad;
+}
+
+describe('class-default x policyBindingKeys guard (D1 net): every class default pair is a declared compatible pair', () => {
+  it('all 10 shipped classes: defaultBindingKind x overridePolicy composes to a declared policyBindingKey AND a policy-allowed kind (zero violations)', () => {
+    const doc = vocabDoc() as ClassDefaultDoc;
+    expect(doc.classes.length).toBe(10);
+    expect(doc.classes.every((c) => c.overridePolicy !== undefined)).toBe(true);
+    expect(classDefaultPairViolations(doc)).toEqual([]);
+  });
+
+  it('NON-VACUITY: a fabricated incompatible default pair (in-memory mutation of a copy — disk untouched) IS caught', () => {
+    const doc = vocabDoc() as ClassDefaultDoc;
+    const maximum = doc.classes.find((c) => c.id === 'maximum');
+    expect(maximum).toBeDefined();
+    // Fabrication: let a lab RELAX a hard cap — the loosening the policy
+    // forbids. Composed key lab-may-relax:hard_bound is not a declared pair.
+    if (maximum) maximum.overridePolicy = 'lab-may-relax';
+    const bad = classDefaultPairViolations(doc);
+    expect(bad.length).toBe(2); // both declared surfaces flag it
+    expect(bad.some((b) => b.includes('maximum') && b.includes('lab-may-relax:hard_bound is not a declared policyBindingKey'))).toBe(true);
+    expect(bad.some((b) => b.includes('maximum') && b.includes('hard_bound is not in lab-may-relax.allowedBindingKinds'))).toBe(true);
+    // The mutation was in-memory only: the shipped doc re-read from disk is clean.
+    expect(classDefaultPairViolations(vocabDoc() as ClassDefaultDoc)).toEqual([]);
   });
 });

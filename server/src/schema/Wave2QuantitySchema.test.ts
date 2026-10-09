@@ -39,6 +39,7 @@ const VOCAB_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/regist
 const CROSSWALK_PATH = join(process.cwd(), '..', 'schema', 'registry', 'wave2-naming-crosswalk.yaml');
 const VOCAB_DOC_PATH = join(process.cwd(), '..', 'schema', 'registry', 'constraint-vocabulary', 'constraint-vocabulary.yaml');
 const QUANTITY_SCHEMA_PATH = join(process.cwd(), '..', 'schema', 'core', 'datatypes', 'quantity.schema.yaml');
+const CONSTRAINT_SCHEMA_PATH = join(process.cwd(), '..', 'schema', 'registry', 'constraint-vocabulary', 'constraint.schema.yaml');
 const SCHEMA_ROOT = join(process.cwd(), '..', 'schema');
 const RECORDS_VERB_DIR = join(process.cwd(), '..', 'records', 'seed', 'verb-definition');
 
@@ -348,30 +349,76 @@ describe('W2-1 admission leg for W2-2-minted nouns (crosswalk resolves, no colli
   }
 
   // Minted nouns are READ from the shipped data files — never hardcoded here.
+  // Covers EVERY noun W2-2 entered into the crosswalk: constraint classes (10),
+  // quantity dimensions (4), the quantity-ratio datatype noun, the qualifier
+  // enum values, the bindingKind enum values, the override-policy ids, and the
+  // capability term (which references an EXISTING CL: CURIE and therefore
+  // carries NO cf: plan — mirrors the crosswalk's "capability terms" entry).
   let mintedClasses: VocabularyClass[] = [];
   let mintedDims: string[] = [];
+  let mintedQualifiers: string[] = [];
+  let mintedBindingKinds: string[] = [];
+  let mintedPolicies: string[] = [];
+  let mintedCapabilityTerms: Array<{ crosswalk_term: string; kindRef: string }> = [];
 
-  function mintedNouns(): { term: string; curie: string }[] {
-    const nouns: { term: string; curie: string }[] = [];
+  function mintedNouns(): Array<{ term: string; curie?: string; existingCurie?: string }> {
+    const nouns: Array<{ term: string; curie?: string; existingCurie?: string }> = [];
     for (const cls of mintedClasses) nouns.push({ term: `constraint-class-${cls.id}`, curie: cls.curie });
     for (const dim of mintedDims) nouns.push({ term: `quantity-dimension-${dim}`, curie: `cf:quantity-dimension-${dim}` });
+    // The datatype noun is derived from the shipped schema $id, not typed here.
+    const ratioIdTail = QUANTITY_RATIO_ID.split('/').pop() ?? '';
+    const ratioTerm = ratioIdTail.replace(/\.schema\.yaml$/, '');
+    nouns.push({ term: ratioTerm, curie: `cf:${ratioTerm}` });
+    // The qualifier enum is ONE minted noun (the qualifier axis itself); its
+    // values are read from the shipped datatype to prove the noun has content.
+    expect(mintedQualifiers.length).toBeGreaterThan(0);
+    nouns.push({ term: 'quantity-qualifier', curie: 'cf:quantity-qualifier' });
+    for (const bk of mintedBindingKinds) nouns.push({ term: `binding-kind-${bk.replace(/_/g, '-')}`, curie: `cf:binding-kind-${bk.replace(/_/g, '-')}` });
+    for (const p of mintedPolicies) nouns.push({ term: `override-policy-${p}`, curie: `cf:override-policy-${p}` });
+    // Capability terms reference an EXISTING CL: kind. The join is done on the
+    // CURIE both sides declare (crosswalk entry binds_to.curie <-> vocabulary
+    // capabilityTerms[*].kindRef) — no local naming rule is invented, and no
+    // cf: plan is expected (a cf: plan would duplicate an existing kind, §6.11).
+    for (const t of mintedCapabilityTerms) nouns.push({ term: t.kindRef.replace(/^CL:/, ''), existingCurie: t.kindRef });
     return nouns;
   }
 
   beforeAll(async () => {
-    const doc = (await readYaml(VOCAB_DOC_PATH)) as { classes: VocabularyClass[] };
+    const doc = (await readYaml(VOCAB_DOC_PATH)) as {
+      classes: VocabularyClass[];
+      overridePolicies: Array<{ id: string }>;
+      capabilityTerms: Array<{ crosswalk_term: string; kindRef: string }>;
+    };
     mintedClasses = doc.classes;
-    const q = (await readYaml(QUANTITY_SCHEMA_PATH)) as { properties: { dimension: { enum: string[] } } };
+    mintedPolicies = doc.overridePolicies.map((p) => p.id);
+    mintedCapabilityTerms = doc.capabilityTerms;
+    const q = (await readYaml(QUANTITY_SCHEMA_PATH)) as { properties: { dimension: { enum: string[] }; qualifier: { enum: string[] } } };
     mintedDims = q.properties.dimension.enum;
+    mintedQualifiers = q.properties.qualifier.enum;
+    const cs = (await readYaml(CONSTRAINT_SCHEMA_PATH)) as { properties: { bindingKind: { enum: string[] } } };
+    mintedBindingKinds = cs.properties.bindingKind.enum;
   });
 
-  it('every minted noun is listed in the crosswalk and carries its cf: CURIE plan', async () => {
+  it('every minted noun is listed in the crosswalk and carries its CURIE plan (cf: plan for minted nouns; the capability term references the EXISTING CL: kind and carries NO cf: plan — mirrors the crosswalk entry shape)', async () => {
     const crosswalk = (await readYaml(CROSSWALK_PATH)) as { entries: CrosswalkEntry[] };
     for (const noun of mintedNouns()) {
-      const entry = crosswalk.entries.find((e) => normalize(e.term) === normalize(noun.term));
-      expect(entry, `${noun.term} must resolve through the crosswalk`).toBeDefined();
-      expect(entry?.curie_plan, `${noun.term} curie_plan`).toBe(noun.curie);
+      if (noun.curie !== undefined) {
+        const entry = crosswalk.entries.find((e) => normalize(e.term) === normalize(noun.term));
+        expect(entry, `${noun.term} must resolve through the crosswalk`).toBeDefined();
+        expect(entry?.curie_plan, `${noun.term} curie_plan`).toBe(noun.curie);
+      } else {
+        // Existing-CURIE reference (bead beater -> CL:bead_beater): joined on
+        // the declared CURIE, not on a term spelling. A cf: plan would mint a
+        // duplicate local term for an existing kind (§6.11).
+        const refEntry = crosswalk.entries.find((e) => (e.binds_to as Record<string, unknown> | undefined)?.curie === noun.existingCurie);
+        expect(refEntry, `${noun.existingCurie} must resolve through the crosswalk`).toBeDefined();
+        expect(refEntry?.curie_plan, `${refEntry?.term} must NOT carry a cf: plan`).toBeUndefined();
+      }
     }
+  });
+
+  it('the admission leg covers ALL 22 crosswalk entries W2-2 added (fix cycle 1, D2): 10 constraint classes + 4 dimensions + quantity-ratio + quantity-qualifier + 2 binding kinds + 3 override policies + bead beater', () => {
+    expect(mintedNouns().length).toBe(22);
   });
 
   it('no minted noun collides with any admission namespace (generic set comparison against the crosswalk-declared namespaces)', async () => {

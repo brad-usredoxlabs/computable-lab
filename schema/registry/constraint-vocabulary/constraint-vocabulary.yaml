@@ -116,6 +116,10 @@ classes:
       A ceiling the biological context must not exceed (e.g. a fill volume cap).
       Split from minimum per the draft's 8+1 counting (minima/maxima as two
       entries); the memo's single "minima/maxima" class maps to these two.
+      Caps are always TIGHTENABLE by the biologist: the declared default pair is
+      hard_bound under lab-may-tighten — the lab may lower the cap, never raise
+      it, and a tightened hard cap STAYS hard. Loosening is what policy forbids
+      (lab-may-relax:hard_bound is deliberately NOT a declared pair).
     boundShape: quantity
     dimensionRule: any-dimension
     allowedBindingKinds: [ vendor_default, hard_bound ]
@@ -199,9 +203,13 @@ overridePolicies:
     relaxable: true
     allowedBindingKinds: [ vendor_default ]
   - id: lab-may-tighten
-    description: "The lab may tighten (never loosen) the bound."
+    description: >-
+      The lab may tighten (never loosen) the bound. Tightening is allowed
+      whatever the strictness: a vendor number may be tightened AND a hard cap
+      may be tightened — a tightened hard bound stays hard. Relaxing is never
+      allowed under this policy (relaxable: false).
     relaxable: false
-    allowedBindingKinds: [ vendor_default ]
+    allowedBindingKinds: [ vendor_default, hard_bound ]
   - id: never-override
     description: "The lab's own material truth: not overridable at all."
     relaxable: false
@@ -210,9 +218,19 @@ overridePolicies:
 # Declared override-policy x bindingKind compatibility as flat pairs (the lint
 # DSL has no collection joins; a constraint carries the composed key and the
 # lint checks membership — the strictness seam as DATA).
+# Semantics: lab-may-relax pairs ONLY with vendor_default (a vendor number is
+# relaxable; relaxing a hard bound is never declared compatible).
+# lab-may-tighten pairs with BOTH kinds: tightening never loosens, so a lab may
+# tighten a vendor number AND tighten a hard cap — a tightened hard bound stays
+# hard (this is the maximum class's declared default pair: hard caps are always
+# tightenable by the biologist). never-override pairs only with hard_bound.
+# Every class's declared defaultBindingKind x overridePolicy pair MUST appear
+# here — guarded by the data-driven class-defaults test in
+# server/src/lint/Wave2ConstraintVocabularyRules.test.ts.
 policyBindingKeys:
   - "lab-may-relax:vendor_default"
   - "lab-may-tighten:vendor_default"
+  - "lab-may-tighten:hard_bound"
   - "never-override:hard_bound"
 
 # Profile-keyed required classes (the lint DSL has no collection joins, so each
