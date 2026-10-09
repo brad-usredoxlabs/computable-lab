@@ -21,8 +21,12 @@ md5-identical preservation copy. New standing assumption recorded
   wt/W2-2-lane2-l2t1405 (still at a1cb8a4a, no commit yet as of 14:53 — in RED-phase),
   report .hermes/plans/W2-2-report.wip-l2t1405.md, final line "W22 DONE <sha>".
   Do NOT re-dispatch while 1584921 alive.
-- NO spec-composer live (run 2 stopped ~15:03, thunderbeast released; run 1 exited 15:02
-  on its own). Brad interactive architect 416507 untouched.
+- cl-spec-composer W2-4-PROVENANCE-LADDER dispatched 15:16 (this tick): bash 1664978,
+  log logs/spec-composer-W2-4-l2t1451.log (0B = buffering, NOT death — see standing
+  lesson), draft target .hermes/plans/2026-10-09_1520-W2-4-provenance-ladder-spec-DRAFT-
+  l2t1451.md, brief prompts/spec-composer-W2-4-l2t1451.txt. thunderbeast 2/4 with orch.
+  Pre-review checklist next tick: rung admissions vs forbidden_kinds, locally-validated
+  expressibility finding, W2-3 seam ownership, DSL-only discipline (no engine edits).
 - This tick = orchestrator only + coder = thunderbeast 1/4.
 
 ## 2. WHAT HAPPENED THIS TICK
