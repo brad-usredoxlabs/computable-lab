@@ -127,9 +127,10 @@ rules:
   # protocol-SPEC registry docs under schema/registry/protocols/ are zod-validated
   # registry docs, never records, so no record-scope lint can ever bound them; the
   # registry surface is declared frozen for wave 2 in the W2-3 report, OQ2(a)).
-  # `when` scopes the rule to records that DECLARE themselves universal-layer
-  # protocols (protocolLayer: universal — what the authoring pipeline emits,
-  # ProtocolExtractionService) and are NOT on the frozen inventory. Meaning: every
+  # `when` is EXACTLY NOT(recordId in the frozen allowlist) (spec §2.2 R-4): no
+  # protocolLayer guard — protocolLayer is NOT in the schema root required list,
+  # so a guard on it would let a new all-literal protocol that OMITS the field
+  # slip through the legacy bounds (fix-cycle defect 1). Meaning: every
   # step of a newly authored universal protocol must carry `intent` — a new
   # all-literal protocol is refused (RecordStore blocks the write), and a MIXED
   # protocol (one intent step + one literal step) is refused too (OQ1 strict form,
@@ -137,29 +138,26 @@ rules:
   - id: legacy-literal-bounded
     title: "Newly authored protocols must be intent-bearing"
     description: >-
-      Any protocol that declares protocolLayer: universal and is NOT one of the
-      six frozen pre-upgrade seed records must have EVERY step carry an `intent`
-      payload. Literal-only or mixed new protocols are refused: intent-only is the
-      authored future. The allowlist is the frozen pre-upgrade inventory as DATA.
+      Any protocol NOT one of the six frozen pre-upgrade seed records must have
+      EVERY step carry an `intent` payload. Literal-only or mixed new protocols
+      are refused: intent-only is the authored future. The guard is exactly
+      recordId-not-in-allowlist (no protocolLayer condition — omitting
+      protocolLayer does not escape the bounds). The allowlist is the frozen
+      pre-upgrade inventory as DATA.
     severity: error
     scope: record
     when:
-      op: all
-      predicates:
-        - op: equals
-          path: protocolLayer
-          value: universal
-        - op: not
-          not:
-            op: in
-            path: recordId
-            values:
-              - prt-seed-biological-transfer
-              - prt-seed-buffer-prep-50ml
-              - prt-seed-incubate-plate
-              - prt-seed-pbs-wash
-              - prt-seed-serial-dilution-96
-              - prt-seed-standard-curve-tubes
+      op: not
+      not:
+        op: in
+        path: recordId
+        values:
+          - prt-seed-biological-transfer
+          - prt-seed-buffer-prep-50ml
+          - prt-seed-incubate-plate
+          - prt-seed-pbs-wash
+          - prt-seed-serial-dilution-96
+          - prt-seed-standard-curve-tubes
     assert:
       op: everyItem
       collectionPath: steps

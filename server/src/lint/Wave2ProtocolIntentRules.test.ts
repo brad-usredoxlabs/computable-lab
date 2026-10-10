@@ -145,6 +145,26 @@ describe('legacy-literal-bounded (error): newly authored literal protocols canno
     const r = engine.lint(intentFamilyPayload('PRT-w23-intent-only'), PROTOCOL);
     expect(r.violations.filter((x) => x.ruleId === 'legacy-literal-bounded')).toEqual([]);
   });
+
+  it('rejects a new all-literal protocol that OMITS protocolLayer (guard has no protocolLayer conjunct)', () => {
+    // Fix-cycle defect 1: protocolLayer is NOT in the schema root required list
+    // (protocol.schema.yaml:12-16), so a `when` guard on protocolLayer would let a
+    // new all-literal protocol that omits the field slip through. The guard is
+    // exactly NOT(recordId in the frozen allowlist) (spec §2.2 R-4).
+    const payload = protocolPayload('PRT-w23-new-literal-no-layer', [
+      { stepId: 'add-dye', label: 'Add dye', ordinal: 1, kind: 'add_material', target: { labwareRole: 'plate' }, wells: { kind: 'all' }, material: { materialRole: 'dye' }, volume_uL: 10 },
+      { stepId: 'wash-plate', label: 'Wash', ordinal: 2, kind: 'wash', target: { labwareRole: 'plate' }, wells: { kind: 'all' }, cycles: 3 },
+    ], { roles: { labwareRoles: [{ roleId: 'plate', description: 'plate', expectedLabwareKinds: ['LBW-plate-96'] }], instrumentRoles: [] } });
+    delete payload.protocolLayer;
+    const r = engine.lint(payload, PROTOCOL);
+    expect(r.valid).toBe(false);
+    const v = r.violations.find((x) => x.ruleId === 'legacy-literal-bounded');
+    expect(v, 'legacy-literal-bounded fires without protocolLayer').toBeDefined();
+    expect(v!.severity).toBe('error');
+    expect(v!.message).toContain('PRT-w23-new-literal-no-layer');
+    expect(v!.message).toContain('add-dye');
+    expect(v!.message).toContain('wash-plate');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -322,6 +322,25 @@ describe('T1(g) PDT-derived branch axis', () => {
 // (h) W2-2 cross-file closure (the DSL cannot; the test can)
 // ---------------------------------------------------------------------------
 
+// The closure predicate shared by the baseline and the non-vacuity arms: every
+// constraint class used by the fixture's intent steps MUST be declared in the
+// merged vocabulary's classIds. Throws on the first undeclared class. If this
+// loop were removed/broken, the non-vacuity arm below would fail.
+function assertConstraintClassClosure(
+  fam: { steps: Array<{ intent?: { constraints?: Array<{ class: string }> } }> },
+  vocab: { classIds: string[] },
+): void {
+  const used = fam.steps.flatMap((s) => (s.intent?.constraints ?? []).map((c) => c.class));
+  if (used.length === 0) {
+    throw new Error('closure check vacuous: fixture declares no constraint classes');
+  }
+  for (const cls of used) {
+    if (!vocab.classIds.includes(cls)) {
+      throw new Error(`constraint class ${cls} is not declared in the merged vocabulary`);
+    }
+  }
+}
+
 describe('T1(h) W2-2 datatype mount + vocabulary closure', () => {
   it('constraint + quantity datatypes are registered and resolve in the validator', () => {
     expect(registry.has(CONSTRAINT_ID)).toBe(true);
@@ -331,35 +350,33 @@ describe('T1(h) W2-2 datatype mount + vocabulary closure', () => {
     expect(validator.hasSchema(QUANTITY_ID)).toBe(true);
   });
 
-  it('the fixture constraint class ids are members of the merged vocabulary classIds', async () => {
+  it('the fixture constraint class ids are members of the merged vocabulary classIds (closure baseline passes)', async () => {
     const vocab = parseYaml(
       await readFile(join(schemaRoot, 'registry', 'constraint-vocabulary', 'constraint-vocabulary.yaml'), 'utf8'),
     ) as { classIds: string[] };
-    const fam = intentFamily() as { steps: Array<{ intent: { constraints?: Array<{ class: string }> } }> };
-    const used = fam.steps.flatMap((s) => (s.intent.constraints ?? []).map((c) => c.class));
-    expect(used.length).toBeGreaterThan(0);
-    for (const cls of used) {
-      expect(vocab.classIds, `constraint class ${cls} declared in vocabulary`).toContain(cls);
-    }
+    const fam = intentFamily() as { steps: Array<{ intent?: { constraints?: Array<{ class: string }> } }> };
+    // Same closure predicate the non-vacuity arm mutates against: the clean
+    // baseline MUST pass it (class IS declared).
+    expect(() => assertConstraintClassClosure(fam, vocab)).not.toThrow();
   });
 
-  it('a mutated fixture with an UNDECLARED class fails the closure assertion (non-vacuity)', async () => {
+  it('a mutated fixture with an UNDECLARED class FAILS the closure predicate (non-vacuity)', async () => {
     const vocab = parseYaml(
       await readFile(join(schemaRoot, 'registry', 'constraint-vocabulary', 'constraint-vocabulary.yaml'), 'utf8'),
     ) as { classIds: string[] };
     const mutated = capacityConstraint();
     mutated.class = 'not_a_declared_class';
-    expect(vocab.classIds).not.toContain(mutated.class);
-    // And the datatype itself still rejects nothing structurally — closure is the vocabulary's job:
-    const fam = intentFamily();
+    const fam = intentFamily() as { steps: Array<Record<string, unknown>> };
     const steps = fam.steps as Array<Record<string, unknown>>;
     const intent = { ...(steps[0]!.intent as Record<string, unknown>), constraints: [mutated] };
     steps[0] = { ...steps[0]!, intent };
-    // structurally the class pattern is legal (^[a-z][a-z0-9_]*$), so the schema passes;
-    // the CROSS-FILE closure is what the test above enforces.
+    // The mutation is STRUCTURALLY legal (class pattern ^[a-z][a-z0-9_]*$), so the
+    // schema still validates — the CROSS-FILE closure is the only enforcement, and
+    // it must FIRE on the mutated fixture. If the closure loop were removed, this
+    // assertion would fail (non-vacuity, spec §3 T1 h).
     const r = validator.validate(fam, PROTOCOL_ID);
     expect(r.valid).toBe(true);
-    expect(vocab.classIds).not.toContain('not_a_declared_class');
+    expect(() => assertConstraintClassClosure(fam as never, vocab)).toThrow(/not_a_declared_class/);
   });
 
   it('a Quantity bound with an approximately_zero qualifier validates through the mounted constraint (W2-2 OQ2 binding)', () => {

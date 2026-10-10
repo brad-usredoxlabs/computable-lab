@@ -95,8 +95,10 @@
 
 ## 3. What was built (all data; zero production TypeScript)
 
-A — `schema/workflow/protocol.schema.yaml` (additive; 217 added lines, ONE removed line =
-the sanctioned branch_axes description append):
+A — `schema/workflow/protocol.schema.yaml` (additive; 221 added lines, ONE removed line =
+the sanctioned branch_axes description append; numstat re-measured in fix cycle 1 —
+`git diff --numstat 7f4e751b..HEAD -- schema/workflow/protocol.schema.yaml` => `221 1`;
+the earlier "217" was a miscount, corrected in §11):
 - `ProtocolStep.properties.intent: {$ref: "#/$defs/IntentStepPayload"}` (the discriminator slot).
 - `$defs/IntentStepPayload` — additionalProperties:false, required:[semanticVerb];
   semanticVerb REUSES the existing `$defs/SemanticVerbRef` (no new verb noun, no enum);
@@ -120,8 +122,9 @@ the sanctioned branch_axes description append):
 
 B — `schema/workflow/protocol.lint.yaml` (4 rules appended after R3; R1-R3 and the trailing
 "Remaining intended rules" comment block byte-unchanged):
-- `legacy-literal-bounded` (ERROR): when all[equals protocolLayer universal, not(in recordId,
-  <the six seed ids as lint YAML DATA>)] -> everyItem(steps) nonEmpty intent.
+- `legacy-literal-bounded` (ERROR): when not(in recordId, <the six seed ids as lint YAML
+  DATA>) -> everyItem(steps) nonEmpty intent. (Fix cycle 1: the drafted
+  `all[equals protocolLayer universal, ...]` conjunct was REMOVED — see §11 defect 1.)
 - `legacy-inventory-no-intent-drift` (WARNING): when in recordId <the six ids> ->
   everyItem(steps) not(nonEmpty intent).
 - `intent-step-provenance-visible` (WARNING): when nonEmpty steps[*].intent ->
@@ -241,7 +244,8 @@ Contract-only proofs:
   git diff 7f4e751b -- server/src | grep -inE 'zymo|prt-seed|volume_uL|catalog' (excluding my
     Wave2* test files) => EMPTY (inventory lives in lint YAML only)
   git diff -- schema/workflow/protocol.schema.yaml | grep '^-' => exactly ONE removed line:
-    the branch_axes description (the sanctioned append). 217 added lines.
+    the branch_axes description (the sanctioned append). 221 added lines (fix cycle 1
+    re-measure; the original "217" was a miscount — see §11 defect 4).
   W2-2 test files (Wave2Quantity*.test.ts, Wave2ConstraintVocabularyRules.test.ts) untouched and
   green (33 + 19 passed). lint-v1.schema.yaml, LintEngine.ts, MANIFEST.yaml, scientist-intent/**,
   amount/concentration/reference-ratio datatypes, records/**: untouched.
@@ -285,7 +289,8 @@ internal contradiction in the spec; neither touches production code or W2-2 arti
     four rules to the SAME file. The two cannot both hold. I extended the pin list to the full
     declared set (7 ids) with a W2-3 comment, keeping R1-R3 ids/severities asserted unchanged.
     Evidence: the pin's own text and spec §2.2's "ADD these rules ... existing R1-R3 untouched".
-    The file's other 41 tests are untouched and green (42 passed).
+    RATIFIED by the orchestrator (l2t1955); fix cycle 1 retitled the describe/it to state the
+    ratification explicitly (§11 defect 3). The file's other tests stay green.
 
 ## 9. Open questions
 
@@ -337,7 +342,126 @@ LIMITS for this item.
   methodRequirement, phase, phaseId, plannedOffset, isOptional) stay ALLOWED on intent steps per
   spec §2.1(iv); only vendor execution params are refused.
 - protocolLayer: universal is the authored-protocol marker (what ProtocolExtractionService
-  emits); the six seed records carry no protocolLayer, so R-4's `when` guard leaves them out
-  without hardcoding a negative list.
+  emits). SUPERSEDED by fix cycle 1 (§11): R-4's `when` no longer references protocolLayer at
+  all — the guard is exactly recordId-not-in-allowlist, because protocolLayer is NOT in the
+  schema root required list (protocol.schema.yaml:12-16) and a guard on it was escapable.
 - Fixture strings (record ids, verb ids, class ids, CL: ids) live only in my two Wave2* test
   files and in protocol.lint.yaml data — allowed by §6.
+
+## 11. FIX CYCLE 1 (orch verdict: fix; defects 1, 2, 4 fixed; defect 3 = ratification recorded)
+
+Commit: ONE new commit on top of 6e45fa8a (branch W2-3-lane2-l2t1650, base 7f4e751b).
+Files touched by the fix commit (4 + this report):
+  schema/workflow/protocol.lint.yaml            (R-4 `when` + comment/description)
+  server/src/lint/Wave2ProtocolIntentRules.test.ts   (+20: T2(a) no-protocolLayer arm)
+  server/src/schema/Wave2ProtocolIntentSchema.test.ts (T1(h) non-vacuity rewrite)
+  server/src/lint/ProtocolLintRules.test.ts     (pin retitled per ratification; fixture
+                                                 labels/steps adjusted for the widened guard)
+  .hermes/plans/W2-3-report.wip-l2t1650.md      (this section + §3/§6/§8/§10 corrections)
+
+### Defect 1 (major) — R-4 legacy-literal-bounded `when` guard bypass: FIXED
+
+`when` is now EXACTLY `not(in recordId, <six frozen ids>)` — the unratified
+`equals protocolLayer universal` conjunct is REMOVED (lint YAML data, spec §2.2 form).
+protocolLayer was NOT added to the schema root required list (that would break legacy
+records; the lint-side fix is the spec's design). Rule comment + description updated to
+state the guard form.
+
+RED/GREEN probe (scratch, untracked: server/scratch/l2t1650-fix1-redprobe-r4.mts) — same
+payload (new all-literal protocol, NO protocolLayer key) linted against HEAD's YAML vs the
+fixed YAML:
+  HEAD 6e45fa8a (unratified protocolLayer conjunct): valid=true ruleIds=[]
+  FIXED (guard = NOT(recordId in allowlist)):        valid=false ruleIds=["legacy-literal-bounded"]
+
+T2(a) extended with the explicit no-protocolLayer arm
+(Wave2ProtocolIntentRules.test.ts, "rejects a new all-literal protocol that OMITS
+protocolLayer"): asserts valid:false, the legacy-literal-bounded violation, severity error,
+and the message naming recordId + both step ids. GREEN.
+
+Frozen inventory re-VERIFIED (not assumed) under the widened guard
+(scratch/l2t1650-fix1-seedlint-probe.mts, real LintEngine + real protocol.lint.yaml):
+  SEED prt-seed-biological-transfer.yaml:   valid=true ruleIds=[]
+  SEED prt-seed-buffer-prep-50ml.yaml:      valid=true ruleIds=[]
+  SEED prt-seed-incubate-plate.yaml:        valid=true ruleIds=[]
+  SEED prt-seed-pbs-wash.yaml:              valid=true ruleIds=[]
+  SEED prt-seed-serial-dilution-96.yaml:    valid=true ruleIds=[]
+  SEED prt-seed-standard-curve-tubes.yaml:  valid=true ruleIds=[]
+The two registry spec docs (schema/registry/protocols/) are zod-validated registry docs,
+never records: RegistryLoader.ts (parseYaml + zod only, no LintEngine import) and
+ProtocolSpecRegistry.ts confirm no record-scope lint ever runs on them (OQ2(a) stands).
+Their tests (ProtocolSpecRegistry.test.ts, 3 passed) stay green. NOTE for the record: if a
+registry doc WERE fed to the record-scope engine it would now trip R-4 (probe output) —
+which is exactly why the registry surface is declared frozen for wave 2 rather than
+allowlisted.
+
+Guard-widening consequence (honest, recorded): the pre-existing PROTO-AI-4 R1-R3 fixtures
+in ProtocolLintRules.test.ts are all-literal payloads on non-allowlisted ids; under the
+corrected guard R-4 co-fires on them BY DESIGN (that IS the acceptance behaviour). Fix:
+  - R1 dangling-role loop + no-declared-roles test: keep non-allowlisted ids, assert the
+    R-4 co-fire EXPLICITLY (roleIntegrityFindings() == 1 + legacy-literal-bounded == 1);
+  - fixtures that must stay valid (R1 clean, no-roles, R2, R3) carry an intent-bearing step
+    (the authored future) or a frozen-inventory label (fixture labels only — records/ is
+    byte-untouched);
+  - new test "the widened R-4 guard co-fires on non-allowlisted literal fixtures and stays
+    silent on inventory labels" pins both directions.
+R1-R3 rule DATA in protocol.lint.yaml is byte-unchanged (verified: the R1..R3 block md5s
+identical between 6e45fa8a and HEAD-of-fix; the only YAML edits are inside the R-4 block).
+
+### Defect 2 (minor) — T1(h) non-vacuity arm asserted nothing: FIXED
+
+Wave2ProtocolIntentSchema.test.ts now shares ONE closure predicate
+(assertConstraintClassClosure: every fixture constraint class must be in the merged
+vocabulary classIds; throws on an undeclared class; throws if the fixture declares no
+classes at all — anti-vacuity). The baseline arm asserts the clean fixture PASSES it; the
+non-vacuity arm mutates the fixture to `not_a_declared_class` (structurally legal — schema
+still validates, asserted) and asserts the closure predicate THROWS on it. If the closure
+loop were removed, the non-vacuity arm fails. Both arms GREEN.
+
+### Defect 3 — orchestrator ratification (no code action): RECORDED
+
+ProtocolLintRules.test.ts pin keeps the 7-id list; describe/it retitled to
+"protocol.lint.yaml declares the full declared rule set" / "activates the full declared
+set: R1-R3 role-integrity + W2-3 rules (extended to the full declared set per spec mandate
++ orch ratification l2t1955)" with the ratification in the comment. The three partial-load
+harness path-list appends (OQ-A closure remedy) stay as ratified.
+
+### Defect 4 (minor) — report numeric slip: FIXED
+
+`git diff --numstat 7f4e751b..6e45fa8a -- schema/workflow/protocol.schema.yaml` =>
+`221 1`. §3 corrected to 221 added / 1 deleted (the §6 "217 added lines" line was the same
+miscount; §6's gate evidence itself — the ONE removed line being the branch_axes
+description — is unchanged).
+
+### Fix-cycle gate evidence (verbatim, all in MY worktree)
+
+Three W2-3 suites:
+  npx vitest run src/schema/Wave2ProtocolIntentSchema.test.ts src/lint/Wave2ProtocolIntentRules.test.ts src/lint/ProtocolLintRules.test.ts
+  -> ProtocolLintRules 43 passed; Wave2ProtocolIntentRules 20 passed; Wave2ProtocolIntentSchema 15 passed
+  -> Test Files 3 passed (3); Tests 78 passed (78)   [HEAD baseline was 76 passed]
+
+PRIMARY SCOPE SET (`npx vitest run src/schema src/lint`):
+  Test Files  2 failed | 44 passed | 5 skipped (51)
+  Tests  5 failed | 557 passed | 53 skipped (615)
+  fail-file SET: src/schema/EventGraphEquipmentSchema.test.ts
+                 src/schema/LabwarePhysicalGeometryData.test.ts  (exact mandated SET)
+
+FULL SUITE (`npx vitest run`), fix vs pristine-HEAD (stashed) measured in this worktree:
+  HEAD 6e45fa8a: Test Files 91 failed | 556 passed | 9 skipped (656); Tests 112 failed | 5115 passed | 68 skipped (5465)
+  FIX:           Test Files 91 failed | 556 passed | 9 skipped (656); Tests 112 failed | 5117 passed | 68 skipped (5463)
+  fail-file SET comm -3 (HEAD vs FIX): EMPTY (88 files both sides). Zero new fail files;
+  +2 passing tests (the two new arms).
+
+Legacy/seed legs: protocol.seed 11, SeedProtocolPhases 30, ProtocolSpecRegistry 3,
+Wave2NamingCrosswalk 6, ExpandProtocol 12, ProtocolRegistry 1, TerminalArtifactsShape 3,
+LintEngine 27 — 8 files, 93 passed.
+
+server tsc: 26 primary error lines; multiset vs /tmp/l2t2230-tsc-server.txt EQUAL
+(positions normalized; the pin file stores truncated continuation lines — the primary-line
+multisets match exactly, zero new errors).
+app tsc: 34 primary error lines; multiset vs /tmp/l2t2230-tsc-app.txt EQUAL (zero new
+errors; no app/ file touched).
+
+Hard-rule re-checks: rung names absent from all four changed files (grep exit 1); R1-R3
+lint data byte-unchanged (md5-equal block); records/ + schema/registry/protocols/ diff
+EMPTY; no new record kinds; scratch probes left UNTRACKED (server/scratch/); one new
+commit on top of 6e45fa8a.
