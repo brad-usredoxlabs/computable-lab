@@ -442,3 +442,50 @@ COMPOSED 2026-10-09 ~23:40 EDT by cl-spec-composer (l2t2310). All §0 cites open
 trunk 78bee2c8 this session; cl-scout screening used twice (both corrected where wrong, §9
 F-W28-4). Every W2-5/W2-6 shape bind reads CAMT — merged trunk wins at promotion. Nothing here
 is promoted.
+
+---
+
+# PROMOTION RECORD (orch l2t0630, 2026-10-10 ~06:45 EDT) — bindings re-derived FIRST-HAND at trunk a2391897 (over f19cfa95 = W2-6 merge over 9a68f26c over a4ce2d58 over fcce2212 = W2-5 merge). The merged trunk WON every CAMT; all M-binds below were opened directly this tick, not inherited.
+
+- M1 — W2-6 TRIGGER ENDPOINT MERGED (OQ1 CONDITION SATISFIED, no degrade to (b)):
+  POST /extraction/vendor-candidates/:recordId/semantic-draft at server/src/api/routes.ts:636
+  -> ExtractHandlers.ts:476 `semanticDraft`. THE PATH PARAM IS THE CAN-* CANDIDATE ID
+  (validated ^CAN-[A-Za-z0-9_-]+$), NOT the route's VPDF-* id — the affordance button must pass
+  the candidate id the page already loads. Success body: {recordId: <XDR id>, diagnostics};
+  failure codes: SEMANTIC_PASS_UNAVAILABLE 503, INVALID_INPUT 400, SEMANTIC_PASS_NO_CANDIDATE
+  404, SEMANTIC_PASS_UNKNOWN_THINKING_LEVEL 400, SEMANTIC_PASS_STEP_COVERAGE 422, else 502.
+  The 3-line client.ts method stays the ONLY sanctioned client.ts touch.
+- M2 — SAID/XDR JOIN CONFIRMED IN MERGED CODE (draft's guessed join is the shipped join):
+  SemanticFamilyPass.ts :296-313 builds source_artifact {kind:'file',
+  id: candidate.source.documentId ?? candidateRecordId, locator: filename};
+  candidates:[{target_kind:'protocol', draft:{kind:'protocol',
+  recordId:`PRT-<CAN>-semantic`, title, steps, branch_axes?}, confidence:0.9}] +
+  ambiguity_spans_by_candidate. Frontend enumeration = listRecordsByKind('extraction-draft')
+  filtered source_artifact.id === <VPDF route id>, status !== 'promoted' (draft §3 stands).
+- M3 — MEANT EDIT PATH MERGED AS SPEC'D: config defaults (server/src/config/types.ts:520-521)
+  appendOnlyKinds includes vendor-protocol-candidate, revisionOnEditKinds includes
+  extraction-draft. PUT /records/:XDR + expectedSha + revisions is live; VPDF/VPC 405 wall is
+  the merged default, not a config ask.
+- M4 — MERGED XDR LINT RULE NAMES (tests reference these exact ids):
+  xdr-promoted-candidate-anchored, xdr-promote-blocked-by-unresolved,
+  xdr-promote-requires-resolvable-target (schema/workflow/extraction-draft.lint.yaml :24/:61/:95).
+- M5 — StepProvenanceRef WIDENING MERGED AT BOTH SITES (protocol.schema.yaml $defs/StepProvenanceRef
+  :1013+:1025-1037): type enum [vendor-protocol-candidate, evidence] in the allOf constraint AND
+  properties. Semantic-step provenance refs ride {kind:'record', type:'vendor-protocol-candidate',
+  id, pageStart, pageEnd?, label?}; additionalProperties:false.
+- M6 — rung-vocabulary.ui.yaml :33-36 still says badges are 'RENDERED ... by the W2-8 surface':
+  OQ4 ruling STANDS — NO rung badges this item; the comment is data for whoever mounts
+  provenance-rung-ref later; inventing a rung value is a banned re-mint.
+- M7 — LINE-PIN RE-VERIFICATION AT CURRENT TRUNK (all CONFIRMED, zero drift):
+  VendorPdfReviewPage.tsx :455 candidateToProtocolPayload, vpdf-save :785, vpdf-save-as :794,
+  vpdf-use-extracted :915, vpdf-tree-select :953, BranchQuestionsPanel mount :964,
+  saveas-modal :1005; App.tsx :55 lazy import, :150 route; protocolEditOps.ts
+  applyProtocolEdit :367. Pins safe for the coder.
+- M8 — OQ2/OQ3 RULINGS CARRY UNCHANGED (module+test byte-untouched; NO promotion button).
+- M9 — BASELINES AT CLAIM (from l2t0550 handoff): server tsc 26 /tmp/l2t0415-tsc-server.txt;
+  app tsc 34 /tmp/l2t2230-tsc-app.txt; scoped fail SET 11 files
+  /tmp/l2t2310-w25-baseline-failfiles.txt (identical at f19cfa95, 100 passed); MANIFEST file hash
+  873e1343 byte-untouched; lintRules 81. W2-8 is app/**-only + client.ts 3-line: the app suites
+  and browser gate are the acceptance track.
+- M10 — W2-7 (in flight, server-side) has app/** as a HARD STOP -> app pins above cannot drift
+  before W2-8's dispatch base; if W2-7 merged first anyway, re-grep M7 pins at claim (5 min).
