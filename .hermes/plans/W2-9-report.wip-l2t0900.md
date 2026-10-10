@@ -101,8 +101,8 @@ AssertionError: expected 'No realization exists for this select…' to contain '
    Start at  16:21:58
    Duration  41.41s (transform 14.11s, setup 88.67s, collect 58.22s, tests 4.65s, environment 597.70s, prepare 65.88s)
 ```
-(raw: /tmp/l2t1510-item1-clean.txt, lines 97-121 — copied verbatim, md5 of the extracted block
-7adb7df0ebe78b16af749d07116fa693.) — the ONLY failure is the BranchQuestionsPanel base-debt pin.
+(raw: /tmp/l2t1510-item1-clean.txt, lines 97-121 copied verbatim; md5 of that extracted range
+33925595858bcf852db0ea861ac501f7.) — the ONLY failure is the BranchQuestionsPanel base-debt pin.
 
 Cross-check against the orchestrator's own capture (**ORCH-CAPTURED**, w29c2-tail1.txt — a tail
 truncated to its last 41 lines, so the exact command it ran is not recorded in the file; its
@@ -138,7 +138,8 @@ AssertionError: expected 'No realization exists for this select…' to contain '
 
 ITEM1 done rc=0
 ```
-(the block above is w29c2-tail1.txt lines 15-41 copied verbatim.)
+(the block above is w29c2-tail1.txt lines 15-41 copied verbatim; md5 of that extracted range
+b4b553b0dbea4acad9a8eb2823c8d426.)
 My independent reproduction of the 10-file set (`npx vitest run src/ingestion/protocol-review/
 src/ingestion/ProtocolReviewHostPage.reviewAiPanel.test.tsx src/shell/settings/SemanticPassModelSection.test.tsx src/event-editor/right-pane/protocol/protocolEditOps.test.ts`) returned
 `Test Files 1 failed | 9 passed (10)` / `Tests 1 failed | 93 passed (94)` — identical counts, and
