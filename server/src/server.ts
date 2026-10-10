@@ -871,12 +871,21 @@ export async function createServer(
   // (resolveSemanticPassInference — optional ai.semanticPass block over the
   // active profile) + createInferenceClient, mirroring the existing
   // resolveAiProfile call-site pattern. Zero model/host literals here.
+  // W2-9 (F-W29-5): the availability gate stays boot-time (no endpoint at
+  // boot = SEMANTIC_PASS_UNAVAILABLE until restart, byte-unchanged behavior),
+  // but the inference is resolved LIVE per-request — the vendorSearchHandlers
+  // precedent (server.ts:767): PATCH /api/config reassigns ctx.appConfig via
+  // onConfigUpdate, so a semanticPass block saved in Settings is consumed by
+  // the NEXT extraction call without a server restart.
   const semanticPassInference = ctx.appConfig?.ai ? resolveSemanticPassInference(ctx.appConfig.ai) : undefined;
   const semanticPassRunner: SemanticPassRunner | undefined = semanticPassInference?.baseUrl
-    ? (input) => runSemanticFamilyPass(
-        { store: ctx.store, client: createInferenceClient(semanticPassInference), inference: semanticPassInference },
-        input,
-      )
+    ? (input) => {
+        const liveInference = ctx.appConfig?.ai ? resolveSemanticPassInference(ctx.appConfig.ai) : semanticPassInference;
+        return runSemanticFamilyPass(
+          { store: ctx.store, client: createInferenceClient(liveInference), inference: liveInference },
+          input,
+        );
+      }
     : undefined;
   const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 

@@ -14,6 +14,12 @@
  * Full-width single pane on purpose: this surface is a document and its
  * extraction, not a chat page (the AI panel that used to live here is what made
  * it feel like an AI tab — see specifications/protocol-worldview.md D2).
+ * WAVE-2 OVERRIDE (W2-9): the task deliberately re-adds an AI rightPane —
+ * assistance grounded on the SAID document + the MEANT draft (D7+D8). The
+ * panel writes nothing itself; an accepted chat edit bumps `draftNonce`, which
+ * remounts the left pane so BOTH panes re-read the XDR without any W2-8 file
+ * edit (F-W29-7: unsaved direct edits are discarded by the remount — the
+ * expectedSha lock is the correctness backstop either way).
  */
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -23,11 +29,18 @@ import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { apiClient } from '../shared/api/client'
 import { protocolReviewTabId } from '../event-editor/workspace/types'
 import { VendorPdfReviewPage } from './VendorPdfReviewPage'
+import { ReviewAiPanel } from './protocol-review/ReviewAiPanel'
 
 export function ProtocolReviewHostPage() {
   const { recordId } = useParams<{ recordId: string }>()
   const openTabs = useOptionalOpenTabs()
   const [title, setTitle] = useState<string | null>(null)
+  // Bumped when an accepted chat edit lands: the key below remounts the left
+  // pane so it re-reads the XDR (no W2-8 file may be edited to add a refresh
+  // hook). Unsaved direct edits are discarded by the remount — disclosed
+  // F-W29-7; the expectedSha lock keeps writes safe either way.
+  const [draftNonce, setDraftNonce] = useState(0)
+  const onDraftApplied = () => setDraftNonce((n) => n + 1)
 
   // Title for the tab label + brand (falls back to the record id).
   useEffect(() => {
@@ -67,7 +80,8 @@ export function ProtocolReviewHostPage() {
       brand={title ?? 'Protocol review'}
       layout="workspace"
       topbarTabs={<WorkspaceTabStrip />}
-      leftPane={<VendorPdfReviewPage embedded />}
+      leftPane={<VendorPdfReviewPage key={`${recordId}:${draftNonce}`} embedded />}
+      {...(recordId ? { rightPane: <ReviewAiPanel recordId={recordId} onDraftApplied={onDraftApplied} /> } : {})}
     />
   )
 }

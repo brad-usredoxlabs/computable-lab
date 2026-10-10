@@ -286,6 +286,15 @@ export type AiSurface =
   // with an empty preamble (the intended behavior — no new preamble/prompt
   // template; prompt authoring is not this item's authority).
   | 'analysis'
+  // W2-9 (OQ1 ruling (a)): the protocol-review host (`/ingestion/vendor-pdf/
+  // :recordId`, registry id `protocol-review` in surfaces.yaml — the chat id
+  // names the registered surface so the two vocabularies stay aligned, F-W29-4).
+  // Additive ONLY: with an attachedProtocol in context the surface delegates
+  // to the grounded buildSystemPrompt path (ATTACHED PROTOCOL block +
+  // protocol_edit instruction region — the PROTO-AI-9 grounding the review
+  // chat needs); without one it falls through to the generic prompt exactly
+  // like 'analysis'. Existing surfaces are byte-unchanged (KV-cache stability).
+  | 'protocol-review'
   | 'run-workspace'
   | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'}`
   | 'materials'
@@ -406,6 +415,17 @@ export function buildSurfaceAwarePrompt(
   // (observed: add_material with only a material recordId — renders as
   // nothing). It previously fell through to the generic chat preamble.
   if (surface === 'event-editor' || surface === 'workspace.deck') {
+    return buildSystemPrompt(context);
+  }
+
+  // W2-9 (OQ1 ruling (a)): the protocol-review chat delegates to the SAME
+  // grounded template when a protocol is attached — the template's deck
+  // sections render from an empty deck context, while the protocol_edit
+  // instruction region and the ATTACHED PROTOCOL block are attachedProtocol-
+  // gated (buildSystemPrompt, PROTO-AI-6). Without an attachment the surface
+  // falls through to the generic prompt (the 'analysis' behavior): the model
+  // never sees a protocol_edit vocabulary it cannot ground (PROTO-AI-9).
+  if (surface === 'protocol-review' && context.attachedProtocol) {
     return buildSystemPrompt(context);
   }
 

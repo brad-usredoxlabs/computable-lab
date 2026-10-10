@@ -20,6 +20,7 @@ import {
   SyncSection,
   JsonLdSection,
   AiModelSection,
+  SemanticPassModelSection,
   ExtractorSettingsSection,
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
@@ -156,6 +157,12 @@ export function SettingsPage() {
         {/* ---- Editable: the AI model every surface uses ---- */}
         <Section title="AI model">
           <AiModelSection />
+        </Section>
+
+        {/* ---- Editable: the semantic-pass model override (W2-9: binds the
+        optional ai.semanticPass config block ONLY — never the active profile) ---- */}
+        <Section title="Semantic-pass model">
+          <SemanticPassModelSection />
         </Section>
 
         {/* ---- Editable: Repository ---- */}
