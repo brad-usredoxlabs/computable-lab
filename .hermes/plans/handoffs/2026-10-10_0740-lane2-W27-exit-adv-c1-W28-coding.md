@@ -97,3 +97,17 @@ fleet-lock handoff + W2-8 dispatch (zero-latency, pre-staged) -> adv gate c1 dis
 W2-9 promotion notes first-hand + committed 248e9b0c -> task-list under lock + assumptions +
 handoff. Two workers live: W2-8 coder (appliance-2 fleet-single) + adv reviewer (OpenRouter, no
 local slot). W2-7 gate ownership: next tick.
+
+## ADDENDUM (same tick, ~07:50): ADV GATE c1 RETURNED VERDICT: fix
+Gate 3713744 exited code=0 at 07:29, report reviews/review-W2-7-adversarial-l2t0715-c1.md.
+4 defects (1 major: literal verb list realizeScientistIntent.ts:550 -> move emission policy to
+DATA; 3 minors: hardcoded profile field paths :542-545, unconsumed substitutionAdjudication
+policy block, vacuous T5 shake arm). AC1-AC6 and all other hunt arms PASS; reviewer
+independently confirmed the MANIFEST stale-pin observation (byte-untouched holds at blob
+58c447eb). FIX-RUN PROMPT STAGED (cycle 1, SAME worktree/branch, append-report discipline,
+end-marker W2-7-FIX DONE <sha>): prompts/coder-W2-7-fix-c1-l2t0715.txt. QUEUED BEHIND W2-8
+(fleet coder single slot; W2-8 alive at checkpoint, 11 min in, disjoint server/** vs app/**).
+NEXT TICK owns: (1) when fleet lock frees -> dispatch W2-7 fix run (flock per SOUL; fix prompt
+above); (2) on fix exit -> adv gate c2 (clone c1 prompt, token l2t<tick>-c2, new unique report
+path); (3) ACCEPT c2 -> orch self-verify + merge (MANIFEST pin: compare blob 58c447eb, not
+873e1343); (4) W2-8 observation unchanged. Two-cycle max not yet consumed (cycle 1 used).
