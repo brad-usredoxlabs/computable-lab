@@ -542,3 +542,47 @@ stays." Consequence otherwise: shared chatbot product regressions on a realizati
 COMPOSED 2026-10-09 ~21:00 EDT by cl-spec-composer (l2t2030). All §0 cites opened first-hand at
 trunk this session (scout screening used once, for the ProtocolCompiler branch_resolution write —
 re-opened and verified at :710-714/:400 personally before citing). Nothing here is promoted.
+
+---
+
+## PROMOTION RECORD (orchestrator l2t0550, 2026-10-10 ~06:15 EDT — BINDING over stale draft text)
+
+Promoted after W2-6 merged (trunk f19cfa95). Every §0 line number below is a draft-era pin:
+RE-PIN at dispatch; drift is expected and the coder re-verifies each cite before use.
+
+Merged-shape bindings (these SUPERSEDE any draft guess):
+- M1 SEMANTIC-PASS LANDING SHAPE (W2-6 merged): the pass POSTs
+  /extraction/vendor-candidates/:recordId/semantic-draft (routes.ts beside :632) and lands an
+  extraction-draft via the W2-5 lifecycle. Family branch_axes on the draft are the
+  deriveBranchAxes/deriveStepVariantAxes output bound VERBATIM (semanticPassGuards.ts). W2-7's
+  family fixture consumes THAT shape; do not re-derive axes.
+- M2 ai.semanticPass CONFIG SHAPE (merged server/src/config/types.ts SemanticPassConfig):
+  all-optional block over resolveAiProfile(ai).inference. W2-7 never touches it.
+- M3 REF CARRIER: StepProvenanceRef required [kind,type,id,pageStart], ref.id = the SAID
+  record's own recordId (merged protocol.schema.yaml $defs). W2-7's realization data carries
+  provenance through the merged W2-4 rung machinery only.
+- M4 RUNG VOCABULARY LOCATION: schema/registry/provenance-ladder/rung-vocabulary.yaml (+ its
+  lint) — rung LOCAL_REALIZATION is declared THERE. W2-7 references it; never re-mints.
+- M5 OQ2 RESOLVED AT MERGE (orch first-hand, local-protocol.lint.yaml R1
+  prov-local-choices-recorded): the merged rule asserts matched -> nonEmpty choices ONLY. It
+  does NOT read inside choices. => shape (a) { [axisId]: chosenValue } is what R1 requires and
+  is back-compat with IntentAcceptHandlers.ts:81. COPY that merged rule's requirement verbatim;
+  report which shape you used (OQ2 smallest-ruling satisfied).
+- M6 W2-4 HARD DEP: SATISFIED (W2-4 merged long before this promotion — rung vocab + prov-local
+  lint active on trunk; lintRules 81).
+- M7 BASELINE PINS at promotion: server tsc multiset 26 (/tmp/l2t0415-tsc-server.txt); scoped
+  fail SET = 11 files (/tmp/l2t2310-w25-baseline-failfiles.txt; reconfirmed identical at
+  f19cfa95 with 100 passed vs 99 pre-W2-6); goldens expect 15; MANIFEST file-level git hash
+  873e1343 byte-untouched (HARD STOP); health lintRules 81 — W2-7 adds NO new lint rule ids
+  (>81 = defect signal; W2-7 consumes W2-4's existing prov-local-* rules).
+- M8 HARD STOPS (any touch = FIX at the adversarial gate): server/src/compiler/pipeline/** passes
+  (incl. SchemaValidateDraftPass/PromotionCompileRunner/PromotionExtractionPasses), goldens
+  MANIFEST, schema/scientist-intent/** (FROZEN 31-verb contract), records/**, app/**,
+  ChatbotCompilePasses 8-sample default (OQ4(a): upstream gate only), legacy
+  VendorProtocolEventGraphDraftService.ts, ai.semanticPass machinery (M2), extraction-draft
+  lifecycle YAML.
+- M9 OQ RULINGS CARRIED: OQ1 = hard dep satisfied (M6); OQ2 = M5; OQ3 = (a) gate+labels depth
+  accepted as the golden's proof bar — CAMT-at-claim on plan_deck_layout's label consumption; if
+  the deck pass ignores profile labels entirely, STOP and escalate for a MANIFEST re-bless
+  DECISION (orchestrator act, never coder act); OQ4 = (a) guessed-default refusal lives upstream,
+  chatbot default stays.
