@@ -1,0 +1,89 @@
+# W2-7-REALIZATION-SPINE — the realization policy as registry DATA
+# (branch-axis-mapping/pdt-axis-to-branch-axis.yaml precedent: registry-style
+# pure data doc — `kind` is a plain data field, NOT a *.schema.yaml, so it
+# never enters SchemaRegistry or the record-kind enumeration; NOT a crosswalk
+# forbidden_kind; adds no code and no new strictness mechanism).
+#
+# Every business rule W2-7's lowerer enforces lives HERE as data:
+#  - scaleBindings: the lab's answered choice -> the bound execution-scale profile
+#    (the profile's OWN matching.prompt_cues/platforms stay the matching
+#    authority — this doc NAMES the binding, never re-lists cues).
+#  - requiredAnswers: what the bound profile demands the lab ANSWER before any
+#    lowering (L3 gate; bars the guessed default upstream — OQ4(a)).
+#  - capabilityClosure: profile requiredTools/requiredLabwareDefinitions ->
+#    the SetupRow sections that must carry them (L4 gate).
+#  - substitutionAdjudication: disallowance is DECIDED by the constraint
+#    vocabulary's bindingKind x overridePolicy seam (SPINE-8) — this doc points
+#    at the seam (policyBindingKeys membership), it adds NO new policy.
+#  - parameterBindings: which constraint dimensions have a scientist-intent
+#    representation (L5; an unrepresentable parameter is a loud failure, never
+#    silent data loss — SPINE-7 fix1/D1 doctrine).
+kind: realization-policy
+version: 0.1.0
+doc_id: "https://computable-lab.com/schema/computable-lab/registry/realization-policy-robot"
+authority: >-
+  W2-7-REALIZATION-SPINE spec §2.2 (promoted 2026-10-10, PROMOTION RECORD
+  binding). Consumed by server/src/compiler/scientistIntent/realizeScientistIntent.ts
+  (the ONLY reader). Rung vocabulary is W2-4's (schema/registry/provenance-ladder/
+  rung-vocabulary.yaml) — this doc references LOCAL_REALIZATION lineage via the
+  recorded-choice shape merged W2-4 R1 requires, and NEVER re-mints a rung.
+
+scaleBindings:
+  # The family's labware-format axis answered "neither spin column nor plate —
+  # the robot": the choice VALUE (the derived condition key) names the binding.
+  - answerValue: robot
+    scaleProfileId: robot-assist-plus-96
+
+requiredAnswers:
+  # L3 consumes: every answer the bound profile demands must be PRESENT with a
+  # recorded-choice carrier before lowering. answerLocation is a data pointer:
+  #   branch_resolution.choices — the LOCAL_REALIZATION carrier (merged
+  #   local-protocol.lint.yaml R1 prov-local-choices-recorded: matched ->
+  #   nonEmpty choices; shape (a) { [axisId]: chosenValue }, per OQ2/M5).
+  #   setup_rows — the plate-setting SetupRow with a concrete `ref`.
+  - id: sample_count
+    answerLocation: branch_resolution.choices
+    answerKey: sample_count
+    boundDimension: count
+    question: "How many samples (wells) are you processing on this realization?"
+    actionable: "record choices.sample_count as a positive count Quantity on the matched branch_resolution entry"
+  - id: sample_plate
+    answerLocation: setup_rows
+    section: labwares
+    roleFromProfile: sampleLayout.labwareRole
+    question: "Which labware carries the samples in THIS lab?"
+    actionable: "add a labwares SetupRow with role '<role>' and a concrete ref"
+  - id: reagent_source
+    answerLocation: setup_rows
+    section: labwares
+    roleFromProfile: reagentSource.sourceLabwareRole
+    question: "Where do the reagents come from in THIS lab?"
+    actionable: "add a labwares SetupRow with role '<role>' and a concrete ref"
+
+capabilityClosure:
+  # L4 consumes: profile-declared requirements must be satisfied by SetupRows
+  # in the named section, matched on ref.id. All membership is a data lookup.
+  - profileField: pipetting.requiredTools
+    section: equipment
+    matchOn: ref.id
+  - profileField: deckBinding.requiredLabwareDefinitions
+    section: labwares
+    matchOn: ref.id
+
+substitutionAdjudication:
+  # The strictness seam is the constraint vocabulary's DATA (SPINE-8):
+  # policyBindingKeys lists the declared <overridePolicy>:<bindingKind> pairs.
+  # A substitution against a surviving step's constraint is allowed IFF the
+  # constraint's composed key is a member; otherwise it fails loudly citing
+  # class + bindingKind + policy id. This doc adds NO policy of its own.
+  vocabularyFile: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml
+  membershipField: policyBindingKeys
+  keyComposition: "{overridePolicy}:{bindingKind}"
+
+parameterBindings:
+  # L5 consumes: a typed constraint bound rides the emitted document ONLY if
+  # its dimension has a declared scientist-intent representation (the arg must
+  # also exist in the shipped vocabulary's argContracts for the lowered verb —
+  # both are data lookups). No representation + no answer = loud failure.
+  - dimension: volume
+    arg: volumeUl
