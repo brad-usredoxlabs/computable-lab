@@ -22,6 +22,7 @@ import {
   type CorpusEntryInput,
 } from '../../corpus/CorpusClient.js';
 import { buildSurfaceContextCorpusEntry } from '../../corpus/surfaceContextCorpus.js';
+import { captureShorthandPairToLocal } from '../../corpus/shorthandCorpus.js';
 import type { SurfaceContext } from '../../surfaceContext/SurfaceContext.js';
 import type { ScientistIntentActionValue } from '../../compiler/scientistIntent/types.js';
 
@@ -105,6 +106,24 @@ export function createIntentTrainingPairHandlers(ctx: AppContext) {
               // to macros; the interactive loop stays on the 2.6B.
               goldModel: GOLD_MODEL,
             };
+
+      // Local shorthand capture (SHORTHAND-CORPUS seam): whenever this pair
+      // carries an accepted macro, ALSO append a prompt→shorthand pair to the
+      // opt-in local JSONL (CLA_CORPUS_LOCAL_PATH). Independent of the remote
+      // post (which is corpus.enabled-gated and may be off-box), schema-checked
+      // before write, best-effort — it never fails the request.
+      if (body?.localMacro) {
+        captureShorthandPairToLocal({
+          userPrompt: userLines.join('\n'),
+          shorthand: body.localMacro,
+          acceptedGraph: body?.acceptedGraph ?? {},
+          confirmedBy: 'user',
+          ...(body?.confirmedAt ? { confirmedAt: body.confirmedAt } : {}),
+          ...(body?.surfaceContext
+            ? { surfaceContext: body.surfaceContext as unknown as Record<string, unknown> }
+            : {}),
+        });
+      }
 
       // Best-effort; never throw to the client (corpus may be disabled/off-box).
       try {

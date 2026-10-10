@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -114,5 +117,69 @@ describe('createIntentTrainingPairHandlers', () => {
     // anonymized: well:1 → well:###
     expect(entry.prompt.surfaceContext.selection[0].ref.id).toBe('well:###');
     expect(entry.acceptedGraph).toMatchObject({ events: [{ eventId: 'e1' }] });
+  });
+
+  it('captures a local prompt→shorthand pair on every accepted macro (SHORTHAND-CORPUS seam)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthand-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'Add 100uL of DMEM to row A',
+          localMacro: {
+            intentId: 'dmem-feed',
+            actions: [{ action: 'add_material', material: 'DMEM', volumeUl: 100, sourceWells: ['A1'] }],
+            unresolved: [],
+          },
+          acceptedGraph: { events: [{ eventId: 'e1' }] },
+          confirmedAt: '2026-10-10T00:00:00Z',
+        }) as never,
+        reply.r as never,
+      );
+      // The remote post still happens (mocked enabled); the local capture is
+      // independent and fired regardless of the post's outcome.
+      expect(postCorpusEntry).toHaveBeenCalledTimes(1);
+      const lines = readFileSync(file, 'utf8').trim().split('\n');
+      expect(lines).toHaveLength(1);
+      const pair = JSON.parse(lines[0]) as Record<string, unknown>;
+      expect(pair.intentShapeVersion).toBe('1');
+      expect((pair.shorthand as Record<string, unknown>).intentId).toBe('dmem-feed');
+      expect(pair.prompt).toMatchObject({ user: expect.stringContaining('DMEM') });
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
+  });
+
+  it('an invalid macro still serves the request and captures NOTHING locally', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthand-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({ userPrompt: 'x', localMacro: { nope: true }, acceptedGraph: { events: [] } }) as never,
+        reply.r as never,
+      );
+      // Request served normally (corpus post best-effort as always)...
+      expect(reply.calls).toHaveLength(1);
+      // ...and nothing invalid reached the training file.
+      let exists = true;
+      try {
+        readFileSync(file, 'utf8');
+      } catch {
+        exists = false;
+      }
+      expect(exists).toBe(false);
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
   });
 });
