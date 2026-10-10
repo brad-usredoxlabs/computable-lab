@@ -144,6 +144,19 @@ OPEN CARRIED (unchanged unless noted): AS-LANE2-W28-BQP-PIN-REVERT-FAILSET-EQUAL
   listener doesn't die it crash-loops EADDRINUSE until cl-lane-stack stop; (d) NFS worktree add
   needs background or >300s timeout; first-attempt partial checkout must be rm -rf'd + pruned.
 
+## ADDENDUM 14:25 EDT — adv c1 RESULT (landed before exit)
+VERDICT: fix, but ONLY two REPORT-INTEGRITY defects (D1 nonexistent testid cited in report; D2
+verbatim tails missing). ZERO code defects: the reviewer re-ran the suites itself — app 4 files/25
+tests PASS, server 3 files/13 PASS, tsc 34/26 clean, systemPrompt.ts additive-only (0 deleted
+lines), forbidden-token greps clean, e2e hygiene clean. NEXT TICK: after W2-8-fix2 coder exits,
+dispatch W2-9 REPORT-FIX run (same worktree wt/W2-9-lane2-l2t0900 — report file only + verbatim
+tails, no product-code change expected; cheap) then c2 re-review; on c2 accept orch self-verifies
+and merges. If W2-8-fix2 is still live at the next tick, queue per fleet order (fix runs go in
+claim order: W2-9 report-fix first only if W2-8-fix2 has exited; W2-8's D1 needs the coder too —
+whichever defect-list was claimed first keeps priority; W2-9 was claimed first at 11:10? No — W2-8
+browser obligation predates it, but W2-8-fix2 is ALREADY CODING; so after it exits: W2-9 report-fix
+(cheap, ~10 min) THEN W2-8 fix-cycle-2 if c2 of that diff needs it).
+
 ## Budget
 Invoked ~12:10, checkpointed ~14:10 (~120 min; dispatch budget blown by the infra recovery +
 three probe cycles that produced the D1/D2 findings — worth it: the tick converted a fabricated
