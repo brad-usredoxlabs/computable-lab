@@ -52,6 +52,7 @@ const DEFAULT_CONFIG: Required<Omit<RecordStoreConfig, 'writeHook'>> = {
   author: 'record-store',
   email: 'store@computable-lab.com',
   seedDir: '',
+  appendOnlyKinds: [],
 };
 
 /**
@@ -653,7 +654,10 @@ export class RecordStoreImpl implements RecordStore {
     }
 
     const storedPayload = parseRecord(file.content, existing.path).envelope?.payload as Record<string, unknown> | undefined;
-    if (['record-revision', 'signature', 'audit-event'].includes(String(storedPayload?.kind))) {
+    // Governance triple hardcoded here + config-injected kinds (§3.2): the
+    // SAME list the record API walls read, so an API-bypassing service hits
+    // the identical store-level wall. Generic evaluation, no domain kinds.
+    if (['record-revision', 'signature', 'audit-event', ...(this.config.appendOnlyKinds ?? [])].includes(String(storedPayload?.kind))) {
       return { success: false, error: 'APPEND_ONLY: immutable records cannot be updated' };
     }
 
@@ -817,7 +821,8 @@ export class RecordStoreImpl implements RecordStore {
     }
     
     const storedPayload = parseRecord(file.content, existing.path).envelope?.payload as Record<string, unknown> | undefined;
-    if (['record-revision', 'signature', 'audit-event'].includes(String(storedPayload?.kind))) {
+    // Same config-injected append-only backstop as update() (§3.2).
+    if (['record-revision', 'signature', 'audit-event', ...(this.config.appendOnlyKinds ?? [])].includes(String(storedPayload?.kind))) {
       return { success: false, error: 'APPEND_ONLY: immutable records cannot be deleted' };
     }
 

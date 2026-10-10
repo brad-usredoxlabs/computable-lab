@@ -488,6 +488,9 @@ export async function initializeApp(
     author: identity?.username ?? 'record-store',
     email: identity?.email ?? 'store@computable-lab.com',
     ...(seedDir ? { seedDir } : {}),
+    // Same list the record API walls read below: the store backstop and the
+    // API answer 405/APPEND_ONLY from one data source (W2-5 §3.2).
+    appendOnlyKinds: appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
   });
 
   // Local credential/session stores live under server.dataDir/auth (non-git):
@@ -719,6 +722,9 @@ export async function createServer(
         ctx.appConfig?.lab?.policyBundleId ?? DEFAULT_APP_CONFIG.lab?.policyBundleId ?? 'POL-SANDBOX'
       ),
       getAppendOnlyKinds: () => ctx.appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
+      // Live accessor, same pattern: revision+audit on ordinary review edits
+      // for kinds listed in the revisionOnEditKinds data knob (W2-5 OQ1).
+      getRevisionOnEditKinds: () => ctx.appConfig?.server?.revisionOnEditKinds ?? DEFAULT_APP_CONFIG.server?.revisionOnEditKinds ?? [],
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
@@ -860,7 +866,7 @@ export async function createServer(
   // so the compile edge exists for every boot path; here we only bind the
   // HTTP handlers to it.
   const runner = ctx.extractionRunner!;
-  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!);
+  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService);
 
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,

@@ -50,6 +50,8 @@ interface RecordHandlerSecurityOptions {
    * config ripped out).
    */
   getAppendOnlyKinds?: () => string[];
+  /** W2-5 OQ1: kinds whose ordinary review edits capture a revision + audit event. */
+  getRevisionOnEditKinds?: () => string[];
   /**
    * Declarative actor-side authoring gates, keyed by schema id. Sourced from
    * *.lint.yaml `authoring:` blocks via the LintEngine; absent accessor →
@@ -125,6 +127,60 @@ function protocolStepWriteGate(
   if (new Set(ids).size !== ids.length) {
     const dup = ids.find((id, i) => ids.indexOf(id) !== i);
     return { status: 400, code: 'DUPLICATE_STEP_ID', message: `Step '${dup}' already exists in protocol '${previousPayload.recordId ?? ''}'` };
+  }
+  return null;
+}
+
+/**
+ * W2-5 §3.4a — extraction-draft review-write gate. Mirrors
+ * protocolStepWriteGate EXACTLY: runs AFTER the controlled lock and BEFORE
+ * the store write, so a refusal persists nothing. Compares previous-vs-
+ * proposed payload SHAPE only — no domain literals, no kind policy invented
+ * in TS (the codes are the stable machine-readable contract).
+ *
+ * The MEANT drafts (candidates[].draft) are the ALLOWED edit surface; the
+ * gate protects what a review edit must never move:
+ * - XDR_SOURCE_LOCKED: the source_artifact object changed at all.
+ * - XDR_CANDIDATE_STATUS_REGRESSION: a candidate status moves
+ *   promoted/rejected -> absent or to the other terminal value.
+ * - XDR_CANDIDATE_LOCKED: the draft body of a candidate whose status is
+ *   promoted/rejected drifted (deep-equal of the candidate minus `status`).
+ */
+function extractionDraftWriteGate(
+  previousPayload: Record<string, unknown>,
+  proposedPayload: Record<string, unknown>,
+): { status: number; code: string; message: string } | null {
+  if (previousPayload.kind !== 'extraction-draft') return null;
+  const asCandidates = (v: unknown) => (Array.isArray(v) ? (v as Array<Record<string, unknown>>) : undefined);
+  const previousCandidates = asCandidates(previousPayload.candidates) ?? [];
+  const nextCandidates = asCandidates(proposedPayload.candidates) ?? [];
+
+  // Source artifact is immutable provenance: any change at all is refused.
+  if (contentHash(previousPayload.source_artifact ?? null) !== contentHash(proposedPayload.source_artifact ?? null)) {
+    return { status: 409, code: 'XDR_SOURCE_LOCKED', message: 'The source artifact of an extraction-draft is immutable.' };
+  }
+
+  // Candidate identity = its content minus `status` (content-addressed, so
+  // pairing never depends on array order). A terminal candidate whose body
+  // survives unchanged may only keep its terminal status; a body that drifts
+  // or a candidate that vanishes is a locked-candidate violation.
+  const stripStatus = (o: Record<string, unknown>): string => {
+    const copy = { ...o };
+    delete copy.status;
+    return contentHash(copy);
+  };
+  for (const previous of previousCandidates) {
+    const previousStatus = previous.status;
+    if (previousStatus !== 'promoted' && previousStatus !== 'rejected') continue;
+    const previousBody = stripStatus(previous);
+    const match = nextCandidates.find((c) => stripStatus(c) === previousBody);
+    if (match) {
+      if (match.status !== previousStatus) {
+        return { status: 409, code: 'XDR_CANDIDATE_STATUS_REGRESSION', message: `Candidate status '${previousStatus}' cannot move to '${String(match.status ?? 'unset')}'.` };
+      }
+      continue;
+    }
+    return { status: 409, code: 'XDR_CANDIDATE_LOCKED', message: `Candidate '${String(previous.target_kind)}' is already ${previousStatus}; its draft body is locked and it cannot be removed.` };
   }
   return null;
 }
@@ -867,6 +923,16 @@ export function createRecordHandlers(
             return { error: stepGate.code, message: stepGate.message };
           }
         }
+        // W2-5 §3.4a — extraction-draft review-write gate. Same placement
+        // discipline as protocolStepWriteGate above: AFTER the controlled lock,
+        // BEFORE the store write, so a refusal persists nothing.
+        {
+          const draftGate = extractionDraftWriteGate(previous, proposed);
+          if (draftGate) {
+            reply.status(draftGate.status);
+            return { error: draftGate.code, message: draftGate.message };
+          }
+        }
         if (previous.kind === 'protocol' && !previous.lifecycleId) {
           const service = new RecordRevisionService(store);
           const versions = await service.list(id);
@@ -972,6 +1038,38 @@ export function createRecordHandlers(
             await indexManager.rebuild(); // For now, rebuild to ensure consistency
           } catch (indexErr) {
             console.error('Failed to update index after update:', indexErr);
+          }
+        }
+
+        // W2-5 §3.4b — MEANT review edits ride ordinary revisions + audit.
+        // Kinds listed in the revisionOnEditKinds config DATA knob (OQ1:
+        // ['extraction-draft'] default) capture the SUPERSEDED snapshot
+        // (previous-envelope capture, mirroring freezeProtocol's draft-
+        // preservation pattern, RecordRevisionService.ts:93-94) and append a
+        // record_revised audit event. capture() is content-addressed
+        // (RecordRevisionService.ts:65-67): a no-op PUT re-returns the
+        // existing REV and mints no duplicate. purpose 'edit' per OQ2.
+        // Best-effort: a revision/audit failure never fails the edit itself.
+        {
+          const revisionOnEditKinds = security?.getRevisionOnEditKinds?.() ?? [];
+          const editedKind = payloadKind(existing.payload);
+          if (editedKind && revisionOnEditKinds.includes(editedKind) && security?.auditService) {
+            try {
+              const revision = await new RecordRevisionService(store).capture(existing, user.userId ?? 'anonymous', 'edit');
+              await security.auditService.append({
+                actor: user.userId ?? 'anonymous',
+                action: 'record_revised',
+                subjectType: editedKind,
+                subjectId: id,
+                data: {
+                  previous_sha: token(existing) ?? '',
+                  new_sha: token(result.envelope ?? existing) ?? '',
+                  revision_ref: revisionRef(revision.recordId),
+                },
+              });
+            } catch (revisionErr) {
+              console.error(`Failed to record revision/audit for ${id}:`, revisionErr);
+            }
           }
         }
 

@@ -14,7 +14,7 @@ properties:
   recipeHash: { type: string, pattern: '^[a-f0-9]{64}$' }
   sourceToken: { type: string }
   gitCommit: { type: string, pattern: '^[a-f0-9]{40,64}$' }
-  purpose: { enum: [signature, research-use, derivation] }
+  purpose: { enum: [signature, research-use, derivation, edit] }
   version: { type: string }
   createdBy: { type: string }
   createdAt: { type: string, format: date-time }

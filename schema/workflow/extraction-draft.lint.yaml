@@ -1,3 +1,112 @@
+# W2-5-DRAFT-LIFECYCLE — activation of the extraction-draft lint spec.
+# Was `rules: []` (dormant: server.ts boot skips zero-rule specs,
+# server.ts:410-411). lintVersion: 1 + the EXACT schemaId (:1-2) are kept
+# byte-identical — a typo'd schemaId silently never binds (LintEngine filters
+# by schemaId, LintEngine.ts:103-105; W2-4 §9 OQ3 trap).
+#
+# Ids namespaced `xdr-` for GLOBAL uniqueness (LintEngine.ts:59-61 throws on
+# duplicate ids). Collision check at claim: existing families are xpr-* x5,
+# prov-vendor-*/prov-derived-*/prov-local-*/prov-vocab-*, step-intent family
+# (step-role-closure, labware-role-identity-bearing, role-id-category-unique,
+# legacy-*, intent-*), constraint-vocab-* x8 — `xdr-` collides with NONE.
+#
+# These rules ride the EXISTING write wall: RecordStoreImpl create/update
+# lint and REJECT on error-severity findings (RecordStoreImpl.ts:492-504,
+# :694-701), so a violating draft is refused at write time with the rule id
+# surfaced — machine-readable, no TS branch invents policy.
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml"
-rules: []
+rules:
+  # R1 — a promoted candidate is an ANCHORED candidate: it must carry an
+  # evidence_span OR an uncertainty that is not 'unresolved'. Candidates that
+  # are not promoted (absent status: equals -> loud false -> not -> true)
+  # pass the first any-arm, so pending_review drafts are untouched.
+  - id: xdr-promoted-candidate-anchored
+    title: "promoted candidates carry an evidence anchor"
+    description: >-
+      Every candidate with status == promoted must carry a non-empty
+      evidence_span OR an uncertainty that is not 'unresolved'. A promoted
+      candidate with neither is an error naming the draft.
+    severity: error
+    scope: record
+    assert:
+      op: everyItem
+      collectionPath: candidates
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: equals
+              path: status
+              value: promoted
+          - op: any
+            predicates:
+              - op: nonEmpty
+                path: evidence_span
+              - op: not
+                not:
+                  op: equals
+                  path: uncertainty
+                  value: unresolved
+    message:
+      template: "extraction-draft '{{recordId}}': a promoted candidate must carry evidence_span OR a non-unresolved uncertainty"
+      paths: [recordId]
+
+  # R2 — the draft-level twin of CandidatePromoter's runtime ambiguity guard
+  # (CandidatePromoter.ts:117-122, free-text reason, no code). The guard
+  # STAYS; this rule gives the same refusal a stable machine-readable code
+  # and an instance path. A promoted candidate may not carry ambiguity_spans
+  # (empty/absent array passes nonEmpty's negation).
+  - id: xdr-promote-blocked-by-unresolved
+    title: "promoted candidates carry no unresolved ambiguity_spans"
+    description: >-
+      No candidate with status == promoted may carry a non-empty
+      ambiguity_spans array — the unresolved-review twin of the runtime
+      promotion guard, now with a code.
+    severity: error
+    scope: record
+    assert:
+      op: everyItem
+      collectionPath: candidates
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: equals
+              path: status
+              value: promoted
+          - op: not
+            not:
+              op: nonEmpty
+              path: ambiguity_spans
+    message:
+      template: "extraction-draft '{{recordId}}': a promoted candidate still carries ambiguity_spans — promotion is blocked by unresolved ambiguity"
+      paths: [recordId]
+
+  # R3 — the target_kind admission list AS DATA. Mirrors the existing TS pass
+  # map TARGET_KIND_TO_SCHEMA (PromotionExtractionPasses.ts:73-78:
+  # material-spec/protocol/equipment-spec/labware-spec). Naming it in lint
+  # data is the point: an unregistered/non-listed target_kind fails HERE
+  # before any write, so no NEW kind can enter the promote surface. Deleting
+  # the TS map toward this data is the named follow-up (F-W25-2) — the TS map
+  # is NOT edited by W2-5.
+  - id: xdr-promote-requires-resolvable-target
+    title: "candidate target_kind must be a promotable kind"
+    description: >-
+      Every candidates[*].target_kind must be one of the declared promotable
+      kinds (the lint-data twin of the promotion pass map). A candidate
+      targeting an unregistered kind is refused before any write.
+    severity: error
+    scope: record
+    assert:
+      op: everyItem
+      collectionPath: candidates
+      assert:
+        op: in
+        path: target_kind
+        values: [protocol, material-spec, equipment-spec, labware-spec]
+    message:
+      template: "extraction-draft '{{recordId}}': a candidate target_kind is not a promotable kind (protocol, material-spec, equipment-spec, labware-spec)"
+      paths: [recordId]
