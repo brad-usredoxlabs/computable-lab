@@ -104,3 +104,17 @@ latency). Arc: reconcile both workers (alive, left running), PROTO-AI-13 corpus 
 (90/500, no accrual), W2-6 adversarial c1 prompt pre-drafted from spec §8 + PROMOTION
 RECORD, queue-gate confirmation, this handoff. Two workers live (coder appliance-2
 fleet-single + composer thunderbeast); next tick owns observation.
+## LATE ADDENDUM (same tick, ~05:45 EDT)
+- W2-11 composer EXITED CLEAN ~05:26: draft landed (475 ln, md5 13bdc236). ORCH PRE-REVIEW
+  done first-hand THIS TICK (routes App.tsx:150/:190/:196 verified, fabricated
+  /project/:studyId/record correctly absent AND pre-empted in the draft; rung-vocabulary
+  registry-dir fix applied; ZymoGoldenE2E 47 ln + deriveBranchAxes.ts verified). W211-OQ1..4
+  RULED (task-list block + AS-LANE2-W211-OQ-RULINGS in assumptions.md): OQ1=(a) zero MANIFEST
+  touch; OQ2=(a) mapper byte-untouched, death-by-refusal; OQ3=promotion-time data pick from
+  W2-10 report; OQ4=(a) orch-schedules-gate. Committed e1a5e848.
+- Queue note: ALL six wave-2 drafts now exist + pre-reviewed (W2-6 promoted; W2-7/8/9/10/11
+  clear awaiting merge gates). Coder still live ~58 min at 05:45 (inside expected window).
+- NEXT TICK owns: (1) coder exit watch (2x ~06:20, 3x ~07:30), (2) on exit -> the PRE-DRAFTED
+  adversarial prompt (prompts/review-W2-6-adversarial-l2t0510-c1.txt), (3) after W2-6 merge ->
+  promote W2-7 (PROMOTION RECORD binding merged shapes) + dispatch coder under fleet lock;
+  W2-8 promotion next in line. (4) PROTO-AI-13 corpus re-check (90/500).
