@@ -486,3 +486,30 @@ at promotion. Nothing here is promoted or dispatched.
   promotion record M1 — same facts).
 - STILL OPEN at W2-9 claim: W2-8 merged surface shapes (W2-8 is in-progress on the coder slot at
   this note's time; its merge closes the promotion gate).
+
+
+---
+
+## OQ RULINGS (orch l2t0810, 2026-10-10 ~08:25 EDT) — binding at promotion; cites re-verified FIRST-HAND at merged trunk (trunk tip 7ac648b8, code f19cfa95-era surfaces):
+
+- OQ1 = (a) APPROVED. Additive AiSurface member 'protocol-review' + buildSurfaceAwarePrompt
+  delegates to buildSystemPrompt(context) when context.attachedProtocol is present, mirroring the
+  event-editor/workspace.deck delegation at server/src/ai/systemPrompt.ts:408 (verified merged).
+  Companion unit test T5 pins the prompt content (stepIds/roles/op vocabulary present under
+  surface protocol-review + attached protocol; absent without one).
+- OQ2 = (a) CONFIRMED (per l2t0715 promotion note): draft body IS kind 'protocol' at merged
+  W2-6 (SemanticFamilyPass.ts:288-312); draft-aware apply fn reusing exported applyOps is the
+  ruling; applyProtocolEdit stays byte-untouched.
+- OQ3 = RESOLVED BY THE MERGE (the tension is gone): W2-6 OQ3 was re-ruled (b) and the machine
+  block MERGED exactly — AIConfig.semanticPass (server/src/config/types.ts:189, verified) +
+  loader validation (server/src/config/loader.ts:376-379, verified) + resolveSemanticPassInference
+  seam (server/src/ingestion/vendor-protocol/SemanticFamilyPass.ts). The verbatim clause
+  "distinct from drafting model / without touching unrelated model settings" IS honorable: the
+  /settings section binds the ai.semanticPass keys ONLY (baseUrl/model/apiKey/maxTokens/
+  temperature/thinking fields per the merged block) — never the active-profile POST activate
+  route. NO new knob, NO second seam, NO re-rule needed. W2-9 owns config block UI + settings
+  section; its ONLY server product touch is the settings-resolution seam if a restart-read gap
+  is found (F-W29-5).
+- OQ4 = (a) APPROVED: backend.log "surface=protocol-review" line is an acceptable grounding
+  receipt leg (PROTO-AI-9 close precedent); prompt content is pinned by unit test T5 instead of
+  an orch stream probe.
