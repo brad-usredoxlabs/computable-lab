@@ -371,6 +371,40 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
     }
   }
 
+  // Validate semantic-pass block if present (W2-6 P2). MISSING = the pass
+  // falls back to the active profile's inference; nothing here may default ON.
+  const semanticPass = c.semanticPass as Record<string, unknown> | undefined;
+  if (semanticPass !== undefined) {
+    if (!semanticPass || typeof semanticPass !== 'object') {
+      throw new ConfigValidationError('semanticPass must be an object', `${path}.semanticPass`, semanticPass);
+    }
+    const sp = semanticPass as Record<string, unknown>;
+    for (const key of ['baseUrl', 'model', 'apiKey', 'defaultThinkingLevel'] as const) {
+      if (sp[key] !== undefined && typeof sp[key] !== 'string') {
+        throw new ConfigValidationError(`semanticPass.${key} must be a string`, `${path}.semanticPass.${key}`, sp[key]);
+      }
+    }
+    for (const key of ['maxTokens', 'temperature'] as const) {
+      if (sp[key] !== undefined && typeof sp[key] !== 'number') {
+        throw new ConfigValidationError(`semanticPass.${key} must be a number`, `${path}.semanticPass.${key}`, sp[key]);
+      }
+    }
+    if (sp.enableThinking !== undefined && typeof sp.enableThinking !== 'boolean') {
+      throw new ConfigValidationError('semanticPass.enableThinking must be a boolean', `${path}.semanticPass.enableThinking`, sp.enableThinking);
+    }
+    if (sp.thinkingLevels !== undefined) {
+      const levels = sp.thinkingLevels as Record<string, unknown>;
+      if (!levels || typeof levels !== 'object' || Array.isArray(levels)) {
+        throw new ConfigValidationError('semanticPass.thinkingLevels must be an object', `${path}.semanticPass.thinkingLevels`, sp.thinkingLevels);
+      }
+      for (const [levelId, definition] of Object.entries(levels)) {
+        if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+          throw new ConfigValidationError(`semanticPass.thinkingLevels.${levelId} must be an object`, `${path}.semanticPass.thinkingLevels.${levelId}`, definition);
+        }
+      }
+    }
+  }
+
   // Normalize: agent block is optional in config.yaml but the type contract
   // (AIConfig.agent, AIProfile.agent) requires it to exist. Default to {}
   // here so every downstream consumer can read ai.agent.* without guarding.

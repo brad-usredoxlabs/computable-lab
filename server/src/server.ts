@@ -124,6 +124,7 @@ import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandl
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
+import { resolveSemanticPassInference, runSemanticFamilyPass, type SemanticPassRunner } from './ingestion/vendor-protocol/SemanticFamilyPass.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
 import { createPredicatesHandlers } from './api/handlers/PredicatesHandlers.js';
@@ -866,7 +867,18 @@ export async function createServer(
   // so the compile edge exists for every boot path; here we only bind the
   // HTTP handlers to it.
   const runner = ctx.extractionRunner!;
-  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService);
+  // W2-6 semantic pass wiring (P2/P3): the ONE resolution seam
+  // (resolveSemanticPassInference — optional ai.semanticPass block over the
+  // active profile) + createInferenceClient, mirroring the existing
+  // resolveAiProfile call-site pattern. Zero model/host literals here.
+  const semanticPassInference = ctx.appConfig?.ai ? resolveSemanticPassInference(ctx.appConfig.ai) : undefined;
+  const semanticPassRunner: SemanticPassRunner | undefined = semanticPassInference?.baseUrl
+    ? (input) => runSemanticFamilyPass(
+        { store: ctx.store, client: createInferenceClient(semanticPassInference), inference: semanticPassInference },
+        input,
+      )
+    : undefined;
+  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,
