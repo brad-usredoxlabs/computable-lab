@@ -95,8 +95,12 @@ export function SettingsPage() {
     try {
       const updated = await apiClient.patchLabSettings({ policyBundleId: bundleId })
       setLabSettings(updated)
+      setLabSettingsError(null)
     } catch (err) {
-      alert(`Failed to update policy bundle: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      // Surface the SERVER's reason (actionable 400 naming the bad bundle id +
+      // known ids, or the 403 FORBIDDEN denial) in the existing labSettingsError
+      // state — the same red info-row the section already renders, not an alert.
+      setLabSettingsError(err instanceof Error ? err.message : 'Failed to update policy bundle')
     }
   }, [])
 
