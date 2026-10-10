@@ -1026,10 +1026,15 @@ $defs:
     - type: object
       properties:
         kind: { const: record }
-        type: { const: vendor-protocol-candidate }
+        # W2-5 OQ1 seam (W2-4 §9 OQ1 disposition (a)): the family-side
+        # INFERRED_INVARIANT anchor needs an evidence ref. Widened CONSISTENTLY
+        # at BOTH sites of this $defs block (allOf constraint + properties) —
+        # widening only one would leave the root narrower than the guard.
+        # Closed enum, never a free string: type: material-spec still rejects.
+        type: { enum: [vendor-protocol-candidate, evidence] }
     properties:
       kind: { const: record }
-      type: { const: vendor-protocol-candidate }
+      type: { enum: [vendor-protocol-candidate, evidence] }
       id:
         type: string
         description: "The vendor-protocol-candidate (SAID) record id."

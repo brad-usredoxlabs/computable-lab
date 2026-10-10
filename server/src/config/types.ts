@@ -339,6 +339,15 @@ export interface ServerConfig {
    * absent list simply leaves those kinds unprotected.
    */
   appendOnlyKinds?: string[];
+  /**
+   * Record kinds whose ordinary review EDITS (PUT /records/:id) capture a
+   * record-revision snapshot of the superseded payload and append a
+   * `record_revised` audit event. Mirrors the appendOnlyKinds pattern: a
+   * documented DATA knob, evaluated generically by the record handler — no
+   * kind-branching in TypeScript. Defaults to the extraction-draft review
+   * surface in DEFAULT_CONFIG.
+   */
+  revisionOnEditKinds?: string[];
 }
 
 /**
@@ -471,7 +480,8 @@ export const DEFAULT_CONFIG: AppConfig = {
       enabled: true,
       origins: ['*'],
     },
-    appendOnlyKinds: ['audit-event', 'signature'],
+    appendOnlyKinds: ['audit-event', 'signature', 'vendor-protocol-candidate'],
+    revisionOnEditKinds: ['extraction-draft'],
   },
   schemas: {
     source: 'bundled',

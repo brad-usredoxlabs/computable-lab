@@ -59,7 +59,7 @@ export interface ExtractionPromotion {
 
 export type PromotionOutcome =
   | { ok: true; record: CanonicalRecord; promotion: ExtractionPromotion }
-  | { ok: false; reason: string; validation_errors?: string[] };
+  | { ok: false; reason: string; validation_errors?: string[]; code?: string };
 
 /**
  * Canonicalize a value for content hashing.
@@ -117,6 +117,9 @@ export function promoteCandidate(args: PromoteCandidateArgs): PromotionOutcome {
   if (candidate.ambiguity_spans && candidate.ambiguity_spans.length > 0) {
     return {
       ok: false,
+      // W2-5 §2.1: the guard STAYS; the handler now surfaces the stable code
+      // (the lint twin xdr-promote-blocked-by-unresolved) alongside the reason.
+      code: 'xdr-promote-blocked-by-unresolved',
       reason: 'candidate has unresolved ambiguity_spans'
     };
   }
@@ -147,6 +150,35 @@ export function promoteCandidate(args: PromoteCandidateArgs): PromotionOutcome {
     kind: candidate.target_kind,
     recordId: targetRecordId
   };
+
+  // W2-5 §3.3a — THE STATE-SPOOF HOLE (spec §8 bait 8): the spread above lets
+  // a crafted candidate.draft carry `state`/`version`, and the CREATE path has
+  // no controlled guard today (the update path has one at
+  // RecordStoreImpl.ts:660-662; store.create validates schema + lint only).
+  // Close it structurally here, mirroring the create-path precedent at
+  // RecordHandlers.ts:471-478 (protocol forced `state: 'draft'` on POST
+  // /records; controlled-document create REJECTS non-draft state with
+  // INITIAL_STATE_REQUIRED — PROTO-AI-5 discipline): a promoted protocol is
+  // ALWAYS born draft; ACTIVE is reachable only through the existing signed
+  // lifecycle transitions. A declared lifecycleId SURVIVES — the promoted
+  // controlled protocol enters the lifecycle at draft state.
+  if (candidate.target_kind === 'protocol') {
+    const declaredState = record.state;
+    const declaredLifecycleId = record.lifecycleId;
+    if (declaredLifecycleId !== undefined && declaredState !== undefined && declaredState !== 'draft') {
+      return {
+        ok: false,
+        code: 'PROMOTION_CONTROLLED_ESCALATION',
+        reason: `candidate draft declares lifecycleId '${String(declaredLifecycleId)}' with non-draft state '${String(declaredState)}' — a promoted protocol is born draft and reaches ACTIVE only through signed lifecycle transitions`,
+      };
+    }
+    // Strip any incoming state/version spoof: state is forced draft, version
+    // is server-assigned (RecordHandlers.ts:471-474 precedent). exactOptional-
+    // PropertyTypes: DELETE, never `undefined`.
+    delete record.state;
+    delete record.version;
+    record = { ...record, state: 'draft' };
+  }
 
   // When the source (e.g. a vendor-pdf) has a meaningful title and the
   // extractor's draft title is missing or generic, use the source title so
