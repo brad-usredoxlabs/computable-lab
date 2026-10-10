@@ -582,3 +582,76 @@
 .vpdf-review--split-dragging * {
   cursor: col-resize !important;
 }
+
+/* --- W2-8 SAID/MEANT panes --------------------------------------------- */
+
+/* The SAID facts ride under the PDF/text in the left pane: document truth,
+   read-only. Its only interactive element is the page-anchor jump. */
+.said-facts {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--cl-border, #333);
+  border-radius: 6px;
+}
+
+.said-facts__header { margin-bottom: 8px; }
+.said-facts__title { margin: 0 0 2px; font-size: 1rem; }
+.said-facts__meta { margin: 0; font-size: 0.8rem; opacity: 0.75; }
+.said-facts__gap { margin: 12px 0 0; font-size: 0.85rem; opacity: 0.8; }
+
+.said-facts__group { margin: 8px 0; }
+.said-facts__heading { margin: 0 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+.said-facts__list { list-style: none; margin: 0; padding: 0; }
+.said-facts__item { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: 0.85rem; }
+.said-facts__label { flex: 1; }
+
+.said-facts__anchor {
+  border: 1px solid var(--cl-border, #444);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.said-facts__anchor:hover { border-color: var(--cl-accent); }
+
+/* The MEANT editor (right pane). */
+.semantic-draft { display: flex; flex-direction: column; gap: 10px; }
+.semantic-draft__header { display: flex; flex-direction: column; gap: 2px; }
+.semantic-draft__title { margin: 0; font-size: 1rem; }
+.semantic-draft__meta { margin: 0; font-size: 0.8rem; opacity: 0.75; }
+.semantic-draft__hint { font-size: 0.85rem; opacity: 0.8; }
+
+.semantic-draft__evidence-heading,
+.semantic-draft__axes-heading { margin: 0 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+
+.semantic-draft__steps { list-style: none; margin: 0; padding: 0; }
+.semantic-draft__step { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 3px 0; font-size: 0.85rem; }
+.semantic-draft__step-label { flex: 1 1 100%; font-weight: 600; }
+
+.semantic-draft__chip {
+  border: 1px solid var(--cl-border, #444);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.semantic-draft__chip:hover:not(:disabled) { border-color: var(--cl-accent); }
+.semantic-draft__chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.semantic-draft__axis { margin: 4px 0; font-size: 0.85rem; }
+.semantic-draft__axis-label { font-weight: 600; }
+.semantic-draft__axis-conditions { margin: 2px 0 0; padding-left: 18px; }
+
+.semantic-draft__footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.semantic-draft__save { padding: 6px 14px; }
+.semantic-draft__note { font-size: 0.8rem; opacity: 0.8; }
+.semantic-draft__error { font-size: 0.8rem; color: var(--cl-error, #c33); }
+
+/* The no-draft affordance (the semantic-draft trigger). */
+.vpdf-review__affordance { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }

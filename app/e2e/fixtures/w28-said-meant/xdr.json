@@ -1,0 +1,65 @@
+{
+  "kind": "extraction-draft",
+  "recordId": "XDR-w28-gate0001",
+  "source_artifact": { "kind": "file", "id": "VPDF-5256F3288E3C", "locator": "w28-gate-said.pdf" },
+  "candidates": [
+    {
+      "target_kind": "protocol",
+      "confidence": 0.9,
+      "draft": {
+        "kind": "protocol",
+        "recordId": "PRT-w28-gate-draft",
+        "title": "W2-8 gate — semantic family draft",
+        "steps": [
+          {
+            "stepId": "step-lyse",
+            "label": "Lyse samples",
+            "ordinal": 1,
+            "kind": "other",
+            "intent": {
+              "semanticVerb": { "ref": { "kind": "record", "type": "verb-definition", "id": "verb-lyse" } },
+              "provenance": [
+                { "kind": "record", "type": "vendor-protocol-candidate", "id": "CAN-w28-gate", "pageStart": 2, "label": "Sample prep" }
+              ]
+            }
+          },
+          {
+            "stepId": "step-lyse-a",
+            "label": "Lyse (variant a)",
+            "ordinal": 2,
+            "kind": "other",
+            "intent": {
+              "semanticVerb": { "ref": { "kind": "record", "type": "verb-definition", "id": "verb-beat" } },
+              "provenance": [
+                { "kind": "record", "type": "vendor-protocol-candidate", "id": "CAN-w28-gate", "pageStart": 1 }
+              ]
+            }
+          },
+          {
+            "stepId": "step-lyse-b",
+            "label": "Lyse (variant b)",
+            "ordinal": 3,
+            "kind": "other",
+            "intent": {
+              "semanticVerb": { "ref": { "kind": "record", "type": "verb-definition", "id": "verb-thaw" } },
+              "provenance": [
+                { "kind": "record", "type": "vendor-protocol-candidate", "id": "CAN-w28-gate", "pageStart": 99 }
+              ]
+            }
+          }
+        ],
+        "branch_axes": [
+          {
+            "axisId": "lysis-method",
+            "label": "Which lysis method?",
+            "conditions": [
+              { "id": "bead-beater", "label": "Bead beater", "predicate": {}, "then_stepIds": ["step-lyse-a"] },
+              { "id": "freeze-thaw", "label": "Freeze-thaw", "predicate": {}, "then_stepIds": ["step-lyse-b"] }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "status": "pending_review"
+}

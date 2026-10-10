@@ -34,6 +34,50 @@ export interface BranchQuestionAxis {
   choices: Array<{ value: string; label: string }>
 }
 
+/**
+ * W2-8 (spec §3 W4): the FAMILY's questions are DATA on the protocol record
+ * (`branch_axes[]` — the merged BranchAxis datatype: axisId/label/conditions).
+ * This pure adapter maps one protocol branch_axis onto an answerable
+ * thread axis WITHOUT inventing anything: label -> question, condition id ->
+ * choice value, condition label -> choice label (ids flow verbatim, spec §8
+ * bait 4). An axis with no answerable conditions yields nothing — the thread
+ * never asks a question the family did not state.
+ */
+export function protocolBranchAxesToQuestionAxes(branchAxes: unknown): BranchQuestionAxis[] {
+  if (!Array.isArray(branchAxes)) return []
+  const out: BranchQuestionAxis[] = []
+  for (const raw of branchAxes) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const axis = raw as { axisId?: unknown; label?: unknown; conditions?: unknown }
+    if (typeof axis.axisId !== 'string' || !axis.axisId) continue
+    const choices = Array.isArray(axis.conditions)
+      ? axis.conditions
+          .filter((c): c is { id: string; label?: string } =>
+            typeof c === 'object' && c !== null && typeof (c as { id?: unknown }).id === 'string' && !!c.id)
+          .map((c) => ({ value: c.id, label: typeof c.label === 'string' && c.label.trim() ? c.label.trim() : c.id }))
+      : []
+    if (choices.length === 0) continue
+    out.push({
+      axisId: axis.axisId,
+      question: typeof axis.label === 'string' && axis.label.trim() ? axis.label.trim() : axis.axisId,
+      choices,
+    })
+  }
+  return out
+}
+
+/**
+ * Merge the family's axes with the AI-emitted axes, deduped by axisId: the
+ * FAMILY's declared axis wins (it is the protocol's own data; the AI pass is a
+ * guess over the same document — spec §8 bait 9).
+ */
+function mergeQuestionAxes(family: BranchQuestionAxis[], ai: BranchQuestionAxis[]): BranchQuestionAxis[] {
+  const byId = new Map<string, BranchQuestionAxis>()
+  for (const axis of family) byId.set(axis.axisId, axis)
+  for (const axis of ai) if (!byId.has(axis.axisId)) byId.set(axis.axisId, axis)
+  return [...byId.values()]
+}
+
 export interface LocalMacro {
   intentId?: string
   actions?: unknown[]
@@ -96,6 +140,12 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
 
   const [protocolText, setProtocolText] = useState(initialProtocolText)
   const [axes, setAxes] = useState<BranchQuestionAxis[]>([])
+  // W2-8 (spec §3 W4): the FAMILY's own questions — the source protocol record's
+  // branch_axes[] — loaded once here. Question-asking moved from extraction
+  // review to this realization entry; the answers ride the existing `answers`
+  // state so POST /intent/accept records them as branch_resolution (server
+  // unchanged, IntentAcceptHandlers.ts:77).
+  const [familyAxes, setFamilyAxes] = useState<BranchQuestionAxis[]>([])
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [needsAnswers, setNeedsAnswers] = useState(false)
   const [localMacro, setLocalMacro] = useState<LocalMacro | null>(null)
@@ -230,6 +280,32 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     setProposedLabware(lab)
     setDeckPicked(new Set(lab.map((p) => p.key)))
   }, [])
+
+  // W2-8 (spec §3 W4): load the FAMILY's questions once per source protocol.
+  // The protocol record's branch_axes[] are its declared questions (data, not
+  // a re-derivation); a record without them asks nothing extra here. A read
+  // failure is a gap, not an error — the AI-emitted axes still work alone.
+  useEffect(() => {
+    if (!sourceProtocolId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const record = await apiClient.getRecord(sourceProtocolId)
+        const payload = (record?.payload ?? {}) as Record<string, unknown>
+        const mapped = protocolBranchAxesToQuestionAxes(payload.branch_axes)
+        if (!cancelled) setFamilyAxes(mapped)
+      } catch {
+        if (!cancelled) setFamilyAxes([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [sourceProtocolId])
+
+  // The answerable axes: the family's declared axes merged with the AI-emitted
+  // ones, deduped by axisId (the family's own data wins).
+  const allAxes = mergeQuestionAxes(familyAxes, axes)
 
   const handleLocalize = useCallback(async () => {
     const text = protocolText.trim()
@@ -433,10 +509,10 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         {localizing ? 'Localizing…' : 'Localize (one-shot)'}
       </button>
 
-      {needsAnswers && axes.length > 0 ? (
+      {familyAxes.length > 0 || (needsAnswers && axes.length > 0) ? (
         <div className="protocol-localization-thread__clarify" data-testid="pl-clarify">
           <p>Answer to localize:</p>
-          {axes.map((axis) => (
+          {allAxes.map((axis) => (
             <div key={axis.axisId} className="pl-axis">
               <span className="pl-axis__q">{axis.question}</span>
               <div className="pl-axis__choices">
@@ -457,7 +533,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
           <button
             type="button"
             data-testid="pl-submit-answers"
-            disabled={localizing || axes.some((a) => !answers[a.axisId])}
+            disabled={localizing || allAxes.some((a) => !answers[a.axisId])}
             onClick={() => { void handleSubmitAnswers() }}
           >
             Apply &amp; compile

@@ -1,11 +1,21 @@
 /**
  * VendorPdfReviewPage — the single review surface for an ingested vendor PDF.
  *
- * Left: the stored PDF (pdfjs canvas pages) with a plain-text fallback when
- * the blob is unavailable. Right: the extracted protocol rendered with
- * ProtocolCandidatePreview, with an "Extract Protocol" button that calls the
- * same /protocol-builder/extract endpoint the builder uses. Per-step "Page N"
- * provenance jumps the left PDF pane to that page via onGotoPage.
+ * W2-8 SAID/MEANT composition (spec §3 W1): the LEFT pane is the immutable
+ * SAID — the stored PDF (pdfjs canvas pages) with a plain-text fallback, plus
+ * the read-only SaidFactsPane (the vendor-protocol-candidate's facts with page
+ * anchors). The RIGHT pane is the MEANT — the extraction-draft's
+ * candidates[0].draft edited via TapTab, saved through PUT /records/:XDR +
+ * expectedSha. Wave-2 vs legacy is a DATA state (a semantic draft exists for
+ * this artifact?), never a URL fork.
+ *
+ * What is GONE on this route (acceptance: no visible action produces a
+ * literal-step protocol): the Save / Save As buttons + modal, the
+ * "Use the extracted protocol" button, the editable ProtocolCandidatePreview
+ * overrides path, and every candidateToProtocolPayload call site. The legacy
+ * extraction stream + the intake questions panel remain ONLY in the no-draft
+ * (pre-wave-2) state; once a semantic draft exists, question-asking lives at
+ * the realization entry (ProtocolLocalizationThread), not here.
  *
  * Route: /ingestion/vendor-pdf/:recordId
  */
@@ -17,10 +27,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
-import type { AiProtocolCandidateSummary } from '../types/ai'
 import type { EditorProjectionResponse } from '../types/uiSpec'
-import { ProtocolCandidatePreview, type StepOverride } from '../event-editor/protocol-builder/ProtocolCandidatePreview'
-import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
 import type { ExtractionStreamEvent, IntakeReviewDetailResponse } from '../shared/api/client'
 import ExtractionProgressPanel, { type ExtractionLogLine } from './protocol-review/ExtractionProgressPanel'
 import { clampZoom, fitWidthScale, MIN_ZOOM, MAX_ZOOM, steppedZoom } from './pdfZoom'
@@ -32,20 +39,19 @@ import {
   nudgeSplitPct,
   splitPctFromDrag,
 } from './splitGeometry'
-import BranchQuestionsPanel, { type ResolvedReviewBranch } from './protocol-review/BranchQuestionsPanel'
+import BranchQuestionsPanel from './protocol-review/BranchQuestionsPanel'
+import { SemanticDraftPanel } from './protocol-review/SemanticDraftPanel'
+import { SaidFactsPane } from './protocol-review/SaidFactsPane'
 import {
-  reviewCandidateToProtocolPayload,
-  treeAxesToBranchAxes,
-  type MappedBranchAxis,
-} from './candidateToProtocolPayload'
-import { candidateToProtocolPayload, normalizeProtocolPayload, type MappedProtocolPayload } from './candidateToProtocolPayload'
+  describeWriteRejection,
+  findSaidCandidate,
+  findSemanticDraft,
+  type SemanticDraftEnvelope,
+  type SemanticDraftView,
+} from './protocol-review/semanticDraft'
 import './VendorPdfReviewPage.css'
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml'
-
-function shortId(): string {
-  return Math.random().toString(36).slice(2, 8)
-}
 
 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
@@ -60,8 +66,9 @@ export interface VendorPdfReviewPageProps {
   /**
    * Rendered inside a workspace tab (ProtocolReviewHostPage) rather than as a
    * bare route: the shell already provides the brand/title and the tab strip, so
-   * the page drops its own back button and heading. The save actions and the
-   * PDF|text toggle stay — they are the page's job.
+   * the page drops its own back button and heading. The PDF|text toggle stays —
+   * it is the page's job. (The save actions are gone: the wave-2 route saves
+   * the MEANT draft from its own panel, never a literal protocol.)
    */
   embedded?: boolean
 }
@@ -78,7 +85,6 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [pdfView, setPdfView] = useState<'pdf' | 'text'>('pdf')
   const canvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map())
 
-  const [candidate, setCandidate] = useState<AiProtocolCandidateSummary | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
   // Live extraction progress: the reviewer must be able to tell a long run from
@@ -92,17 +98,18 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [sinceLastEventMs, setSinceLastEventMs] = useState<number | null>(null)
   const lastEventAtRef = useRef<number | null>(null)
   const extractAbortRef = useRef<AbortController | null>(null)
-  const [skippedSteps, setSkippedSteps] = useState<Set<string>>(new Set())
-  const [overrides, setOverrides] = useState<StepOverride[]>([])
 
-  // TapTab protocol-surface state (Phase 3).
-  const [protocolPayload, setProtocolPayload] = useState<MappedProtocolPayload | null>(null)
+  // TapTab protocol-surface projection (create mode), fetched once.
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
-  // The document's if/then questions, answered by the reviewer (branch panel).
-  const [reviewBranch, setReviewBranch] = useState<ResolvedReviewBranch | null>(null)
-  // The intake read model for this artifact: which questions the document asks,
-  // and the candidate whose step ids they gate. Loaded ONCE here (not per
-  // panel) so the questions and the step list cannot drift or double-fetch.
+
+  // W2-8 wave-2 data state: the MEANT draft + the SAID candidate for THIS artifact.
+  const [semanticView, setSemanticView] = useState<SemanticDraftView | null>(null)
+  const [saidCandidate, setSaidCandidate] = useState<SemanticDraftEnvelope | null>(null)
+  const [drafting, setDrafting] = useState(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
+  const [draftToken, setDraftToken] = useState(0)
+
+  // The document's if/then questions (legacy no-draft review only).
   const [review, setReview] = useState<IntakeReviewDetailResponse | null>(null)
   // Handbook artifacts back several trees (one per protocol section, same
   // sha256). The reviewer picks which protocol to work through; singular
@@ -111,13 +118,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [reviewToken, setReviewToken] = useState(0)
-  const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveNote, setSaveNote] = useState<string | null>(null)
-  // Save As modal: prompts the user to confirm/overwrite the protocol title.
-  const [saveAsOpen, setSaveAsOpen] = useState(false)
-  const [saveAsTitle, setSaveAsTitle] = useState('')
+
   // Resizable split — default 40:60 (PDF : editor).
   const [leftPct, setLeftPct] = useState(DEFAULT_SPLIT_PCT)
   const [splitDragging, setSplitDragging] = useState(false)
@@ -141,7 +142,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         if (!cancelled) setProjection(p)
       })
       .catch(() => {
-        // projection unavailable — fall back to ProtocolCandidatePreview below
+        // projection unavailable — the MEANT panel still renders evidence + save
       })
     return () => {
       cancelled = true
@@ -184,8 +185,71 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     }
   }, [recordId])
 
+  /**
+   * The CAN-* candidate id the semantic-draft affordance rides (M1: the merged
+   * endpoint validates ^CAN-[A-Za-z0-9_-]+$ — the param is the CANDIDATE id,
+   * never the route's VPDF-* id). Resolution order: the joined candidate record
+   * (source.documentId === this VPDF), else the VPDF record's own
+   * vendorProtocolCandidateRef when it names a CAN-*.
+   */
+  const candidateRefId = useMemo(() => {
+    const ref = (record?.payload as Record<string, unknown> | undefined)?.vendorProtocolCandidateRef as
+      | { kind?: string; type?: string; id?: string }
+      | undefined
+    if (ref?.kind === 'record' && typeof ref.id === 'string' && /^CAN-[A-Za-z0-9_-]+$/.test(ref.id)) {
+      return ref.id
+    }
+    return null
+  }, [record])
+
+  const canCandidateId =
+    saidCandidate && /^CAN-[A-Za-z0-9_-]+$/.test(saidCandidate.recordId) ? saidCandidate.recordId : candidateRefId
+
+  // Load the wave-2 data state: the MEANT draft (extraction-drafts joined on
+  // source_artifact.id === this VPDF, M2) and the SAID candidate. A missing
+  // list endpoint or an empty result is a gap, not an error: the page stays in
+  // the legacy no-draft review.
+  useEffect(() => {
+    if (!recordId) return
+    let cancelled = false
+    const load = async () => {
+      let drafts: unknown[] = []
+      let candidates: unknown[] = []
+      try {
+        drafts = (await apiClient.listRecordsByKind('extraction-draft', 200)).records
+      } catch {
+        drafts = []
+      }
+      try {
+        candidates = (await apiClient.listRecordsByKind('vendor-protocol-candidate', 200)).records
+      } catch {
+        candidates = []
+      }
+      let joined = findSaidCandidate(candidates, recordId)
+      if (!joined && candidateRefId) {
+        try {
+          const env = await apiClient.getRecord(candidateRefId)
+          if (env && (env.payload as Record<string, unknown>).kind === 'vendor-protocol-candidate') {
+            joined = { recordId: env.recordId, schemaId: env.schemaId, payload: env.payload as Record<string, unknown> }
+          }
+        } catch {
+          /* the ref names nothing readable — the pane degrades honestly */
+        }
+      }
+      if (cancelled) return
+      setSemanticView(findSemanticDraft(drafts, recordId))
+      setSaidCandidate(joined)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [recordId, draftToken, candidateRefId])
+
   // Load the intake review for THIS artifact (questions + the gated steps).
   // A 404 (no attributable tree) is a gap, not an error: the panel says so.
+  // This read model drives the LEGACY no-draft questions block only — once a
+  // semantic draft exists, asking lives at the realization entry.
   useEffect(() => {
     if (!recordId) return
     let cancelled = false
@@ -244,7 +308,6 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     },
     [activeReview],
   )
-
 
   // Liveness clock: "last event Ns ago" is what separates a thinking model
   // from a dead connection, so it must tick even when no event arrives.
@@ -419,6 +482,9 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     })
   }, [pdfDoc, pages, renderPage])
 
+  // The anchor-jump machinery: every PDF canvas page AND every text-fallback
+  // page carries data-vpdf-page; the MEANT panel's semantic-evidence chips jump
+  // here (acceptance A2).
   const handleGotoPage = useCallback((pageNumber: number) => {
     document
       .querySelector(`[data-vpdf-page="${pageNumber}"]`)
@@ -429,6 +495,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
    * Run the AI extraction as a live stream: the panel shows the server's stage,
    * the model's reasoning as it arrives, and a liveness clock. Cancelling
    * aborts the request rather than leaving a run going in the background.
+   *
+   * W2-8: the stream is progress ONLY. Its `done` event no longer maps a
+   * candidate into an editable protocol payload (the literal-completion path is
+   * retired on this route — spec §8 bait 7: stream events never clobber MEANT
+   * state).
    */
   const handleExtract = useCallback(async () => {
     if (!extractedText) return
@@ -447,17 +518,6 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       .map((pg) => (typeof pg?.text === 'string' ? pg.text : ''))
       .filter(Boolean)
       .join('\n\n')
-
-    const applyCandidate = (raw: Record<string, unknown> | null): void => {
-      const c = (raw ?? null) as AiProtocolCandidateSummary | null
-      setCandidate(c)
-      if (c) {
-        setProtocolPayload(candidateToProtocolPayload(c, 'DRAFT-' + recordId, sourceText))
-        setSavedRecordId(null)
-        setSaveError(null)
-        setSaveNote(null)
-      }
-    }
 
     try {
       await apiClient.extractProtocolStream(
@@ -504,7 +564,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
               case 'done':
                 setExtractElapsedMs(event.elapsedMs)
                 setExtractStage('Extraction complete')
-                applyCandidate(event.candidate as Record<string, unknown>)
+                setExtractNote('Extraction finished. The semantic pass drafts the protocol from the stored candidate — this route never completes a literal protocol.')
                 break
               case 'error':
                 setExtractError(event.message)
@@ -532,120 +592,23 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   }, [])
 
   /**
-   * Build the editable protocol from the extraction the QUESTIONS gate (the
-   * vendor candidate), instead of asking the AI for a second candidate of the
-   * same PDF. Step ids then match the tree's then_stepIds, so "this branch runs
-   * step-001, step-004" and the editor show the same rows. No AI round trip.
+   * The no-draft affordance (OQ1 (a) / M1): run the merged W2-6 semantic pass
+   * over the CAN-* candidate. Success lands an extraction-draft; the data-state
+   * reload then renders the MEANT editor — no URL fork, no literal completion.
    */
-  const handleUseExtractedProtocol = useCallback(() => {
-    const extracted = activeReview?.candidate
-    if (!extracted) return
-    setCandidate(null)
-    setProtocolPayload(reviewCandidateToProtocolPayload(extracted, 'DRAFT-' + recordId))
-    setSavedRecordId(null)
-    setSaveError(null)
-    setSaveNote(null)
-  }, [activeReview, recordId])
-
-  const handleToggleStep = useCallback((key: string, enabled: boolean) => {
-    setSkippedSteps((prev) => {
-      const next = new Set(prev)
-      if (enabled) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }, [])
-
-  const handleOverrideChange = useCallback((key: string, field: keyof StepOverride, value: string | null) => {
-    setOverrides((prev) => {
-      const existing = prev.find((o) => o.stepKey === key)
-      const next = { ...existing, stepKey: key, [field]: value } as StepOverride
-      return existing ? prev.map((o) => (o.stepKey === key ? next : o)) : [...prev, next]
-    })
-  }, [])
-
-  const handleReviewResolved = useCallback((resolved: ResolvedReviewBranch | null) => {
-    setReviewBranch(resolved)
-  }, [])
-
-  // The promoted protocol carries the document's questions as `branch_axes`:
-  // the global recipe keeps every step AND asks which branch applies, so the
-  // lab realization can answer it (protocol-worldview: recipes carry questions,
-  // localizations carry answers).
-  const branchAxesForSave = useCallback((): MappedBranchAxis[] | undefined => {
-    if (!reviewBranch) return undefined
-    const axes = treeAxesToBranchAxes(reviewBranch.axes)
-    return axes.length > 0 ? axes : undefined
-  }, [reviewBranch])
-
-  // Save = accept the current version of the protocol, promoted to a usable
-  // protocol: state approved + the real (current) title. Reuses the stable id
-  // on subsequent saves.
-  const handleSave = useCallback(async () => {
-    if (!protocolPayload) return
-    setSaving(true)
-    setSaveError(null)
-    setSaveNote(null)
+  const handleSemanticDraft = useCallback(async () => {
+    if (!canCandidateId) return
+    setDrafting(true)
+    setDraftError(null)
     try {
-      const axes = branchAxesForSave()
-      const payload = normalizeProtocolPayload({
-        ...(protocolPayload as unknown as Record<string, unknown>),
-        ...(axes ? { branch_axes: axes } : {}),
-      })
-      if (savedRecordId) {
-        await apiClient.updateRecord(savedRecordId, { ...payload, recordId: savedRecordId, state: 'approved' })
-        setSaveNote('Saved.')
-      } else {
-        const recId = `PRT-${shortId()}`
-        await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
-        setSavedRecordId(recId)
-        setProtocolPayload({ ...(payload as unknown as MappedProtocolPayload), recordId: recId })
-        setSaveNote('Saved.')
-      }
+      await apiClient.semanticDraft(canCandidateId)
+      setDraftToken((n) => n + 1)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed')
+      setDraftError(describeWriteRejection(err))
     } finally {
-      setSaving(false)
+      setDrafting(false)
     }
-  }, [protocolPayload, savedRecordId, branchAxesForSave])
-
-  // Save As — open a modal pre-loaded with the real protocol title so the
-  // user can overwrite it, then save as a fresh approved copy.
-  const handleSaveAs = useCallback(async () => {
-    if (!protocolPayload) return
-    setSaveAsTitle(protocolPayload.title)
-    setSaveAsOpen(true)
-  }, [protocolPayload])
-
-  const handleSaveAsConfirm = useCallback(async () => {
-    if (!protocolPayload) return
-    setSaveAsOpen(false)
-    setSaving(true)
-    setSaveError(null)
-    setSaveNote(null)
-    try {
-      const axes = branchAxesForSave()
-      const payload = normalizeProtocolPayload({
-        ...protocolPayload,
-        title: saveAsTitle.trim() ? saveAsTitle.trim() : protocolPayload.title,
-        ...(axes ? { branch_axes: axes } : {}),
-      } as unknown as Record<string, unknown>)
-      const recId = `PRT-${shortId()}`
-      await apiClient.createRecord(PROTOCOL_SCHEMA_ID, { ...payload, recordId: recId, state: 'approved' })
-      setSavedRecordId(recId)
-      setSaveNote('Saved as copy.')
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save As failed')
-    } finally {
-      setSaving(false)
-    }
-  }, [protocolPayload, saveAsTitle, branchAxesForSave])
-
-  // TapTab onUpdate: keep the edited payload when dirty.
-  const handleTapTabUpdate = useCallback((serialized: Record<string, unknown>, dirty?: boolean) => {
-    if (dirty === false) return
-    setProtocolPayload((prev) => (prev ? ({ ...prev, ...serialized } as MappedProtocolPayload) : prev))
-  }, [])
+  }, [canCandidateId])
 
   // Split-drag handlers.
   /**
@@ -711,6 +674,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     }
   }, [])
 
+  const sourcePageCount = (() => {
+    const source = saidCandidate?.payload?.source as { pageCount?: number } | undefined
+    return typeof source?.pageCount === 'number' ? source.pageCount : undefined
+  })()
+
   if (loadError) {
     return (
       <div className="vpdf-review vpdf-review--centered" data-testid="vpdf-review">
@@ -775,37 +743,13 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
             </button>
           </div>
         )}
-        {protocolPayload ? (
-          <div className="vpdf-review__save-actions" data-testid="vpdf-save-actions">
-            <button
-              type="button"
-              className="vpdf-review__save"
-              onClick={() => void handleSave()}
-              disabled={saving}
-              data-testid="vpdf-save"
-            >
-              {saving ? 'Saving…' : savedRecordId ? 'Save' : 'Save protocol'}
-            </button>
-            <button
-              type="button"
-              className="vpdf-review__save vpdf-review__save--secondary"
-              onClick={() => void handleSaveAs()}
-              disabled={saving}
-              data-testid="vpdf-save-as"
-            >
-              Save As
-            </button>
-          </div>
-        ) : null}
-        {saveNote ? <span className="vpdf-review__save-note">{saveNote}</span> : null}
-        {saveError ? <span className="vpdf-review__save-error">{saveError}</span> : null}
       </header>
 
       <div className="vpdf-review__panels" ref={(el) => {
         // The split handle drag measures its parent (this panels container) width.
         splitPanelRef.current = el
       }}>
-        {/* Left: PDF (or plain-text fallback) */}
+        {/* Left: the SAID — PDF (or plain-text fallback) + read-only candidate facts */}
         <div className="vpdf-review__left" style={{ flex: `0 0 ${leftPct}%`, maxWidth: `${leftPct}%` }}>
           {pdfView === 'pdf' && pdfDoc && (
             <div className="vpdf-review__zoom" data-testid="vpdf-zoom">
@@ -879,6 +823,13 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
               )}
             </div>
           ) : null}
+          {saidCandidate ? (
+            <SaidFactsPane
+              candidate={saidCandidate}
+              {...(canCandidateId ? { candidateRecordId: canCandidateId } : {})}
+              onGotoPage={handleGotoPage}
+            />
+          ) : null}
         </div>
 
         {/* Split handle */}
@@ -903,19 +854,40 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           <span>PDF · Editor</span>
         </div>
 
-        {/* Right: extracted protocol */}
+        {/* Right: the MEANT (semantic draft present) or the no-draft affordance */}
         <div className="vpdf-review__right" style={{ flex: 1 }}>
-          {!protocolPayload ? (
+          {semanticView ? (
+            <SemanticDraftPanel
+              xdrRecordId={semanticView.xdr.recordId}
+              candidateIndex={semanticView.candidateIndex}
+              draft={semanticView.draft}
+              {...(sourcePageCount !== undefined ? { sourcePageCount } : {})}
+              projection={projection}
+              onGotoPage={handleGotoPage}
+            />
+          ) : (
             <>
-              {activeReview?.candidate ? (
-                <button
-                  type="button"
-                  className="vpdf-review__extract"
-                  onClick={handleUseExtractedProtocol}
-                  data-testid="vpdf-use-extracted"
-                >
-                  Use the extracted protocol ({activeReview.candidate.steps.length} steps)
-                </button>
+              {canCandidateId ? (
+                <div className="vpdf-review__affordance" data-testid="vpdf-semantic-draft-block">
+                  <button
+                    type="button"
+                    className="vpdf-review__extract"
+                    data-testid="vpdf-semantic-draft"
+                    disabled={drafting}
+                    onClick={() => void handleSemanticDraft()}
+                  >
+                    {drafting ? 'Drafting the semantic protocol…' : 'Draft the semantic protocol'}
+                  </button>
+                  <p className="vpdf-review__hint">
+                    Runs the semantic pass over {canCandidateId} and lands an extraction-draft — the review
+                    then edits the draft, never a literal protocol.
+                  </p>
+                  {draftError ? (
+                    <p className="vpdf-review__error" data-testid="vpdf-semantic-draft-error" role="alert">
+                      {draftError}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
               <ExtractionProgressPanel
                 running={extracting}
@@ -929,111 +901,55 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                 error={extractError}
                 note={extractNote}
               />
+              {recordId ? (
+                <div className="vpdf-review__questions">
+                  {reviewLoading ? (
+                    <p className="vpdf-review__hint">Reading the document’s questions…</p>
+                  ) : reviewError ? (
+                    <p className="vpdf-review__error" role="alert">
+                      {reviewError}
+                    </p>
+                  ) : (
+                    <>
+                      {/* Handbook artifacts back one tree per protocol section —
+                          pick the protocol to review before answering its
+                          questions. Single-tree documents render no selector. */}
+                      {review && (review.count ?? 1) > 1 ? (
+                        <label className="vpdf-review__tree-select">
+                          <span>Protocol </span>
+                          <select
+                            value={reviewTreeIndex}
+                            onChange={(e) => setReviewTreeIndex(Number(e.target.value))}
+                            data-testid="vpdf-tree-select"
+                          >
+                            {(review.trees ?? []).map((entry, i) => (
+                              <option key={entry.tree.recordId} value={i}>
+                                {entry.tree.documentId.split('__').pop() ?? entry.tree.recordId}
+                                {' '}({entry.proposals.length} proposal{entry.proposals.length === 1 ? '' : 's'})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <BranchQuestionsPanel
+                        axes={activeReview?.tree.axes ?? []}
+                        proposals={activeReview?.proposals ?? []}
+                        gap={
+                          activeReview
+                            ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
+                            : 'No decision tree is attributable to this PDF yet — run intake on it first.'
+                        }
+                        onRedrafted={() => setReviewToken((n) => n + 1)}
+                        {...(activeReview?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
+                      />
+                    </>
+                  )}
+                </div>
+              ) : null}
             </>
-          ) : null}
-          {recordId ? (
-            <div className="vpdf-review__questions">
-              {reviewLoading ? (
-                <p className="vpdf-review__hint">Reading the document’s questions…</p>
-              ) : reviewError ? (
-                <p className="vpdf-review__error" role="alert">
-                  {reviewError}
-                </p>
-              ) : (
-                <>
-                  {/* Handbook artifacts back one tree per protocol section —
-                      pick the protocol to review before answering its
-                      questions. Single-tree documents render no selector. */}
-                  {review && (review.count ?? 1) > 1 ? (
-                    <label className="vpdf-review__tree-select">
-                      <span>Protocol </span>
-                      <select
-                        value={reviewTreeIndex}
-                        onChange={(e) => setReviewTreeIndex(Number(e.target.value))}
-                        data-testid="vpdf-tree-select"
-                      >
-                        {(review.trees ?? []).map((entry, i) => (
-                          <option key={entry.tree.recordId} value={i}>
-                            {entry.tree.documentId.split('__').pop() ?? entry.tree.recordId}
-                            {' '}({entry.proposals.length} proposal{entry.proposals.length === 1 ? '' : 's'})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <BranchQuestionsPanel
-                    axes={activeReview?.tree.axes ?? []}
-                    proposals={activeReview?.proposals ?? []}
-                    gap={
-                      activeReview
-                        ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
-                        : 'No decision tree is attributable to this PDF yet — run intake on it first.'
-                    }
-                    onResolved={handleReviewResolved}
-                    onRedrafted={() => setReviewToken((n) => n + 1)}
-                    {...(activeReview?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
-                  />
-                </>
-              )}
-            </div>
-          ) : null}
-          {/* TapTab protocol surface once we have a candidate + projection. */}
-          {protocolPayload && projection ? (
-            <div className="vpdf-review__taptab" data-testid="vpdf-taptab">
-              <ProjectionTapTabEditor
-                blocks={projection.blocks}
-                slots={projection.slots}
-                data={protocolPayload as unknown as Record<string, unknown>}
-                onUpdate={handleTapTabUpdate}
-              />
-            </div>
-          ) : candidate ? (
-            <ProtocolCandidatePreview
-              candidate={candidate}
-              skippedSteps={skippedSteps}
-              overrides={overrides}
-              onToggleStep={handleToggleStep}
-              onOverrideChange={handleOverrideChange}
-              onGotoPage={handleGotoPage}
-            />
-          ) : null}
+          )}
         </div>
       </div>
-
-      {/* Save As modal — pre-loaded with the real protocol title. */}
-      {saveAsOpen ? (
-        <div className="vpdf-review__modal-overlay" data-testid="vpdf-saveas-modal">
-          <form
-            className="vpdf-review__modal"
-            role="dialog"
-            aria-modal="true"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void handleSaveAsConfirm()
-            }}
-          >
-            <h3 className="vpdf-review__modal-title">Save Protocol As</h3>
-            <label className="vpdf-review__modal-label">
-              Protocol title
-              <input
-                data-testid="vpdf-saveas-title"
-                className="vpdf-review__modal-input"
-                value={saveAsTitle}
-                onChange={(e) => setSaveAsTitle(e.target.value)}
-                autoFocus
-              />
-            </label>
-            <div className="vpdf-review__modal-actions">
-              <button type="button" className="vpdf-review__save vpdf-review__save--secondary" onClick={() => setSaveAsOpen(false)} data-testid="vpdf-saveas-cancel">
-                Cancel
-              </button>
-              <button type="submit" className="vpdf-review__save" disabled={saving} data-testid="vpdf-saveas-confirm">
-                Save As
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
     </div>
   )
 }
