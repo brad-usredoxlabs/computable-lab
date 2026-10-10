@@ -5031,6 +5031,11 @@ export const apiClient = {
     return `${API_BASE}/studies/${encodeURIComponent(studyId)}/artifacts/${encodeURIComponent(artifactId)}/blob`
   },
 
+  /** POST the merged semantic pass over a CAN-* vendor-protocol-candidate (NOT the VPDF-* route id); lands an extraction-draft. */
+  async semanticDraft(candidateRecordId: string): Promise<{ recordId: string; diagnostics: unknown }> {
+    return request<{ recordId: string; diagnostics: unknown }>(`/extraction/vendor-candidates/${encodeURIComponent(candidateRecordId)}/semantic-draft`, { method: 'POST' })
+  },
+
   /**
    * URL of a free-floating vendor-pdf's stored bytes. Unlike artifactBlobUrl
    * this is NOT study-scoped (ingested vendor PDFs have no studyId), so pdfjs

@@ -122,7 +122,7 @@ describe('BranchQuestionsPanel', () => {
     )
     fireEvent.click(screen.getByLabelText('Feces'))
     fireEvent.click(screen.getByLabelText('ZR BashingBead Lysis Tubes (0.1 & 0.5 mm)'))
-    expect(screen.getByTestId('branch-questions-unbuilt').textContent).toContain('not pre-built')
+    expect(screen.getByTestId('branch-questions-unbuilt').textContent).toContain('No realization exists for this selection')
   })
 
   it('asks the owner to build the selected branch, and reports a failure', async () => {
