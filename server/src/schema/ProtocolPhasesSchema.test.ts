@@ -33,6 +33,11 @@ describe('ProtocolPhasesSchema', () => {
       'core/datatypes/concentration.schema.yaml',
       'core/datatypes/reference-ratio.schema.yaml',
       'core/datatypes/condition.schema.yaml',
+      // W2-3: protocol.schema.yaml $defs/IntentStepPayload mounts W2-2's constraint
+      // datatype by $ref; the harness path list mirrors the schema's dependency closure.
+      'registry/constraint-vocabulary/constraint.schema.yaml',
+      'core/datatypes/quantity.schema.yaml',
+      'core/datatypes/quantity-ratio.schema.yaml',
     ];
 
     const contents = new Map<string, string>();

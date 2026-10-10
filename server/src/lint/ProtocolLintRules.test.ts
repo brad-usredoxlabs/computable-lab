@@ -82,6 +82,30 @@ function baseRoles(): Record<string, unknown> {
   };
 }
 
+// W2-3 fix cycle 1 (defect 1): R-4 legacy-literal-bounded now guards on
+// recordId-not-in-the-frozen-allowlist ONLY — no protocolLayer conjunct. Consequence:
+// ANY non-allowlisted all-literal protocol trips R-4 (that IS the acceptance
+// behaviour). The PROTO-AI-4 role-integrity fixtures below are adjusted honestly:
+//   - fixtures that must stay VALID carry either an intent-bearing step (the authored
+//     future) or a frozen-inventory recordId (the only place a literal step is legal
+//     after W2-3; fixture labels only — no records/ file is touched);
+//   - fixtures that assert INVALID keep their non-allowlisted ids and the R-4 co-fire
+//     is asserted explicitly, never hidden.
+// R1-R3 rule DATA (protocol.lint.yaml) is byte-unchanged; the R1-R3 assertions stay
+// byte-identical.
+function intentBearingStep(stepId: string, kind: string): Record<string, unknown> {
+  return {
+    stepId,
+    label: `Intent ${stepId}`,
+    ordinal: 1,
+    kind,
+    intent: {
+      semanticVerb: { ref: { kind: 'record', type: 'verb-definition', id: 'VERB-WASH' }, canonical: 'wash' },
+      provenance: [{ kind: 'record', type: 'vendor-protocol-candidate', id: 'CAN-lint-fixture', pageStart: 1 }],
+    },
+  };
+}
+
 function protocolFixture(
   steps: Array<Record<string, unknown>>,
   roles?: Record<string, unknown>,
@@ -96,6 +120,19 @@ function protocolFixture(
   };
 }
 
+// W2-3 fix cycle 1: the role-integrity rules under test in this file (R1-R3).
+// R-4 (legacy-literal-bounded) guards on recordId-not-in-allowlist ONLY, so a
+// non-allowlisted ALL-LITERAL fixture trips it by design — the R1-R3 pins below
+// scope to these three rule ids and record the R-4 co-fire explicitly.
+const ROLE_INTEGRITY_RULE_IDS = [
+  'step-role-closure',
+  'labware-role-identity-bearing',
+  'role-id-category-unique',
+];
+
+function roleIntegrityFindings(violations: Array<{ ruleId: string }>): Array<{ ruleId: string }> {
+  return violations.filter((v) => ROLE_INTEGRITY_RULE_IDS.includes(v.ruleId));
+}
 // =============================================================================
 // Generic DSL: everyItem
 // =============================================================================
@@ -267,18 +304,28 @@ describe('noneIn predicate (cross-collection disjointness)', () => {
 // The declared rules, linted through the real file on disk
 // =============================================================================
 
-describe('protocol.lint.yaml declares exactly R1/R2/R3', () => {
+describe('protocol.lint.yaml declares the full declared rule set', () => {
   let spec: LintSpec;
 
   beforeAll(() => {
     spec = loadProtocolLintSpec();
   });
 
-  it('activates only the three role-integrity rules', () => {
+  it('activates the full declared set: R1-R3 role-integrity + W2-3 rules (extended to the full declared set per spec mandate + orch ratification l2t1955)', () => {
+    // The three PROTO-AI-4 role-integrity rules remain declared with their
+    // original ids/severities (byte-unchanged). The spec mandates the W2-3
+    // intent/legacy-bounds rules live in the SAME protocol.lint.yaml (§2.2), so
+    // the old "only the three role-integrity rules activate" pin cannot remain
+    // true; the 7-id pin is extended to the full declared set per spec mandate +
+    // orchestrator ratification l2t1955.
     expect(spec.rules.map((r) => r.id)).toEqual([
       'step-role-closure',
       'labware-role-identity-bearing',
       'role-id-category-unique',
+      'legacy-literal-bounded',
+      'legacy-inventory-no-intent-drift',
+      'intent-step-provenance-visible',
+      'intent-verb-ref-declared',
     ]);
     expect(spec.rules.find((r) => r.id === 'step-role-closure')?.severity).toBe('error');
     expect(spec.rules.find((r) => r.id === 'labware-role-identity-bearing')?.severity).toBe('warning');
@@ -379,6 +426,10 @@ describe('R1 step-role-closure (error): one fixture per schema labwareRole locat
 
   for (const loc of locations) {
     it(`flags a dangling ${loc.name} as an error naming the step id and the ref`, () => {
+      // Fix cycle 1 (defect 1): this fixture is a NEW all-literal protocol on a
+      // non-allowlisted id, so R-4 legacy-literal-bounded co-fires BY DESIGN (the
+      // guard is now exactly recordId-not-in-allowlist). The co-fire is asserted
+      // explicitly below; the R1 pin scopes to the role-integrity finding.
       const r = engine.lint(protocolFixture([loc.step], baseRoles(), 'PRT-r1-dangling'), PROTOCOL);
       expect(r.valid).toBe(false);
       const v = r.violations.find((x) => x.ruleId === 'step-role-closure');
@@ -388,8 +439,9 @@ describe('R1 step-role-closure (error): one fixture per schema labwareRole locat
       // via {{path}} interpolation.
       expect(v?.message).toContain(String(loc.step.stepId));
       expect(v?.message).toContain(loc.dangling);
-      // Only R1 fires on this fixture.
-      expect(r.violations).toHaveLength(1);
+      // Only R1 fires among the role-integrity rules; R-4 co-fires (recorded).
+      expect(roleIntegrityFindings(r.violations)).toHaveLength(1);
+      expect(r.violations.filter((x) => x.ruleId === 'legacy-literal-bounded')).toHaveLength(1);
     });
   }
 
@@ -412,7 +464,7 @@ describe('R1 step-role-closure (error): one fixture per schema labwareRole locat
         target: { labwareRole: 'plate' }, modality: 'absorbance', instrumentRole: 'reader',
       },
     ];
-    const r = engine.lint(protocolFixture(steps, baseRoles(), 'PRT-r1-clean'), PROTOCOL);
+    const r = engine.lint(protocolFixture(steps, baseRoles(), 'prt-seed-biological-transfer'), PROTOCOL);
     expect(r.violations).toEqual([]);
     expect(r.valid).toBe(true);
     expect(r.summary.errors).toBe(0);
@@ -426,7 +478,9 @@ describe('R1 step-role-closure (error): one fixture per schema labwareRole locat
         description: 'No role references anywhere.',
       },
     ];
-    const r = engine.lint(protocolFixture(steps, undefined, 'PRT-r1-noroles'), PROTOCOL);
+    // Fix cycle 1: allowlisted (frozen-inventory) label — a literal-only fixture on a
+    // non-allowlisted id would trip R-4 by design (asserted in the co-fire test below).
+    const r = engine.lint(protocolFixture(steps, undefined, 'prt-seed-buffer-prep-50ml'), PROTOCOL);
     expect(r.violations).toEqual([]);
     expect(r.valid).toBe(true);
   });
@@ -438,12 +492,31 @@ describe('R1 step-role-closure (error): one fixture per schema labwareRole locat
         target: { labwareRole: 'plate' }, cycles: 3,
       },
     ];
+    // Fix cycle 1: non-allowlisted id -> R-4 co-fires (all-literal new protocol); the
+    // R1 pin below is unchanged and the co-fire is recorded, not hidden.
     const r = engine.lint(protocolFixture(steps, undefined, 'PRT-r1-nodecl'), PROTOCOL);
     expect(r.valid).toBe(false);
     const v = r.violations.find((x) => x.ruleId === 'step-role-closure');
     expect(v).toBeDefined();
     expect(v?.message).toContain('wash-plate');
     expect(v?.message).toContain('plate');
+    expect(r.violations.filter((x) => x.ruleId === 'legacy-literal-bounded')).toHaveLength(1);
+  });
+
+  it('fix cycle 1: the widened R-4 guard co-fires on non-allowlisted literal fixtures and stays silent on inventory labels', () => {
+    // Same literal steps, two labels: the guard is exactly recordId-not-in-allowlist
+    // (no protocolLayer conjunct), so the non-allowlisted label trips R-4 and the
+    // frozen-inventory label does not.
+    const steps = [
+      {
+        stepId: 'wash-plate', label: 'Wash', ordinal: 1, kind: 'wash',
+        target: { labwareRole: 'plate' }, cycles: 3,
+      },
+    ];
+    const outside = engine.lint(protocolFixture(steps, baseRoles(), 'PRT-r4-widened'), PROTOCOL);
+    expect(outside.violations.filter((x) => x.ruleId === 'legacy-literal-bounded')).toHaveLength(1);
+    const inside = engine.lint(protocolFixture(steps, baseRoles(), 'prt-seed-pbs-wash'), PROTOCOL);
+    expect(inside.violations.filter((x) => x.ruleId === 'legacy-literal-bounded')).toEqual([]);
   });
 });
 
@@ -455,13 +528,11 @@ describe('R2 labware-role-identity-bearing (warning)', () => {
   });
 
   function r2Fixture(labwareRoles: Array<Record<string, unknown>>): Record<string, unknown> {
+    // Fix cycle 1 (defect 1): the step is intent-bearing so this PROTO-AI-4 probe
+    // isolates R2 — an all-literal fixture on a non-allowlisted id also trips R-4
+    // by design (asserted explicitly in the R1 co-fire tests, never hidden here).
     return protocolFixture(
-      [
-        {
-          stepId: 'wash-plate', label: 'Wash', ordinal: 1, kind: 'wash',
-          target: { labwareRole: 'plate' }, cycles: 3,
-        },
-      ],
+      [intentBearingStep('wash-plate', 'wash')],
       { labwareRoles },
       'PRT-r2',
     );
@@ -499,9 +570,7 @@ describe('R2 labware-role-identity-bearing (warning)', () => {
   it('a protocol with no labwareRoles block emits no R2 noise', () => {
     const r = engine.lint(
       protocolFixture(
-        [
-          { stepId: 'note', label: 'Note', ordinal: 1, kind: 'other', description: 'd' },
-        ],
+        [intentBearingStep('note', 'other')],
         { materialRoles: [{ roleId: 'dye', description: 'the dye' }] },
         'PRT-r2-noise',
       ),
@@ -521,12 +590,10 @@ describe('R3 role-id-category-unique (warning)', () => {
   it('warns when the same roleId is both a labwareRole and an instrumentRole', () => {
     const r = engine.lint(
       protocolFixture(
-        [
-          {
-            stepId: 'wash-plate', label: 'Wash', ordinal: 1, kind: 'wash',
-            target: { labwareRole: 'plate' }, cycles: 3,
-          },
-        ],
+        // Fix cycle 1 (defect 1): intent-bearing step so this probe isolates R3 —
+        // an all-literal fixture on a non-allowlisted id also trips R-4 by design
+        // (asserted explicitly in the R1 co-fire tests, never hidden here).
+        [intentBearingStep('wash-plate', 'wash')],
         {
           labwareRoles: [identityLabwareRole('plate')],
           instrumentRoles: [identityInstrumentRole('plate')],
