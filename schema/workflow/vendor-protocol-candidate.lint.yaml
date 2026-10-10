@@ -1,0 +1,251 @@
+# W2-4 VENDOR-rung lint for the vendor-protocol-candidate (the SAID) — the
+# candidate carried NO lint spec before W2-4; this file activates it.
+#
+# schemaId below is the candidate's EXACT $id INCLUDING the `workflow/`
+# segment (vendor-protocol-candidate.schema.yaml:2). Copy-pasting protocol's
+# $id shape (no workflow/ segment) yields a spec that NEVER fires — the silent
+# zero-rule-lookalike trap (W2-4 spec bait 8.3). The firing proof is
+# server/src/lint/Wave2ProvenanceLadderRules.test.ts (arm b).
+#
+# VENDOR lineage = document anchors. The candidate's fact objects are CLOSED
+# (additionalProperties:false at every level incl. $defs/Provenance), so a rung
+# key / locally_validated flag / validatedBy field on any candidate fact is a
+# SCHEMA REJECT (proven in Wave2ProvenanceLadderSchema.test.ts arm d — zero
+# lint needed). The prov-vendor-* rules below are the ACTIONABLE per-item belt:
+# they name the offending array + item index at lint-on-write, and R2/R3 catch
+# the closed-shape guarantee loudly if a future relaxed arm ever slips (the
+# intent-verb-ref-declared precedent).
+#
+# Presence-of-field based ONLY: free-text notes/sourceText stay free text —
+# no rule scans prose.
+#
+# Nine provenance-carrying surfaces are covered (spec bait 8.7): sections,
+# steps, tables, materials, equipment, labware, notes, outputs (ExtractedItem
+# arrays) and steps[].actions[] (Action items) — covering only `steps` is the
+# classic partial-coverage reject.
+#
+# Rule ids namespaced `prov-vendor-` for GLOBAL uniqueness (LintEngine.ts:59-61).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml"
+
+rules:
+# R1 — every fact on the candidate is document-anchored: provenance present,
+# provenance.documentId non-empty, provenance.pageStart non-empty, across ALL
+# nine provenance-carrying arrays. The schema already requires the ref shape
+# ($defs/Provenance required [documentId, pageStart]); this rule fires the
+# actionable per-item error at lint-on-write and proves the VENDOR rung's
+# lineage requirement is ENFORCED, not just typed.
+- id: prov-vendor-facts-document-anchored
+  title: "every candidate fact carries a document anchor (VENDOR lineage)"
+  description: >-
+    VENDOR lineage is a document anchor: each item of sections/steps/tables/
+    materials/equipment/labware/notes/outputs and each step action carries a
+    provenance with a non-empty documentId and pageStart. A fact without its
+    anchor is an error naming the array and the item.
+  severity: error
+  scope: record
+  assert:
+    op: all
+    predicates:
+      - op: everyItem
+        collectionPath: sections
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: steps
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+            - op: everyItem
+              collectionPath: actions
+              assert:
+                op: all
+                predicates:
+                  - op: nonEmpty
+                    path: provenance
+                  - op: nonEmpty
+                    path: provenance.documentId
+                  - op: nonEmpty
+                    path: provenance.pageStart
+      - op: everyItem
+        collectionPath: tables
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: materials
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: equipment
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: labware
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: notes
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+      - op: everyItem
+        collectionPath: outputs
+        assert:
+          op: all
+          predicates:
+            - op: nonEmpty
+              path: provenance
+            - op: nonEmpty
+              path: provenance.documentId
+            - op: nonEmpty
+              path: provenance.pageStart
+  message:
+    template: "candidate '{{title}}': a fact lacks its document anchor (provenance.documentId + provenance.pageStart) — VENDOR lineage is a visible citation. sections: {{sections[*].id}} steps: {{steps[*].id}} tables: {{tables[*].id}} materials: {{materials[*].id}} equipment: {{equipment[*].id}} labware: {{labware[*].id}} notes: {{notes[*].id}} outputs: {{outputs[*].id}}."
+
+# R2 — no rung / attestation key on any fact provenance. PRIMARY wall is the
+# schema (additionalProperties:false rejects these keys — T1 arm d); this rule
+# is the loud belt naming the offender (the intent-verb-ref-declared precedent:
+# keep a schema-required invariant visible at the lint layer too).
+- id: prov-vendor-no-rung-attestation
+  title: "candidate fact provenance carries no rung or attestation key"
+  description: >-
+    VENDOR is positional: a fact is VENDOR because it sits on this immutable,
+    document-anchored candidate — there is NO rung field on a candidate fact.
+    A provenance carrying rung / locally_validated / validatedBy is an error
+    (schema closure is the primary wall; this rule names the offender
+    actionably and stays loud if a future relaxed arm slips).
+  severity: error
+  scope: record
+  assert:
+    op: all
+    predicates:
+      - op: everyItem
+        collectionPath: sections
+        assert:
+          op: not
+          not:
+            op: exists
+            path: provenance.rung
+      - op: everyItem
+        collectionPath: steps
+        assert:
+          op: all
+          predicates:
+            - op: not
+              not:
+                op: exists
+                path: provenance.rung
+            - op: not
+              not:
+                op: exists
+                path: provenance.locally_validated
+            - op: not
+              not:
+                op: exists
+                path: provenance.validatedBy
+      - op: everyItem
+        collectionPath: materials
+        assert:
+          op: not
+          not:
+            op: exists
+            path: provenance.rung
+      - op: everyItem
+        collectionPath: labware
+        assert:
+          op: not
+          not:
+            op: exists
+            path: provenance.rung
+      - op: everyItem
+        collectionPath: outputs
+        assert:
+          op: not
+          not:
+            op: exists
+            path: provenance.rung
+  message:
+    template: "candidate '{{title}}': a fact provenance carries a rung/attestation key — VENDOR is positional (the candidate's closed schema admits no rung field); steps: {{steps[*].id}} labware: {{labware[*].id}}."
+
+# R3 — the acceptance clause's lint leg: vendor-validated-labware facts ride
+# sections[kind==specifications] + labware ExtractedItems, NEVER step
+# parameters. Asserts steps carry no validated-by / validated-labware-shaped
+# KEY (presence-of-field only — free-text notes stay free text, say so).
+# The step object is closed (schema REJECT is primary, T1 arm d); this rule
+# documents the law in the lint layer and names the offender.
+- id: prov-vendor-specifications-not-step-params
+  title: "vendor-validated-labware is a specifications/labware fact, never a step parameter"
+  description: >-
+    A manufacturer-validated-labware VENDOR fact = a labware ExtractedItem + a
+    specifications section, each document-anchored. Steps carry NO
+    validatedBy / manufacturer_validated / rung key — there is no validated
+    flag on steps by design. Presence-of-field based ONLY: prose stays prose.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: steps
+    assert:
+      op: all
+      predicates:
+        - op: not
+          not:
+            op: exists
+            path: validatedBy
+        - op: not
+          not:
+            op: exists
+            path: manufacturer_validated
+        - op: not
+          not:
+            op: exists
+            path: rung
+  message:
+    template: "candidate '{{title}}': a step carries a validated-labware-shaped key — vendor-validated labware renders from sections[kind=specifications] + labware items, never as a step parameter. step ids: {{steps[*].id}}."

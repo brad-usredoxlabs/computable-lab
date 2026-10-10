@@ -6,3 +6,108 @@ schemaId: "https://computable-lab.com/schema/computable-lab/local-protocol.schem
 # cross-layer invariants (same-verbs-same-order, substitution-class
 # compatibility) are enforced by the structural-correspondence compiler pass
 # (50 §6), not by lint.
+
+# W2-4-PROVENANCE-LADDER activates this spec (it shipped with ZERO rules and
+# was silently skipped at boot — server.ts:411). LOCAL_REALIZATION lineage
+# (schema/registry/provenance-ladder/rung-vocabulary.yaml, rung
+# LOCAL_REALIZATION): a local-protocol realization is the lab's OWN answer to
+# the family — its lineage is the RECORDED CHOICE, never a vendor attestation.
+# W2-7 WRITES these fields; W2-4 only constrains their lineage. Every rule is
+# when-guarded so a legacy LPR (no branch_resolution / no overrides) emits
+# ZERO findings — records/seed holds no LPR records, and the boot-activation
+# risk is nil by construction.
+#
+# nonEmpty-object probe (spec §2.6 R1, recorded): PathResolver.isEmpty
+# (PathResolver.ts:228-246) treats `undefined`/null/''/[]/{} as EMPTY — an
+# empty choices OBJECT `{}` is EMPTY, identical to absent. The DSL therefore
+# cannot distinguish "choices: {}" from "no choices"; both fire R1. That is
+# the honest posture (a realization with no recorded choice is unenforceable
+# either way) and it is pinned by a test arm, not papered over.
+#
+# Cross-record half, declared not faked (§8.6): axisId existing on the
+# FAMILY's branch_axes and branchIds never masquerading as vendor step ids is
+# NOT lint-DSL expressible (record-scope only, LintEngine.ts:126-135; no
+# cross-record resolution). It is a vocabulary lineage requirement
+# (rung-vocabulary.yaml, rung LOCAL_REALIZATION) and W2-7's compiler gate,
+# which resolves inherits_from at compile time anyway.
+
+rules:
+# R1 — a MATCHED axis with no recorded choices is a realization with no
+# LOCAL_REALIZATION lineage. Unmatched axes (matched: false) are honest without
+# choices. `choices: {}` fires too (isEmpty({}) === true — probe above).
+- id: prov-local-choices-recorded
+  title: "matched branch resolutions must record their localization choices"
+  description: >-
+    LOCAL_REALIZATION lineage is the recorded choice: when a branch_resolution
+    item matched, its `choices` (the localization choices that produced this
+    resolution — the schema's own provenance note) must be non-empty. An
+    empty-object choices is EMPTY (PathResolver.isEmpty), same as absent.
+    Unmatched resolutions (matched: false) carry no lineage obligation.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: branch_resolution
+  assert:
+    op: everyItem
+    collectionPath: branch_resolution
+    assert:
+      op: any
+      predicates:
+        - op: equals
+          path: matched
+          value: false
+        - op: nonEmpty
+          path: choices
+  message:
+    template: "local-protocol '{{recordId}}': a matched branch_resolution records no localization choices — a LOCAL_REALIZATION without its recorded choice. axis ids: {{branch_resolution[*].axisId}}."
+
+# R2 — axisId shape, actionable per-item (mirrors the schema pattern). The
+# schema is the primary wall; this names the offender at lint-on-write.
+- id: prov-local-axis-declared-shape
+  title: "branch_resolution axisId must carry the declared axis-id shape"
+  description: >-
+    Every branch_resolution axisId matches ^[a-z][a-z0-9-]*$ (the schema's own
+    pattern). The cross-record half — the axisId exists on the FAMILY's
+    branch_axes and branchIds are family ids, never masquerading as vendor
+    candidate step ids — is NOT record-scope lint expressible; it is declared
+    in rung-vocabulary.yaml and enforced by W2-7's compiler gate.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: branch_resolution
+  assert:
+    op: everyItem
+    collectionPath: branch_resolution
+    assert:
+      op: regex
+      path: axisId
+      pattern: "^[a-z][a-z0-9-]*$"
+  message:
+    template: "local-protocol '{{recordId}}': branch_resolution axisId(s) violate the declared axis-id shape ^[a-z][a-z0-9-]*$. axis ids: {{branch_resolution[*].axisId}}."
+
+# R3 — a substitution without its WHY is a visible review issue (warning
+# discipline precedent, PROTO-AI-4 R2): the rationale IS the LOCAL_REALIZATION
+# lineage of a lab substitution.
+- id: prov-local-substitution-rationale
+  title: "material substitutions must carry their rationale"
+  description: >-
+    A LOCAL_REALIZATION substitution (overrides.substitutions[]) must carry a
+    non-empty rationale — the WHY of the lab's substitution is its lineage.
+    WARNING severity: a missing rationale is a review issue, not a write
+    refusal.
+  severity: warning
+  scope: record
+  when:
+    op: nonEmpty
+    path: overrides.substitutions
+  assert:
+    op: everyItem
+    collectionPath: overrides.substitutions
+    assert:
+      op: nonEmpty
+      path: rationale
+  message:
+    template: "local-protocol '{{recordId}}': substitution(s) without a rationale — a LOCAL_REALIZATION substitution must state its why. substitutions: {{overrides.substitutions[*].material_ref}}."
+

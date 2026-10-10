@@ -1,0 +1,79 @@
+# UI hints for the provenance-rung vocabulary registry doc
+# (schema/registry/provenance-ladder/rung-vocabulary.yaml — derivation.ui.yaml
+# precedent: uiVersion + schemaId + display/form/list; the schemaId here is the
+# vocabulary's declared doc_id, mirroring how rung-vocabulary.lint.yaml binds).
+# Display hints for the later ladder review surface; zero app code, no UI gate.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/provenance-rung-vocabulary"
+
+display:
+  titleField: "$.doc_id"
+  icon: "vocabulary"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.doc_id"
+      widget: "text"
+      label: "Vocabulary doc id"
+      readonly: true
+    - path: "$.version"
+      widget: "text"
+      label: "Version"
+      readonly: true
+  - title: "Rungs"
+    description: >-
+      The four admitted rungs (VENDOR / DERIVED / INFERRED_INVARIANT /
+      LOCAL_REALIZATION) with carrier + lineage_required. Rung badges elsewhere
+      in the UI are RENDERED from this data by the W2-8 surface.
+    fields:
+    - path: "$.rungs"
+      widget: "array"
+      label: "Rungs"
+      readonly: true
+    - path: "$.rungs[*].id"
+      widget: "text"
+      label: "Rung"
+      readonly: true
+    - path: "$.rungs[*].curie"
+      widget: "text"
+      label: "CURIE"
+      readonly: true
+    - path: "$.rungs[*].lineage_required"
+      widget: "textarea"
+      label: "Lineage required"
+      readonly: true
+  - title: "Derived queries"
+    description: >-
+      'locally-validated' is a DERIVED query over realization+run+evidence —
+      never an attestation field (R2-a).
+    fields:
+    - path: "$.derived_queries"
+      widget: "array"
+      label: "Derived queries"
+      readonly: true
+  - title: "Transition policy"
+    fields:
+    - path: "$.transition_policy.transitions"
+      widget: "array"
+      label: "Permitted transitions"
+      readonly: true
+    - path: "$.transition_policy.forbidden_edges"
+      widget: "array"
+      label: "Forbidden edges (no promotion TO VENDOR)"
+      readonly: true
+
+list:
+  columns:
+  - path: "$.rungs[*].id"
+    label: "Rung"
+    width: "180px"
+  - path: "$.rungs[*].curie"
+    label: "CURIE"

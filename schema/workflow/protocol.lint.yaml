@@ -258,6 +258,111 @@ rules:
     message:
       template: "Protocol '{{recordId}}': intent step(s) without an intent.semanticVerb ref — the semantic verb is a verb-definition record ref, never absent and never a bare string. step ids: {{steps[*].stepId}}."
 
+  # R-8 (W2-4) — DERIVED lineage: a PRESENT intent provenance must carry the
+  # candidate document anchor. THE SPLIT (recorded, bait 8.2): ABSENT provenance
+  # stays W2-3 R-6's WARNING (intent-step-provenance-visible); PRESENT-but-
+  # UNANCHORED is an ERROR here. The `not(exists intent.provenance)` arm keeps
+  # the absent case out of this rule (everyItem would otherwise fail loudly on
+  # the unresolvable collectionPath and double-fire); an empty provenance array
+  # passes everyItem vacuously and is R-6's business. Legacy protocols (no
+  # intent) emit nothing: the when-guard skips the whole rule.
+  - id: prov-derived-conclusions-anchored
+    title: "Intent provenance refs must carry the candidate document anchor"
+    description: >-
+      A DERIVED conclusion (an intent step's provenance ref at the SAID) is
+      only as good as its visible derivation: when `intent.provenance` is
+      present, every ref must carry a non-empty id AND a non-empty pageStart
+      (the candidate document anchor). Absent provenance is NOT this rule's
+      case — it stays the W2-3 intent-step-provenance-visible WARNING; present-
+      but-unanchored is an error naming the step.
+    severity: error
+    scope: record
+    when:
+      op: nonEmpty
+      path: steps[*].intent
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: intent
+          - op: not
+            not:
+              op: exists
+              path: intent.provenance
+          - op: everyItem
+            collectionPath: intent.provenance
+            assert:
+              op: all
+              predicates:
+                - op: nonEmpty
+                  path: id
+                - op: nonEmpty
+                  path: pageStart
+    message:
+      template: "Protocol '{{recordId}}': intent provenance ref(s) present without the candidate document anchor (id + pageStart) — a DERIVED conclusion without a visible derivation. step ids: {{steps[*].stepId}}."
+
+  # R-9 (W2-4) — the lint leg of "DERIVED conclusions CANNOT be promoted to
+  # VENDOR by any path": the referenced id must LOOK like a candidate id. The
+  # PRIMARY wall is schema-level — W2-3's merged StepProvenanceRef type-const
+  # `vendor-protocol-candidate` makes `type: run` a schema REJECT (proven in
+  # Wave2ProvenanceLadderSchema/Wave2ProtocolIntentSchema fixtures); this rule
+  # catches the right-type-wrong-id half-masquerade (a run/plan id wearing the
+  # candidate type). Prefix `CAN-` confirmed from the MERGED trunk: the W2-3
+  # fixtures (CAN-w23-demo, CAN-lint-fixture) and the production mint
+  # server/src/api/handlers/ExtractHandlers.ts:162 (`CAN-${target_kind}-${Date.now()}`).
+  - id: prov-derived-never-vendor-carrier
+    title: "Intent provenance refs must name a candidate record, never another kind's id"
+    description: >-
+      A DERIVED conclusion quotes the SAID: its provenance ref id must carry
+      the candidate id shape (CAN- prefix, as minted by the extraction path).
+      A candidate-typed ref wearing a run/plan/protocol id is a masquerade of
+      vendor truth and is refused, naming the step. Schema type-const is the
+      primary wall; this is the id-shape belt.
+    severity: error
+    scope: record
+    when:
+      op: nonEmpty
+      path: steps[*].intent
+    assert:
+      op: everyItem
+      collectionPath: steps
+      assert:
+        op: any
+        predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: intent
+          - op: not
+            not:
+              op: exists
+              path: intent.provenance
+          - op: everyItem
+            collectionPath: intent.provenance
+            assert:
+              op: regex
+              path: id
+              pattern: "^CAN-"
+    message:
+      template: "Protocol '{{recordId}}': intent provenance ref id does not look like a vendor-protocol-candidate id (CAN- prefix) — a DERIVED conclusion cannot borrow a non-candidate id to read as vendor truth. step ids: {{steps[*].stepId}}; ref ids: {{steps[*].intent.provenance[*].id}}."
+
+# INFERRED_INVARIANT family-side seam (W2-4, declared — NOT a rule): the rung
+# vocabulary (schema/registry/provenance-ladder/rung-vocabulary.yaml, rung
+# INFERRED_INVARIANT) requires an EVIDENCE anchor, but protocol.schema.yaml has
+# NO family-invariant slot today (root closed; StepProvenanceRef type-const is
+# candidate-only; EvidenceSource.type lacks protocol/run). Shipping a rule
+# against a path that exists nowhere would be a vacuous-green dead rule — so
+# the lineage is proven on the knowledge layer instead (assertion.evidence_refs
+# + evidence required supports/sources; Wave2ProvenanceLadderSchema.test.ts arm
+# h) and the family-side slot is the declared hand-off seam to W2-5 (OQ1:
+# widen StepProvenanceRef's type const toward evidence refs). When that slot
+# lands, the family rule rides HERE with a prov-family-* id.
+
 # Remaining intended rules (deliberately NOT activated — out of PROTO-AI-4
 # scope; track activation separately. The DSL now carries the generic
 # quantifiers several of them need — allIn/everyItem/noneIn, see
