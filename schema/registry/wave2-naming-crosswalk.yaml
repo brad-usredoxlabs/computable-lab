@@ -146,23 +146,88 @@ entries:
 
   # ---- wave-2 vocabulary pending admission (minted as enum VALUES/data on
   #      existing records, never as kinds) ----
+  # W2-4-PROVENANCE-LADDER admitted the four rungs: minted as VOCAB DATA
+  # (registry vocabulary doc + the ONE datatype enum + lint rule bodies),
+  # never as record kinds — forbidden_kinds `provenance-ladder`/`provenance-rung`
+  # remain satisfied (no such properties.kind.const exists; the pinned
+  # admission test's enumeration walks only *.schema.yaml files).
   - term: "VENDOR"
-    status: new-vocab-pending-admission
-    binds_to: { kind: vendor-protocol-candidate }
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/workflow/vendor-protocol-candidate.schema.yaml
+      carrier_lint: schema/workflow/vendor-protocol-candidate.lint.yaml
     curie_plan: "cf:provenance-vendor"
     source_decision: D3/W2-4
+    note: >-
+      W2-4 LANDED the rung (was new-vocab-pending-admission at W2-1 admission).
+      VENDOR is POSITIONAL: a fact is VENDOR iff it sits on an immutable,
+      document-anchored vendor-protocol-candidate ($defs/Provenance
+      documentId+pageStart, closed fact objects — no rung field exists on a
+      candidate fact). Vocabulary data + lint, never a record kind.
   - term: "DERIVED"
-    status: new-vocab-pending-admission
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier_lint: schema/workflow/protocol.lint.yaml
     curie_plan: "cf:provenance-derived"
     source_decision: W2-4
+    note: >-
+      W2-4 LANDED the rung. Extraction conclusions on the protocol family
+      (steps[].intent.provenance, W2-3's merged StepProvenanceRef): present-but-
+      unanchored provenance is a lint ERROR (prov-derived-conclusions-anchored);
+      absence stays W2-3's intent-step-provenance-visible WARNING. DERIVED can
+      NEVER be promoted to VENDOR by any path (schema closure + prov-* lint
+      walls; rung-vocabulary transition_policy.forbidden_edges).
   - term: "INFERRED_INVARIANT"
-    status: new-vocab-pending-admission
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/knowledge/assertion.schema.yaml
+      evidence: schema/knowledge/evidence.schema.yaml
     curie_plan: "cf:provenance-inferred-invariant"
     source_decision: W2-4
+    note: >-
+      W2-4 LANDED the rung. Family invariants with EVIDENCE anchors; today's
+      instantiation surface is the knowledge layer (assertion.evidence_refs +
+      evidence required supports/sources). The family-side slot in
+      protocol.schema.yaml does NOT exist yet — declared hand-off seam to W2-5
+      (commented seam in protocol.lint.yaml; no dead rule shipped against a
+      nonexistent path).
   - term: "LOCAL_REALIZATION"
-    status: new-vocab-pending-admission
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/workflow/local-protocol.schema.yaml
+      carrier_lint: schema/workflow/local-protocol.lint.yaml
     curie_plan: "cf:provenance-local-realization"
     source_decision: D3/W2-4
+    note: >-
+      W2-4 LANDED the rung. local-protocol.branch_resolution[].choices +
+      overrides.substitutions[].rationale (W2-7 WRITES, W2-4 constrains lineage
+      via prov-local-*). Vocabulary data + lint, never a record kind.
+  - term: "locally-validated"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+    curie_plan: "cf:locally-validated"
+    source_decision: D3/W2-4
+    note: >-
+      DERIVED query over local-protocol realization + completed run + active
+      evidence (rung-vocabulary.yaml derived_queries: three read-side
+      GraphQuery clauses; computation proven in-process by
+      server/src/graph-query/Wave2LocallyValidatedQuery.test.ts). NEVER an
+      attestation field (R2-a): no locally_validated flag/status/enum exists
+      anywhere; the query IS the expression. Vocabulary data, never a kind.
   - term: "constraint-classes"
     status: existing
     binds_to:

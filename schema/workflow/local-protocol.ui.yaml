@@ -69,6 +69,32 @@ form:
     - path: "$.notes"
       widget: "textarea"
       label: "Notes"
+  # W2-4-PROVENANCE-LADDER (additive): LOCAL_REALIZATION badge hints (rung
+  # vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml). The
+  # localization choices and substitution rationales ARE the lab's lineage —
+  # badges are rendered from rung-vocabulary data by the W2-8 surface; W2-4
+  # ships hints only. W2-7 WRITES these fields; W2-4 constrains their lineage
+  # (prov-local-* rules).
+  - title: "Localization (LOCAL_REALIZATION)"
+    fields:
+    - path: "$.branch_resolution"
+      widget: "array"
+      label: "Branch resolutions"
+      readonly: true
+    - path: "$.branch_resolution[*].choices"
+      widget: "object"
+      label: "LOCAL_REALIZATION — lab's answer"
+      readonly: true
+      helpText: "the localization choices that produced this resolution (prov-local-choices-recorded)"
+    - path: "$.overrides.substitutions"
+      widget: "array"
+      label: "Material substitutions"
+      readonly: true
+    - path: "$.overrides.substitutions[*].rationale"
+      widget: "textarea"
+      label: "LOCAL_REALIZATION — why"
+      readonly: true
+      helpText: "the WHY of a lab substitution is its lineage (prov-local-substitution-rationale)"
 
 list:
   columns:

@@ -1,0 +1,124 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/provenance-rung-ref.schema.yaml"
+title: "ProvenanceRungRef"
+description: >
+  THE shared provenance-rung datatype of the W2-4 provenance ladder: a ref
+  (composed by $ref ./ref.schema.yaml — never duplicating it) plus a rung from
+  the admitted four-rung vocabulary and the rung's required lineage anchors.
+  The rung VOCABULARY lives as data in
+  schema/registry/provenance-ladder/rung-vocabulary.yaml; this datatype is the
+  ONE enum of those names (rung VALUES closed to the four, spelled exactly).
+
+  Rungs are enum VALUES + registry data, NEVER a record kind: this file
+  declares no `properties.kind.const` (the crosswalk's forbidden_kinds lists
+  `provenance-ladder` and `provenance-rung` — neither is minted here or
+  anywhere in wave 2; the pinned admission test
+  server/src/schema/Wave2NamingCrosswalk.test.ts enforces it).
+
+  VENDOR is POSITIONAL, not labelable: a fact is VENDOR iff it sits on an
+  immutable, document-anchored vendor-protocol-candidate. The candidate's own
+  facts stay anchor-only with NO rung field (their objects are
+  additionalProperties:false). This datatype is for the layers that DO label a
+  conclusion's provenance (intent-step refs, knowledge-layer conclusions,
+  local-protocol realizations).
+
+  SHIPS UNMOUNTED (the W2-2 constraint.datatype precedent): no shipped record
+  schema $refs it in this diff — W2-5/W2-7/W2-8 mount it.
+
+  CLOSURE DECISION (named probe in the W2-4 report): `additionalProperties` is
+  INTENTIONALLY not set at the outer level. ref.schema.yaml is an OPEN datatype
+  (no additionalProperties), and closing here while allOf-composing would
+  reject ref's own fields under some Ajv stances. The rung VALUES are closed
+  (enum); extra keys are accepted by design, mirroring the equipment-capability
+  allOf+$ref style (equipment-capability.schema.yaml equipmentRef).
+
+  'locally-validated' is a DERIVED QUERY over local-protocol realizations +
+  completed runs + active evidence (rung-vocabulary.yaml derived_queries), NEVER
+  an attestation field (R2-a). The ladder carries no signature/lifecycle field:
+  QMS e-sign attaches to promotion-to-ACTIVE of controlled documents (W2-5).
+
+type: object
+allOf:
+- $ref: "./ref.schema.yaml"
+
+- type: object
+  required: [ rung ]
+  properties:
+    rung:
+      type: string
+      enum: [ VENDOR, DERIVED, INFERRED_INVARIANT, LOCAL_REALIZATION ]
+      description: >-
+        The provenance rung of this conclusion's lineage — the four admitted
+        names, spelled exactly (uppercase with underscores), mirrored from
+        rung-vocabulary.yaml rungs[*].id and the crosswalk entries. Not a kind,
+        not a status, not a verb.
+    pageStart:
+      type: integer
+      minimum: 1
+      description: "Candidate-document page anchor (mirrors $defs/Provenance)."
+    pageEnd:
+      type: integer
+      minimum: 1
+    sectionId:
+      type: string
+    spanStart:
+      type: integer
+      minimum: 0
+    spanEnd:
+      type: integer
+      minimum: 0
+    evidence:
+      type: array
+      minItems: 1
+      items:
+        $ref: "./ref.schema.yaml"
+      description: >-
+        Evidence anchors for an INFERRED_INVARIANT conclusion: record refs to
+        kind `evidence` whose own required supports/sources carry the lineage
+        (knowledge-layer surfaces today; the family-side slot is the declared
+        W2-5 hand-off seam).
+
+- # VENDOR: a candidate ref (kind record, type vendor-protocol-candidate —
+  # mirroring W2-3's merged StepProvenanceRef constrained-ref style) plus the
+  # document page anchor. VENDOR lineage = document anchors.
+  if:
+    properties:
+      rung: { const: VENDOR }
+    required: [ rung ]
+  then:
+    required: [ pageStart ]
+    properties:
+      kind: { const: record }
+      type: { const: vendor-protocol-candidate }
+
+- # DERIVED: a conclusion whose derivation is VISIBLE — the candidate document
+  # anchor is required. (Present-but-unanchored is also a lint ERROR,
+  # prov-derived-conclusions-anchored; absence stays W2-3's warning.)
+  if:
+    properties:
+      rung: { const: DERIVED }
+    required: [ rung ]
+  then:
+    required: [ pageStart ]
+
+- # INFERRED_INVARIANT: a family invariant carries EVIDENCE anchors — a
+  # non-empty evidence array (minItems:1 above makes an empty array invalid).
+  if:
+    properties:
+      rung: { const: INFERRED_INVARIANT }
+    required: [ rung ]
+  then:
+    required: [ evidence ]
+
+- # LOCAL_REALIZATION: rides the local-protocol record ref (id + type are
+  # already required for kind: record by ref.schema.yaml's own arms). Arms are
+  # ADDITIVE-only requirements — no rung-forbids-beyond-its-own-presence rule
+  # (a LOCAL_REALIZATION ref may also carry anchors; documented, not forbidden).
+  if:
+    properties:
+      rung: { const: LOCAL_REALIZATION }
+    required: [ rung ]
+  then:
+    properties:
+      kind: { const: record }
+      type: { const: local-protocol }

@@ -1,0 +1,127 @@
+# UI specification for VendorProtocolCandidate records (W2-4: NEW — none
+# existed before the provenance-ladder item).
+#
+# VENDOR rung rendering (schema/registry/provenance-ladder/rung-vocabulary.yaml,
+# rung VENDOR): the whole record is the ladder's VENDOR position — immutable
+# document truth. The rung badge is a HINT string for the W2-8 SAID/MEANT
+# surface to render FROM the rung-vocabulary data; W2-4 ships hints only, zero
+# app code.
+#
+# vendor-validated-labware renders from sections[kind=specifications] + the
+# labware ExtractedItems: there is NO validated flag on steps BY DESIGN (the
+# step object is closed — additionalProperties:false — and
+# vendor-protocol-candidate.lint.yaml prov-vendor-specifications-not-step-params
+# keeps the law loud). The layout below lists ONLY closed-schema fields; no
+# step-parameter affordance for validation appears anywhere, by design.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "protocol"
+  badge: "VENDOR — immutable document truth (ladder position)"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Source document"
+    description: >-
+      VENDOR lineage is a document anchor: every fact cites the source document
+      (provenance.documentId + pageStart). Read-only — the candidate is written
+      by extraction only.
+    fields:
+    - path: "$.source"
+      widget: "text"
+      label: "Source document"
+      readonly: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      readonly: true
+  - title: "Manufacturer specifications"
+    description: >-
+      manufacturer facts (vendor-validated labware renders HERE):
+      sections[kind=specifications] + the labware ExtractedItems below, each
+      document-anchored. There is no validated flag on steps by design.
+    fields:
+    - path: "$.sections"
+      widget: "array"
+      label: "Sections (kind: specifications carries manufacturer facts)"
+      readonly: true
+    - path: "$.sections[*].provenance.documentId"
+      widget: "text"
+      label: "Document ID"
+      readonly: true
+    - path: "$.sections[*].provenance.pageStart"
+      widget: "number"
+      label: "Page"
+      readonly: true
+  - title: "Labware"
+    description: >-
+      ExtractedItems — vendor-validated labware rides here (with its
+      specifications section), never as a step parameter.
+    fields:
+    - path: "$.labware"
+      widget: "array"
+      label: "Labware (ExtractedItems)"
+      readonly: true
+    - path: "$.labware[*].provenance.documentId"
+      widget: "text"
+      label: "Document ID"
+      readonly: true
+    - path: "$.labware[*].provenance.pageStart"
+      widget: "number"
+      label: "Page"
+      readonly: true
+  - title: "Materials / Equipment"
+    fields:
+    - path: "$.materials"
+      widget: "array"
+      label: "Materials (ExtractedItems)"
+      readonly: true
+    - path: "$.equipment"
+      widget: "array"
+      label: "Equipment (ExtractedItems)"
+      readonly: true
+  - title: "Steps"
+    description: >-
+      Extracted steps with per-step provenance anchors. NO validation affordance
+      here: steps carry no validatedBy/rung key (closed schema +
+      prov-vendor-specifications-not-step-params).
+    fields:
+    - path: "$.steps"
+      widget: "array"
+      label: "Steps"
+      readonly: true
+    - path: "$.steps[*].provenance.documentId"
+      widget: "text"
+      label: "Document ID"
+      readonly: true
+    - path: "$.steps[*].provenance.pageStart"
+      widget: "number"
+      label: "Page"
+      readonly: true
+  - title: "Tables / Notes / Outputs"
+    fields:
+    - path: "$.tables"
+      widget: "array"
+      label: "Tables"
+      readonly: true
+    - path: "$.notes"
+      widget: "array"
+      label: "Notes"
+      readonly: true
+    - path: "$.outputs"
+      widget: "array"
+      label: "Outputs"
+      readonly: true
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "160px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.source"
+    label: "Source document"

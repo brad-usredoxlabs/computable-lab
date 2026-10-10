@@ -318,6 +318,10 @@ describe('protocol.lint.yaml declares the full declared rule set', () => {
     // the old "only the three role-integrity rules activate" pin cannot remain
     // true; the 7-id pin is extended to the full declared set per spec mandate +
     // orchestrator ratification l2t1955.
+    // W2-4-PROVENANCE-LADDER (same precedent, same ratification shape): the
+    // W2-4 spec mandates the DERIVED-lineage rules live in the SAME file
+    // (§2.5 R-8/R-9, additive-only — the seven W2-3 ids above are
+    // byte-unchanged), so the 7-id pin extends to the 9-id declared set.
     expect(spec.rules.map((r) => r.id)).toEqual([
       'step-role-closure',
       'labware-role-identity-bearing',
@@ -326,6 +330,8 @@ describe('protocol.lint.yaml declares the full declared rule set', () => {
       'legacy-inventory-no-intent-drift',
       'intent-step-provenance-visible',
       'intent-verb-ref-declared',
+      'prov-derived-conclusions-anchored',
+      'prov-derived-never-vendor-carrier',
     ]);
     expect(spec.rules.find((r) => r.id === 'step-role-closure')?.severity).toBe('error');
     expect(spec.rules.find((r) => r.id === 'labware-role-identity-bearing')?.severity).toBe('warning');

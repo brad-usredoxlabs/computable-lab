@@ -1,0 +1,200 @@
+# W2-4-PROVENANCE-LADDER — the four-rung provenance ladder as registry DATA
+# (wave2-naming-crosswalk.yaml / operations.yaml precedent: registry-style pure
+# data doc, NOT a *.schema.yaml, so it never enters SchemaRegistry or the
+# record-kind enumeration — Wave2NamingCrosswalk.test.ts:54-62 walks only
+# *.schema.yaml files). The rung NAMES are minted HERE as vocabulary data; the
+# rung CURIEs are mirrored from the merged crosswalk entries (:149-164) and are
+# NEVER re-minted.
+#
+# Structural well-formedness of THIS doc: rung-vocabulary.lint.yaml (DSL).
+# UI hints for the later ladder review surface: rung-vocabulary.ui.yaml.
+# The shared rung datatype (the ONE enum of the four rungs):
+# schema/core/datatypes/provenance-rung-ref.schema.yaml (ships UNMOUNTED —
+# W2-5/W2-7/W2-8 mount it; nothing in this diff $refs it from a record schema).
+#
+# Binding rulings: D3/R2-a (lane-2 task-list WAVE-2 header): "'locally-validated'
+# is DERIVED (query over runs/evidence), never an attestation field; QMS e-sign
+# applies only to promotion-to-ACTIVE of regulated docs". The rung memo this doc
+# implements: docs/wave2-naming-crosswalk.md §3. Provenance discipline follows
+# docs/knowledge-layer-canonical-example.md `layer_provenance:` (provenance as
+# data attached to records, never collapsed layers) and principles §4 (provenance
+# hierarchy) / §5 (controlled vocab) / §6 (declarative).
+kind: provenance-vocabulary
+version: 0.1.0
+campaign: semantic-protocol-family
+authority: >-
+  D3/R2-a task-list WAVE-2 header + docs/wave2-naming-crosswalk.md §3 (the rung
+  memo) + W2-1 crosswalk admission (schema/registry/wave2-naming-crosswalk.yaml
+  entries VENDOR/DERIVED/INFERRED_INVARIANT/LOCAL_REALIZATION, cf: plans).
+doc_id: "https://computable-lab.com/schema/computable-lab/registry/provenance-rung-vocabulary"
+
+rungs:
+  - id: VENDOR
+    curie: cf:provenance-vendor
+    carrier: >-
+      vendor-protocol-candidate facts (sections/steps/tables/materials/
+      equipment/labware/notes/outputs items; provenance per-field —
+      vendor-protocol-candidate.schema.yaml $defs/Provenance on
+      sections[].provenance, steps[].provenance, tables[].provenance,
+      ExtractedItem.provenance, Action.provenance)
+    lineage_required: >-
+      document anchor — provenance.documentId + provenance.pageStart
+      (schema-required by $defs/Provenance); enforced per-fact by
+      vendor-protocol-candidate.lint.yaml prov-vendor-facts-document-anchored
+    mints_on: >-
+      extraction (the ONLY writer of VENDOR facts; the candidate is immutable —
+      "document truth plus provenance, not a final executable protocol"
+      (schema description); immutability ENFORCEMENT is the W2-5 server surface)
+
+  - id: DERIVED
+    curie: cf:provenance-derived
+    carrier: >-
+      extraction conclusions on the protocol family —
+      steps[].intent.provenance (protocol.schema.yaml $defs/StepProvenanceRef,
+      merged W2-3 shape: a record ref type-const vendor-protocol-candidate plus
+      candidate-side anchors, rung-agnostic by design)
+    lineage_required: >-
+      a candidate record ref WITH a visible document anchor (pageStart
+      nonEmpty) — a DERIVED conclusion whose provenance is present but
+      unanchored is a lint ERROR (prov-derived-conclusions-anchored); absence
+      stays the W2-3 intent-step-provenance-visible WARNING
+    mints_on: >-
+      extraction or review-edit (an authored intent conclusion quoting SAID
+      evidence pointers; derivation is never quoted as vendor truth)
+
+  - id: INFERRED_INVARIANT
+    curie: cf:provenance-inferred-invariant
+    carrier: >-
+      family invariants — conclusions with EVIDENCE anchors; today's schema
+      surface is the knowledge layer: assertion.evidence_refs
+      (assertion.schema.yaml) + evidence required supports/sources
+      (evidence.schema.yaml). The FAMILY-side slot does NOT exist in
+      protocol.schema.yaml today (root closed; StepProvenanceRef type-const is
+      candidate-only) — declared HAND-OFF SEAM (W2-5 reconciliation; see the
+      commented seam in protocol.lint.yaml). No lint rule is shipped against a
+      path that exists nowhere (dead rules are vacuity bait).
+    lineage_required: >-
+      evidence anchor — a record ref to kind `evidence` whose sources resolve
+      (evidence.schema.yaml required [supports, sources]; retracted evidence is
+      excluded from active queries by its own status semantics)
+    mints_on: inference-pass
+
+  - id: LOCAL_REALIZATION
+    curie: cf:provenance-local-realization
+    carrier: >-
+      local-protocol.branch_resolution[].choices (local-protocol.schema.yaml
+      "The localization choices that produced this resolution (provenance)") +
+      overrides.substitutions[].rationale; W2-7 WRITES these fields, W2-4
+      declares the vocabulary + constrains their lineage via prov-local-*
+    lineage_required: >-
+      a recorded choice + inherits_from the family (schema-required); branch
+      ids come from the FAMILY's branch_axes/variants vocabulary, NEVER minted
+      from candidate step ids ("never masquerading as vendor branch ids"). The
+      cross-record half (axisId exists on the family's branch_axes) is NOT
+      lint-DSL expressible (record-scope only, LintEngine.ts:126-135) — it is
+      the W2-7 compiler gate, which resolves inherits_from at compile time.
+    mints_on: localization
+
+derived_queries:
+  - id: locally-validated
+    curie: cf:locally-validated
+    rung_effect: DERIVED
+    statement: >-
+      A protocol-family conclusion is locally-validated IFF a local-protocol
+      realization of the family EXISTS (local-protocol.inherits_from -> the
+      protocol), at least one run of that realization has status completed
+      (run.schema.yaml status enum via run.localProtocolRef), AND at least one
+      ACTIVE evidence record's sources resolve into that run's executed surface
+      (evidence.schema.yaml sources[].type enum — event/event_graph/
+      measurement_context; run.executedEventGraphId). NEVER an attestation
+      field (R2-a): there is no locally_validated flag, status, or enum value
+      anywhere — this query IS the expression.
+    query_clauses:
+      - id: realization-exists
+        op: traverse
+        relationship: refers_to
+        direction: in
+        targetType: local-protocol
+        depth: 1
+        reads: >-
+          local-protocol records that refer to the protocol (inherits_from ->
+          refers_to edge in the GraphEdgeIndex build input)
+      - id: completed-run-of-realization
+        op: find
+        type: run
+        where:
+          - field: status
+            operator: "="
+            value: completed
+          - field: local-protocol.recordId
+            operator: in
+            values_from: realization-exists
+        reads: >-
+          runs whose status is completed AND whose localProtocolRef resolves
+          (GraphQueryEngine dotted-field expansion: 'local-protocol.recordId'
+          follows the refers_to edge to the local-protocol node) to one of the
+          realizations from clause 1
+      - id: active-evidence-into-run-executed-surface
+        op: find
+        type: evidence
+        where:
+          - field: status
+            operator: "="
+            value: active
+          - field: event-graph.runId
+            operator: in
+            values_from: completed-run-of-realization
+        reads: >-
+          ACTIVE evidence records whose sources resolve through refers_to edges
+          (GraphQueryEngine dotted-field expansion: 'event-graph.runId' follows
+          evidence -> event-graph -> the run link; run.executedEventGraphId
+          names the same executed surface) into a COMPLETED run of the
+          realization set; retracted evidence is excluded by the status clause
+          (evidence status semantics: retracted is excluded from active queries)
+    composition: >-
+      Three read-side GraphQuery clauses (graph-query.schema.yaml ops
+      traverse/find/exists; the engine is read-only — "No query in this schema
+      mutates laboratory state"). The clause DATA lives HERE; the existing
+      GraphQueryEngine + GraphEdgeIndex execute them (server/src/graph-query/
+      Wave2LocallyValidatedQuery.test.ts proves the computation in-process).
+      The reusable SERVICE composition is W2-5/W2-7 territory (OQ2) — no new
+      DSL op, no engine edit.
+
+transition_policy:
+  mints:
+    VENDOR: [extraction]
+    DERIVED: [extraction, review-edit]
+    INFERRED_INVARIANT: [inference-pass]
+    LOCAL_REALIZATION: [localization]
+  # The PERMITTED rung-to-rung edges, as data (source/target are RUNG names;
+  # the activity that mints a rung is declared in `mints` above).
+  # prov-vocab-no-vendor-promotion-edge reads THIS list in the DSL-honest
+  # direction: every edge must either originate at VENDOR or not target VENDOR.
+  # An edge whose target is VENDOR from a non-VENDOR source FIRES. The
+  # forbidden_edges block below is the same law stated the other way —
+  # documentation-as-data, mirrored by the rule.
+  transitions:
+    - { source: VENDOR, target: DERIVED, via: extraction }
+    - { source: VENDOR, target: INFERRED_INVARIANT, via: inference-pass }
+    - { source: DERIVED, target: INFERRED_INVARIANT, via: inference-pass }
+    - { source: LOCAL_REALIZATION, target: DERIVED, via: localization }
+  forbidden_edges:
+    - { from: DERIVED, to: VENDOR }
+    - { from: INFERRED_INVARIANT, to: VENDOR }
+    - { from: LOCAL_REALIZATION, to: VENDOR }
+  note: >-
+    VENDOR is POSITIONAL, not labelable: a fact is VENDOR iff it sits on an
+    immutable, document-anchored vendor-protocol-candidate. There is no rung
+    FIELD on a candidate fact (schema closure — $defs/Provenance and every fact
+    object carry additionalProperties:false), therefore no path — edit, PATCH,
+    or promotion — can relabel a derived conclusion as vendor truth.
+    Enforcement walls: vendor-protocol-candidate.lint.yaml (candidate),
+    protocol.lint.yaml prov-derived-* (family), and the schema closure arms
+    proven by server/src/schema/Wave2ProvenanceLadderSchema.test.ts.
+
+qms_note: >-
+  The ladder carries NO attestation and NO signature. QMS e-sign applies at
+  promotion-to-ACTIVE of controlled documents (lifecycle.meta.schema.yaml
+  requires_signature; signature.schema.yaml kind const) — the W2-5 surface,
+  deliberately NOT the ladder (task why: "QMS sign lives on promotion-to-ACTIVE
+  (W2-5), not on the ladder").

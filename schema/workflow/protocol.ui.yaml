@@ -85,6 +85,30 @@ form:
       readonly: true
       helpText: "pointers at the SAID (vendor-protocol-candidate + anchors)"
 
+  # W2-4-PROVENANCE-LADDER (additive, NEW section — the W2-3 'Intent' section's
+  # field list is byte-unchanged so its pinned loader test stays green). DERIVED
+  # badge hints on the intent provenance anchors: rung badges are RENDERED from
+  # rung-vocabulary data by the W2-8 surface; W2-4 ships hints only.
+  # INFERRED_INVARIANT has no family-side slot in protocol.schema.yaml yet
+  # (declared seam to W2-5 — see the commented seam in protocol.lint.yaml); its
+  # hint rides HERE once the slot lands.
+  - title: "Provenance (DERIVED)"
+    description: >-
+      DERIVED lineage of an intent conclusion: the candidate document anchor it
+      quotes. Read-only hints; enforcement is prov-derived-* lint
+      (protocol.lint.yaml) + the schema's StepProvenanceRef type const.
+    fields:
+    - path: "$.steps[*].intent.provenance[*].id"
+      widget: "text"
+      label: "Candidate id (DERIVED — never another kind's id)"
+      readonly: true
+      helpText: "a DERIVED conclusion quotes the SAID (CAN- candidate id); prov-derived-never-vendor-carrier"
+    - path: "$.steps[*].intent.provenance[*].pageStart"
+      widget: "number"
+      label: "Page (DERIVED — candidate-anchored)"
+      readonly: true
+      helpText: "the visible candidate document anchor; prov-derived-conclusions-anchored"
+
 list:
   columns:
   - path: "$.recordId"
