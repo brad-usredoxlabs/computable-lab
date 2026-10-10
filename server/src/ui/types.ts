@@ -71,6 +71,8 @@ export interface FieldHint {
   disabled?: boolean;
   /** Whether field is read-only */
   readOnly?: boolean;
+  /** YAML uses lowercase readonly — accept both spellings (mirrors app uiSpec.ts) */
+  readonly?: boolean;
   /** Default value (if not in schema) */
   defaultValue?: unknown;
   /** Visibility condition */

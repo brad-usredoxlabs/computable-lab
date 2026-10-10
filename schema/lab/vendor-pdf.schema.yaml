@@ -12,6 +12,26 @@ type: object
 unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+# W2-8-FIX2 D2 (conditional JSON Schema — same if/then convention as
+# core/datatypes/quantity.schema.yaml and provenance-rung-ref.schema.yaml):
+# source.url is the provenance of the exa URL-ingest path. A local
+# upload-by-content has no url — its provenance truth is the content-addressed
+# file (file.sha256 + stored_path) — so the url requirement applies ONLY when
+# the record does not carry a content-addressed file block. A record with
+# NEITHER url NOR file.sha256 has no traceable provenance and stays invalid.
+- if:
+    not:
+      type: object
+      required: [ file ]
+      properties:
+        file:
+          type: object
+          required: [ sha256 ]
+  then:
+    properties:
+      source:
+        type: object
+        required: [ url ]
 
 required:
 - kind
@@ -54,7 +74,10 @@ properties:
   source:
     type: object
     additionalProperties: false
-    required: [ engine, url, ingestedAt ]
+    # url is NOT flat-required here: the top-level allOf conditional above
+    # requires it for the URL-ingest shape and waives it for a content upload
+    # whose truth is file.sha256 + stored_path (W2-8-FIX2 D2).
+    required: [ engine, ingestedAt ]
     properties:
       engine:
         const: "exa"
