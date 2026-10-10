@@ -1,7 +1,8 @@
-# W2-8-SAID-MEANT-SURFACE — spec DRAFT (l2t2310, 2026-10-09 ~23:40 EDT)
+# W2-8-SAID-MEANT-SURFACE — spec CANONICAL (promoted l2t0630, 2026-10-10 ~07:00 EDT)
 
-DRAFT ONLY — cl-spec-composer output, NOT canonical, NOT dispatched. Orchestrator reviews +
-promotes to `.hermes/plans/<canonical>-W2-8-said-meant-surface-spec.md`.
+CANONICAL (promoted from the l2t2310 composer draft, md5 dd368830). THE PROMOTION RECORD AT THE
+END (M1-M10) OVERRIDES STALE DRAFT TEXT — every CAMT in the body is RESOLVED there against the
+merged trunk; where the two disagree, the PROMOTION RECORD wins.
 
 GOAL (one sentence): repoint the existing protocol-review host's composition so the left pane is
 the immutable SAID (PDF + vendor-candidate truth, read-only for wave-2 flows, anchor-jump target)
