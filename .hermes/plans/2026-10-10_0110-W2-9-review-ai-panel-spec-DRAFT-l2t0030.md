@@ -467,3 +467,22 @@ COMPOSED 2026-10-10 ~01:55 EDT by cl-spec-composer (l2t0030). Every §0 product 
 FIRST-HAND this session at code base 78bee2c8 (tip 987bd34c); cl-scout screening twice,
 corrections/limits marked (§0.4, F-W29-8). All W2-5/W2-6/W2-8 binds are CAMT — merged trunk wins
 at promotion. Nothing here is promoted or dispatched.
+
+
+---
+
+## PROMOTION NOTE (orch l2t0715, 2026-10-10 ~07:30 EDT) — the OQ2 CAMT-fires condition is RESOLVED EARLY, first-hand at merged trunk f19cfa95:
+- OQ2 condition CLEARED: the merged W2-6 semantic pass lands the XDR with candidates[0] =
+  {target_kind:'protocol', draft:{kind:'protocol', recordId:`PRT-<CAN>-semantic`, title, steps,
+  branch_axes?}} (SemanticFamilyPass.ts:288-312) — the draft body IS protocol kind, so the ruled
+  draft-aware apply fn (OQ2(a), reusing exported applyOps) does NOT reopen. The edit path is
+  PUT /records/:XDR + expectedSha (M3, W2-8 promotion record).
+- W2-6 OQ3(b) machine block CONFIRMED MERGED exactly as re-ruled: AIConfig.semanticPass
+  (types.ts:189; fields baseUrl/model/apiKey/maxTokens/temperature/enableThinking/thinkingLevels/
+  defaultThinkingLevel) + resolveSemanticPassInference seam (SemanticFamilyPass.ts:65). W2-9's
+  /settings section binds THESE keys — no new knob, no second seam.
+- Trigger endpoint for the panel affordance (if spec §11 wires one): POST
+  /extraction/vendor-candidates/:recordId/semantic-draft, param = CAN-* candidate id (W2-8
+  promotion record M1 — same facts).
+- STILL OPEN at W2-9 claim: W2-8 merged surface shapes (W2-8 is in-progress on the coder slot at
+  this note's time; its merge closes the promotion gate).

@@ -513,3 +513,16 @@ this session at trunk 987bd34c; zero scout calls (all questions answered by dire
 endpoint probes fired from this session. CAMT register: W2-6 endpoint/service codes/prompt path,
 W2-7 realization module/fixture, merged baselines (tsc/fail-SET/health counts) — merged trunk
 wins over every shape assumed here; fixtures adapt at claim, the spec does not.
+
+
+---
+
+## PROMOTION NOTE (orch l2t0715, 2026-10-10 ~07:25 EDT) — W2-6-side CAMTs RESOLVED first-hand at trunk (post-W2-6 merge f19cfa95; docs chain over it; W2-7 merge pending). Merged trunk wins; this note REPLACES the §0.6 W2-6 guesses below as the binding shapes:
+
+- N1 CONFIG KNOB (OQ2 ruling's "resolve AS MERGED"): `AIConfig.semanticPass?: SemanticPassConfig` MERGED at server/src/config/types.ts:189; SemanticPassConfig fields (all optional): baseUrl, model, apiKey, maxTokens, temperature, enableThinking, thinkingLevels, defaultThinkingLevel. Matrix combos are therefore DATA: each variant sets ai.semanticPass.{baseUrl,model} (apiKey only where required; never hardcode). No /settings UI needed for the matrix — drive it by config copy per combo, exactly as ruled.
+- N2 THE ONE SEAM: resolveSemanticPassInference(ai) at server/src/ingestion/vendor-protocol/SemanticFamilyPass.ts:65 — merges the block OVER resolveAiProfile(ai).inference; MISSING block => active profile. Do not add a second knob.
+- N3 ENDPOINT (merged, W2-6): POST /extraction/vendor-candidates/:recordId/semantic-draft — param = the CAN-* candidate id; success {recordId:<XDR-semantic-*>, diagnostics}. Error codes MERGED set: SEMANTIC_PASS_NO_CANDIDATE / SEMANTIC_PASS_PARSE_FAILED / SEMANTIC_PASS_STEP_COVERAGE / SEMANTIC_PASS_TRUNCATED / SEMANTIC_PASS_DRAFT_WRITE_FAILED / SEMANTIC_PASS_UNKNOWN_THINKING_LEVEL (map per §7: parse/guard -> extraction.*; 502 transport -> extraction.transport).
+- N4 PROMPT DATA REAL: server/src/extract/prompts/semantic-family-draft.md (2834 B at f19cfa95) — sha256 it in the report preamble as the prompt-revision pin (§7 guessed path CONFIRMED).
+- N5 XDR LANDING SHAPE (for anchor-support scoring): candidates[0]={target_kind:'protocol', draft:{kind:'protocol', recordId:`PRT-<CAN>-semantic`, title, steps, branch_axes?}}; source_artifact.id = candidate.source.documentId ?? candidateRecordId; ambiguity_spans_by_candidate carries the anchor spans. Drafts land UNVALIDATED at mint — the schema+lint wall fires at store write/promotion (scores must distinguish mint-time vs wall-time failures).
+- N6 STILL OPEN (CAMT-at-claim, W2-7 side): realizeScientistIntent.ts module surface + realization fixture bytes + REALIZATION_* code names — W2-7 coder exited DONE at cf7d548a (adversarial gate c1 in flight at this note's time); resolve these against MERGED trunk at W2-10 claim, per the existing §11 register.
+
