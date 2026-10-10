@@ -22,13 +22,19 @@
  *                  upstream (OQ4(a)); dimensional conflation fails at the
  *                  shipped Quantity schema (Ajv), never a TS branch
  *   L4 CAPABILITY  profile requiredTools/requiredLabwareDefinitions + surviving
- *                  steps' capabilityRequirement satisfied by SetupRows;
- *                  substitution adjudication rides the constraint vocabulary's
- *                  bindingKind x overridePolicy seam (SPINE-8) as data
+ *                  steps' capabilityRequirement satisfied by SetupRows (the
+ *                  per-step section/match path is policy DATA
+ *                  stepCapabilityClosure); substitution adjudication rides the
+ *                  constraint vocabulary's bindingKind x overridePolicy seam
+ *                  (SPINE-8) CONSUMED from the policy's substitutionAdjudication
+ *                  pointer (vocabularyFile/membershipField/keyComposition)
  *   L5 ADJUDICATE  canonical -> the 31-verb contract via the adjudication
- *                  table + the shipped vocabulary (unadjudicated verbs fail
+ *                  table (path declared by the policy's verbAdjudication
+ *                  pointer) + the shipped vocabulary (unadjudicated verbs fail
  *                  loudly; no silent folding); symbolic labels ride from the
- *                  bound profile's data
+ *                  bound profile's data via the policy's emissionPolicy
+ *                  (labelFields paths + reagentFedVerbs membership — the
+ *                  emission rule is DATA, zero verb literals in TS)
  *   L6 VALIDATE    the emitted string through the REAL parseScientistIntent
  *                  (Ajv sole authority); a failure is a lowering BUG
  */
@@ -123,11 +129,30 @@ export interface RealizationPolicyDoc {
     actionable: string;
   }>;
   capabilityClosure: Array<{ profileField: string; section: string; matchOn: string }>;
+  stepCapabilityClosure: { section: string; matchOn: string };
   substitutionAdjudication: {
     vocabularyFile: string;
     membershipField: string;
     keyComposition: string;
   };
+  verbAdjudication: { file: string };
+  emissionPolicy: {
+    /** The lowered verbs fed from the profile's reagent source (L5 emission
+     *  rule as DATA — adversarial cycle-1 DEFECT 1: membership test, never a
+     *  verb literal in TS). */
+    reagentFedVerbs: string[];
+    /** labelKey -> the profile FIELD PATH + the action slots it fills
+     *  (DEFECT 2: field paths are declared data, never dataPath literals). */
+    labelFields: Array<{
+      labelKey: string;
+      profileField: string;
+      actionSlots: string[];
+      hintValueField?: string;
+      hintSlot?: string;
+      onlyForReagentFedVerbs?: boolean;
+    }>;
+  };
+  setupDefaults: { defaultSetupSection: string };
   parameterBindings: Array<{ dimension: string; arg: string }>;
 }
 
@@ -147,8 +172,9 @@ export function loadRealizationPolicy(path: string = defaultPolicyPath()): Reali
   return doc;
 }
 
-/** Data path lookup on the bound profile record ('pipetting.requiredTools' ->
- *  the array). Zero profile-field knowledge hardcoded in TS beyond the path. */
+/** Data path lookup on the bound profile record (e.g. the policy's
+ *  capabilityClosure[].profileField -> the array). Zero profile-field knowledge
+ *  hardcoded in TS beyond the path. */
 function dataPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const seg of path.split('.')) {
@@ -169,8 +195,10 @@ interface VerbAdjudication {
   protocolSemanticOnly: Set<string>;
 }
 
-function loadVerbAdjudication(): VerbAdjudication {
-  const path = resolve(process.cwd(), '..', 'schema', 'registry', 'wave2-verb-adjudication.yaml');
+function loadVerbAdjudication(policy: RealizationPolicyDoc): VerbAdjudication {
+  // The table path rides the policy's verbAdjudication pointer (DEFECT 3
+  // discipline: the pointer is consumed, never a hardcoded path).
+  const path = resolve(process.cwd(), '..', policy.verbAdjudication.file);
   const doc = parseYaml(readFileSync(path, 'utf-8')) as {
     mappings?: {
       same_operation?: Array<{ canonical: string; scientist_intent_action: string }>;
@@ -191,12 +219,31 @@ function loadVerbAdjudication(): VerbAdjudication {
 // Constraint vocabulary DATA (the SPINE-8 strictness seam as membership)
 // ---------------------------------------------------------------------------
 
-function loadPolicyBindingKeys(): Set<string> {
-  const path = resolve(
-    process.cwd(), '..', 'schema', 'registry', 'constraint-vocabulary', 'constraint-vocabulary.yaml',
-  );
-  const doc = parseYaml(readFileSync(path, 'utf-8')) as { policyBindingKeys?: string[] };
-  return new Set(doc.policyBindingKeys ?? []);
+/** Load the seam vocabulary THROUGH the policy's substitutionAdjudication
+ *  pointer (DEFECT 3: vocabularyFile + membershipField are consumed from the
+ *  declaration — no hardcoded path or field name). */
+function loadPolicyBindingKeys(policy: RealizationPolicyDoc): Set<string> {
+  const path = resolve(process.cwd(), '..', policy.substitutionAdjudication.vocabularyFile);
+  const doc = parseYaml(readFileSync(path, 'utf-8')) as Record<string, unknown>;
+  const field = policy.substitutionAdjudication.membershipField;
+  const list = doc[field];
+  if (!Array.isArray(list)) {
+    throw new Error(
+      `substitutionAdjudication.membershipField '${field}' is not a list in the declared ` +
+      `vocabularyFile ${path} — the seam pointer must name a real membership list.`,
+    );
+  }
+  return new Set(list.filter((k): k is string => typeof k === 'string'));
+}
+
+/** Compose the seam key from the policy's keyComposition template (the
+ *  {placeholder} tokens name the constraint's own fields — data, not a TS
+ *  format string). */
+function composeBindingKey(
+  template: string,
+  fields: Record<string, string>,
+): string {
+  return template.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, token: string) => fields[token] ?? '');
 }
 
 // ---------------------------------------------------------------------------
@@ -406,8 +453,9 @@ export async function lowerRealization(
       continue;
     }
     if (answer.answerLocation === 'setup_rows') {
+      const defaultSection = policy.setupDefaults.defaultSetupSection;
       const sectionRows =
-        (dataPath(realization, answer.section ?? 'labwares') as SetupRowLike[] | undefined) ?? [];
+        (dataPath(realization, answer.section ?? defaultSection) as SetupRowLike[] | undefined) ?? [];
       const role = scaleProfile
         ? String(dataPath(scaleProfile, answer.roleFromProfile ?? '') ?? '')
         : '';
@@ -419,7 +467,7 @@ export async function lowerRealization(
           message:
             `required realization answer '${answer.id}' is not recorded — `
             + `${answer.actionable.replace('<role>', role)}. `
-            + `Question: "${answer.question}" (answer location: the '${answer.section ?? 'labwares'}' `
+            + `Question: "${answer.question}" (answer location: the '${answer.section ?? defaultSection}' `
             + `SetupRow with role '${role}' and a concrete ref).`,
         });
       }
@@ -455,21 +503,27 @@ export async function lowerRealization(
     for (const need of step.intent?.materialNeeds ?? []) {
       const cap = need.capabilityRequirement;
       if (!cap?.id) continue;
-      const satisfied = sectionRows('equipment').some((row) => row.ref?.id === cap.id);
+      // The section + match path for per-step capability requirements is
+      // policy DATA (stepCapabilityClosure), same discipline as capabilityClosure.
+      const satisfied = sectionRows(policy.stepCapabilityClosure.section)
+        .some((row) => dataPath(row, policy.stepCapabilityClosure.matchOn) === cap.id);
       if (!satisfied) {
         failures.push({
           code: 'REALIZATION_CAPABILITY_MISSING',
           message:
-            `surviving intent step '${step.stepId}' needs '${need.need}' which presumes capability `
-            + `'${cap.id}', but the realization's 'equipment' SetupRows bind no ref with `
-            + `id = '${cap.id}' — answer the equipment role (bind a row to '${cap.id}').`,
+            `surviving intent step '${step.stepId}' needs '${need.need}' which presumes capability ` +
+            `'${cap.id}', but the realization's '${policy.stepCapabilityClosure.section}' SetupRows bind no ref with ` +
+            `${policy.stepCapabilityClosure.matchOn} = '${cap.id}' — answer the equipment role (bind a row to '${cap.id}').`,
         });
       }
     }
   }
 
-  // Substitution adjudication: the constraint vocabulary's seam as membership.
-  const policyBindingKeys = loadPolicyBindingKeys();
+  // Substitution adjudication: the constraint vocabulary's seam as membership,
+  // consumed THROUGH the policy's substitutionAdjudication pointer (DEFECT 3:
+  // the declared vocabularyFile/membershipField/keyComposition are LIVE).
+  const policyBindingKeys = loadPolicyBindingKeys(policy);
+  const bindingKeyTemplate = policy.substitutionAdjudication.keyComposition;
   const survivingConstraints = survivingSteps.flatMap(
     (step) => (step.intent?.constraints ?? []) as Array<Record<string, unknown>>,
   );
@@ -481,10 +535,18 @@ export async function lowerRealization(
       const subject = constraint.subject as Record<string, unknown> | undefined;
       const bindingKind = String(constraint.bindingKind ?? '');
       const overridePolicy = String(constraint.overridePolicy ?? 'none');
-      const composed =
-        typeof subject?.bindingPolicyKey === 'string'
-          ? subject.bindingPolicyKey
-          : `${overridePolicy}:${bindingKind}`;
+      const composed = composeBindingKey(bindingKeyTemplate, { overridePolicy, bindingKind });
+      if (typeof subject?.bindingPolicyKey === 'string' && subject.bindingPolicyKey !== composed) {
+        failures.push({
+          code: 'REALIZATION_SUBSTITUTION_DISALLOWED',
+          message:
+            `constraint on role '${sub.role}' declares subject.bindingPolicyKey ` +
+            `'${subject.bindingPolicyKey}' which disagrees with the policy's declared ` +
+            `keyComposition '${bindingKeyTemplate}' (composed '${composed}') — the seam key ` +
+            `comes from the declared composition, never a per-record override.`,
+        });
+        continue;
+      }
       if (!policyBindingKeys.has(composed)) {
         failures.push({
           code: 'REALIZATION_SUBSTITUTION_DISALLOWED',
@@ -501,8 +563,9 @@ export async function lowerRealization(
   if (failures.length > 0) return { failures };
 
   // ---- L5 ADJUDICATE + EMIT --------------------------------------------------
-  const adjudication = loadVerbAdjudication();
+  const adjudication = loadVerbAdjudication(policy);
   const vocabulary = defaultScientistIntentVocabulary();
+  const reagentFedVerbs = new Set(policy.emissionPolicy.reagentFedVerbs);
   const parameterArgByDimension = new Map<string, string>(
     policy.parameterBindings.map((b) => [b.dimension, b.arg]),
   );
@@ -538,23 +601,24 @@ export async function lowerRealization(
       continue;
     }
 
-    // Symbolic labels ride from the bound profile's data (never hardcoded).
-    const sampleRole = scaleProfile ? String(dataPath(scaleProfile, 'sampleLayout.labwareRole') ?? '') : '';
-    const reagentRole = scaleProfile ? String(dataPath(scaleProfile, 'reagentSource.sourceLabwareRole') ?? '') : '';
-    const sampleDef = scaleProfile ? String(dataPath(scaleProfile, 'sampleLayout.labwareDefinition') ?? '') : '';
-    const reagentDef = scaleProfile ? String(dataPath(scaleProfile, 'reagentSource.labwareDefinition') ?? '') : '';
-
+    // Symbolic labels ride from the bound profile's data via the policy's
+    // emissionPolicy.labelFields (DEFECT 2: the profile FIELD PATHS and the
+    // action slots they fill are declared data — zero path literals in TS).
+    // Declaration order is the emission order (determinism by construction).
     const action: Record<string, unknown> = { action: verb };
     const needLabel = payload.materialNeeds?.[0]?.need;
     if (typeof needLabel === 'string' && needLabel.length > 0) action.material = needLabel;
-    if (reagentRole && (verb === 'transfer' || verb === 'wash' || verb === 'add_material')) {
-      action.source = reagentRole;
-      if (reagentDef) action.sourceHint = reagentDef;
-    }
-    if (sampleRole) {
-      action.target = sampleRole;
-      action.labware = sampleRole;
-      if (sampleDef) action.labwareHint = sampleDef;
+    for (const labelField of policy.emissionPolicy.labelFields) {
+      if (labelField.onlyForReagentFedVerbs && !reagentFedVerbs.has(verb)) continue;
+      const label = scaleProfile
+        ? String(dataPath(scaleProfile, labelField.profileField) ?? '')
+        : '';
+      if (!label) continue;
+      for (const slot of labelField.actionSlots) action[slot] = label;
+      if (labelField.hintValueField && labelField.hintSlot) {
+        const hint = String(dataPath(scaleProfile, labelField.hintValueField) ?? '');
+        if (hint) action[labelField.hintSlot] = hint;
+      }
     }
 
     // Typed constraint bounds ride ONLY through declared parameterBindings.

@@ -5,7 +5,7 @@
  * Fixtures mirror realizationGolden.test.ts (same derived axes, M1).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse as parseYaml } from 'yaml';
@@ -351,15 +351,71 @@ describe('W2-7 T5 verb adjudication (bait #5)', () => {
     expect(() => parseScientistIntent(fabricated)).toThrow(ScientistIntentValidationError);
   });
 
-  it('same_operation canonical `shake` maps via the adjudication table (data lookup, not a TS verb list)', async () => {
+  it('vocabulary-member canonical `shake` lowers via the DIRECT vocabulary door (door 1)', async () => {
     const family = cloneFixture(familyFixture());
     const steps = family.steps as Array<{ stepId: string; intent: Record<string, unknown> }>;
     // step-2b (the selected vortex-variant step) carries no volume constraint,
-    // so the mapped verb lowers cleanly.
+    // so the verb lowers cleanly. 'shake' IS a shipped vocabulary member
+    // (scientist-intent-vocabulary.yaml), so this leg proves door 1 (direct
+    // membership), NOT the adjudication-table mapping (see the next test).
     steps[3].intent.semanticVerb = { canonical: 'shake' };
     const result = await lower(family, realizationFixture());
     expect('intentYaml' in result).toBe(true);
     if ('intentYaml' in result) expect(result.intentYaml).toContain('action: shake');
+  });
+
+  it('non-vocabulary canonical `agitate` maps to `shake` via the adjudication table (door 2, mapping branch exercised via DATA — zero code edits)', async () => {
+    // 'agitate' is NOT a member of the shipped 31-verb vocabulary, so the
+    // direct door fails and the same_operation MAPPING branch is the only way
+    // to a lowered verb. The mapping lives in the adjudication table, reached
+    // via the policy's verbAdjudication pointer: the test renames the table's
+    // shake entry to agitate -> shake in a TEMP copy and points a TEMP policy
+    // copy at it (the shipped files stay byte-untouched).
+    const adjudicationPath = join(process.cwd(), '..', 'schema', 'registry', 'wave2-verb-adjudication.yaml');
+    const policyPath = join(process.cwd(), '..', 'schema', 'registry', 'realization', 'robot-realization.policy.yaml');
+    const originalTable = readFileSync(adjudicationPath, 'utf-8');
+    const originalPolicy = readFileSync(policyPath, 'utf-8');
+    const tempTable = join(tmpdir(), `w27-adjudication-agitate-${process.pid}.yaml`);
+    const tempPolicy = join(tmpdir(), `w27-policy-agitate-${process.pid}.yaml`);
+    try {
+      const mutatedTable = originalTable.replace('canonical: shake', 'canonical: agitate');
+      expect(mutatedTable).not.toBe(originalTable);
+      writeFileSync(tempTable, mutatedTable, 'utf-8');
+
+      const mutatedPolicy = originalPolicy.replace(
+        'file: schema/registry/wave2-verb-adjudication.yaml',
+        `file: ${tempTable}`,
+      );
+      expect(mutatedPolicy).not.toBe(originalPolicy);
+      writeFileSync(tempPolicy, mutatedPolicy, 'utf-8');
+
+      const family = cloneFixture(familyFixture());
+      const steps = family.steps as Array<{ stepId: string; intent: Record<string, unknown> }>;
+      steps[3].intent.semanticVerb = { canonical: 'agitate' };
+
+      // Control: with the SHIPPED table, 'agitate' has no door at all.
+      const refused = await lower(family, realizationFixture());
+      expect(codes(refused)).toContain('REALIZATION_VERB_UNADJUDICATED');
+      expect(messages(refused)).toContain('agitate');
+
+      // With the mapped table (loaded through the policy pointer — fresh disk
+      // read, same route as every policy leg), the mapping branch fires.
+      const policy = loadRealizationPolicy(tempPolicy);
+      const result = await lowerRealization({
+        family: family as unknown as ProtocolPayloadLike,
+        realization: realizationFixture() as unknown as LocalProtocolPayloadLike,
+        policy,
+      });
+      expect('intentYaml' in result).toBe(true);
+      if ('intentYaml' in result) expect(result.intentYaml).toContain('action: shake');
+
+      // The shipped data files are byte-untouched (the swap lived in temp copies).
+      expect(readFileSync(adjudicationPath, 'utf-8')).toBe(originalTable);
+      expect(readFileSync(policyPath, 'utf-8')).toBe(originalPolicy);
+    } finally {
+      rmSync(tempTable, { force: true });
+      rmSync(tempPolicy, { force: true });
+    }
   });
 });
 
@@ -392,6 +448,41 @@ describe('W2-7 T6 policy-is-data (AC: substitution policy + bindings ride data)'
       expect(result.scaleProfile?.id).toBe('robot-opentrons-ot2-96');
     } finally {
       // The shipped policy file is byte-untouched (the swap lived in a temp copy).
+      expect(readFileSync(policyPath, 'utf-8')).toBe(original);
+    }
+  });
+
+  it('editing the policy YAML emissionPolicy.reagentFedVerbs (drop the wash verb) removes the reagent source labels with ZERO code edits (DEFECT 1: the emission rule is DATA)', async () => {
+    const policyPath = join(process.cwd(), '..', 'schema', 'registry', 'realization', 'robot-realization.policy.yaml');
+    const original = readFileSync(policyPath, 'utf-8');
+    const tempPath = join(tmpdir(), `w27-emission-drop-wash-${process.pid}.yaml`);
+    try {
+      // Drop ONLY the wash entry from the declared reagentFedVerbs list.
+      const swapped = original.replace('    - wash\n', '');
+      expect(swapped).not.toBe(original);
+      writeFileSync(tempPath, swapped, 'utf-8');
+
+      const policy = loadRealizationPolicy(tempPath);
+      const result = await lowerRealization({
+        family: familyFixture() as unknown as ProtocolPayloadLike,
+        realization: realizationFixture() as unknown as LocalProtocolPayloadLike,
+        policy,
+      });
+      expect('intentYaml' in result).toBe(true);
+      if (!('intentYaml' in result)) return;
+      // The wash action keeps its target/labware labels but is NO LONGER fed
+      // from the reagent source — the verb->source-role rule rode the YAML.
+      const actions = parseYaml(result.intentYaml) as { actions: Array<Record<string, unknown>> };
+      const wash = actions.actions.find((a) => a.action === 'wash')!;
+      expect(wash.source).toBeUndefined();
+      expect(wash.sourceHint).toBeUndefined();
+      expect(wash.target).toBe('sample_plate');
+      // transfer/add_material remain reagent-fed (their entries stayed declared).
+      const fed = actions.actions.filter((a) => a.source === 'reagent_reservoir').map((a) => a.action);
+      expect(fed).toContain('transfer');
+      expect(fed).toContain('add_material');
+      expect(fed).not.toContain('wash');
+    } finally {
       expect(readFileSync(policyPath, 'utf-8')).toBe(original);
     }
   });

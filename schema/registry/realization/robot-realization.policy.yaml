@@ -12,9 +12,17 @@
 #    lowering (L3 gate; bars the guessed default upstream — OQ4(a)).
 #  - capabilityClosure: profile requiredTools/requiredLabwareDefinitions ->
 #    the SetupRow sections that must carry them (L4 gate).
+#  - stepCapabilityClosure: a surviving intent step's capabilityRequirement ->
+#    the SetupRow section + match path that must carry it (L4 gate).
 #  - substitutionAdjudication: disallowance is DECIDED by the constraint
 #    vocabulary's bindingKind x overridePolicy seam (SPINE-8) — this doc points
-#    at the seam (policyBindingKeys membership), it adds NO new policy.
+#    at the seam (vocabularyFile + membershipField + keyComposition), and the
+#    lowerer CONSUMES the pointer (file, field, composition template).
+#  - verbAdjudication: the ONE mapping table the L5 verb doors read (pointer).
+#  - emissionPolicy: which lowered verbs are fed from the profile's reagent
+#    source (reagentFedVerbs) + the profile FIELD PATHS the symbolic labels
+#    ride (labelFields) — the L5 emission rule as DATA (adversarial cycle-1
+#    DEFECTS 1-2: zero verb literals, zero field-path literals in TS).
 #  - parameterBindings: which constraint dimensions have a scientist-intent
 #    representation (L5; an unrepresentable parameter is a loud failure, never
 #    silent data loss — SPINE-7 fix1/D1 doctrine).
@@ -70,15 +78,65 @@ capabilityClosure:
     section: labwares
     matchOn: ref.id
 
+stepCapabilityClosure:
+  # L4 consumes: a surviving intent step's materialNeeds[].capabilityRequirement
+  # must be satisfied by a SetupRow in this section, matched on this data path
+  # (same discipline as capabilityClosure[].section/matchOn — no section name
+  # hardcoded in TS).
+  section: equipment
+  matchOn: ref.id
+
 substitutionAdjudication:
   # The strictness seam is the constraint vocabulary's DATA (SPINE-8):
   # policyBindingKeys lists the declared <overridePolicy>:<bindingKind> pairs.
   # A substitution against a surviving step's constraint is allowed IFF the
   # constraint's composed key is a member; otherwise it fails loudly citing
   # class + bindingKind + policy id. This doc adds NO policy of its own.
+  # The lowerer CONSUMES all three fields (adversarial cycle-1 DEFECT 3):
+  # vocabularyFile (repo-root-relative), membershipField (the list to load),
+  # keyComposition (a {placeholder} template over the constraint's own fields;
+  # a constraint's declared subject.bindingPolicyKey must agree with it).
   vocabularyFile: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml
   membershipField: policyBindingKeys
   keyComposition: "{overridePolicy}:{bindingKind}"
+
+verbAdjudication:
+  # L5 consumes: the ONE verb adjudication mapping table (W2-1 crosswalk).
+  # The lowerer loads the verb doors from THIS pointer — never a hardcoded
+  # path and never a TS verb list.
+  file: schema/registry/wave2-verb-adjudication.yaml
+
+emissionPolicy:
+  # L5 consumes: the emission rule as DATA (adversarial cycle-1 DEFECTS 1-2).
+  # reagentFedVerbs: which lowered verbs are fed from the bound profile's
+  # reagent source (membership test — the lowerer carries zero verb literals).
+  # labelFields: the profile FIELD PATHS the symbolic labels ride, in emission
+  # order, each naming the action slots it fills (and, when declared, the
+  # profile's definition/hint value riding the hint slot).
+  reagentFedVerbs:
+    - transfer
+    - wash
+    - add_material
+  labelFields:
+    - labelKey: reagent_source
+      profileField: reagentSource.sourceLabwareRole
+      actionSlots:
+        - source
+      hintValueField: reagentSource.labwareDefinition
+      hintSlot: sourceHint
+      onlyForReagentFedVerbs: true
+    - labelKey: sample_layout
+      profileField: sampleLayout.labwareRole
+      actionSlots:
+        - target
+        - labware
+      hintValueField: sampleLayout.labwareDefinition
+      hintSlot: labwareHint
+
+setupDefaults:
+  # The SetupRow section a requiredAnswers[].section is omitted to (the
+  # plate-answer default; declared, never hardcoded in TS).
+  defaultSetupSection: labwares
 
 parameterBindings:
   # L5 consumes: a typed constraint bound rides the emitted document ONLY if
