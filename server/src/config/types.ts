@@ -177,6 +177,17 @@ export interface AIConfig {
    */
   shadowRouter?: ShadowRouterConfig;
   /**
+   * W2-6 semantic-pass inference block (P2 ruling: OPTIONAL block, the
+   * shadowRouter optional-block precedent). MISSING/absent block = the pass
+   * runs on the active profile's inference (resolveAiProfile(ai).inference).
+   * Every field is optional and merges OVER the resolved profile: a block
+   * that names only `model` swaps the model and keeps the profile's endpoint.
+   * Model/host/thinking are DATA here — never literals in code. The /settings
+   * UI section for this block is W2-9's; the resolution seam lives in
+   * server/src/ingestion/vendor-protocol/SemanticFamilyPass.ts.
+   */
+  semanticPass?: SemanticPassConfig;
+  /**
    * RESOLVE threshold for prompt resolution assurance (default 0.9).
    * Below-threshold compiles pause for user confirmation instead of
    * auto-previewing. Also used as the default per-critical-binding floor.
@@ -226,6 +237,32 @@ export interface ShadowRouterConfig {
   timeoutMs?: number;
   /** Append-only JSONL telemetry destination (mirrors the foundry events.jsonl pattern). */
   telemetryPath?: string;
+}
+
+/**
+ * W2-6 semantic-pass inference block. Every field optional; the block merges
+ * OVER the resolved profile (see AIConfig.semanticPass). `thinkingLevels` /
+ * `defaultThinkingLevel` reuse the InferenceConfig thinking-level DATA shape
+ * (ai/thinkingLevels.ts) — an unknown requested level is refused, never
+ * downgraded.
+ */
+export interface SemanticPassConfig {
+  /** OpenAI-compatible base URL override for the semantic pass. */
+  baseUrl?: string;
+  /** Model name override for the semantic pass. */
+  model?: string;
+  /** API key override (endpoints that require one). */
+  apiKey?: string;
+  /** Answer budget for the pass (the knob SEMANTIC_PASS_TRUNCATED names). */
+  maxTokens?: number;
+  /** Generation temperature override. */
+  temperature?: number;
+  /** vLLM/Qwen3 enable_thinking override. */
+  enableThinking?: boolean;
+  /** Named thinking levels for the pass (thinkingLevels.ts shape). */
+  thinkingLevels?: Record<string, import('../ai/thinkingLevels.js').ThinkingLevelDefinition>;
+  /** Level id applied when a request names none. */
+  defaultThinkingLevel?: string;
 }
 
 /**

@@ -11,6 +11,7 @@ import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import { extractPdfText } from '../../extract/PdfTextAdapter.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { StoreResult } from '../../store/types.js';
+import type { SemanticPassRunner } from '../../ingestion/vendor-protocol/SemanticFamilyPass.js';
 
 type ExtractBody = {
   target_kind?: unknown;
@@ -40,6 +41,16 @@ export interface ExtractHandlers {
     request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<MetricsSnapshot | ApiError>;
+  /**
+   * W2-6 (OQ1 ruling (ii), P3): POST /extraction/vendor-candidates/:recordId/semantic-draft
+   * — wiring-only: param parse -> semantic pass service -> code->status map.
+   * NO policy logic here; the response is {recordId: XDR-...} + diagnostics
+   * and NEVER a literal-protocol payload or legacy draft-service output (A5).
+   */
+  semanticDraft(
+    request: FastifyRequest<{ Params: { recordId: string } }>,
+    reply: FastifyReply,
+  ): Promise<{ recordId: string; diagnostics: unknown } | ApiError>;
 }
 
 type UploadBody = {
@@ -60,6 +71,7 @@ export function createExtractHandlers(
   validator: AjvValidator,
   metrics?: { snapshot: () => MetricsSnapshot },
   auditService?: AuditEventService,
+  semanticPass?: SemanticPassRunner,
 ): ExtractHandlers {
   return {
     async extract(request, reply) {
@@ -459,6 +471,35 @@ export function createExtractHandlers(
         return { error: 'METRICS_UNAVAILABLE', message: 'Metrics collector not configured' };
       }
       return metrics.snapshot();
+    },
+
+    async semanticDraft(request, reply) {
+      // Wiring-only (spec §2.3): param parse -> service -> code->status map.
+      if (!semanticPass) {
+        reply.code(503);
+        return { error: 'SEMANTIC_PASS_UNAVAILABLE', message: 'Semantic pass is not configured (no ai.inference endpoint)' };
+      }
+      const { recordId } = request.params;
+      if (!recordId || !/^CAN-[A-Za-z0-9_-]+$/.test(recordId)) {
+        reply.code(400);
+        return { error: 'INVALID_INPUT', message: 'Invalid vendor-candidate record id (must be CAN-*)' };
+      }
+      const result = await semanticPass({ candidateRecordId: recordId });
+      if (result.ok) {
+        // A5: the route ends at the XDR record id + diagnostics — never a
+        // literal-protocol payload, never the legacy draft route's output.
+        return { recordId: result.recordId, diagnostics: result.diagnostics };
+      }
+      const status = result.error === 'SEMANTIC_PASS_NO_CANDIDATE' ? 404
+        : result.error === 'SEMANTIC_PASS_UNKNOWN_THINKING_LEVEL' ? 400
+        : result.error === 'SEMANTIC_PASS_STEP_COVERAGE' ? 422
+        : 502;
+      reply.code(status);
+      return {
+        error: result.error,
+        message: result.message,
+        ...(result.details !== undefined ? { details: result.details } : {}),
+      } as ApiError;
     },
   };
 }
