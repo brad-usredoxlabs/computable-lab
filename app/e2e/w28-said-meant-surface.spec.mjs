@@ -110,6 +110,11 @@ async function seedVpdf() {
   if (res.status !== 200) {
     throw new Error(`VPDF seeding upload -> ${res.status}: ${JSON.stringify(res.body)}`)
   }
+  // W2-8-FIX2 D2 response honesty: a 200 whose record create failed must not
+  // be treated as a durable seed.
+  if (res.body?.recordWriteError) {
+    throw new Error(`VPDF seeding upload wrote bytes but the record create failed: ${res.body.recordWriteError}`)
+  }
   const envelope = await getRecordEnvelope(VPDF_ID)
   const payload = envelope.payload
   const text = Array.isArray(payload.extractedText) ? payload.extractedText : []
@@ -261,7 +266,6 @@ test.describe('W2-8 SAID/MEANT surface gate', () => {
   })
 
   test('A3: a MEANT edit saves atomically, survives reload, and provenance survives byte-equal', async ({ page }) => {
-    const EDITED_TITLE = 'W2-8 gate — semantic family draft EDITED'
     const { xdrId: XDR_ID } = fixtures()
 
     const before = await getRecordEnvelope(XDR_ID)
@@ -269,17 +273,30 @@ test.describe('W2-8 SAID/MEANT surface gate', () => {
     expect(shaBefore, 'seeded XDR must carry a contentSha (the human lock)').toBeTruthy()
     const draftBefore = before.payload.candidates[0].draft
     const provenanceBefore = JSON.parse(JSON.stringify(draftBefore.steps.map((s) => s.intent?.provenance ?? null)))
+    // Idempotent-safe: a re-run over an already-edited record must still pick
+    // a value DIFFERENT from the current one, or the edit would be a no-op
+    // and the save would never dirty. Appending guarantees difference.
+    const EDITED_TITLE = `${draftBefore.title} EDITED`
 
     await openReview(page)
     const editor = page.locator('.semantic-draft__taptab [contenteditable="true"]').first()
     await expect(editor, 'the MEANT editor must mount (TapTab projection)').toBeVisible({ timeout: 20000 })
 
-    // Edit ONLY the title heading (first editable block): select the line,
-    // not the whole document — the steps and their provenance must survive.
-    await editor.click()
-    await page.keyboard.press('Home')
-    await page.keyboard.press('Shift+End')
-    await page.keyboard.type(EDITED_TITLE)
+    // Edit ONLY the title via the product's FieldRow edit path: click the
+    // value -> inline input -> commit. (Typing into the outer ProseMirror
+    // doc can never mutate it by design: fieldRow is an atom NodeView and
+    // the section content model is `sectionHeading fieldRow+` — no text
+    // positions. The interactive widget path is click-to-edit, the same one
+    // BudgetDocumentSurface and the registry surfaces use.)
+    const titleRow = page
+      .locator('.semantic-draft__taptab .taptab-field-row', { has: page.locator('.taptab-field-label', { hasText: 'Title' }) })
+      .first()
+    await expect(titleRow, 'the Title fieldRow must render').toBeVisible({ timeout: 15000 })
+    await titleRow.locator('.taptab-widget-value').first().click()
+    const input = titleRow.locator('input.taptab-inline-input').first()
+    await expect(input, 'clicking the value must open the inline input').toBeVisible({ timeout: 5000 })
+    await input.fill(EDITED_TITLE)
+    await page.keyboard.press('Enter')
 
     const save = page.getByTestId('semantic-draft-save')
     await expect(save, 'an edit must dirty the Save button').toBeEnabled({ timeout: 10000 })
@@ -296,6 +313,16 @@ test.describe('W2-8 SAID/MEANT surface gate', () => {
     // GET the XDR: the edit landed, provenance is byte-equal, a revision exists.
     const after = await getRecordEnvelope(XDR_ID)
     const draftAfter = after.payload.candidates[0].draft
+    // W2-8-FIX2 D1: the save must not mint junk keys. Wildcard projection
+    // hints ($.steps[*]...) are display-only; serializing them back used to
+    // add literal `steps[*]`/`version: null` keys to the draft (the trunk
+    // save polluted candidates[0].draft). The key set may only ever shrink
+    // or stay identical — a save must never invent addressable fields.
+    const junkBefore = Object.keys(draftBefore).filter((k) => k.includes('[*]')).sort()
+    const junkAfter = Object.keys(draftAfter).filter((k) => k.includes('[*]')).sort()
+    expect(junkAfter, 'the save must not mint wildcard-hint keys into the draft').toEqual(junkBefore)
+    const newKeys = Object.keys(draftAfter).filter((k) => !(k in draftBefore))
+    expect(newKeys, 'the save must not add keys the draft did not already have').toEqual([])
     const provenanceAfter = draftAfter.steps.map((s) => s.intent?.provenance ?? null)
     console.log('[A3] GET /records/XDR-w28-gate0001 title before/after:', draftBefore.title, '->', draftAfter.title)
     expect(draftAfter.title, 'the edited title must persist server-side').toBe(EDITED_TITLE)

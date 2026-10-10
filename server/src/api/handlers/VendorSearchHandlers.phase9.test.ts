@@ -481,6 +481,29 @@ describe('GraphLemur PDF upload → durable vendor-pdf record', () => {
     );
     expect(reply.statusCode).toBe(400);
   });
+
+  it('W2-8-FIX2 D2: a failed record create surfaces recordWriteError instead of a silent 200', async () => {
+    // The upload-by-content path (no url in the body). Before the schema
+    // conditional, the store rejected this payload ('Missing required
+    // property: url') and the response hid it. Now the failure is surfaced.
+    const base = makeStubStore();
+    const store = {
+      ...base.store,
+      async create() {
+        return { success: false, error: 'Validation failed: Missing required property: url' };
+      },
+    } as unknown as RecordStore;
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from('%PDF-1.4 upload-without-url').toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'Uploaded protocol', fileName: 'protocol.pdf', contentBase64: base64 }),
+      reply.reply,
+    );
+    const payload = (result as { recordWriteError?: string; recordedArtifact?: unknown })
+    expect(payload.recordedArtifact, 'a failed create must NOT report a durable record').toBeUndefined();
+    expect(payload.recordWriteError, 'the response must name the write failure').toContain('Validation failed');
+  });
 });
 
 // Mirror of the handler's content-addressed id derivation for the upload path.

@@ -159,8 +159,12 @@ function projectSlotsFromFormSections(
       // Determine required state
       const required = field.required ?? false;
 
-      // Determine readOnly state
-      const readOnly = field.readOnly ?? false;
+      // Determine readOnly state. The ui-v1 schema (and every *.ui.yaml in
+      // schema/) spells the hint `readonly:`; the TS type historically used
+      // `readOnly`. Honour BOTH spellings so a field the ui spec declares
+      // read-only can never project as an editable slot (W2-8-FIX2 D1: the
+      // protocol Intent/Provenance hint sections leaked as live inputs).
+      const readOnly = field.readOnly ?? field.readonly ?? false;
 
       const slot: ProjectionSlot = {
         id: `slot-${field.path.replace(/\$/g, '').replace(/\./g, '_')}`,

@@ -424,10 +424,25 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   // extraction payload lands and re-triggers the effect), which is why the
   // preview flips at the END of an ingestion and not on a first quiet load.
   const renderTasks = useRef<Map<number, { promise: Promise<void>; cancel: () => void }>>(new Map())
+  // W2-8-FIX2 D3: per-page claim. The old discipline only registered the
+  // render task AFTER `await pdfDoc.getPage()`, so two passes starting in the
+  // same tick (StrictMode's double effect run, a scale change landing mid-loop,
+  // the extraction payload re-triggering the effect) both saw an empty
+  // `previous` and called page.render() on the SAME canvas — pdf.js rejects
+  // that with "Cannot use the same canvas during multiple render() operations"
+  // (the console errors the orchestrator's probes captured on pages 1-2).
+  // A claim is written SYNCHRONOUSLY before the first await, and every await
+  // point re-checks it: at most one render per page is ever live, and a
+  // superseded pass bows out instead of racing onto the canvas.
+  const renderClaims = useRef<Map<number, number>>(new Map())
+  const claimSeq = useRef(0)
 
   const renderPage = useCallback(
     async (pageNumber: number) => {
       if (!pdfDoc) return
+      const myClaim = ++claimSeq.current
+      renderClaims.current.set(pageNumber, myClaim)
+      const ownsPage = () => renderClaims.current.get(pageNumber) === myClaim
       const previous = renderTasks.current.get(pageNumber)
       if (previous) {
         // A newer paint supersedes the old one: stop it, then wait for it to
@@ -439,9 +454,13 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         }
         await previous.promise.catch(() => undefined)
       }
+      if (!ownsPage()) return
       let task: { promise: Promise<void>; cancel: () => void } | undefined
       try {
         const page: PDFPageProxy = await pdfDoc.getPage(pageNumber)
+        // getPage is an await: a newer request may have claimed this page
+        // meanwhile. It owns the next paint — do not race it onto the canvas.
+        if (!ownsPage()) return
         const canvas = canvasRefs.current.get(pageNumber)
         if (!canvas) return
         const context = canvas.getContext('2d')
@@ -464,10 +483,11 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           console.error(`Failed to render page ${pageNumber}:`, err)
         }
       } finally {
-        // Only clear the entry if nobody newer claimed this page meanwhile.
+        // Only clear the entries if nobody newer claimed this page meanwhile.
         if (task && renderTasks.current.get(pageNumber) === task) {
           renderTasks.current.delete(pageNumber)
         }
+        if (ownsPage()) renderClaims.current.delete(pageNumber)
       }
     },
     [pdfDoc, scale],
