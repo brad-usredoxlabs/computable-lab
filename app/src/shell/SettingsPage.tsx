@@ -281,19 +281,29 @@ export function SettingsPage() {
             <div className="info-row">
               <span className="info-row__value">Loading...</span>
             </div>
-          ) : labSettingsError ? (
-            <div className="info-row">
-              <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
-            </div>
-          ) : labSettings ? (
-            <PolicyBundleSelector
-              currentBundleId={labSettings.policyBundleId}
-              onBundleChanged={handlePolicyBundleChanged}
-            />
           ) : (
-            <div className="info-row">
-              <span className="info-row__value">Not configured</span>
-            </div>
+            <>
+              {/* FIX-RUN-1 (adversarial defect 5): a refusal must NOT replace
+                  the bundle control. The error renders as a row ABOVE the
+                  selector so the sandbox->regulated->sandbox round trip can be
+                  retried on the same page; the next attempt clears it (success
+                  path sets labSettingsError to null). */}
+              {labSettingsError && (
+                <div className="info-row" data-testid="lab-settings-error" role="alert">
+                  <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
+                </div>
+              )}
+              {labSettings ? (
+                <PolicyBundleSelector
+                  currentBundleId={labSettings.policyBundleId}
+                  onBundleChanged={handlePolicyBundleChanged}
+                />
+              ) : (
+                <div className="info-row">
+                  <span className="info-row__value">Not configured</span>
+                </div>
+              )}
+            </>
           )}
         </Section>
 

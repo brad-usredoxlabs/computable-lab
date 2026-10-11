@@ -54,7 +54,11 @@ export interface LabSettingsHandlerOptions {
    * Authz gate (QMS-8 spec DECISION): resolve the request user the way the
    * lifecycle handlers do, then require the admin role via the RoleResolver
    * used by lifecycle transitions. Fail closed: unresolvable identity is
-   * non-admin.
+   * non-admin. FIX-RUN-1: fail closed ALSO for a request that presents no
+   * credential at all — the shipped LocalIdentityService resolves a headerless
+   * request to the first active user or the bootstrap USR-LOCAL-ADMIN
+   * (isSystem:true); that implicit fallback is NOT a credential for a
+   * privileged config write (adversarial defect 1).
    */
   resolveRequestUser?: (request: FastifyRequest) => Promise<ResolvedRequestUser | null>;
   roleResolver?: RoleResolver;
@@ -118,11 +122,17 @@ export function createLabSettingsHandlers(
       // -- Bundle registry is DATA: validate against the loaded catalog -------
       // (schema/core/policy-bundles/*.policy-bundle.yaml via listBundles —
       // never a hardcoded list in TS, never an unknown policy state.)
+      // FIX-RUN-1 (defect 2): the refusal is UNCONDITIONAL. The old
+      // `known.length > 0 &&` escape skipped validation when the registry was
+      // empty/absent and persisted an unknown policy state. An empty registry
+      // knows nothing, so it refuses EVERY id.
       const known = (bundleService?.listBundles() ?? []).map((b) => b.id);
-      if (known.length > 0 && !known.includes(requested)) {
+      if (!known.includes(requested)) {
         return reply.status(400).send({
           error: 'UNKNOWN_POLICY_BUNDLE',
-          message: `Unknown policy bundle ${requested}. Known bundles: ${known.join(', ')}`,
+          message: known.length > 0
+            ? `Unknown policy bundle ${requested}. Known bundles: ${known.join(', ')}`
+            : `Unknown policy bundle ${requested}. No policy bundles are loaded on this server; refusing to persist an unknown policy state.`,
         });
       }
 
@@ -131,16 +141,72 @@ export function createLabSettingsHandlers(
       // not a record, so this route gates on the role resolver the lifecycle
       // transitions use: admin-role grant (RoleResolver), or the system/local
       // admin identity. Fail closed. Denial shape: 403 {error:'FORBIDDEN',message}.
-      const actor = resolveRequestUser ? await resolveRequestUser(request) : null;
+      //
+      // FIX-RUN-1 (defect 1, BLOCKER): the gate must fail closed for a request
+      // that presents NO credential. The shipped LocalIdentityService resolves
+      // a headerless request to the first active user, or to the bootstrap
+      // USR-LOCAL-ADMIN with isSystem:true when that is the only active user
+      // (LocalIdentityService.ts:125-138) — a normal fresh-install state. That
+      // implicit fallback is not a credential: without an explicit identity
+      // signal (x-cl-session / x-user-id / x-computable-user-id) the route
+      // denies 403 BEFORE consulting the resolver, so the isSystem arm is only
+      // ever reachable for a request that actually presented one.
+      // FIX-RUN-1 (defect 4): a resolver exception denies 403 FORBIDDEN too —
+      // the denial shape is preserved on the error path, never a 500.
+      //
+      // Residual hardening (found by the residual tests below): the shipped
+      // resolver treats an EMPTY header value and an INVALID session token as
+      // "no signal" and falls through to the bootstrap fallback
+      // (LocalIdentityService.ts:85-96, :98-123, :125-138). A grant is only
+      // ever given when the resolved identity is attributable to a credential
+      // the request actually presented:
+      //  - the isSystem arm requires an explicit non-empty x-user-id /
+      //    x-computable-user-id (the shipped resolver only returns
+      //    isSystem:true via ensureLocalAdminUser for an explicit
+      //    x-user-id: USR-LOCAL-ADMIN on a bootstrap-only store);
+      //  - the localAdmin arm accepts a session-authenticated USR-LOCAL-ADMIN
+      //    (the shipped session path always returns isSystem:false,
+      //    LocalIdentityService.ts:89 — an isSystem:true result on a
+      //    session-only request can only be the fallback, so it denies);
+      //  - a failed/absent credential never reaches the role arm's fallback
+      //    identity as a system grant.
+      const headerValue = (name: string): string | null => {
+        const v = request.headers[name];
+        if (typeof v === 'string') return v.length > 0 ? v : null;
+        if (Array.isArray(v)) {
+          const first = v[0];
+          return typeof first === 'string' && first.length > 0 ? first : null;
+        }
+        return null;
+      };
+      const explicitUserHeader =
+        headerValue('x-user-id') ?? headerValue('x-computable-user-id');
+      const sessionHeader = headerValue('x-cl-session');
+      const hasCredential = explicitUserHeader !== null || sessionHeader !== null;
+
+      let actor: ResolvedRequestUser | null = null;
+      if (hasCredential) {
+        try {
+          actor = resolveRequestUser ? await resolveRequestUser(request) : null;
+        } catch {
+          actor = null;
+        }
+      }
       const userId = actor?.userId ?? null;
-      let admin = actor?.isSystem === true || userId === LOCAL_ADMIN_USER_ID;
+      const systemArm = explicitUserHeader !== null && actor?.isSystem === true;
+      const localAdminArm =
+        userId === LOCAL_ADMIN_USER_ID &&
+        (explicitUserHeader !== null || (sessionHeader !== null && actor?.isSystem === false));
+      let admin = systemArm || localAdminArm;
       if (!admin && userId && roleResolver) {
         admin = (await roleResolver.rolesFor(userId)).includes('admin');
       }
       if (!admin) {
         return reply.status(403).send({
           error: 'FORBIDDEN',
-          message: `Policy bundle change forbidden: user ${userId ?? '(unauthenticated)'} does not hold the admin role.`,
+          message: hasCredential
+            ? `Policy bundle change forbidden: user ${userId ?? '(unauthenticated)'} does not hold the admin role.`
+            : 'Policy bundle change forbidden: the request presents no identity credential (x-cl-session or x-user-id).',
         });
       }
 
