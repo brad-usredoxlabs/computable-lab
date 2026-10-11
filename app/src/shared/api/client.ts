@@ -1896,7 +1896,7 @@ export type AccessRole = 'owner' | 'admin' | 'editor' | 'operator' | 'qa' | 'vie
 export type Visibility = 'private' | 'shared' | 'public'
 
 export interface AccessGrant {
-  principalType: 'user' | 'group'
+  principalType: 'user' | 'group' | 'project'
   principalId: string
   role: AccessRole
 }

@@ -75,12 +75,12 @@ function asArray(value: unknown): unknown[] {
 function coerceGrant(raw: unknown): AccessGrant | null {
   const g = asRecord(raw);
   const principalType = g.principalType;
-  if (principalType !== 'user' && principalType !== 'group') return null;
+  if (principalType !== 'user' && principalType !== 'group' && principalType !== 'project') return null;
   const principalId = asString(g.principalId);
   if (!principalId) return null;
   const role = asString(g.role);
   if (!role || !ACL_ROLES.includes(role)) return null;
-  // 'project' principal lands with OWN-6
+  // 'project' principal admitted per OWN-6 (handoff from the OWN-5 pinned seam)
   return { principalType, principalId, role: role as AccessGrant['role'] };
 }
 

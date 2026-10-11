@@ -1,9 +1,10 @@
 export type AccessRole = 'owner' | 'admin' | 'editor' | 'operator' | 'qa' | 'viewer';
 export type AccessAction = 'read' | 'write' | 'operate' | 'quality-review' | 'admin';
 export type Visibility = 'private' | 'shared' | 'public';
+export type AccessPrincipalType = 'user' | 'group' | 'project';
 
 export interface AccessGrant {
-  principalType: 'user' | 'group';
+  principalType: AccessPrincipalType;
   principalId: string;
   role: AccessRole;
 }
@@ -36,6 +37,13 @@ export interface CanAccessInput {
   policy: AccessPolicyRecord | null | undefined;
   userId: string | null | undefined;
   action: AccessAction;
+  /** Required only when a policy carries a `project` grant. */
+  projectPolicies?: ProjectPolicyIndex;
+}
+
+/** Read-only view of project (study) policies, used to resolve project grants. */
+export interface ProjectPolicyIndex {
+  get(projectId: string): AccessPolicyRecord | null;
 }
 
 /**
@@ -52,7 +60,7 @@ export class AccessControlService {
     this.groupsById = new Map(groups.map((group) => [group.recordId, group]));
   }
 
-  canAccess({ policy, userId, action }: CanAccessInput): boolean {
+  canAccess({ policy, userId, action, projectPolicies }: CanAccessInput): boolean {
     if (!policy) return true;
     if (action === 'read' && policy.visibility === 'public') return true;
     if (!userId) return false;
@@ -62,6 +70,10 @@ export class AccessControlService {
       if (!ROLE_ACTIONS[grant.role].has(action)) continue;
       if (grant.principalType === 'user' && grant.principalId === userId) return true;
       if (grant.principalType === 'group' && this.groupContainsUser(grant.principalId, userId)) return true;
+      if (grant.principalType === 'project') {
+        const projectPolicy = projectPolicies?.get(grant.principalId);
+        if (projectPolicy && this.principalIsMember(projectPolicy, userId)) return true;
+      }
     }
 
     return false;
@@ -75,5 +87,17 @@ export class AccessControlService {
     if (!group) return false;
     if (group.memberUserIds?.includes(userId)) return true;
     return group.memberGroupIds?.some((childGroupId) => this.groupContainsUser(childGroupId, userId, visited)) ?? false;
+  }
+
+  /** Project membership = the project policy's owner, a listed user/group, or a public project. */
+  private principalIsMember(projectPolicy: AccessPolicyRecord, userId: string): boolean {
+    if (projectPolicy.ownerUserId === userId) return true;
+    if (projectPolicy.visibility === 'public') return true;
+    return projectPolicy.grants.some((grant) => {
+      if (grant.principalType === 'user') return grant.principalId === userId;
+      if (grant.principalType === 'group') return this.groupContainsUser(grant.principalId, userId);
+      // Project principals deliberately do NOT chain (plan §T6 stop boundary).
+      return false;
+    });
   }
 }

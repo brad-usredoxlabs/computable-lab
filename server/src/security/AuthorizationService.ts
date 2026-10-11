@@ -5,6 +5,7 @@ import {
   type AccessAction,
   type AccessPolicyRecord,
   type GroupRecord,
+  type ProjectPolicyIndex,
 } from './AccessControlService.js';
 
 export const ACCESS_POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml';
@@ -45,7 +46,7 @@ function coercePolicy(envelope: RecordEnvelope | null | undefined): AccessPolicy
     grants: grants.filter((grant): grant is AccessPolicyRecord['grants'][number] => {
       if (!grant || typeof grant !== 'object') return false;
       const g = grant as Record<string, unknown>;
-      return (g.principalType === 'user' || g.principalType === 'group')
+      return (g.principalType === 'user' || g.principalType === 'group' || g.principalType === 'project')
         && typeof g.principalId === 'string'
         && ['owner', 'admin', 'editor', 'operator', 'qa', 'viewer'].includes(String(g.role));
     }),
@@ -95,7 +96,8 @@ export class AuthorizationService {
   async canAccess(userId: string | null | undefined, action: AccessAction, record: RecordEnvelope): Promise<boolean> {
     const effectivePolicy = await this.resolveEffectivePolicy(record);
     const groups = await this.loadGroups();
-    return new AccessControlService(groups).canAccess({ policy: effectivePolicy, userId, action });
+    const projectPolicies = await this.loadProjectPolicies();
+    return new AccessControlService(groups).canAccess({ policy: effectivePolicy, userId, action, projectPolicies });
   }
 
   async ensureOwnerPolicy(resource: RecordEnvelope, ownerUserId: string): Promise<RecordEnvelope | null> {
@@ -219,5 +221,17 @@ export class AuthorizationService {
   private async loadGroups(): Promise<GroupRecord[]> {
     const groups = await this.store.list({ kind: 'group', limit: 10000 });
     return groups.map(coerceGroup).filter((group): group is GroupRecord => group !== null);
+  }
+
+  /** resourceRef id -> policy, for resolving `project` grants (study records). */
+  private async loadProjectPolicies(): Promise<ProjectPolicyIndex> {
+    const policies = await this.store.list({ kind: 'access-policy', limit: 10000 });
+    const byResource = new Map<string, AccessPolicyRecord>();
+    for (const env of policies) {
+      const coerced = coercePolicy(env);
+      const resourceId = getResourceRefId(env);
+      if (coerced && resourceId) byResource.set(resourceId, coerced);
+    }
+    return { get: (projectId: string) => byResource.get(projectId) ?? null };
   }
 }
