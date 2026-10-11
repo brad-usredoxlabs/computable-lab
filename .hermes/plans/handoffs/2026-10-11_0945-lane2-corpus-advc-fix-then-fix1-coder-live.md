@@ -92,3 +92,22 @@ next check (next tick):
 (3) PROTO-AI-13 recount events.jsonl (n=166; threshold 500).
 (4) After SHORTHAND-CORPUS merge: stack restart picks up WS5; schedule WS6 browser gate
     (receipts SHORTHAND-CORPUS/<ts>/; criterion: JSONL gains the pair 0->1 after Accept).
+
+ADDENDUM (same tick, 09:55 EDT): ARCHITECT DECISION LANDED + VALID (exit 0 ~84 min; decisions/
+W2-89-write-wall-authority-decision-l2t0810.md ends W289-WALL-DECISION DONE). VERDICT (D): ask
+wall remains authority of record, restructured to structural governance (FIX-1 leadingVerb
+blockerWords + interrogativeStripPatterns + negationTokens as DATA; FIX-2 interpreter step
+order; FIX-3 smuggle closed by also walling effectivePrompt at AgentOrchestrator.ts:1246 with
+the c2 test INVERTED; FIX-4 opsWall targetIdRules CAN- -> SAID_IMMUTABLE backstop; FIX-5 eight
+named tests incl. six-legit-ask regression pin; acceptance battery demands the next reviewer's
+OWN fresh >=27-case probe). W289 FIX3 CODER QUEUED on the fleet lock BEHIND SHORTHAND-CORPUS
+fix1: chain proc_06ac604a0f5d bash 3235962, script scripts/coder-chain-W289-fix3-l2t0950.sh
+(flock -w 10800; hermes launches ONLY after the lock grants -> fleet single-coder invariant
+held; 'FLOCK-TIMEOUT' log line => coder never launched => re-dispatch), prompt prompts/
+coder-W289-fix3-l2t0950.txt, log logs/coder-W289-fix3-l2t0950.log, report .hermes/plans/
+W2-89-fix3-report.wip-l2t0950.md, same worktree wt/W2-89-fix-lane2-l2t0230 @ cl/W2-89-fix-
+lane2-l2t0230 off d6bdcf3a; end marker 'W289-FIX3 DONE <sha>'. On exit -> advc c3 unique path
+running the decision's acceptance battery verbatim; accept -> orch battery -> merge --no-ff ->
+stack restart (review-write-wall.yaml is config DATA: restart it) -> queue g2c+a5c browser
+re-shoots (tier ladder) WITH the W2-11-gate fixtures (CAN roles A5 deck, XDR-w29-gate-panel01
+pending_review per l2t0610 §5).
