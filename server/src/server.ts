@@ -155,6 +155,7 @@ import { SessionStore } from './security/SessionStore.js';
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
 import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
+import { OwnershipPolicyService } from './security/OwnershipPolicyService.js';
 import { StorageService } from './storage/StorageService.js';
 import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
 import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
@@ -492,7 +493,8 @@ export async function initializeApp(
   const sessionStore = new SessionStore(authDir);
   const localIdentityService = new LocalIdentityService(store, sessionStore);
   await localIdentityService.ensureLocalAdminUser();
-  const authorizationService = new AuthorizationService(store);
+  const ownershipPolicyService = new OwnershipPolicyService(store);
+  const authorizationService = new AuthorizationService(store, ownershipPolicyService);
   // Backfill owner policies for pre-existing policy-root records that have no
   // ACL (otherwise "no policy = open to everyone" leaks them to other users).
   // Idempotent; a no-op once everything is stamped.

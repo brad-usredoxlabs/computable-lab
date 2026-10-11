@@ -13,6 +13,7 @@ import type {
 import { createRecordHandlers } from '../api/handlers/RecordHandlers.js';
 import { AuthorizationService, ACCESS_POLICY_SCHEMA_ID } from './AuthorizationService.js';
 import { LOCAL_ADMIN_USER_ID, LocalIdentityService, USER_SCHEMA_ID } from './LocalIdentityService.js';
+import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 
 class MemoryRecordStore implements RecordStore {
   records = new Map<string, RecordEnvelope>();
@@ -402,5 +403,53 @@ describe('local identity and authorization substrate', () => {
     expect(await authorization.findPolicyForRecord('PRT-SYSTEM')).toBeNull();
     // Open = anyone can read.
     expect(await authorization.canAccess('USR-OWNER', 'read', (await store.get('PRT-SYSTEM'))!)).toBe(true);
+  });
+
+  it('stamps the declared visibility and owner for lab-shared kinds', async () => {
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-LOCAL-ADMIN'),
+      user('USR-ADMIN-2'),
+      user('USR-STRANGER'),
+      {
+        recordId: 'GRP-LAB-ADMINS',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-LAB-ADMINS', memberUserIds: ['USR-ADMIN-2'] },
+      } as RecordEnvelope,
+      {
+        recordId: 'OWN-LAB-DEFAULT',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml',
+        payload: {
+          kind: 'ownership-policy',
+          recordId: 'OWN-LAB-DEFAULT',
+          title: 'Lab policy',
+          scope: { type: 'lab', id: 'lab' },
+          labOwnerUserId: 'USR-LOCAL-ADMIN',
+          fallback: { owner: 'creator', visibility: 'private', filedTo: 'none', editRoles: ['owner'], shareTargets: ['user'] },
+          kindRules: [
+            { kind: 'instrument', owner: 'lab', visibility: 'public', filedTo: 'none', editRoles: ['owner', 'admin'], shareTargets: ['user', 'group', 'lab'], defaultGrants: [{ principalType: 'group', principalId: 'GRP-LAB-ADMINS', role: 'admin' }] },
+          ],
+        },
+      } as RecordEnvelope,
+    ]);
+    const authorization = new AuthorizationService(store, new OwnershipPolicyService(store));
+    const instrument = {
+      recordId: 'INS-MITO-SPECIAL',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/instrument.schema.yaml',
+      payload: { kind: 'instrument', id: 'INS-MITO-SPECIAL', name: 'Grant-funded imager' },
+    } as RecordEnvelope;
+
+    const stamped = await authorization.ensureOwnerPolicy(instrument, 'USR-BRAD');
+
+    expect((stamped?.payload as Record<string, unknown>).visibility).toBe('public');
+    expect((stamped?.payload as Record<string, unknown>).ownerUserId).toBe('USR-LOCAL-ADMIN');
+    // Declared lab-visible => a stranger can read it.
+    expect(await authorization.canAccess('USR-STRANGER', 'read', instrument)).toBe(true);
+    // MULTI-USER: the declared admin GROUP administers it — not just labOwnerUserId.
+    expect((stamped?.payload as Record<string, unknown>).grants).toEqual([
+      { principalType: 'group', principalId: 'GRP-LAB-ADMINS', role: 'admin' },
+    ]);
+    expect(await authorization.canAccess('USR-ADMIN-2', 'admin', instrument)).toBe(true);   // member of GRP-LAB-ADMINS
+    expect(await authorization.canAccess('USR-STRANGER', 'admin', instrument)).toBe(false); // not a member
   });
 });
