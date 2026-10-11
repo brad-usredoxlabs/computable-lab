@@ -357,6 +357,18 @@ export function AiTabPanel() {
   // turn's onDraftResult, cleared at the single sendChat choke point.
   const ledgerTurnRef = useRef(false)
 
+  // SHORTHAND-CHAT: the shorthand document rides the sidebar review state;
+  // the edit affordance recompiles it through the server's EXISTING
+  // POST /intent/compile (Ajv sole authority, deterministic compiler — the
+  // ONE producer of the graph). The client is render + POST only: it never
+  // parses, validates, or "fixes" the YAML. No LLM call on the edit path,
+  // ever (edits re-compile, never re-draft).
+  const lastShorthandDraftRef = useRef<{ prompt: string } | null>(null)
+  const [shorthandApply, setShorthandApply] = useState<{
+    recompiling?: boolean
+    error?: string
+  } | null>(null)
+
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
@@ -366,6 +378,11 @@ export function AiTabPanel() {
       // the whole draft because of an ungrounded material).
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
+      // SHORTHAND-CHAT: a fresh draft (or any turn without shorthand) clears
+      // the edit-recompile state — a stale error never leaks into a new draft.
+      lastShorthandDraftRef.current =
+        typeof result.shorthand === 'string' ? { prompt } : null
+      setShorthandApply(null)
 
       // PB-CH-4 D1: consume the turn flags FIRST, on every path, so a stale
       // flag can never leak into a later turn (a no-envelope compose_workstate
@@ -472,7 +489,17 @@ export function AiTabPanel() {
       }
 
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
-        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
+        sidebarDispatch({
+          type: 'clarifications-needed',
+          draftId,
+          questions: result.clarificationRequests,
+          // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): a needs-clarification
+          // turn IS proposal-bearing — the server carries result.shorthand on
+          // it, and the spec's UI goal shows the document VERBATIM above the
+          // proposal. Same conditional-spread discipline as 'draft-ready': a
+          // clarification from a draft without shorthand stays byte-identical.
+          ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
+        })
       } else {
         // Describe what will be applied. This used to pass `changes: []`, so
         // "Apply to run" sat above an empty list — the biologist was asked to
@@ -486,6 +513,9 @@ export function AiTabPanel() {
           warnings: [],
           // Classified server-side (draftTermManifest); absent on older payloads.
           terms: result.termManifest ?? [],
+          // SHORTHAND-CHAT: the compiled document VERBATIM (conditional
+          // spread — a draft without shorthand stays byte-identical).
+          ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
         })
       }
 
@@ -556,6 +586,67 @@ export function AiTabPanel() {
       })
     },
     [activeDeckScope, editor, protocolSel?.protocol, protocolSel?.steps, protocolSel?.resources],
+  )
+
+  // SHORTHAND-CHAT — the edit-recompile path. The edited document is POSTed
+  // UNTOUCHED to the server's EXISTING POST /intent/compile; the deterministic
+  // compiler (Ajv sole authority) re-parses and recompiles, and the new
+  // proposal REPLACES the old one (sidebar review + deck ghosts). Zero LLM
+  // calls on this path — edits re-compile, never re-draft. A rejected edit
+  // surfaces the server's diagnostic verbatim and the existing proposal stays.
+  const handleShorthandRecompile = useCallback(
+    async (yaml: string) => {
+      if (!editor) return
+      setShorthandApply({ recompiling: true })
+      try {
+        const compiled = await apiClient.intentCompile(yaml)
+        const terminal = compiled.terminalArtifacts ?? {}
+        const events = (terminal.events ?? []) as PlateEvent[]
+        const gaps = (terminal.gaps ?? []).map((gap) => ({
+          code: 'compile-gap',
+          message: typeof gap.message === 'string' ? gap.message : 'compile gap',
+          severity: 'warning' as const,
+        }))
+        const prompt = lastShorthandDraftRef.current?.prompt ?? ''
+        const platform = getPlatformManifest(editor.state.platforms, editor.state.platformId)
+        const variant = getVariantManifest(editor.state.platforms, editor.state.platformId, editor.state.variantId)
+        const { preview, skips } = buildPreviewFromDraft({
+          platform,
+          variant,
+          events,
+          labwareAdditions: [],
+          labwareRequirements: [],
+          equipmentRequirements: [],
+          recordCreations: [],
+          existingLabwares: editor.state.labwares,
+          existingPlacements: editor.state.placements,
+          activeDeckScope,
+        })
+        editor.actions.setPreview({
+          ...preview,
+          sourcePrompt: prompt,
+          labwareRequirements: [],
+          labwareAdditions: [],
+          ...(skips.length > 0 ? { sourceSkips: skips } : {}),
+        })
+        sidebarDispatch({
+          type: 'draft-ready',
+          draftId: `draft-recompile-${Date.now()}`,
+          interpretation: { operations: [] },
+          changes: changesFromDraftEvents(events),
+          warnings: gaps,
+          terms: [],
+          shorthand: yaml,
+        })
+        setShorthandApply(null)
+      } catch (err) {
+        // The server's parse diagnostic rides verbatim; the proposal is untouched.
+        setShorthandApply({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+    [activeDeckScope, editor],
   )
 
   // ── PB-CH-4 — the Wave-1 mount ───────────────────────────────────────────
@@ -1126,6 +1217,10 @@ export function AiTabPanel() {
             questions={sidebar.questions}
             answers={sidebar.answers}
             activeQuestionId={sidebar.activeQuestionId}
+            // SHORTHAND-CHAT fix cycle 1: verbatim document above the
+            // questions while the draft is paused (conditional spread — a
+            // clarification without shorthand renders byte-unchanged).
+            {...(sidebar.shorthand !== undefined ? { shorthand: sidebar.shorthand } : {})}
             onAnswer={(qId, ans) => sidebarDispatch({ type: 'answer-question', questionId: qId, answer: ans })}
             onChangeQuestion={(qId) => sidebarDispatch({ type: 'change-question', questionId: qId })}
             onSubmit={() => {
@@ -1153,6 +1248,12 @@ export function AiTabPanel() {
             {...(sidebar.protocolDiff ? { protocolDiff: sidebar.protocolDiff } : {})}
             {...(protocolApply?.applying ? { applying: true } : {})}
             {...(protocolApply?.error ? { applyError: protocolApply.error } : {})}
+            // SHORTHAND-CHAT: verbatim document + edit affordance (conditional
+            // spread — a draft without shorthand renders byte-unchanged).
+            {...(sidebar.shorthand !== undefined ? { shorthand: sidebar.shorthand } : {})}
+            {...(sidebar.shorthand !== undefined && editor ? { onShorthandRecompile: (yaml: string) => { void handleShorthandRecompile(yaml) } } : {})}
+            {...(shorthandApply?.recompiling ? { recompiling: true } : {})}
+            {...(shorthandApply?.error !== undefined ? { shorthandError: shorthandApply.error } : {})}
             onApply={() => {
               // The ONLY behavioural hook (grounding-map §(e)): a protocol
               // proposal runs the PROTO-AI-8 applier; an event-graph draft

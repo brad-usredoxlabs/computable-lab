@@ -27,6 +27,7 @@ import type { ShadowRouterConfig } from '../config/types.js';
 /** The four router-classifiable intents plus explicit non-pick outcomes. */
 export type ShadowRouterPick =
   | 'event_graph'
+  | 'event_shorthand'
   | 'deck_layout'
   | 'create_record'
   | 'protocol_edit'

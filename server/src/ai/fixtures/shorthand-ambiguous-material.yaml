@@ -1,0 +1,11 @@
+# SHORTHAND-CHAT chat-e2e golden fixture 2 — the 422-class round-trip.
+# 'mystery goop' is NOT in the test store's seeds, so the frozen pipeline's
+# resolve_nouns bar bars it and the compile outcome is needs-clarification;
+# the chat must carry the ScientistIntentUnresolvedFact VERBATIM.
+intentId: chat-add-mystery
+actions:
+  - action: add_material
+    labware: plate
+    material: mystery goop
+    volumeUl: 50
+    targetWells: [A1]

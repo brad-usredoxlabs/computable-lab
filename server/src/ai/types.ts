@@ -596,6 +596,16 @@ export interface AgentClarificationRequest {
    * thing they were choosing. Set by the gate, consumed by the picker.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product';
+  /**
+   * SHORTHAND-CHAT: the VERBATIM ScientistIntentUnresolvedFact this card maps —
+   * a PURE structural map (label/reason/candidates/actionLocation ride through
+   * untouched; the server mints no labels, confidences, or ids beyond the join
+   * id `unresolved-<index+1>`, mirroring the 422 verbatim rule at
+   * IntentCompileFromPromptHandlers.ts:274-287). The 422 round-trip test and
+   * the chat see the SAME facts; the answer-fold keys off this fact's
+   * actionLocation.
+   */
+  unresolvedFact?: import('../compiler/scientistIntent/types.js').ScientistIntentUnresolvedFact;
 }
 
 export interface AgentClarificationAnswer {
@@ -741,6 +751,15 @@ export interface AgentResult {
   /** Deck layout switch requested via agent_intent (intent: deck_layout). The
    *  client applies this to the live editor; nothing is drafted. */
   deckLayout?: { platformId: string; variantId: string };
+  /**
+   * SHORTHAND-CHAT (intent: event_shorthand): the scientist-intent shorthand
+   * document the model emitted, carried VERBATIM — byte-identical to what the
+   * deterministic compiler parsed. The AI panel renders it verbatim above the
+   * proposal; a scientist edit re-compiles it server-side (POST /intent/compile).
+   * exactOptionalPropertyTypes: every emission site uses the conditional-spread
+   * idiom — key ABSENT when the turn carried no shorthand, never `undefined`.
+   */
+  shorthand?: string;
   /**
    * Protocol-edit proposal emitted via agent_intent (intent: protocol_edit,
    * PROTO-AI-7). `ops` is the model's envelope VALIDATED server-side against

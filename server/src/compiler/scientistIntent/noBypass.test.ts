@@ -54,6 +54,13 @@ describe('W2-7 T7 no-bypass closure (AC5, §6)', () => {
       join('compiler', 'scientistIntent', 'realizeScientistIntent.ts'),
       join('api', 'handlers', 'IntentCompileHandlers.ts'),
       join('api', 'handlers', 'IntentCompileFromPromptHandlers.ts'),
+      // SHORTHAND-CHAT (spec §Design 2, sanctioned): the chat-side seam is the
+      // run chat's single declared consumer of THIS frozen pipeline — the
+      // orchestrator branch reaches the compiler ONLY through it
+      // (compileShorthandDeterministically). The guard's purpose (no
+      // unauthorized bypass) is preserved: a declared consumer, not a second
+      // compiler. Pipeline modules themselves stay untouched.
+      join('ai', 'shorthandChat.ts'),
     ]);
     const unexpected = rel.filter((f) => !known.has(f));
     expect(unexpected).toEqual([]);

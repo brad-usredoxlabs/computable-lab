@@ -31,9 +31,19 @@ export interface SubmitCallSelection<T extends SubmitCallLike> {
 
 const SUBMIT_TOOL_NAMES = new Set(['agent_intent', 'submit_suggestion', 'compile_event_graph_draft']);
 
+/**
+ * How substantive a submit call is for the tie-break. Draft EVENTS count; a
+ * SHORTHAND payload (SHORTHAND-CHAT) counts as ONE substantive draft — the
+ * scientist-intent document IS the draft (the deterministic compiler expands
+ * it), so a shorthand call must not silently lose a two-call tie to an
+ * incidental side-errand (the 2026-09-20 "first match won and the rest lost"
+ * precedent). A shorthand call carrying no usable document scores 0.
+ */
 function eventCountOf(call: SubmitCallLike): number {
   try {
     const args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
+    const shorthand = args['shorthand'];
+    if (typeof shorthand === 'string' && shorthand.trim().length > 0) return 1;
     const events = args['events'];
     return Array.isArray(events) ? events.length : 0;
   } catch {

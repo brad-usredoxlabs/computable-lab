@@ -42,6 +42,7 @@ describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
       'compose_workstate',
       'compose_analysis',
       'query_workstate_history',
+      'event_shorthand',
     ]);
   });
 

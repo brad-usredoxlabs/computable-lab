@@ -109,6 +109,15 @@ export type AiSidebarState =
       questions: AiClarificationRequest[]
       answers: Record<string, AiClarificationAnswer>
       activeQuestionId: string
+      /**
+       * SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): the shorthand document
+       * the paused draft was built from, VERBATIM. A needs-clarification turn
+       * IS proposal-bearing — the panel shows the document above the questions
+       * while the draft is paused. Optional: a clarification from a draft
+       * without shorthand leaves the clarifying state byte-identical (the key
+       * is never introduced as undefined).
+       */
+      shorthand?: string
     }
   | { mode: 'updating'; draftId: string }
   | {
@@ -129,6 +138,12 @@ export type AiSidebarState =
        * never carries one and its review state stays byte-identical.
        */
       protocolDiff?: ProtocolEditDiff
+      /**
+       * SHORTHAND-CHAT: the compiled scientist-intent document VERBATIM, shown
+       * above the changes list. Optional: a draft without shorthand stays
+       * byte-identical (the key is never introduced as undefined).
+       */
+      shorthand?: string
     }
   | { mode: 'committing'; draftId: string }
 
@@ -139,6 +154,8 @@ export type SidebarAction =
       type: 'clarifications-needed'
       draftId: string
       questions: AiClarificationRequest[]
+      /** See AiSidebarState 'clarifying'.shorthand (SHORTHAND-CHAT fix cycle 1). */
+      shorthand?: string
     }
   | { type: 'answer-question'; questionId: string; answer: AiClarificationAnswer }
   | { type: 'change-question'; questionId: string }
@@ -153,6 +170,8 @@ export type SidebarAction =
       /** See AiSidebarState 'reviewing'.protocolDiff — all-optional so every
        *  existing event-graph dispatch compiles unchanged. */
       protocolDiff?: ProtocolEditDiff
+      /** See AiSidebarState 'reviewing'.shorthand (SHORTHAND-CHAT). */
+      shorthand?: string
     }
   | { type: 'commit' }
   | { type: 'cancel' }
@@ -180,6 +199,10 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         questions: action.questions,
         answers: {},
         activeQuestionId: action.questions[0]?.id ?? '',
+        // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): same conditional-spread
+        // discipline as 'draft-ready' — a clarification from a draft WITHOUT
+        // shorthand leaves the clarifying state byte-identical.
+        ...(action.shorthand !== undefined ? { shorthand: action.shorthand } : {}),
       }
 
     case 'answer-question':
@@ -208,6 +231,8 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         // Conditional spread: an event-graph draft's reviewing state stays
         // byte-identical (no `protocolDiff: undefined` key is ever introduced).
         ...(action.protocolDiff ? { protocolDiff: action.protocolDiff } : {}),
+        // SHORTHAND-CHAT: same discipline for the shorthand document.
+        ...(action.shorthand !== undefined ? { shorthand: action.shorthand } : {}),
       }
 
     case 'commit':
