@@ -49,5 +49,5 @@ form:
   - title: "Kind Rules"
     fields:
     - path: "$.kindRules"
-      widget: "json"
+      widget: "array"
       label: "Kind Rules"
