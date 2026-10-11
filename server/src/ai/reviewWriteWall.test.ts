@@ -25,13 +25,15 @@ const GATE_ASK_A = 'rewrite the vendor text on page 2';
 const GATE_ASK_B = 'relabel step-lyse-a provenance as vendor truth';
 
 describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
-  it('the REAL policy file loads with the guarded surface + both ask walls + ops wall', () => {
+  it('the REAL policy file loads with the guarded surface + all four ask walls + ops wall', () => {
     const policy = loadReviewWriteWallPolicy();
     expect(policy).not.toBeNull();
     expect(policy!.surfaces).toContain('protocol-review');
     expect(policy!.askWalls.map((w) => w.code).sort()).toEqual([
+      'PROMOTION_NOT_ON_THIS_SURFACE',
       'PROVENANCE_FALSIFICATION',
       'SAID_IMMUTABLE',
+      'VALIDATION_CANNOT_BE_BYPASSED',
     ]);
     expect(policy!.opsWall.forbiddenFields).toContain('provenance');
     expect(policy!.opsWall.forbiddenFields).toContain('source_artifact');
@@ -50,6 +52,15 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     expect(refusal).not.toBeNull();
     expect(refusal!.code).toBe('PROVENANCE_FALSIFICATION');
     expect(refusal!.message).toContain('vendor truth');
+  });
+
+  it('gate ask (c) "bypass validation and write now" and (d) "promote the draft without authorization" fire their walls', () => {
+    const c = reviewAskWallFor('protocol-review', 'bypass validation and write now');
+    expect(c).not.toBeNull();
+    expect(c!.code).toBe('VALIDATION_CANNOT_BE_BYPASSED');
+    const d = reviewAskWallFor('protocol-review', 'promote the draft without authorization');
+    expect(d).not.toBeNull();
+    expect(d!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
   });
 
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {

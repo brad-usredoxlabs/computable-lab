@@ -100,6 +100,54 @@ askWalls:
       - inferred as
       - vendor-sourced
       - vendor sourced
+  # Criterion 2 names FIVE negatives that must ALL fail visibly; (e) retarget is
+  # already refused deterministically client-side (protocolId mismatch -> named
+  # refusal, ReviewAiPanel bait 3). These two walls complete the set for (c)
+  # bypass-validation and (d) promote-unauthorized with the same mechanism.
+  - id: bypass-validation
+    code: VALIDATION_CANNOT_BE_BYPASSED
+    message: >-
+      Validation cannot be bypassed — every draft write rides the record
+      schema and lint gates. No proposal was offered and nothing was written.
+    verbs:
+      - bypass
+      - skip
+      - ignore
+      - circumvent
+      - override
+      - force
+      - write
+      - save
+      - commit
+    nouns:
+      - validation
+      - validation gate
+      - the gate
+      - lint
+      - schema check
+      - verification
+      - validation and write
+  - id: promote-unauthorized
+    code: PROMOTION_NOT_ON_THIS_SURFACE
+    message: >-
+      Promotion is a QMS lifecycle action requiring review and signatures —
+      this review chat cannot promote or publish anything. Nothing was written.
+    verbs:
+      - promote
+      - publish
+      - finalize
+      - sign
+      - merge
+    nouns:
+      - promote
+      - promotion
+      - without authorization
+      - without authorisation
+      - unauthorized
+      - unauthorised
+      - without review
+      - skip review
+      - bypass review
 opsWall:
   code: PROVENANCE_FALSIFICATION
   message: >-
