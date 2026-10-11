@@ -365,4 +365,83 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(selection.chosen).toBe(calls[1]);
     expect(selection.ignored[0]?.name).toBe(AGENT_INTENT_TOOL_NAME);
   });
+
+  it('OQ3: a forced-draft shorthand turn with NO model configured says so LOUDLY and never silently event-compiles', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+    compileSpy.mockRestore();
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(model.callCount()).toBe(0);
+    expect(compileSpy).not.toHaveBeenCalled();
+  });
+
+  it('OQ1 fallback: an answer with no 1:1 mapping falls back to ONE extraction-only re-ask carrying the held shorthand + answers as grounded context', async () => {
+    const model = stubModel([
+      { toolCalls: [shorthandCall(AMBIGUOUS_YAML)] },
+      { toolCalls: [shorthandCall(ADD_DMEM_YAML)] },
+    ]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add 50 uL of mystery goop to A1' });
+    expect(first.clarificationRequests?.length).toBeGreaterThan(0);
+
+    // An answer the deterministic fold cannot map 1:1 (no label — free text).
+    const second = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{ requestId: 'unresolved-1', value: 'Test Reagent' }],
+    });
+    // The permitted fallback: exactly ONE re-ask, and its grounded context
+    // carries the HELD shorthand + the answer. The model still only writes
+    // shorthand — the accepted graph is the deterministic compile of it.
+    expect(model.callCount()).toBe(2);
+    const reask = model.captured[1];
+    expect(JSON.stringify(reask.messages)).toMatch('mystery goop');
+    expect(JSON.stringify(reask.messages)).toMatch('CLARIFICATION ANSWERS');
+    expect(second.success).toBe(true);
+    const direct = await directCompile();
+    expect(projectGraph(second.events ?? [])).toEqual(projectGraph(direct.terminalArtifacts.events));
+  });
+
+  it('the shorthand path omits termManifest explicitly (bait 9: no raw-draft classifier to disagree with; the client never re-derives)', async () => {
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+    expect(result.success).toBe(true);
+    expect('termManifest' in result).toBe(false);
+  });
+
+  it('shorthand surface membership is DATA (config/drafting/shorthand-drafting.yaml), not a TS literal', async () => {
+    const { loadShorthandDraftingPolicy, surfaceDraftsShorthand } = await import('./shorthandDrafting.js');
+    const policy = loadShorthandDraftingPolicy();
+    expect(policy?.surfaces).toContain('workspace.deck');
+    // AS-4: the raw-events code stays for surfaces not yet moved.
+    expect(surfaceDraftsShorthand('event-editor')).toBe(false);
+    expect(surfaceDraftsShorthand('protocol-builder')).toBe(false);
+    expect(surfaceDraftsShorthand(undefined)).toBe(false);
+  });
 });
+

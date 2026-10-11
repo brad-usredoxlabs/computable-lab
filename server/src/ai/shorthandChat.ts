@@ -30,7 +30,13 @@ import {
   parseScientistIntent,
   ScientistIntentValidationError,
 } from '../compiler/scientistIntent/parseScientistIntent.js';
-import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
+import {
+  compileScientistIntent,
+  type ScientistIntentCompileResult,
+  type ScientistIntentCompileDeps,
+} from '../compiler/scientistIntent/compileScientistIntent.js';
+import { createResolveSpineFromContext } from '../resolve/index.js';
+import type { RecordStore } from '../store/types.js';
 import type {
   ScientistIntent,
   ScientistIntentUnresolvedFact,
@@ -43,6 +49,36 @@ import type {
   AgentResult,
   PlateEventProposal,
 } from './types.js';
+
+// ---------------------------------------------------------------------------
+// The deterministic compile seam (THE only producer of the event graph)
+// ---------------------------------------------------------------------------
+
+export interface ShorthandCompileDeps {
+  store?: RecordStore;
+  searchLabwareByHint?: ScientistIntentCompileDeps['searchLabwareByHint'];
+}
+
+/**
+ * Compile a VALIDATED shorthand document through the FROZEN deterministic
+ * pipeline with the SAME production deps the intent-compile routes build
+ * (IntentCompileHandlers.ts:59-62, the server.ts:733 composition): a
+ * store-backed, config-aware spine. No store wired ⇒ null (the honest
+ * COMPILE_INTERNAL precedent — never a provider-less spine that false-bars
+ * every store-resolvable noun). This module is the chat-side seam's single
+ * declared consumer of the pipeline (the W2-7 no-bypass closure allow-list).
+ */
+export async function compileShorthandDeterministically(
+  doc: ScientistIntent,
+  deps: ShorthandCompileDeps,
+): Promise<ScientistIntentCompileResult | null> {
+  if (!deps.store) return null;
+  const spine = createResolveSpineFromContext({ store: deps.store });
+  return compileScientistIntent(doc, {
+    spine,
+    ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Held intent per conversation (the getDefaultLabStateCache precedent)

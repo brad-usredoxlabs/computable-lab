@@ -65,6 +65,7 @@ import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick 
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
 import {
+  compileShorthandDeterministically,
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
@@ -72,10 +73,7 @@ import {
   malformedShorthandRepairPrompt,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
-import { createResolveSpineFromContext } from '../resolve/index.js';
-import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
 import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
-import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -805,30 +803,6 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
 }
 
 
-/**
- * SHORTHAND-CHAT: compile a validated scientist-intent document through the
- * FROZEN deterministic pipeline with the SAME production deps as
- * IntentCompileHandlers / IntentCompileFromPromptHandlers (store-backed spine
- * via createResolveSpineFromContext — the server.ts:733 composition — plus
- * searchLabwareByHint). No spine wired ⇒ null (the honest COMPILE_INTERNAL
- * precedent — never a spine-less compile that false-bars every noun).
- */
-async function compileShorthandDeterministically(
-  doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
-  deps: AgentOrchestratorDeps,
-): Promise<import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult | null> {
-  // The SAME composition the intent-compile routes build (server.ts:733):
-  // store-backed, config-aware. No store wired ⇒ null (the honest
-  // COMPILE_INTERNAL precedent — never a provider-less spine that false-bars
-  // every store-resolvable noun).
-  if (!deps.store) return null;
-  const spine: EngineSpineLike = createResolveSpineFromContext({ store: deps.store });
-  return compileScientistIntent(doc, {
-    spine,
-    ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
-  });
-}
-
 function waitMs(ms: number): Promise<'heartbeat'> {
   return new Promise((resolve) => setTimeout(() => resolve('heartbeat'), ms));
 }
@@ -1204,7 +1178,10 @@ export function createAgentOrchestrator(
         if (held) {
           const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
           if (folded) {
-            const compiledFold = await compileShorthandDeterministically(folded.doc, deps);
+            const compiledFold = await compileShorthandDeterministically(folded.doc, {
+              ...(deps.store ? { store: deps.store } : {}),
+              ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+            });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
               if (compiledFold.outcome === 'needs-clarification') {
@@ -2109,7 +2086,8 @@ export function createAgentOrchestrator(
             // The model wrote a scientist-intent document. THE ONLY producer
             // of the event graph is the FROZEN deterministic pipeline:
             // parseScientistIntent (Ajv sole authority, validate-in-place,
-            // NEVER a repaired re-parse) -> compileScientistIntent with the
+            // NEVER a repaired re-parse) -> the frozen deterministic compiler
+            // via the chat seam (compileShorthandDeterministically) with the
             // production deps. A schema-invalid payload is MALFORMED MODEL
             // OUTPUT: re-ask ONCE with the contract quoted (the 502 class's
             // chat analogue — origin-based, never substring-sniffing), then an
@@ -2178,7 +2156,10 @@ export function createAgentOrchestrator(
                 return malformedResult;
               }
 
-              const compiledSh = await compileShorthandDeterministically(shorthandDoc, deps);
+              const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
+                ...(deps.store ? { store: deps.store } : {}),
+                ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+              });
               if (!compiledSh) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 const unwired = 'event_shorthand cannot compile: this orchestrator has no record store wired for the deterministic compiler spine.';

@@ -9,4 +9,4 @@
 # workstate-composition.yaml precedent — presence-checked, never process-
 # cached); the orchestrator never branches on a surface-name literal (repo
 # rule #1).
-surfaces: [workspace.deck, event-editor]
+surfaces: [workspace.deck]
