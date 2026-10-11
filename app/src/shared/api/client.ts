@@ -2868,6 +2868,22 @@ export const apiClient = {
     return request<LabSettings>('/settings/lab')
   },
 
+  /**
+   * Switch the lab's policy bundle (QMS-8 / Defect L1-A). PATCHes
+   * /settings/lab with {policyBundleId} only; the server validates the id
+   * against the bundle registry (unknown id -> actionable 400 naming the bad
+   * id + known ids), gates the switch on the admin role (403 FORBIDDEN),
+   * persists via the config writer, and answers with the same LabSettings
+   * body GET /settings/lab returns. Server rejections ({error, message})
+   * surface as ApiError so the Settings page can show the server's reason.
+   */
+  async patchLabSettings(patch: { policyBundleId: string }): Promise<LabSettings> {
+    return request<LabSettings>('/settings/lab', {
+      method: 'PATCH',
+      body: JSON.stringify({ policyBundleId: patch.policyBundleId }),
+    })
+  },
+
   async listSemanticsInstruments(params: {
     instrumentType?: string
   } = {}): Promise<{ items: InstrumentDefinition[] }> {

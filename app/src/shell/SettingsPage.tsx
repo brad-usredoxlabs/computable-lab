@@ -95,8 +95,12 @@ export function SettingsPage() {
     try {
       const updated = await apiClient.patchLabSettings({ policyBundleId: bundleId })
       setLabSettings(updated)
+      setLabSettingsError(null)
     } catch (err) {
-      alert(`Failed to update policy bundle: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      // Surface the SERVER's reason (actionable 400 naming the bad bundle id +
+      // known ids, or the 403 FORBIDDEN denial) in the existing labSettingsError
+      // state — the same red info-row the section already renders, not an alert.
+      setLabSettingsError(err instanceof Error ? err.message : 'Failed to update policy bundle')
     }
   }, [])
 
@@ -277,19 +281,29 @@ export function SettingsPage() {
             <div className="info-row">
               <span className="info-row__value">Loading...</span>
             </div>
-          ) : labSettingsError ? (
-            <div className="info-row">
-              <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
-            </div>
-          ) : labSettings ? (
-            <PolicyBundleSelector
-              currentBundleId={labSettings.policyBundleId}
-              onBundleChanged={handlePolicyBundleChanged}
-            />
           ) : (
-            <div className="info-row">
-              <span className="info-row__value">Not configured</span>
-            </div>
+            <>
+              {/* FIX-RUN-1 (adversarial defect 5): a refusal must NOT replace
+                  the bundle control. The error renders as a row ABOVE the
+                  selector so the sandbox->regulated->sandbox round trip can be
+                  retried on the same page; the next attempt clears it (success
+                  path sets labSettingsError to null). */}
+              {labSettingsError && (
+                <div className="info-row" data-testid="lab-settings-error" role="alert">
+                  <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
+                </div>
+              )}
+              {labSettings ? (
+                <PolicyBundleSelector
+                  currentBundleId={labSettings.policyBundleId}
+                  onBundleChanged={handlePolicyBundleChanged}
+                />
+              ) : (
+                <div className="info-row">
+                  <span className="info-row__value">Not configured</span>
+                </div>
+              )}
+            </>
           )}
         </Section>
 

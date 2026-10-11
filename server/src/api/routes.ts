@@ -590,6 +590,9 @@ export function registerRoutes(
   const { labSettingsHandlers } = options;
   if (labSettingsHandlers) {
     fastify.get('/settings/lab', labSettingsHandlers.getLabSettings.bind(labSettingsHandlers));
+    // QMS-8: the write half of the lab-settings contract (Defect L1-A — the
+    // route was absent while SettingsPage already called patchLabSettings).
+    fastify.patch('/settings/lab', labSettingsHandlers.patchLabSettings.bind(labSettingsHandlers));
   }
 
   const { lifecycleHandlers } = options;

@@ -814,7 +814,26 @@ export async function createServer(
   });
   const runContextAssembler = new RunContextAssembler(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
-  const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
+  const labSettingsHandlers = createLabSettingsHandlers({
+    // Live accessor, not a snapshot (the vendorSearchHandlers pattern below):
+    // onConfigUpdate reassigns ctx.appConfig, so GET/PATCH /settings/lab read
+    // the CURRENT config per request — a bundle switch is visible immediately,
+    // no restart (the snapshot trap the old by-value wiring created).
+    getAppConfig: () => ctx.appConfig,
+    bundleService: ctx.policyBundleService,
+    // Persistence reuses the PATCH /api/config writer (merge + validate +
+    // atomic tmp+rename + in-memory reassign + onConfigUpdate). Lazy
+    // reference: configHandlers is constructed later in this scope; the call
+    // happens per-request. One writer instance = one in-memory truth.
+    patchConfig: (request, reply) =>
+      configHandlers.patchConfig(request as Parameters<typeof configHandlers.patchConfig>[0], reply),
+    // Authz gate (QMS-8 spec DECISION): resolve the request user the way the
+    // lifecycle handlers do; require the admin role via the same RoleResolver
+    // the lifecycle transitions use. Fail closed; denial -> 403 FORBIDDEN.
+    resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
+    roleResolver,
+    auditService,
+  });
   const lifecycleHandlers = createLifecycleHandlers({
     engine: ctx.lifecycleEngine,
     store: ctx.store,
