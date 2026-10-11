@@ -323,6 +323,13 @@ export function summarizeDraftResult(result: AssistDraftResult | undefined): str
     const source = creation.source ? `source: ${creation.source}` : 'no source stated'
     lines.push(`New ${creation.kind ?? 'record'} to create: ${creation.name ?? 'unnamed'} (${source}).`)
   }
+  // W2-89 g2b-3: a protocol_edit turn streams no prose (the answer lives in
+  // the review card). Without a summary line the bubble fell back to
+  // "(no response)" — or, before the channel fix, to the model's raw
+  // reasoning. Name the proposal honestly instead.
+  if (Array.isArray(result.protocolEdit?.ops) && result.protocolEdit.ops.length > 0) {
+    lines.push(`Proposed ${result.protocolEdit.ops.length} protocol edit${result.protocolEdit.ops.length === 1 ? '' : 's'} on the draft — review the card; nothing is written until you Accept.`)
+  }
   for (const note of result.notes ?? []) lines.push(note)
   return lines.length > 0 ? lines.join('\n') : undefined
 }

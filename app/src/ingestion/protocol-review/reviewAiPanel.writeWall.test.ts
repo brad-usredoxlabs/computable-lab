@@ -39,6 +39,18 @@ describe('summarizeDraftResult — refusal envelope (W2-89 g2b-1/2)', () => {
     }
     expect(summarizeDraftResult(result)).toBe('Provenance cannot be relabelled.')
   })
+
+  it('a protocol_edit proposal turn summarizes honestly (no reasoning, no "(no response)")', () => {
+    const result: AssistDraftResult = {
+      success: true,
+      notes: [],
+      protocolEdit: { ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Bench wording' }] },
+    }
+    const summary = summarizeDraftResult(result)
+    expect(summary).toBeDefined()
+    expect(summary).toContain('protocol edit')
+    expect(summary).toContain('nothing is written')
+  })
 })
 
 describe('useChatThread — refusal turn commits a visible assistant bubble (g2b-1/2)', () => {
