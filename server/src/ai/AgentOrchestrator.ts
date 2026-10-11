@@ -64,7 +64,7 @@ import type { SubmitCallLike } from './selectSubmitCall.js';
 import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
-import { reviewAskWallFor, reviewOpsWallFor } from './reviewWriteWall.js';
+import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
 import {
   compileShorthandDeterministically,
   holdShorthandIntent,
@@ -1246,11 +1246,22 @@ export function createAgentOrchestrator(
        * `appendClarificationAnswersToPrompt` — cannot trip it, while an answer
        * that IS an imperative carrying a declared referent IS the attack
        * (advc-W289-c2 DEFECT-3: the clarification-answer smuggle) and must be
-       * refused before the model. The structured half of the wall (the
+       * refused before the model. Per the W2-89 cycle-4 ruling (FIX-6), each
+       * clarification answer the user submitted is itself a governed turn: the
+       * ask wall reads the answer's RAW request fields alongside the ask and
+       * the appended prompt. The structured half of the wall (the
        * payload-side backstop: forbidden op keys + CAN- target-id rules) is
        * `reviewOpsWallFor` at the protocol_edit branch below.
        */
-      const askWall = reviewAskWallFor(surfaceName, prompt) ?? reviewAskWallFor(surfaceName, effectivePrompt);
+      const askWall = reviewAskWallFor(surfaceName, prompt)
+        ?? reviewAskWallFor(surfaceName, effectivePrompt)
+        ?? (request.clarificationAnswers ?? [])
+             .map((a) => [a.optionId, a.label, a.mentionToken, a.value,
+                          a.ref ? JSON.stringify(a.ref) : '']
+                       .filter((s): s is string => typeof s === 'string' && s.length > 0)
+                       .join('\n'))
+             .map((segment) => reviewAskWallFor(surfaceName, segment))
+             .find((w): w is ReviewWallRefusal => w !== null) ?? null;
       if (askWall) {
         console.log(`[agent ${tid}] write-wall refusal surface=${surfaceName} code=${askWall.code} — turn refused before the model (zero inference, zero writes)`);
         onEvent?.({ type: 'tool_result', toolName: 'write-wall', success: false, durationMs: 0 });

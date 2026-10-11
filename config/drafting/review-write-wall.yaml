@@ -21,10 +21,6 @@
 #       `maxGapWords` words. An ask that merely MENTIONS the source artefact
 #       further away in the sentence ("change step 3 to match the vendor text on
 #       page 2") changes something PERMITTED and is never walled.
-#     * TURN-FORM EXEMPTION: an interrogative turn is a question ABOUT the wall,
-#       not an instruction to cross it. `interrogativePatterns` are DATA; the
-#       interpreter additionally exempts a turn ending in '?' structurally
-#       (punctuation, not a phrase).
 #   Both halves of a wall (verb AND noun) are still required. TWO governance
 #   triggers fire: ADJACENCY (the noun starts within maxGapWords words after a
 #   verb occurrence) AND LEADING-VERB (advc-W289-c2 DEFECT-1/2: when the turn's
@@ -62,11 +58,6 @@ matching:
   # ("promote the draft without authorization"). A referent further away is a
   # MENTION, not the object of the change, and never fires.
   maxGapWords: 3
-  interrogativePatterns:
-    - "^(who|what|when|where|why|how|whether|can|could|should|would|will|do|does|did|is|are|was|were)\\b"
-    - "\\b(why|how) (can|cannot|can't|could|do|does|are|is)\\b"
-    - "\\b(what|which) (is|are|does|do|should)\\b"
-    - "\\b(explain|tell me) (why|what|how)\\b"
   # LEADING-VERB GOVERNANCE (advc-W289-c2 DEFECT-1/2): when the turn's first
   # token (after stripping an interrogative/polite prefix and any trailing '?')
   # is one of the wall's verbs, the verb governs any declared referent that

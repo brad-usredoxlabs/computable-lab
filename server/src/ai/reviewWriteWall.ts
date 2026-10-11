@@ -34,7 +34,7 @@
  *     noun match (a competing clause "rewrite the step so it reflects the
  *     vendor document" is a MENTION, not the object).
  *   - INTERROGATIVE EXEMPTION on the STRIPPED REMAINDER (replaces the old
- *     ends-in-'?' + interrogativePatterns + not-opening-with-verb test): a
+ *     ends-in-'?' + interrogative-pattern-list + not-opening-with-verb test): a
  *     remainder OPENING with a `matching.negationTokens` word is a question
  *     ABOUT the wall and is exempt ("why can you not rewrite…" → stripped
  *     remainder opens with the negation), while a modal-prefixed imperative
@@ -87,8 +87,6 @@ export interface ReviewAskWallMatching {
    * Adjacency REMAINS a trigger alongside leading-verb governance.
    */
   maxGapWords: number;
-  /** Regex shapes of an interrogative turn (matched against the trimmed ask). */
-  interrogativePatterns: string[];
   /** Leading-verb governance (blocker words); absent => no blocker list. */
   leadingVerb?: ReviewLeadingVerbGovernance;
   /** Prefix shapes stripped (repeatedly) from the front before the leading-verb test. */
@@ -197,8 +195,6 @@ export function loadReviewWriteWallPolicy(
   if (typeof maxGapWords !== 'number' || !Number.isInteger(maxGapWords) || maxGapWords < 0) {
     throw new Error('review write-wall policy: `matching.maxGapWords` must be a non-negative integer');
   }
-  const interrogativePatterns = optionalStringList(matchingDoc.interrogativePatterns, 'matching.interrogativePatterns');
-  for (const pattern of interrogativePatterns) compileNoun(pattern, 'matching.interrogativePatterns');
   // Leading-verb governance (FIX-1/FIX-2): blocker words are DATA; absent =>
   // no blocker list (the trigger then has no unreachable-referent escape).
   const leadingVerbRaw = matchingDoc.leadingVerb;
@@ -221,7 +217,6 @@ export function loadReviewWriteWallPolicy(
   const negationTokens = optionalStringList(matchingDoc.negationTokens, 'matching.negationTokens');
   const matching: ReviewAskWallMatching = {
     maxGapWords,
-    interrogativePatterns,
     interrogativeStripPatterns,
     negationTokens,
     ...(leadingVerb !== undefined ? { leadingVerb } : {}),

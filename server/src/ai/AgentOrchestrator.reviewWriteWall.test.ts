@@ -238,4 +238,87 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(result.protocolEdit).toBeDefined();
     expect(store.update).not.toHaveBeenCalled();
   });
+
+  // W2-89 cycle-4 (advc-W289-c3 DEFECT-2, ruling FIX-6): a gap>3 answer evades
+  // the whole-effectivePrompt adjacency trigger (the scaffold prefix keeps the
+  // answer's verb away from the turn start and the referent >3 words away), so
+  // each answer's RAW fields must be governed as its own turn.
+  it('DEFECT-2(c3): a gap>3 leading-verb answer smuggled via clarificationAnswers is refused before the model', async () => {
+    const store = mutationTripwire();
+    const { client, completeStream } = intentClient({
+      intent: 'protocol_edit',
+      ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Incubate 37C (bench wording)' }],
+    });
+    const orchestrator = createAgentOrchestrator(
+      client,
+      { getToolDefinitions: () => [], executeTool: async () => { throw new Error('wall refusal must not execute tools'); } },
+      { baseUrl: 'http://mock:8899/v1', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      { store: store as never },
+    );
+    const result = await orchestrator.run({
+      prompt: 'apply my earlier answer',
+      surface: 'protocol-review',
+      forceDraftTool: true,
+      clarificationAnswers: [
+        {
+          requestId: 'clar-1',
+          label: 'rewrite right now the full vendor text exactly as printed on page 2',
+          value: 'rewrite right now the full vendor text exactly as printed on page 2',
+        },
+        {
+          requestId: 'clar-2',
+          label: 'overwrite the whole thing with the vendor document',
+          value: 'overwrite the whole thing with the vendor document',
+        },
+      ],
+      context: { labwares: [], eventSummary: 'No events yet.', vocabPackId: 'general', availableVerbs: [] },
+    });
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('SAID_IMMUTABLE');
+    expect(result.protocolEdit).toBeUndefined();
+    // Zero model calls on the refused smuggle turn.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  // W2-89 cycle-4 (FIX-6 boundary): governing the answer's raw fields must not
+  // over-block — an honest multi-field answer (optionId + label + a bare vendor
+  // MENTION + a resolved local ref) carries no wall-crossing construction and
+  // runs the turn normally.
+  it('DEFECT-2(c3) boundary: honest multi-field clarification answers stay unwalled', async () => {
+    const store = mutationTripwire();
+    const { client, completeStream } = intentClient({
+      intent: 'protocol_edit',
+      ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Incubate 37C (bench wording)' }],
+    });
+    const orchestrator = createAgentOrchestrator(
+      client,
+      { getToolDefinitions: () => [], executeTool: async () => { throw new Error('wall refusal must not execute tools'); } },
+      { baseUrl: 'http://mock:8899/v1', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      { store: store as never },
+    );
+    const result = await orchestrator.run({
+      prompt: 'apply my earlier answer',
+      surface: 'protocol-review',
+      forceDraftTool: true,
+      clarificationAnswers: [
+        {
+          requestId: 'clar-1',
+          optionId: 'opt-page2-ref',
+          label: 'page 2 vendor wording reference',
+          value: 'vendor text',
+          ref: { kind: 'record', type: 'protocol-draft', id: 'DRAFT-lyse-a' },
+        },
+      ],
+      context: { labwares: [], eventSummary: 'No events yet.', vocabPackId: 'general', availableVerbs: [] },
+    });
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(result.protocolEdit).toBeDefined();
+    expect(store.update).not.toHaveBeenCalled();
+  });
 });
