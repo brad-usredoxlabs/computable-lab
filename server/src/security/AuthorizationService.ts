@@ -3,10 +3,13 @@ import type { RecordStore } from '../store/types.js';
 import {
   AccessControlService,
   type AccessAction,
+  type AccessGrant,
   type AccessPolicyRecord,
   type GroupRecord,
   type ProjectPolicyIndex,
+  type Visibility,
 } from './AccessControlService.js';
+import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 
 export const ACCESS_POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml';
 
@@ -91,7 +94,10 @@ function parentIds(envelope: RecordEnvelope): string[] {
 }
 
 export class AuthorizationService {
-  constructor(private readonly store: RecordStore) {}
+  constructor(
+    private readonly store: RecordStore,
+    private readonly ownershipPolicy?: OwnershipPolicyService,
+  ) {}
 
   async canAccess(userId: string | null | undefined, action: AccessAction, record: RecordEnvelope): Promise<boolean> {
     const effectivePolicy = await this.resolveEffectivePolicy(record);
@@ -114,6 +120,15 @@ export class AuthorizationService {
 
     const now = new Date().toISOString();
     const policyRecordId = `ACL-${sanitizeRecordIdPart(resource.recordId)}`;
+    const defaults = this.ownershipPolicy
+      ? await this.ownershipPolicy.defaultsForCreate({ kind: resourceKind, creatorUserId: ownerUserId })
+      : null;
+    const visibility: Visibility = defaults?.visibility ?? 'private';
+    const resolvedOwnerUserId = defaults?.ownerUserId ?? ownerUserId;
+    const grants: AccessGrant[] = defaults?.grants ?? [];
+    // Fallback when no ownership-policy document is installed mirrors the
+    // pre-existing behaviour (creator-private, no grants) so a bare repo never
+    // widens access. The document is the authority; see plan D9.
     const payload = {
       kind: 'access-policy',
       recordId: policyRecordId,
@@ -123,9 +138,9 @@ export class AuthorizationService {
         type: resourceKind,
         label: asString(payloadOf(resource).title) ?? asString(payloadOf(resource).name) ?? resource.recordId,
       },
-      visibility: 'private',
-      ownerUserId,
-      grants: [],
+      visibility,
+      ownerUserId: resolvedOwnerUserId,
+      grants,
       createdAt: now,
       updatedAt: now,
     };
