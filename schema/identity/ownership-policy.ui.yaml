@@ -1,0 +1,53 @@
+# UI specification for Ownership Policy records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "shield"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+  - title: "Scope"
+    fields:
+    - path: "$.scope.type"
+      widget: "select"
+      label: "Scope Type"
+    - path: "$.scope.id"
+      widget: "text"
+      label: "Scope ID"
+    - path: "$.labOwnerUserId"
+      widget: "text"
+      label: "Lab Owner User"
+  - title: "Fallback"
+    fields:
+    - path: "$.fallback.owner"
+      widget: "select"
+      label: "Owner"
+    - path: "$.fallback.visibility"
+      widget: "select"
+      label: "Visibility"
+    - path: "$.fallback.filedTo"
+      widget: "select"
+      label: "Filed To"
+  - title: "Kind Rules"
+    fields:
+    - path: "$.kindRules"
+      widget: "array"
+      label: "Kind Rules"
