@@ -1,5 +1,6 @@
 export type AccessRole = 'owner' | 'admin' | 'editor' | 'operator' | 'qa' | 'viewer';
 export type AccessAction = 'read' | 'write' | 'operate' | 'quality-review' | 'admin';
+export type Visibility = 'private' | 'shared' | 'public';
 
 export interface AccessGrant {
   principalType: 'user' | 'group';
@@ -10,7 +11,7 @@ export interface AccessGrant {
 export interface AccessPolicyRecord {
   kind: 'access-policy';
   recordId: string;
-  visibility: 'private' | 'shared' | 'public';
+  visibility: Visibility;
   ownerUserId: string;
   grants: AccessGrant[];
 }
