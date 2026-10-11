@@ -59,6 +59,9 @@ vi.mock('../shared/api/client', () => ({
     createDraftCopy: mocked.mockCreateDraftCopy,
     createSignature: vi.fn(),
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
+    // EDITOR-9 fix-1: the page resolves tab kind -> schema $id from the
+    // schema registry endpoint. Empty list = no resolution (old behaviour).
+    getSchemas: vi.fn().mockResolvedValue([]),
   },
 }))
 

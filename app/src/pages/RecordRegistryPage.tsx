@@ -9,6 +9,8 @@ import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
 import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
+import { deriveSchemaNode } from '../browser/SchemaTree';
+import type { SchemaNode } from '../browser/SchemaTree';
 
 const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
@@ -50,6 +52,34 @@ export default function RecordRegistryPage() {
   // Projection state for the selected record
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
+
+  // EDITOR-9 fix-1 (browser-gate defect 2): the create-from-search affordance
+  // was dead for every tab because the combobox received schemaId="" and the
+  // server's precompile endpoint refuses an empty id. The kind -> schema $id
+  // mapping is NOT hardcoded here: it is derived from the schema registry
+  // itself (GET /schemas + SchemaTree's deriveSchemaNode, the same wiring
+  // /browser uses), so a new schema/<domain>/<kind>.schema.yaml needs no
+  // frontend change.
+  const [schemaNodes, setSchemaNodes] = useState<SchemaNode[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getSchemas()
+      .then((infos) => {
+        const nodes: SchemaNode[] = [];
+        for (const info of infos) {
+          const node = deriveSchemaNode(info);
+          if (node) nodes.push(node);
+        }
+        if (!cancelled) setSchemaNodes(nodes);
+      })
+      .catch((err) => {
+        console.warn('Schema registry unavailable; create-from-search disabled.', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // QMS-6E D5: request-sequence token for the record list. Every refresh (tab
   // switch, post-save, post-transition) bumps the token; a response whose
@@ -245,6 +275,13 @@ export default function RecordRegistryPage() {
 
   const activeTabConfig = REGISTRY_TABS.find(t => t.id === activeTab)!;
 
+  // EDITOR-9 fix-1: the tab's primary kind (first entry in its kinds list)
+  // resolves to its registered schema $id from the schema-registry metadata.
+  // Empty until the registry loads — the combobox then behaves as before
+  // instead of guessing a schema.
+  const activeTabSchemaId =
+    schemaNodes.find((node) => node.kind === activeTabConfig.kinds[0])?.schemaId ?? '';
+
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
 
   // Determine if we have projection data to render
@@ -274,7 +311,7 @@ export default function RecordRegistryPage() {
         <div className="p-2 border-b border-gray-100">
           <RecordSearchCombobox
             kinds={activeTabConfig.kinds as unknown as string[]}
-            schemaId=""
+            schemaId={activeTabSchemaId}
             placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
             onSelect={(record) => {
               if (record.isNew) {
