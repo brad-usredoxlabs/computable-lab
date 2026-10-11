@@ -201,4 +201,41 @@ describe('ReviewAiPanel write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(await screen.findByTestId('changes-apply')).toBeTruthy()
     expect(screen.queryByTestId('review-ai-refusal')).toBeNull()
   })
+
+  // advc-W289-l2t0525 DEFECT-3 (minor): a stale refusal banner must not survive
+  // the next non-refusal plain-answer turn. The plain-answer/notes-only branch
+  // cleared the proposal but never the refusal, so the previous "vendor document
+  // (SAID) is immutable…" alert stayed on screen while the chat answered a new
+  // question — misreporting the turn's outcome.
+  it('DEFECT-3: a refusal banner is CLEARED by the next plain-answer / notes-only turn', async () => {
+    renderPanel()
+    await screen.findByTestId('review-ai-panel')
+    // Turn 1: the wall refuses — the banner shows.
+    await emit(
+      { refusal: { code: 'SAID_IMMUTABLE', message: 'The vendor document (SAID) is immutable — nothing was written.' } },
+      GATE_ASK_A,
+    )
+    expect(await screen.findByTestId('review-ai-refusal')).toBeTruthy()
+    // Turn 2: an ordinary question answers with notes only — no proposal, no
+    // refusal. The stale banner must be gone.
+    await emit({ notes: ['The lyse step breaks the sample open.'] }, 'what does the lyse step do?')
+    await waitFor(() => expect(screen.queryByTestId('review-ai-refusal')).toBeNull())
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(updateRecordMock).not.toHaveBeenCalled()
+  })
+
+  // Same defect class on the other non-refusal branches: an unmappable proposal
+  // envelope (no diff) must not keep a prior refusal banner either.
+  it('DEFECT-3: a refusal banner is CLEARED by a later proposal turn that opens a card', async () => {
+    renderPanel()
+    await screen.findByTestId('review-ai-panel')
+    await emit(
+      { refusal: { code: 'PROVENANCE_FALSIFICATION', message: 'Provenance cannot be relabelled — nothing was written.' } },
+      GATE_ASK_B,
+    )
+    expect(await screen.findByTestId('review-ai-refusal')).toBeTruthy()
+    await emit({ protocolEdit: { ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Bench wording' }] } }, 'reword step 1 for our bench')
+    expect(await screen.findByTestId('changes-apply')).toBeTruthy()
+    expect(screen.queryByTestId('review-ai-refusal')).toBeNull()
+  })
 })

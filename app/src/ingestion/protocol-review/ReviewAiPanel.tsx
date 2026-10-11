@@ -184,8 +184,11 @@ export function ReviewAiPanel({ recordId, onDraftApplied }: ReviewAiPanelProps) 
       const protocolEdit = result.protocolEdit
       if (!protocolEdit || !Array.isArray(protocolEdit.ops) || protocolEdit.ops.length === 0) {
         // A plain answer / notes-only turn: the chat log is its surface. No
-        // review card, no Accept (the empty-accept defect class).
+        // review card, no Accept (the empty-accept defect class). The prior
+        // turn's refusal banner is cleared too (advc-W289-l2t0525 DEFECT-3): a
+        // non-refusal turn must not keep reporting the earlier refusal.
         setProposal(null)
+        setRefusal(null)
         return
       }
       if (!view) {
