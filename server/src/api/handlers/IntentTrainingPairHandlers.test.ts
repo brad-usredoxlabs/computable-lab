@@ -155,6 +155,187 @@ describe('createIntentTrainingPairHandlers', () => {
     }
   });
 
+  // ── SHORTHAND-CORPUS WS1: the chat-Accept leg posts the accepted shorthand
+  // as a YAML STRING (shorthandYaml). The server decodes it via parseYaml into
+  // the SAME lift+Ajv capture door; the client never parses. ────────────────
+  const CHAT_SHORTHAND_YAML = [
+    'intentId: chat-dmem-feed',
+    'actions:',
+    '  - action: add_material',
+    '    material: DMEM',
+    '    volumeUl: 100',
+    '    targetWells: [A1]',
+    '',
+  ].join('\n')
+
+  it('WS1: a shorthandYaml body captures exactly ONE local pair whose target is the accepted ScientistIntent', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthandYaml-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'add 100uL of DMEM to A1',
+          shorthandYaml: CHAT_SHORTHAND_YAML,
+          acceptedGraph: { events: [{ eventId: 'e1', event_type: 'add_material' }], labwares: {} },
+          confirmedAt: '2026-10-11T00:00:00Z',
+        }) as never,
+        reply.r as never,
+      );
+      // Request served (remote post best-effort as always).
+      expect(reply.calls).toHaveLength(1);
+      // EXACTLY one JSONL pair appended.
+      const lines = readFileSync(file, 'utf8').trim().split('\n');
+      expect(lines).toHaveLength(1);
+      const pair = JSON.parse(lines[0]) as Record<string, unknown>;
+      // Version discriminator as DATA.
+      expect(pair.intentShapeVersion).toBe('1');
+      // The TARGET is the accepted ScientistIntent (lift-canonical), NOT the graph.
+      const target = pair.shorthand as Record<string, unknown>;
+      expect(target.kind).toBe('scientist-intent');
+      expect(target.intentId).toBe('chat-dmem-feed');
+      expect((target.actions as Array<Record<string, unknown>>)[0]?.action).toBe('add_material');
+      expect(pair.shorthandVersion).toBe('0.1.0');
+      // The graph is provenance-only: it rides the historical acceptedGraph field.
+      expect(pair.acceptedGraph).toMatchObject({ events: [{ eventId: 'e1' }] });
+      expect(pair.prompt).toMatchObject({ user: expect.stringContaining('DMEM') });
+      // Anonymized provenance: no raw internal ids.
+      expect(JSON.stringify(pair)).not.toMatch(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-[A-Za-z0-9]{2,}\b/);
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
+  });
+
+  it('WS1: malformed shorthandYaml still serves the request and captures NOTHING', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthandYaml-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'x',
+          // Unparseable YAML (broken mapping value).
+          shorthandYaml: 'intentId: broken\nactions: [ { :::\n',
+          acceptedGraph: { events: [] },
+        }) as never,
+        reply.r as never,
+      );
+      expect(reply.calls).toHaveLength(1);
+      let exists = true;
+      try {
+        readFileSync(file, 'utf8');
+      } catch {
+        exists = false;
+      }
+      expect(exists).toBe(false);
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
+  });
+
+  it('WS1: an undisclosed field inside shorthandYaml never reaches the file (schema-check BEFORE write)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthandYaml-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'x',
+          // Valid YAML, invalid scientist-intent: undisclosed top-level field
+          // (schema/workflow/scientist-intent.schema.yaml additionalProperties:false).
+          shorthandYaml: 'intentId: sneaky\nnope: true\n',
+          acceptedGraph: { events: [] },
+        }) as never,
+        reply.r as never,
+      );
+      expect(reply.calls).toHaveLength(1);
+      let exists = true;
+      try {
+        readFileSync(file, 'utf8');
+      } catch {
+        exists = false;
+      }
+      expect(exists).toBe(false);
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
+  });
+
+  it('WS1: shorthandYaml + localMacro in one body still captures EXACTLY ONE pair (single write path)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthandYaml-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    process.env.CLA_CORPUS_LOCAL_PATH = file;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'add 100uL of DMEM to A1',
+          shorthandYaml: CHAT_SHORTHAND_YAML,
+          localMacro: {
+            intentId: 'dmem-feed',
+            actions: [{ action: 'add_material', material: 'DMEM', volumeUl: 100, sourceWells: ['A1'] }],
+            unresolved: [],
+          },
+          acceptedGraph: { events: [{ eventId: 'e1' }] },
+        }) as never,
+        reply.r as never,
+      );
+      expect(reply.calls).toHaveLength(1);
+      const lines = readFileSync(file, 'utf8').trim().split('\n');
+      expect(lines).toHaveLength(1);
+      const pair = JSON.parse(lines[0]) as Record<string, unknown>;
+      // The YAML arm wins the single capture (the chat leg's accepted document).
+      expect((pair.shorthand as Record<string, unknown>).intentId).toBe('chat-dmem-feed');
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+      else delete process.env.CLA_CORPUS_LOCAL_PATH;
+    }
+  });
+
+  it('WS1: with the toggle unset, a valid shorthandYaml captures NOTHING (file never created)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-shorthandYaml-'));
+    const file = join(dir, 'pairs.jsonl');
+    const saved = process.env.CLA_CORPUS_LOCAL_PATH;
+    delete process.env.CLA_CORPUS_LOCAL_PATH;
+    try {
+      const h = createIntentTrainingPairHandlers(ctx);
+      const reply = send();
+      await h.saveTrainingPair(
+        mockRequest({
+          userPrompt: 'add 100uL of DMEM to A1',
+          shorthandYaml: CHAT_SHORTHAND_YAML,
+          acceptedGraph: { events: [{ eventId: 'e1' }] },
+        }) as never,
+        reply.r as never,
+      );
+      // The request still serves.
+      expect(reply.calls).toHaveLength(1);
+      let exists = true;
+      try {
+        readFileSync(file, 'utf8');
+      } catch {
+        exists = false;
+      }
+      expect(exists).toBe(false);
+    } finally {
+      if (saved !== undefined) process.env.CLA_CORPUS_LOCAL_PATH = saved;
+    }
+  });
+
   it('an invalid macro still serves the request and captures NOTHING locally', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'tp-shorthand-'));
     const file = join(dir, 'pairs.jsonl');

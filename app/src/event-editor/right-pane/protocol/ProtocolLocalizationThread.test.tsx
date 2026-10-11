@@ -145,5 +145,75 @@ describe('ProtocolLocalizationThread', () => {
     const tpCall = mockClient.intentTrainingPair.mock.calls[0]![0] as Record<string, unknown>
     expect(tpCall.localMacro).toMatchObject({ intentId: 'zymo-local' })
   })
+
+  // ── SHORTHAND-CORPUS WS2: honest surfacing driven by the POST response ───
+  it('WS2: a corpus.disabled response surfaces LOCAL capture honestly (never claims the corpus)', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce({ ok: false, error: 'corpus.disabled' })
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    // cycle-1 DEFECT-2: the exact three-way wording. `corpus.disabled` says the
+    // pair was FORWARDED and local capture happens ONLY if the server-side
+    // toggle is on — it must not claim a capture that may not have happened
+    // (CLA_CORPUS_LOCAL_PATH unset => nothing captured).
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved; remote corpus disabled — pair forwarded to the server (local capture only if enabled).',
+    ))
+    const msg = screen.getByTestId('pl-msg').textContent ?? ''
+    expect(msg).toContain('remote corpus disabled')
+    // No capture claim of any kind on this branch.
+    expect(msg).not.toContain('added to training corpus')
+    expect(msg).not.toContain('pair sent for local capture')
+    expect(msg).not.toContain('captured locally')
+    // The POST still happened (the server-side local capture door rides it).
+    expect(mockClient.intentTrainingPair).toHaveBeenCalledTimes(1)
+  })
+
+  it('WS2: a failed training-pair post does not claim corpus capture', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce({ ok: false, error: 'http_500' })
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    // Second leg of the three-way wording: a failed post names the failure.
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved; training pair not posted (http_500).',
+    ))
+    const msg = screen.getByTestId('pl-msg').textContent ?? ''
+    expect(msg).toContain('training pair not posted')
+    expect(msg).toContain('http_500')
+    expect(msg).not.toContain('added to training corpus')
+    expect(msg).not.toContain('local capture')
+    // The accept itself still served (capture failure never fails the accept).
+    expect(mockClient.intentAccept).toHaveBeenCalledTimes(1)
+  })
+
+  it('WS2: a successful post keeps the original corpus-capture message', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce(CORPUS_RES)
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    // Third leg of the three-way wording: ok => the original message, exact.
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved and added to training corpus.',
+    ))
+  })
 })
 
