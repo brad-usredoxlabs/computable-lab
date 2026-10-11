@@ -1,0 +1,104 @@
+$schema: https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml
+kind: ownership-policy
+recordId: OWN-LAB-DEFAULT
+title: Lab Ownership & Sharing Policy
+description: >
+  Default ownership/sharing rules for this lab. New drafts (protocols, local
+  protocols, claims, sequences) belong to their creator and are private until
+  shared. Shared resources (materials, instruments, labware, vendor products)
+  belong to the lab: any member may read them, only the lab owner/grantees may
+  write or operate. Local protocols created inside a project file into that
+  project.
+scope:
+  type: lab
+  id: lab
+labOwnerUserId: USR-LOCAL-ADMIN
+fallback:
+  owner: creator
+  visibility: private
+  filedTo: none
+  editRoles: [owner, editor]
+  shareTargets: [user, group, project, lab]
+kindRules:
+  # ---- personal drafts: creator-private; local protocols file into the project
+  - kind: local-protocol
+    owner: creator
+    visibility: private
+    filedTo: active-project
+    editRoles: [owner, editor]
+    shareTargets: [project, lab, user, group]
+  - kind: protocol
+    owner: creator
+    visibility: private
+    filedTo: none
+    editRoles: [owner, editor]
+    shareTargets: [lab, project, user, group]
+    publishRole: owner
+  - kind: sequence
+    owner: creator
+    visibility: private
+    filedTo: none
+    editRoles: [owner, editor]
+    shareTargets: [lab, user, group]
+  - kind: claim
+    owner: creator
+    visibility: private
+    filedTo: none
+    editRoles: [owner, editor]
+    shareTargets: [lab, project, user, group]
+  # ---- lab-shared physical resources: readable lab-wide, written by owner/admin.
+  # `defaultGrants` stamps the lab admin GROUP as admin on every lab-owned record,
+  # so a multi-user lab is not bottlenecked on the single labOwnerUserId above.
+  # Create GRP-LAB-ADMINS (with its members) first; an unresolved group is inert.
+  - kind: material
+    owner: lab
+    visibility: public
+    filedTo: none
+    editRoles: [owner, admin]
+    shareTargets: [user, group, lab]
+    defaultGrants:
+      - { principalType: group, principalId: GRP-LAB-ADMINS, role: admin }
+  - kind: material-spec
+    owner: lab
+    visibility: public
+    filedTo: none
+    editRoles: [owner, admin]
+    shareTargets: [user, group, lab]
+    defaultGrants:
+      - { principalType: group, principalId: GRP-LAB-ADMINS, role: admin }
+  - kind: material-instance
+    owner: creator
+    visibility: private
+    filedTo: active-project
+    editRoles: [owner, admin]
+    shareTargets: [project, user, group]
+  - kind: aliquot
+    owner: creator
+    visibility: private
+    filedTo: active-project
+    editRoles: [owner, admin]
+    shareTargets: [project, user, group]
+  - kind: instrument
+    owner: lab
+    visibility: public
+    filedTo: none
+    editRoles: [owner, admin]
+    shareTargets: [user, group, lab]
+    defaultGrants:
+      - { principalType: group, principalId: GRP-LAB-ADMINS, role: admin }
+  - kind: equipment
+    owner: lab
+    visibility: public
+    filedTo: none
+    editRoles: [owner, admin]
+    shareTargets: [user, group, lab]
+    defaultGrants:
+      - { principalType: group, principalId: GRP-LAB-ADMINS, role: admin }
+  - kind: labware
+    owner: lab
+    visibility: public
+    filedTo: none
+    editRoles: [owner, admin]
+    shareTargets: [user, group, lab]
+    defaultGrants:
+      - { principalType: group, principalId: GRP-LAB-ADMINS, role: admin }
