@@ -41,6 +41,7 @@ import type { ProtocolBuilderHandlers } from './handlers/ProtocolBuilderHandlers
 import type { CheckinHandlers } from './handlers/CheckinHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
+import type { OwnershipPolicyHandlers } from './handlers/OwnershipPolicyHandlers.js';
 import type { LifecycleHandlers } from './handlers/LifecycleHandlers.js';
 import type { SignatureHandlers } from './handlers/SignatureHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -131,6 +132,7 @@ export interface RouteOptions {
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
+  ownershipPolicyHandlers?: OwnershipPolicyHandlers;
   lifecycleHandlers?: LifecycleHandlers;
   signatureHandlers?: SignatureHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -593,6 +595,12 @@ export function registerRoutes(
     // QMS-8: the write half of the lab-settings contract (Defect L1-A — the
     // route was absent while SettingsPage already called patchLabSettings).
     fastify.patch('/settings/lab', labSettingsHandlers.patchLabSettings.bind(labSettingsHandlers));
+  }
+
+  const { ownershipPolicyHandlers } = options;
+  if (ownershipPolicyHandlers) {
+    fastify.get('/settings/ownership-policy', ownershipPolicyHandlers.getOwnershipPolicy.bind(ownershipPolicyHandlers));
+    fastify.put('/settings/ownership-policy', ownershipPolicyHandlers.putOwnershipPolicy.bind(ownershipPolicyHandlers));
   }
 
   const { lifecycleHandlers } = options;
