@@ -123,7 +123,7 @@ function sanitizeGrants(value: unknown): AccessGrant[] {
     const principalType = row.principalType;
     const principalId = row.principalId;
     const role = row.role;
-    if (principalType !== 'user' && principalType !== 'group') continue;
+    if (principalType !== 'user' && principalType !== 'group' && principalType !== 'project') continue;
     if (typeof principalId !== 'string') continue;
     if (!VALID_ROLES.includes(role as (typeof VALID_ROLES)[number])) continue;
     out.push({ principalType, principalId, role: role as AccessGrant['role'] });
@@ -340,7 +340,9 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
       const grants = sanitizeGrants(request.body?.grants);
       // Reject grants whose principalId doesn't match its declared type prefix.
       for (const g of grants) {
-        const ok = g.principalType === 'user' ? g.principalId.startsWith('USR-') : g.principalId.startsWith('GRP-');
+        const ok = g.principalType === 'user' ? g.principalId.startsWith('USR-')
+          : g.principalType === 'group' ? g.principalId.startsWith('GRP-')
+          : g.principalId.startsWith('STU-');
         if (!ok) {
           reply.status(400);
           return { error: 'BAD_REQUEST', message: `grant principalId ${g.principalId} does not match principalType ${g.principalType}` };

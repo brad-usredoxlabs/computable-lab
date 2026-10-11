@@ -36,4 +36,88 @@ describe('AccessControlService', () => {
     const acl = new AccessControlService();
     expect(acl.canAccess({ policy: null, userId: undefined, action: 'write' })).toBe(true);
   });
+
+  // §T6 (plan 2026-10-10_192635, verbatim): project principal contract.
+  it('propagates a project grant to EVERY project member, and to nobody else', () => {
+    const projectPolicy = {
+      kind: 'access-policy' as const,
+      recordId: 'ACL-STU-A',
+      visibility: 'private' as const,
+      ownerUserId: 'USR-OWNER',
+      grants: [
+        { principalType: 'group' as const, principalId: 'GRP-MITO', role: 'editor' as const },
+        { principalType: 'user' as const, principalId: 'USR-MEMBER-2', role: 'editor' as const },
+      ],
+    };
+    const target = {
+      kind: 'access-policy' as const,
+      recordId: 'ACL-PRT-1',
+      visibility: 'private' as const,
+      ownerUserId: 'USR-OWNER',
+      grants: [{ principalType: 'project' as const, principalId: 'STU-A', role: 'editor' as const }],
+    };
+    const index = { get: (id: string) => (id === 'STU-A' ? projectPolicy : null) };
+    const groups = [
+      { kind: 'group' as const, recordId: 'GRP-MITO', memberUserIds: ['USR-MEMBER-1'] },
+      { kind: 'group' as const, recordId: 'GRP-NESTED', memberUserIds: ['USR-MEMBER-3'] },
+    ];
+    const svc = new AccessControlService(groups);
+
+    // Every route into project membership: owner, group member, directly-granted user.
+    expect(svc.canAccess({ policy: target, userId: 'USR-OWNER', action: 'write', projectPolicies: index })).toBe(true);
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-1', action: 'write', projectPolicies: index })).toBe(true);
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-2', action: 'write', projectPolicies: index })).toBe(true);
+    // Not a member => no access, and an unresolved project id never opens up.
+    expect(svc.canAccess({ policy: target, userId: 'USR-STRANGER', action: 'write', projectPolicies: index })).toBe(false);
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-1', action: 'write', projectPolicies: { get: () => null } })).toBe(false);
+  });
+
+  // §T6 additive assertions (orchestrator-accepted deviation): only the grant loop
+  // can answer these — the owner short-circuit is not involved.
+  it('enforces project grants through the grant loop only (role-scoped, nested, non-chaining)', () => {
+    const groups = [
+      { kind: 'group' as const, recordId: 'GRP-MITO', memberUserIds: ['USR-MEMBER-1'], memberGroupIds: ['GRP-NESTED'] },
+      { kind: 'group' as const, recordId: 'GRP-NESTED', memberUserIds: ['USR-MEMBER-3'] },
+    ];
+    const svc = new AccessControlService(groups);
+    const target = {
+      kind: 'access-policy' as const,
+      recordId: 'ACL-PRT-2',
+      visibility: 'private' as const,
+      ownerUserId: 'USR-OWNER',
+      grants: [{ principalType: 'project' as const, principalId: 'STU-A', role: 'editor' as const }],
+    };
+
+    // Editor-role project grant: a member gets the grant role's actions, never admin.
+    const privateProject = {
+      kind: 'access-policy' as const,
+      recordId: 'ACL-STU-A',
+      visibility: 'private' as const,
+      ownerUserId: 'USR-OWNER',
+      grants: [{ principalType: 'group' as const, principalId: 'GRP-MITO', role: 'editor' as const }],
+    };
+    const index = { get: (id: string) => (id === 'STU-A' ? privateProject : null) };
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-1', action: 'write', projectPolicies: index })).toBe(true);
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-1', action: 'admin', projectPolicies: index })).toBe(false);
+
+    // A user reachable ONLY via nested memberGroupIds on the study policy is a member.
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-3', action: 'write', projectPolicies: index })).toBe(true);
+
+    // A public study admits a stranger as a member — but only for the grant role's actions.
+    const publicProject = { ...privateProject, visibility: 'public' as const };
+    const publicIndex = { get: (id: string) => (id === 'STU-A' ? publicProject : null) };
+    expect(svc.canAccess({ policy: target, userId: 'USR-STRANGER', action: 'write', projectPolicies: publicIndex })).toBe(true);
+    expect(svc.canAccess({ policy: target, userId: 'USR-STRANGER', action: 'admin', projectPolicies: publicIndex })).toBe(false);
+
+    // Project principals do NOT chain: membership via a project grant on the study
+    // policy (pointing at another study) is not membership (plan §T6 stop boundary).
+    const chainedProject = {
+      ...privateProject,
+      grants: [{ principalType: 'project' as const, principalId: 'STU-B', role: 'editor' as const }],
+    };
+    const chainedIndex = {
+      get: (id: string) => (id === 'STU-A' ? chainedProject : id === 'STU-B' ? privateProject : null),
+    };
+    expect(svc.canAccess({ policy: target, userId: 'USR-MEMBER-1', action: 'write', projectPolicies: chainedIndex })).toBe(false);
+  });
 });

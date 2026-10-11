@@ -342,6 +342,49 @@ describe('local identity and authorization substrate', () => {
     expect((datPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
   });
 
+  it('resolves a project grant end-to-end through coercion (OWN-6 §T6 seam)', async () => {
+    // Study ACL carries a nested-group member + a direct user; the target record
+    // ACL carries a {project: STU-*} grant. If coercePolicy dropped 'project'
+    // grants, every member assertion below would be false.
+    const store = new MemoryRecordStore([
+      user('USR-OWNER'),
+      user('USR-MEMBER-1'),
+      user('USR-MEMBER-2'),
+      user('USR-STRANGER'),
+      {
+        recordId: 'GRP-MITO',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-MITO', memberUserIds: [], memberGroupIds: ['GRP-NESTED'] },
+      },
+      {
+        recordId: 'GRP-NESTED',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-NESTED', memberUserIds: ['USR-MEMBER-1'] },
+      },
+      study('STU-PROJECT'),
+      experiment('EXP-TARGET', 'STU-PROJECT'),
+      policy('ACL-STU-PROJECT', 'STU-PROJECT', 'study', 'USR-OWNER', [
+        { principalType: 'group', principalId: 'GRP-MITO', role: 'editor' },
+        { principalType: 'user', principalId: 'USR-MEMBER-2', role: 'editor' },
+      ]),
+      policy('ACL-EXP-TARGET', 'EXP-TARGET', 'experiment', 'USR-OWNER', [
+        { principalType: 'project', principalId: 'STU-PROJECT', role: 'editor' },
+      ]),
+    ]);
+    const authorization = new AuthorizationService(store);
+    const exp = await store.get('EXP-TARGET');
+    expect(exp).toBeTruthy();
+
+    // Member via nested group, member via direct user grant, and the study owner all open.
+    expect(await authorization.canAccess('USR-MEMBER-1', 'write', exp!)).toBe(true);
+    expect(await authorization.canAccess('USR-MEMBER-2', 'write', exp!)).toBe(true);
+    // Role-scoped: the project grant is 'editor', so admin is not carried.
+    expect(await authorization.canAccess('USR-MEMBER-1', 'admin', exp!)).toBe(false);
+    // A stranger never opens, and the index is keyed by resourceRef id (STU-PROJECT),
+    // not by the ACL recordId (ACL-STU-PROJECT).
+    expect(await authorization.canAccess('USR-STRANGER', 'write', exp!)).toBe(false);
+  });
+
   it('never guesses an owner for system-created records during backfill', async () => {
     const store = new MemoryRecordStore([
       user('USR-OWNER'),
