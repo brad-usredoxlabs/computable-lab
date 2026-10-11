@@ -1,0 +1,25 @@
+# Lint rules for Ownership Policy records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml"
+rules:
+  - id: "ownership-policy-requires-kind-rules"
+    title: "An ownership policy should declare at least one kind rule"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.kindRules"
+    message:
+      template: "Ownership policy '{{$.recordId}}' declares no kindRules (only the fallback applies)"
+      paths: ["$.recordId"]
+  - id: "ownership-policy-fallback-must-be-safe"
+    title: "Fallback owner must be creator so unlisted kinds stay private"
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "equals"
+      path: "$.fallback.owner"
+      value: "creator"
+    message:
+      template: "Fallback owner for '{{$.recordId}}' must be 'creator'"
+      paths: ["$.recordId"]

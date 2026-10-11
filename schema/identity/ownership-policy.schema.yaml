@@ -1,0 +1,115 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml"
+title: "Ownership Policy"
+description: >
+  Declarative lab policy for ownership, sharing and filing defaults. One document
+  per scope (v1: one lab-scope document). It declares defaults only — per-record
+  exceptions live in access-policy records. Record kinds not listed here use
+  `fallback`.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, recordId, title, scope, labOwnerUserId, fallback]
+
+properties:
+  kind:
+    const: "ownership-policy"
+
+  recordId:
+    type: string
+    pattern: "^OWN-[A-Z0-9][A-Z0-9_-]*$"
+
+  scope:
+    type: object
+    additionalProperties: false
+    required: [type, id]
+    properties:
+      type:
+        type: string
+        enum: [lab, project]
+      id:
+        type: string
+        description: "Scope identifier. 'lab' for the lab document; STU-* for a project override."
+
+  labOwnerUserId:
+    type: string
+    pattern: "^USR-[A-Z0-9][A-Z0-9_-]*$"
+    description: "Owner stamped on records whose rule says owner: lab (the lab admin/manager user)."
+
+  fallback:
+    $ref: "#/$defs/KindRule"
+    description: "Applied to any record kind with no entry in kindRules."
+
+  kindRules:
+    type: array
+    description: "Per-kind defaults. At most one entry per kind."
+    items:
+      allOf:
+      - $ref: "#/$defs/KindRule"
+      - type: object
+        required: [kind]
+        properties:
+          kind:
+            type: string
+            description: "Record kind, exactly as it appears in payload.kind (e.g. local-protocol)."
+    uniqueItems: false
+
+$defs:
+  KindRule:
+    type: object
+    additionalProperties: false
+    required: [owner, visibility, filedTo, editRoles, shareTargets]
+    properties:
+      kind:
+        type: string
+      owner:
+        type: string
+        enum: [creator, lab]
+        description: "creator = the session user who created the record; lab = labOwnerUserId."
+      visibility:
+        type: string
+        enum: [private, shared, public]
+        description: "public = whole lab may read (single-tenant lab)."
+      filedTo:
+        type: string
+        enum: [none, active-project]
+        description: "active-project = stamp links.studyId from the creating request's project when absent."
+      editRoles:
+        type: array
+        items:
+          type: string
+          enum: [owner, admin, editor, operator, qa, viewer]
+        description: "Roles the lab offers when sharing this kind (descriptive in v1; see plan D8)."
+      shareTargets:
+        type: array
+        items:
+          type: string
+          enum: [user, group, project, lab]
+        description: "Legal share targets for this kind. 'lab' maps to visibility: public."
+      defaultGrants:
+        type: array
+        description: >
+          Grants stamped onto the record's access-policy at creation, so a
+          lab-owned kind is administered by a GROUP (multi-user) rather than by
+          labOwnerUserId alone. A principalId that does not resolve is inert.
+        items:
+          type: object
+          additionalProperties: false
+          required: [principalType, principalId, role]
+          properties:
+            principalType:
+              type: string
+              enum: [user, group, project]
+            principalId:
+              type: string
+              description: "USR-* / GRP-* / STU-* per principalType."
+            role:
+              type: string
+              enum: [owner, admin, editor, operator, qa, viewer]
+      publishRole:
+        type: string
+        enum: [owner, admin, editor, operator, qa, viewer]
+        description: "Optional: role required to publish this kind lab-wide."
