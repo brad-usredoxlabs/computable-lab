@@ -419,6 +419,30 @@ describe('serializeDocument — empty optional omission (EDITOR-9)', () => {
     expect(result.tags).toEqual([]);
   });
 
+  it('an untouched composite slot (null attr default) is ABSENT, not null', () => {
+    // TipTap fills an absent attr with the node default (null), so an
+    // untouched array/object row carries null — writing null into a
+    // `type: array` slot 422s "Expected type: array" just like the strings.
+    const doc: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Lists' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Lists' }] },
+            { type: 'fieldRow', attrs: { path: '$.labIds', widget: 'multiselect', label: 'Labs', value: null } },
+            { type: 'fieldRow', attrs: { path: '$.settings', widget: 'object', label: 'Settings', value: null } },
+          ],
+        },
+      ],
+    };
+
+    const result = serializeDocument(doc, {});
+    expect(result).not.toHaveProperty('labIds');
+    expect(result).not.toHaveProperty('settings');
+  });
+
   it('ref-widget fences are unchanged (QMS-6E): null and \'—\' refs absent, structured ref present', () => {
     const refDoc = (value: unknown): JSONContent => ({
       type: 'doc',

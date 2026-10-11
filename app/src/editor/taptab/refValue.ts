@@ -78,17 +78,21 @@ export function isCompositeValueWidget(widget: unknown): boolean {
  * `''` or `null`. The editor's widgets carry "no value" as null (FieldRow's
  * attr default, an untouched slot) or as `''` (a cleared text/number/date
  * input). Writing either into the payload 422s with
- * "Expected type: string" (Brad's person save: /organizationId, /contact/phone).
+ * "Expected type: string" (Brad's person save: /organizationId, /contact/phone)
+ * or "Expected type: array" for a container slot.
  *
- * So: a scalar widget holding its unset/empty value emits NOTHING — the
- * serializer omits the path (and deletes any stale base-payload value there).
- * Composite widgets keep their empty containers; `false` and `0` are values,
- * not empties. A REQUIRED field left empty is omitted too: the server's
- * required-check is the correct, desired validation error — the client must
- * not fabricate a requiredness check of its own.
+ * So: a widget holding its unset value (null/undefined — any widget, since
+ * TipTap fills absent attrs with the node default null) emits NOTHING, and a
+ * scalar holding `''` emits NOTHING. The serializer omits the path and deletes
+ * any stale base-payload value there. Composite containers keep their EMPTY
+ * value (`[]`, `{}`) — an emptied list is the user's intent, not an unset
+ * slot. `false` and `0` are values, not empties. A REQUIRED field left empty
+ * is omitted too: the server's required-check is the correct, desired
+ * validation error — the client must not fabricate a requiredness check.
  */
 export function isEmptyFieldValue(value: unknown, widget: unknown): boolean {
-  if (isEmptyRefFieldValue(value, widget)) return true
+  if (value === null || value === undefined) return true
+  if (isRefWidget(widget)) return isDisplayOnlyRefValue(value)
   if (isCompositeValueWidget(widget)) return false
-  return value === null || value === undefined || value === ''
+  return value === ''
 }
