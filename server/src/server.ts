@@ -254,6 +254,7 @@ export interface AppContext {
   credentialStore: CredentialStore;
   sessionStore: SessionStore;
   authorizationService: AuthorizationService;
+  ownershipPolicyService: OwnershipPolicyService;
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
@@ -637,6 +638,7 @@ export async function initializeApp(
     credentialStore,
     sessionStore,
     authorizationService,
+    ownershipPolicyService,
     platformRegistry,
     lifecycleEngine,
     policyBundleService,
@@ -708,6 +710,7 @@ export async function createServer(
     {
       identityService: ctx.localIdentityService,
       authorizationService: ctx.authorizationService,
+      ownershipPolicyService: ctx.ownershipPolicyService,
       roleResolver,
       auditService,
       // Live accessor: ctx.appConfig is reassigned at runtime (PATCH /api/config),
