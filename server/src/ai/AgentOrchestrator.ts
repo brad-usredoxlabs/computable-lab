@@ -1235,8 +1235,15 @@ export function createAgentOrchestrator(
        * chat shows a user-facing refusal (never raw reasoning, never
        * "(no response)"). TS follows the data — no surface literal, no
        * phrase literal here.
+       *
+       * advc-W289-l2t0525 DEFECT-2: the ask wall reads the USER'S OWN ask
+       * (`prompt`), never `effectivePrompt`. The clarification answers appended
+       * at :1119 are the user's ANSWERS to a picker, not instructions — a reply
+       * must never trip a wall the user never meant as an ask. The structured
+       * half of the wall (the primary judgement on proposal semantics) is
+       * `reviewOpsWallFor` at the protocol_edit branch below.
        */
-      const askWall = reviewAskWallFor(surfaceName, effectivePrompt);
+      const askWall = reviewAskWallFor(surfaceName, prompt);
       if (askWall) {
         console.log(`[agent ${tid}] write-wall refusal surface=${surfaceName} code=${askWall.code} — turn refused before the model (zero inference, zero writes)`);
         onEvent?.({ type: 'tool_result', toolName: 'write-wall', success: false, durationMs: 0 });

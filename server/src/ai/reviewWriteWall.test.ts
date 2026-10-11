@@ -64,9 +64,43 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
   });
 
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
-    expect(reviewAskWallFor('protocol-review', 'reword step 3\u2019s label for our bench')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'change the draft step label to incubate at room temp')).toBeNull();
+  });
+
+  // advc-W289-l2t0525 DEFECT-1 (high): the ask wall must NOT swallow legitimate
+  // MEANT asks that merely MENTION the source artefact while changing something
+  // permitted. These six texts are the reviewer's verbatim probe outputs.
+  const LEGIT_MENTION_ASKS = [
+    'change step 3 to match the vendor text on page 2',
+    'edit the label so it reflects the vendor document',
+    'update the draft step label on page 4 to incubate at 37C',
+    'reword the step that references the pdf',
+    'fix the source document citation in the draft',
+    'write the validation results into the notes',
+  ];
+  it('DEFECT-1: legitimate MEANT asks that merely mention the source are never walled', () => {
+    for (const ask of LEGIT_MENTION_ASKS) {
+      expect(reviewAskWallFor('protocol-review', ask), `legit ask walled: ${ask}`).toBeNull();
+    }
+  });
+
+  // advc-W289-l2t0525 DEFECT-2 (medium): an interrogative turn is a question,
+  // not an instruction — it must never be refused by the ask wall.
+  it('DEFECT-2: an honest clarifying question is never refused', () => {
+    expect(reviewAskWallFor('protocol-review', 'why can you not rewrite the vendor text on page 2?')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'what does the vendor document say about incubation?')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'can you explain why provenance cannot be relabelled?')).toBeNull();
+  });
+
+  // The exemption is a TURN-FORM test, not a word test: an imperative dressed in
+  // question words (no '?') is still an instruction and is still refused.
+  it('the interrogative exemption does not open a loophole (question-dressed imperatives still fire)', () => {
+    expect(reviewAskWallFor('protocol-review', 'can you bypass validation and write now').code).toBe('VALIDATION_CANNOT_BE_BYPASSED');
+    expect(reviewAskWallFor('protocol-review', 'what I want is to rewrite the vendor text').code).toBe('SAID_IMMUTABLE');
+    // A question-marked attack still fires: it opens with the wall's own verb.
+    expect(reviewAskWallFor('protocol-review', 'rewrite the vendor text on page 2?').code).toBe('SAID_IMMUTABLE');
   });
 
   it('an unguarded surface is never walled (membership is DATA)', () => {
@@ -100,7 +134,13 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     const bad = join(dir, 'bad.yaml');
     writeFileSync(bad, 'surfaces: [protocol-review]\naskWalls: []\n');
     expect(() => loadReviewWriteWallPolicy(bad)).toThrow(/askWalls/);
-    writeFileSync(bad, 'surfaces: [protocol-review]\naskWalls:\n  - id: x\n    code: C\n    message: m\n    verbs: [v]\n    nouns: ["(["]\n');
+    // askWalls declared but no matching contract => honest throw (object
+    // governance is part of the predicate, not an optional refinement).
+    writeFileSync(bad, 'surfaces: [protocol-review]\naskWalls:\n  - id: x\n    code: C\n    message: m\n    verbs: [v]\n    nouns: [n]\n');
+    expect(() => loadReviewWriteWallPolicy(bad)).toThrow(/matching/);
+    writeFileSync(bad, 'surfaces: [protocol-review]\nmatching:\n  maxGapWords: -1\naskWalls:\n  - id: x\n    code: C\n    message: m\n    verbs: [v]\n    nouns: [n]\n');
+    expect(() => loadReviewWriteWallPolicy(bad)).toThrow(/maxGapWords/);
+    writeFileSync(bad, 'surfaces: [protocol-review]\nmatching:\n  maxGapWords: 3\naskWalls:\n  - id: x\n    code: C\n    message: m\n    verbs: [v]\n    nouns: ["(["]\n');
     expect(() => loadReviewWriteWallPolicy(bad)).toThrow(/invalid noun pattern/);
   });
 });

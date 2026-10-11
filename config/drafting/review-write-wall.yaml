@@ -14,17 +14,46 @@
 #
 # Semantics:
 # - `surfaces` — the AI surface ids the wall guards (membership is data).
-# - `askWalls` — a wall fires when the turn's ask matches ANY `verbs` word
-#   (word-bounded, case-insensitive) AND ANY `nouns` regex pattern. BOTH halves
-#   are required, so a legitimate MEANT-only ask ("reword step 3's label for our
-#   bench") never trips a wall. The refusal fires BEFORE any model call: zero
-#   inference, zero writes, no proposal payload reaches the client.
+# - `matching` — how an ask wall matches (advc-W289-l2t0525 DEFECT-1/2). The ask
+#   wall is a CONSTRUCTION predicate, not a word bag:
+#     * OBJECT GOVERNANCE: the wall fires only when the wall verb GOVERNS the
+#       declared referent as its OBJECT — the noun must follow the verb within
+#       `maxGapWords` words. An ask that merely MENTIONS the source artefact
+#       further away in the sentence ("change step 3 to match the vendor text on
+#       page 2") changes something PERMITTED and is never walled.
+#     * TURN-FORM EXEMPTION: an interrogative turn is a question ABOUT the wall,
+#       not an instruction to cross it. `interrogativePatterns` are DATA; the
+#       interpreter additionally exempts a turn ending in '?' structurally
+#       (punctuation, not a phrase).
+#   Both halves of a wall (verb AND noun) are still required. The refusal fires
+#   BEFORE any model call: zero inference, zero writes, no proposal payload
+#   reaches the client. The ask wall reads the USER'S OWN ask text only — never
+#   the clarification-appended prompt (a clarification answer is not an
+#   instruction). The structured-payload half of the wall is `opsWall`.
+# - `askWalls` — the declared wall-crossing asks. The verbs are the
+#   wall-crossing CONSTRUCTIONS only: ordinary MEANT-editing verbs
+#   (change/edit/update/fix/reword/modify/replace/…) are NOT listed on
+#   said-vendor-rewrite, because they are the verbs of legitimate draft work and
+#   object governance — not the verb list — is what separates "rewrite the
+#   vendor text" from "change step 3 to match the vendor text".
 # - `opsWall` — defense-in-depth at the protocol_edit branch: an op object
 #   carrying any `forbiddenFields` key is a provenance-falsification attempt
 #   (provenance/source_artifact are record structure, never chat-editable).
 #   The schema envelope's unevaluatedProperties:false stays the structural half;
 #   this is the honest-wording half. The op vocabulary is NOT extended.
 surfaces: [protocol-review]
+matching:
+  # Words allowed between the wall verb and the START of the referent it
+  # governs. 1 covers a determiner ("rewrite the vendor text"), 2 a named
+  # target ("relabel step-lyse-a provenance"), 3 a qualified object
+  # ("promote the draft without authorization"). A referent further away is a
+  # MENTION, not the object of the change, and never fires.
+  maxGapWords: 3
+  interrogativePatterns:
+    - "^(who|what|when|where|why|how|whether|can|could|should|would|will|do|does|did|is|are|was|were)\\b"
+    - "\\b(why|how) (can|cannot|can't|could|do|does|are|is)\\b"
+    - "\\b(what|which) (is|are|does|do|should)\\b"
+    - "\\b(explain|tell me) (why|what|how)\\b"
 askWalls:
   - id: said-vendor-rewrite
     code: SAID_IMMUTABLE
@@ -32,21 +61,22 @@ askWalls:
       The vendor document (SAID) is immutable — chat cannot rewrite vendor text.
       Edits apply only to the semantic draft (MEANT). No proposal was offered
       and nothing was written.
+    # Only the SAID-REWRITE construction: verbs that mean "author the source
+    # artefact's own text". Ordinary MEANT verbs are deliberately absent
+    # (advc-W289-l2t0525 DEFECT-1).
     verbs:
       - rewrite
-      - reword
-      - change
-      - changes
-      - edit
-      - edits
-      - alter
-      - modify
-      - update
-      - replace
-      - fix
-      - correct
-      - revise
-      - adjust
+      - overwrite
+      - retype
+      - recopy
+      - redraft
+      - transcribe
+      - restate
+    # Only referents that ARE the vendor/SAID artefact. Generic non-SOID
+    # referents (`page \d+`, `the pdf`, `source document`, `original text`,
+    # `original document`) are deliberately absent: they name the source without
+    # making it the object of the change, so they swallowed legitimate MEANT
+    # asks (advc-W289-l2t0525 DEFECT-1).
     nouns:
       - vendor text
       - vendor's text
@@ -55,13 +85,9 @@ askWalls:
       - vendor document
       - vendor pdf
       - vendor page
-      - source document
+      - vendor protocol
       - source text
-      - original text
-      - original document
-      - the pdf
       - said text
-      - page \d+
   - id: provenance-falsification
     code: PROVENANCE_FALSIFICATION
     message: >-
@@ -119,14 +145,19 @@ askWalls:
       - write
       - save
       - commit
+    # The gate being bypassed, not the word "validation": a bare `validation`
+    # noun fired on "write the validation results into the notes", which is an
+    # ordinary note-taking ask (advc-W289-l2t0525 DEFECT-1).
     nouns:
-      - validation
       - validation gate
-      - the gate
+      - validation gates
+      - validation checks
+      - validation and write
+      - validation or write
+      - lint gate
       - lint
       - schema check
       - verification
-      - validation and write
   - id: promote-unauthorized
     code: PROMOTION_NOT_ON_THIS_SURFACE
     message: >-
