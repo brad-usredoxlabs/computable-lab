@@ -133,8 +133,17 @@ export default function RecordRegistryPage() {
     loadProjectionForRecord(recordData);
   };
 
-  const handleCreateRecord = (schemaId: string) => {
-    setSelectedRecord({ recordId: '', schemaId, payload: {} });
+  const handleCreateRecord = (schemaId: string, precompilePayload?: Record<string, unknown>) => {
+    // EDITOR-9 fix-2 (browser-gate defect 1, 20261011T0550-regate): the
+    // precompile payload the combobox already carries (kind/id/displayName/
+    // status — RecordSearchCombobox.tsx:187-193) must SEED the create base.
+    // serializeDocument clones this base and overlays only projection slot
+    // paths; the person draft projection has no `kind` slot, so a base of {}
+    // produced a POST body with no kind (Ajv 422) and no id (server 400).
+    // This is the same mechanism that makes EDIT mode work: edit keeps the
+    // record's own kind/id in the base. No client-side id minting here — the
+    // id comes from the precompile payload the server already produced.
+    setSelectedRecord({ recordId: '', schemaId, payload: { ...precompilePayload } });
     setEditorMode('create');
     setDirty(false);
     setDraftRevisionNote(null);
@@ -315,7 +324,10 @@ export default function RecordRegistryPage() {
             placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
             onSelect={(record) => {
               if (record.isNew) {
-                handleCreateRecord(record.schemaId);
+                // EDITOR-9 fix-2: pass the combobox's precompile payload
+                // through so the create base carries kind/id (see
+                // handleCreateRecord).
+                handleCreateRecord(record.schemaId, record.payload);
               } else {
                 handleSelectRecord({ recordId: record.recordId, payload: record.payload });
               }
