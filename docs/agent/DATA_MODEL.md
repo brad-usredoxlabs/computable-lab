@@ -52,6 +52,61 @@
 | **RoleGrant** | `identity/role-grant.schema.yaml` | `recordId` (GRANT-), `userId`, `lifecycleId?`, `roles[]`, `grantedBy?` | Governed lifecycle roles for a user; scoped to one lifecycle or global (lifecycleId absent). Not a file ACL — see access-policy for sharing |
 | **Signature** | `governance/signature.schema.yaml` | `recordId` (SIG-), `signedBy`, `action` (executed\|reviewed\|approved\|verified\|released\|witnessed\|acknowledged), `meaning.code`, `subject{recordId, gitCommit, lifecycleId?, targetState?}`, `signedAt`, `authentication.method: password_reauthentication` | Append-only; binds person + meaning + exact git version of subject record |
 | **AuditEvent** | `governance/audit-event.schema.yaml` | `recordId` (EVT-), `actor`, `action`, `subjectType`, `subjectId`, `occurredAt`, `data?` | Append-only domain event: git records what changed, audit events record what it MEANT |
+| **OwnershipPolicy** | `identity/ownership-policy.schema.yaml` | `recordId` (OWN-*), `scope` lab\|project, `labOwnerUserId`, `fallback`, `kindRules` | drives creation-time ACL defaults (T7) + filing (T8); resolved only via `OwnershipPolicyService.ruleFor` — see Ownership & Sharing |
+
+---
+
+## Ownership & Sharing
+
+Three ownership levels, widening outward:
+
+```
+personal  ->  project  ->  lab
+(creator   (filed into   (lab-owned,
+ owns,      the study     readable
+ private    it was        lab-wide via
+ drafts)    created in)   visibility + grants)
+```
+
+An `ownership-policy` record (e.g. `OWN-LAB-DEFAULT`) declares, per record
+kind, the starting `owner` (creator | lab), `visibility` (private | shared |
+public), `filedTo` (none | active-project), `editRoles`, `shareTargets`, and
+`defaultGrants` stamped onto the new record's `access-policy`. It is DATA:
+`OwnershipPolicyService` only reads it and reports each answer's origin
+(`{policyRecordId, source: kind|fallback}`) so the UI and the AI can explain
+WHY a record was made private / lab-visible / project-filed. Code decides
+nothing.
+
+**Resolution order** (`OwnershipPolicyService.ruleFor(kind)`):
+
+1. `kindRules[kind]` — the declared rule for that kind (`origin.source: "kind"`).
+2. `fallback` — the document's declared fallback (`origin.source: "fallback"`).
+3. No document installed → creator-private, no grants, and the system says so
+   (D9: a bare repo never widens access — the pre-document behaviour is the
+   floor, so installing/removing the document can only change defaults, never
+   silently open records).
+
+**Role-vocabulary seam.** The ownership document speaks ACL roles —
+`owner/admin/editor/operator/qa/viewer` — verbatim from the `access-policy`
+grant enum (`editRoles`, `shareTargets`, `defaultGrants`). QMS lifecycle roles
+(`role-grant` + `RoleResolver`, optionally scoped to a `lifecycleId`) are a
+SEPARATE vocabulary: they gate lifecycle transitions and signatures, not
+record sharing. One entity never gets two local names — a lifecycle role is
+never re-declared as an ACL role, and an ACL role is never re-declared as a
+role-grant.
+
+**Honest git-boundary note.** These ACLs are enforced by the application
+(`AuthorizationService` / `AccessControlService`) over the record store. Git
+access to the data dir is the real ACL boundary: anyone with filesystem or
+git access to the data repo can read (and, outside the app, edit) every
+record regardless of `visibility`. `access-policy` governs what the app lets
+principals do; it does not replace OS/git permissions.
+
+`applyOwnershipDefaults` (`npm run apply:ownership-defaults -w server`) is
+the opt-in migration that brings pre-existing `access-policy` records in line
+with the document: dry-run by default, prints the resolved data dir first,
+writes only with `--apply`, skips records with no applicable rule, and never
+guesses an owner.
 
 ---
 
