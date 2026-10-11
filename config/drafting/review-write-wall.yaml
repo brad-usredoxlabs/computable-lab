@@ -25,11 +25,24 @@
 #       not an instruction to cross it. `interrogativePatterns` are DATA; the
 #       interpreter additionally exempts a turn ending in '?' structurally
 #       (punctuation, not a phrase).
-#   Both halves of a wall (verb AND noun) are still required. The refusal fires
-#   BEFORE any model call: zero inference, zero writes, no proposal payload
-#   reaches the client. The ask wall reads the USER'S OWN ask text only — never
-#   the clarification-appended prompt (a clarification answer is not an
-#   instruction). The structured-payload half of the wall is `opsWall`.
+#   Both halves of a wall (verb AND noun) are still required. TWO governance
+#   triggers fire: ADJACENCY (the noun starts within maxGapWords words after a
+#   verb occurrence) AND LEADING-VERB (advc-W289-c2 DEFECT-1/2: when the turn's
+#   first token — after stripping an interrogative/polite prefix and any
+#   trailing '?' — is one of the wall's verbs, that verb governs any declared
+#   referent that follows ANYWHERE in the turn; distance cannot be an evasion.
+#   A blocker word (`leadingVerb.blockerWords`) between the verb and the
+#   referent makes the referent a MENTION, not the object). The interrogative
+#   exemption is evaluated on the STRIPPED remainder: an opening negation
+#   (`negationTokens`) exempts the wall; a modal/polite prefix stripped by
+#   `interrogativeStripPatterns` exposes the imperative underneath.
+#   The refusal fires BEFORE any model call: zero inference, zero writes, no
+#   proposal payload reaches the client. The ask wall reads the user's ask AND
+#   the clarification-appended prompt (W2-89 cycle-3 / advc-W289-c2 DEFECT-3:
+#   after structural governance, only wall-crossing CONSTRUCTIONS fire, so an
+#   honest picker answer cannot trip it while an answer that IS an imperative
+#   carrying a referent is refused). The structured-payload half of the wall is
+#   `opsWall`.
 # - `askWalls` — the declared wall-crossing asks. The verbs are the
 #   wall-crossing CONSTRUCTIONS only: ordinary MEANT-editing verbs
 #   (change/edit/update/fix/reword/modify/replace/…) are NOT listed on
@@ -54,6 +67,24 @@ matching:
     - "\\b(why|how) (can|cannot|can't|could|do|does|are|is)\\b"
     - "\\b(what|which) (is|are|does|do|should)\\b"
     - "\\b(explain|tell me) (why|what|how)\\b"
+  # LEADING-VERB GOVERNANCE (advc-W289-c2 DEFECT-1/2): when the turn's first
+  # token (after stripping an interrogative/polite prefix and any trailing '?')
+  # is one of the wall's verbs, the verb governs any declared referent that
+  # follows ANYWHERE in the turn — distance cannot be an evasion. The referent
+  # is unreachable when a blocker word sits between the verb and the referent
+  # (a competing clause "rewrite the step so it reflects the vendor document"
+  # is a MENTION, not the object).
+  leadingVerb:
+    blockerWords: [to, so, such, that, which, who, because, since, while, and, but, then, or, if, when]
+  # Prefixes stripped before the leading-verb test (DATA; polite/modal shapes,
+  # so "can you rewrite…" is an imperative in question dress).
+  interrogativeStripPatterns:
+    - "^(can|could|would|will|shall) (you|u) (please|kindly)? ?"
+    - "^(please|kindly) +"
+    - "^(who|what|when|where|why|how) (can|could|should|would|will|do|does|did|is|are|was|were) (you)?"
+  # An interrogative remainder OPENING with a negation is a question ABOUT the
+  # wall and is exempt (DEFECT-1 c1 boundary, preserved).
+  negationTokens: [not, no, never, cannot, "can't", "cannot"]
 askWalls:
   - id: said-vendor-rewrite
     code: SAID_IMMUTABLE
@@ -195,3 +226,16 @@ opsWall:
     - vendor-truth
     - rung
     - ladder
+  # W2-89 cycle-3 (architect decision FIX-4): the only expressible payload-side
+  # rule — a proposal whose `protocolId` override names a vendor-protocol-
+  # candidate (CAN-, the SAID shape already declared in
+  # schema/workflow/protocol.lint.yaml) targets an immutable record. Chat edits
+  # apply only to the MEANT draft. Absent `targetIdRules` => no target rule
+  # (absent = OFF, the standing contract).
+  targetIdRules:
+    - pattern: "^CAN-"
+      code: SAID_IMMUTABLE
+      message: >-
+        The proposal targets a vendor-protocol-candidate (SAID) record — chat
+        edits apply only to the semantic draft (MEANT). No proposal was offered
+        and nothing was written.

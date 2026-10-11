@@ -123,6 +123,78 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     expect(reviewOpsWallFor('event-editor', { ops: [{ op: 'step_update', provenance: [] }] })).toBeNull();
   });
 
+  // W2-89 cycle-3 (advc-W289-c2 DEFECT-1, closed by FIX-1/FIX-2): a gap beyond
+  // `maxGapWords` must NOT be an evasion when the turn OPENS with a wall verb —
+  // the leading verb governs any declared referent that follows with no blocker.
+  it('DEFECT-1(c2): gap>3 imperatives led by a wall verb fire SAID_IMMUTABLE', () => {
+    for (const ask of [
+      'rewrite right now the full vendor text exactly as printed on page 2',
+      'overwrite the whole thing with the vendor document',
+      'rewrite as our own wording the vendor text',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `gap>3 leading-verb ask not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('SAID_IMMUTABLE');
+    }
+  });
+
+  // W2-89 cycle-3 (advc-W289-c2 DEFECT-2): a modal/polite prefix is question
+  // DRESS over an imperative — the strip patterns (DATA) expose the leading verb.
+  it('DEFECT-2(c2): modal-prefixed question imperatives fire SAID_IMMUTABLE', () => {
+    expect(reviewAskWallFor('protocol-review', 'can you rewrite the vendor text on page 2?')!.code).toBe('SAID_IMMUTABLE');
+    expect(reviewAskWallFor('protocol-review', 'would you please rewrite the vendor document?')!.code).toBe('SAID_IMMUTABLE');
+  });
+
+  // W2-89 cycle-3 (DEFECT-2 boundary): the exemption lives on the STRIPPED
+  // remainder — a negated question or a non-governing question stays exempt.
+  it('DEFECT-2(c2) boundary: negated and non-governing questions stay exempt', () => {
+    expect(reviewAskWallFor('protocol-review', 'why can you not rewrite the vendor text on page 2?')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'what does the vendor document say about incubation?')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'can you explain why provenance cannot be relabelled?')).toBeNull();
+  });
+
+  // W2-89 cycle-3 (FIX-2 step 4): the leading-verb trigger must NOT over-block.
+  // A blocker word between the verb and the referent makes it a MENTION.
+  it('leading-verb governance does not over-block: blocker clause is a MENTION', () => {
+    expect(reviewAskWallFor('protocol-review', 'rewrite the draft step so it reflects the vendor document')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', "rewrite the mix step's label for our bench")).toBeNull();
+  });
+
+  // W2-89 cycle-3 regression pin (decision FIX-5 #5): the six legit MEANT asks
+  // and the four gate asks re-asserted in ONE test the next reviewer can demand by name.
+  it('regression pins: the six legit MEANT asks and the four gate asks are unchanged', () => {
+    for (const ask of LEGIT_MENTION_ASKS) {
+      expect(reviewAskWallFor('protocol-review', ask), `legit ask walled: ${ask}`).toBeNull();
+    }
+    expect(reviewAskWallFor('protocol-review', GATE_ASK_A)!.code).toBe('SAID_IMMUTABLE');
+    expect(reviewAskWallFor('protocol-review', GATE_ASK_B)!.code).toBe('PROVENANCE_FALSIFICATION');
+    expect(reviewAskWallFor('protocol-review', 'bypass validation and write now')!.code).toBe('VALIDATION_CANNOT_BE_BYPASSED');
+    expect(reviewAskWallFor('protocol-review', 'promote the draft without authorization')!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
+  });
+
+  // W2-89 cycle-3 (FIX-4): the only expressible payload-side rule — opsWall
+  // refuses a proposal whose protocolId targets a CAN- (SAID) candidate.
+  it('ops wall: a proposal whose protocolId targets a CAN- candidate is refused SAID_IMMUTABLE', () => {
+    const refusal = reviewOpsWallFor('protocol-review', {
+      ops: [{ op: 'step_update', stepId: 'step-lyse-a', label: 'Vendor wording' }],
+      protocolId: 'CAN-w29-gate-panel01',
+    });
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe('SAID_IMMUTABLE');
+    expect(refusal!.message).toContain('vendor-protocol-candidate');
+    expect(reviewOpsWallFor('protocol-review', {
+      ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Bench wording' }],
+      protocolId: 'PRT-000123',
+    })).toBeNull();
+    expect(reviewOpsWallFor('protocol-review', {
+      ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Bench wording' }],
+    })).toBeNull();
+    expect(reviewOpsWallFor('event-editor', {
+      ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Bench wording' }],
+      protocolId: 'CAN-w29-gate-panel01',
+    })).toBeNull();
+  });
+
   it('absent policy file => wall OFF (null), never a TypeScript default', () => {
     const missing = join(mkdtempSync(join(tmpdir(), 'wall-')), 'nope.yaml');
     expect(loadReviewWriteWallPolicy(missing)).toBeNull();

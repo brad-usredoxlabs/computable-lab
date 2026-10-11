@@ -1236,14 +1236,21 @@ export function createAgentOrchestrator(
        * "(no response)"). TS follows the data — no surface literal, no
        * phrase literal here.
        *
-       * advc-W289-l2t0525 DEFECT-2: the ask wall reads the USER'S OWN ask
-       * (`prompt`), never `effectivePrompt`. The clarification answers appended
-       * at :1119 are the user's ANSWERS to a picker, not instructions — a reply
-       * must never trip a wall the user never meant as an ask. The structured
-       * half of the wall (the primary judgement on proposal semantics) is
+       * advc-W289-l2t0525 DEFECT-2 (cycle-2 clause, SUPERSEDED by the W2-89
+       * cycle-3 authority decision, FIX-3): the ask wall now reads the user's
+       * ask AND the clarification-appended prompt. REVERSAL, explicitly: after
+       * the FIX-2 restructure (structural governance: leading-verb + adjacency
+       * triggers, strip/negation exemption on the stripped remainder) the
+       * predicate only fires on wall-crossing CONSTRUCTIONS, so an honest
+       * picker answer — option labels and resolved refs as appended by
+       * `appendClarificationAnswersToPrompt` — cannot trip it, while an answer
+       * that IS an imperative carrying a declared referent IS the attack
+       * (advc-W289-c2 DEFECT-3: the clarification-answer smuggle) and must be
+       * refused before the model. The structured half of the wall (the
+       * payload-side backstop: forbidden op keys + CAN- target-id rules) is
        * `reviewOpsWallFor` at the protocol_edit branch below.
        */
-      const askWall = reviewAskWallFor(surfaceName, prompt);
+      const askWall = reviewAskWallFor(surfaceName, prompt) ?? reviewAskWallFor(surfaceName, effectivePrompt);
       if (askWall) {
         console.log(`[agent ${tid}] write-wall refusal surface=${surfaceName} code=${askWall.code} — turn refused before the model (zero inference, zero writes)`);
         onEvent?.({ type: 'tool_result', toolName: 'write-wall', success: false, durationMs: 0 });

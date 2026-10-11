@@ -171,10 +171,12 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
-  // advc-W289-l2t0525 DEFECT-2: effectivePrompt appends the clarification
-  // answers (AgentOrchestrator.ts:1119). A user answering a clarification picker
-  // must never trip a wall with text they never meant as an instruction.
-  it('DEFECT-2: a clarification-answer turn whose answer text names a wall phrase is NOT refused', async () => {
+  // W2-89 cycle-3 (advc-W289-c2 DEFECT-3, closed by FIX-3): the INVERSION of
+  // the cycle-2 smuggle pin. After FIX-2 the ask-wall predicate only fires on
+  // wall-crossing CONSTRUCTIONS, so it may (and must) read the
+  // clarification-appended prompt too: an answer that IS an imperative carrying
+  // a referent is the attack and is refused BEFORE the model.
+  it('DEFECT-3(c2): a wall-crossing clarification answer is refused before the model', async () => {
     const store = mutationTripwire();
     const { client, completeStream } = intentClient({
       intent: 'protocol_edit',
@@ -188,7 +190,7 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
       { store: store as never },
     );
     const result = await orchestrator.run({
-      prompt: 'which incubation wording applies to the wash step?',
+      prompt: 'apply my earlier answer',
       surface: 'protocol-review',
       forceDraftTool: true,
       clarificationAnswers: [
@@ -196,8 +198,44 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
       ],
       context: { labwares: [], eventSummary: 'No events yet.', vocabPackId: 'general', availableVerbs: [] },
     });
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('SAID_IMMUTABLE');
+    expect(result.protocolEdit).toBeUndefined();
+    // Zero model calls on the refused smuggle turn.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  // W2-89 cycle-3 (FIX-3 boundary): an honest picker answer — option labels and
+  // resolved refs, even carrying a mere vendor MENTION — is not a wall-crossing
+  // construction and must run the turn normally.
+  it('a benign clarification answer is NOT walled (option labels pass through)', async () => {
+    const store = mutationTripwire();
+    const { client, completeStream } = intentClient({
+      intent: 'protocol_edit',
+      ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Incubate 37C (bench wording)' }],
+    });
+    const orchestrator = createAgentOrchestrator(
+      client,
+      { getToolDefinitions: () => [], executeTool: async () => { throw new Error('wall refusal must not execute tools'); } },
+      { baseUrl: 'http://mock:8899/v1', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      { store: store as never },
+    );
+    const result = await orchestrator.run({
+      prompt: 'apply my earlier answer',
+      surface: 'protocol-review',
+      forceDraftTool: true,
+      clarificationAnswers: [
+        { requestId: 'clar-1', label: 'page 2 vendor wording reference', value: 'page-2-vendor-wording-reference' },
+      ],
+      context: { labwares: [], eventSummary: 'No events yet.', vocabPackId: 'general', availableVerbs: [] },
+    });
     expect(result.refusal).toBeUndefined();
     expect(completeStream).toHaveBeenCalled();
+    expect(result.protocolEdit).toBeDefined();
     expect(store.update).not.toHaveBeenCalled();
   });
 });
