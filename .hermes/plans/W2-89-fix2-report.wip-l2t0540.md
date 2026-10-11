@@ -201,6 +201,8 @@ Docs/evidence: this report + `.hermes/plans/evidence/w289-l2t0540/`.
 
 ## 8. Commits (branch `cl/W2-89-fix-lane2-l2t0230`, NOT merged)
 
-See §9 tail for SHAs (recorded by `git log` after commit).
+- `d5049bbc` — fix(W2-89c2): write-wall predicate is object-governed construction, not a word bag (adv DEFECT-1/2/4)
+- `392b6628` — fix(W2-89c2): plain-answer turn clears the stale refusal banner (adv DEFECT-3)
+- the docs commit carrying this report + `.hermes/plans/evidence/w289-l2t0540/` is the branch TIP (its SHA is reported to the orchestrator in the run's final line; `git -c core.fileMode=false log --oneline -4` shows it)
 
 VERDICT: implementation complete; acceptance pending orchestrator re-gate + adversarial re-review.
