@@ -16,8 +16,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import React from 'react'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import RecordRegistryPage from './RecordRegistryPage'
+import { apiClient } from '../shared/api/client'
 
 const mocked = vi.hoisted(() => ({
   PERSON_SCHEMA_ID: 'https://computable-lab.com/schema/computable-lab/person.schema.yaml',
@@ -35,6 +37,23 @@ const mocked = vi.hoisted(() => ({
   mockComboboxSchemaId: null as string | null,
   mockComboboxKinds: null as string[] | null,
   mockOnSelect: null as ((r: { recordId: string; schemaId: string; payload: Record<string, unknown>; isNew: boolean }) => void) | null,
+  // FIX-2: stand-in for the TipTap editor instance taptabRef exposes to
+  // handleSave (RecordRegistryPage.tsx:179-194). getJSON returns a doc whose
+  // fieldRows are exactly the two fields the projection marks required
+  // (Display Name, Status) — optionals carry their unset value.
+  editorDoc: null as unknown,
+  editorDataProp: null as Record<string, unknown> | null,
+  editorOnUpdate: null as ((payload: Record<string, unknown>, dirty: boolean) => void) | null,
+  // The precompile payload the real combobox forwards on a web hit
+  // (RecordSearchCombobox.tsx:187-193; the server's precompile prompt emits
+  // kind/id/displayName/status — RecordSearchHandlers.ts:225-232).
+  precompilePayload: {
+    kind: 'person',
+    id: 'PER-EDITOR9-FIX2',
+    displayName: 'EDITOR9 FIX2 PERSON',
+    status: 'active',
+    organizationId: 'ORG-FIX2',
+  } as Record<string, unknown>,
 }))
 
 const { PERSON_SCHEMA_ID, EQUIPMENT_SCHEMA_ID } = mocked
@@ -89,7 +108,14 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
         <button
           data-testid="simulate-web-create"
           onClick={() =>
-            onSelect({ recordId: '', schemaId, payload: { displayName: 'New Person' }, isNew: true })
+            onSelect({
+              recordId: '',
+              schemaId,
+              // FIX-2: the real combobox forwards the precompile payload
+              // verbatim on a web hit (RecordSearchCombobox.tsx:188-193).
+              payload: { ...mocked.precompilePayload },
+              isNew: true,
+            })
           }
         >
           Simulate Web Create
@@ -102,7 +128,26 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
 vi.mock('../components/registry/CsvImportModal', () => ({ CsvImportModal: () => null }))
 vi.mock('../components/registry/RelatedRecordsCard', () => ({ RelatedRecordsCard: () => null }))
 vi.mock('../editor/taptab/TapTabEditor', () => ({
-  ProjectionTapTabEditor: () => <div data-testid="projection-taptab-editor" />,
+  // FIX-2: stand-in for ProjectionTapTabEditor. Captures the `data` prop (the
+  // create base payload the page feeds the editor) and exposes getEditor()
+  // through the forwarded ref, exactly as the real component does
+  // (TapTabEditor.tsx:218). getJSON returns the doc handleSave serializes.
+  ProjectionTapTabEditor: React.forwardRef(
+    (
+      props: {
+        data: Record<string, unknown>
+        onUpdate?: (payload: Record<string, unknown>, dirty: boolean) => void
+      },
+      ref: React.Ref<{ getEditor: () => { getJSON: () => unknown } | null }>,
+    ) => {
+      mocked.editorDataProp = props.data
+      mocked.editorOnUpdate = props.onUpdate ?? null
+      React.useImperativeHandle(ref, () => ({
+        getEditor: () => ({ getJSON: () => mocked.editorDoc }),
+      }))
+      return <div data-testid="projection-taptab-editor" />
+    },
+  ),
 }))
 
 describe('RecordRegistryPage — create-from-search schemaId wiring (EDITOR-9 fix-1)', () => {
@@ -112,6 +157,22 @@ describe('RecordRegistryPage — create-from-search schemaId wiring (EDITOR-9 fi
     mocked.mockComboboxSchemaId = null
     mocked.mockComboboxKinds = null
     mocked.mockOnSelect = null
+    mocked.editorDataProp = null
+    mocked.editorOnUpdate = null
+    // The doc the editor holds after the user fills ONLY the two required
+    // fields (Display Name, Status). Optionals carry their unset value — the
+    // serializer must omit them (EDITOR-9 contract, exercised here too).
+    mocked.editorDoc = {
+      type: 'doc',
+      content: [
+        { type: 'fieldRow', attrs: { path: '$.displayName', widget: 'text', value: 'EDITOR9 FIX2 PERSON' } },
+        { type: 'fieldRow', attrs: { path: '$.status', widget: 'select', value: 'active' } },
+        { type: 'fieldRow', attrs: { path: '$.organizationId', widget: 'text', value: '' } },
+        { type: 'fieldRow', attrs: { path: '$.contact.email', widget: 'text', value: '' } },
+        { type: 'fieldRow', attrs: { path: '$.contact.phone', widget: 'text', value: '' } },
+        { type: 'fieldRow', attrs: { path: '$.notes', widget: 'textarea', value: null } },
+      ],
+    }
   })
 
   afterEach(() => {
@@ -153,5 +214,74 @@ describe('RecordRegistryPage — create-from-search schemaId wiring (EDITOR-9 fi
     // at base it is requested with "" and the server refuses (400/404).
     expect(mocked.draftProjectionCalls).toContain(PERSON_SCHEMA_ID)
     expect(mocked.draftProjectionCalls).not.toContain('')
+  })
+})
+
+/**
+ * EDITOR-9 FIX-2 (RED-first) — the create base must carry the precompile
+ * payload the combobox already passes in.
+ *
+ * Browser-gate defect (EDITOR-9-EMPTY-OPTIONAL-SAVE/20261011T0550-regate,
+ * defect 1, VERDICT: fix): handleCreateRecord (RecordRegistryPage.tsx:136-144)
+ * sets payload:{} and DISCARDS the precompile payload (RecordSearchCombobox.tsx:
+ * 187-193 — kind/id/displayName/status). serializeDocument clones the empty
+ * base and overlays only projection slot paths; the person draft projection has
+ * no `kind` slot, so the POST body lacks kind (Ajv 422 "Missing required
+ * property: kind") and, unless the ID is hand-typed, id (server 400 "payload
+ * must contain recordId or id field"). Edit mode works precisely because its
+ * base keeps the record's own kind/id — create must get the same mechanism.
+ *
+ * Contract (mandated fix direction, smallest): thread the combobox payload into
+ * handleCreateRecord and seed selectedRecord.payload with it. No client-side id
+ * minting, no server change, no serializer omission-semantics change.
+ */
+describe('RecordRegistryPage — create-from-search base carries the precompile payload (EDITOR-9 fix-2)', () => {
+  it('seeds the create-mode editor base with the precompile payload (kind + id present)', async () => {
+    render(<RecordRegistryPage />)
+    await waitFor(() => {
+      expect(mocked.mockComboboxSchemaId).toBe(PERSON_SCHEMA_ID)
+    })
+    fireEvent.click(screen.getByTestId('simulate-web-create'))
+    await waitFor(() => {
+      expect(mocked.editorDataProp).not.toBeNull()
+    })
+    // RED at base: the page seeds payload:{} (RecordRegistryPage.tsx:137), so
+    // the editor base has neither kind nor id.
+    expect(mocked.editorDataProp!['kind']).toBe('person')
+    expect(mocked.editorDataProp!['id']).toBe('PER-EDITOR9-FIX2')
+  })
+
+  it('save POST body from a create-from-search session includes kind + id and omits empty optionals', async () => {
+    render(<RecordRegistryPage />)
+    await waitFor(() => {
+      expect(mocked.mockComboboxSchemaId).toBe(PERSON_SCHEMA_ID)
+    })
+    fireEvent.click(screen.getByTestId('simulate-web-create'))
+    await waitFor(() => {
+      expect(mocked.editorDataProp).not.toBeNull()
+    })
+    // The editor reports the user's edit (only the required fields filled) —
+    // this is what flips Save from disabled to enabled (dirty tracking).
+    mocked.editorOnUpdate!({ displayName: 'EDITOR9 FIX2 PERSON', status: 'active' }, true)
+    const saveButton = await screen.findByText('Save')
+    expect((saveButton as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(saveButton)
+
+    await waitFor(() => {
+      expect(apiClient.createRecord).toHaveBeenCalledTimes(1)
+    })
+    const [schemaIdArg, body] = (apiClient.createRecord as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(schemaIdArg).toBe(PERSON_SCHEMA_ID)
+    // RED at base: body = { displayName, status } only — no kind (Ajv 422),
+    // no id (server 400). GREEN: the base clone carries kind/id through.
+    expect(body['kind']).toBe('person')
+    expect(body['id']).toBe('PER-EDITOR9-FIX2')
+    expect(body['displayName']).toBe('EDITOR9 FIX2 PERSON')
+    expect(body['status']).toBe('active')
+    // EDITOR-9 shipped contract must NOT regress: empty optionals serialize
+    // to ABSENCE, not '' / null / {}.
+    expect('organizationId' in body).toBe(false)
+    expect('contact' in body).toBe(false)
+    expect('notes' in body).toBe(false)
   })
 })
