@@ -231,6 +231,217 @@ describe('serializeDocument', () => {
   });
 });
 
+/**
+ * EDITOR-9 — empty optional slots must serialize to ABSENCE.
+ *
+ * Brad's field report (sandbox, :5192): saving a person with ONLY required
+ * fields 422s with
+ *   "Validation failed: /organizationId: Expected type: string;
+ *    /contact/phone: Expected type: string"
+ * person.schema.yaml declares both as optional `type: string` and is correct.
+ * The save path wrote a typed empty (null for an untouched widget — FieldRow's
+ * attr default is null; '' for a cleared one) into a slot whose valid states
+ * are ABSENT or a value of the declared type (exactOptionalPropertyTypes).
+ *
+ * Contract: the serializer's ONE shared omission helper decides emission for
+ * every widget. An empty/never-set value is ABSENT from the payload, and a
+ * cleared optional must also DELETE a stale base-payload value at that path
+ * (otherwise "clear" silently un-clears). Required-but-empty is omitted too —
+ * the server's required-check is the correct authority, the client must not
+ * fabricate one.
+ */
+describe('serializeDocument — empty optional omission (EDITOR-9)', () => {
+  /** Person-shaped doc: required slots filled, optional slots untouched. */
+  function personDoc(optionalValue: unknown): JSONContent {
+    return {
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Identity' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Identity' }] },
+            { type: 'fieldRow', attrs: { path: '$.kind', widget: 'text', label: 'Kind', required: true, value: 'person' } },
+            { type: 'fieldRow', attrs: { path: '$.id', widget: 'text', label: 'Id', required: true, value: 'PER-EDITOR9' } },
+            { type: 'fieldRow', attrs: { path: '$.displayName', widget: 'text', label: 'Display Name', required: true, value: 'Editor Nine' } },
+            { type: 'fieldRow', attrs: { path: '$.status', widget: 'select', label: 'Status', required: true, value: 'active' } },
+            // Optional, never touched: the mapper leaves the widget's default.
+            { type: 'fieldRow', attrs: { path: '$.organizationId', widget: 'text', label: 'Organization', value: optionalValue } },
+            { type: 'fieldRow', attrs: { path: '$.contact.email', widget: 'text', label: 'Email', value: optionalValue } },
+            { type: 'fieldRow', attrs: { path: '$.contact.phone', widget: 'text', label: 'Phone', value: optionalValue } },
+          ],
+        },
+      ],
+    };
+  }
+
+  const personBase: Record<string, unknown> = {
+    kind: 'person',
+    id: 'PER-EDITOR9',
+    displayName: 'Editor Nine',
+    status: 'active',
+  };
+
+  it('RED-1: an untouched optional (null widget value) is ABSENT from the payload', () => {
+    const result = serializeDocument(personDoc(null), structuredClone(personBase));
+
+    // Required slots are present.
+    expect(result.kind).toBe('person');
+    expect(result.displayName).toBe('Editor Nine');
+
+    // The defect: null written into an optional `type: string` slot 422s with
+    // "Expected type: string". Absence is the only correct emission.
+    expect(result).not.toHaveProperty('organizationId');
+    expect(result).not.toHaveProperty('contact');
+  });
+
+  it('RED-2: an untouched optional holding an empty string is ABSENT', () => {
+    const result = serializeDocument(personDoc(''), structuredClone(personBase));
+
+    expect(result).not.toHaveProperty('organizationId');
+    expect(result).not.toHaveProperty('contact');
+  });
+
+  it('filled optional is PRESENT with its value (no over-omission)', () => {
+    const doc = personDoc(null);
+    // Fill only the optional slots the user chose to fill.
+    // section.content: [0]=heading, [1..4]=required rows, [5]=organizationId,
+    // [6]=contact.email, [7]=contact.phone.
+    (doc.content![0]!.content![5]!.attrs as Record<string, unknown>).value = 'ORG-LANE1';
+    (doc.content![0]!.content![6]!.attrs as Record<string, unknown>).value = 'editor9@example.org';
+
+    const result = serializeDocument(doc, structuredClone(personBase));
+
+    expect(result.organizationId).toBe('ORG-LANE1');
+    const contact = result.contact as Record<string, unknown>;
+    expect(contact.email).toBe('editor9@example.org');
+    // The untouched sibling stays absent, not ''.
+    expect(contact).not.toHaveProperty('phone');
+  });
+
+  it('RED-3: a CLEARED optional deletes the stale base-payload value (absent, not \'\')', () => {
+    // The stored record HAS values at these paths; the widgets now hold the
+    // cleared value. Mirroring the ref contract's deleteValueAtPath behavior,
+    // the payload must drop them — otherwise the PUT re-writes the old value
+    // and the clear silently un-clears.
+    const stored: Record<string, unknown> = {
+      ...structuredClone(personBase),
+      organizationId: 'ORG-STALE',
+      contact: { email: 'stale@example.org', phone: '555-0100' },
+    };
+
+    const result = serializeDocument(personDoc(''), structuredClone(stored));
+
+    expect(result).not.toHaveProperty('organizationId');
+    expect(result).not.toHaveProperty('contact');
+  });
+
+  it('clearing one nested optional keeps its filled siblings', () => {
+    const stored: Record<string, unknown> = {
+      ...structuredClone(personBase),
+      contact: { email: 'keep@example.org', phone: '555-0100' },
+    };
+
+    const doc = personDoc(null);
+    (doc.content![0]!.content![6]!.attrs as Record<string, unknown>).value = 'keep@example.org';
+
+    const result = serializeDocument(doc, structuredClone(stored));
+
+    const contact = result.contact as Record<string, unknown>;
+    expect(contact.email).toBe('keep@example.org');
+    expect(contact).not.toHaveProperty('phone');
+  });
+
+  it('required-but-empty is omitted from the payload (the server owns requiredness)', () => {
+    const doc: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Identity' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Identity' }] },
+            { type: 'fieldRow', attrs: { path: '$.displayName', widget: 'text', label: 'Display Name', required: true, value: '' } },
+          ],
+        },
+      ],
+    };
+
+    const result = serializeDocument(doc, {});
+
+    // The client simply omits; the server's required-check is the real,
+    // desired validation error. No client-side required check is fabricated.
+    expect(result).not.toHaveProperty('displayName');
+  });
+
+  it('number widget: a cleared input is ABSENT, but 0 is a real value and stays', () => {
+    const numberDoc = (value: unknown): JSONContent => ({
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Spec' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Spec' }] },
+            { type: 'fieldRow', attrs: { path: '$.threshold', widget: 'number', label: 'Threshold', value } },
+          ],
+        },
+      ],
+    });
+
+    // The inline number input commits '' when the user clears the field.
+    expect(serializeDocument(numberDoc(''), { threshold: 42 })).not.toHaveProperty('threshold');
+    expect(serializeDocument(numberDoc(null), { threshold: 42 })).not.toHaveProperty('threshold');
+
+    // 0 is a value, not an empty.
+    const zero = serializeDocument(numberDoc(0), {});
+    expect(zero.threshold).toBe(0);
+  });
+
+  it('false and empty arrays are real values and stay (no over-omission)', () => {
+    const doc: JSONContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Flags' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Flags' }] },
+            { type: 'fieldRow', attrs: { path: '$.calibrationRequired', widget: 'checkbox', label: 'Calibration', value: false } },
+            { type: 'fieldRow', attrs: { path: '$.tags', widget: 'multiselect', label: 'Tags', value: [] } },
+          ],
+        },
+      ],
+    };
+
+    const result = serializeDocument(doc, {});
+    expect(result.calibrationRequired).toBe(false);
+    expect(result.tags).toEqual([]);
+  });
+
+  it('ref-widget fences are unchanged (QMS-6E): null and \'—\' refs absent, structured ref present', () => {
+    const refDoc = (value: unknown): JSONContent => ({
+      type: 'doc',
+      content: [
+        {
+          type: 'section',
+          attrs: { title: 'Signers' },
+          content: [
+            { type: 'sectionHeading', content: [{ type: 'text', text: 'Signers' }] },
+            { type: 'fieldRow', attrs: { path: '$.reviewerRef', widget: 'ref', label: 'Reviewer', value } },
+          ],
+        },
+      ],
+    });
+
+    expect(serializeDocument(refDoc(null), { reviewerRef: { kind: 'record', type: 'user', id: 'USR-STALE' } })).not.toHaveProperty('reviewerRef');
+    expect(serializeDocument(refDoc('—'), { reviewerRef: { kind: 'record', type: 'user', id: 'USR-STALE' } })).not.toHaveProperty('reviewerRef');
+
+    const kept = serializeDocument(refDoc({ kind: 'record', type: 'user', id: 'USR-BRAD' }), {});
+    expect(kept.reviewerRef).toEqual({ kind: 'record', type: 'user', id: 'USR-BRAD' });
+  });
+});
+
 describe('isDirty', () => {
   it('returns false for identical records', () => {
     const original: Record<string, unknown> = {
