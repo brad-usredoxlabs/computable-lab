@@ -14,7 +14,7 @@
  * one answer is possible.
  */
 
-export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout' | 'protocol_edit';
+export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout' | 'protocol_edit' | 'event_shorthand';
 
 const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
   event_graph: ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'unresolvedRefs'],
@@ -24,6 +24,11 @@ const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
   // recovery paths the same. `ops` is its signature key — deliberately narrow:
   // `protocolId` alone is not a draft (it is an optional target, not content).
   protocol_edit: ['ops'],
+  // SHORTHAND-CHAT (OQ2): the shorthand signature key. `shorthand` alone is a
+  // complete answer (the YAML document IS the draft); it deliberately shares no
+  // key with event_graph, so a payload carrying BOTH events and shorthand is
+  // ambiguous by this table and never guessed.
+  event_shorthand: ['shorthand'],
 };
 
 /**
@@ -34,6 +39,16 @@ const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
  * The decision still lives in this table — one source.
  */
 export const PROTOCOL_EDIT_ARG_KEYS: readonly string[] = INTENT_KEYS.protocol_edit;
+
+/**
+ * The substantive keys of the event_shorthand envelope, exported for the
+ * fast-recovery guard (`coerceDraftArgsFromContent`) for the same reason
+ * PROTOCOL_EDIT_ARG_KEYS exists: the shorthand payload must be recognised as a
+ * draft WITHOUT widening DRAFT_ARG_KEYS (which drives the unknown-field
+ * diagnostic and stays event-only). The decision lives in INTENT_KEYS — one
+ * source.
+ */
+export const SHORTHAND_ARG_KEYS: readonly string[] = INTENT_KEYS.event_shorthand;
 
 export function isAgentIntentName(value: unknown): value is AgentIntentName {
   return typeof value === 'string' && value in INTENT_KEYS;

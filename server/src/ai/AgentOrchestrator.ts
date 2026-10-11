@@ -51,7 +51,7 @@ import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.j
 import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
-import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS } from './coerceAgentIntent.js';
+import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS, SHORTHAND_ARG_KEYS } from './coerceAgentIntent.js';
 import { ledgerAnswerText } from '../workspace-session/ledgerQuery.js';
 import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
 import {
@@ -63,6 +63,19 @@ import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
 import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
+import { surfaceDraftsShorthand } from './shorthandDrafting.js';
+import {
+  holdShorthandIntent,
+  takeHeldShorthandIntent,
+  foldAnswersIntoShorthand,
+  heldReextractionContext,
+  malformedShorthandRepairPrompt,
+  shorthandResultFromCompile,
+} from './shorthandChat.js';
+import { createResolveSpineFromContext } from '../resolve/index.js';
+import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
+import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -495,20 +508,20 @@ function stampDraftProvenance<T>(events: T[]): T[] {
 export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${AGENT_INTENT_TOOL_NAME} tool exactly once, choosing ONE intent from its menu.`,
-  '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_graph" and fill the event/labware fields.',
+  '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.',
   '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.',
   '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
-  '- ALWAYS return the events for an add-materials request (with {mint} for unknowns). NEVER return "events": [] for such a request, and never ask the user to confirm a volume or concentration they already stated.',
-  '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
-  '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
-  '- THREE intents, ONE call. `event_graph` drafts events onto the deck; `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
+  '- ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.',
+  '- When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.',
+  '- Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist\'s words) — never a hand-built labwareRequirements payload.',
+  '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
-  '- For operations, use canonical operation names when possible: dispense, transfer, mix, shake, incubate, centrifuge, wash, read, seed, harvest, etc. The system normalizes verbs automatically.',
+  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one.',
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
@@ -768,6 +781,10 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
   // strict: `{intent, protocolId}` with no substantive key is still not a draft.
   if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
   if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return obj;
+  // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
+  // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
+  // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
+  if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return obj;
   return null;
 }
 
@@ -775,18 +792,42 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
   return [
     `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
     'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
-    'For event drafting, use intent "event_graph" and allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
+    // SHORTHAND-CHAT: event drafting is a scientist-intent DOCUMENT now. The
+    // retry prompt demands the shorthand envelope — never events, never the
+    // old key-set coaching (the deterministic compiler owns the expansion).
+    'For event drafting, use intent "event_shorthand" with the scientist-intent YAML document in `shorthand`: top-level intentId + actions[] (closed vocabulary; natural-language noun labels; numeric parameters; optional sourceWells/targetWells). Never write events, labware record ids, or deck slots.',
     'For a deck layout change, use intent "deck_layout" with variantId (e.g. "manual_freeform") and leave the event fields empty.',
     // PROTO-AI-9: the retry prompt must know the protocol_edit envelope too, or
     // a protocol-edit turn can never be recovered by the slow path.
     'For edits to the ATTACHED PROTOCOL (add/delete/reorder/modify its steps), use intent "protocol_edit" with ops:[...] — cite ONLY stepIds/roleIds from the ATTACHED PROTOCOL block; this proposes an edit and writes nothing.',
-    'For labware/deck setup, prefer labwareRequirements like {"classCurie":"CL:96_well_plate","deckSlot":"B2","reason":"96-well plate requested","specificity":"generic"}. Do not invent LBW-* recordIds.',
-    'Do not ask which vendor/catalog/plate subtype for a generic request like a 96-well plate. Emit the generic requirement.',
-    'For material nouns, use materials[].ref as {"curie":"..."} or {"mint":{"label":"...","domain":"..."}}.',
     `Original user prompt: ${originalPrompt}`,
   ].join('\n');
 }
 
+
+/**
+ * SHORTHAND-CHAT: compile a validated scientist-intent document through the
+ * FROZEN deterministic pipeline with the SAME production deps as
+ * IntentCompileHandlers / IntentCompileFromPromptHandlers (store-backed spine
+ * via createResolveSpineFromContext — the server.ts:733 composition — plus
+ * searchLabwareByHint). No spine wired ⇒ null (the honest COMPILE_INTERNAL
+ * precedent — never a spine-less compile that false-bars every noun).
+ */
+async function compileShorthandDeterministically(
+  doc: import('../compiler/scientistIntent/types.js').ScientistIntent,
+  deps: AgentOrchestratorDeps,
+): Promise<import('../compiler/scientistIntent/compileScientistIntent.js').ScientistIntentCompileResult | null> {
+  // The SAME composition the intent-compile routes build (server.ts:733):
+  // store-backed, config-aware. No store wired ⇒ null (the honest
+  // COMPILE_INTERNAL precedent — never a provider-less spine that false-bars
+  // every store-resolvable noun).
+  if (!deps.store) return null;
+  const spine: EngineSpineLike = createResolveSpineFromContext({ store: deps.store });
+  return compileScientistIntent(doc, {
+    spine,
+    ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+  });
+}
 
 function waitMs(ms: number): Promise<'heartbeat'> {
   return new Promise((resolve) => setTimeout(() => resolve('heartbeat'), ms));
@@ -1120,6 +1161,16 @@ export function createAgentOrchestrator(
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
+      /**
+       * SHORTHAND-CHAT run-scoped state. The raw-events refusal and the
+       * malformed-shorthand re-ask each get ONE re-ask per run (re-ask once,
+       * then an honest failure — never a silent repair). Membership of the
+       * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
+       */
+      const shorthandSurface = surfaceDraftsShorthand(surfaceName);
+      let eventGraphRefusalAsked = false;
+      let shorthandRepairAsked = false;
+      const conversationKey = deriveContextCacheKey(surface, context);
 
       /**
        * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
@@ -1138,6 +1189,59 @@ export function createAgentOrchestrator(
           bigModelLatencyMs,
         });
       }
+      // OQ3 ruling: with the run-chat event drafting moved to shorthand, an
+      // intent document REQUIRES extraction — there is no deterministic authoring
+      // path. A forced-tool shorthand turn with no model configured says so
+      // LOUDLY and never silently event-compiles. The deterministicOnly legacy
+      // modes stay as-is for the surfaces not yet moved.
+      // OQ1 mandatory arm: a clarification answer on a shorthand surface folds
+      // onto the HELD intent deterministically — splice the noun, Ajv re-parse,
+      // re-compile — ZERO model calls. No 1:1 mapping ⇒ the permitted fallback
+      // (below): one extraction-only re-ask with the held shorthand + answers as
+      // grounded context. The model still only writes shorthand, never events.
+      if (shorthandSurface && !deterministicOnly && clarificationAnswers && clarificationAnswers.length > 0) {
+        const held = takeHeldShorthandIntent(conversationKey);
+        if (held) {
+          const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
+          if (folded) {
+            const compiledFold = await compileShorthandDeterministically(folded.doc, deps);
+            if (compiledFold) {
+              console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
+              if (compiledFold.outcome === 'needs-clarification') {
+                holdShorthandIntent(conversationKey, { yaml: folded.yaml, doc: folded.doc, clarifications: compiledFold.clarifications });
+              }
+              const foldResult = shorthandResultFromCompile(
+                compiledFold,
+                folded.yaml,
+                'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
+              );
+              const foldElapsed = Date.now() - t0;
+              const foldSummary: AgentSummary = {
+                traceId: tid, surface: surfaceName, model, success: foldResult.success, elapsedMs: foldElapsed,
+                turns: [],
+                totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+                resolvedMentions: 0, bypass: null,
+              };
+              if (foldResult.error) foldSummary.error = foldResult.error;
+              logAgentSummary(tid, foldSummary);
+              console.log(`[agent ${tid}] done shorthand-fold success=${foldResult.success} events=${foldResult.events?.length ?? 0} elapsedMs=${foldElapsed}`);
+              return foldResult;
+            }
+          } else {
+            // No 1:1 mapping — re-hold and let the loop re-extract with the
+            // held document + answers as grounded context (extraction-only).
+            holdShorthandIntent(conversationKey, held);
+            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
+          }
+        }
+      }
+      if (shorthandSurface && !deterministicOnly && !inferenceConfig.model) {
+        console.warn(`[agent ${tid}] no model configured — cannot draft shorthand on ${surfaceName}`);
+        return {
+          success: false,
+          error: 'No model configured — cannot draft: the shorthand drafting path needs a model to extract the scientist-intent document. Ask an administrator to configure the AI runtime.',
+        };
+      }
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -1153,6 +1257,12 @@ export function createAgentOrchestrator(
        */
       let truncatedToolCall = false;
       let resolvedMentionsCount = 0;
+      /**
+       * SHORTHAND-CHAT run-scoped state. The raw-events refusal and the
+       * malformed-shorthand re-ask each get ONE re-ask per run (re-ask once,
+       * then an honest failure — never a silent repair). Membership of the
+       * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
+       */
 
       // 1. Build the message array
       const systemPrompt = surface
@@ -1436,9 +1546,19 @@ export function createAgentOrchestrator(
         const volatileContext = buildVolatileContextMessage(context);
         if (volatileContext) volatileParts.push(volatileContext);
         if (resolvedContextMessage) volatileParts.push(resolvedContextMessage);
-        const userContent = volatileParts.length > 0
+        // SHORTHAND-CHAT OQ1 fallback: when answers could not fold 1:1, the
+        // HELD shorthand + answers ride as grounded context so the model
+        // RE-EXTRACTS the corrected document (extraction-only — it still only
+        // writes shorthand).
+        const heldForReextract = shorthandSurface && clarificationAnswers && clarificationAnswers.length > 0
+          ? takeHeldShorthandIntent(conversationKey)
+          : null;
+        const reextractionBlock = heldForReextract
+          ? `\n\n${heldReextractionContext(heldForReextract.yaml, clarificationAnswers ?? [])}`
+          : '';
+        const userContent = (volatileParts.length > 0
           ? `${volatileParts.join('\n\n')}\n\n[User request]\n${prompt}`
-          : prompt;
+          : prompt) + reextractionBlock;
         messages = [
           ...(await buildPrefixRequest({
             context,
@@ -1984,6 +2104,122 @@ export function createAgentOrchestrator(
           // result the client applies to the live editor + persists.
           if (submitCall.function.name === AGENT_INTENT_TOOL_NAME) {
             const agentIntent = parseAgentIntentArgs(submitArgs);
+
+            // ---- SHORTHAND-CHAT: intent=event_shorthand ------------------
+            // The model wrote a scientist-intent document. THE ONLY producer
+            // of the event graph is the FROZEN deterministic pipeline:
+            // parseScientistIntent (Ajv sole authority, validate-in-place,
+            // NEVER a repaired re-parse) -> compileScientistIntent with the
+            // production deps. A schema-invalid payload is MALFORMED MODEL
+            // OUTPUT: re-ask ONCE with the contract quoted (the 502 class's
+            // chat analogue — origin-based, never substring-sniffing), then an
+            // honest failure. Harness gates ride at the INTENT boundary:
+            // needs-clarification -> the bar's ScientistIntentUnresolvedFacts
+            // VERBATIM on the chat clarification channel; well binding and
+            // material grounding already live inside the frozen compile.
+            if (agentIntent.intent === 'event_shorthand') {
+              const shorthandYaml = agentIntent.shorthand ?? '';
+              const elapsedSh = () => Date.now() - t0;
+              const shorthandSummary = (res: AgentResult): void => {
+                const elapsed = elapsedSh();
+                const summary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: res.success,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                };
+                if (res.error) summary.error = res.error;
+                logAgentSummary(tid, summary);
+                console.log(`[agent ${tid}] done event_shorthand success=${res.success} events=${res.events?.length ?? 0} clarifications=${res.clarificationRequests?.length ?? 0} elapsedMs=${elapsed}`);
+                shadowRoute('event_shorthand', elapsed);
+              };
+
+              if (!shorthandYaml.trim()) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const emptySh: AgentResult = {
+                  success: false,
+                  error: emptyDraftMessage({ truncated: truncatedToolCall, hadArguments: Object.keys(submitArgs).length > 0 }),
+                };
+                shorthandSummary(emptySh);
+                return emptySh;
+              }
+
+              // Ajv sole authority — validate-in-place, never a repaired re-parse.
+              let shorthandDoc: import('../compiler/scientistIntent/types.js').ScientistIntent;
+              try {
+                shorthandDoc = parseScientistIntent(shorthandYaml);
+              } catch (err) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                if (err instanceof ScientistIntentValidationError && !shorthandRepairAsked) {
+                  // Re-ask ONCE with the contract quoted (origin-based: this is
+                  // the model payload's own validation failure, not prose).
+                  shorthandRepairAsked = true;
+                  onEvent?.({ type: 'status', message: 'The shorthand document was rejected by the scientist-intent schema; asking the AI to re-emit it…' });
+                  messages.push({ role: 'user', content: malformedShorthandRepairPrompt(err, shorthandYaml) });
+                  continue;
+                }
+                const malformed = err instanceof ScientistIntentValidationError
+                  ? `The shorthand document was rejected by the scientist-intent schema and could not be repaired: ${err.message}`
+                  : `The shorthand document could not be parsed: ${err instanceof Error ? err.message : String(err)}`;
+                console.warn(`[agent ${tid}] ${malformed}`);
+                const malformedResult: AgentResult = { success: false, error: malformed };
+                shorthandSummary(malformedResult);
+                return malformedResult;
+              }
+
+              const compiledSh = await compileShorthandDeterministically(shorthandDoc, deps);
+              if (!compiledSh) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const unwired = 'event_shorthand cannot compile: this orchestrator has no record store wired for the deterministic compiler spine.';
+                console.warn(`[agent ${tid}] ${unwired}`);
+                const unwiredResult: AgentResult = { success: false, error: unwired };
+                shorthandSummary(unwiredResult);
+                return unwiredResult;
+              }
+
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
+              if (compiledSh.outcome === 'needs-clarification') {
+                // Hold the VALIDATED intent per conversation (the held localMacro
+                // precedent) so an answer folds deterministically next turn.
+                holdShorthandIntent(conversationKey, { yaml: shorthandYaml, doc: shorthandDoc, clarifications: compiledSh.clarifications });
+              }
+              const shResult = shorthandResultFromCompile(
+                compiledSh,
+                shorthandYaml,
+                'Draft compiled deterministically from the scientist-intent shorthand.',
+              );
+              if (extraSubmissionNotes.length > 0) {
+                shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
+              }
+              shorthandSummary(shResult);
+              return shResult;
+            }
+
+            // ---- SHORTHAND-CHAT: raw event_graph refusal (AS-4) ----------
+            // On a shorthand surface, an event_graph call is REFUSED: the turn
+            // re-asks ONCE with the (rewritten) forced prompt demanding the
+            // shorthand document. The raw payload is NEVER compiled. The
+            // event_graph enum and the legacy paths stay for surfaces not yet
+            // moved — retirement is when the LAST surface moves.
+            if (shorthandSurface && agentIntent.intent === 'event_graph' && !eventGraphRefusalAsked) {
+              eventGraphRefusalAsked = true;
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+              onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused. Asking the AI for a shorthand document…' });
+              console.warn(`[agent ${tid}] refused raw event_graph on shorthand surface ${surfaceName}; re-asking for shorthand`);
+              messages.push({ role: 'user', content: buildForcedDraftJsonPrompt(effectivePrompt) });
+              continue;
+            }
 
             // intent=create_record: AUTHOR records (equipment/material/labware) the lab
             // does not have yet. Distinct from drafting events, and it writes nothing

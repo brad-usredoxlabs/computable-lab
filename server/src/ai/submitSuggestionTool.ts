@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". You never supply a timestamp and never invent an id.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. You never supply a timestamp and never invent an id.',
         },
         platformId: {
           type: 'string',
@@ -622,6 +622,11 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
           },
         },
+        shorthand: {
+          type: 'string',
+          description:
+            'event_shorthand only (SHORTHAND-CHAT): the scientist-intent YAML document — a closed-vocabulary list of high-level biology verbs with natural-language noun labels and numeric parameters (top-level intentId + actions, optional unresolved). NEVER resolved record ids, deck slots, or low-level event primitives: the deterministic compiler owns the event-graph expansion. The server validates the document against the registered scientist-intent schema (Ajv) and compiles it; an invalid document is re-asked, never repaired for you.',
+        },
       },
     },
   },
@@ -672,7 +677,7 @@ export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDef
 }
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -720,12 +725,21 @@ export interface AgentIntentArgs {
    * parser never "helps" and never queries.
    */
   ledgerQuery?: Record<string, unknown>;
+  /**
+   * event_shorthand only (SHORTHAND-CHAT, OQ2 ruling): the scientist-intent YAML
+   * document EXACTLY as the model emitted it — retained by reference, no copy/
+   * repair (the same `ops`/`action`/`workstate`/`analysis` discipline). The
+   * orchestrator hands it to `parseScientistIntent` (Ajv sole authority,
+   * validate-in-place, NEVER a repaired re-parse) and then to the FROZEN
+   * deterministic compiler; the parser never "helps" and never compiles.
+   */
+  shorthand?: string;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -745,6 +759,11 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
         : {}),
       ...(intent === 'query_workstate_history' && args.ledgerQuery !== null && typeof args.ledgerQuery === 'object' && !Array.isArray(args.ledgerQuery)
         ? { ledgerQuery: args.ledgerQuery as Record<string, unknown> }
+        : {}),
+      // event_shorthand: the YAML document is carried VERBATIM (by value, no
+      // trim/repair — parseScientistIntent + Ajv are the sole authorities).
+      ...(intent === 'event_shorthand' && typeof args.shorthand === 'string' && args.shorthand.trim().length > 0
+        ? { shorthand: args.shorthand }
         : {}),
     };
   }

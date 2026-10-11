@@ -1,0 +1,12 @@
+# SHORTHAND-CHAT — the shorthand drafting policy DATA.
+#
+# `surfaces` are the AI surface ids whose event drafting rides the
+# scientist-intent shorthand path (intent `event_shorthand`): on these surfaces
+# a raw `event_graph` call is REFUSED and re-asked as shorthand (AS-4 ruling:
+# refusal/repair is scoped to the run-chat surface; the raw-events code stays
+# for surfaces not yet moved — retirement is a later item when the LAST surface
+# moves). Membership is DATA (the analysis-composition.yaml /
+# workstate-composition.yaml precedent — presence-checked, never process-
+# cached); the orchestrator never branches on a surface-name literal (repo
+# rule #1).
+surfaces: [workspace.deck, event-editor]
