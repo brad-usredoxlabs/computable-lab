@@ -129,6 +129,12 @@ export type AiSidebarState =
        * never carries one and its review state stays byte-identical.
        */
       protocolDiff?: ProtocolEditDiff
+      /**
+       * SHORTHAND-CHAT: the compiled scientist-intent document VERBATIM, shown
+       * above the changes list. Optional: a draft without shorthand stays
+       * byte-identical (the key is never introduced as undefined).
+       */
+      shorthand?: string
     }
   | { mode: 'committing'; draftId: string }
 
@@ -153,6 +159,8 @@ export type SidebarAction =
       /** See AiSidebarState 'reviewing'.protocolDiff — all-optional so every
        *  existing event-graph dispatch compiles unchanged. */
       protocolDiff?: ProtocolEditDiff
+      /** See AiSidebarState 'reviewing'.shorthand (SHORTHAND-CHAT). */
+      shorthand?: string
     }
   | { type: 'commit' }
   | { type: 'cancel' }
@@ -208,6 +216,8 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         // Conditional spread: an event-graph draft's reviewing state stays
         // byte-identical (no `protocolDiff: undefined` key is ever introduced).
         ...(action.protocolDiff ? { protocolDiff: action.protocolDiff } : {}),
+        // SHORTHAND-CHAT: same discipline for the shorthand document.
+        ...(action.shorthand !== undefined ? { shorthand: action.shorthand } : {}),
       }
 
     case 'commit':

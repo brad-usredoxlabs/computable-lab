@@ -207,3 +207,31 @@ describe('sidebarState', () => {
     expect(primaryActionLabel({ mode: 'committing', draftId: 'd1' })).toBeNull()
   })
 })
+
+describe('sidebarState — SHORTHAND-CHAT shorthand on the review state', () => {
+  const baseDraftReady = {
+    type: 'draft-ready' as const,
+    draftId: 'd1',
+    interpretation: { operations: [] },
+    changes: [{ op: 'add' as const, description: 'x' }],
+    warnings: [],
+    terms: [],
+  }
+
+  it('draft-ready WITHOUT shorthand leaves the reviewing state byte-identical (no undefined key)', () => {
+    const state = sidebarReducer(initialSidebarState, baseDraftReady)
+    expect(state.mode).toBe('reviewing')
+    expect('shorthand' in state).toBe(false)
+  })
+
+  it('draft-ready WITH shorthand carries it verbatim', () => {
+    const state = sidebarReducer(initialSidebarState, {
+      ...baseDraftReady,
+      shorthand: 'intentId: x\nactions: []\n',
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      expect(state.shorthand).toBe('intentId: x\nactions: []\n')
+    }
+  })
+})

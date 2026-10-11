@@ -97,6 +97,14 @@ export interface AssistDraftResult {
   success?: boolean
   events?: unknown[]
   /**
+   * SHORTHAND-CHAT: the scientist-intent YAML document the model emitted and
+   * the deterministic compiler compiled, VERBATIM (byte-identical to what was
+   * compiled). The panel renders it read-only; an edit POSTs it back to
+   * /intent/compile for a server-side recompile — the client never parses it.
+   * Absent on turns that carried no shorthand (key ABSENT, never undefined).
+   */
+  shorthand?: string
+  /**
    * What each term in the draft matched (local record / ontology / vendor /
    * not yet in the lab), classified server-side for the term panel. Absent on
    * older payloads — the panel simply does not render.

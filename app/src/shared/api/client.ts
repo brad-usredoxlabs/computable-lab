@@ -3961,6 +3961,26 @@ export const apiClient = {
     })
   },
 
+  /**
+   * POST /intent/compile — compile a scientist-intent YAML document through
+   * the deterministic compiler (SHORTHAND-CHAT: the chat panel's shorthand
+   * edit-recompile rides this EXISTING route; the server re-parses with Ajv as
+   * sole authority and recompiles — the client is render + POST only).
+   */
+  async intentCompile(intentYaml: string): Promise<{
+    outcome?: string
+    terminalArtifacts?: {
+      events?: unknown[]
+      gaps?: Array<{ message?: string } & Record<string, unknown>>
+      [key: string]: unknown
+    }
+  }> {
+    return request('/intent/compile', {
+      method: 'POST',
+      body: JSON.stringify({ intent: intentYaml }),
+    })
+  },
+
   /** POST /intent/accept — persist an accepted local-protocol from a macro. */
   async intentAccept(body: {
     sourceProtocolId: string

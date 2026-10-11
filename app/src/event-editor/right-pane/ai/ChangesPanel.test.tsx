@@ -329,3 +329,92 @@ describe('protocolEditDiffFrom', () => {
     expect(diff!.ops[0]!.after).toEqual({ label: 'Wash', kind: 'wash' })
   })
 })
+
+describe('ChangesPanel — SHORTHAND-CHAT verbatim shorthand', () => {
+  const YAML = 'intentId: chat-add-dmem\nactions:\n  - action: add_material\n    labware: plate\n    material: DMEM\n    volumeUl: 100\n'
+
+  it('renders the shorthand VERBATIM (byte-identical) above the changes', () => {
+    render(
+      <ChangesPanel
+        changes={[{ op: 'add', description: 'add_material · A1 · DMEM · 100 uL' }]}
+        warnings={[]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+        shorthand={YAML}
+      />,
+    )
+    const pre = screen.getByTestId('shorthand-verbatim')
+    // Byte-identical: the exact bytes the compiler ran, no reformatting.
+    expect(pre.textContent).toBe(YAML)
+  })
+
+  it('renders byte-unchanged when NO shorthand is carried (no empty view)', () => {
+    render(
+      <ChangesPanel
+        changes={[{ op: 'add', description: 'test' }]}
+        warnings={[]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('shorthand-view')).toBeNull()
+  })
+
+  it('edit affordance: Save & recompile sends the edited text UNTOUCHED (render-only, never a second grammar)', () => {
+    const onRecompile = vi.fn()
+    render(
+      <ChangesPanel
+        changes={[{ op: 'add', description: 'test' }]}
+        warnings={[]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+        shorthand={YAML}
+        onShorthandRecompile={onRecompile}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('shorthand-edit'))
+    const editor = screen.getByTestId('shorthand-editor') as HTMLTextAreaElement
+    expect(editor.value).toBe(YAML)
+    fireEvent.change(editor, { target: { value: YAML.replace('100', '200') } })
+    fireEvent.click(screen.getByTestId('shorthand-recompile'))
+    // The payload is the textarea's text verbatim — the client never parses or
+    // "fixes" YAML; the server's /intent/compile is the sole authority.
+    expect(onRecompile).toHaveBeenCalledWith(YAML.replace('100', '200'))
+  })
+
+  it('a rejected edit shows the server diagnostic verbatim and keeps the proposal', () => {
+    render(
+      <ChangesPanel
+        changes={[{ op: 'add', description: 'keep me' }]}
+        warnings={[]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+        shorthand={YAML}
+        onShorthandRecompile={vi.fn()}
+        shorthandError="SCIENTIST_INTENT_VALIDATION: /actions/0 must have required property 'action'"
+      />,
+    )
+    expect(screen.getByTestId('shorthand-error').textContent).toMatch(/SCIENTIST_INTENT_VALIDATION/)
+    // The existing proposal stays actionable.
+    expect(screen.getByText('keep me')).toBeDefined()
+    expect(screen.getByText('Apply to run')).toBeDefined()
+  })
+
+  it('recompile in flight disables Save (no duplicate POST)', () => {
+    const onRecompile = vi.fn()
+    render(
+      <ChangesPanel
+        changes={[{ op: 'add', description: 'test' }]}
+        warnings={[]}
+        onApply={vi.fn()}
+        onDiscard={vi.fn()}
+        shorthand={YAML}
+        onShorthandRecompile={onRecompile}
+        recompiling={true}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('shorthand-edit'))
+    const save = screen.getByTestId('shorthand-recompile') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+  })
+})

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import './ChangesPanel.css'
 import type { AiProtocolEditProposal } from './assistStream'
 import type {
@@ -28,6 +29,26 @@ export interface ChangesPanelProps {
   applying?: boolean
   /** A failed/conflicted apply, shown verbatim (the D4 stale-sha message). */
   applyError?: string
+  /**
+   * SHORTHAND-CHAT: the scientist-intent document the deterministic compiler
+   * compiled, VERBATIM — rendered byte-identical above the changes list. The
+   * panel is RENDER-ONLY: it never parses, validates, or summarizes the
+   * document (no second grammar). Optional: a draft without shorthand renders
+   * byte-unchanged.
+   */
+  shorthand?: string
+  /**
+   * SHORTHAND-CHAT edit affordance: saving an edited document POSTs it to the
+   * server's /intent/compile (the deterministic compiler re-parses with Ajv as
+   * sole authority and recompiles). The client sends the text UNTOUCHED — a
+   * client-side parse that "fixes" YAML is a hard stop. Absent ⇒ no edit UI.
+   */
+  onShorthandRecompile?: (yaml: string) => void
+  /** A rejected edit (the server's parse diagnostic), shown verbatim; the
+   *  existing proposal stays untouched. */
+  shorthandError?: string
+  /** A recompile is in flight: the Save button disables (no duplicate POST). */
+  recompiling?: boolean
 }
 
 /** The + / - / ~ prefix convention, shared by both diff kinds. */
@@ -43,6 +64,10 @@ export function ChangesPanel({
   protocolDiff,
   applying,
   applyError,
+  shorthand,
+  onShorthandRecompile,
+  shorthandError,
+  recompiling,
 }: ChangesPanelProps) {
   const protocolMode = protocolDiff !== undefined
   return (
@@ -58,6 +83,15 @@ export function ChangesPanel({
             </div>
           ))}
         </div>
+      ) : null}
+
+      {shorthand !== undefined ? (
+        <ShorthandView
+          yaml={shorthand}
+          {...(onShorthandRecompile ? { onRecompile: onShorthandRecompile } : {})}
+          {...(shorthandError !== undefined ? { error: shorthandError } : {})}
+          {...(recompiling === true ? { recompiling: true } : {})}
+        />
       ) : null}
 
       {protocolDiff ? <ProtocolDiffView diff={protocolDiff} /> : null}
@@ -105,6 +139,97 @@ export function ChangesPanel({
           {protocolMode ? 'Accept' : 'Apply to run'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// --------------------------------------------------------- shorthand view
+
+/**
+ * SHORTHAND-CHAT — the verbatim scientist-intent document (render-only).
+ * The <pre> shows the EXACT bytes the server compiled. "Edit" swaps in a
+ * textarea; Save sends the text UNTOUCHED to the caller's recompile (the
+ * server's /intent/compile — Ajv sole authority). A rejected edit shows the
+ * server's diagnostic verbatim and the proposal stays. No parsing, no
+ * validation, no summarizing here — that is the server's compiler, once.
+ */
+function ShorthandView({
+  yaml,
+  onRecompile,
+  error,
+  recompiling,
+}: {
+  yaml: string
+  onRecompile?: (yaml: string) => void
+  error?: string
+  recompiling?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(yaml)
+  return (
+    <div className="changes-panel__shorthand" data-testid="shorthand-view">
+      <div className="changes-panel__shorthand-label">
+        Scientist-intent shorthand (exactly what the compiler ran)
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            className="changes-panel__shorthand-editor"
+            data-testid="shorthand-editor"
+            value={draft}
+            rows={Math.min(14, Math.max(4, draft.split('\n').length))}
+            onChange={(e) => setDraft(e.target.value)}
+            spellCheck={false}
+          />
+          <div className="changes-panel__shorthand-actions">
+            <button
+              type="button"
+              className="changes-panel__btn changes-panel__btn--discard"
+              onClick={() => {
+                setDraft(yaml)
+                setEditing(false)
+              }}
+            >
+              Cancel edit
+            </button>
+            <button
+              type="button"
+              className="changes-panel__btn changes-panel__btn--apply"
+              data-testid="shorthand-recompile"
+              disabled={recompiling === true || draft.trim().length === 0}
+              onClick={() => onRecompile?.(draft)}
+            >
+              {recompiling === true ? 'Recompiling…' : 'Save & recompile'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <pre className="changes-panel__shorthand-yaml" data-testid="shorthand-verbatim">
+            {yaml}
+          </pre>
+          {onRecompile ? (
+            <div className="changes-panel__shorthand-actions">
+              <button
+                type="button"
+                className="changes-panel__btn changes-panel__btn--apply"
+                data-testid="shorthand-edit"
+                onClick={() => {
+                  setDraft(yaml)
+                  setEditing(true)
+                }}
+              >
+                Edit shorthand
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
+      {error !== undefined ? (
+        <div className="changes-panel__shorthand-error" role="alert" data-testid="shorthand-error">
+          {error}
+        </div>
+      ) : null}
     </div>
   )
 }
