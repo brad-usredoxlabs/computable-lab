@@ -158,13 +158,19 @@ describe('ProtocolLocalizationThread', () => {
     await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
     fireEvent.click(screen.getByTestId('pl-accept'))
 
-    await waitFor(() => {
-      const msg = screen.getByTestId('pl-msg').textContent ?? ''
-      expect(msg).toContain('remote corpus disabled')
-      expect(msg).toContain('local capture')
-    })
-    // The misleading unconditional claim is gone when nothing was posted remotely.
-    expect(screen.getByTestId('pl-msg').textContent).not.toContain('added to training corpus')
+    // cycle-1 DEFECT-2: the exact three-way wording. `corpus.disabled` says the
+    // pair was FORWARDED and local capture happens ONLY if the server-side
+    // toggle is on — it must not claim a capture that may not have happened
+    // (CLA_CORPUS_LOCAL_PATH unset => nothing captured).
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved; remote corpus disabled — pair forwarded to the server (local capture only if enabled).',
+    ))
+    const msg = screen.getByTestId('pl-msg').textContent ?? ''
+    expect(msg).toContain('remote corpus disabled')
+    // No capture claim of any kind on this branch.
+    expect(msg).not.toContain('added to training corpus')
+    expect(msg).not.toContain('pair sent for local capture')
+    expect(msg).not.toContain('captured locally')
     // The POST still happened (the server-side local capture door rides it).
     expect(mockClient.intentTrainingPair).toHaveBeenCalledTimes(1)
   })
@@ -180,12 +186,15 @@ describe('ProtocolLocalizationThread', () => {
     await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
     fireEvent.click(screen.getByTestId('pl-accept'))
 
-    await waitFor(() => {
-      const msg = screen.getByTestId('pl-msg').textContent ?? ''
-      expect(msg).toContain('training pair not posted')
-      expect(msg).toContain('http_500')
-    })
-    expect(screen.getByTestId('pl-msg').textContent).not.toContain('added to training corpus')
+    // Second leg of the three-way wording: a failed post names the failure.
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved; training pair not posted (http_500).',
+    ))
+    const msg = screen.getByTestId('pl-msg').textContent ?? ''
+    expect(msg).toContain('training pair not posted')
+    expect(msg).toContain('http_500')
+    expect(msg).not.toContain('added to training corpus')
+    expect(msg).not.toContain('local capture')
     // The accept itself still served (capture failure never fails the accept).
     expect(mockClient.intentAccept).toHaveBeenCalledTimes(1)
   })
@@ -201,7 +210,10 @@ describe('ProtocolLocalizationThread', () => {
     await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
     fireEvent.click(screen.getByTestId('pl-accept'))
 
-    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toContain('added to training corpus'))
+    // Third leg of the three-way wording: ok => the original message, exact.
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toBe(
+      'Accepted — protocol saved and added to training corpus.',
+    ))
   })
 })
 

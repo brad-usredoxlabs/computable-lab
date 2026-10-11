@@ -467,14 +467,17 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
           confirmedAt: new Date().toISOString(),
         })
         // SHORTHAND-CORPUS WS2 — honest surfacing: the message follows the
-        // POST response. `corpus.disabled` is a NORMAL response (lane default
-        // is remote-off; the server-side local JSONL capture is best-effort
-        // and stays server-side — the client never claims what it cannot see).
+        // POST response, three-way, and never claims a capture that may not
+        // have happened. `corpus.disabled` is a NORMAL response (lane default
+        // is remote-off); the server-side local JSONL append rides the same
+        // request but only fires when CLA_CORPUS_LOCAL_PATH is set — the
+        // client cannot see that toggle (OQ2), so the wording states the
+        // CONDITION, not a completed local capture (cycle-1 DEFECT-2).
         // A failed post must not claim corpus capture either.
         if (pairRes?.ok) {
           setMessage('Accepted — protocol saved and added to training corpus.')
         } else if (pairRes?.error === 'corpus.disabled') {
-          setMessage('Accepted — protocol saved; remote corpus disabled — pair sent for local capture.')
+          setMessage('Accepted — protocol saved; remote corpus disabled — pair forwarded to the server (local capture only if enabled).')
         } else {
           setMessage(`Accepted — protocol saved; training pair not posted (${pairRes?.error ?? 'corpus.post-failed'}).`)
         }
