@@ -1,5 +1,6 @@
 /**
  * QMS-6E D3b — the ref value-emission contract.
+ * EDITOR-9 — the same contract generalized to every widget on the save path.
  *
  * Ref-typed fields (`ref` widget) carry structured ref objects (datatypes/
  * ref.schema.yaml: `type: object`) or are ABSENT from the payload. A display
@@ -55,4 +56,43 @@ export function normalizeRefFieldValue(value: unknown, widget: unknown): unknown
  */
 export function isEmptyRefFieldValue(value: unknown, widget: unknown): boolean {
   return isRefWidget(widget) && (value === null || value === undefined || isDisplayOnlyRefValue(value))
+}
+
+/**
+ * Widget types whose stored value is a composite container (array/object).
+ * For these, an EMPTY container is a real value — an emptied list is the
+ * user's intent, not an unset slot — so it must NOT be omitted.
+ */
+const COMPOSITE_VALUE_WIDGETS = new Set(['array', 'reflist', 'multiselect', 'chips', 'object'])
+
+/** True when the widget's stored value is a composite container. */
+export function isCompositeValueWidget(widget: unknown): boolean {
+  return typeof widget === 'string' && COMPOSITE_VALUE_WIDGETS.has(widget)
+}
+
+/**
+ * EDITOR-9 — the ONE shared omission decision for the save serializer.
+ *
+ * The backend enforces exactOptionalPropertyTypes: a slot declared optional
+ * is valid when it is ABSENT or holds a value of the declared type — never
+ * `''` or `null`. The editor's widgets carry "no value" as null (FieldRow's
+ * attr default, an untouched slot) or as `''` (a cleared text/number/date
+ * input). Writing either into the payload 422s with
+ * "Expected type: string" (Brad's person save: /organizationId, /contact/phone)
+ * or "Expected type: array" for a container slot.
+ *
+ * So: a widget holding its unset value (null/undefined — any widget, since
+ * TipTap fills absent attrs with the node default null) emits NOTHING, and a
+ * scalar holding `''` emits NOTHING. The serializer omits the path and deletes
+ * any stale base-payload value there. Composite containers keep their EMPTY
+ * value (`[]`, `{}`) — an emptied list is the user's intent, not an unset
+ * slot. `false` and `0` are values, not empties. A REQUIRED field left empty
+ * is omitted too: the server's required-check is the correct, desired
+ * validation error — the client must not fabricate a requiredness check.
+ */
+export function isEmptyFieldValue(value: unknown, widget: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (isRefWidget(widget)) return isDisplayOnlyRefValue(value)
+  if (isCompositeValueWidget(widget)) return false
+  return value === ''
 }
