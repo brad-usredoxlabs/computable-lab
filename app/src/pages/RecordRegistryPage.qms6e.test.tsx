@@ -72,6 +72,8 @@ vi.mock('../shared/api/client', () => ({
     createDraftCopy: vi.fn(),
     createSignature: vi.fn(),
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
+    // EDITOR-9 fix-1: kind -> schema $id resolution endpoint (unused here).
+    getSchemas: vi.fn().mockResolvedValue([]),
   },
 }))
 
