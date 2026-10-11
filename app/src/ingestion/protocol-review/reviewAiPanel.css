@@ -1,0 +1,63 @@
+/* ReviewAiPanel — the protocol-review host's right-pane chat column (W2-9 R7).
+   Styles for the new panel ONLY; the shared channel parts (message-log,
+   chat-input, changes-panel) keep their own css untouched. */
+
+.review-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  min-height: 0;
+  padding: 0.75rem;
+  color: var(--cl-text);
+}
+
+.review-ai__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.review-ai__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.review-ai__hint {
+  font-size: 0.78rem;
+  color: var(--cl-text-dim);
+}
+
+.review-ai__log {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review-ai__arm,
+.review-ai__refusal {
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  background: var(--cl-bg-elev-2);
+}
+
+.review-ai__refusal {
+  border-color: var(--cl-danger-border);
+  color: var(--cl-danger);
+  background: var(--cl-danger-soft);
+}
+
+.review-ai__note {
+  font-size: 0.8rem;
+  color: var(--cl-text-dim);
+}
+
+.review-ai__review {
+  flex-shrink: 0;
+}
+
+.review-ai__input {
+  flex-shrink: 0;
+}
