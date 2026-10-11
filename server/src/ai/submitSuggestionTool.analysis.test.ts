@@ -39,6 +39,7 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
       'compose_workstate',
       'compose_analysis',
       'query_workstate_history',
+      'event_shorthand',
     ]);
   });
 

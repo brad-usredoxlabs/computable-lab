@@ -47,6 +47,11 @@ const SEED_RECORDS = [
     schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
     payload: { kind: 'material', name: 'Test Reagent', title: 'Test Reagent', synonyms: ['test reagent'] },
   },
+  {
+    recordId: 'MAT-dmem-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+    payload: { kind: 'material', name: 'DMEM', title: 'DMEM', synonyms: ['dmem'] },
+  },
 ];
 
 function mockStore() {
@@ -319,7 +324,13 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(model.callCount()).toBe(1);
     expect(second.success).toBe(true);
     expect(second.events?.length ?? 0).toBeGreaterThan(0);
-    expect(JSON.stringify(second.events)).toMatch('MAT-test-material-1');
+    // The folded noun bound through the spine: the event carries the ANSWERED
+    // label (the pipeline binds nouns as labels in event details, not record ids).
+    const foldedEvent = (second.events ?? [])[0] as unknown as Record<string, unknown>;
+    const foldedDetails = foldedEvent.details as Record<string, unknown>;
+    expect(foldedDetails.material).toBe('Test Reagent');
+    // The folded shorthand is what compiled — carried verbatim for the panel.
+    expect(second.shorthand).toMatch('Test Reagent');
   });
 
   it('the ONE forced tool grows exactly one new intent value with one shorthand arg', () => {
