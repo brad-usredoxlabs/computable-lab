@@ -31,7 +31,12 @@
 .review-ai__log {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  /* W2-89 g2b-4 (D-SCROLL): the log never scrolled — a clipped wrapper over
+     a fixed-height panel meant logCH==logSH at mount and per-attempt gate
+     shots collapsed to the same frame. The log must actually scroll; the
+     shared .message-log keeps its own overflow, this wrapper stops clipping
+     it. */
+  overflow-y: auto;
 }
 
 .review-ai__arm,

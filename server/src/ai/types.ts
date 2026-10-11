@@ -790,6 +790,16 @@ export interface AgentResult {
   }>;
   /** Prompt-level resolution assurance (RESOLVE/CONFIRM + structured blockers). */
   assurance?: AssuranceResult;
+  /**
+   * W2-89 g2b-1/2 — the DETERMINISTIC write-wall refusal (protocol-review
+   * surface). When a turn's ask crosses a declared SAID/MEANT wall
+   * (config/drafting/review-write-wall.yaml — the policy is DATA, the TS only
+   * follows data) the turn returns this envelope INSTEAD of any proposal
+   * payload: no protocolEdit, no events, zero model calls, zero writes. The
+   * client renders `message` as the user-facing refusal bubble/banner.
+   * exactOptionalPropertyTypes: key ABSENT on every non-refusal turn.
+   */
+  refusal?: { code: string; message: string };
 }
 
 /**

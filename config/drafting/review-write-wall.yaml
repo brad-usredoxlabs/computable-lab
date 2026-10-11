@@ -1,0 +1,118 @@
+# W2-89 g2b-1/2 — the review-panel WRITE-WALL refusal policy (deterministic).
+#
+# The browser gate (2026-10-11_0110-g2b) proved model discretion FAILS TWICE on
+# both negatives: "rewrite the vendor text on page 2" and "relabel step-lyse-a
+# provenance as vendor truth" each surfaced an actionable Apply/Accept card
+# instead of failing visibly. The orchestrator ruling: the refusal must be
+# DETERMINISTIC — the server recognizes a wall-crossing ask (or a wall-crossing
+# op) and returns an honest refusal envelope INSTEAD of a proposal payload.
+#
+# Like shorthand-drafting.yaml: membership and predicates are DATA, loaded PER
+# call (never process-cached); server/src/ai/reviewWriteWall.ts INTERPRETS them
+# and contains ZERO surface-name or phrase literals (repo rule #1). Absent file
+# => the wall is OFF (no refusal), never a TypeScript default mirroring a phrase.
+#
+# Semantics:
+# - `surfaces` — the AI surface ids the wall guards (membership is data).
+# - `askWalls` — a wall fires when the turn's ask matches ANY `verbs` word
+#   (word-bounded, case-insensitive) AND ANY `nouns` regex pattern. BOTH halves
+#   are required, so a legitimate MEANT-only ask ("reword step 3's label for our
+#   bench") never trips a wall. The refusal fires BEFORE any model call: zero
+#   inference, zero writes, no proposal payload reaches the client.
+# - `opsWall` — defense-in-depth at the protocol_edit branch: an op object
+#   carrying any `forbiddenFields` key is a provenance-falsification attempt
+#   (provenance/source_artifact are record structure, never chat-editable).
+#   The schema envelope's unevaluatedProperties:false stays the structural half;
+#   this is the honest-wording half. The op vocabulary is NOT extended.
+surfaces: [protocol-review]
+askWalls:
+  - id: said-vendor-rewrite
+    code: SAID_IMMUTABLE
+    message: >-
+      The vendor document (SAID) is immutable — chat cannot rewrite vendor text.
+      Edits apply only to the semantic draft (MEANT). No proposal was offered
+      and nothing was written.
+    verbs:
+      - rewrite
+      - reword
+      - change
+      - changes
+      - edit
+      - edits
+      - alter
+      - modify
+      - update
+      - replace
+      - fix
+      - correct
+      - revise
+      - adjust
+    nouns:
+      - vendor text
+      - vendor's text
+      - vendors text
+      - vendor wording
+      - vendor document
+      - vendor pdf
+      - vendor page
+      - source document
+      - source text
+      - original text
+      - original document
+      - the pdf
+      - said text
+      - page \d+
+  - id: provenance-falsification
+    code: PROVENANCE_FALSIFICATION
+    message: >-
+      Provenance cannot be relabelled — an inference cannot be recorded as
+      vendor truth (SAID). No proposal was offered and nothing was written.
+    verbs:
+      - relabel
+      - relabelled
+      - remap
+      - reclassify
+      - mark
+      - mark it
+      - record
+      - records
+      - label
+      - claim
+      - assert
+      - encode
+      - present
+      - pass off
+      - falsify
+      - change
+      - rewrite
+      - edit
+      - set
+    nouns:
+      - provenance
+      - source_artifact
+      - source artifact
+      - vendor truth
+      - vendor-truth
+      - vendor-stated
+      - vendor stated
+      - as vendor
+      - inference as
+      - inferred as
+      - vendor-sourced
+      - vendor sourced
+opsWall:
+  code: PROVENANCE_FALSIFICATION
+  message: >-
+    The proposal carries a provenance/source field — provenance is record
+    structure, never a chat-editable property, and an inference cannot be
+    relabelled as vendor truth (SAID). No proposal was offered and nothing was
+    written.
+  forbiddenFields:
+    - provenance
+    - source_artifact
+    - sourceArtifact
+    - vendorTruth
+    - vendor_truth
+    - vendor-truth
+    - rung
+    - ladder

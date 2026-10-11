@@ -149,6 +149,15 @@ export interface AssistDraftResult {
    * (on Accept) is PROTO-AI-8.
    */
   protocolEdit?: AiProtocolEditProposal
+  /**
+   * W2-89 g2b-1/2 — the DETERMINISTIC write-wall refusal envelope (server-
+   * built wording from config/drafting/review-write-wall.yaml — policy DATA,
+   * never model narration). On a wall-crossing turn the server emits this
+   * INSTEAD of any proposal payload: the panel renders it as a named refusal
+   * and NO Apply/Accept card can open. Key ABSENT on non-refusal turns
+   * (exactOptionalPropertyTypes), never undefined.
+   */
+  refusal?: { code: string; message: string }
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string
@@ -276,6 +285,10 @@ export type AssistStreamEvent =
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
   if (!result) return undefined
   if (result.error) return `Draft failed: ${result.error}`
+  // W2-89 g2b-1/2: a write-wall refusal turn has a user-facing ANSWER — the
+  // server-built refusal wording, verbatim. It outranks every other channel
+  // so the bubble never reads "(no response)" and never shows reasoning.
+  if (result.refusal?.message) return result.refusal.message
   const clarificationRequests = Array.isArray(result.clarificationRequests) ? result.clarificationRequests : []
   if (clarificationRequests.length > 0) {
     return clarificationRequests.length === 1
