@@ -159,6 +159,7 @@ import { OwnershipPolicyService } from './security/OwnershipPolicyService.js';
 import { StorageService } from './storage/StorageService.js';
 import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
 import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
+import { createOwnershipPolicyHandlers } from './api/handlers/OwnershipPolicyHandlers.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -254,6 +255,9 @@ export interface AppContext {
   credentialStore: CredentialStore;
   sessionStore: SessionStore;
   authorizationService: AuthorizationService;
+  /** The single ownership-policy service instance (constructed in initializeApp,
+   *  beside AuthorizationService's) — OWN-9 reuses it for the handlers: one
+   *  instance, one truth. */
   ownershipPolicyService: OwnershipPolicyService;
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
@@ -839,6 +843,15 @@ export async function createServer(
     roleResolver,
     auditService,
   });
+  // OWN-9: the ownership-policy document API. REUSES the single
+  // ownershipPolicyService instance constructed in initializeApp (beside
+  // AuthorizationService's) — one instance, one truth; no second construction.
+  const ownershipPolicyHandlers = createOwnershipPolicyHandlers({
+    store: ctx.store,
+    service: ctx.ownershipPolicyService,
+    identityService: ctx.localIdentityService,
+    authorizationService: ctx.authorizationService,
+  });
   const lifecycleHandlers = createLifecycleHandlers({
     engine: ctx.lifecycleEngine,
     store: ctx.store,
@@ -1407,6 +1420,7 @@ export async function createServer(
       runDraftHandlers,
       platformHandlers,
       labSettingsHandlers,
+      ownershipPolicyHandlers,
       lifecycleHandlers,
       signatureHandlers,
       metaHandlers,
