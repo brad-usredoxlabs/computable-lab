@@ -4004,6 +4004,13 @@ export const apiClient = {
     acceptedProtocolId?: string
     acceptedProtocolResult?: string
     localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    /**
+     * SHORTHAND-CORPUS WS1 (chat-Accept leg): the accepted shorthand as the
+     * VERBATIM YAML string the panel shows — the client is render + POST only
+     * (it never parses; the server decodes via parseYaml into the lift+Ajv
+     * capture door).
+     */
+    shorthandYaml?: string
     acceptedGraph?: Record<string, unknown>
     confirmedAt?: string
   }): Promise<{ ok: boolean; entryId?: string; deduped?: boolean; error?: string }> {

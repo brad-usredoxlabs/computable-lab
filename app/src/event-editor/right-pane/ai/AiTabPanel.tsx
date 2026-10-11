@@ -841,6 +841,41 @@ export function AiTabPanel() {
   // Coexists alongside the chat reducer — it adds state-driven UI behavior on top of the existing chat.
   const [sidebar, sidebarDispatch] = useReducer(sidebarReducer, initialSidebarState)
 
+  // SHORTHAND-CORPUS WS1 — the chat-Accept corpus leg (OQ1 ruling: client-side
+  // post-accept POST to the EXISTING /intent/training-pair seam, fire-and-
+  // forget, mirroring eventGraphPersistence's corpus leg). Only a draft that
+  // carried shorthand produces a pair. The accepted document rides VERBATIM as
+  // `shorthandYaml` — render + POST only, the client NEVER parses (the server
+  // decodes via parseYaml into the lift+Ajv capture door). The committed
+  // preview events + labwares ride `acceptedGraph` as PROVENANCE ONLY, never
+  // the target. Must read the preview BEFORE commitPreview clears it. A failed
+  // post never touches the Accept (best-effort; corpus may be off-box).
+  const captureAcceptedShorthandPair = useCallback(() => {
+    if (!editor) return
+    if (sidebar.mode !== 'reviewing' || sidebar.shorthand === undefined) return
+    const draft = lastShorthandDraftRef.current
+    if (!draft) return
+    const { state } = editor
+    void apiClient
+      .intentTrainingPair({
+        userPrompt: draft.prompt,
+        shorthandYaml: sidebar.shorthand,
+        acceptedGraph: {
+          events: [...state.events, ...(state.preview?.previewEvents ?? [])],
+          labwares: state.labwares,
+        },
+        confirmedAt: new Date().toISOString(),
+      })
+      .then((res) => {
+        if (!res.ok && res.error !== 'corpus.disabled') {
+          console.warn('corpus:chat-accept-pair-not-posted', res.error)
+        }
+      })
+      .catch(() => {
+        // Fire-and-forget: a capture failure never fails the Accept.
+      })
+  }, [editor, sidebar])
+
   // PROTO-AI-9 Accept/Reject state. The VALIDATED envelope ops ride a ref
   // (never re-derived from the display diff) so Accept sends exactly what the
   // server validated. `applying` disables the button the moment Accept fires —
@@ -1272,6 +1307,9 @@ export function AiTabPanel() {
                 return
               }
               sidebarDispatch({ type: 'commit' })
+              // SHORTHAND-CORPUS WS1: capture BEFORE the commit clears the
+              // preview (the provenance graph reads the mounted ghosts).
+              captureAcceptedShorthandPair()
               editor?.actions.commitPreview()
               // Bounded reset path for `committing`: the commit is a
               // synchronous local editor dispatch, so the pane returns to

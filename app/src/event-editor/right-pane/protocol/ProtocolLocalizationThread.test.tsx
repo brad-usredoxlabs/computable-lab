@@ -145,5 +145,63 @@ describe('ProtocolLocalizationThread', () => {
     const tpCall = mockClient.intentTrainingPair.mock.calls[0]![0] as Record<string, unknown>
     expect(tpCall.localMacro).toMatchObject({ intentId: 'zymo-local' })
   })
+
+  // ── SHORTHAND-CORPUS WS2: honest surfacing driven by the POST response ───
+  it('WS2: a corpus.disabled response surfaces LOCAL capture honestly (never claims the corpus)', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce({ ok: false, error: 'corpus.disabled' })
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    await waitFor(() => {
+      const msg = screen.getByTestId('pl-msg').textContent ?? ''
+      expect(msg).toContain('remote corpus disabled')
+      expect(msg).toContain('local capture')
+    })
+    // The misleading unconditional claim is gone when nothing was posted remotely.
+    expect(screen.getByTestId('pl-msg').textContent).not.toContain('added to training corpus')
+    // The POST still happened (the server-side local capture door rides it).
+    expect(mockClient.intentTrainingPair).toHaveBeenCalledTimes(1)
+  })
+
+  it('WS2: a failed training-pair post does not claim corpus capture', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce({ ok: false, error: 'http_500' })
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    await waitFor(() => {
+      const msg = screen.getByTestId('pl-msg').textContent ?? ''
+      expect(msg).toContain('training pair not posted')
+      expect(msg).toContain('http_500')
+    })
+    expect(screen.getByTestId('pl-msg').textContent).not.toContain('added to training corpus')
+    // The accept itself still served (capture failure never fails the accept).
+    expect(mockClient.intentAccept).toHaveBeenCalledTimes(1)
+  })
+
+  it('WS2: a successful post keeps the original corpus-capture message', async () => {
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(COMPILED_RES)
+    mockClient.intentAccept.mockResolvedValueOnce(ACCEPT_RES)
+    mockClient.intentTrainingPair.mockResolvedValueOnce(CORPUS_RES)
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-load-deck'))
+    await waitFor(() => expect(screen.getByTestId('pl-accept')).toBeTruthy())
+    fireEvent.click(screen.getByTestId('pl-accept'))
+
+    await waitFor(() => expect(screen.getByTestId('pl-msg').textContent).toContain('added to training corpus'))
+  })
 })
 

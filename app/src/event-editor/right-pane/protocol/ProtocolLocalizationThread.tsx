@@ -457,7 +457,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         ...(links ? { links } : {}),
       })
       if (acceptRes.recordId) {
-        await apiClient.intentTrainingPair({
+        const pairRes = await apiClient.intentTrainingPair({
           userPrompt: firstUserPrompt.current,
           thread: corrections.map((c) => ({ role: 'user', content: c })),
           sourceProtocolId,
@@ -466,7 +466,18 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
           localMacro,
           confirmedAt: new Date().toISOString(),
         })
-        setMessage('Accepted — protocol saved and added to training corpus.')
+        // SHORTHAND-CORPUS WS2 — honest surfacing: the message follows the
+        // POST response. `corpus.disabled` is a NORMAL response (lane default
+        // is remote-off; the server-side local JSONL capture is best-effort
+        // and stays server-side — the client never claims what it cannot see).
+        // A failed post must not claim corpus capture either.
+        if (pairRes?.ok) {
+          setMessage('Accepted — protocol saved and added to training corpus.')
+        } else if (pairRes?.error === 'corpus.disabled') {
+          setMessage('Accepted — protocol saved; remote corpus disabled — pair sent for local capture.')
+        } else {
+          setMessage(`Accepted — protocol saved; training pair not posted (${pairRes?.error ?? 'corpus.post-failed'}).`)
+        }
       } else {
         setMessage('Accepted on deck, but local-protocol save failed.')
       }
