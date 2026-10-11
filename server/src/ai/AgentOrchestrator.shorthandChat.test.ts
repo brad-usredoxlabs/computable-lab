@@ -229,6 +229,90 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(compileSpy).not.toHaveBeenCalled();
   });
 
+  it('DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const rawEvents = [{ event_type: 'add_material', details: { well: 'A1', material: 'invented', volumeUl: 999 } }];
+    const rawCall = { name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_graph', events: rawEvents } };
+    const model = stubModel([
+      { toolCalls: [rawCall] },
+      { toolCalls: [rawCall] },
+    ]);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 3 },
+      orchestratorDeps(),
+    );
+
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST, onEvent: (e) => events.push(e) });
+    compileSpy.mockRestore();
+
+    // The refusal is TOTAL on a shorthand surface: BOTH raw calls refused (two
+    // refusal status events), the turn ends with the honest cannot-draft
+    // failure, and the legacy raw-events path (parseSubmitSuggestionArgs /
+    // runChatbotCompile / termManifest classification) NEVER runs.
+    const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
+    expect(refusals.length).toBe(2);
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(result.events ?? []).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toMatch('invented');
+    expect('termManifest' in result).toBe(false);
+    expect(model.callCount()).toBe(2);
+    expect(compileSpy).not.toHaveBeenCalled();
+  });
+
+  it('DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash', async () => {
+    const { holdShorthandIntent } = await import('./shorthandChat.js');
+    const { deriveContextCacheKey } = await import('./systemPrompt.js');
+    const key = deriveContextCacheKey('workspace.deck' as never, RUN_CHAT_REQUEST.context as never);
+    const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
+    // A held document whose folded re-serialization CANNOT pass Ajv (a field
+    // the wire schema forbids): the fold's final parseScientistIntent must
+    // return null (the permitted extraction-only fallback), never escape as a
+    // ScientistIntentValidationError crashing the turn out of run().
+    (heldDoc.actions[0] as unknown as Record<string, unknown>).bogusField = 'not-a-schema-field';
+    holdShorthandIntent(key, {
+      yaml: AMBIGUOUS_YAML,
+      doc: heldDoc,
+      clarifications: [{
+        label: 'mystery goop',
+        reason: 'the lab spine could not bind it',
+        actionLocation: { actionIndex: 0, action: 'add_material', argument: 'material' },
+      }],
+    });
+
+    const model = stubModel([{ toolCalls: [shorthandCall(ADD_DMEM_YAML)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const result = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{
+        requestId: 'unresolved-1',
+        label: 'Test Reagent',
+        ref: { id: 'MAT-test-material-1', kind: 'material' },
+      }],
+    });
+    // No crash: the fold returned null and the permitted fallback ran — exactly
+    // ONE extraction-only re-ask whose grounded context carries the held
+    // shorthand + the answer. The accepted graph is the deterministic compile.
+    expect(model.callCount()).toBe(1);
+    expect(JSON.stringify(model.captured[0].messages)).toMatch('CLARIFICATION ANSWERS');
+    expect(result.success).toBe(true);
+    expect(result.shorthand).toBe(ADD_DMEM_YAML);
+  });
+
   it('re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document', async () => {
     const invalidYaml = 'intentId: bad\nactions:\n  - action: vaporize\n';
     const model = stubModel([

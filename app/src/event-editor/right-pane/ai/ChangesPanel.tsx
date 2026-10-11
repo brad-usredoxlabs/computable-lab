@@ -152,8 +152,11 @@ export function ChangesPanel({
  * server's /intent/compile — Ajv sole authority). A rejected edit shows the
  * server's diagnostic verbatim and the proposal stays. No parsing, no
  * validation, no summarizing here — that is the server's compiler, once.
+ * Exported (fix cycle 1, advc1 DEFECT-5): the clarification view renders the
+ * SAME component — one rendering home for the verbatim document, no second
+ * grammar. Without `onRecompile` it is render-only (no edit affordance).
  */
-function ShorthandView({
+export function ShorthandView({
   yaml,
   onRecompile,
   error,

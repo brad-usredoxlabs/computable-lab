@@ -30,6 +30,45 @@ describe('QuestionsPanel', () => {
     expect(screen.getByText(/1 answers needed/)).toBeDefined()
   })
 
+  // fix cycle 1 (advc1 DEFECT-5): a needs-clarification turn IS proposal-bearing
+  // — the paused draft's shorthand rides the dispatch and renders VERBATIM
+  // above the questions (the SAME ShorthandView the review panel uses).
+  it('renders the carried shorthand VERBATIM above the questions', () => {
+    const yaml = 'intentId: chat-add-mystery\nactions:\n  - action: add_material\n'
+    render(
+      <QuestionsPanel
+        questions={[mockQuestion]}
+        answers={{}}
+        activeQuestionId="q1"
+        shorthand={yaml}
+        onAnswer={vi.fn()}
+        onChangeQuestion={vi.fn()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    const pre = screen.getByTestId('shorthand-verbatim')
+    expect(pre.textContent).toBe(yaml)
+    // Render-only: no edit affordance mid-clarification (the answer fold is
+    // the server's deterministic job, never a client re-draft).
+    expect(screen.queryByTestId('shorthand-edit')).toBeNull()
+  })
+
+  it('renders byte-unchanged when NO shorthand is carried (no empty view)', () => {
+    render(
+      <QuestionsPanel
+        questions={[mockQuestion]}
+        answers={{}}
+        activeQuestionId="q1"
+        onAnswer={vi.fn()}
+        onChangeQuestion={vi.fn()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('shorthand-view')).toBeNull()
+  })
+
   it('shows update button when all answered', () => {
     render(
       <QuestionsPanel

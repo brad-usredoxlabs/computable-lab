@@ -220,7 +220,16 @@ export function foldAnswersIntoShorthand(
     unresolved: doc.unresolved,
   });
   // Ajv sole authority on the folded document (the /intent/compile discipline).
-  return { yaml: yamlText, doc: parseScientistIntent(yamlText) };
+  // A folded document that FAILS validation (advc1 DEFECT-4) is not a crash:
+  // the fold returns null and the caller takes the permitted extraction-only
+  // fallback route — a parse fault must never escape run() as a turn-crashing
+  // exception.
+  try {
+    return { yaml: yamlText, doc: parseScientistIntent(yamlText) };
+  } catch (error) {
+    if (error instanceof ScientistIntentValidationError) return null;
+    throw error;
+  }
 }
 
 /**

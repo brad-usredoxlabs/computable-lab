@@ -489,7 +489,17 @@ export function AiTabPanel() {
       }
 
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
-        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
+        sidebarDispatch({
+          type: 'clarifications-needed',
+          draftId,
+          questions: result.clarificationRequests,
+          // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): a needs-clarification
+          // turn IS proposal-bearing — the server carries result.shorthand on
+          // it, and the spec's UI goal shows the document VERBATIM above the
+          // proposal. Same conditional-spread discipline as 'draft-ready': a
+          // clarification from a draft without shorthand stays byte-identical.
+          ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
+        })
       } else {
         // Describe what will be applied. This used to pass `changes: []`, so
         // "Apply to run" sat above an empty list — the biologist was asked to
@@ -1207,6 +1217,10 @@ export function AiTabPanel() {
             questions={sidebar.questions}
             answers={sidebar.answers}
             activeQuestionId={sidebar.activeQuestionId}
+            // SHORTHAND-CHAT fix cycle 1: verbatim document above the
+            // questions while the draft is paused (conditional spread — a
+            // clarification without shorthand renders byte-unchanged).
+            {...(sidebar.shorthand !== undefined ? { shorthand: sidebar.shorthand } : {})}
             onAnswer={(qId, ans) => sidebarDispatch({ type: 'answer-question', questionId: qId, answer: ans })}
             onChangeQuestion={(qId) => sidebarDispatch({ type: 'change-question', questionId: qId })}
             onSubmit={() => {

@@ -1234,12 +1234,6 @@ export function createAgentOrchestrator(
        */
       let truncatedToolCall = false;
       let resolvedMentionsCount = 0;
-      /**
-       * SHORTHAND-CHAT run-scoped state. The raw-events refusal and the
-       * malformed-shorthand re-ask each get ONE re-ask per run (re-ask once,
-       * then an honest failure — never a silent repair). Membership of the
-       * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
-       */
 
       // 1. Build the message array
       const systemPrompt = surface
@@ -2188,18 +2182,52 @@ export function createAgentOrchestrator(
             }
 
             // ---- SHORTHAND-CHAT: raw event_graph refusal (AS-4) ----------
-            // On a shorthand surface, an event_graph call is REFUSED: the turn
-            // re-asks ONCE with the (rewritten) forced prompt demanding the
-            // shorthand document. The raw payload is NEVER compiled. The
-            // event_graph enum and the legacy paths stay for surfaces not yet
-            // moved — retirement is when the LAST surface moves.
-            if (shorthandSurface && agentIntent.intent === 'event_graph' && !eventGraphRefusalAsked) {
-              eventGraphRefusalAsked = true;
+            // On a shorthand surface, an event_graph call is REFUSED — TOTAL:
+            // the FIRST call re-asks ONCE with the (rewritten) forced prompt
+            // demanding the shorthand document; a REPEAT call ends the turn
+            // with the honest cannot-draft failure (the malformed-shorthand
+            // arm's discipline). The raw payload is NEVER compiled on either
+            // attempt — a stubborn model must not reach the legacy raw-events
+            // path on the very surface the deterministic-only invariant covers
+            // (advc1 DEFECT-1). The event_graph enum and the legacy paths stay
+            // for surfaces not yet moved — retirement is when the LAST surface
+            // moves.
+            if (shorthandSurface && agentIntent.intent === 'event_graph') {
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
-              onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused. Asking the AI for a shorthand document…' });
-              console.warn(`[agent ${tid}] refused raw event_graph on shorthand surface ${surfaceName}; re-asking for shorthand`);
-              messages.push({ role: 'user', content: buildForcedDraftJsonPrompt(effectivePrompt) });
-              continue;
+              if (!eventGraphRefusalAsked) {
+                eventGraphRefusalAsked = true;
+                onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused. Asking the AI for a shorthand document…' });
+                console.warn(`[agent ${tid}] refused raw event_graph on shorthand surface ${surfaceName}; re-asking for shorthand`);
+                messages.push({ role: 'user', content: buildForcedDraftJsonPrompt(effectivePrompt) });
+                continue;
+              }
+              const repeated = 'Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document.';
+              onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused again. The AI could not produce a shorthand document.' });
+              console.warn(`[agent ${tid}] refused a REPEAT raw event_graph on shorthand surface ${surfaceName}; ending the turn with the honest cannot-draft failure`);
+              const repeatedResult: AgentResult = { success: false, error: repeated };
+              const repeatedElapsed = Date.now() - t0;
+              const repeatedSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: false,
+                elapsedMs: repeatedElapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              repeatedSummary.error = repeated;
+              logAgentSummary(tid, repeatedSummary);
+              console.log(`[agent ${tid}] done event_graph_refusal success=false events=0 elapsedMs=${repeatedElapsed}`);
+              shadowRoute('event_graph', repeatedElapsed);
+              return repeatedResult;
             }
 
             // intent=create_record: AUTHOR records (equipment/material/labware) the lab

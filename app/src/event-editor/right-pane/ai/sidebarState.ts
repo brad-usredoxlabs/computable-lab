@@ -109,6 +109,15 @@ export type AiSidebarState =
       questions: AiClarificationRequest[]
       answers: Record<string, AiClarificationAnswer>
       activeQuestionId: string
+      /**
+       * SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): the shorthand document
+       * the paused draft was built from, VERBATIM. A needs-clarification turn
+       * IS proposal-bearing — the panel shows the document above the questions
+       * while the draft is paused. Optional: a clarification from a draft
+       * without shorthand leaves the clarifying state byte-identical (the key
+       * is never introduced as undefined).
+       */
+      shorthand?: string
     }
   | { mode: 'updating'; draftId: string }
   | {
@@ -145,6 +154,8 @@ export type SidebarAction =
       type: 'clarifications-needed'
       draftId: string
       questions: AiClarificationRequest[]
+      /** See AiSidebarState 'clarifying'.shorthand (SHORTHAND-CHAT fix cycle 1). */
+      shorthand?: string
     }
   | { type: 'answer-question'; questionId: string; answer: AiClarificationAnswer }
   | { type: 'change-question'; questionId: string }
@@ -188,6 +199,10 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         questions: action.questions,
         answers: {},
         activeQuestionId: action.questions[0]?.id ?? '',
+        // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): same conditional-spread
+        // discipline as 'draft-ready' — a clarification from a draft WITHOUT
+        // shorthand leaves the clarifying state byte-identical.
+        ...(action.shorthand !== undefined ? { shorthand: action.shorthand } : {}),
       }
 
     case 'answer-question':
