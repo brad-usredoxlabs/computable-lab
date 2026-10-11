@@ -317,3 +317,109 @@ git -c core.fileMode=false log --oneline -1
 ```
 
 Worktree clean (only lane-synced untracked node_modules/config entries present, never staged). Not merged, lane stack not restarted, browser reviewer not run — per contract.
+
+## 12. Fix cycle 1 (advc1 review SHORTHAND-CHAT-advc1-l2t0030 — verdict: fix)
+
+Fix commit: bf40b0e8 (10 files, +424/-20). Reviewer defects 1-5 resolved per the
+orchestrator's binding rulings. RED-first: both new server tests were run against
+the pre-fix code (stash-free method: fixed files copied aside, `git checkout --`
+restored, suite run) before the fixes were re-applied.
+
+### DEFECT-1 [blocker] — raw event_graph refusal is now TOTAL on a shorthand surface
+- Fix (server/src/ai/AgentOrchestrator.ts, refusal arm): the `!eventGraphRefusalAsked`
+  escape was dropped from the guard condition — `shorthandSurface && intent === 'event_graph'`
+  now catches EVERY raw call. First call: unchanged one re-ask (forced shorthand prompt).
+  REPEAT call: honest cannot-draft failure (the malformed-shorthand arm's discipline —
+  `success:false`, error matching /cannot draft/i, tool_result event, refusal status event,
+  AgentSummary logged, shadowRoute('event_graph'), `return` — the legacy path at the old
+  :2713 `parseSubmitSuggestionArgs` is NEVER reached). Chosen per spec wording "NEVER
+  compiled": a second re-ask for the *raw* path has no repair value on this surface.
+- RED proof (pre-fix code): new test "DEFECT-1 (fix cycle 1): a REPEAT raw event_graph
+  call is ALSO refused" failed 2/16 — turn-2 fell through and was processed (the reviewer's
+  probe reproduced in-suite). GREEN: 16/16.
+- Test asserts: TWO refusal status events; result.success=false; error /cannot draft/i;
+  zero events; payload contains no 'invented' raw material; NO termManifest key; model
+  called exactly twice; runChatbotCompile spy NEVER called.
+
+### DEFECT-2 [medium] — orchestrator ruling: ACCEPTED deviation (no code change)
+- RULING recorded: AS-LANE2-SHORTHANDCHAT-NOBYPASS-EDIT-RATIFIED. The noBypass.test.ts
+  allow-list entry for ai/shorthandChat.ts stands: the guard is a TEST, not a pipeline
+  module; the reviewer ran it first-hand (7/7 green, arm (b) still fails undeclared
+  importers); shorthandChat.ts is the legitimate single door (AgentOrchestrator.ts has
+  zero compileScientistIntent imports). The spec's §Verification-5 "empty diff" expectation
+  is amended by the orchestrator. Do-not-restructure honored — the one-line entry stays.
+
+### DEFECT-3 [minor] — orphan duplicated JSDoc deleted
+- server/src/ai/AgentOrchestrator.ts: the dead copy of the "SHORTHAND-CHAT run-scoped
+  state..." block (was :1237-1242, no code following) removed; the live twin at
+  :1138-1143 (above `const shorthandSurface = ...`) is the single home.
+
+### DEFECT-4 [minor] — fold re-parse guarded; validation failure routes to the fallback
+- server/src/ai/shorthandChat.ts foldAnswersIntoShorthand: the final
+  `parseScientistIntent(yamlText)` is wrapped — a ScientistIntentValidationError returns
+  null (the permitted extraction-only fallback route at the AgentOrchestrator.ts:1179 call
+  site); any other error still throws (never swallow a programming fault).
+- RED proof (pre-fix code): new test "DEFECT-4 (fix cycle 1)" crashed the turn —
+  `ScientistIntentValidationError: scientist-intent failed schema validation: 1 error(s)`
+  escaping run() via foldAnswersIntoShorthand (stack: parseScientistIntent:192 ->
+  shorthandChat:223 -> AgentOrchestrator.run:1179). GREEN: 16/16.
+- Test mechanism: a held intent whose doc carries a schema-forbidden field
+  (`bogusField` -> Ajv additionalProperties rejection on the folded re-serialization);
+  the answer maps 1:1 so the fold IS attempted; asserts no crash, exactly ONE
+  extraction-only re-ask whose grounded context carries 'CLARIFICATION ANSWERS', and the
+  accepted graph is the deterministic compile of the re-extracted shorthand.
+
+### DEFECT-5 [per ruling] — shorthand carried on the clarifications-needed dispatch
+- RULING: carry it — a needs-clarification turn IS proposal-bearing and the spec's UI goal
+  says the panel shows the shorthand VERBATIM above the proposal.
+- app/src/event-editor/right-pane/ai/AiTabPanel.tsx: the `clarifications-needed` dispatch
+  now conditional-spreads `result.shorthand` (same discipline as `draft-ready` — key never
+  introduced as undefined). sidebarState.ts: `clarifying` state + action gain optional
+  `shorthand?`; the reducer conditional-spreads it; answer-question/change-question spreads
+  preserve it. QuestionsPanel.tsx: optional `shorthand?` prop rendering the SAME exported
+  ShorthandView component (one rendering home, no second grammar) VERBATIM above the
+  questions, RENDER-ONLY (no edit affordance mid-clarification — the answer fold is the
+  server's deterministic job). ChangesPanel.tsx: ShorthandView exported (comment records why).
+- Tests: sidebarState.test.ts +3 (carried verbatim; WITHOUT shorthand byte-identical,
+  `'shorthand' in state === false`; preserved across answer-question);
+  QuestionsPanel.test.tsx +2 (verbatim `<pre>` byte-identical + no edit affordance; no
+  shorthand -> no view); NEW AiTabPanel.shorthandClarification.test.tsx (2 tests, panel
+  level via the protocolEdit option-capturing seam: clarification result WITH shorthand ->
+  questions-panel + shorthand-verbatim exact bytes; WITHOUT -> byte-unchanged).
+
+### Reviewer OBSERVATION re browser gate — confirmed, no action needed
+- Nothing in this item's code reads a query-param runId: AiTabPanel takes runId from the
+  mounted editor state (`editorState.runId`), the route is the path-param form
+  `/deck/:eventGraphId/:runId?` (App.tsx:200), and no file in the diff touches
+  searchParams/URLSearchParams/location.search. The gate URL
+  /deck/EVG-a5-fixture-method/RUN-2026-09-19-run-vwr8 works unchanged.
+
+### Fix-cycle verification (all from this worktree; git always -c core.fileMode=false)
+RED (pre-fix, fixes temporarily reverted):
+  npx vitest run src/ai/AgentOrchestrator.shorthandChat.test.ts
+  -> Tests 2 failed | 14 passed (16)  [DEFECT-1: expected 1 to be 2 (one refusal, turn-2 processed);
+      DEFECT-4: ScientistIntentValidationError escaping run()]
+GREEN + pins (post-fix, commit bf40b0e8):
+  server: npx tsc --noEmit | grep -c "error TS"            -> 19   (pin)
+  server: npx vitest run src/ai/AgentOrchestrator.shorthandChat.test.ts
+          -> Test Files 1 passed (1); Tests 16 passed (16)  (14 prior + 2 new)
+  server: npx vitest run src/compiler/scientistIntent/goldens src/compiler/scientistIntent/noBypass.test.ts src/ai/AgentOrchestrator.shorthandChat.test.ts
+          -> Test Files 5 passed (5); Tests 38 passed (38)  (goldens 15/15, noBypass 7/7)
+  server: git -c core.fileMode=false hash-object src/compiler/scientistIntent/goldens/MANIFEST.yaml
+          -> 58c447ebd8dc62b111fc35ee5cd04d6e7c4aba35       (pin, unchanged)
+  server: npx vitest run src/ai/analysisReferenceGrounding.test.ts src/ai/workstateComposeRules.test.ts
+          -> 2 passed (2); 35 passed (35)  (the only other workspace.deck-touching suites)
+  app:    npx tsc --noEmit | grep -c "error TS"            -> 34   (pin)
+  app:    npx vitest run ChangesPanel.test.tsx sidebarState.test.ts ChangesPanel.styling.test.tsx QuestionsPanel.test.tsx AiTabPanel.shorthandClarification.test.tsx
+          -> Test Files 5 passed (5); Tests 54 passed (54)  (41 prior + 13 new)
+  app:    npx vitest run AiTabPanel.test.tsx AiTabPanel.protocolEdit.test.tsx AiTabPanel.runPageSurface.test.tsx AiTabPanel.workstate.test.tsx AiTabPanel.analysis.test.tsx AiTabPanel.ledgerTurn.test.tsx
+          -> Test Files 6 passed (6); Tests 56 passed (56)  (no AiTabPanel regressions)
+
+### Fix-cycle final state
+```
+git -c core.fileMode=false log --oneline -2
+bf40b0e8 SHORTHAND-CHAT fix cycle 1: total event_graph refusal on shorthand surfaces (DEFECT-1), guarded fold re-parse (DEFECT-4), orphan JSDoc removed (DEFECT-3), shorthand on the clarification turn (DEFECT-5 per ruling)
+fc0e4f61 SHORTHAND-CHAT: deliverable report (evidence, pin set-equality, bait dispositions, OQs)
+```
+Worktree clean. Trunk untouched; :3001/:5174/:3093/:5193 untouched; no merge, no stack
+restart, no browser run — acceptance remains the orchestrator's gate.
