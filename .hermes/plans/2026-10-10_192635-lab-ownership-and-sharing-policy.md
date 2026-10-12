@@ -102,7 +102,7 @@ description: >
 type: object
 unevaluatedProperties: false
 allOf:
-- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"  # AMENDED 2026-10-11 per architect decision 2026-10-11_own-1-fixcycle-decision.md (2a): ../core/ dangles in $id-URL space; identity siblings use ./ form
 
 required: [kind, recordId, title, scope, labOwnerUserId, fallback]
 
@@ -291,7 +291,7 @@ form:
   - title: "Kind Rules"
     fields:
     - path: "$.kindRules"
-      widget: "json"
+      widget: "array"  # AMENDED 2026-10-11 per architect decision 2026-10-11_own-1-fixcycle-decision.md (1a): "json" fails UISpecLoader whitelist + ui-v1 enum; kindRules is type:array, ArrayWidget is repo precedent
       label: "Kind Rules"
 ```
 
