@@ -9,6 +9,15 @@ import {
 } from './resolvers'
 import type { SlashResolverContext } from './types'
 
+// SHORTHAND-CORPUS WS6 D1: the vendor Exa tier is a DECLARED capability
+// (integrations.exa), not a default. Stub the flag seam so each test declares
+// the capability; the gate logic under test lives in resolvers.ts (which
+// mirrors the server's normalizeConfig semantics via integrationFlags).
+const flags = vi.hoisted(() => ({ exaVendorEnabled: vi.fn<[], boolean>() }))
+vi.mock('../../lib/integrationFlags', () => ({
+  exaVendorEnabled: () => flags.exaVendorEnabled(),
+}))
+
 function ctx(
   overrides: Partial<SlashResolverContext> = {},
 ): SlashResolverContext {
@@ -24,6 +33,10 @@ const fetchSpy = vi.fn()
 beforeEach(() => {
   fetchSpy.mockReset()
   vi.stubGlobal('fetch', fetchSpy)
+  // Default declared capability: Exa ON (the server default when the config
+  // carries no `enabled: false`). The D1 tests below flip it explicitly.
+  flags.exaVendorEnabled.mockReset()
+  flags.exaVendorEnabled.mockResolvedValue(true)
 })
 
 afterEach(() => {
@@ -264,6 +277,102 @@ describe('resolveEquipment', () => {
       id: 'EQP-EPPENDORF-5424R',
       label: 'Eppendorf 5424R centrifuge',
     })
+  })
+})
+
+describe('SHORTHAND-CORPUS WS6 D1 — the vendor Exa tier honors the declared integration flag', () => {
+  // Gate r4 defect: with no vendor credential the lane's POST /api/vendor/exa/
+  // search 502s deterministically, and the browser logs a resource error the
+  // app cannot suppress. The slash-menu tier is a DECLARED capability
+  // (integrations.exa): the resolver must not fire the request when the config
+  // declares it off — mirroring the server's own semantics (normalizeConfig:
+  // disabled iff `enabled === false`; absent = enabled).
+
+  it('integrations.exa.enabled=false: NO vendor search request fires, and the ontology/local tiers still stream in', async () => {
+    flags.exaVendorEnabled.mockResolvedValue(false)
+    // First-paint workspace search + formulation summary: nothing.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    // localOnly resolve → a canonical-term hit (the local tier must survive the gate).
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            curie: 'local:TERM-dmem-0001',
+            label: 'DMEM',
+            namespace: 'local',
+            tier: 0,
+            level: 'unknown',
+            score: 1.1,
+            source: 'canonical-term',
+          },
+        ],
+      }),
+    } as Response)
+    // full resolve → empty.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+
+    const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    const out = await resolveMaterial('dmem', ctx({ onUpdate: more }))
+    expect(out.some((s) => s.key === 'mint:dmem')).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 0))
+
+    // The local/ontology tier still lands — the gate removes the vendor tier,
+    // not the menu.
+    expect(additions.some((s) => s.badge === 'Canonical')).toBe(true)
+    // And the vendor seam was NEVER touched: no request, so no 502 to log.
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/vendor/exa/search'))).toBe(false)
+    expect(additions.some((s) => s.key.startsWith('vendor-exa:'))).toBe(false)
+  })
+
+  it('integrations.exa.enabled=false: the labware and equipment tiers skip the vendor call too', async () => {
+    flags.exaVendorEnabled.mockResolvedValue(false)
+    mockSearchResponse([{ recordId: 'LBW-96', kind: 'labware', label: '96-well plate' }])
+    const labware = await resolveLabware('96', ctx({ onUpdate: () => {} }))
+    expect(labware[0]?.badge).toBe('Labware')
+
+    mockSearchResponse([{ recordId: 'EQP-CENTRIFUGE', kind: 'equipment', label: 'Benchtop centrifuge' }])
+    const equipment = await resolveEquipment('centrifuge', ctx({ onUpdate: () => {} }))
+    expect(equipment[0]?.badge).toBe('Equipment')
+
+    await new Promise((r) => setTimeout(r, 0))
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/vendor/exa/search'))).toBe(false)
+  })
+
+  it('flag ON (the default above): the vendor tier still fires exactly as before (zero behavior change)', async () => {
+    // flags.exaVendorEnabled resolves true in beforeEach — the server default.
+    mockSearchResponse([])
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        configured: true,
+        query: 'centrifuge',
+        items: [
+          {
+            id: 'exa-1',
+            title: 'Eppendorf 5424R centrifuge',
+            url: 'https://example.com/5424r',
+            snippet: 'Benchtop laboratory centrifuge',
+            category: 'equipment',
+            source: 'exa',
+          },
+        ],
+      }),
+    } as Response)
+
+    const additions: Awaited<ReturnType<typeof resolveEquipment>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    await resolveEquipment('centrifuge', ctx({ onUpdate: more }))
+    await new Promise((r) => setTimeout(r, 0))
+
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/vendor/exa/search'))).toBe(true)
+    expect(additions[0]).toMatchObject({ key: 'vendor-exa:https://example.com/5424r', badge: 'Web' })
   })
 })
 
