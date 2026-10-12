@@ -2029,7 +2029,21 @@ export function createAgentOrchestrator(
             ? assistantMsg.content.replace(/\s+/g, ' ').slice(0, 400)
             : '<empty>';
           const error = `AI stopped without calling ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}, and compiler-argument fallback did not produce valid JSON. Last text: ${contentPreview}`;
-          onEvent?.({ type: 'error', message: error });
+          // W2-9 g2c DEFECT-2 (gate 2026-10-12_1330-g2c asks (d)/(e)): when the
+          // model's final text IS its answer — a refusal in prose — the turn
+          // surfaces that prose honestly as an assistant TEXT turn (the notes
+          // channel: the same surface today's notes-only turns use) instead of
+          // a harness-error turn. The internal trace stays in the SERVER LOG
+          // only: the agent-summary line below keeps `error` verbatim for
+          // observability, and no `error` event reaches the client. Success
+          // accounting is unchanged (a zero-tool turn still ends success:false)
+          // and no emission kind is added beyond routing the prose. The prose
+          // is plain text — it can never carry a proposal payload, so the panel
+          // cannot open an Apply/Accept card on this path. Empty/absent prose
+          // keeps the current honest error shape (still no card).
+          const finalProse = typeof assistantMsg.content === 'string' ? assistantMsg.content.trim() : '';
+          const proseRouted = finalProse.length > 0;
+          if (!proseRouted) onEvent?.({ type: 'error', message: error });
           const elapsed = Date.now() - t0;
           turnStats.push({
             turn: turn + 1,
@@ -2058,6 +2072,18 @@ export function createAgentOrchestrator(
             error,
           };
           logAgentSummary(tid, summary);
+          if (proseRouted) {
+            return {
+              success: false,
+              notes: [finalProse],
+              usage: {
+                ...totalUsage,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+              },
+            };
+          }
           return {
             success: false,
             error,
