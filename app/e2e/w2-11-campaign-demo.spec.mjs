@@ -218,7 +218,7 @@ async function apiPut(path, payload) {
 async function getRecordEnvelope(recordId) {
   const res = await apiGet(`/records/${encodeURIComponent(recordId)}`)
   if (res.status !== 200 || !res.body?.record) throw new Error(`GET /records/${recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
-  return res.body
+  return res.body.record
 }
 function shaOf(envelope) {
   const sha = envelope.meta?.contentSha ?? envelope.meta?.commitSha
@@ -275,7 +275,7 @@ async function seedXdr() {
     message: 'W2-11 gate spec: seed the frozen reviewed semantic draft (campaign fixture)',
   })
   if (res.status !== 200 && res.status !== 201) throw new Error(`XDR seeding -> ${res.status}: ${JSON.stringify(res.body).slice(0, 400)}`)
-  return (await getRecordEnvelope(XDR_ID)).record
+  return await getRecordEnvelope(XDR_ID)
 }
 
 /** Promote the frozen draft through the REAL W2-5 route; returns the family id. */
@@ -295,23 +295,43 @@ async function promoteFamily() {
     }
   }
   const res = await apiPost(`/extraction/drafts/${encodeURIComponent(XDR_ID)}/candidates/0/promote`, {})
+  if (res.status === 409 || String(res.body?.error ?? '') === 'CONFLICT') {
+    // Idempotence (l2t1615): a re-run against an already-promoted draft resolves
+    // the family through the extraction-promotion record (the real ledger).
+    const all = await apiGet('/records?kind=extraction-promotion')
+    const rows = (all.body?.records ?? []).filter((r) => r.payload?.kind === 'extraction-promotion'
+      && r.payload?.source_draft_ref?.id === XDR_ID
+      && r.payload?.candidate_path === 'candidates[0]')
+    const out = rows.map((r) => String(r.payload?.output_ref?.id ?? '')).find((id) => id.startsWith('CAN-protocol-'))
+    if (out) return out
+  }
   if (res.status !== 200) throw new Error(`promotion -> ${res.status}: ${JSON.stringify(res.body).slice(0, 400)}`)
   const canonicalId = String(res.body?.recordId ?? '')
   if (!canonicalId.startsWith('CAN-protocol-')) throw new Error(`promotion returned unexpected recordId ${canonicalId}`)
   return canonicalId
 }
 
+// Orchestrator gate-harness fix l2t1615: shape the seed rows to the REAL
+// schemas (labware: name+labwareType+aliases; material: id+domain+name+
+// synonyms; aliquot: id+name+tags) — the recordingStore the vitest golden
+// suite seeds skips validation; the live lane API does not. recordIds and the
+// human-facing names/synonym strings are unchanged so the robot's answer-name
+// matching and the D5/D6 server legs are unaffected.
 const SEED_LABWARES = [
-  { recordId: 'LAB-w211-sample-plate', payload: { kind: 'labware', title: 'Sample Plate', synonyms: ['sample_plate', 'sample plate'] } },
-  { recordId: 'LAB-w211-reservoir', payload: { kind: 'labware', title: 'Reagent Reservoir', synonyms: ['reagent_reservoir', 'reagent reservoir'] } },
+  { recordId: 'LAB-w211-sample-plate', payload: { kind: 'labware', recordId: 'LAB-w211-sample-plate', name: 'Sample Plate', labwareType: 'plate', aliases: ['sample_plate', 'sample plate'] } },
+  { recordId: 'LAB-w211-reservoir', payload: { kind: 'labware', recordId: 'LAB-w211-reservoir', name: 'Reagent Reservoir', labwareType: 'reservoir', aliases: ['reagent_reservoir', 'reagent reservoir'] } },
 ]
 const SEED_MATERIALS = [
-  { recordId: 'MAT-w211-lysis', payload: { kind: 'material', title: 'Lysis Solution', synonyms: ['lysis_solution'] } },
-  { recordId: 'MAT-w211-magbeads', payload: { kind: 'material', title: 'MagBinding Beads', synonyms: ['magbinding_beads'] } },
-  { recordId: 'MAT-w211-magbuffer', payload: { kind: 'material', title: 'MagBinding Buffer', synonyms: ['magbinding_buffer'] } },
-  { recordId: 'MAT-w211-magwash1', payload: { kind: 'material', title: 'MagWash 1', synonyms: ['magwash_1'] } },
-  { recordId: 'MAT-w211-magwash2', payload: { kind: 'aliquot', title: 'MagWash 2', label: 'magwash_2' } },
-  { recordId: 'MAT-w211-water', payload: { kind: 'material', title: 'DNase/RNase Free Water', synonyms: ['dnase_rnase_free_water'] } },
+  { recordId: 'MAT-w211-lysis', payload: { kind: 'material', id: 'MAT-w211-lysis', domain: 'reagent', name: 'Lysis Solution', synonyms: ['lysis_solution'] } },
+  { recordId: 'MAT-w211-magbeads', payload: { kind: 'material', id: 'MAT-w211-magbeads', domain: 'reagent', name: 'MagBinding Beads', synonyms: ['magbinding_beads'] } },
+  { recordId: 'MAT-w211-magbuffer', payload: { kind: 'material', id: 'MAT-w211-magbuffer', domain: 'reagent', name: 'MagBinding Buffer', synonyms: ['magbinding_buffer'] } },
+  { recordId: 'MAT-w211-magwash1', payload: { kind: 'material', id: 'MAT-w211-magwash1', domain: 'reagent', name: 'MagWash 1', synonyms: ['magwash_1'] } },
+  // l2t1615: the live lane API enforces the aliquot anyOf (a real spec/parent
+  // ref is required); the robot legs read SEED_ROWS via the recordingStore, not
+  // these records, and the name/tag strings are unchanged -> expressed as a
+  // material, matching its sibling MagWash 1.
+  { recordId: 'MAT-w211-magwash2', payload: { kind: 'material', id: 'MAT-w211-magwash2', domain: 'reagent', name: 'MagWash 2', synonyms: ['magwash_2'] } },
+  { recordId: 'MAT-w211-water', payload: { kind: 'material', id: 'MAT-w211-water', domain: 'reagent', name: 'DNase/RNase Free Water', synonyms: ['dnase_rnase_free_water'] } },
 ]
 
 // The recordingStore canon rows the D5/D6 server legs resolve against (the
@@ -335,7 +355,10 @@ async function seedBioRecords() {
         : 'https://computable-lab.com/schema/computable-lab/material.schema.yaml'
     const res = await apiPost('/records', {
       schemaId,
-      payload: { ...row.payload, recordId: row.recordId },
+      // l2t1615: only the labware schema carries a recordId property;
+      // material/aliquot schemas identify via id and reject recordId
+      // (unevaluatedProperties:false), so inject it for labware only.
+      payload: kind === 'labware' ? { ...row.payload, recordId: row.recordId } : row.payload,
       message: 'W2-11 gate spec: seed the lab rows the robot answers name',
     })
     if (res.status !== 200 && res.status !== 201) throw new Error(`seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
