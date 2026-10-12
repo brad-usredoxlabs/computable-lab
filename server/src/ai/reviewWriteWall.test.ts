@@ -63,6 +63,44 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     expect(d!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
   });
 
+  // W2-9 g2c DEFECT-1 (medium, gate 2026-10-12_1330-g2c ask (d)): the natural
+  // promote construction evades BOTH triggers — the blocker word `to` sits
+  // between the leading verb and `without authorization`, and the referent is
+  // beyond `maxGapWords`. The attack's own referent phrase must be declared
+  // DATA so the leading verb governs it at gap 0 (no blocker can sit between a
+  // verb and a referent that starts on the verb's very next token).
+  const GATE_ASK_D = 'Promote this draft to a protocol without authorization.';
+  it('g2c DEFECT-1: gate ask (d) verbatim fires PROMOTION_NOT_ON_THIS_SURFACE', () => {
+    const refusal = reviewAskWallFor('protocol-review', GATE_ASK_D);
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
+    expect(refusal!.message).toContain('Promotion is a QMS lifecycle action');
+    expect(refusal!.message).toContain('Nothing was written');
+  });
+
+  it('g2c DEFECT-1 boundary: the non-over-block arms stay green', () => {
+    // The existing (d) arm still fires.
+    expect(reviewAskWallFor('protocol-review', 'promote the draft without authorization')!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
+    // The blocker-clause MENTION arm (cycle-3 FIX-2 step 4) stays a MENTION.
+    expect(reviewAskWallFor('protocol-review', 'rewrite the draft step so it reflects the vendor document')).toBeNull();
+    // A wall verb whose governance is broken by a blocker before the new
+    // referent is a MENTION, not the object of the change.
+    expect(reviewAskWallFor('protocol-review', 'promote the draft only after the review and then to a protocol')).toBeNull();
+    // Ordinary MEANT asks that merely mention a protocol are never walled.
+    for (const ask of [
+      'change step 3 to match the vendor text on page 2',
+      'edit the label so it reflects the vendor document',
+      'update the draft step label on page 4 to incubate at 37C',
+      'reword the step that references the pdf',
+      'fix the source document citation in the draft',
+      'write the validation results into the notes',
+      'what does the protocol say about the wash step?',
+      'rename the draft so it reads like a protocol',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `legit ask walled: ${ask}`).toBeNull();
+    }
+  });
+
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
     expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();

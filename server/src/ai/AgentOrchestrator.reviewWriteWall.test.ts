@@ -119,6 +119,27 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
+  // W2-9 g2c DEFECT-1 (gate 2026-10-12_1330-g2c ask (d) verbatim): the natural
+  // promote construction must refuse BEFORE the model like a/b/c — the wall
+  // noun `to a protocol` (DATA) restores the leading verb's governance.
+  it('g2c gate ask (d) "Promote this draft to a protocol without authorization." refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'Promote this draft to a protocol without authorization.',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-lyse', label: 'Promoted' }] },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('PROMOTION_NOT_ON_THIS_SURFACE');
+    expect(result.refusal!.message).toContain('Promotion is a QMS lifecycle action');
+    expect(result.protocolEdit).toBeUndefined();
+    // Deterministic: the wall fired BEFORE the model — zero inference spent.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
   it('a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today', async () => {
     const store = mutationTripwire();
     const { result, completeStream } = await runReviewTurn(

@@ -201,6 +201,16 @@ askWalls:
       - without review
       - skip review
       - bypass review
+      # W2-9 g2c DEFECT-1 (gate 2026-10-12_1330-g2c ask (d),
+      # "Promote this draft to a protocol without authorization."): the blocker
+      # word `to` broke the leading verb's governance over `without
+      # authorization` and the referent sat beyond `maxGapWords`, so the ask
+      # fell through to the model. The attack's OWN referent phrase is declared
+      # here: it starts on the verb's very next token, so no blocker can sit
+      # between verb and referent and the leading-verb trigger governs it.
+      # Additive only — no existing noun or blocker entry was weakened.
+      - to a protocol
+      - to protocol
 opsWall:
   code: PROVENANCE_FALSIFICATION
   message: >-
