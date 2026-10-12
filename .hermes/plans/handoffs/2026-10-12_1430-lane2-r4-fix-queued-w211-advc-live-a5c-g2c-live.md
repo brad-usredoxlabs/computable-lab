@@ -48,6 +48,13 @@ ACTIONS THIS TICK:
    -> SHORTHAND-COMP-1 dispatch_gate closes ONLY on BOTH accepts.
 
 QUEUE / NEXT TICK (priority order):
+(0) W2-11 ADV C1 RESULT (landed after this handoff's write — full detail in the task block):
+    VERDICT: fix, 2 defects (D1 gate-spec familyId scope ReferenceError kills D5/D6; D2
+    report §6 overstated runnable-form evidence). FIX1 coder queued third in fleet
+    (chain scripts/coder-chain-W211-fix1-l2t1430.sh bash 2666850, log logs/
+    coder-W211-fix1-l2t1430.log, marker 'W2-11-FIX1 DONE <sha>'). On DONE -> advc c2
+    (unique reviews/advc-W211-c2-l2t*.md; reviewer §4 cleared-noted items not re-litigated)
+    -> orch battery -> merge. Fleet order now: WS6FIX -> COERCION-PINS -> W211-FIX1.
 (1) advc-W211-c1 report: accept -> orch battery (vitest 32-test re-run in worktree, tsc
     set-equality base vs head, own wall grep, fixtures pins) -> merge --no-ff into trunk ->
     restart (check YAML deltas first) -> browser gate per spec §4 (orch runs the gate;
