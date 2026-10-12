@@ -31,15 +31,24 @@ vi.mock('../extensions', () => ({ Slot: () => null }))
 import { SettingsPage } from './SettingsPage'
 import { CurrentUserProvider } from '../shared/identity/CurrentUserProvider'
 
+// Merged wire shape: the data-driven PolicyBundleSelector (main's Oct 3-6
+// rework) renders the level cards from availablePolicyBundles — the merged
+// GET/PATCH /settings/lab always carries the catalog (bundleService.listBundles).
+const BUNDLE_CATALOG = [
+  { id: 'POL-SANDBOX', label: 'Sandbox', level: 0 },
+  { id: 'POL-REGULATED', label: 'Regulated', level: 3 },
+]
 const SANDBOX_BODY = {
   materialTracking: { mode: 'relaxed', allowAdHocEventInstances: true },
   policyBundleId: 'POL-SANDBOX',
   activePolicyBundle: { id: 'POL-SANDBOX', label: 'Sandbox', level: 0 },
+  availablePolicyBundles: BUNDLE_CATALOG,
 }
 const REGULATED_BODY = {
   materialTracking: { mode: 'relaxed', allowAdHocEventInstances: true },
   policyBundleId: 'POL-REGULATED',
   activePolicyBundle: { id: 'POL-REGULATED', label: 'Regulated', level: 3 },
+  availablePolicyBundles: BUNDLE_CATALOG,
 }
 
 const META_BODY = {
@@ -141,6 +150,10 @@ describe('SettingsPage policy-bundle error path (FIX-RUN-1 defect 5)', () => {
     // Success clears the error and the selector reflects the new bundle.
     await waitFor(() => expect(container.querySelector('[data-testid="lab-settings-error"]')).toBeNull())
     const finalSelector = container.querySelector<HTMLElement>('.policy-bundle-selector')!
-    expect(within(finalSelector).getByText('Regulated').closest('button')!.className).toContain('border-red-500')
+    // Merged data-driven selector marks the active card with data-active +
+    // inline accent (the Tailwind level classes belonged to the superseded
+    // hardcoded selector).
+    const regulatedBtn = within(finalSelector).getByText('Regulated').closest('button')!
+    expect(regulatedBtn.getAttribute('data-active')).toBe('true')
   })
 })

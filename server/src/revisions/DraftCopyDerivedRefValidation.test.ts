@@ -58,7 +58,21 @@ function protocolPayload(derivedFromRevisionRef?: unknown): Record<string, unkno
     recordId: 'PRT-QMS6C-VALIDATE',
     title: 'QMS-6C validation protocol',
     state: 'draft',
-    steps: [{ stepId: 'record-observation', label: 'Record observation', ordinal: 1, kind: 'other', description: 'Observation step for the validation fixture.' }],
+    // W2-3 R-4 (legacy-literal-bounded, merged from lane 2): a non-allowlisted
+    // protocol must be intent-bearing — a literal step is legal only on the
+    // frozen pre-upgrade inventory. The lineage probe fixture carries a real
+    // intent step (the authored future) instead of a legacy literal step;
+    // the derivedFromRevisionRef under test rides the envelope untouched.
+    steps: [{
+      stepId: 'record-observation',
+      label: 'Record observation',
+      ordinal: 1,
+      kind: 'other',
+      description: 'Observation step for the validation fixture.',
+      intent: {
+        semanticVerb: { ref: { kind: 'record', type: 'verb-definition', id: 'VERB-WASH' }, canonical: 'wash' },
+      },
+    }],
     ...(derivedFromRevisionRef !== undefined ? { derivedFromRevisionRef } : {}),
   };
 }
