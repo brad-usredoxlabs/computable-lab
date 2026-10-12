@@ -287,6 +287,104 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(compileSpy).not.toHaveBeenCalled();
   });
 
+  it('refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const rawEvents = [{ event_type: 'add_material', details: { well: 'A1', material: 'invented', volumeUl: 999 } }];
+    // COERCION-PINS (ruling A): the route the :217/:252 pins do NOT cover — the
+    // model answers with the draft as PROSE JSON and NO tool call (the appliance's
+    // tool-call parser is off). The prose-recovery leg runs: coerceDraftArgsFromContent
+    // recovers the bare {events:[…]} object (AgentOrchestrator.ts:1909),
+    // coerceToAgentIntentArgs INFERs the event_graph label (coerceAgentIntent.ts),
+    // and that inferred label is what must then hit the AS-4 refusal arm
+    // (AgentOrchestrator.ts:2317) — never the legacy raw-events compile. The stub's
+    // single response repeats (stubModel clamps to the last spec), so the re-ask is
+    // answered with the same prose raw events: the repeat refusal ends the turn
+    // with the honest cannot-draft failure.
+    const model = stubModel([{ content: JSON.stringify({ events: rawEvents }) }]);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 3 },
+      orchestratorDeps(),
+    );
+
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST, onEvent: (e) => events.push(e) });
+    compileSpy.mockRestore();
+
+    // The prose-recovery leg ACTUALLY ran: the draft was parsed from content and
+    // invoked AS agent_intent (intent inferred) — this is not a native tool call.
+    expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(true);
+    // The inferred event_graph hit the refusal on BOTH attempts: first call
+    // refused + re-asked, repeat call refused again (>=1 refusal required; the
+    // stubborn-model route produces exactly two).
+    const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
+    expect(refusals.length).toBeGreaterThanOrEqual(1);
+    expect(refusals.length).toBe(2);
+    // The re-ask demands the shorthand document.
+    const reask = model.captured[1];
+    expect(reask).toBeDefined();
+    expect(JSON.stringify(reask.messages)).toMatch(/event_shorthand/);
+    // The REFUSAL is the diagnostic: the turn ends in the honest cannot-draft
+    // failure, NEVER in the shorthand-schema "could not be repaired" message
+    // (AgentOrchestrator.ts:2266) — the raw payload never reached the shorthand
+    // parser either.
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(String(result.error)).toMatch(/refused again/i);
+    expect(String(result.error)).not.toMatch(/could not be repaired/);
+    expect(String(result.error)).not.toMatch(/scientist-intent schema/);
+    // Zero compiled events, and the raw payload never reached ANY compile path.
+    expect(result.events ?? []).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toMatch('invented');
+    expect('termManifest' in result).toBe(false);
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(model.callCount()).toBe(2);
+  });
+
+  it('an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const rawEvents = [{ event_type: 'add_material', details: { well: 'A1', material: 'invented', volumeUl: 999 } }];
+    const rawCall = { name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_graph', events: rawEvents } };
+    // The NATIVE route (explicit discriminator, no coercion): the stub's single
+    // response repeats, so the re-ask is answered with the same raw call — the
+    // refusal must be TOTAL, exactly as the :217/:252 pins hold it.
+    const model = stubModel([{ toolCalls: [rawCall] }]);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 3 },
+      orchestratorDeps(),
+    );
+
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST, onEvent: (e) => events.push(e) });
+    compileSpy.mockRestore();
+
+    // Routing is the refusal arm directly — no prose-coercion leg ran (the call
+    // was native), and BOTH raw calls were refused.
+    expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(false);
+    const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
+    expect(refusals.length).toBe(2);
+    const reask = model.captured[1];
+    expect(reask).toBeDefined();
+    expect(JSON.stringify(reask.messages)).toMatch(/event_shorthand/);
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(result.events ?? []).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toMatch('invented');
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(model.callCount()).toBe(2);
+  });
+
   it('DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash', async () => {
     const { holdShorthandIntent } = await import('./shorthandChat.js');
     const { deriveContextCacheKey } = await import('./systemPrompt.js');

@@ -17,6 +17,14 @@
 export type AgentIntentName = 'event_graph' | 'create_record' | 'deck_layout' | 'protocol_edit' | 'event_shorthand' | 'sequence_action';
 
 const INTENT_KEYS: Record<AgentIntentName, readonly string[]> = {
+  // COERCION-PINS (ruling A, l2t1145): the `event_graph` this table INFERs is a
+  // ROUTING LABEL, not a permission. On a surface listed in
+  // config/drafting/shorthand-drafting.yaml (surfaceDraftsShorthand), an inferred
+  // or explicit event_graph call is REFUSED at the intent boundary (AS-4 arm,
+  // AgentOrchestrator.ts) and re-asked as shorthand — the raw payload is never
+  // compiled there. The label stays in this table because surfaces not yet moved
+  // legitimately draft event_graph; global retirement is the future
+  // last-surface-moves task, not this one.
   event_graph: ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'unresolvedRefs'],
   create_record: ['records', 'alsoPlace'],
   deck_layout: ['variantId'],
