@@ -55,7 +55,7 @@ properties:
       recordId:
         type: string
       revisionRef:
-        $ref: "../core/datatypes/revision-ref.schema.yaml"
+        $ref: "./datatypes/revision-ref.schema.yaml"
         description: >
           Immutable record-revision snapshot of the subject at signing time
           (2026-10-03 signature-integrity contract). Optional in the schema
