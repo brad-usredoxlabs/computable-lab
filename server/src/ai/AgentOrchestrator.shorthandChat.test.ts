@@ -26,6 +26,7 @@ import { inferAgentIntent, coerceToAgentIntentArgs } from './coerceAgentIntent.j
 import { AGENT_INTENT_TOOL_DEF, AGENT_INTENT_TOOL_NAME, parseAgentIntentArgs } from './submitSuggestionTool.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import { createLabwareLookup } from './compiler/labwareLookup.js';
+import { bindShorthandEventsToDeck } from './shorthandChat.js';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
@@ -150,6 +151,25 @@ async function directCompile() {
   });
 }
 
+/** The direct compile PLUS the chat seam's declared boundary repair (deck
+ *  binding — the shorthand analogue of normalizeDraftLabwareRefs on the
+ *  legacy path). The chat result must equal THIS: the deterministic graph is
+ *  the compiler's, byte for byte; only labware labels provable against the
+ *  sent deck are rewritten to deck ids, and scalar range tokens expanded. */
+async function directCompileDeckBound() {
+  const direct = await directCompile();
+  return {
+    outcome: direct.outcome,
+    terminalArtifacts: {
+      ...direct.terminalArtifacts,
+      events: bindShorthandEventsToDeck(
+        direct.terminalArtifacts.events as unknown as Array<Record<string, unknown>>,
+        RUN_CHAT_REQUEST.context.labwares,
+      ),
+    },
+  };
+}
+
 describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
   it('compiles the stubbed shorthand-only turn into the SAME bound graph the deterministic compiler produces', async () => {
     const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
@@ -170,7 +190,7 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     compileSpy.mockRestore();
 
     expect(result.success).toBe(true);
-    const direct = await directCompile();
+    const direct = await directCompileDeckBound();
     expect(direct.outcome).toBe('complete');
     expect(result.events?.length).toBe(direct.terminalArtifacts.events.length);
     expect(projectGraph(result.events ?? [])).toEqual(projectGraph(direct.terminalArtifacts.events));
@@ -223,7 +243,7 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(JSON.stringify(reask.messages)).toMatch(/event_shorthand/);
     // What got accepted is the deterministic compile of the shorthand — never the model's raw events.
     expect(result.success).toBe(true);
-    const direct = await directCompile();
+    const direct = await directCompileDeckBound();
     expect(projectGraph(result.events ?? [])).toEqual(projectGraph(direct.terminalArtifacts.events));
     expect(JSON.stringify(result.events)).not.toMatch('invented');
     expect(compileSpy).not.toHaveBeenCalled();
@@ -500,7 +520,7 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(JSON.stringify(reask.messages)).toMatch('mystery goop');
     expect(JSON.stringify(reask.messages)).toMatch('CLARIFICATION ANSWERS');
     expect(second.success).toBe(true);
-    const direct = await directCompile();
+    const direct = await directCompileDeckBound();
     expect(projectGraph(second.events ?? [])).toEqual(projectGraph(direct.terminalArtifacts.events));
   });
 

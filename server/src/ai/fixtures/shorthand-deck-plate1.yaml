@@ -1,0 +1,12 @@
+# SHORTHAND-CHAT deck-binding fixture — the scientist's OWN deck plate. The
+# draft names the plate they added to the deck ("plate1") with a compact well
+# range and a bare numeric volume; the deck plate is editor state, NOT a store
+# record (the test store carries NO plate records), so binding it proves the
+# chat seam threads the scientist's deck into the frozen compile.
+intentId: add-dmem-deck-plate
+actions:
+  - action: add_material
+    material: DMEM
+    volume: 100
+    targetWells: ["A2:H2"]
+    labware: plate1

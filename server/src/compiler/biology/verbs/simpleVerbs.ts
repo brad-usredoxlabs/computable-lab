@@ -337,9 +337,17 @@ export const addMaterialExpander: BiologyVerbExpander = {
         ? params.volume_uL
         : typeof params.volume_ul === 'number'
           ? params.volume_ul
-          : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
-            ? material.volume_uL
-            : undefined;
+          : typeof params.volume === 'number'
+            // The wire contract declares `volume` a quantity (schema
+            // scientist-intent.schema.yaml `volume: {}`); a bare NUMBER
+            // reaches here unexpanded. The serial-dilution lowering already
+            // normalizes a numeric wire `volume` as uL (normalizeScientist-
+            // Intent serialDilutionPattern) — same rule here, so "add 100ul
+            // DMEM" never compiles an amount-less add_material.
+            ? params.volume
+            : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
+              ? material.volume_uL
+              : undefined;
 
     const events: PlateEventPrimitive[] = [];
 

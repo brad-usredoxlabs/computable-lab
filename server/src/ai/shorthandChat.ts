@@ -42,6 +42,7 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {
   AgentClarificationAnswer,
@@ -54,9 +55,143 @@ import type {
 // The deterministic compile seam (THE only producer of the event graph)
 // ---------------------------------------------------------------------------
 
+export interface DeckLabwareSummary {
+  labwareId: string;
+  labwareType?: string;
+  name?: string;
+}
+
 export interface ShorthandCompileDeps {
   store?: RecordStore;
   searchLabwareByHint?: ScientistIntentCompileDeps['searchLabwareByHint'];
+  /**
+   * The editor's DECK labware (context.labwares — the plates the scientist
+   * is looking at). Deck plates are editor state, not store records, so the
+   * store-backed spine and the store-backed labware lookup cannot see them:
+   * a draft that names the deck plate ("plate1") false-barred as
+   * unknown-noun. The chat seam composes them into the labware-hint lookup:
+   * an EXACT deck-name match wins (the createLabwareLookup directAlias-map
+   * precedent — exact identity returns alone, never mixed with looser
+   * evidence); with no exact deck match the store lookup runs
+   * byte-identically. No deck context wired ⇒ zero behavior change.
+   */
+  deckLabwares?: readonly DeckLabwareSummary[];
+}
+
+/**
+ * Exact-name deck match for a hint: case/trim-insensitive equality against
+ * each deck plate's name. Returns ALL exact matches (duplicate names are the
+ * editor's handle-collision case — the engine clarifies honestly). Looser
+ * deck matches are DELIBERATELY not added: substring noise would create new
+ * ambiguity arms against clean store resolutions.
+ */
+export function deckLabwareExactMatches(
+  deck: readonly DeckLabwareSummary[] | undefined,
+  hint: string,
+): LabwareLookupHit[] {
+  if (!deck || deck.length === 0) return [];
+  const needle = hint.trim().toLowerCase();
+  if (!needle) return [];
+  const out: LabwareLookupHit[] = [];
+  for (const lw of deck) {
+    if (typeof lw?.name !== 'string') continue;
+    if (lw.name.trim().toLowerCase() === needle) {
+      out.push({ recordId: lw.labwareId, title: lw.name });
+    }
+  }
+  return out;
+}
+
+export interface LabwareLookupHit {
+  recordId: string;
+  title: string;
+}
+
+/** The chat seam's composed labware-hint lookup (deck-first, exact-only). */
+export function composeLabwareHintLookupWithDeck(
+  deck: readonly DeckLabwareSummary[] | undefined,
+  base: ScientistIntentCompileDeps['searchLabwareByHint'] | undefined,
+): ScientistIntentCompileDeps['searchLabwareByHint'] | undefined {
+  const hasDeck = Array.isArray(deck) && deck.length > 0;
+  if (!hasDeck && !base) return undefined;
+  return async (hint: string) => {
+    const deckMatches = deckLabwareExactMatches(deck, hint);
+    if (deckMatches.length > 0) return deckMatches;
+    return base ? base(hint) : [];
+  };
+}
+
+/**
+ * Chat-side deck binding for compiled proposals — the shorthand analogue of
+ * what the legacy event_graph path does at the orchestrator boundary
+ * (normalizeDraftLabwareRefs repairs echoed names to real deck ids;
+ * expandEventWells expands range tokens). The FROZEN compiler emits events
+ * whose labwareId is the scientist's label and whose `well` may be a compact
+ * range token; the deck canvas binds by the editor's labwareId. Rewrite ONLY
+ * on an exact, unambiguous deck-name match (duplicate deck names stay as
+ * labelled — the editor's own handle-collision case); never invent an id.
+ * Well expansion covers the singular `details.well` carrier the add_material
+ * expander emits for a one-token wells array (expandEventWells expands the
+ * ARRAY fields; this covers the scalar the scalar expander produces).
+ */
+export function bindShorthandEventsToDeck<T extends object>(
+  events: readonly T[],
+  deck: readonly DeckLabwareSummary[] | undefined,
+): T[] {
+  if (!Array.isArray(deck) || deck.length === 0 || events.length === 0) return [...events];
+  const idByName = new Map<string, { id: string; ambiguous: boolean }>();
+  const knownIds = new Set<string>();
+  for (const lw of deck) {
+    if (!lw || typeof lw.labwareId !== 'string') continue;
+    knownIds.add(lw.labwareId);
+    if (typeof lw.name !== 'string') continue;
+    const key = lw.name.trim().toLowerCase();
+    if (!key) continue;
+    const seen = idByName.get(key);
+    if (seen) seen.ambiguous = true;
+    else idByName.set(key, { id: lw.labwareId, ambiguous: false });
+  }
+  const bindRef = (ref: unknown): string | undefined => {
+    if (typeof ref !== 'string' || !ref.trim()) return undefined;
+    if (knownIds.has(ref)) return undefined; // already a deck id
+    const hit = idByName.get(ref.trim().toLowerCase());
+    return hit && !hit.ambiguous ? hit.id : undefined;
+  };
+  return events.map((raw) => {
+    const ev = raw as Record<string, unknown>;
+    let changed = false;
+    const next: Record<string, unknown> = { ...ev };
+    const boundTop = bindRef(ev.labwareId);
+    if (boundTop) {
+      next.labwareId = boundTop;
+      changed = true;
+    }
+    const details = ev.details;
+    if (details && typeof details === 'object' && !Array.isArray(details)) {
+      const d = details as Record<string, unknown>;
+      const nextDetails: Record<string, unknown> = { ...d };
+      let dChanged = false;
+      const boundDetail = bindRef(d.labwareId);
+      if (boundDetail) {
+        nextDetails.labwareId = boundDetail;
+        dChanged = true;
+      }
+      const well = d.well;
+      if (typeof well === 'string') {
+        const expanded = expandWellTokens([well]);
+        if (expanded.length > 1) {
+          delete nextDetails.well;
+          nextDetails.wells = expanded;
+          dChanged = true;
+        }
+      }
+      if (dChanged) {
+        next.details = nextDetails;
+        changed = true;
+      }
+    }
+    return (changed ? next : raw) as T;
+  });
 }
 
 /**
@@ -324,6 +459,7 @@ export function shorthandResultFromCompile(
   compiled: ScientistIntentCompileResult,
   shorthandYaml: string,
   note: string,
+  deck?: readonly DeckLabwareSummary[],
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
     const requests = clarificationsFromUnresolvedFacts(compiled.clarifications);
@@ -343,7 +479,10 @@ export function shorthandResultFromCompile(
       shorthand: shorthandYaml,
     };
   }
-  const events = compiledEventsToProposals(compiled.terminalArtifacts.events);
+  const events = bindShorthandEventsToDeck(
+    compiledEventsToProposals(compiled.terminalArtifacts.events),
+    deck,
+  );
   // The compileResultToAgentResult precedent: gaps ride unresolvedRefs through
   // the same loose proposal shape the compiler path already emits.
   const unresolvedRefs = compiled.terminalArtifacts.gaps.map((gap) => ({

@@ -66,6 +66,7 @@ import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
 import {
   compileShorthandDeterministically,
+  composeLabwareHintLookupWithDeck,
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
@@ -1147,6 +1148,20 @@ export function createAgentOrchestrator(
       const conversationKey = deriveContextCacheKey(surface, context);
 
       /**
+       * SHORTHAND deck-context threading: the labware-hint lookup the frozen
+       * compile sees is the store-backed lookup COMPOSED with the editor's
+       * deck (context.labwares). Deck plates are editor state, not records —
+       * without this, a draft naming the plate the scientist is looking at
+       * ("plate1") false-bars as unknown-noun. Exact-name deck matches win;
+       * everything else falls through to the store lookup byte-identically.
+       */
+      const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      const shorthandSearchLabwareByHint = composeLabwareHintLookupWithDeck(
+        shorthandDeckLabwares,
+        deps.searchLabwareByHint,
+      );
+
+      /**
        * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
        * after the authoritative intent branch has resolved (each call site
        * sits after that branch built its result and logged its done line),
@@ -1180,7 +1195,7 @@ export function createAgentOrchestrator(
           if (folded) {
             const compiledFold = await compileShorthandDeterministically(folded.doc, {
               ...(deps.store ? { store: deps.store } : {}),
-              ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+              ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
             });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
@@ -1191,6 +1206,7 @@ export function createAgentOrchestrator(
                 compiledFold,
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
+                shorthandDeckLabwares,
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {
@@ -2152,7 +2168,7 @@ export function createAgentOrchestrator(
 
               const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
                 ...(deps.store ? { store: deps.store } : {}),
-                ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+                ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               });
               if (!compiledSh) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
@@ -2173,6 +2189,7 @@ export function createAgentOrchestrator(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
+                shorthandDeckLabwares,
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
