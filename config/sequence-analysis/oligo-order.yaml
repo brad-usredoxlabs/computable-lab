@@ -1,10 +1,36 @@
-# Vendor spelling belongs in data. Unknown modifications remain visible for review.
-namePattern: '^(?:Oligo\s+Name|Name|Primer\s+Name|Probe\s+Name)\s*[:\t]\s*(.+)$'
-sequencePattern: '^(?:Sequence|Oligo\s+Sequence)\s*[:\t]\s*(.+)$'
+# Vendor spelling and page layout belong in data. Unknown modifications remain visible for review.
+#
+# Every line of the extracted text is tested against each declared format, in order.
+#   namePattern     — sets the current oligo label and resets the open row
+#   sequencePattern — creates a row from capture group 1, labelled with the current label
+# A document may mix formats (e.g. a certificate of analysis after an order summary);
+# the first matching pattern in the list wins for each line.
+formats:
+  # Certificate-of-analysis / labeled fields: "Primer Name: X" then "Sequence (5'to 3): ...".
+  # The name may share its line with a trailing column ("Primer Length: 24").
+  - id: labeled-fields
+    namePattern: '^(?:Oligo\s+Name|Name|Primer\s+Name|Probe\s+Name)\s*[:\t]\s*(.+?)(?:\s+Primer\s+Length\b.*)?$'
+    sequencePattern: '^(?:Sequence|Oligo\s+Sequence)\s*(?:\([^)]*\))?\s*[:\t]\s*(.+)$'
+  # Invitrogen order-summary table: a "N <cat#> - DNA <name> for <researcher> ... bases N"
+  # line followed by a "<lot#> <well> BASES" line.
+  - id: invitrogen-order-summary
+    namePattern: '^\s*\d+\s+\d{6,}\s*-\s*DNA\s+(.+?)\s+for\b'
+    sequencePattern: '^\s*\d{6}\s+\S+\s+([ACGTRYSWKMBDHVN\s]+?)\s*$'
+  # Biosystems/IDT-style modified-oligo table: the name and a dye-wrapped sequence share
+  # one line ("30 Pass Oformi_1784_ABY |ABY-CAC CGT ... GTC A-QSY 28 ...").
+  - id: dye-wrapped-row
+    namePattern: '^\s*\S+\s+Pass\s+([A-Za-z0-9_.\-]+)'
+    sequencePattern: '^\s*\S+\s+Pass\s+\S+\s+\|?([A-Za-z0-9\- ]+?)\s+\d+\s+\d+'
+# Chemistry/orientation noise stripped from a captured sequence before alphabet validation.
+sequenceNoise:
+  - '^\s*\((?:DNA|RNA|LNA|MOE|2OMe|MOD)\)\s*[-–]?\s*'
 modifications:
   - { pattern: '(?:/56-FAM/|/6-FAM/|\[FAM\]|\(FAM\)|^FAM[- ])', label: FAM, role: reporter, position: 5-prime }
   - { pattern: '(?:/3BHQ_1/|\[BHQ-?1\]|\(BHQ-?1\)|[- ]BHQ-?1$)', label: BHQ-1, role: quencher, position: 3-prime }
   - { pattern: '(?:\[MGBNFQ\]|\(MGBNFQ\)|[- ]MGBNFQ$)', label: MGBNFQ, role: quencher, position: 3-prime }
+  - { pattern: '^VIC[- ]', label: VIC, role: reporter, position: 5-prime }
+  - { pattern: '^ABY[- ]', label: ABY, role: reporter, position: 5-prime }
+  - { pattern: '[- ]QSY$', label: QSY, role: quencher, position: 3-prime }
 metadata:
   vendor: '^(?:Vendor|Supplier)\s*:\s*(.+)$'
   orderId: '^(?:Order\s*(?:Number|No\.?|ID)|Order\s*#)\s*[:#]?\s*(.+)$'

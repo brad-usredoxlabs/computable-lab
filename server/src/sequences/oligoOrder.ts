@@ -14,15 +14,18 @@ import { sequenceConfig, SEQUENCE_SCHEMA } from './sequenceRuntime.js';
 export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:Array<{label:string;role:string;position:string}>; issues:string[]; metadata:Record<string,string> }
 export async function extractOligoRows(text: string): Promise<OligoRow[]> {
   const config=await sequenceConfig('oligo-order'); const alphabets=await sequenceConfig('alphabets');
+  const formats:Array<{namePattern:string;sequencePattern:string}>=(config.formats as Array<{namePattern:string;sequencePattern:string}>|undefined)??[{namePattern:config.namePattern,sequencePattern:config.sequencePattern}];
+  const nameMatchers=formats.map(f=>new RegExp(f.namePattern,'i'));const sequenceMatchers=formats.map(f=>new RegExp(f.sequencePattern,'i'));
+  const noise=(config.sequenceNoise as string[]|undefined)??[];
   const rows:OligoRow[]=[];const metadata:Record<string,string>={};
   for(const line of text.split(/\r?\n/))for(const [key,pattern] of Object.entries(config.metadata??{})){const match=new RegExp(String(pattern),'i').exec(line.trim());if(match)metadata[key]=match[1]!.trim();}
   for(const [pageIndex,page] of text.split('\f').entries()) {
     let label='';let row:OligoRow|undefined;let table=false;
     for(const line of page.split(/\r?\n/)) {
       const trimmed=line.trim();
-      const name=new RegExp(config.namePattern,'i').exec(trimmed);
-      const sequence=new RegExp(config.sequencePattern,'i').exec(trimmed);
-      if(name) {label=name[1]!.trim();row=undefined;continue;}
+      const name=nameMatchers.map(r=>r.exec(trimmed)).find(Boolean);
+      const sequence=sequenceMatchers.map(r=>r.exec(trimmed)).find(Boolean);
+      if(name) {label=name[1]!.trim();row=undefined;}
       if(/\bname\b.*\bsequence\b/i.test(trimmed)) {table=true;continue;}
       const cells=table?trimmed.split(/\t+|\s{2,}/):[];
       if(sequence || (cells.length>=2 && cells[1]!.match(/^[ACGTRYSWKMBDHVN\s\/\[\]0-9'()-]+$/i))) {
@@ -33,7 +36,8 @@ export async function extractOligoRows(text: string): Promise<OligoRow[]> {
     }
   }
   for(const row of rows) {
-    let bases=row.raw.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
+    let bases=row.raw;for(const pattern of noise) bases=bases.replace(new RegExp(pattern,'i'),'');
+    bases=bases.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
     for(const mod of config.modifications) {
       const regex=new RegExp(mod.pattern,'gi');
       if(regex.test(bases)) {row.modifications.push({label:mod.label,role:mod.role,position:mod.position});bases=bases.replace(new RegExp(mod.pattern,'gi'),'');}
