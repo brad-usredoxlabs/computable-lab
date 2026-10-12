@@ -281,6 +281,32 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     setDeckPicked(new Set(lab.map((p) => p.key)))
   }, [])
 
+  /**
+   * W2-8 A5 (C leg, gate A5c root cause 2): the server's 422 bar HOLDS the
+   * parseable macro + terminalArtifacts + structured clarifications (OQ4(a))
+   * precisely so the client folds them into the review flow instead of
+   * discarding them. The apiClient now surfaces that bundle as a discriminated
+   * `{ held: true }` result; folding here is EXACTLY the 2xx branch
+   * (setLocalMacro + holdForReview) plus an honest info message listing the
+   * unresolved facts (labels + reasons) the scientist should review before
+   * accepting. Nothing is silently resolved on the user's behalf.
+   */
+  const foldHeldBundle = useCallback((held: {
+    clarifications: Array<Record<string, unknown>>
+    localMacro: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    terminalArtifacts: Record<string, unknown>
+  }) => {
+    setNeedsAnswers(false)
+    setLocalMacro(held.localMacro as LocalMacro)
+    const facts = held.clarifications
+      .map((c) => `${String(c.label ?? 'unnamed fact')} (${String(c.reason ?? 'unresolved')})`)
+      .join('; ')
+    setInfoMsg(facts
+      ? `Compiled — unresolved facts to review before accepting: ${facts}`
+      : 'Compiled — review the deck & labware, then place them.')
+    holdForReview(held.terminalArtifacts)
+  }, [holdForReview])
+
   // W2-8 (spec §3 W4): load the FAMILY's questions once per source protocol.
   // The protocol record's branch_axes[] are its declared questions (data, not
   // a re-derivation); a record without them asks nothing extra here. A read
@@ -315,7 +341,12 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     firstUserPrompt.current = text
     try {
       const res = await apiClient.intentCompileFromPrompt({ protocolText: text, sourceProtocolId })
-      if (res.needsAnswers) {
+      if ('held' in res && res.held === true) {
+        // Defensive: the ask call sends no answers, so a held 422 should not
+        // occur here; if the server ever holds one, fold it honestly rather
+        // than discarding it.
+        foldHeldBundle(res)
+      } else if (res.needsAnswers) {
         setAxes(res.axes ?? [])
         setNeedsAnswers(true)
         setAnswers({})
@@ -338,7 +369,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, holdForReview])
+  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle])
 
   // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
   // text present), AUTO-RUN the branch-question extraction so the if/then
@@ -364,7 +395,11 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         sourceProtocolId,
         answers,
       })
-      if (res.localMacro && res.terminalArtifacts) {
+      if ('held' in res && res.held === true) {
+        // The 422 bar with a held macro: fold it EXACTLY like the 2xx branch
+        // and surface the unresolved facts honestly (OQ4(a) as designed).
+        foldHeldBundle(res)
+      } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Ready — review the deck & labware, then place them.')
@@ -373,11 +408,12 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setErrorMsg('One-shot returned no draft after answers.')
       }
     } catch (err) {
+      // A 422 WITHOUT a held macro (or any other failure) keeps the error path.
       setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, answers, holdForReview])
+  }, [protocolText, sourceProtocolId, answers, holdForReview, foldHeldBundle])
 
   // Per-step refinement: append a Correction, re-localize with the correction
   // (refinements fold into the final macro), then re-hold it through the gate.
@@ -395,7 +431,11 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         sourceProtocolId,
         answers,
       })
-      if (res.localMacro && res.terminalArtifacts) {
+      if ('held' in res && res.held === true) {
+        // A re-draft that bars with a held macro folds the same honest way
+        // (OQ4(a)) instead of discarding the held bundle.
+        foldHeldBundle(res)
+      } else if (res.localMacro && res.terminalArtifacts) {
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
         holdForReview(res.terminalArtifacts)
@@ -407,7 +447,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, answers, holdForReview])
+  }, [input, protocolText, sourceProtocolId, answers, holdForReview, foldHeldBundle])
 
   const toggleDeckLabware = useCallback((key: string) => {
     setDeckPicked((prev) => {

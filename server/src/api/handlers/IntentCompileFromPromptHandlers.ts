@@ -113,6 +113,28 @@ interface CompileFromPromptBody {
   answers?: Record<string, string>;
 }
 
+/**
+ * W2-8 A5 (S leg, gate A5c root cause 1): answers must reach the compile as
+ * DATA. The handler previously used `answers` ONLY as the ask-vs-answer gate,
+ * so the answered call re-derived the same macro and re-barred — answering
+ * structurally could not change the outcome. When answers are present, the
+ * scientist's stated choices are appended to the compile prompt as an explicit
+ * settled-choices block built by ITERATING the request's answers entries: the
+ * axisId and value ride verbatim from the request data (zero phrase/domain
+ * literals here — the labels are the request's + the family record's). The ask
+ * gate, the 422 envelope shape, and the OQ4(a) hold are unchanged.
+ */
+function composeAnsweredPrompt(protocolText: string, answers: Record<string, string>): string {
+  const entries = Object.entries(answers);
+  if (entries.length === 0) return protocolText;
+  return [
+    protocolText,
+    '',
+    'SCIENTIST-RESOLVED CHOICES (stated by the scientist for this run — treat as settled, do not re-ask):',
+    ...entries.map(([axisId, value]) => `- ${axisId} = ${value}`),
+  ].join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // SPINE-5 response contract (exported from THIS handler file — the payload
 // type IS ScientistIntentUnresolvedFact, consumed verbatim; no second schema
@@ -256,7 +278,10 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       try {
         const labInventory = await loadLabInventory();
         emitted = await compileFromSmallLlm({
-          prompt: protocolText,
+          // W2-8 A5 (S leg): the scientist's answers ride the prompt as data
+          // (see composeAnsweredPrompt) — the compile sees the settled choices
+          // instead of re-deriving the same macro and re-barring.
+          prompt: composeAnsweredPrompt(protocolText, answers),
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
           deps: { searchLabwareByHint, spine },
