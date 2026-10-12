@@ -108,7 +108,6 @@ import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISp
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
 import { ChatHandlers } from './api/handlers/ChatHandlers.js';
 import { registerRoutes } from './api/routes.js';
-import { registerDraftRoutes } from './drafts/draftRoutes.js';
 import type { ServerConfig } from './api/types.js';
 import { resolveGitHubIdentity, type ResolvedIdentity } from './identity/GitHubIdentity.js';
 import { createMcpServer, mcpPlugin } from './mcp/index.js';
