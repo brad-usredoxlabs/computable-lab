@@ -67,6 +67,10 @@ const XDR_ID = 'XDR-w211-gate'
 const PLR_ID = 'PLR-w211-gate'
 const RUN_ID = 'RUN-w211-gate'
 
+// Module scope: seededFamilyPayload() (module-scope helper, used by D5/D6)
+// must see this binding; assigned in test.beforeAll below (advc-W211-c1 D1).
+let familyId = null
+
 function repoPath(...segments) {
   // app/e2e/ -> repo root
   return fileURLToPath(new URL(`../../${segments.join('/')}`, import.meta.url))
@@ -488,8 +492,6 @@ async function seededFamilyPayload() {
 
 test.describe('W2-11 zymo campaign demo gate', () => {
   test.describe.configure({ mode: 'serial' })
-
-  let familyId = null
 
   test.beforeAll(async () => {
     const apiHealth = await fetch(`${API}/health`).then((r) => r.status)

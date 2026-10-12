@@ -132,9 +132,10 @@ W211_G7_DIGESTS {"yaml":"b6740fc13d4c0b0ad153ad81cb0c767299fb859fcb70ca0126936c7
 `app/e2e/w2-11-campaign-demo.spec.mjs` (770 lines) authored per §4: BASE_URL ?? :5193 / API_URL ?? :3093 (orchestrator-only), receipts under `receipts/w2-11-campaign-demo/<stamp>/` written ONLY from real GETs (no fixture reload). Legs: D1 upload->immutable candidate (sha before/after, no mutating controls, retired testids absent); D2 frozen draft -> SemanticDraftPanel (branch-axes/evidence testids); D3 ReviewAiPanel refusal legs (no-draft/no-steps/refusal/apply-note); D4 seeded run -> protocol tab -> `protocol-localization-details` -> localization thread (family axis answered with the rack branch — honest naming note §8.3 — deck load via `pl-load-deck`, accept via `pl-accept`); D5/D6 server legs (C27 headless branch): merged `lowerRealization`/`realizeAndCompile` run through a tsx subprocess against the same stack, generated script under gitignored `server/tmp/`.
 
 Runnable-form evidence (without touching :5193/:3093):
-- `node --check` clean.
+- `node --check` clean. NOTE (advc-W211-c1 D2 correction): `node --check` validates syntax only, not lexical scope, and the scratch harness below exercises `runServerLeg` mechanics ONLY — it never calls `seededFamilyPayload()` and therefore never covered the D5/D6 test bodies. The original wording overstated its reach; the D5/D6 blocker it missed was fixed in Cycle 1 (see §12).
 - Vitest collection posture IDENTICAL to the merged w29 precedent (`Test Files 1 failed / Tests no tests` — Playwright spec under vitest, same as w28/w29).
-- Server-leg mechanics proven headlessly via a scratch harness extracted VERBATIM from the spec's helper: `LEG_COMPILE {"ok":true,"outcome":"complete","events":24,"closure":{"sample_plate":true,"reagent_reservoir":true}}` and `LEG_LOWER {"ok":true,"stage":"lower"}`. Scratch harness removed; `git status` clean.
+- Server-leg mechanics proven headlessly via a scratch harness extracted VERBATIM from the spec's helper: `LEG_COMPILE {"ok":true,"outcome":"complete","events":24,"closure":{"sample_plate":true,"reagent_reservoir":true}}` and `LEG_LOWER {"ok":true,"stage":"lower"}` — this stands as evidence for the generated tsx leg itself, nothing more. Scratch harness removed; `git status` clean.
+- D5/D6-specific runnable-form evidence (post-Cycle-1 fix): `npx playwright test w2-11-campaign-demo.spec.mjs --project=chromium --list` collects all 7 tests including D5 and D6, and a node scope probe shows `seededFamilyPayload()` resolves `familyId` at module scope (pre-fix control throws `ReferenceError: familyId is not defined`). Full outputs in §12.
 - Receipt dir listing + reviewer VERDICT line: orchestrator/cl-browser-reviewer act — pending, not mine.
 
 ## 7. Prompt/model budget
@@ -187,3 +188,57 @@ Everything else: EMPTY diff (records/, goldens/, schema/, app/src/, server/src/{
 - The C21 config-copy fallback for the live leg (lane config untouched) is the sanctioned pattern; the lane config's semanticPass model id is provider-invalid at tip (F-LANE2-W210-adjacent config debt — flagged for the orchestrator, NOT fixed by me).
 - The 2 merge-introduced app tsc errors and the 11-file scoped fail-set are trunk-side debt outside my owned files; left untouched per the pin-drift rule.
 - All records in the data repos are TEST DATA (Brad ruling) — my probes mint only clearly-labeled w211 test records in isolated probe dataDirs.
+
+## Cycle 1 (fix run l2t1430)
+
+Adversarial review c1 (`/home/brad/.hermes/cl/lanes/2/reviews/advc-W211-c1-l2t1415.md`): VERDICT fix, 2 defects. Both fixed on this branch; diff restricted to `app/e2e/w2-11-campaign-demo.spec.mjs` + this report. No golden/negatives/fixtures/live-smoke edits.
+
+### DEFECT 1 [BLOCKER] — familyId scope (spec.mjs)
+
+Fix (reviewer's option 1, hoist): `let familyId = null` moved from inside the `test.describe` callback (old :492) to MODULE scope (new :72, after the const block); the `beforeAll` assignment (`familyId = await promoteFamily()`, new :504) and every describe-scoped use site (PRECHECK, D4) now read the same module binding; `seededFamilyPayload()` (module scope, new :488-491) sees it. No other logic changed.
+
+Diff shape: `git diff --name-status HEAD` -> exactly `app/e2e/w2-11-campaign-demo.spec.mjs` + `.hermes/plans/W2-11-report.wip-l2t1105.md`.
+
+### DEFECT 1 verification — real outputs
+
+1. Syntax check (necessary, NOT sufficient — kept for completeness):
+```
+$ cd app && node --input-type=module --check < e2e/w2-11-campaign-demo.spec.mjs
+exit 0
+```
+
+2. Playwright collection gate (the non-vacuous check the reviewer mandated — parses + collects every test body, incl. D5/D6, without running legs):
+```
+$ cd app && npx playwright test w2-11-campaign-demo.spec.mjs --project=chromium --list
+Listing tests:
+  [chromium] › w2-11-campaign-demo.spec.mjs:508:3 › W2-11 zymo campaign demo gate › PRECHECK: seeded SAID + MEANT + family + run present
+  [chromium] › w2-11-campaign-demo.spec.mjs:523:3 › W2-11 zymo campaign demo gate › D1: immutable SAID — sha equal, zero mutating controls
+  [chromium] › w2-11-campaign-demo.spec.mjs:548:3 › W2-11 zymo campaign demo gate › D2: editable MEANT — label edit saves, survives reload, provenance byte-equal
+  [chromium] › w2-11-campaign-demo.spec.mjs:589:3 › W2-11 zymo campaign demo gate › D3: mounted AI — proposal + accept revision, refusals visible, walls hold
+  [chromium] › w2-11-campaign-demo.spec.mjs:646:3 › W2-11 zymo campaign demo gate › D4: downstream questions — run workspace localization answers + accept -> LPR
+  [chromium] › w2-11-campaign-demo.spec.mjs:718:3 › W2-11 zymo campaign demo gate › D5: robot realization — merged lowerRealization/realizeAndCompile headless leg (honestly named)
+  [chromium] › w2-11-campaign-demo.spec.mjs:742:3 › W2-11 zymo campaign demo gate › D6: run graph shown — POST /intent/compile artifacts viewable
+Total: 7 tests in 1 file
+exit 0
+```
+No collection error; D5 and D6 are collected.
+
+3. Helper-scope proof (reviewer-reproducible, throwaway copies under /tmp/w211-scope-fix with a stub `@playwright/test`; the spec itself untouched by the probe; only difference between the two copies is the fix, plus a scratch-only `export` added to the helper so node can call it):
+```
+$ node -e "import('./spec-fixed.mjs').then(m=>m.seededFamilyPayload()).then(...).catch(e=>console.log('THROWS:', e.constructor.name+':', e.message))"   # POST-FIX copy
+THROWS: Error: GET /records/null -> 404: {"error":"NOT_FOUND","message":"Record not found: null"}
+```
+The helper now executes its body and reaches `getRecordEnvelope(familyId)` with the module binding (null pre-seed in the probe) — a network 404, NOT a ReferenceError.
+```
+$ node -e "...same call..."   # PRE-FIX control copy from git show e4643a4b:...spec.mjs
+THROWS: ReferenceError: familyId is not defined
+```
+Control reproduces the reviewer's §0.7 finding exactly; the fixed copy does not. Binding resolution proven.
+
+### DEFECT 2 [MAJOR] — §6 evidence honesty
+
+§6 "Runnable-form evidence" amended in place: `node --check` explicitly scoped to syntax-only; the scratch harness claim scoped to `runServerLeg` mechanics only with an explicit note that it never calls `seededFamilyPayload()` and never covered the D5/D6 test bodies; new bullet states the D5/D6-specific evidence (the `--list` collection output + the scope probe above). No other section's claims touched.
+
+### Re-runs
+
+Per dispatch rule, nothing expensive re-run: golden/negatives battery (32/32) and server tsc (0) are untouched by this diff (no server file changed); the app gate itself remains the orchestrator's act (OQ4).
