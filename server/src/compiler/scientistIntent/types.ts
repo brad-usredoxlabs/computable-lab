@@ -9,6 +9,14 @@
  * knows how to expand.
  */
 
+/**
+ * Drift-checked MIRROR of the verb vocabulary (Q1 ruling: a TS type has no
+ * runtime YAML source without a codegen step, which would be a second policy
+ * home). AUTHORITY = schema/scientist-intent/scientist-intent-vocabulary.yaml;
+ * equality with this union is enforced by scientist-intent-vocabulary.mirror-drift
+ * (set diff both directions + declaration order vs fixtures/verb-inventory.yaml).
+ * No runtime code reads this union as a verb set — see vocabulary.ts.
+ */
 export type ScientistIntentActionKind =
   // simple biology verbs
   | 'seed'
@@ -52,12 +60,22 @@ export interface ScientistIntentActionValue {
   // symbolic noun labels (never resolved ids)
   source?: string;
   sourceHint?: string;
-  sourceWells?: string[];
+  /** SPINE-7: explicit address array OR a single symbolic well-label (the
+   *  scalar form the SPINE-3 engine's existing scalar arm binds). */
+  sourceWells?: string[] | string;
   target?: string;
   targetHint?: string;
-  targetWells?: string[];
+  targetWells?: string[] | string;
   labware?: string;
   labwareHint?: string;
+  // expected-domain slots (SPINE-1 declaration ONLY): free-text domain tags
+  // naming which KIND of thing the argument is expected to be. Nothing consumes
+  // them until SPINE-2's vocabulary YAML declares per-verb per-argument domains
+  // and SPINE-3's resolution engine evaluates them. No ontology-term validation
+  // fires here (that would be a second policy home before the vocabulary exists).
+  expectedSourceDomain?: string;
+  expectedTargetDomain?: string;
+  expectedLabwareDomain?: string;
   // auth
   source_name?: string;
   // quantities / parameters
@@ -80,10 +98,25 @@ export interface ScientistIntentActionValue {
   params?: Record<string, unknown>;
 }
 
+/**
+ * Argument-location identity (SPINE-1 contract extension): WHERE in the
+ * document a clarification bites — which action (by index and/or canonical
+ * verb) and which argument of it ('source' | 'target' | 'labware' | a param
+ * name). All members optional; `action` is constrained to the same 31-verb
+ * union the schema's $defs/actionVerb references — the verb enum is the
+ * fabrication gate at the contract layer.
+ */
+export interface ScientistIntentActionLocation {
+  actionIndex?: number;
+  action?: ScientistIntentActionKind;
+  argument?: string;
+}
+
 export interface ScientistIntentUnresolvedFact {
   label: string;
   reason: string;
   candidates?: Array<{ label: string; confidence?: number }>;
+  actionLocation?: ScientistIntentActionLocation;
 }
 
 export interface ScientistIntent {

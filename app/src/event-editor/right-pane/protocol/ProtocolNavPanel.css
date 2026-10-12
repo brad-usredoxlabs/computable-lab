@@ -257,3 +257,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The concrete instance THIS run bound to the role (PROTO-AI-10, read-only):
+   mono like the role id but dimmer — it answers "which plate", beside "which
+   role". No label renders when the run binds nothing (zero guessing). */
+.protocol-nav__role-bound {
+  font-family: var(--cl-font-mono, monospace);
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

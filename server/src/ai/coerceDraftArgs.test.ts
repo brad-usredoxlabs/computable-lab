@@ -34,4 +34,27 @@ describe('coerceDraftArgsFromContent', () => {
     expect(coerceDraftArgsFromContent(null)).toBeNull();
     expect(coerceDraftArgsFromContent(undefined)).toBeNull();
   });
+
+  // PROTO-AI-9: the fast path must recover a prose protocol_edit envelope too.
+  // `ops` is the protocol_edit intent's signature key, so the decision reuses
+  // coerceToAgentIntentArgs' intent table rather than widening DRAFT_ARG_KEYS.
+  it('recovers a prose {intent:"protocol_edit",ops:[…]} envelope', () => {
+    const content = '{"intent":"protocol_edit","ops":[{"op":"step_delete","stepId":"step-6"}]}';
+    expect(coerceDraftArgsFromContent(content)).toEqual({
+      intent: 'protocol_edit',
+      ops: [{ op: 'step_delete', stepId: 'step-6' }],
+    });
+  });
+
+  it('recovers a bare prose {ops:[…]} envelope (intent inferred downstream)', () => {
+    const content = '{"ops":[{"op":"step_delete","stepId":"step-6"}]}';
+    expect(coerceDraftArgsFromContent(content)).toEqual({
+      ops: [{ op: 'step_delete', stepId: 'step-6' }],
+    });
+  });
+
+  it('still returns null for an intent-shaped blob with no substantive key (envelope alone is not a draft)', () => {
+    expect(coerceDraftArgsFromContent('{"intent":"protocol_edit"}')).toBeNull();
+    expect(coerceDraftArgsFromContent('{"protocolId":"PRT-000123"}')).toBeNull();
+  });
 });

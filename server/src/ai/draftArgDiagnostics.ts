@@ -48,6 +48,8 @@ export const SUBMISSION_ENVELOPE_KEYS: readonly string[] = [
   'variantId',
   'records',
   'alsoPlace',
+  'ops',
+  'protocolId',
   'labwareRequirements',
   'equipmentRequirements',
   'labwareAdditions',

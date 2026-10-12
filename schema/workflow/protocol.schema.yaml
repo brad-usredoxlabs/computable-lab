@@ -310,7 +310,7 @@ properties:
   # reuse the PredicateEvaluator vocabulary (datatypes/condition.schema.yaml).
   branch_axes:
     type: array
-    description: "Optional declarative if/then/else branch templates for localization."
+    description: "Optional declarative if/then/else branch templates for localization. Axes may be derived from a protocol-decision-tree's axes[] per the declared data flow in schema/registry/branch-axis-mapping/pdt-axis-to-branch-axis.yaml (question -> label; conditions pass through the shared BranchCondition datatype; choiceKey/origin/evidence stay on the PDT record)."
     items:
       $ref: "./datatypes/condition.schema.yaml#/$defs/BranchAxis"
     uniqueItems: true
@@ -871,6 +871,16 @@ $defs:
       executionMeta:
         $ref: "#/$defs/ExecutionMeta"
 
+      # W2-3 — the INTENT-step discriminator slot. Presence of `intent` marks this
+      # step as a semantic INTENT step: semantic verb + symbolic role/capability
+      # material needs + typed Quantity/constraint bindings (W2-2 datatypes) +
+      # provenance refs. An intent step can NEVER carry literal vendor execution
+      # params: every literal payload def below now carries `not: {required: [intent]}`
+      # and the closed IntentStep arm closes the envelope, so a step carrying BOTH
+      # `intent` and a literal/unknown key matches zero oneOf branches -> schema REJECT.
+      intent:
+        $ref: "#/$defs/IntentStepPayload"
+
       # Whether this step is optional (can be skipped without invalidating the protocol).
       isOptional:
         type: boolean
@@ -878,6 +888,12 @@ $defs:
         description: "When true, this step may be skipped during execution without marking the run as deviated."
 
     allOf:
+    # Arm 1 — the step union. The eight LITERAL payload arms (vendor execution
+    # params) plus the ninth INTENT arm (W2-3). Because every literal payload def
+    # carries `not: {required: [intent]}` and IntentStep closes its envelope with
+    # additionalProperties:false, a step carrying `intent` AND any literal/unknown
+    # execution key matches ZERO branches -> schema REJECT. `intent` presence IS
+    # the discriminator; there is no stepShape enum.
     - oneOf:
       - $ref: "#/$defs/StepAddMaterial"
       - $ref: "#/$defs/StepTransfer"
@@ -887,14 +903,202 @@ $defs:
       - $ref: "#/$defs/StepRead"
       - $ref: "#/$defs/StepHarvest"
       - $ref: "#/$defs/StepOther"
+      - $ref: "#/$defs/IntentStep"
+    # Arm 2 (W2-3) — the actionable-error arm. Not load-bearing for rejection (arm 1
+    # already rejects); it names the forbidden literal key on an intent step so the
+    # validation error is diagnosable rather than an opaque oneOf failure. Declarative
+    # envelope keys (settings, subGraphRef, executionMeta, executionPreference,
+    # methodRequirement, phase, phaseId, plannedOffset, isOptional) stay ALLOWED.
+    - if:
+        required: [ intent ]
+      then:
+        not:
+          anyOf:
+          - { required: [ volume_uL ] }
+          - { required: [ working_concentration ] }
+          - { required: [ target ] }
+          - { required: [ source ] }
+          - { required: [ wells ] }
+          - { required: [ material ] }
+          - { required: [ cycles ] }
+          - { required: [ washVolume_uL ] }
+          - { required: [ duration_min ] }
+          - { required: [ temperature_C ] }
+          - { required: [ modality ] }
+          - { required: [ channels ] }
+          - { required: [ instrumentRole ] }
+          - { required: [ mappingHint ] }
+          - { required: [ producesArtifactId ] }
+          - { required: [ ratio ] }
 
   # -------------------------
   # Step payloads (minimal, declarative)
   # -------------------------
+  # W2-3 — the INTENT arm. A step whose payload is `intent` is a semantic intent
+  # step: it declares WHAT it means (semantic verb, symbolic material needs,
+  # typed Quantity/constraint bindings, provenance refs) and can never state HOW a
+  # vendor instrument does it. The envelope keys are shared with the base step by
+  # JSON-pointer $ref (DRY — no duplicated envelope definitions).
+  IntentStep:
+    type: object
+    required: [ intent ]
+    additionalProperties: false
+    description: >-
+      The INTENT arm of the step union: the declarative step envelope plus an
+      IntentStepPayload, and NOTHING else. Literal vendor execution params
+      (volume_uL, target, source, wells, material, cycles, washVolume_uL,
+      duration_min, temperature_C, modality, channels, instrumentRole,
+      mappingHint, producesArtifactId, ratio, working_concentration) are excluded
+      by construction: this arm closes the envelope, and every literal payload def
+      refuses `intent`. D1 concession — intent steps cannot carry literal vendor
+      execution params; realization answers belong to local-protocol (W2-7/D9).
+    properties:
+      stepId: { $ref: "#/$defs/ProtocolStep/properties/stepId" }
+      label: { $ref: "#/$defs/ProtocolStep/properties/label" }
+      description: { $ref: "#/$defs/ProtocolStep/properties/description" }
+      ordinal: { $ref: "#/$defs/ProtocolStep/properties/ordinal" }
+      notes: { $ref: "#/$defs/ProtocolStep/properties/notes" }
+      kind: { $ref: "#/$defs/ProtocolStep/properties/kind" }
+      semanticVerb: { $ref: "#/$defs/ProtocolStep/properties/semanticVerb" }
+      methodRequirement: { $ref: "#/$defs/ProtocolStep/properties/methodRequirement" }
+      executionPreference: { $ref: "#/$defs/ProtocolStep/properties/executionPreference" }
+      plannedOffset: { $ref: "#/$defs/ProtocolStep/properties/plannedOffset" }
+      phaseId: { $ref: "#/$defs/ProtocolStep/properties/phaseId" }
+      phase: { $ref: "#/$defs/ProtocolStep/properties/phase" }
+      subGraphRef: { $ref: "#/$defs/ProtocolStep/properties/subGraphRef" }
+      settings: { $ref: "#/$defs/ProtocolStep/properties/settings" }
+      executionMeta: { $ref: "#/$defs/ProtocolStep/properties/executionMeta" }
+      isOptional: { $ref: "#/$defs/ProtocolStep/properties/isOptional" }
+      intent:
+        $ref: "#/$defs/IntentStepPayload"
+
+  IntentStepPayload:
+    type: object
+    additionalProperties: false
+    required: [ semanticVerb ]
+    description: >-
+      The semantic content of an intent step. `semanticVerb` REUSES the existing
+      SemanticVerbRef (a verb-definition record ref — the crosswalk's "Semantic
+      operation"); never a bare string, never a second verb enum. `materialNeeds`
+      carries SYMBOLIC role refs plus the capability this need presumes (the
+      bead-beater arm, via the existing equipment-capability machinery).
+      `constraints` mounts W2-2's constraint-object datatype (the typed
+      Quantity/QuantityRatio binding point W2-2 §2.3 reserved for W2-3 — the
+      datatype is $ref'd, never re-implemented here: no copied minimum/qualifier
+      bounds). `provenance` points AT the SAID (the vendor-protocol-candidate
+      record + document anchors); absence is lint-visible
+      (intent-step-provenance-visible), never a silent vendor quotation. Symbolic
+      refs only — never inline payloads, never concrete instances.
+    properties:
+      semanticVerb:
+        $ref: "#/$defs/SemanticVerbRef"
+      materialNeeds:
+        type: array
+        description: >-
+          What this step needs, symbolically: a role reference plus the optional
+          equipment capability the need presumes and the optional typed constraint
+          bound to it.
+        items:
+          type: object
+          additionalProperties: false
+          required: [ need ]
+          properties:
+            need:
+              type: string
+              description: "Symbolic role reference (a roleId of this protocol's declared roles; closure is a lint concern, see protocol.lint.yaml R1 + the recorded intent-role gap)."
+            capabilityRequirement:
+              allOf:
+              - $ref: "./datatypes/ref.schema.yaml"
+              - oneOf:
+                - type: object
+                  properties:
+                    kind: { const: record }
+                    type: { const: equipment-capability }
+                - type: object
+                  properties:
+                    kind: { const: ontology }
+                    id:
+                      type: string
+                      pattern: "^CL:"
+              description: >-
+                The equipment capability this need presumes (CL:bead_beater arm).
+                Mirrors constraint.schema.yaml's capabilityRequirement shape — the
+                EXISTING equipment-capability machinery, no new prefix.
+            quantityConstraint:
+              $ref: "https://computable-lab.com/schema/computable-lab/registry/constraint.schema.yaml"
+              description: >-
+                The typed Quantity/constraint binding for this need (W2-2's
+                constraint-object datatype, mounted by $ref-by-$id).
+      constraints:
+        type: array
+        description: >-
+          Constraints this step declares, each an instance of W2-2's
+          constraint-object datatype (class id from the constraint vocabulary
+          data, typed bound, symbolic subject, bindingKind seam, overridePolicy).
+        items:
+          $ref: "https://computable-lab.com/schema/computable-lab/registry/constraint.schema.yaml"
+      provenance:
+        type: array
+        description: >-
+          Evidence pointers for this intent: the SAID (vendor-protocol-candidate
+          record) plus document anchors. Provenance as DATA attached to the
+          record; derivation is never quoted as vendor truth.
+        items:
+          $ref: "#/$defs/StepProvenanceRef"
+      intentNotes:
+        type: string
+        description: "Optional prose: why this step means what it means."
+
+  StepProvenanceRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id, pageStart ]
+    description: >-
+      MINIMAL step-level provenance ref: a record ref constrained to
+      vendor-protocol-candidate plus the candidate-side anchor fields
+      (mirrors vendor-protocol-candidate.schema.yaml $defs/Provenance shape
+      without duplicating that datatype). Rung-agnostic by design — the
+      provenance RUNGS are a separate admission (W2-4); this ref only says
+      WHERE the evidence lives.
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        # W2-5 OQ1 seam (W2-4 §9 OQ1 disposition (a)): the family-side
+        # INFERRED_INVARIANT anchor needs an evidence ref. Widened CONSISTENTLY
+        # at BOTH sites of this $defs block (allOf constraint + properties) —
+        # widening only one would leave the root narrower than the guard.
+        # Closed enum, never a free string: type: material-spec still rejects.
+        type: { enum: [vendor-protocol-candidate, evidence] }
+    properties:
+      kind: { const: record }
+      type: { enum: [vendor-protocol-candidate, evidence] }
+      id:
+        type: string
+        description: "The vendor-protocol-candidate (SAID) record id."
+      label: { type: string }
+      pageStart:
+        type: integer
+        minimum: 1
+      pageEnd:
+        type: integer
+        minimum: 1
+      sectionId: { type: string }
+      spanStart:
+        type: integer
+        minimum: 0
+      spanEnd:
+        type: integer
+        minimum: 0
+
   StepAddMaterial:
     type: object
     
     required: [ kind, target, wells, material ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     # A dispensing step must express HOW MUCH: either a legacy absolute volume
     # OR a working concentration (the north star) that the compiler resolves to
     # stock/diluent volumes. Both allowed; neither optional-only.
@@ -937,6 +1141,9 @@ $defs:
     type: object
     
     required: [ kind, source, target, volume_uL ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "transfer" }
       source:
@@ -970,6 +1177,9 @@ $defs:
     type: object
     
     required: [ kind, target, wells ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "mix" }
       target:
@@ -986,6 +1196,9 @@ $defs:
     type: object
     
     required: [ kind, target, wells, cycles ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "wash" }
       target:
@@ -1002,6 +1215,9 @@ $defs:
     type: object
     
     required: [ kind, target, duration_min ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "incubate" }
       target:
@@ -1020,6 +1236,9 @@ $defs:
     type: object
     
     required: [ kind, target, modality ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "read" }
       target:
@@ -1049,6 +1268,9 @@ $defs:
     type: object
     
     required: [ kind, source, wells ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "harvest" }
       source:
@@ -1070,6 +1292,9 @@ $defs:
     type: object
     
     required: [ kind, description ]
+    # W2-3: a literal payload def can never coexist with `intent` — a step
+    # carrying both fails this arm AND the closed IntentStep arm -> zero oneOf matches.
+    not: { required: [ intent ] }
     properties:
       kind: { const: "other" }
       description:

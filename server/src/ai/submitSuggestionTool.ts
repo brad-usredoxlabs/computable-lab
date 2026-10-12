@@ -416,6 +416,10 @@ const DRAFT_ARGS_PROPERTIES: Record<string, unknown> = (
  *   - `event_graph`: draft events onto the current deck (existing draft args).
  *   - `deck_layout`: switch the run deck platform/variant (e.g. to the freeform
  *     bench). No event drafting — the client applies the change to the editor.
+ *   - `protocol_edit`: propose declarative edits to the ATTACHED protocol via
+ *     the `ops` envelope (PROTO-AI-2 schema). The server validates the payload
+ *     against the REGISTERED schema and emits the proposal; it runs nothing
+ *     else — propose, never write (PROTO-AI-7).
  *
  * Keeping a single forced tool (tool_choice) preserves the hard constraint that
  * the model emits structured output every turn, while widening the menu beyond
@@ -428,7 +432,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, or `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"). Fill only the fields that belong to the intent you chose; never mix both.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing), or `compose_analysis` to propose opening/creating an ANALYSIS against a method the lab already has (an analysis envelope — the server COMPILES this into a review card; it creates at most a QUEUED run record on Accept; it NEVER executes and NEVER promotes). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -436,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. You never supply a timestamp and never invent an id.',
         },
         platformId: {
           type: 'string',
@@ -447,6 +451,51 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         variantId: {
           type: 'string',
           description: 'deck_layout only: target deck variant id, e.g. "manual_freeform" (the freeform bench / Manual Bench).',
+        },
+        protocolId: {
+          type: 'string',
+          description: 'protocol_edit only (optional): target protocol record id (e.g. "PRT-000123"). Omit when the proposal rides the attached-protocol scope — the scope already binds the target.',
+        },
+        ops: {
+          type: 'array',
+          minItems: 1,
+          description:
+            'protocol_edit only: the ordered edit operations against the attached protocol. The server validates this against the registered protocol-edit-op schema; an invalid op is rejected back to you, never applied. Cite ONLY stepIds/roleIds shown in the ATTACHED PROTOCOL block.',
+          items: {
+            type: 'object',
+            required: ['op'],
+            properties: {
+              op: {
+                type: 'string',
+                enum: [
+                  'step_update',
+                  'step_insert',
+                  'step_delete',
+                  'labware_add',
+                  'labware_update',
+                  'labware_delete',
+                  'equipment_add',
+                  'equipment_update',
+                  'equipment_delete',
+                ],
+              },
+              stepId: { type: 'string', description: 'step_update / step_delete: existing step id (^[a-z][a-z0-9-]*$).' },
+              afterStepId: { type: 'string', description: 'step_insert: anchor — insert after this existing step (exactly one of afterStepId/beforeStepId).' },
+              beforeStepId: { type: 'string', description: 'step_insert: anchor — insert before this existing step.' },
+              roleId: { type: 'string', description: 'labware_* / equipment_*: declared role id (^[a-z0-9][a-z0-9_-]*$).' },
+              label: { type: 'string', description: 'step_update: replacement label; step_insert: label of the new step.' },
+              description: { type: 'string', description: 'Replacement/added plain-text description (rich text is derived at apply time, never proposed).' },
+              notes: { type: 'string', description: 'step_update: replacement operator notes.' },
+              kind: { type: 'string', enum: ['add_material', 'transfer', 'mix', 'wash', 'incubate', 'read', 'harvest', 'other'], description: 'step kind — only the base ProtocolStep kinds.' },
+              settings: {
+                type: 'array',
+                items: { type: 'object', additionalProperties: true },
+                description: 'step_update: replacement step settings — ALWAYS the array form (Setting objects), even for kind read.',
+              },
+              expectedLabwareKinds: { type: 'array', items: { type: 'string' }, description: 'labware_add/update: compatible labware DESIGN record ids.' },
+              allowedInstrumentIds: { type: 'array', items: { type: 'string' }, description: 'equipment_add/update: allowable instrument DESIGN record ids.' },
+            },
+          },
         },
         events: DRAFT_ARGS_PROPERTIES['events'],
         notes: DRAFT_ARGS_PROPERTIES['notes'],
@@ -458,25 +507,264 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         records: DRAFT_ARGS_PROPERTIES['records'],
         alsoPlace: DRAFT_ARGS_PROPERTIES['alsoPlace'],
         labwareAdditions: DRAFT_ARGS_PROPERTIES['labwareAdditions'],
+        action: {
+          type: 'object',
+          description:
+            'workspace_action only: the agent-action envelope. VERBS AND TERMS ONLY — `action` is "focus" or "open-surface"; `target` is a protocol-step {kind,protocolId,stepId} or a record/ontology ref, or a TERM ({kind:"record", label:"the biologist words"}) for the server to resolve; `surface` names a registered surface for open-surface. THE SERVER resolves terms through the lab spine + surface registry and REJECTS invented ids; nothing is written.',
+          additionalProperties: false,
+          properties: {
+            action: { type: 'string', enum: ['focus', 'open-surface'], description: 'The declared verb. Unknown verbs are rejected by the registered agent-action schema.' },
+            target: {
+              type: 'object',
+              description: 'focus: what to retarget the investigation to. Prefer a TERM you are sure of ({kind:"record", label:"HepG2 cells"}) — the server resolves it. protocol-step targets must cite protocolId+stepId from the ATTACHED PROTOCOL block.',
+              properties: {
+                kind: { type: 'string', enum: ['protocol-step', 'record', 'ontology'] },
+                protocolId: { type: 'string', description: 'protocol-step: an existing protocol record id.' },
+                stepId: { type: 'string', description: 'protocol-step: an existing stepId in that protocol.' },
+                id: { type: 'string', description: 'record/ontology: an existing record id or CURIE — the server verifies it; never invent one.' },
+                type: { type: 'string', description: 'record: the record type (e.g. "material", "protocol").' },
+                label: { type: 'string', description: 'The term, in the words the biologist used, for the server to resolve.' },
+              },
+            },
+            surface: { type: 'string', description: 'open-surface: a registered surface id (e.g. "analysis", "run-design").' },
+            contextNote: { type: 'string', description: 'A human-readable note. It never overrides the authoritative resolved label.' },
+          },
+        },
+        workstate: {
+          type: 'object',
+          description:
+            'compose_workstate only: the workstate proposal envelope (the workstate-intent schema shape). VERBS AND TERMS ONLY — `operation` is "compose-workstate"; `tabs` each carry a registered `surface` and a `target` that is either a TERM ({term:"the biologist words"}) or an explicit recordId ({recordId:"RUN-7"}); optional `activeTab` selects one proposed tab ({index} | {term} | {recordId}). THE SERVER compiles this into a review card via POST /api/drafts/compile — terms are spine-resolved, recordIds store-verified, invented ids rejected — and the card only becomes actionable after the user accepts. Nothing is written.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-workstate'], description: 'The registered workstate verb.' },
+            tabs: {
+              type: 'array',
+              minItems: 1,
+              description: 'Proposed workspace tabs, in strip order.',
+              items: {
+                type: 'object',
+                // PB-CH-6 fix1 F2: mirror of workstate-intent.schema.yaml
+                // tabs.items — the compile envelope already requires both;
+                // the menu was blind and the model emitted bare-surface tabs
+                // the compiler honestly rejected (MALFORMED_ENVELOPE).
+                required: ['surface', 'target'],
+                properties: {
+                  surface: { type: 'string', description: 'A registered surface id (e.g. "run-design", "analysis").' },
+                  target: {
+                    description: 'A TERM the server must resolve, OR an explicit recordId the server verifies — exactly one shape (schema oneOf). A surface name is never a target.',
+                    oneOf: [
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['term'],
+                        properties: {
+                          term: { type: 'string', description: 'The target in the biologist\u2019s words — the server resolves it.' },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['recordId'],
+                        properties: {
+                          recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
+                        },
+                      },
+                    ],
+                  },
+                  title: { type: 'string', description: 'Optional display title; the resolved record\u2019s authoritative label wins when absent.' },
+                },
+              },
+            },
+            activeTab: {
+              type: 'object',
+              description: 'Which proposed tab is active: {index}, {term}, or {recordId}.',
+              properties: {
+                index: { type: 'integer', minimum: 0 },
+                term: { type: 'string' },
+                recordId: { type: 'string' },
+              },
+            },
+          },
+        },
+        analysis: {
+          type: 'object',
+          description:
+            'compose_analysis only: the analysis proposal envelope (the analysis-intent schema shape). VERBS AND TERMS ONLY — `operation` is "compose-analysis"; `target` is exactly one of {revision:{term|recordId}, newRun?} (open/create against a METHOD) or {run:{term|recordId}} (open an EXISTING run); optional `focus` (run|revision) picks the landing tab and `open.tabs` appends extra cross-page tabs. THE SERVER compiles this into a review card via POST /api/drafts/compile — terms are spine-resolved, recordIds store-verified, invented ids rejected — and the card only becomes actionable after the user accepts. Accept stages AT MOST one QUEUED analysis-run create; it NEVER executes a run and NEVER promotes an artifact. Nothing is written before Accept.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-analysis'], description: 'The registered analysis verb.' },
+            target: {
+              type: 'object',
+              description: 'Exactly one of: {revision, newRun?} or {run}.',
+              properties: {
+                revision: { type: 'object', description: 'The analysis method: {term:"the biologist words"} or {recordId:"ANREV-…"} — the server resolves/verifies it.', properties: { term: { type: 'string' }, recordId: { type: 'string' } } },
+                run: { type: 'object', description: 'An existing analysis run to open: {term} or {recordId} — the server verifies it; never invent one.', properties: { term: { type: 'string' }, recordId: { type: 'string' } } },
+                newRun: {
+                  type: 'object',
+                  description: 'Optional: stage ONE new QUEUED run against the resolved revision. The run id, revisionRef, status, and initiator are all server-derived.',
+                  properties: {
+                    title: { type: 'string', description: 'Display title for the queued run (optional; the resolved method label is the fallback).' },
+                    parameters: { type: 'object', description: 'Parameter values for the run (per the revision parameterSchema).' },
+                    inputs: { type: 'object', description: 'name → {term|recordId}; the server resolves each through the declared input kinds (data-reference / analysis-output-artifact) and REJECTS a wrong-kind input — never a silently skipped one.' },
+                  },
+                },
+              },
+            },
+            focus: { type: 'string', enum: ['run', 'revision'], description: 'Which landing tab is active (default run). The server derives the tab id — never model-named.' },
+            open: { type: 'object', description: 'Extra cross-page tabs appended after the landing tabs (same {surface, target:{term|recordId}} shape as compose_workstate tabs).', properties: { tabs: { type: 'array', items: { type: 'object', required: ['surface', 'target'], properties: { surface: { type: 'string' }, target: { oneOf: [ { type: 'object', additionalProperties: false, required: ['term'], properties: { term: { type: 'string' } } }, { type: 'object', additionalProperties: false, required: ['recordId'], properties: { recordId: { type: 'string' } } } ] }, title: { type: 'string' } } } } } },
+          },
+        },
+        ledgerQuery: {
+          type: 'object',
+          description:
+            'query_workstate_history only: the ledger query — VERBS AND TERMS ONLY. `term` (the biologist\'s words for the run/study/record) OR `recordId` (an existing record id the server verifies). NO timestamp: the SERVER supplies the time anchor from its own audit clock (policy query.anchor), and a model-proposed time or id is never trusted as an anchor or a link.',
+          additionalProperties: false,
+          properties: {
+            term: { type: 'string', description: 'The subject in the biologist\'s words — the server resolves it through the spine.' },
+            recordId: { type: 'string', description: 'An existing record id — the server verifies it; never invent one.' },
+          },
+        },
+        shorthand: {
+          type: 'string',
+          description:
+            'event_shorthand only (SHORTHAND-CHAT): the scientist-intent YAML document — a closed-vocabulary list of high-level biology verbs with natural-language noun labels and numeric parameters (top-level intentId + actions, optional unresolved). NEVER resolved record ids, deck slots, or low-level event primitives: the deterministic compiler owns the event-graph expansion. The server validates the document against the registered scientist-intent schema (Ajv) and compiles it; an invalid document is re-asked, never repaired for you.',
+        },
       },
     },
   },
 };
 
+/**
+ * PB-CH-4b — render the forced draft tool with the REGISTERED surface ids in
+ * its two surface descriptions.
+ *
+ * WHY: gate run-5 showed the model cannot know the legal surface ids — the
+ * static descriptions name a hardcoded example pair, and the model guessed
+ * `surface: "protocol"` and was (correctly) rejected by the compiler's
+ * UNSUPPORTED_SURFACE. The menu was blind; the vocabulary is DATA
+ * (schema/registry/surfaces/surfaces.yaml via deps.surfaces), so it arrives
+ * here as data (repo rule #1).
+ *
+ * WHAT THIS IS NOT: no enum, no validation, no membership branch. The single
+ * membership authority stays `workstateCompile.ts` UNSUPPORTED_SURFACE (repo
+ * rule #3) — an enum here would duplicate policy in a second place and break
+ * dynamic registry edits. This is pure rendering of declared ids into the two
+ * description strings.
+ *
+ * Fallback: with no ids the static const is returned BY REFERENCE —
+ * byte-identical, so every existing pin on AGENT_INTENT_TOOL_DEF keeps
+ * passing. The static const is never mutated (the def is cloned).
+ */
+export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDefinition {
+  if (surfaceIds === undefined || surfaceIds.length === 0) {
+    return AGENT_INTENT_TOOL_DEF;
+  }
+  const def = structuredClone(AGENT_INTENT_TOOL_DEF);
+  const params = def.function.parameters as {
+    properties: {
+      action?: { properties?: { surface?: { description?: string } } };
+      workstate?: { properties?: { tabs?: { items?: { properties?: { surface?: { description?: string } } } } } };
+    };
+  };
+  const registeredIds = surfaceIds.join(', ');
+  const actionSurface = params.properties.action?.properties?.surface;
+  if (actionSurface) {
+    actionSurface.description = `open-surface: a registered surface id — registered ids: ${registeredIds}. Nothing else is valid.`;
+  }
+  const tabSurface = params.properties.workstate?.properties?.tabs?.items?.properties?.surface;
+  if (tabSurface) {
+    tabSurface.description = `A registered surface id — registered ids: ${registeredIds}. Nothing else is valid.`;
+  }
+  return def;
+}
+
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'sequence_action' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'sequence_action' | 'unknown';
   platformId?: string;
   variantId?: string;
+  /**
+   * protocol_edit only: the ops envelope EXACTLY as the model emitted it. The
+   * parser retains the array by reference — no copy, filter, or reorder — so
+   * the schema validator sees the model's own answer, and the emission path
+   * re-emits that same validated array. (Parsing happens BEFORE validation;
+   * any "help" here would silently mutate the proposal under audit.)
+   */
+  ops?: unknown[];
+  /** protocol_edit only: explicit target protocol record id, if stated. */
+  protocolId?: string;
+  /**
+   * workspace_action only (PB-CH-1): the agent-action envelope EXACTLY as the
+   * model emitted it — retained by reference, no copy/filter (the protocol_edit
+   * `ops` discipline). The server compiler (compileWorkspaceAction) validates
+   * and resolves it; the parser never "helps".
+   */
+  action?: Record<string, unknown>;
+  /**
+   * compose_workstate only (PB-CH-4): the workstate proposal envelope EXACTLY
+   * as the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action` discipline). The orchestrator emits it VERBATIM as a
+   * `workstate_proposal` event; the drafts compile endpoint (Ajv against the
+   * registered workstate-intent $id + canAccept) is the trust boundary. The
+   * parser never "helps" and never compiles.
+   */
+  workstate?: Record<string, unknown>;
+  /**
+   * compose_analysis only (PB-CH-5): the analysis proposal envelope EXACTLY as
+   * the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action`/`workstate` discipline). The orchestrator emits it VERBATIM
+   * as an `analysis_proposal` event; the drafts compile endpoint (Ajv against
+   * the registered analysis-intent $id + canAccept) is the trust boundary. The
+   * parser never "helps" and never compiles.
+   */
+  analysis?: Record<string, unknown>;
+  /**
+   * query_workstate_history only (PB-CH-8): the ledger query envelope EXACTLY
+   * as the model emitted it — retained by reference, no copy/filter (the same
+   * `ops`/`action`/`workstate`/`analysis` discipline). The orchestrator hands
+   * it to ledgerQuery.ts, which resolves the term/recordId through the spine
+   * and takes the time anchor from SERVER-KNOWN audit occurredAt only — a
+   * model-proposed timestamp or id is never trusted (decision §4.4). The
+   * parser never "helps" and never queries.
+   */
+  ledgerQuery?: Record<string, unknown>;
+  /**
+   * event_shorthand only (SHORTHAND-CHAT, OQ2 ruling): the scientist-intent YAML
+   * document EXACTLY as the model emitted it — retained by reference, no copy/
+   * repair (the same `ops`/`action`/`workstate`/`analysis` discipline). The
+   * orchestrator hands it to `parseScientistIntent` (Ajv sole authority,
+   * validate-in-place, NEVER a repaired re-parse) and then to the FROZEN
+   * deterministic compiler; the parser never "helps" and never compiles.
+   */
+  shorthand?: string;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
       ...(typeof args.variantId === 'string' && args.variantId.trim().length > 0 ? { variantId: args.variantId.trim() } : {}),
+      ...(intent === 'protocol_edit' && Array.isArray(args.ops) ? { ops: args.ops } : {}),
+      ...(intent === 'protocol_edit' && typeof args.protocolId === 'string' && args.protocolId.trim().length > 0
+        ? { protocolId: args.protocolId.trim() }
+        : {}),
+      ...(intent === 'workspace_action' && args.action !== null && typeof args.action === 'object' && !Array.isArray(args.action)
+        ? { action: args.action as Record<string, unknown> }
+        : {}),
+      ...(intent === 'compose_workstate' && args.workstate !== null && typeof args.workstate === 'object' && !Array.isArray(args.workstate)
+        ? { workstate: args.workstate as Record<string, unknown> }
+        : {}),
+      ...(intent === 'compose_analysis' && args.analysis !== null && typeof args.analysis === 'object' && !Array.isArray(args.analysis)
+        ? { analysis: args.analysis as Record<string, unknown> }
+        : {}),
+      ...(intent === 'query_workstate_history' && args.ledgerQuery !== null && typeof args.ledgerQuery === 'object' && !Array.isArray(args.ledgerQuery)
+        ? { ledgerQuery: args.ledgerQuery as Record<string, unknown> }
+        : {}),
+      // event_shorthand: the YAML document is carried VERBATIM (by value, no
+      // trim/repair — parseScientistIntent + Ajv are the sole authorities).
+      ...(intent === 'event_shorthand' && typeof args.shorthand === 'string' && args.shorthand.trim().length > 0
+        ? { shorthand: args.shorthand }
+        : {}),
     };
   }
   return { intent: 'unknown' };
@@ -791,6 +1079,7 @@ function parseEquipmentRequirements(raw: unknown): AgentEquipmentRequirement[] {
 /** Every field the emission contract recognises. Anything else is reported back. */
 const KNOWN_SUBMISSION_KEYS = new Set([
   'intent', 'platformId', 'variantId',
+  'ops', 'protocolId',
   'events', 'notes', 'unresolvedRefs', 'clarification', 'clarificationRequests',
   'labwareRequirements', 'labwareAdditions', 'equipmentRequirements',
   'records', 'alsoPlace',

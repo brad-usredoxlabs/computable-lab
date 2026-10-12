@@ -1,0 +1,27 @@
+# SPINE-6 golden fixture 3 — golden.intent-to-clarification.ambiguous-material
+# (untouched by both rulings). 'standard plate' substring-matches two store
+# labware records: the engine's ambiguity arm (policies.ambiguity.mode:
+# clarify) clarifies with BOTH in-band candidates; the exact target binds.
+name: golden.intent-to-clarification.ambiguous-material
+request:
+  protocolText: >-
+    Transfer 10 uL from the standard plate into the standard plate alpha.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-plate-alpha
+      payload:
+        kind: labware
+        name: standard plate alpha
+    - recordId: LAB-plate-beta
+      payload:
+        kind: labware
+        name: standard plate beta
+modelOutput:
+  intentId: golden-ambiguous-material
+  actions:
+    - action: transfer
+      source: standard plate
+      target: standard plate alpha
+      volumeUl: 10

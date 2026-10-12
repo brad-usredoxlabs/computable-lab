@@ -177,6 +177,14 @@ export function MessageLog({ state }: MessageLogProps) {
                 <span className={t.success === false ? 'message-log__trace-icon message-log__trace-icon--error' : 'message-log__trace-icon'}>✓</span>
               ) : t.kind === 'draft' ? (
                 <span className="message-log__trace-icon message-log__trace-icon--draft">◈</span>
+              ) : t.kind === 'action' ? (
+                // PB-CH-4 tier-1: a compiled agent action applied on arrival
+                // (focus/open — the workspace moved, nothing was written).
+                <span className="message-log__trace-icon message-log__trace-icon--action">➤</span>
+              ) : t.kind === 'ledger' ? (
+                // PB-CH-8: the SERVER-BUILT ledger answer (fetched journal
+                // evidence — read-only, nothing was written).
+                <span className="message-log__trace-icon message-log__trace-icon--ledger">▤</span>
               ) : (
                 <span className={`message-log__trace-icon message-log__trace-icon--${t.severity ?? 'info'}`}>◆</span>
               )}
@@ -187,6 +195,21 @@ export function MessageLog({ state }: MessageLogProps) {
                   <>{t.toolName} {t.success === false ? 'failed' : 'ok'}{t.durationMs ? ` · ${t.durationMs}ms` : ''}</>
                 ) : t.kind === 'draft' ? (
                   <>{t.evidence ?? 'draft'}</>
+                ) : t.kind === 'action' ? (
+                  <>{t.evidence ?? 'action'}</>
+                ) : t.kind === 'ledger' ? (
+                  // The server's answerText verbatim + provenance lines:
+                  // capturedAt rides inside the disclosure text; links and the
+                  // clearly-labeled lab events render beneath it.
+                  <>
+                    {t.evidence ?? 'ledger'}
+                    {t.links && t.links.length > 0 ? (
+                      <span className="message-log__trace-provenance" data-testid="trace-ledger-links"> · linked lab events: {t.links.join(', ')}</span>
+                    ) : null}
+                    {t.labEvents && t.labEvents.length > 0 ? (
+                      <span className="message-log__trace-provenance" data-testid="trace-ledger-lab-events"> · lab events, not workstate: {t.labEvents.map((e) => `${e.occurredAt} ${e.action} (${e.subjectId})`).join('; ')}</span>
+                    ) : null}
+                  </>
                 ) : (
                   <>{t.message ?? t.code ?? (t.severity ?? 'info')}</>
                 )}

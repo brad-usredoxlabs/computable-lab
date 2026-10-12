@@ -6,7 +6,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { EditorContext, LabwareSummary, EventSummary } from './types.js';
+import type { EditorContext, LabwareSummary, EventSummary, AttachedProtocolContext } from './types.js';
 
 const promptCache = new Map<string, string>();
 
@@ -288,6 +288,21 @@ function formatDraftRevisionContext(context: EditorContext): string {
 export type AiSurface =
   | 'event-editor'
   | 'workspace.deck'
+  // PB-CH-6: the `/analysis` work surface (registry id `analysis`,
+  // schema/registry/surfaces/surfaces.yaml — a no-params AI-context surface).
+  // Additive ONLY: getSurfacePreamble falls through to the generic prompt
+  // with an empty preamble (the intended behavior — no new preamble/prompt
+  // template; prompt authoring is not this item's authority).
+  | 'analysis'
+  // W2-9 (OQ1 ruling (a)): the protocol-review host (`/ingestion/vendor-pdf/
+  // :recordId`, registry id `protocol-review` in surfaces.yaml — the chat id
+  // names the registered surface so the two vocabularies stay aligned, F-W29-4).
+  // Additive ONLY: with an attachedProtocol in context the surface delegates
+  // to the grounded buildSystemPrompt path (ATTACHED PROTOCOL block +
+  // protocol_edit instruction region — the PROTO-AI-9 grounding the review
+  // chat needs); without one it falls through to the generic prompt exactly
+  // like 'analysis'. Existing surfaces are byte-unchanged (KV-cache stability).
+  | 'protocol-review'
   | 'run-workspace'
   | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'}`
   | 'materials'
@@ -413,6 +428,17 @@ export function buildSurfaceAwarePrompt(
     return buildSystemPrompt(context);
   }
 
+  // W2-9 (OQ1 ruling (a)): the protocol-review chat delegates to the SAME
+  // grounded template when a protocol is attached — the template's deck
+  // sections render from an empty deck context, while the protocol_edit
+  // instruction region and the ATTACHED PROTOCOL block are attachedProtocol-
+  // gated (buildSystemPrompt, PROTO-AI-6). Without an attachment the surface
+  // falls through to the generic prompt (the 'analysis' behavior): the model
+  // never sees a protocol_edit vocabulary it cannot ground (PROTO-AI-9).
+  if (surface === 'protocol-review' && context.attachedProtocol) {
+    return buildSystemPrompt(context);
+  }
+
   // Domain-specific draft surfaces get their dedicated prompt template
   const domainTemplate = DOMAIN_PROMPT_TEMPLATES[surface];
   if (domainTemplate) {
@@ -471,13 +497,85 @@ export function buildSystemPrompt(
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
     .replace('{{RUN_ID}}', context.runId ?? 'none');
 
+  // PROTO-AI-6: the template carries the protocol_edit instruction section
+  // inside a marker-delimited region. It renders ONLY when a protocol is
+  // attached — with no attachment the whole region is stripped, so the
+  // prompt carries no protocol_edit guidance at all.
+  const gated = context.attachedProtocol
+    ? prompt.replace(
+        /<!--\s*protocol-edit:begin\s*-->\n?([\s\S]*?)\n?<!--\s*protocol-edit:end\s*-->\n?/,
+        '$1\n',
+      )
+    : prompt.replace(/\n?<!--\s*protocol-edit:begin\s*-->[\s\S]*?<!--\s*protocol-edit:end\s*-->\n?/, '');
+
   const extraContexts = [
     formatGraphLemurContext(context),
     formatDraftRevisionContext(context),
     formatProtocolStepContext(context),
     formatLocalProtocolSetup(context),
+    formatAttachedProtocol(context),
+    formatWorkingFocus(context),
   ].filter(Boolean);
-  return extraContexts.length > 0 ? `${prompt}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : prompt;
+  return extraContexts.length > 0 ? `${gated}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : gated;
+}
+
+/**
+ * PB-CH-4 — the WORKING FOCUS block: the step the ChatContextHeader shows,
+ * finally in the request contract. Rendered ONLY when present (the byte-stable
+ * prefix otherwise stays byte-stable for the KV warm cache). Cites protocolId +
+ * stepId so "the step I'm looking at" resolves to exactly that step — the model
+ * never invents one.
+ */
+export function formatWorkingFocus(context: EditorContext): string | null {
+  const focus = context.workingFocus;
+  if (!focus) return null;
+  const ordinal = focus.ordinal ?? '?';
+  return [
+    'WORKING FOCUS:',
+    `- Step ${ordinal} — ${focus.label} (stepId ${focus.stepId}) of protocol ${focus.protocolId}.`,
+    '- Interpret "this step" / "the step I\'m looking at" as exactly this step; cite its stepId, never invent one.',
+  ].join('\n');
+}
+
+/**
+ * Render the compact ground-truth block for the protocol ATTACHED to this
+ * chat (PROTO-AI-6): identity (recordId + current sha), every step
+ * (ordinal | stepId | kind | label — nothing more), and the declared
+ * labware / instrument roles. This is the ONLY protocol ground truth the
+ * model may cite; the paired instruction section ({{PROTOCOL_EDIT}}) binds
+ * it to the proposal vocabulary. Returns null when no protocol is attached.
+ */
+export function formatAttachedProtocol(context: EditorContext): string | null {
+  const protocol: AttachedProtocolContext | undefined = context.attachedProtocol;
+  if (!protocol) return null;
+  const lines = [
+    'ATTACHED PROTOCOL (ground truth for protocol_edit):',
+    `- Protocol: ${protocol.recordId}${protocol.sha ? ` (sha ${protocol.sha})` : ''}`,
+  ];
+  lines.push('- Steps (ordinal | stepId | kind | label):');
+  for (const step of protocol.steps) {
+    lines.push(`  ${step.ordinal} | ${step.stepId} | ${step.kind ?? '-'} | ${step.label}`);
+  }
+  if (protocol.labwareRoles && protocol.labwareRoles.length > 0) {
+    lines.push('- Labware roles:');
+    for (const role of protocol.labwareRoles) {
+      const kinds = role.expectedLabwareKinds?.length
+        ? ` (expectedLabwareKinds: ${role.expectedLabwareKinds.join(', ')})`
+        : '';
+      lines.push(`  - ${role.roleId}${role.description ? ` — ${role.description}` : ''}${kinds}`);
+    }
+  }
+  if (protocol.instrumentRoles && protocol.instrumentRoles.length > 0) {
+    lines.push('- Instrument roles:');
+    for (const role of protocol.instrumentRoles) {
+      const ids = role.allowedInstrumentIds?.length
+        ? ` (allowedInstrumentIds: ${role.allowedInstrumentIds.join(', ')})`
+        : '';
+      lines.push(`  - ${role.roleId}${role.description ? ` — ${role.description}` : ''}${ids}`);
+    }
+  }
+  lines.push('- Cite ONLY the stepIds and roleIds listed above; never invent one.');
+  return lines.join('\n');
 }
 
 /**

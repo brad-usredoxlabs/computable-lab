@@ -18,7 +18,7 @@ import { apiClient } from '../api/client'
 import { useOpenTabs } from '../shell/OpenTabsContext'
 import type { OpenTabsState } from '../shell/OpenTabsContext'
 import { tabPath } from '../shell/WorkspaceTabStrip'
-import { sessionDocumentToState, sessionFromYaml, sessionTabsToState, sessionToYaml } from './sessionYaml'
+import { sessionDocumentFromValue, sessionDocumentToState, sessionFromYaml, sessionTabsToState, sessionToYaml, type SessionDocument } from './sessionYaml'
 import { stableTabId } from './tabId'
 
 const PUSH_DEBOUNCE_MS = 500
@@ -41,13 +41,21 @@ function activeTabPath(state: OpenTabsState): string | null {
   return active ? tabPath(active.tab) : null
 }
 
-/** Apply an AI-emitted (or shared) session document to the live store. */
-export function useApplySessionDocument(): (yaml: string) => void {
+/**
+ * Apply an AI-emitted (or shared) session document to the live store.
+ *
+ * PB-CH-3 overload: a string keeps the existing sessionFromYaml path
+ * byte-unchanged; a SessionDocument object goes through the shared
+ * sessionDocumentFromValue validator (throws on malformed, same errors) —
+ * the drafts accept body is a JSON object, so no stringify→re-parse hop.
+ * Still ONE writer: OpenTabsContext.replaceState.
+ */
+export function useApplySessionDocument(): (doc: string | SessionDocument) => void {
   const { replaceState } = useOpenTabs()
   return useCallback(
-    (yaml: string) => {
-      const doc = sessionFromYaml(yaml)
-      replaceState(sessionDocumentToState(doc, stableTabId))
+    (doc: string | SessionDocument) => {
+      const parsed = typeof doc === 'string' ? sessionFromYaml(doc) : sessionDocumentFromValue(doc)
+      replaceState(sessionDocumentToState(parsed, stableTabId))
     },
     [replaceState],
   )

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useReducer, useState } from 'r
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
+import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { openContent } from '../../../shared/lib/openContent'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
@@ -33,7 +34,8 @@ import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
 import { changesFromDraftEvents } from './draftChanges'
 import { InterpretationPanel } from './InterpretationPanel'
-import { ChangesPanel } from './ChangesPanel'
+import { ChangesPanel, protocolEditDiffFrom, type AttachedProtocolSnapshot } from './ChangesPanel'
+import { applyProtocolEdit, type ProtocolEditOp } from '../protocol/protocolEditOps'
 import type { DraftTermRow } from './TermPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
@@ -42,6 +44,8 @@ import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
 import { sidebarReducer, initialSidebarState, isChatEnabled, headerLabel } from './sidebarState'
+import { useWorkstateProposalFlow, type WorkstateAdapter } from '../../../shared/ai/useWorkstateProposalFlow'
+import { WorkstateProposalCard } from './WorkstateProposalCard'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -115,6 +119,13 @@ export function WarmIndicator({ status }: { status: AiWarmStatus }) {
   return null
 }
 
+/**
+ * PB-CH-4 — the panel-side card state now lives in the shared flow
+ * (`WorkstateProposalCardState` in shared/ai/useWorkstateProposalFlow.ts);
+ * the mount holds at most ONE pending proposal and the component stays
+ * presentational.
+ */
+
 export function AiTabPanel() {
   const ws = useWorkspace()
   const openTabs = useOptionalOpenTabs()
@@ -124,12 +135,58 @@ export function AiTabPanel() {
     return ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
   }, [ws.state.activeTabId, ws.state.tabs])
 
-  const systemPrompt = systemPromptForViewer(systemPromptKindForTab(activeTab))
-
   // Present only when the active tab is a deck (EventEditorProvider wraps
-  // the pane then); null on pdf/document/project tabs.
+  // the pane then); null on pdf/document tabs.
   const editor = useOptionalEventEditor()
   const editorState = editor?.state ?? null
+
+  // PROTO-AI-9 surface ruling (architect decision 2026-10-05, option d):
+  // while the deck editor is MOUNTED the pane sends on the deck surface,
+  // even when the workspace's ACTIVE tab is not a deck (the run page wraps
+  // the pane in EventEditorProvider regardless of the active tab, which
+  // defaultWorkspaceState seeds as `details:<studyId>`). The warm path below
+  // already triggers off the mounted deck editor — the chat send must not
+  // contradict it. No deck editor mounted → the active-tab derivation stands
+  // byte-identical (pdf/document/other tabs unaffected).
+  const systemPrompt =
+    editorState !== null
+      ? systemPromptForViewer('deck')
+      : systemPromptForViewer(systemPromptKindForTab(activeTab))
+
+  // Shared protocol surface (rail/loader): the ATTACHED protocol identity,
+  // its step concepts, and its declared roles. The context builder below
+  // folds them into `attachedProtocol` (PROTO-AI-6) so the outbound request
+  // carries the ground truth the model must cite — never fetched per-turn.
+  const protocolSel = useProtocolSelection()
+  const attachedProtocol = useMemo(() => {
+    const identity = protocolSel?.protocol
+    const steps = protocolSel?.steps ?? []
+    // Identity alone (steps still loading / failed) would render a block with
+    // no citable ids — an invention invitation. Wait for steps.
+    if (!identity || steps.length === 0) return null
+    const labwareRoles = (protocolSel?.resources.labwares ?? []).map((r) => ({
+      roleId: r.roleId,
+      ...(r.description ? { description: r.description } : {}),
+      ...(r.expectedLabwareKinds?.length ? { expectedLabwareKinds: r.expectedLabwareKinds } : {}),
+    }))
+    const instrumentRoles = (protocolSel?.resources.equipment ?? []).map((r) => ({
+      roleId: r.roleId,
+      ...(r.description ? { description: r.description } : {}),
+      ...(r.allowedInstrumentIds?.length ? { allowedInstrumentIds: r.allowedInstrumentIds } : {}),
+    }))
+    return {
+      recordId: identity.recordId,
+      ...(identity.sha ? { sha: identity.sha } : {}),
+      steps: steps.map((s, i) => ({
+        stepId: s.stepId,
+        ordinal: s.ordinal ?? i + 1,
+        label: s.label,
+        ...(s.kind ? { kind: s.kind } : {}),
+      })),
+      ...(labwareRoles.length > 0 ? { labwareRoles } : {}),
+      ...(instrumentRoles.length > 0 ? { instrumentRoles } : {}),
+    }
+  }, [protocolSel?.protocol, protocolSel?.steps, protocolSel?.resources])
 
   // Active deck scope for preview placement validation — computed outside
   // useMemo so it's accessible as a stable reference in useCallback deps.
@@ -169,8 +226,14 @@ export function AiTabPanel() {
       activeTab && (activeTab.kind === 'pdf' || activeTab.kind === 'document')
         ? activeTab.artifactId
         : null
+    // PROTO-AI-9 surface ruling: the deck template's {{RUN_ID}}/graph fields
+    // read this id. On the run page the ACTIVE tab is not a deck, so fall
+    // back to the mounted editor's graph — the same deck the surface label
+    // now declares. When the active tab IS a deck, the tab's id wins.
     const activeEventGraphId =
-      activeTab?.kind === 'deck' ? activeTab.eventGraphId : null
+      activeTab?.kind === 'deck'
+        ? activeTab.eventGraphId
+        : editorState?.eventGraphId ?? null
     const activeVariant = editorState
       ? getVariantManifest(editorState.platforms, editorState.platformId, editorState.variantId)
       : null
@@ -233,6 +296,10 @@ export function AiTabPanel() {
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
       activeDeckScope,
+      // The ATTACHED protocol's compact ground truth (identity + steps +
+      // declared roles) — the server renders it as a prompt block plus the
+      // protocol_edit instruction section ONLY when present (PROTO-AI-6).
+      ...(attachedProtocol ? { attachedProtocol } : {}),
       // Deck tabs send the same accepted event graph projection used by the
       // standalone editor; this context object is shared by warm and draft.
       ...acceptedGraphProjection,
@@ -255,7 +322,52 @@ export function AiTabPanel() {
           }
         : {}),
     }
-  }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope])
+  }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope, attachedProtocol])
+
+  // PB-CH-4 D1 fix (gate receipts 2026-10-07_orchgate2): a compose_workstate
+  // turn ALSO fires the event-graph onDraftResult path — its done result
+  // carries notes only (no error, no protocolEdit, no clarifications, empty
+  // events), so it fell to the final else and dispatched draft-ready with an
+  // EMPTY changes list: sidebar 'reviewing', auto subtab 'changes', the chat
+  // section (where <WorkstateProposalCard> renders) unmounted, and an
+  // actionable 'Apply to run' over nothing. The card is that turn's ONLY
+  // review surface. The flag is set when the turn's workstate_proposal event
+  // arrives (server emits it DURING run(), before the post-run `done` frame —
+  // AgentOrchestrator.ts:2199 inside orchestrator.run vs the assistStream
+  // handler's `sendEvent({type:'done'})` at AIHandlers.ts:458, the endpoint
+  // the client's /ai/assist/stream posts to), CONSUMED by the same
+  // turn's onDraftResult, and cleared at the single sendChat choke point every
+  // turn starts through so a stale flag can
+  // never suppress a later turn's review (race-safe without depending on any
+  // untested ordering beyond that verified one).
+  const workstateTurnRef = useRef(false)
+
+  // PB-CH-8 fix1 (defect lanes/2/decisions/PB-CH-8-ledger-render-defect.md,
+  // receipts PB-CH-8/2026-10-08 probe1/capture1/witness1): a ledger turn
+  // (the server's ledger_answer frame) ends with a notes-only `done` result,
+  // so without a flag onDraftResult fell to the final else and dispatched
+  // draft-ready with an EMPTY changes list — sidebar 'reviewing', auto subtab
+  // 'changes', the chat section (where the kind:'ledger' trace renders)
+  // UNMOUNTED before 'done' commits the trace; MutationObserver proved the
+  // answer NEVER entered the DOM. Same failure class as PB-CH-4 D1, replayed
+  // for ledger turns. The ledger trace IS that turn's ONLY surface. Same
+  // discipline as workstateTurnRef: set when the ledger_answer frame arrives
+  // (server emits it during run(), before the post-run `done` frame — the
+  // ordering the workstate comment above cites), CONSUMED first by the same
+  // turn's onDraftResult, cleared at the single sendChat choke point.
+  const ledgerTurnRef = useRef(false)
+
+  // SHORTHAND-CHAT: the shorthand document rides the sidebar review state;
+  // the edit affordance recompiles it through the server's EXISTING
+  // POST /intent/compile (Ajv sole authority, deterministic compiler — the
+  // ONE producer of the graph). The client is render + POST only: it never
+  // parses, validates, or "fixes" the YAML. No LLM call on the edit path,
+  // ever (edits re-compile, never re-draft).
+  const lastShorthandDraftRef = useRef<{ prompt: string } | null>(null)
+  const [shorthandApply, setShorthandApply] = useState<{
+    recompiling?: boolean
+    error?: string
+  } | null>(null)
 
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
@@ -272,8 +384,128 @@ export function AiTabPanel() {
       // the whole draft because of an ungrounded material).
       const draftId = `draft-${Date.now()}`
       const draftedEvents = (result.events ?? []) as unknown[]
+      // SHORTHAND-CHAT: a fresh draft (or any turn without shorthand) clears
+      // the edit-recompile state — a stale error never leaks into a new draft.
+      lastShorthandDraftRef.current =
+        typeof result.shorthand === 'string' ? { prompt } : null
+      setShorthandApply(null)
+
+      // PB-CH-4 D1: consume the turn flags FIRST, on every path, so a stale
+      // flag can never leak into a later turn (a no-envelope compose_workstate
+      // turn ends with an `error` result and never reaches the flag branch).
+      // PB-CH-8 fix1: the ledger flag is consumed in the same breath.
+      const workstateTurn = workstateTurnRef.current
+      workstateTurnRef.current = false
+      const ledgerTurn = ledgerTurnRef.current
+      ledgerTurnRef.current = false
+
+      // R-Defect-1 (PROTO-AI-9 fix): a failed turn — the server result
+      // carries `error` (schema rejection, model failure; assistStream
+      // renders "Draft failed: …" in the chat log) — must NOT open an
+      // actionable review over an empty change list. Return the pane to
+      // chat (ready) with the error visible in the message log so the
+      // biologist can simply retry.
+      if (result.error) {
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
+      // PB-CH-4 D1: this turn proposed a workstate — the card (compiling slot
+      // or review card) is its ONLY review surface, NOT the ChangesPanel.
+      // Same discipline as the result.error guard above: no draft-ready, no
+      // 'reviewing' mode, no empty actionable 'Apply to run', the chat
+      // section (where the card renders) stays mounted and the input stays
+      // usable. The turn still commits its chat message/trace —
+      // summarizeDraftResult covers the notes (useChatThread 'done').
+      if (workstateTurn) {
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
+      // PB-CH-8 fix1: this turn carried the server's ledger_answer — the
+      // kind:'ledger' trace (answerText verbatim + provenance) rendered in
+      // the chat section is its ONLY surface. Same discipline as the
+      // workstate guard above: no draft-ready, no 'reviewing' mode, no empty
+      // actionable 'Apply to run', the chat section stays mounted and the
+      // input stays usable. The turn still commits its chat message/trace —
+      // summarizeDraftResult covers the notes (useChatThread 'done').
+      if (ledgerTurn) {
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
+      // PROTO-AI-9: a `protocol_edit` emission branches HERE, independent of
+      // the event-graph path. The proposal renders in the SAME ChangesPanel
+      // review surface (D1: no new rail) and the sidebar leaves 'interpreting'
+      // the moment it is shown — never stuck. The envelope's validated `ops`
+      // are kept verbatim for Accept; only the display diff is derived.
+      const protocolEdit = result.protocolEdit
+      if (protocolEdit && Array.isArray(protocolEdit.ops) && protocolEdit.ops.length > 0) {
+        const identity = protocolSel?.protocol
+        if (identity) {
+          const snapshot: AttachedProtocolSnapshot = {
+            steps: (protocolSel?.steps ?? []).map((s) => ({
+              stepId: s.stepId,
+              label: s.label,
+              ...(s.description ? { description: s.description } : {}),
+              ...(s.kind ? { kind: s.kind } : {}),
+            })),
+            labwareRoles: (protocolSel?.resources.labwares ?? []).map((r) => ({
+              roleId: r.roleId,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.expectedLabwareKinds?.length ? { expectedLabwareKinds: r.expectedLabwareKinds } : {}),
+            })),
+            instrumentRoles: (protocolSel?.resources.equipment ?? []).map((r) => ({
+              roleId: r.roleId,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.allowedInstrumentIds?.length ? { allowedInstrumentIds: r.allowedInstrumentIds } : {}),
+            })),
+          }
+          const diff = protocolEditDiffFrom(
+            protocolEdit,
+            { recordId: identity.recordId, ...(identity.title ? { title: identity.title } : {}) },
+            snapshot,
+          )
+          if (diff) {
+            const targetRecordId = protocolEdit.protocolId ?? identity.recordId
+            protocolProposalRef.current = {
+              protocolId: targetRecordId,
+              attachedRecordId: identity.recordId,
+              ops: protocolEdit.ops as ProtocolEditOp[],
+            }
+            setProtocolApply(null)
+            sidebarDispatch({
+              type: 'draft-ready',
+              draftId,
+              interpretation: { operations: [] },
+              changes: [],
+              warnings: [],
+              terms: result.termManifest ?? [],
+              protocolDiff: diff,
+            })
+            // A protocol edit ghosts NOTHING on the deck — its review surface
+            // is this panel; the deck preview belongs to the event-graph path.
+            return
+          }
+          // An unmappable envelope falls through to the event-graph path
+          // unchanged rather than opening an empty protocol review.
+        }
+      }
+
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
-        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
+        sidebarDispatch({
+          type: 'clarifications-needed',
+          draftId,
+          questions: result.clarificationRequests,
+          // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): a needs-clarification
+          // turn IS proposal-bearing — the server carries result.shorthand on
+          // it, and the spec's UI goal shows the document VERBATIM above the
+          // proposal. Same conditional-spread discipline as 'draft-ready': a
+          // clarification from a draft without shorthand stays byte-identical.
+          ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
+        })
       } else {
         // Describe what will be applied. This used to pass `changes: []`, so
         // "Apply to run" sat above an empty list — the biologist was asked to
@@ -287,6 +519,9 @@ export function AiTabPanel() {
           warnings: [],
           // Classified server-side (draftTermManifest); absent on older payloads.
           terms: result.termManifest ?? [],
+          // SHORTHAND-CHAT: the compiled document VERBATIM (conditional
+          // spread — a draft without shorthand stays byte-identical).
+          ...(result.shorthand !== undefined ? { shorthand: result.shorthand } : {}),
         })
       }
 
@@ -356,26 +591,184 @@ export function AiTabPanel() {
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
-    [activeDeckScope, editor, navigate],
+    [activeDeckScope, editor, protocolSel?.protocol, protocolSel?.steps, protocolSel?.resources],
+  )
+
+  // SHORTHAND-CHAT — the edit-recompile path. The edited document is POSTed
+  // UNTOUCHED to the server's EXISTING POST /intent/compile; the deterministic
+  // compiler (Ajv sole authority) re-parses and recompiles, and the new
+  // proposal REPLACES the old one (sidebar review + deck ghosts). Zero LLM
+  // calls on this path — edits re-compile, never re-draft. A rejected edit
+  // surfaces the server's diagnostic verbatim and the existing proposal stays.
+  const handleShorthandRecompile = useCallback(
+    async (yaml: string) => {
+      if (!editor) return
+      setShorthandApply({ recompiling: true })
+      try {
+        const compiled = await apiClient.intentCompile(yaml)
+        const terminal = compiled.terminalArtifacts ?? {}
+        const events = (terminal.events ?? []) as PlateEvent[]
+        const gaps = (terminal.gaps ?? []).map((gap) => ({
+          code: 'compile-gap',
+          message: typeof gap.message === 'string' ? gap.message : 'compile gap',
+          severity: 'warning' as const,
+        }))
+        const prompt = lastShorthandDraftRef.current?.prompt ?? ''
+        const platform = getPlatformManifest(editor.state.platforms, editor.state.platformId)
+        const variant = getVariantManifest(editor.state.platforms, editor.state.platformId, editor.state.variantId)
+        const { preview, skips } = buildPreviewFromDraft({
+          platform,
+          variant,
+          events,
+          labwareAdditions: [],
+          labwareRequirements: [],
+          equipmentRequirements: [],
+          recordCreations: [],
+          existingLabwares: editor.state.labwares,
+          existingPlacements: editor.state.placements,
+          activeDeckScope,
+        })
+        editor.actions.setPreview({
+          ...preview,
+          sourcePrompt: prompt,
+          labwareRequirements: [],
+          labwareAdditions: [],
+          ...(skips.length > 0 ? { sourceSkips: skips } : {}),
+        })
+        sidebarDispatch({
+          type: 'draft-ready',
+          draftId: `draft-recompile-${Date.now()}`,
+          interpretation: { operations: [] },
+          changes: changesFromDraftEvents(events),
+          warnings: gaps,
+          terms: [],
+          shorthand: yaml,
+        })
+        setShorthandApply(null)
+      } catch (err) {
+        // The server's parse diagnostic rides verbatim; the proposal is untouched.
+        setShorthandApply({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+    [activeDeckScope, editor],
+  )
+
+  // ── PB-CH-4 — the Wave-1 mount ───────────────────────────────────────────
+  // Tier 1: the frame that reaches the flow's handler is the OUTPUT of the
+  // server's workspace-action compiler (Ajv + spine + registry resolution
+  // already happened — AR-1). The PB-CH-3 shared executor applies it on
+  // arrival; the hook self-wires openTabs/navigate/registry/focus/single-writer,
+  // so the panel passes NOTHING down (AR-3: consume the executor, never
+  // re-implement it). The unsaved-work guarantee (reference identity of
+  // non-target tabs, no replace/close, no confirm dialog) is the EXECUTOR's,
+  // mounted through the flow — not re-implemented. An ok:false outcome surfaces
+  // its diagnostic text in the trace: no dialog, no retry loop, no local
+  // fallback (PB-CH-3 OQ2/OQ3). PB-CH-6: the narrowing + executeTier1 call
+  // moved into `useWorkstateProposalFlow.handleAgentAction` verbatim (the same
+  // code, now shared with the Analysis + protocol-builder mounts).
+  const flow = useWorkstateProposalFlow()
+
+  // THE CONTEXT GAP FIX: `focusedStep` is display-only in ChatContextHeader
+  // today. Here it leaves the DOM and rides the request contract. Conditional
+  // spread — with nothing focused the key is ABSENT, never `undefined`
+  // (exactOptionalPropertyTypes discipline). Never folded into `context`
+  // (per-turn churn would break the KV warm prefix) and never merged into
+  // protocolStepContext (that ghosts the deck).
+  const workingFocus = useMemo(() => {
+    const focused = protocolSel?.focusedStep
+    const protocolId = protocolSel?.protocol?.recordId
+    if (!focused || !protocolId) return undefined
+    return {
+      protocolId,
+      stepId: focused.stepId,
+      label: focused.label,
+      ...(focused.ordinal !== undefined ? { ordinal: focused.ordinal } : {}),
+    }
+  }, [protocolSel?.focusedStep, protocolSel?.protocol?.recordId])
+
+  // Tier 2: the model's INTENT arrives here verbatim. PB-CH-6 lifted the
+  // compile→card→accept/reject orchestration into the shared
+  // `useWorkstateProposalFlow` (the ONE implementation — the compile call site
+  // lives there, not here) so the Analysis mount and the protocol-builder
+  // mount ride the SAME machinery. The trust rule is unchanged: the panel
+  // relays the intent to POST /api/drafts/compile — THE trust boundary; until
+  // that response says canAccept:true the card is a "compiling…" slot with NO
+  // accept control; a newer proposal supersedes an in-flight compile and a
+  // late response for a superseded compile is DISCARDED (never resurrected).
+  // PB-CH-5: the SAME flow serves the analysis adapter — `adapter` is a
+  // parameter of the flow; analysis is ONE constant, not a fork.
+  // NOT lifted (PB-CH-6 extraction ruling): the workstateTurnRef flag and the
+  // sendChat choke point below — they guard the AiTabPanel turn model, not the
+  // flow, and stay here byte-identical.
+  const handleWorkstateProposal = useCallback(
+    (intent: Record<string, unknown>, adapter: WorkstateAdapter) => {
+      // PB-CH-4 D1: mark THIS turn as a card turn (workstate OR analysis —
+      // tier-2 proposals both fire the event-graph onDraftResult path with
+      // notes-only results, and the card is their ONLY review surface). The
+      // server emits the proposal event during run() and `done` only after
+      // run() resolves (AgentOrchestrator.ts vs AIHandlers.ts:458, the handler
+      // behind the client's /ai/assist/stream), so the flag is set before the
+      // same turn's onDraftResult consumes it.
+      workstateTurnRef.current = true
+      void flow.proposeWorkstate(adapter, intent)
+    },
+    [flow],
   )
 
   const chat = useChatThread({
     surface: systemPrompt.id,
     context,
+    ...(workingFocus ? { workingFocus } : {}),
     onDraftResult,
+    onAgentAction: flow.handleAgentAction,
+    onWorkstateProposal: (intent) => {
+      handleWorkstateProposal(intent, 'workstate')
+    },
+    // PB-CH-5: the analysis INTENT rides the SAME flow — the only delta is the
+    // adapter constant; card state, pending identity, supersede, accept and
+    // reject are the identical code paths (shared, not forked).
+    onAnalysisProposal: (intent) => {
+      handleWorkstateProposal(intent, 'analysis')
+    },
+    // PB-CH-8 fix1: the ledger_answer frame marks THIS turn as a ledger turn
+    // (the hook still renders the trace verbatim — this is the flag-set site,
+    // mirroring handleWorkstateProposal's workstateTurnRef set).
+    onLedgerAnswer: () => {
+      ledgerTurnRef.current = true
+    },
   })
+
+  // PB-CH-4 review fix1 D1: THE single choke point every turn starts through.
+  // The panel has FIVE chat.send entry points (sendSurfaceContext, handleSend,
+  // handleClarificationsSubmit, the protocol-builder Draft button, the
+  // Extract-Protocol CTA); clearing the workstate flag at three of them left
+  // two leak paths, and a turn that dies on an SSE error/abort never fires
+  // onDraftResult, so a stale flag could suppress a LATER turn's draft-ready.
+  // Every send in this panel goes through this wrapper, so no send path can
+  // miss the reset — the flag is cleared at turn start regardless of how the
+  // previous turn ended (done, error frame, or Stop).
+  const sendChat = useCallback(
+    (text: string, options?: Parameters<typeof chat.send>[1]) => {
+      workstateTurnRef.current = false // PB-CH-4 D1: a fresh turn starts here — no leak
+      ledgerTurnRef.current = false // PB-CH-8 fix1: same choke point, same no-leap guarantee
+      return chat.send(text, options)
+    },
+    [chat],
+  )
 
   // Send a well-formed SurfaceContext into the AI chat with the deterministic
   // "from surface, selected N, goal" preamble so every selection→AI seam is
   // corpus-capturable. Accepts extra chat.send options (e.g. protocolStepContext).
   const sendSurfaceContext = useCallback(
     (sc: SurfaceContext, extra?: Parameters<typeof chat.send>[1]) => {
-      void chat.send(surfaceAiPrompt(sc), {
+      void sendChat(surfaceAiPrompt(sc), {
         enableThinking: false,
         ...(extra ?? {}),
       })
     },
-    [chat],
+    [sendChat],
   )
 
   // Pre-warm the KV cache while the user reads/types: whenever the deck
@@ -454,6 +847,102 @@ export function AiTabPanel() {
   // Coexists alongside the chat reducer — it adds state-driven UI behavior on top of the existing chat.
   const [sidebar, sidebarDispatch] = useReducer(sidebarReducer, initialSidebarState)
 
+  // SHORTHAND-CORPUS WS1 — the chat-Accept corpus leg (OQ1 ruling: client-side
+  // post-accept POST to the EXISTING /intent/training-pair seam, fire-and-
+  // forget, mirroring eventGraphPersistence's corpus leg). Only a draft that
+  // carried shorthand produces a pair. The accepted document rides VERBATIM as
+  // `shorthandYaml` — render + POST only, the client NEVER parses (the server
+  // decodes via parseYaml into the lift+Ajv capture door). The committed
+  // preview events + labwares ride `acceptedGraph` as PROVENANCE ONLY, never
+  // the target. Must read the preview BEFORE commitPreview clears it. A failed
+  // post never touches the Accept (best-effort; corpus may be off-box).
+  const captureAcceptedShorthandPair = useCallback(() => {
+    if (!editor) return
+    if (sidebar.mode !== 'reviewing' || sidebar.shorthand === undefined) return
+    const draft = lastShorthandDraftRef.current
+    if (!draft) return
+    const { state } = editor
+    void apiClient
+      .intentTrainingPair({
+        userPrompt: draft.prompt,
+        shorthandYaml: sidebar.shorthand,
+        acceptedGraph: {
+          events: [...state.events, ...(state.preview?.previewEvents ?? [])],
+          labwares: state.labwares,
+        },
+        confirmedAt: new Date().toISOString(),
+      })
+      .then((res) => {
+        if (!res.ok && res.error !== 'corpus.disabled') {
+          console.warn('corpus:chat-accept-pair-not-posted', res.error)
+        }
+      })
+      .catch(() => {
+        // Fire-and-forget: a capture failure never fails the Accept.
+      })
+  }, [editor, sidebar])
+
+  // PROTO-AI-9 Accept/Reject state. The VALIDATED envelope ops ride a ref
+  // (never re-derived from the display diff) so Accept sends exactly what the
+  // server validated. `applying` disables the button the moment Accept fires —
+  // a duplicate click cannot replay; AI-8's no-op idempotence is the backstop.
+  // `error` carries a failed apply verbatim (the D4 stale-sha message).
+  const protocolProposalRef = useRef<{
+    protocolId: string
+    attachedRecordId: string
+    ops: ProtocolEditOp[]
+  } | null>(null)
+  const [protocolApply, setProtocolApply] = useState<{
+    applying: boolean
+    error?: string
+  } | null>(null)
+
+  // Swapping the attached protocol invalidates an open proposal: what the AI
+  // proposed was against the PREVIOUS protocol's ground truth — Reject it.
+  const attachedProtocolId = protocolSel?.protocol?.recordId ?? null
+  useEffect(() => {
+    const open = protocolProposalRef.current
+    if (open && open.attachedRecordId !== attachedProtocolId) {
+      protocolProposalRef.current = null
+      setProtocolApply(null)
+      sidebarDispatch({ type: 'reset' })
+    }
+  }, [attachedProtocolId])
+
+  const handleProtocolAccept = useCallback(() => {
+    const proposal = protocolProposalRef.current
+    if (!proposal) return
+    // Duplicate-Accept gate: while an apply is in flight nothing re-fires.
+    setProtocolApply((prev) => (prev?.applying ? prev : { applying: true }))
+    void (async () => {
+      try {
+        // PROTO-AI-8 applier: getRecord → apply pure → ONE updateRecord
+        // under the human lock. Zero writes on gate rejection / no-op / stale sha.
+        await applyProtocolEdit(proposal.protocolId, proposal.ops)
+        // Success: the proposal is spent. Reset the sidebar so the chat
+        // input returns and there is nothing left to re-Accept.
+        // D2 rail refresh: same window signal every human protocol-write
+        // path fires after a successful write (ProtocolStepEditModal.tsx:99,
+        // ProtocolTabPanel.tsx:1394, ProtocolNavPanel.tsx:130) — RunProtocol
+        // StepsLoader listens and refills the rail so the LABWARE count
+        // updates without a page reload. SUCCESS only: a failed apply wrote
+        // nothing and must not refresh.
+        window.dispatchEvent(new CustomEvent('cl:records-changed'))
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+      } catch (error) {
+        // Truthful conflict state (D4 verbatim via protocolEditOps): the
+        // proposal stays open for review, the input is NOT lost, and the
+        // Apply label flips back; the user reloads per the message.
+        setProtocolApply({
+          applying: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })()
+  }, [])
+
   // Sub-tab navigation: auto-switches based on sidebar mode, user can override
   type AiSubTab = 'chat' | 'questions' | 'interpretation' | 'changes'
 
@@ -479,10 +968,14 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // PB-CH-4 D1: a fresh send starts a fresh turn — sendChat resets the
+      // workstate flag at the choke point, so a flag from a previous turn
+      // (e.g. one that ended on an SSE error with no `done` frame) can never
+      // suppress this turn's review path.
       sidebarDispatch({ type: 'start-interpreting', prompt: text })
-      await chat.send(text, { enableThinking: false })
+      await sendChat(text, { enableThinking: false })
     },
-    [chat],
+    [sendChat],
   )
 
   // Term overrides were moved to the deck's review modal (Discard / View changes /
@@ -507,15 +1000,19 @@ export function AiTabPanel() {
       const all = [...resolvedClarificationsRef.current.values()]
       const answerMap = Object.fromEntries(answers.map((a) => [a.requestId, a]))
       sidebarDispatch({ type: 'submit-answers', answers: answerMap })
-      await chat.send(clarificationAnswersPrompt(answers, requests), {
+      await sendChat(clarificationAnswersPrompt(answers, requests), {
         clarificationAnswers: all,
         enableThinking: false,
       })
     },
-    [chat],
+    [sendChat],
   )
 
   const handleCancelDraft = useCallback(() => {
+    // Reject → zero mutation: the proposal is dropped, NOTHING is written,
+    // and the deck preview (if any) clears exactly as before.
+    protocolProposalRef.current = null
+    setProtocolApply(null)
     sidebarDispatch({ type: 'cancel' })
     resolvedClarificationsRef.current.clear()
     editor?.actions.clearPreview()
@@ -695,7 +1192,7 @@ export function AiTabPanel() {
                 })
               }
 
-              void chat.send(draftPrompt, { enableThinking: false })
+              void sendChat(draftPrompt, { enableThinking: false })
             }}
             onPromote={() => {
               // Accept the ghost preview events into the event graph
@@ -718,7 +1215,7 @@ export function AiTabPanel() {
               className="ai-tab__protocol-cta-btn"
               onClick={() => {
                 resolvedClarificationsRef.current.clear()
-                void chat.send(
+                void sendChat(
                   `Extract a protocol from the PDF in the active tab. Identify the procedure steps, materials, and labware.`,
                   { enableThinking: false },
                 )
@@ -734,6 +1231,24 @@ export function AiTabPanel() {
       {activeSubTab === 'chat' ? (
         <section className="ai-tab__section ai-tab__section--log">
           <MessageLog state={chat.state} />
+          {flow.card ? (
+            // PB-CH-4 tier-2: the review card rides the chat itself. While a
+            // card is pending NO proposed tab is rendered anywhere (no ghosted
+            // preview, no store copy) — the workspace adopts a workstate only
+            // through Accept → the single writer. PB-CH-6: the card state now
+            // comes from the shared flow (same phases, same identity).
+            <WorkstateProposalCard
+              phase={flow.card.phase}
+              {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+              {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
+              {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+              {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+              {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+              {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+              onAccept={() => void flow.acceptWorkstate()}
+              onReject={flow.rejectWorkstate}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -743,6 +1258,10 @@ export function AiTabPanel() {
             questions={sidebar.questions}
             answers={sidebar.answers}
             activeQuestionId={sidebar.activeQuestionId}
+            // SHORTHAND-CHAT fix cycle 1: verbatim document above the
+            // questions while the draft is paused (conditional spread — a
+            // clarification without shorthand renders byte-unchanged).
+            {...(sidebar.shorthand !== undefined ? { shorthand: sidebar.shorthand } : {})}
             onAnswer={(qId, ans) => sidebarDispatch({ type: 'answer-question', questionId: qId, answer: ans })}
             onChangeQuestion={(qId) => sidebarDispatch({ type: 'change-question', questionId: qId })}
             onSubmit={() => {
@@ -767,9 +1286,41 @@ export function AiTabPanel() {
           <ChangesPanel
             changes={sidebar.changes}
             warnings={sidebar.warnings}
+            {...(sidebar.protocolDiff ? { protocolDiff: sidebar.protocolDiff } : {})}
+            {...(protocolApply?.applying ? { applying: true } : {})}
+            {...(protocolApply?.error ? { applyError: protocolApply.error } : {})}
+            // SHORTHAND-CHAT: verbatim document + edit affordance (conditional
+            // spread — a draft without shorthand renders byte-unchanged).
+            {...(sidebar.shorthand !== undefined ? { shorthand: sidebar.shorthand } : {})}
+            {...(sidebar.shorthand !== undefined && editor ? { onShorthandRecompile: (yaml: string) => { void handleShorthandRecompile(yaml) } } : {})}
+            {...(shorthandApply?.recompiling ? { recompiling: true } : {})}
+            {...(shorthandApply?.error !== undefined ? { shorthandError: shorthandApply.error } : {})}
             onApply={() => {
+              // The ONLY behavioural hook (grounding-map §(e)): a protocol
+              // proposal runs the PROTO-AI-8 applier; an event-graph draft
+              // commits its preview exactly as before.
+              if (sidebar.protocolDiff) {
+                handleProtocolAccept()
+                return
+              }
+              // R-Defect-2 (PROTO-AI-9 fix): with NO protocol proposal and
+              // NO mounted preview there is nothing to commit — entering
+              // `committing` here hid the chat input with no UI exit
+              // (isChatEnabled false, nothing but cancel/reset leaves it).
+              // Stay usable: return the pane to chat instead.
+              if (!previewActive) {
+                sidebarDispatch({ type: 'reset' })
+                return
+              }
               sidebarDispatch({ type: 'commit' })
+              // SHORTHAND-CORPUS WS1: capture BEFORE the commit clears the
+              // preview (the provenance graph reads the mounted ghosts).
+              captureAcceptedShorthandPair()
               editor?.actions.commitPreview()
+              // Bounded reset path for `committing`: the commit is a
+              // synchronous local editor dispatch, so the pane returns to
+              // chat in the same turn — the input can never be stranded.
+              sidebarDispatch({ type: 'reset' })
             }}
             onDiscard={handleCancelDraft}
           />

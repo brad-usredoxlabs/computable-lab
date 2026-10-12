@@ -49,6 +49,63 @@ form:
       widget: "protocol-prose-authoring"
       label: "Notes"
 
+  # W2-3 — the INTENT shape (additive display hints only; zero app code).
+  # The custom `protocol-step-roles` taptab widget above remains the RENDERER of
+  # $.steps (it reads known fields and round-trips unknown keys via {...step}
+  # spreads, so an intent step already renders as its label/description with the
+  # intent payload preserved). These hints are DATA for the W2-8 SAID/MEANT
+  # surface to consume: the readonly intent arms of a step. W2-3 changes no widget.
+  - title: "Intent"
+    description: >-
+      Semantic intent carried by intent steps (presence of steps[*].intent is the
+      discriminator). Read-only here: the intent arms are authored through the
+      protocol lifecycle, not by free-form field edits.
+    fields:
+    - path: "$.steps[*].intent.semanticVerb"
+      widget: "ref"
+      label: "Semantic verb"
+      readonly: true
+      helpText: "verb-definition record ref — the crosswalk's Semantic operation"
+    - path: "$.steps[*].intent.materialNeeds"
+      widget: "array"
+      label: "Material needs"
+      readonly: true
+      helpText: "symbolic role refs + capability requirements"
+    - path: "$.steps[*].intent.constraints"
+      widget: "array"
+      label: "Constraints"
+      readonly: true
+      helpText: "typed Quantity/QuantityRatio bounds (constraint vocabulary classes)"
+    - path: "$.steps[*].intent.provenance"
+      widget: "ref"
+      label: "Provenance"
+      readonly: true
+      helpText: "pointers at the SAID (vendor-protocol-candidate + anchors)"
+
+  # W2-4-PROVENANCE-LADDER (additive, NEW section — the W2-3 'Intent' section's
+  # field list is byte-unchanged so its pinned loader test stays green). DERIVED
+  # badge hints on the intent provenance anchors: rung badges are RENDERED from
+  # rung-vocabulary data by the W2-8 surface; W2-4 ships hints only.
+  # INFERRED_INVARIANT has no family-side slot in protocol.schema.yaml yet
+  # (declared seam to W2-5 — see the commented seam in protocol.lint.yaml); its
+  # hint rides HERE once the slot lands.
+  - title: "Provenance (DERIVED)"
+    description: >-
+      DERIVED lineage of an intent conclusion: the candidate document anchor it
+      quotes. Read-only hints; enforcement is prov-derived-* lint
+      (protocol.lint.yaml) + the schema's StepProvenanceRef type const.
+    fields:
+    - path: "$.steps[*].intent.provenance[*].id"
+      widget: "text"
+      label: "Candidate id (DERIVED — never another kind's id)"
+      readonly: true
+      helpText: "a DERIVED conclusion quotes the SAID (CAN- candidate id); prov-derived-never-vendor-carrier"
+    - path: "$.steps[*].intent.provenance[*].pageStart"
+      widget: "number"
+      label: "Page (DERIVED — candidate-anchored)"
+      readonly: true
+      helpText: "the visible candidate document anchor; prov-derived-conclusions-anchored"
+
 list:
   columns:
   - path: "$.recordId"

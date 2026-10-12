@@ -58,6 +58,18 @@ export interface AssistBody {
     highlightedSection: string;
     selectedText?: string;
   };
+  /**
+   * PB-CH-4 — the structured working focus (the step ChatContextHeader shows).
+   * Rides the request TOP-LEVEL (like protocolStepContext) and renders as the
+   * WORKING FOCUS prompt block only when present. NOT folded into `context`
+   * (per-turn churn would break the KV warm prefix).
+   */
+  workingFocus?: {
+    protocolId: string;
+    stepId: string;
+    label: string;
+    ordinal?: number;
+  };
 }
 
 /**
@@ -153,10 +165,17 @@ function buildProtocolExtractedEvent(
 
 /**
  * Create AI handlers backed by the given orchestrator.
+ *
+ * PB-CH-8: the optional `resolveLedgerActor` seam supplies the RESOLVED request
+ * user (production passes `ctx.localIdentityService.resolveRequestUser`) so a
+ * `query_workstate_history` turn runs against a resolved identity. Omitted or
+ * unresolved ⇒ the ledger REFUSES the read (OQ1 ruling: never a raw-header
+ * fallback for ledger reads).
  */
 export function createAIHandlers(
   orchestrator: AgentOrchestrator,
   getWarmup?: () => PromptWarmupManager | undefined,
+  resolveLedgerActor?: (request: FastifyRequest) => Promise<string | null>,
 ): AIHandlers {
   return {
     async draftEvents(
@@ -299,6 +318,7 @@ export function createAIHandlers(
       let enableThinking: boolean | undefined;
       let clarificationAnswers: AgentClarificationAnswer[] | undefined;
       let protocolStepContext: NonNullable<AssistBody['protocolStepContext']> | undefined;
+      let workingFocus: NonNullable<AssistBody['workingFocus']> | undefined;
       let fileAttachments: FileAttachment[] = [];
       let uploadedFiles: UploadedFile[] = [];
 
@@ -332,6 +352,7 @@ export function createAIHandlers(
         enableThinking = fields['enableThinking'] === 'true' ? true : undefined;
         clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
         protocolStepContext = fields['protocolStepContext'] ? JSON.parse(fields['protocolStepContext']) as NonNullable<AssistBody['protocolStepContext']> : undefined;
+        workingFocus = fields['workingFocus'] ? JSON.parse(fields['workingFocus']) as NonNullable<AssistBody['workingFocus']> : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
         fileAttachments = uploadedFiles.map((f) => ({
@@ -349,6 +370,7 @@ export function createAIHandlers(
         enableThinking = body.enableThinking;
         clarificationAnswers = body.clarificationAnswers;
         protocolStepContext = body.protocolStepContext;
+        workingFocus = body.workingFocus;
       }
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -413,6 +435,10 @@ export function createAIHandlers(
         availableVerbs: [],
         ...context,
         ...(protocolStepContext ? { protocolStepContext } : {}),
+        // PB-CH-4: focus rides the top-level and renders as the WORKING FOCUS
+        // block; conditional spread — never `{workingFocus: undefined}`
+        // (exactOptionalPropertyTypes, server tsconfig:13).
+        ...(workingFocus ? { workingFocus } : {}),
       };
 
       // NOTE: File attachments are passed directly to orchestrator.run(),
@@ -426,6 +452,13 @@ export function createAIHandlers(
 
         sendEvent({ type: 'status', message: `Processing ${surface} request...` });
 
+        // PB-CH-8 (OQ1 ruling): resolve the ledger actor BEFORE the turn runs.
+        // A resolved user rides into the orchestrator; an unresolved one is
+        // null — the ledger refuses, never falls back to the header 'default'.
+        const ledgerActor = resolveLedgerActor
+          ? await resolveLedgerActor(request).catch(() => null)
+          : null;
+
         const result = await orchestrator.run({
           prompt,
           context: editorContext,
@@ -434,6 +467,7 @@ export function createAIHandlers(
           ...(fileAttachments.length > 0 ? { attachments: fileAttachments } : {}),
           ...(clarificationAnswers ? { clarificationAnswers } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
+          ...(ledgerActor !== null ? { ledgerActor } : {}),
           onEvent: sendEvent,
         });
 

@@ -171,6 +171,23 @@ export interface AIConfig {
   /** Background KV-context warming against a local llama.cpp server. */
   warmup?: WarmupConfig;
   /**
+   * PROTO-AI-12 shadow router (log-only). MISSING block = fully OFF: no
+   * inference call, no telemetry write. All endpoints are DATA here — the
+   * router URL is never hardcoded in code.
+   */
+  shadowRouter?: ShadowRouterConfig;
+  /**
+   * W2-6 semantic-pass inference block (P2 ruling: OPTIONAL block, the
+   * shadowRouter optional-block precedent). MISSING/absent block = the pass
+   * runs on the active profile's inference (resolveAiProfile(ai).inference).
+   * Every field is optional and merges OVER the resolved profile: a block
+   * that names only `model` swaps the model and keeps the profile's endpoint.
+   * Model/host/thinking are DATA here — never literals in code. The /settings
+   * UI section for this block is W2-9's; the resolution seam lives in
+   * server/src/ingestion/vendor-protocol/SemanticFamilyPass.ts.
+   */
+  semanticPass?: SemanticPassConfig;
+  /**
    * RESOLVE threshold for prompt resolution assurance (default 0.9).
    * Below-threshold compiles pause for user confirmation instead of
    * auto-previewing. Also used as the default per-critical-binding floor.
@@ -195,6 +212,57 @@ export interface WarmupConfig {
   maxLibraryEntries?: number;
   /** Manifest path for persisted contexts (default "var/compiled-contexts.json"). */
   manifestPath?: string;
+}
+
+/**
+ * PROTO-AI-12 shadow-router configuration (campaign ai-protocol-edit-and-router).
+ *
+ * The tiny-model router is a LOG-ONLY shadow: it classifies the same turn the
+ * big model handles and appends a paired telemetry record. It never drafts
+ * payloads, never writes records, and its failure can never alter the
+ * user-visible result.
+ *
+ * Kill-switch semantics: MISSING config = OFF. Every field is optional;
+ * `enabled` must be explicitly `true` for anything to fire. Endpoints are
+ * DATA (never hardcoded URLs).
+ */
+export interface ShadowRouterConfig {
+  /** Master switch (default false — absent means OFF). */
+  enabled?: boolean;
+  /** OpenAI-compatible base URL of the tiny-model endpoint (e.g. "http://appliance-2:8900/v1"). */
+  baseUrl?: string;
+  /** Model name served at that endpoint. */
+  model?: string;
+  /** Per-classification timeout in ms (default 8_000). */
+  timeoutMs?: number;
+  /** Append-only JSONL telemetry destination (mirrors the foundry events.jsonl pattern). */
+  telemetryPath?: string;
+}
+
+/**
+ * W2-6 semantic-pass inference block. Every field optional; the block merges
+ * OVER the resolved profile (see AIConfig.semanticPass). `thinkingLevels` /
+ * `defaultThinkingLevel` reuse the InferenceConfig thinking-level DATA shape
+ * (ai/thinkingLevels.ts) — an unknown requested level is refused, never
+ * downgraded.
+ */
+export interface SemanticPassConfig {
+  /** OpenAI-compatible base URL override for the semantic pass. */
+  baseUrl?: string;
+  /** Model name override for the semantic pass. */
+  model?: string;
+  /** API key override (endpoints that require one). */
+  apiKey?: string;
+  /** Answer budget for the pass (the knob SEMANTIC_PASS_TRUNCATED names). */
+  maxTokens?: number;
+  /** Generation temperature override. */
+  temperature?: number;
+  /** vLLM/Qwen3 enable_thinking override. */
+  enableThinking?: boolean;
+  /** Named thinking levels for the pass (thinkingLevels.ts shape). */
+  thinkingLevels?: Record<string, import('../ai/thinkingLevels.js').ThinkingLevelDefinition>;
+  /** Level id applied when a request names none. */
+  defaultThinkingLevel?: string;
 }
 
 /**
@@ -308,6 +376,15 @@ export interface ServerConfig {
    * absent list simply leaves those kinds unprotected.
    */
   appendOnlyKinds?: string[];
+  /**
+   * Record kinds whose ordinary review EDITS (PUT /records/:id) capture a
+   * record-revision snapshot of the superseded payload and append a
+   * `record_revised` audit event. Mirrors the appendOnlyKinds pattern: a
+   * documented DATA knob, evaluated generically by the record handler — no
+   * kind-branching in TypeScript. Defaults to the extraction-draft review
+   * surface in DEFAULT_CONFIG.
+   */
+  revisionOnEditKinds?: string[];
 }
 
 /**
@@ -440,7 +517,8 @@ export const DEFAULT_CONFIG: AppConfig = {
       enabled: true,
       origins: ['*'],
     },
-    appendOnlyKinds: ['audit-event', 'signature'],
+    appendOnlyKinds: ['audit-event', 'signature', 'vendor-protocol-candidate'],
+    revisionOnEditKinds: ['extraction-draft'],
   },
   schemas: {
     source: 'bundled',

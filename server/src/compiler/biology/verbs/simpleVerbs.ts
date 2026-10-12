@@ -337,9 +337,17 @@ export const addMaterialExpander: BiologyVerbExpander = {
         ? params.volume_uL
         : typeof params.volume_ul === 'number'
           ? params.volume_ul
-          : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
-            ? material.volume_uL
-            : undefined;
+          : typeof params.volume === 'number'
+            // The wire contract declares `volume` a quantity (schema
+            // scientist-intent.schema.yaml `volume: {}`); a bare NUMBER
+            // reaches here unexpanded. The serial-dilution lowering already
+            // normalizes a numeric wire `volume` as uL (normalizeScientist-
+            // Intent serialDilutionPattern) — same rule here, so "add 100ul
+            // DMEM" never compiles an amount-less add_material.
+            ? params.volume
+            : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
+              ? material.volume_uL
+              : undefined;
 
     const events: PlateEventPrimitive[] = [];
 
@@ -419,6 +427,13 @@ export const transferExpander: BiologyVerbExpander = {
     const targetWells = (params.wells ?? params.target_wells) as string[] | undefined;
     const sourceWell = params.source_well as string | undefined;
     const sourceWells = params.source_wells as string[] | undefined;
+    // SPINE-7: a scalar well-LABEL lowered by normalizeScientistIntent rides
+    // the candidate as `wellRole` (a scientist-intent producer key); the
+    // resolve_roles seam (ChatbotCompilePasses :2390/:2410) consumes
+    // details.role against the resolve_nouns slot. Passive carrier only: the
+    // chatbot chain has no wellRole producer => chatbot lowering byte-identical
+    // (a chatbot candidate's own `role` param is NOT lowered into details).
+    const wellRole = typeof params.wellRole === 'string' && params.wellRole.trim() ? params.wellRole : undefined;
     const volume_uL = (params.volume_uL ?? params.volume_ul) as number | undefined;
     const volume = params.volume as { value: number; unit: string } | undefined;
     const materialRef = (params.material_ref ?? params.source_material_ref) as
@@ -434,6 +449,7 @@ export const transferExpander: BiologyVerbExpander = {
         ...(sourceWells ? { source_wells: sourceWells } : {}),
         ...(targetWell ? { well: targetWell } : {}),
         ...(targetWells ? { wells: targetWells } : {}),
+        ...(wellRole ? { role: wellRole } : {}),
         ...(typeof volume_uL === 'number' ? { volumeUl: volume_uL, volume: { value: volume_uL, unit: 'uL' } } : {}),
         ...(volume && typeof volume === 'object' ? { volume } : {}),
         ...(materialRef ? { source_material_ref: materialRef } : {}),

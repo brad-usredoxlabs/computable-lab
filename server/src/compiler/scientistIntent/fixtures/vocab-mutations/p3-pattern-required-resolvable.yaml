@@ -1,0 +1,798 @@
+version: 1
+verbs:
+  - name: seed
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+  - name: incubate
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+  - name: mix
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+  - name: resuspend
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: dilute
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: shake
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+  - name: count
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: mode
+        kind: scalar
+        required: false
+      - name: readout
+        kind: scalar
+        required: false
+  - name: read
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: instrument
+        kind: resolvable
+        required: false
+        domain: instrument
+      - name: mode
+        kind: scalar
+        required: false
+      - name: wavelength
+        kind: scalar
+        required: false
+      - name: readout
+        kind: scalar
+        required: false
+  - name: add_material
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: source_name
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: volume
+        kind: quantity
+        required: false
+  - name: create_container
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: source_name
+        kind: scalar
+        required: false
+  - name: transfer
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: volume
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: stain
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: fix
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: permeabilize
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: block
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: quench
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: duration
+        kind: scalar
+        required: false
+  - name: label
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+  - name: transfect
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: aliquot
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: wash
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: elute
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: harvest
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+  - name: passage
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+  - name: freeze
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: thaw
+    class: compound
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+  - name: spin
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+  - name: pellet
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: rpm
+        kind: quantity
+        required: false
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+  - name: serial_dilution
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: true
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: factor
+        kind: quantity
+        required: true
+      - name: points
+        kind: quantity
+        required: true
+      - name: replicates
+        kind: quantity
+        required: false
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: ratio
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: media_swap_duplicate_columns
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: source_wells_to_duplicate_target_columns
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: volumeUl
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+  - name: repeat_rows
+    class: pattern
+    policyRef: hint-authority
+    args:
+      - name: source
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: target
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: cycles
+        kind: quantity
+        required: false
+      - name: sourceWells
+        kind: wells
+        required: false
+      - name: targetWells
+        kind: wells
+        required: false
+policies:
+  strategyOrder:
+    - explicit_wells
+    - hint_search
+    - symbolic_label
+    - ontology_resolution
+    - mint_local
+  ambiguity:
+    mode: clarify
+    confidenceAccept:
+      min: 0.7
+      max: 1
+    strategyRef: symbolic_label
+  hintAuthority:
+    mode: lab_hint_first
+    strategyRef: hint_search
+  ruleIds:
+    - hint-authority
+    - ambiguity-clarify

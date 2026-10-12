@@ -3,6 +3,7 @@ import { parseScientistIntent, ScientistIntentValidationError } from './parseSci
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
 import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm, composeIntentPrompt } from './intentCompile.js';
+import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 import { liftScientistIntent, canonicalActionName, coerceNumeric } from './liftScientistIntent.js';
 
 const THREE_ACTION = `
@@ -126,7 +127,9 @@ actions:
     const { intent, compile } = await compileFromSmallLlm({
       prompt: '2-fold serial dilution 4 points then incubate and read at 450nm',
       llmClient: llm as never,
-      deps: { searchLabwareByHint: async (h) => [{ recordId: `LAB-${h}`, title: h }] },
+      // SPINE-4 fix1/D1: spine injected explicitly (fail-loud registration);
+      // provider-less spine is the declared test seam, nouns bind via hint.
+      deps: { spine: createResolveSpine({}), searchLabwareByHint: async (h) => [{ recordId: `LAB-${h}`, title: h }] },
     });
 
     expect(intent.actions).toHaveLength(3);
@@ -164,7 +167,8 @@ actions:
     const { intent, compile } = await compileFromSmallLlm({
       prompt: '2-fold serial dilution 4 points then incubate and read at 450nm',
       llmClient: llm as never,
-      deps: { searchLabwareByHint: async (h) => [{ recordId: `LAB-${h}`, title: h }] },
+      // SPINE-4 fix1/D1: explicit test-seam spine (see the tool-call leg above).
+      deps: { spine: createResolveSpine({}), searchLabwareByHint: async (h) => [{ recordId: `LAB-${h}`, title: h }] },
     });
 
     expect(intent.actions).toHaveLength(3);
@@ -205,6 +209,8 @@ actions:
     const { intent } = await compileFromSmallLlm({
       prompt: 'Add 550 ul of Lysis Solution to the lysis module, then spin',
       llmClient: llm as never,
+      // SPINE-4 fix1/D1: explicit test-seam spine (fail-loud registration).
+      deps: { spine: createResolveSpine({}) },
     });
 
     expect(toolCallCalls).toHaveLength(1); // tool path tried once
@@ -244,7 +250,12 @@ describe('composeIntentPrompt (lab inventory context)', () => {
 describe('compileScientistIntent', () => {
   it('compiles the 3-action example into canonical events (gap: unresolved symbol)', async () => {
     const doc = parseScientistIntent(THREE_ACTION);
+    // SPINE-4 fix1/D1: deps.spine is REQUIRED (fail-loud registration). This
+    // suite's nouns are hint-eligible labware resolved by the stub lookup;
+    // the provider-less spine is injected EXPLICITLY as the declared test
+    // seam (legal only as an injected seam — never a silent default).
     const { terminalArtifacts, outcome } = await compileScientistIntent(doc, {
+      spine: createResolveSpine({}),
       searchLabwareByHint: async (hint) => {
         const h = hint.toLowerCase();
         if (h.includes('standards') || h === 'standards') {

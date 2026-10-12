@@ -197,6 +197,16 @@ export interface RecordStoreConfig {
    * logged but do not fail the originating write — indexing is downstream.
    */
   writeHook?: RecordStoreWriteHook;
+  /**
+   * Extra append-only kinds enforced by the store-level backstop, ON TOP of
+   * the governance triple the store already hardcodes (record-revision /
+   * signature / audit-event). The server passes the SAME appConfig list the
+   * record API walls read (server.ts getAppendOnlyKinds), so a service that
+   * bypasses the API (e.g. a future extraction pass calling store.update
+   * directly) hits the identical wall. Evaluated generically — no domain
+   * kind is hardcoded beyond the triple already hardcoded here.
+   */
+  appendOnlyKinds?: string[];
 }
 
 /**

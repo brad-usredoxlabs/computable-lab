@@ -15,3 +15,19 @@ form:
     - id: status
       title: "Review status"
       fields: [status, notes]
+# W2-5 §3.6 — additive review hints: the triplet's ui file had NO list view,
+# so the review surface lacked status/confidence columns. Same column shape
+# as the merged ui files (ui-v1 definitions/column; wildcard paths per the
+# protocol.ui.yaml `$.steps[*]...` precedent).
+list:
+  columns:
+    - path: "$.recordId"
+      label: "Draft"
+      width: "160px"
+    - path: "$.status"
+      label: "Review status"
+    - path: "$.candidates[*].target_kind"
+      label: "Candidate kinds"
+    - path: "$.candidates[*].confidence"
+      label: "Confidence"
+      format: "number"

@@ -1,0 +1,20 @@
+{
+  "runAt": "2026-10-09T06:54:22.023Z",
+  "profile": "qwen3.8-thunderbeast",
+  "model": "qwen3.8-flash-next",
+  "baseUrlHost": "thunderbeast:8080",
+  "prompt": "A scientist protocol in plain words:\nTake 50 microliters out of the source plate and move it into the destination plate.\nAfter the transfer, read the source plate on the plate reader at 450 nm absorbance.",
+  "modelInteractionChain": "one handler call (the route's own retries are the route's)",
+  "httpStatus": 422,
+  "responseBodyKeys": [
+    "clarifications",
+    "error",
+    "localMacro",
+    "outcome",
+    "terminalArtifacts"
+  ],
+  "outcome": "needs-clarification",
+  "error": "NEEDS_CLARIFICATION",
+  "classification": "NOT_SUCCESS_CLARIFICATION",
+  "note": "Evidence, not a gate (OQ4(a)): exit 0 on any completed call. Malformed model output = EXTRACTION_FAILURE; clarification = NOT_SUCCESS_CLARIFICATION. No tier/family/size claims anywhere."
+}

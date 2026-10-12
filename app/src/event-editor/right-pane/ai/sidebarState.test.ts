@@ -67,6 +67,51 @@ describe('sidebarState', () => {
     expect(state.mode).toBe('reviewing')
   })
 
+  it('draft-ready carries protocolDiff into the reviewing state', () => {
+    const protocolDiff = {
+      protocol: { recordId: 'PROT-1', title: 'Hep G2 ROS assay' },
+      ops: [
+        {
+          op: 'add' as const,
+          target: { type: 'step' as const, stepId: 'step-3' },
+          after: { label: 'Wash', kind: 'wash' as const, description: 'Wash twice with PBS' },
+          position: { anchorStepId: 'step-3', relative: 'after' as const },
+        },
+      ],
+    }
+    const state = sidebarReducer({ mode: 'updating', draftId: 'draft-1' }, {
+      type: 'draft-ready',
+      draftId: 'draft-1',
+      interpretation: { operations: [] },
+      changes: [],
+      warnings: [],
+      protocolDiff,
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      expect(state.protocolDiff).toEqual(protocolDiff)
+    }
+  })
+
+  it('draft-ready WITHOUT protocolDiff leaves the key absent (event-graph dispatches compile unchanged)', () => {
+    const state = sidebarReducer({ mode: 'updating', draftId: 'draft-2' }, {
+      type: 'draft-ready',
+      draftId: 'draft-2',
+      interpretation: { operations: [] },
+      changes: [{ op: 'add', description: 'Dispense 10 uL DMEM into A1' }],
+      warnings: [],
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      // The event-graph review payload must stay byte-identical: no
+      // `protocolDiff: undefined` key is introduced by the reducer.
+      expect('protocolDiff' in state).toBe(false)
+      expect(Object.keys(state).sort()).toEqual(
+        ['changes', 'draftId', 'interpretation', 'mode', 'terms', 'warnings'],
+      )
+    }
+  })
+
   it('transitions reviewing → committing on commit', () => {
     const reviewing = {
       mode: 'reviewing' as const,
@@ -77,6 +122,16 @@ describe('sidebarState', () => {
     }
     const state = sidebarReducer(reviewing, { type: 'commit' })
     expect(state.mode).toBe('committing')
+  })
+
+  it('R-Defect-2: committing has a bounded reset path — reset/cancel return to ready', () => {
+    // `committing` disables the chat input (isChatEnabled false), so it must
+    // never be terminal: the reducer's reset/cancel are the exits the panel
+    // fires after a commit lands (AiTabPanel.onApply) and on empty applies.
+    const committing = { mode: 'committing' as const, draftId: 'draft-1' }
+    expect(isChatEnabled(committing)).toBe(false)
+    expect(sidebarReducer(committing, { type: 'reset' }).mode).toBe('ready')
+    expect(sidebarReducer(committing, { type: 'cancel' }).mode).toBe('ready')
   })
 
   it('transitions to ready on cancel from any state', () => {
@@ -150,5 +205,75 @@ describe('sidebarState', () => {
     expect(primaryActionLabel({ mode: 'updating', draftId: 'd1' })).toBeNull()
     expect(primaryActionLabel({ mode: 'reviewing', draftId: 'd1', interpretation: { operations: [] }, changes: [], warnings: [] })).toBe('Apply to run')
     expect(primaryActionLabel({ mode: 'committing', draftId: 'd1' })).toBeNull()
+  })
+})
+
+describe('sidebarState — SHORTHAND-CHAT shorthand on the review state', () => {
+  const baseDraftReady = {
+    type: 'draft-ready' as const,
+    draftId: 'd1',
+    interpretation: { operations: [] },
+    changes: [{ op: 'add' as const, description: 'x' }],
+    warnings: [],
+    terms: [],
+  }
+
+  it('draft-ready WITHOUT shorthand leaves the reviewing state byte-identical (no undefined key)', () => {
+    const state = sidebarReducer(initialSidebarState, baseDraftReady)
+    expect(state.mode).toBe('reviewing')
+    expect('shorthand' in state).toBe(false)
+  })
+
+  it('draft-ready WITH shorthand carries it verbatim', () => {
+    const state = sidebarReducer(initialSidebarState, {
+      ...baseDraftReady,
+      shorthand: 'intentId: x\nactions: []\n',
+    })
+    expect(state.mode).toBe('reviewing')
+    if (state.mode === 'reviewing') {
+      expect(state.shorthand).toBe('intentId: x\nactions: []\n')
+    }
+  })
+
+  // fix cycle 1 (advc1 DEFECT-5): a needs-clarification turn IS proposal-bearing.
+  it('clarifications-needed WITH shorthand carries it verbatim on the clarifying state', () => {
+    const interpreting = { mode: 'interpreting' as const, prompt: 'test', progress: { steps: [] } }
+    const state = sidebarReducer(interpreting, {
+      type: 'clarifications-needed',
+      draftId: 'draft-1',
+      questions: [mockQuestion],
+      shorthand: 'intentId: x\nactions: []\n',
+    })
+    expect(state.mode).toBe('clarifying')
+    if (state.mode === 'clarifying') {
+      expect(state.shorthand).toBe('intentId: x\nactions: []\n')
+    }
+  })
+
+  it('clarifications-needed WITHOUT shorthand leaves the clarifying state byte-identical (no undefined key)', () => {
+    const interpreting = { mode: 'interpreting' as const, prompt: 'test', progress: { steps: [] } }
+    const state = sidebarReducer(interpreting, {
+      type: 'clarifications-needed',
+      draftId: 'draft-1',
+      questions: [mockQuestion],
+    })
+    expect(state.mode).toBe('clarifying')
+    expect('shorthand' in state).toBe(false)
+  })
+
+  it('answer-question / change-question keep the carried shorthand on the clarifying state', () => {
+    const interpreting = { mode: 'interpreting' as const, prompt: 'test', progress: { steps: [] } }
+    let state = sidebarReducer(interpreting, {
+      type: 'clarifications-needed',
+      draftId: 'draft-1',
+      questions: [mockQuestion],
+      shorthand: 'intentId: x\nactions: []\n',
+    })
+    state = sidebarReducer(state, { type: 'answer-question', questionId: 'q1', answer: { requestId: 'q1', label: 'y' } })
+    expect(state.mode).toBe('clarifying')
+    if (state.mode === 'clarifying') {
+      expect(state.shorthand).toBe('intentId: x\nactions: []\n')
+      expect(state.answers['q1']?.label).toBe('y')
+    }
   })
 })

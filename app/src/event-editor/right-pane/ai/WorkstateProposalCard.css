@@ -1,0 +1,119 @@
+/* WorkstateProposalCard — ChangesPanel-styled precedent (PROTO-AI-14):
+   theme tokens only, readable in light AND dark. */
+
+.workstate-card {
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: var(--surface-raised, #ffffff);
+  color: var(--text, #1f2328);
+  font-size: 13px;
+}
+
+.workstate-card--compiling {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted, #57606a);
+  font-style: italic;
+}
+
+.workstate-card__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border, #d0d7de);
+  border-top-color: var(--accent, #0969da);
+  border-radius: 50%;
+  animation: workstate-card-spin 0.8s linear infinite;
+}
+
+@keyframes workstate-card-spin {
+  to { transform: rotate(360deg); }
+}
+
+.workstate-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.workstate-card__title {
+  font-weight: 600;
+}
+
+.workstate-card__identity {
+  font-size: 11px;
+  color: var(--text-muted, #57606a);
+}
+
+.workstate-card__summary {
+  margin: 4px 0;
+}
+
+.workstate-card__tabs {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.workstate-card__tab {
+  margin: 2px 0;
+}
+
+.workstate-card__terms {
+  margin: 4px 0;
+  color: var(--text-muted, #57606a);
+  font-size: 12px;
+}
+
+.workstate-card__diagnostics {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: var(--danger, #cf222e);
+  font-size: 12px;
+}
+
+.workstate-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.workstate-card__btn {
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--surface, #f6f8fa);
+  color: var(--text, #1f2328);
+}
+
+.workstate-card__btn--accept {
+  background: var(--accent, #0969da);
+  border-color: var(--accent, #0969da);
+  color: #ffffff;
+}
+
+.workstate-card__btn:hover {
+  filter: brightness(1.08);
+}
+
+.workstate-card__btn:focus-visible {
+  outline: 2px solid var(--accent, #0969da);
+  outline-offset: 2px;
+}
+
+.workstate-card__revise-note {
+  font-size: 12px;
+  color: var(--text-muted, #57606a);
+}
+
+.workstate-card__applied {
+  margin: 6px 0 0;
+  color: var(--success, #1a7f37);
+  font-weight: 600;
+}

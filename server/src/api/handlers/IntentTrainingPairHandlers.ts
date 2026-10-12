@@ -22,6 +22,8 @@ import {
   type CorpusEntryInput,
 } from '../../corpus/CorpusClient.js';
 import { buildSurfaceContextCorpusEntry } from '../../corpus/surfaceContextCorpus.js';
+import { captureShorthandPairToLocal } from '../../corpus/shorthandCorpus.js';
+import { parseYamlDoc, stripYamlFence } from '../../compiler/scientistIntent/intentCompile.js';
 import type { SurfaceContext } from '../../surfaceContext/SurfaceContext.js';
 import type { ScientistIntentActionValue } from '../../compiler/scientistIntent/types.js';
 
@@ -34,6 +36,13 @@ interface TrainingPairBody {
   userPrompt?: string;
   /** The FINAL (refinement-folded) local macro the human accepted. */
   localMacro?: { intentId?: string; actions?: ScientistIntentActionValue[]; [key: string]: unknown };
+  /**
+   * SHORTHAND-CORPUS WS1 (chat-Accept leg): the accepted shorthand as a YAML
+   * STRING — byte-identical to the verbatim panel content. The CLIENT NEVER
+   * PARSES: the server decodes it via parseYaml into the SAME lift+Ajv capture
+   * door as `localMacro`. Malformed YAML = request served, nothing written.
+   */
+  shorthandYaml?: string;
   /** The accepted local-protocol recordId + source universal protocol id. */
   sourceProtocolId?: string;
   acceptedProtocolId?: string;
@@ -105,6 +114,37 @@ export function createIntentTrainingPairHandlers(ctx: AppContext) {
               // to macros; the interactive loop stays on the 2.6B.
               goldModel: GOLD_MODEL,
             };
+
+      // Local shorthand capture (SHORTHAND-CORPUS seam): whenever this pair
+      // carries an accepted macro, ALSO append a prompt→shorthand pair to the
+      // opt-in local JSONL (CLA_CORPUS_LOCAL_PATH). Independent of the remote
+      // post (which is corpus.enabled-gated and may be off-box), schema-checked
+      // before write, best-effort — it never fails the request.
+      //
+      // WS1 (chat-Accept leg): the shorthand may arrive as a YAML STRING
+      // (`shorthandYaml`, byte-identical to the verbatim panel content). The
+      // server decodes it here — the ONE parse site — into the SAME
+      // lift+Ajv door. Malformed YAML yields no object, so the door receives
+      // nothing valid and writes nothing (mirrors the invalid-macro contract).
+      // shorthandYaml takes precedence when both arms are present: the chat
+      // leg's accepted document is the target the human just approved.
+      const shorthandYamlDoc =
+        typeof body?.shorthandYaml === 'string'
+          ? parseYamlDoc(stripYamlFence(body.shorthandYaml))
+          : null;
+      const capturedShorthand = shorthandYamlDoc ?? body?.localMacro;
+      if (capturedShorthand) {
+        captureShorthandPairToLocal({
+          userPrompt: userLines.join('\n'),
+          shorthand: capturedShorthand,
+          acceptedGraph: body?.acceptedGraph ?? {},
+          confirmedBy: 'user',
+          ...(body?.confirmedAt ? { confirmedAt: body.confirmedAt } : {}),
+          ...(body?.surfaceContext
+            ? { surfaceContext: body.surfaceContext as unknown as Record<string, unknown> }
+            : {}),
+        });
+      }
 
       // Best-effort; never throw to the client (corpus may be disabled/off-box).
       try {

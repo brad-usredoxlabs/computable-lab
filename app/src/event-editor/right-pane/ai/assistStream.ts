@@ -20,6 +20,25 @@ import { API_BASE } from '../../../shared/api/base'
 import type { AiClarificationAnswer, AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
 import type { DraftTermRow } from './TermPanel'
 
+/**
+ * The compact ground-truth payload for the protocol ATTACHED to an
+ * event-editor chat (PROTO-AI-6), populated app-side into the request
+ * `context.attachedProtocol`. The server renders it as the ATTACHED PROTOCOL
+ * prompt block plus the protocol_edit instruction section ONLY when present;
+ * absent → neither. It rides in `context` (not a top-level field) so the
+ * warm render and the real request share one cacheable prefix.
+ * Mirrors `server/src/ai/types.ts#AttachedProtocolContext`.
+ */
+export interface AssistAttachedProtocol {
+  recordId: string
+  /** Current content sha of the attached record — the staleness anchor for
+   *  expectedSha at proposal-apply time; absent until the record fetch lands. */
+  sha?: string
+  steps: Array<{ stepId: string; ordinal: number; label: string; kind?: string }>
+  labwareRoles?: Array<{ roleId: string; description?: string; expectedLabwareKinds?: string[] }>
+  instrumentRoles?: Array<{ roleId: string; description?: string; allowedInstrumentIds?: string[] }>
+}
+
 export interface AssistStreamRequest {
   prompt: string
   /** Surface id sent to the orchestrator. Workspace uses `workspace.<viewer>`
@@ -40,6 +59,33 @@ export interface AssistStreamRequest {
     highlightedSection: string
     selectedText: string
   }
+  /**
+   * PB-CH-4 — structured working focus: the step the ChatContextHeader shows
+   * (`ProtocolSelectionContext.focusedStep`, display-only until now). Rides the
+   * request TOP-LEVEL (like protocolStepContext) so the server renders it as
+   * the WORKING FOCUS prompt block and the model can resolve "the step I'm
+   * looking at". NOT folded into `context`: focus changes per turn and would
+   * churn the KV warm prefix (attachedProtocol's stability precedent does not
+   * apply). Mirrors `server/src/api/handlers/AIHandlers.ts#AssistBody.workingFocus`.
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
+}
+
+/**
+ * A protocol_edit proposal emitted by the server (PROTO-AI-7) and rendered by
+ * the ChangesPanel diff (PROTO-AI-9). `ops` is the model's envelope ALREADY
+ * validated server-side against the registered protocol-edit-op schema
+ * (schema/workflow/protocol-edit-op.schema.yaml), re-emitted verbatim; the op
+ * shape is schema-owned data, so it stays an opaque validated array here
+ * rather than a hand-rolled TypeScript mirror of the op union.
+ * `protocolId` is only the model's explicit override; when absent, the
+ * attached-protocol scope of the conversation binds the target.
+ * PROPOSE-NEVER-WRITE: the server writes NOTHING for this payload — Accept
+ * (PROTO-AI-8) is the only path that applies it.
+ */
+export interface AiProtocolEditProposal {
+  ops: unknown[]
+  protocolId?: string
 }
 
 /**
@@ -51,6 +97,14 @@ export interface AssistDraftResult {
   sequenceProposal?: Record<string, unknown>
   success?: boolean
   events?: unknown[]
+  /**
+   * SHORTHAND-CHAT: the scientist-intent YAML document the model emitted and
+   * the deterministic compiler compiled, VERBATIM (byte-identical to what was
+   * compiled). The panel renders it read-only; an edit POSTs it back to
+   * /intent/compile for a server-side recompile — the client never parses it.
+   * Absent on turns that carried no shorthand (key ABSENT, never undefined).
+   */
+  shorthand?: string
   /**
    * What each term in the draft matched (local record / ontology / vendor /
    * not yet in the lab), classified server-side for the term panel. Absent on
@@ -89,6 +143,13 @@ export interface AssistDraftResult {
   }>
   /** Place the created record on the bench in the same turn (explicit). */
   alsoPlace?: { surface?: 'lawn' | 'slot'; slotId?: string }
+  /**
+   * A protocol_edit proposal emitted via agent_intent (PROTO-AI-7). See
+   * AiProtocolEditProposal — the server validates the envelope against the
+   * registered schema and WRITES NOTHING; rendering is PROTO-AI-9, applying
+   * (on Accept) is PROTO-AI-8.
+   */
+  protocolEdit?: AiProtocolEditProposal
   /** Draft-only ontology bindings; materialized into records on Accept. */
   ontologyBindings?: unknown[]
   clarificationNeeded?: string
@@ -111,6 +172,71 @@ export interface DraftEventProposal {
   [key: string]: unknown
 }
 
+/**
+ * PB-CH-4 — transport mirror of `schema/workflow/agent-action.schema.yaml`
+ * after PB-CH-1's server-side compilation (THE SCHEMA IS THE AUTHORITY; this
+ * is typing convenience for the stream, mirroring `server/src/ai/types.ts#
+ * AgentActionPayload` — no import from server/**). A frame of this shape exists
+ * ONLY as the output of the workspace-action compiler: a raw model proposal
+ * never rides it. exactOptionalPropertyTypes discipline: optional fields are
+ * OMITTED, never `undefined`.
+ */
+export type AgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AgentActionTargetEnvelope[]
+}
+
+/**
+ * PB-CH-8 — transport mirror of `server/src/workspace-session/ledgerQuery.ts#
+ * LedgerAnswerEnvelope` (no import from server/**; the same mirror discipline
+ * as `AgentActionEnvelope` above). The frame is SERVER-BUILT fetched evidence:
+ * the journal snapshot + server-known audit rows, never model narration.
+ * exactOptionalPropertyTypes discipline: optional fields are OMITTED, never
+ * `undefined`. `answerText` is the server's single wording authority — the
+ * client renders it verbatim instead of re-composing reason prose.
+ */
+export type LedgerNoHistoryReason =
+  | 'policy-disabled'
+  | 'journal-empty'
+  | 'predates-first-capture'
+  | 'pruned'
+  | 'no-anchor'
+  | 'actor-unresolved'
+
+export interface LedgerLabEventLine {
+  recordId: string
+  action: string
+  occurredAt: string
+  subjectId: string
+}
+
+export interface LedgerAnswerEnvelope {
+  status: 'found' | 'no-history'
+  /**
+   * The server-known audit time the query was answered at (never
+   * model-supplied). OPTIONAL (adversarial r2 F2, mirroring the server
+   * envelope): present exactly when a server-known audit time exists; the
+   * refusal paths (policy-disabled / actor-unresolved / no-anchor) OMIT the
+   * key — the server never emits a fabricated epoch as observed time.
+   */
+  asOf?: string
+  capturedAt?: string
+  disclosure?: string
+  links?: string[]
+  reason?: LedgerNoHistoryReason
+  labEvents?: LedgerLabEventLine[]
+  integrity?: Array<{ file: string; reason: string }>
+  answerText?: string
+}
+
 export type AssistStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; delta: string }
@@ -124,6 +250,28 @@ export type AssistStreamEvent =
   | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
   | { type: 'pipeline_diagnostics'; outcome: string; diagnostics: PipelineDiagnosticItem[] }
   | { type: 'draft'; events: DraftEventProposal[] }
+  // PB-CH-1's emission, mounted by PB-CH-4: the server-compiled tier-1 action.
+  // Before this item the app union had no member for it and dispatchFrame
+  // silently dropped it (grep agent_action app/src = 0).
+  | { type: 'agent_action'; action: AgentActionEnvelope }
+  // PB-CH-4 tier-2: the model's workstate INTENT — verbs and terms only. This
+  // is NOT a compiled draft and is NOT actionable alone: POST /api/drafts/compile
+  // (Ajv + canAccept) is the trust boundary, not this stream. Field name
+  // `workstate` mirrors the server frame (AgentOrchestrator emits
+  // {type:'workstate_proposal', workstate}).
+  | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
+  // PB-CH-5 tier-2 (analysis): the model's analysis INTENT — verbs and terms
+  // only, relayed verbatim. NOT a compiled draft and NOT actionable alone:
+  // POST /api/drafts/compile (Ajv + canAccept) is the trust boundary, not this
+  // stream. Field name `analysis` mirrors the server frame (AgentOrchestrator
+  // emits {type:'analysis_proposal', analysis}).
+  | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
+  // PB-CH-8: the ledger ANSWER — SERVER-BUILT fetched evidence (never model
+  // narration). The client relays the envelope verbatim; `answerText` is the
+  // server's single wording authority. Deliberately assistStream-only: the
+  // generic `types/ai.ts` AiStreamEvent stack does not consume ledger answers
+  // this task (the aiStreamTypes.pin.test.ts rationale — stated, not silent).
+  | { type: 'ledger_answer'; answer: LedgerAnswerEnvelope }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -257,7 +405,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[] }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -290,6 +438,41 @@ function dispatchFrame(
       return
     case 'draft':
       onEvent({ type: 'draft', events: Array.isArray(parsed.events) ? parsed.events : [] })
+      return
+    case 'agent_action':
+      // PB-CH-1's compiled action (the server only emits this after Ajv +
+      // spine + registry resolution). Relay the envelope as-is — the mount
+      // hands it to the executor; a malformed frame carries no action and is
+      // dropped rather than guessed into one.
+      if (parsed.action && typeof parsed.action === 'object' && (parsed.action.action === 'focus' || parsed.action.action === 'open-surface')) {
+        onEvent({ type: 'agent_action', action: parsed.action })
+      }
+      return
+    case 'workstate_proposal':
+      // PB-CH-4 tier-2: relay the model's INTENT verbatim. NOT actionable
+      // alone — the mount relays it to POST /api/drafts/compile, which is the
+      // Ajv/canAccept trust boundary.
+      if (parsed.workstate && typeof parsed.workstate === 'object' && !Array.isArray(parsed.workstate)) {
+        onEvent({ type: 'workstate_proposal', workstate: parsed.workstate })
+      }
+      return
+    case 'analysis_proposal':
+      // PB-CH-5 tier-2 (analysis): same discipline — relay the model's INTENT
+      // verbatim; the mount relays it to POST /api/drafts/compile (adapter
+      // 'analysis'), which is the Ajv/canAccept trust boundary.
+      if (parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)) {
+        onEvent({ type: 'analysis_proposal', analysis: parsed.analysis })
+      }
+      return
+    case 'ledger_answer':
+      // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot + server-
+      // known audit rows — fetched evidence, never model narration). Relay the
+      // envelope verbatim; a frame without a recognized status is DROPPED,
+      // never guessed into an answer.
+      if (parsed.answer && typeof parsed.answer === 'object' && !Array.isArray(parsed.answer)
+        && (parsed.answer.status === 'found' || parsed.answer.status === 'no-history')) {
+        onEvent({ type: 'ledger_answer', answer: parsed.answer as LedgerAnswerEnvelope })
+      }
       return
     case 'protocol_extracted':
       if (parsed.candidate) {

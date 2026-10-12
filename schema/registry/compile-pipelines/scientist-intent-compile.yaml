@@ -14,6 +14,16 @@ passes:
     family: parse
     description: Synthetic seeding slot populated by runScientistIntentCompile with normalizeScientistIntent output (protocolIntent + candidateEvents).
 
+  # SPINE-4: the one noun-resolution door. Runs on the PARSED document +
+  # normalized symbols (never expanded events), ahead of every noun-consuming
+  # stage. Any argument still unresolved bars the compile: this pass fails,
+  # and the runner's cascade barrier skips every consumer and graph stage
+  # below them without invoking run().
+  - id: resolve_nouns
+    family: disambiguate
+    depends_on: [ai_precompile]
+    description: Resolve every declared noun argument through the SPINE-3 engine; authoritative bindings + structured clarifications; unresolved arguments bar compilation.
+
   - id: protocol_intent_state_plan
     family: expand
     depends_on: [ai_precompile]
@@ -26,17 +36,17 @@ passes:
 
   - id: lower_protocol_intent
     family: expand
-    depends_on: [protocol_intent_state_plan, validate_protocol_intent]
+    depends_on: [protocol_intent_state_plan, validate_protocol_intent, resolve_nouns]
     description: Lower ProtocolIntent resources and simple operations into primitive events + candidate labware + directives.
 
   - id: expand_protocol_intent_patterns
     family: expand
-    depends_on: [protocol_intent_state_plan, validate_protocol_intent]
+    depends_on: [protocol_intent_state_plan, validate_protocol_intent, resolve_nouns]
     description: Expand geometric macros (serial_dilution, media_swap, repeat_rows) into primitive transfer/mix events.
 
   - id: expand_biology_verbs
     family: expand
-    depends_on: [ai_precompile]
+    depends_on: [ai_precompile, resolve_nouns]
     description: Lower candidateEvents biology verbs (seed, incubate, read, wash, harvest, spin, ...) through the verb expander registry.
 
   - id: apply_directives
@@ -46,17 +56,17 @@ passes:
 
   - id: resolve_labware
     family: disambiguate
-    depends_on: [lower_protocol_intent]
+    depends_on: [lower_protocol_intent, resolve_nouns]
     description: Resolve symbolic labware hints to existing labware-instance records; emit additions for unmatched.
 
   - id: resolve_references
     family: disambiguate
-    depends_on: [ai_precompile]
+    depends_on: [ai_precompile, resolve_nouns]
     description: Resolve named protocol/assay/pattern/compound-class references from registries.
 
   - id: resolve_roles
     family: expand
-    depends_on: [expand_protocol_intent_patterns, expand_biology_verbs, lower_protocol_intent]
+    depends_on: [expand_protocol_intent_patterns, expand_biology_verbs, lower_protocol_intent, resolve_nouns]
     description: Map role coordinates to concrete well addresses under current orientation.
 
   - id: compute_volumes

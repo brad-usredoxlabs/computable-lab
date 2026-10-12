@@ -60,3 +60,27 @@ rules:
     message:
       template: "status must be active or retracted"
       paths: []
+
+  # W2-5 — the output-kind wall for wave-2 promotions. The schema keeps
+  # output_kind a FREE STRING (extraction-promotion.schema.yaml:69-71); the
+  # kind discipline lives HERE, as lint data. This is the declared twin of
+  # xdr-promote-requires-resolvable-target (extraction-draft.lint.yaml) —
+  # the DSL has no cross-file ref, so the pair is two rule ids over one
+  # literal list (comment names the twin). For target_kind==protocol drafts
+  # output_kind is protocol by construction (CandidatePromoter.ts:173);
+  # no NEW kind can enter because an unlisted output_kind fails here.
+  - id: xpr-output-kind-registered
+    title: "output_kind must be a registered promotable kind"
+    description: >-
+      output_kind must be one of the declared promotable kinds — the same
+      list as xdr-promote-requires-resolvable-target on the draft side.
+      A promotion record naming an unregistered output kind is refused.
+    severity: error
+    scope: record
+    assert:
+      op: in
+      path: output_kind
+      values: [protocol, material-spec, equipment-spec, labware-spec]
+    message:
+      template: "extraction-promotion '{{recordId}}': output_kind '{{output_kind}}' is not a registered promotable kind"
+      paths: [recordId, output_kind]

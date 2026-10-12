@@ -1,0 +1,99 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/quantity.schema.yaml"
+title: "Quantity"
+description: >
+  The shared dimensioned quantity datatype (W2-2, D6): value + unit + dimension.
+  Dimensions are the first-wave set [count, volume, mass, molar]; the unit is
+  CONTROLLED per dimension (JSON-Schema-native if/then cross-enforcement below —
+  spellings reconciled with concentration.schema.yaml so the same spelling means
+  the same thing across datatypes). An uncontrolled unit (e.g. dimension count
+  with unit "uL") FAILS validation: dimension collapse is a schema error, not a
+  convention.
+
+  NO arithmetic and NO conversion live here. The dimension-preservation law:
+  counts never collapse into volumes. Forcing functions this datatype must make
+  expressible with no forced conversion (Brad's round-3 words, intake
+  round-0-grounding.md:124-129): a well state after aspiration is count=10000
+  cells (exact) AND volume=0 uL (approximately_zero) — two first-class Quantity
+  fields about the same well, neither derived from the other; 5 bashing beads per
+  well is a QuantityRatio (see quantity-ratio.schema.yaml), not a concentration.
+
+  `value` uses minimum: 0 — NOT concentration's exclusiveMinimum: 0
+  (concentration.schema.yaml:12-13). The aspiration arm needs volume EXACTLY 0
+  representable; `qualifier` carries the honesty (~zero) without inventing an
+  epsilon. `qualifier` absent means exact by the default reading.
+
+  Coexistence ruling (W2-1 crosswalk, schema/registry/wave2-naming-crosswalk.yaml
+  Quantity entry): amount/concentration/reference-ratio STAY; Quantity is the
+  genuinely-missing dimensioned datatype. Migration of existing fields is a later
+  wave. This is a datatype, not a record kind (crosswalk forbidden_kinds).
+
+type: object
+additionalProperties: false
+required: [ value, unit, dimension ]
+
+properties:
+  value:
+    type: number
+    minimum: 0
+    description: >-
+      The numeric magnitude. minimum: 0 (zero is representable — the aspiration
+      volume ~0 arm); negative values are rejected.
+
+  unit:
+    type: string
+    description: >-
+      The unit, controlled per dimension by the allOf cross-enforcement below.
+      Spellings match concentration.schema.yaml's unit enum where the same unit
+      appears (uL, mL, L, M, mM, uM, nM, ...).
+
+  dimension:
+    type: string
+    enum: [ count, volume, mass, molar ]
+    description: >-
+      First-wave dimensions ONLY. Extension is a future DATA edit to this enum
+      (and its per-dimension unit sets), never a TypeScript list.
+
+  qualifier:
+    type: string
+    enum: [ exact, approximately_zero ]
+    description: >-
+      Honesty travels with the quantity (OQ2 adjudication): approximately_zero
+      marks a measured ~0 fact (the aspiration volume) while the value stays
+      numeric. No tolerance field, no invented epsilon.
+
+allOf:
+# Cross-enforcement: each dimension carries a CLOSED unit set. A unit outside
+# its dimension's set fails validation (the "uncontrolled units rejected" arm).
+- if:
+    required: [ dimension ]
+    properties:
+      dimension: { const: count }
+  then:
+    properties:
+      unit:
+        enum: [ cells, beads, wells, organisms, worms, CFU, colonies ]
+- if:
+    required: [ dimension ]
+    properties:
+      dimension: { const: volume }
+  then:
+    properties:
+      unit:
+        enum: [ nL, uL, mL, L ]
+- if:
+    required: [ dimension ]
+    properties:
+      dimension: { const: mass }
+  then:
+    properties:
+      unit:
+        enum: [ g, mg, ug, ng, pg ]
+- if:
+    required: [ dimension ]
+    properties:
+      dimension: { const: molar }
+  then:
+    properties:
+      unit:
+        enum: [ M, mM, uM, nM, pM, fM ]

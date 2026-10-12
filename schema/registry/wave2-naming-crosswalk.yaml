@@ -1,0 +1,494 @@
+# W2-1-NAMING-CROSSWALK — machine-readable naming crosswalk for the wave-2
+# semantic-protocol-family campaign. Registry-style data file (mirrors
+# schema/registry/operations.yaml's style; NOT a schema triplet, NOT registered
+# in SchemaRegistry). The human memo is docs/wave2-naming-crosswalk.md; every
+# `binds_to` pointer below is a real file:line the coder opened (see memo).
+#
+# Binding rulings: D1-D9 in the WAVE-2 campaign header
+# (.hermes plans intake: ~/.hermes/specs/intake/2026-10-09_semantic-protocol-family/).
+# This file MAPS, never merges, and mints NO new record kind and NO new verb.
+kind: naming-crosswalk
+version: 0.1.0
+campaign: semantic-protocol-family
+authority: "docs/wave2-naming-crosswalk.md (memo) + D1-D9 rulings"
+
+entries:
+  # ---- the 8 neighbor nouns: all resolve to EXISTING record kinds ----
+  - term: "Semantic Protocol Family"
+    status: existing
+    binds_to:
+      kind: protocol
+      schema: schema/workflow/protocol.schema.yaml
+      kind_line: "schema/workflow/protocol.schema.yaml:25"
+    source_decision: D1
+    note: >-
+      protocol upgraded IN PLACE to carry semantic operations; NO separate
+      semantic-protocol-family kind. protocolLayer const "universal"
+      (protocol.schema.yaml:21) already marks the universal layer.
+
+  - term: "Lab Realization Plan"
+    status: existing
+    binds_to:
+      kind: local-protocol
+      schema: schema/workflow/local-protocol.schema.yaml
+      kind_line: "schema/workflow/local-protocol.schema.yaml:28"
+    source_decision: D1
+    note: "branch_resolution (local-protocol.schema.yaml:88) holds the lab's branch answers."
+
+  - term: "branch axes"
+    status: existing
+    binds_to:
+      kind: protocol
+      field: protocol.branch_axes
+      field_line: "schema/workflow/protocol.schema.yaml:294"
+      fed_by: protocol-decision-tree
+      fed_by_line: "schema/workflow/protocol-decision-tree.schema.yaml:25"
+    source_decision: D1/D4
+
+  - term: "SAID"
+    status: existing
+    binds_to:
+      kind: vendor-protocol-candidate
+      schema: schema/workflow/vendor-protocol-candidate.schema.yaml
+      kind_line: "schema/workflow/vendor-protocol-candidate.schema.yaml:15"
+      anchors: server/src/ingestion/vendor-protocol/StepPdfAnchor.ts
+    source_decision: D3
+    note: "immutable document truth (schema description, vendor-protocol-candidate.schema.yaml:6) + StepPdfAnchor anchors."
+
+  - term: "MEANT"
+    status: existing
+    binds_to:
+      kind: protocol
+      lifecycle: [extraction-draft, extraction-promotion]
+      lifecycle_lines:
+        - "schema/workflow/extraction-draft.schema.yaml:18"
+        - "schema/workflow/extraction-promotion.schema.yaml:26"
+    source_decision: D3/D5
+    note: "draft semantic protocol = kind 'protocol' under review; NOT a third representation."
+
+  - term: "draft semantic protocol"
+    status: existing
+    binds_to:
+      kind: protocol
+      lifecycle: [extraction-draft, extraction-promotion]
+    source_decision: D3/D5
+
+  - term: "execution-scale choices"
+    status: existing
+    binds_to:
+      kind: execution-scale-profile
+      schema: schema/workflow/execution-scale-profile.schema.yaml
+      kind_line: "schema/workflow/execution-scale-profile.schema.yaml:28"
+      registry_data: schema/registry/execution-scale-profiles/
+    source_decision: D9
+
+  - term: "semantic operation"
+    status: existing
+    binds_to:
+      kind: protocol
+      field: protocol.steps[].semanticVerb
+      field_lines:
+        - "schema/workflow/protocol.schema.yaml:774"
+        - "schema/workflow/protocol.schema.yaml:775"
+      ref_def: "protocol.schema.yaml $defs/SemanticVerbRef (:669)"
+      target_kind: verb-definition
+      target_kind_line: "schema/workflow/verb-definition.schema.yaml:20"
+      seed_records: records/seed/verb-definition/
+    source_decision: D1
+    note: >-
+      The verb-definition vocabulary ALREADY exists as a separate record kind;
+      adjudicated against the scientist-intent 31-verb enum in
+      schema/registry/wave2-verb-adjudication.yaml. The crosswalk maps, never merges.
+
+  - term: "operation-template"
+    status: existing
+    binds_to:
+      kind: operation-template
+      kind_line: "schema/workflow/operation-template.schema.yaml:18"
+    source_decision: neighbor-noun
+
+  - term: "phase-template"
+    status: existing
+    binds_to:
+      kind: phase-template
+      kind_line: "schema/workflow/phase-template.schema.yaml:22"
+    source_decision: neighbor-noun
+
+  - term: "capability terms"
+    status: existing
+    binds_to:
+      kind: equipment-capability
+      kind_line: "schema/workflow/equipment-capability.schema.yaml:21"
+    source_decision: D6
+    note: "bead beater = equipment capability (D6 forcing function); no new capability kind."
+
+  # ---- genuinely-missing datatype (W2-2) — LANDED by W2-2 ----
+  - term: "Quantity"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      schema_line: "schema/core/datatypes/quantity.schema.yaml:2 ($id)"
+      ratio_schema: schema/core/datatypes/quantity-ratio.schema.yaml
+      overlap_check:
+        - "schema/core/datatypes/amount.schema.yaml:6 (required: [value, unit])"
+        - "schema/core/datatypes/concentration.schema.yaml:9 (required: [value, unit, basis])"
+        - "schema/core/datatypes/reference-ratio.schema.yaml"
+        - "schema/lab/datatypes/ (holds ONLY chemical-properties.schema.yaml — no Quantity)"
+    curie_plan: "cf:quantity"
+    source_decision: D6
+    note: >-
+      W2-2 LANDED the datatype (was missing-datatype at W2-1 admission). amount/
+      concentration/reference-ratio COEXIST untouched (W2-1 ruling); migration of
+      existing fields is a later wave. Quantity is a datatype, not a record kind
+      (forbidden_kinds `quantity` remains satisfied — no such record kind exists,
+      verified by server/src/schema/Wave2QuantitySchema.test.ts namespace
+      enumeration).
+
+  # ---- wave-2 vocabulary pending admission (minted as enum VALUES/data on
+  #      existing records, never as kinds) ----
+  # W2-4-PROVENANCE-LADDER admitted the four rungs: minted as VOCAB DATA
+  # (registry vocabulary doc + the ONE datatype enum + lint rule bodies),
+  # never as record kinds — forbidden_kinds `provenance-ladder`/`provenance-rung`
+  # remain satisfied (no such properties.kind.const exists; the pinned
+  # admission test's enumeration walks only *.schema.yaml files).
+  - term: "VENDOR"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/workflow/vendor-protocol-candidate.schema.yaml
+      carrier_lint: schema/workflow/vendor-protocol-candidate.lint.yaml
+    curie_plan: "cf:provenance-vendor"
+    source_decision: D3/W2-4
+    note: >-
+      W2-4 LANDED the rung (was new-vocab-pending-admission at W2-1 admission).
+      VENDOR is POSITIONAL: a fact is VENDOR iff it sits on an immutable,
+      document-anchored vendor-protocol-candidate ($defs/Provenance
+      documentId+pageStart, closed fact objects — no rung field exists on a
+      candidate fact). Vocabulary data + lint, never a record kind.
+  - term: "DERIVED"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier_lint: schema/workflow/protocol.lint.yaml
+    curie_plan: "cf:provenance-derived"
+    source_decision: W2-4
+    note: >-
+      W2-4 LANDED the rung. Extraction conclusions on the protocol family
+      (steps[].intent.provenance, W2-3's merged StepProvenanceRef): present-but-
+      unanchored provenance is a lint ERROR (prov-derived-conclusions-anchored);
+      absence stays W2-3's intent-step-provenance-visible WARNING. DERIVED can
+      NEVER be promoted to VENDOR by any path (schema closure + prov-* lint
+      walls; rung-vocabulary transition_policy.forbidden_edges).
+  - term: "INFERRED_INVARIANT"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/knowledge/assertion.schema.yaml
+      evidence: schema/knowledge/evidence.schema.yaml
+    curie_plan: "cf:provenance-inferred-invariant"
+    source_decision: W2-4
+    note: >-
+      W2-4 LANDED the rung. Family invariants with EVIDENCE anchors; today's
+      instantiation surface is the knowledge layer (assertion.evidence_refs +
+      evidence required supports/sources). The family-side slot in
+      protocol.schema.yaml does NOT exist yet — declared hand-off seam to W2-5
+      (commented seam in protocol.lint.yaml; no dead rule shipped against a
+      nonexistent path).
+  - term: "LOCAL_REALIZATION"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+      datatype: schema/core/datatypes/provenance-rung-ref.schema.yaml
+      carrier: schema/workflow/local-protocol.schema.yaml
+      carrier_lint: schema/workflow/local-protocol.lint.yaml
+    curie_plan: "cf:provenance-local-realization"
+    source_decision: D3/W2-4
+    note: >-
+      W2-4 LANDED the rung. local-protocol.branch_resolution[].choices +
+      overrides.substitutions[].rationale (W2-7 WRITES, W2-4 constrains lineage
+      via prov-local-*). Vocabulary data + lint, never a record kind.
+  - term: "locally-validated"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/provenance-ladder/rung-vocabulary.yaml
+      vocabulary_lint: schema/registry/provenance-ladder/rung-vocabulary.lint.yaml
+    curie_plan: "cf:locally-validated"
+    source_decision: D3/W2-4
+    note: >-
+      DERIVED query over local-protocol realization + completed run + active
+      evidence (rung-vocabulary.yaml derived_queries: three read-side
+      GraphQuery clauses; computation proven in-process by
+      server/src/graph-query/Wave2LocallyValidatedQuery.test.ts). NEVER an
+      attestation field (R2-a): no locally_validated flag/status/enum exists
+      anywhere; the query IS the expression. Vocabulary data, never a kind.
+  - term: "constraint-classes"
+    status: existing
+    binds_to:
+      vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml
+      vocabulary_schema: schema/registry/constraint-vocabulary/constraint-vocabulary.schema.yaml
+      vocabulary_lint: schema/registry/constraint-vocabulary/constraint-vocabulary.lint.yaml
+      constraint_datatype: schema/registry/constraint-vocabulary/constraint.schema.yaml
+    curie_plan: "cf:constraint-class"
+    source_decision: D6
+    note: >-
+      ratios, concentrations, per-unit doses, minima/maxima, capacities,
+      thresholds, ordering, completion conditions, vendor defaults — as data on
+      ONE constraint vocabulary (D6). W2-2 LANDED it: 10 class entries (the memo's
+      minima/maxima split into minimum+maximum, vendor_default as the +1),
+      applicability and override policy in the bound lint YAML. Registry doc, NOT
+      a record kind (forbidden_kinds `constraint-class` remains satisfied — the
+      doc's kind is an enum, never a properties.kind.const).
+
+  # ---- W2-2-minted vocabulary (admitted as enum VALUES/data on datatypes and
+  #      the registry doc, never as kinds; collision + cf: CURIE enforced at
+  #      minting time by server/src/schema/Wave2QuantitySchema.test.ts, which
+  #      enumerates the same namespaces this file's admission section names) ----
+  - term: "quantity-dimension-count"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-count"
+    source_decision: D6
+    note: >-
+      QUALIFIED on purpose (finding W2-2-F1): the bare word `count` collides with
+      operations.yaml operation-id `count` and verb-action-map verb `count` — a
+      dimension noun is a different entity from the count OPERATION and must not
+      shadow it.
+  - term: "quantity-dimension-volume"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-volume"
+    source_decision: D6
+  - term: "quantity-dimension-mass"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-mass"
+    source_decision: D6
+  - term: "quantity-dimension-molar"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.dimension.enum
+    curie_plan: "cf:quantity-dimension-molar"
+    source_decision: D6
+  - term: "quantity-ratio"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity-ratio.schema.yaml
+      schema_line: "schema/core/datatypes/quantity-ratio.schema.yaml:2 ($id)"
+      distinct_from: "schema/core/datatypes/reference-ratio.schema.yaml (advisory bare numbers — coexists by W2-1 ruling)"
+    curie_plan: "cf:quantity-ratio"
+    source_decision: D6
+  - term: "quantity-qualifier"
+    status: existing
+    binds_to:
+      schema: schema/core/datatypes/quantity.schema.yaml
+      field: properties.qualifier.enum
+    curie_plan: "cf:quantity-qualifier"
+    source_decision: D6
+    note: "OQ2 adjudication: [exact, approximately_zero] — ~zero representable, no invented epsilon."
+
+  - term: "constraint-class-ratio"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-ratio"
+    source_decision: D6
+  - term: "constraint-class-concentration"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-concentration"
+    source_decision: D6
+  - term: "constraint-class-per-unit-dose"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-per-unit-dose"
+    source_decision: D6
+  - term: "constraint-class-minimum"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-minimum"
+    source_decision: D6
+  - term: "constraint-class-maximum"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-maximum"
+    source_decision: D6
+  - term: "constraint-class-capacity"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-capacity"
+    source_decision: D6
+  - term: "constraint-class-threshold"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-threshold"
+    source_decision: D6
+  - term: "constraint-class-ordering"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-ordering"
+    source_decision: D6
+  - term: "constraint-class-completion-condition"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-completion-condition"
+    source_decision: D6
+  - term: "constraint-class-vendor-default"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:constraint-vendor-default"
+    source_decision: D6
+
+  - term: "binding-kind-vendor-default"
+    status: existing
+    binds_to:
+      schema: schema/registry/constraint-vocabulary/constraint.schema.yaml
+      field: properties.bindingKind.enum
+    curie_plan: "cf:binding-kind-vendor-default"
+    source_decision: D6
+    note: "the vendor side of the strictness seam (SPINE-8/SPINE-3 governs when it binds a material concept)."
+  - term: "binding-kind-hard-bound"
+    status: existing
+    binds_to:
+      schema: schema/registry/constraint-vocabulary/constraint.schema.yaml
+      field: properties.bindingKind.enum
+    curie_plan: "cf:binding-kind-hard-bound"
+    source_decision: D6
+    note: "the material-truth side of the seam."
+
+  - term: "override-policy-lab-may-relax"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-lab-may-relax"
+    source_decision: D6
+  - term: "override-policy-lab-may-tighten"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-lab-may-tighten"
+    source_decision: D6
+  - term: "override-policy-never-override"
+    status: existing
+    binds_to: { vocabulary: schema/registry/constraint-vocabulary/constraint-vocabulary.yaml }
+    curie_plan: "cf:override-policy-never-override"
+    source_decision: D6
+
+  - term: "bead beater"
+    status: existing
+    binds_to:
+      kind: equipment-capability
+      kind_line: "schema/workflow/equipment-capability.schema.yaml:21"
+      curie: "CL:bead_beater"
+      vocabulary_field: "constraint-vocabulary.yaml capabilityTerms"
+    source_decision: D6
+    note: >-
+      D6 forcing function: bead beater = equipment capability. Referenced through
+      the EXISTING machinery (CL:<snake> physical-kind namespace,
+      equipment-capability.schema.yaml:39-43,57) — no fourth prefix minted (§6.11).
+
+# ---- explicit NO-new-record-kind declaration (D1) ----
+forbidden_kinds:
+  - semantic-protocol-family
+  - realization-plan
+  - lab-realization-plan
+  - semantic-extraction-ir
+  - extraction-ir
+  - provenance-ladder
+  - said
+  - meant
+  - constraint-class
+  - quantity
+  - provenance-rung
+
+# ---- findings: genuine TODAY-level collisions found by machine enumeration
+#      (recorded, NOT resolved here — architect call) ----
+findings:
+  - id: W2-1-F1
+    status: collision
+    term: heat
+    detail: >-
+      verb-definition VERB-HEAT canonical `heat` (records/seed/verb-definition/verb-heat.yaml:4)
+      vs operations.yaml `incubate` whose aliases include `heat`
+      (schema/registry/operations.yaml:36). Two local terms for one entity across
+      the two neighboring vocabularies.
+  - id: W2-1-F2
+    status: collision
+    term: set
+    detail: >-
+      verb-definition VERB-SET canonical `set` (records/seed/verb-definition/verb-set.yaml:4)
+      vs operations.yaml `add_material` whose aliases include `set`
+      (schema/registry/operations.yaml:16).
+  - id: W2-1-F3
+    status: collision
+    term: shake
+    detail: >-
+      `shake` is a first-class scientist-intent enum verb
+      (scientist-intent.schema.yaml:31) AND a verb-definition canonical
+      (verb-shake.yaml:4), yet operations.yaml folds it as an ALIAS of `mix`
+      (schema/registry/operations.yaml:47). verb-action-map.yaml (26 mappings)
+      omits `shake` entirely.
+  - id: W2-1-F4
+    status: collision
+    term: spin/pellet vs centrifuge
+    detail: >-
+      `spin` (scientist-intent.schema.yaml:53) and `pellet` (:54) are first-class
+      enum verbs, yet operations.yaml folds both as ALIASES of `centrifuge`
+      (schema/registry/operations.yaml:66-69) — and `centrifuge` is NOT an enum verb.
+  - id: W2-1-F5
+    status: coverage-gap
+    term: verb-action-map
+    detail: >-
+      schema/registry/verb-action-map.yaml holds 26 mappings vs the 31-verb enum;
+      the 5 enum verbs absent are shake + the 4 pattern macros (serial_dilution,
+      media_swap_duplicate_columns, source_wells_to_duplicate_target_columns,
+      repeat_rows). Third neighboring vocabulary — named, not conflated.
+  - id: W2-1-F6
+    status: collision
+    term: warm
+    detail: >-
+      alias `warm` is assigned to TWO distinct operations: operations.yaml
+      `incubate` whose aliases include `warm`
+      (schema/registry/operations.yaml:36) AND operations.yaml `thaw` whose
+      aliases include `warm` (schema/registry/operations.yaml:252). Inverse
+      shape of F1-F5 — one local alias term for two entities; thaw also
+      `expands_to: [incubate]` (operations.yaml:251), so the overlap is
+      semantically real. Recorded for architect adjudication.
+
+# ---- admission predicate: every proposed wave-2 term must pass BEFORE it
+#      enters any schema, lint, or fixture (enforced headlessly by
+#      server/src/schema/Wave2NamingCrosswalk.test.ts) ----
+admission:
+  applies_to: "every proposed wave-2 term (noun, datatype, constraint class, provenance rung, capability term)"
+  rules:
+    - id: resolves-through-crosswalk
+      description: >-
+        The term must appear in this file's `entries` (status existing,
+        missing-datatype, or new-vocab-pending-admission). An unlisted term is
+        rejected: it has no bound existing record.
+    - id: no-collision
+      description: >-
+        A term proposed as NEW (status new-vocab-pending-admission or
+        missing-datatype) must not collide with any existing namespace below
+        (normalized: lowercase, '-' == '_').
+      namespaces:
+        - record-kind            # every properties.kind.const across schema/**/*.schema.yaml
+        - operation-id           # schema/registry/operations.yaml operations[].id
+        - scientist-intent-verb  # $defs/actionVerb enum (scientist-intent.schema.yaml:22)
+        - verb-definition-canonical  # records/seed/verb-definition/*.yaml canonical:
+        - verb-action-map-verb   # schema/registry/verb-action-map.yaml mappings[].verb
+    - id: curie-plan
+      description: >-
+        A new term must carry a CURIE plan in the project `cf:` local-namespace
+        convention (specifications/computable-lab-principles.md:43; schema/registry/lab-profile/lab-profile.yaml:14).
+      pattern: "^cf:[a-z0-9][a-z0-9-]*$"

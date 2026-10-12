@@ -1,0 +1,25 @@
+# SPINE-6 golden fixture 2 — golden.intent-to-graph.labware-hint-regression
+# (untouched by both rulings; the labwareHint-carrying shape of the route test
+# :129-151 / hintParity pin). *Hint companions enter the engine as EVIDENCE
+# only (resolutionEngine doc-door reads the declared arg field), so the label
+# is NOT engine-bound: resolve_labware takes the search arm — the spy pins
+# exactly one searchLabwareByHint lookup for the shared hint.
+name: golden.intent-to-graph.labware-hint-regression
+request:
+  protocolText: >-
+    Move 25 uL between the hint plate copies.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-hint-plate
+      payload:
+        kind: labware
+        name: hint plate
+modelOutput:
+  intentId: golden-labware-hint-regression
+  actions:
+    - action: transfer
+      sourceHint: hint plate
+      targetHint: hint plate
+      volumeUl: 25

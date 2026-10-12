@@ -1,0 +1,18 @@
+# PB-CH-6 fix1 — the workstate compose policy DATA. Loaded per call
+# (the analysis-composition.yaml / workstate-tab-kinds.yaml precedent —
+# presence-checked, never process-cached). Code INTERPRETS this file; zero
+# surface-name literals live in TypeScript (repo rule #1).
+#
+# rules          — the WORKSTATE COMPOSE RULES block. `surfaces` are the AI
+#                  surface ids the block is pushed on (membership is DATA —
+#                  the orchestrator never branches on a surface name); `file`
+#                  is the rule-text prompt template, resolved relative to the
+#                  server root like every other prompt template. ABSENT section
+#                  = feature off (no block). Present-but-malformed throws
+#                  honestly. `surfaces: []` is OFF, not malformed.
+#                  Deliberately EXCLUDES the deck surface: it already compiles
+#                  via the full event-graph-agent template and its prefix stays
+#                  token-cheap. Membership is data — it can be added later.
+rules:
+  surfaces: [analysis, literature, protocol-builder]
+  file: prompts/workstate-compose-rules.md

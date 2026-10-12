@@ -15,6 +15,7 @@ import type { PassFamily } from './types.js';
  * Keep in sync with schema/registry/compile-pipelines/compile-pipeline.schema.yaml entrypoint enum. See spec-002-pipeline-schema-alignment.
  */
 export const VALID_ENTRYPOINTS = [
+  'form-draft-compile',
   'protocol-compile',
   'local-protocol-compile',
   'run-plan-compile',

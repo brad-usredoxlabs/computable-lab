@@ -358,4 +358,95 @@ describe('config loader', () => {
       expect(config.ai?.extractor?.model).toBe('Qwen/Qwen3.5-9B-Instruct');
     });
   });
+
+  describe('shadow-router config block (PROTO-AI-12)', () => {
+    const baseYaml = [
+      'server:',
+      '  port: 3001',
+      '  host: 0.0.0.0',
+      '  logLevel: info',
+      '  workspaceDir: /tmp/cl-workspaces',
+      '  cors:',
+      '    enabled: true',
+      '    origins: ["*"]',
+      'schemas:',
+      '  source: bundled',
+      '  bundledDir: ./schema',
+      'repositories: []',
+    ];
+
+    it('is absent (OFF) when the block is not in the config', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(
+        configPath,
+        [
+          ...baseYaml,
+          'ai:',
+          '  inference:',
+          '    baseUrl: http://localhost:8000/v1',
+          '    model: test-model',
+          '  agent: {}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const config = await loadConfig({ configPath });
+      // MISSING config = OFF: the field is simply absent, no defaults injected.
+      expect(config.ai?.shadowRouter).toBeUndefined();
+    });
+
+    it('loads the configured endpoint + kill-switch as data', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(
+        configPath,
+        [
+          ...baseYaml,
+          'ai:',
+          '  inference:',
+          '    baseUrl: http://localhost:8000/v1',
+          '    model: test-model',
+          '  agent: {}',
+          '  shadowRouter:',
+          '    enabled: true',
+          '    baseUrl: http://appliance-2:8900/v1',
+          '    model: lfm2.5-350m',
+          '    timeoutMs: 8000',
+          '    telemetryPath: var/shadow-router/events.jsonl',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const config = await loadConfig({ configPath });
+      expect(config.ai?.shadowRouter).toEqual({
+        enabled: true,
+        baseUrl: 'http://appliance-2:8900/v1',
+        model: 'lfm2.5-350m',
+        timeoutMs: 8000,
+        telemetryPath: 'var/shadow-router/events.jsonl',
+      });
+    });
+
+    it('rejects a non-boolean shadowRouter.enabled', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(
+        configPath,
+        [
+          ...baseYaml,
+          'ai:',
+          '  inference:',
+          '    baseUrl: http://localhost:8000/v1',
+          '    model: test-model',
+          '  agent: {}',
+          '  shadowRouter:',
+          '    enabled: "yes"',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(loadConfig({ configPath })).rejects.toThrow(/shadowRouter\.enabled must be a boolean/);
+    });
+  });
 });

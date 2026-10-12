@@ -1,0 +1,151 @@
+# W2-4 provenance-ladder vocabulary lint — well-formedness of the rung
+# vocabulary registry doc (rung-vocabulary.yaml), bound by schemaId to the
+# doc's declared doc_id (scientist-intent-vocabulary.lint.yaml +
+# constraint-vocabulary.lint.yaml shape). DSL-only: exists/nonEmpty/equals/in/
+# all/any/not/everyItem — no interpreter changes, no arithmetic, no TS.
+#
+# The doc_id schemaId never matches any record schema, so these rules can never
+# fire on a record write (LintEngine.ts:103-105 filters by schemaId; boot only
+# checks spec.rules.length — server.ts:411). The boot proof is
+# Wave2ProvenanceLadderRules.test.ts (f): every shipped spec loads into ONE
+# engine with no Duplicate rule ID, and a protocol payload linted through the
+# full repo engine emits no prov-vocab-* finding.
+#
+# Rule ids are namespaced `prov-vocab-` for GLOBAL uniqueness
+# (LintEngine.addSpec throws on duplicate ids across ALL specs, LintEngine.ts:
+# 59-61). NB server.ts:411 skips empty-rule specs silently — this spec ships
+# four rules and the test proves they FIRE, not just load.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/provenance-rung-vocabulary"
+
+rules:
+# R1 — the ladder is EXACTLY the four admitted rungs, spelled exactly, each
+# cf:-CURIED per the crosswalk plan pattern. Mutation arms: rename a rung or
+# add a fifth rung -> ERROR naming the offending item index.
+- id: prov-vocab-four-rungs-exact
+  title: "The rung vocabulary is exactly the four admitted rungs"
+  description: >-
+    Every entry of rungs[*].id is one of VENDOR / DERIVED / INFERRED_INVARIANT /
+    LOCAL_REALIZATION (spelled exactly) and every rungs[*].curie follows the
+    crosswalk's cf:provenance-* CURIE plan. A renamed rung or a fifth rung is
+    an error: the ladder is a closed, admitted vocabulary, not an open list.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: rungs
+  assert:
+    op: everyItem
+    collectionPath: rungs
+    assert:
+      op: all
+      predicates:
+        - op: in
+          path: id
+          values:
+            - VENDOR
+            - DERIVED
+            - INFERRED_INVARIANT
+            - LOCAL_REALIZATION
+        - op: regex
+          path: curie
+          pattern: "^cf:provenance-[a-z0-9-]+$"
+  message:
+    template: "rung vocabulary: rungs[*].id must be exactly one of VENDOR/DERIVED/INFERRED_INVARIANT/LOCAL_REALIZATION with a cf:provenance-* curie; declared rungs: {{rungs[*].id}} curies: {{rungs[*].curie}}."
+
+# R2 — every rung declares its carrier and its lineage requirement as data.
+# A rung whose lineage is stripped cannot be enforced downstream (the ladder's
+# whole point is that each rung names WHAT lineage its conclusions must carry).
+- id: prov-vocab-lineage-declared
+  title: "every rung declares a carrier and a lineage requirement"
+  description: >-
+    Each rung entry carries a non-empty carrier (where the rung rides) and a
+    non-empty lineage_required (what its conclusions must carry). Stripping a
+    rung's lineage declaration is an error — an unenforceable rung is not a
+    rung.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: rungs
+  assert:
+    op: everyItem
+    collectionPath: rungs
+    assert:
+      op: all
+      predicates:
+        - op: nonEmpty
+          path: carrier
+        - op: nonEmpty
+          path: lineage_required
+  message:
+    template: "rung vocabulary: a rung is missing carrier or lineage_required; rungs: {{rungs[*].id}}."
+
+# R3 — THE no-promotion wall, read in the DSL-honest direction. The DSL cannot
+# assert the ABSENCE of an allowed edge directly, so the rule reads the declared
+# PERMITTED transitions: every transition must either originate at VENDOR or NOT
+# target VENDOR. Declaring an edge whose target is VENDOR from a non-VENDOR
+# source FIRES (mutation arm: {source: DERIVED, target: VENDOR} -> error naming
+# the item index). The forbidden_edges block in rung-vocabulary.yaml is the same
+# law stated the other way — documentation-as-data mirrored by this rule.
+- id: prov-vocab-no-vendor-promotion-edge
+  title: "no transition may promote anything TO VENDOR"
+  description: >-
+    VENDOR is positional (extraction onto an immutable document-anchored
+    candidate), never a promotion target. Every declared transition either
+    originates at VENDOR or does not target VENDOR. A DERIVED /
+    INFERRED_INVARIANT / LOCAL_REALIZATION -> VENDOR edge is an error:
+    "DERIVED can never be promoted to VENDOR by any path", as data.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: transition_policy.transitions
+  assert:
+    op: everyItem
+    collectionPath: transition_policy.transitions
+    assert:
+      op: any
+      predicates:
+        - op: equals
+          path: source
+          value: VENDOR
+        - op: not
+          not:
+            op: equals
+            path: target
+            value: VENDOR
+  message:
+    template: "rung vocabulary: a declared transition targets VENDOR from a non-VENDOR source — VENDOR is positional, never a promotion target; declared edges: {{transition_policy.transitions[*].source}} -> {{transition_policy.transitions[*].target}}."
+
+# R4 — the derived-query block guards its OWN shape against future attestation
+# creep: every derived query's rung_effect is DERIVED (never its own rung) and
+# no derived query declares an attestation_field. Fires on mutation.
+- id: prov-vocab-locally-validated-is-derived
+  title: "derived queries are DERIVED effects, never attestation fields"
+  description: >-
+    R2-a binding: 'locally-validated' is a DERIVED query over
+    realizations/runs/evidence, never an attestation field. Every
+    derived_queries[*].rung_effect is DERIVED and no derived query carries an
+    attestation_field key. This rule is the vocabulary's own guard against a
+    future edit turning the query into a flag.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: derived_queries
+  assert:
+    op: everyItem
+    collectionPath: derived_queries
+    assert:
+      op: all
+      predicates:
+        - op: equals
+          path: rung_effect
+          value: DERIVED
+        - op: not
+          not:
+            op: exists
+            path: attestation_field
+  message:
+    template: "rung vocabulary: derived_queries must carry rung_effect DERIVED and no attestation_field (R2-a: the derived query is the expression, never a flag); declared queries: {{derived_queries[*].id}}."

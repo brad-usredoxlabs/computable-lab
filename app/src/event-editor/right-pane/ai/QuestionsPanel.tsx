@@ -10,12 +10,23 @@
 import { useEffect } from 'react'
 import { ClarificationPicker, requestHasPicker } from './ClarificationPicker'
 import { ParameterAnswerInput } from './ParameterAnswerInput'
+import { ShorthandView } from './ChangesPanel'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 
 export interface QuestionsPanelProps {
   questions: AiClarificationRequest[]
   answers: Record<string, AiClarificationAnswer>
   activeQuestionId: string
+  /**
+   * SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): the shorthand document the
+   * paused draft was built from, VERBATIM — a needs-clarification turn IS
+   * proposal-bearing, so the spec's "shows the shorthand VERBATIM above the
+   * proposal" holds while the draft is paused. Render-only (the SAME
+   * ShorthandView component the review panel uses — no second grammar, no edit
+   * affordance mid-clarification). Optional: a clarification from a draft
+   * without shorthand renders byte-unchanged.
+   */
+  shorthand?: string
   onAnswer: (questionId: string, answer: AiClarificationAnswer) => void
   onChangeQuestion: (questionId: string) => void
   onSubmit: () => void
@@ -26,6 +37,7 @@ export function QuestionsPanel({
   questions,
   answers,
   activeQuestionId,
+  shorthand,
   onAnswer,
   onChangeQuestion,
   onSubmit,
@@ -45,6 +57,12 @@ export function QuestionsPanel({
 
   return (
     <div className="questions-panel" data-testid="questions-panel">
+      {shorthand !== undefined ? (
+        // SHORTHAND-CHAT fix cycle 1: the paused draft's document, VERBATIM,
+        // above the questions (render-only — no onRecompile, no edit affordance
+        // mid-clarification; the answer fold is the server's deterministic job).
+        <ShorthandView yaml={shorthand} />
+      ) : null}
       <div className="questions-panel__header">
         <span className="questions-panel__count">
           {questions.length - answeredCount} answers needed

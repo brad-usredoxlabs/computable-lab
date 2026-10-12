@@ -18,7 +18,7 @@ import {
   initialChatState,
   type ChatMessage,
 } from './chatReducer'
-import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest } from './assistStream'
+import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest, type AgentActionEnvelope } from './assistStream'
 import type { AiClarificationAnswer } from '../../../types/ai'
 
 interface SendOptions {
@@ -37,6 +37,12 @@ interface SendOptions {
     highlightedSection: string
     selectedText: string
   }
+  /**
+   * PB-CH-4 — the structured working focus (ChatContextHeader's focused step).
+   * Rides the request TOP-LEVEL so the server renders the WORKING FOCUS block;
+   * never folded into `context` (per-turn churn would break the KV warm prefix).
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
 }
 
 export interface UseChatThreadResult {
@@ -56,17 +62,75 @@ function makeMessageId(role: 'user' | 'assistant'): string {
   return `msg-${nextMessageId}-${role}`
 }
 
+/**
+ * PB-CH-4 — fallback trace evidence for a tier-1 agent action when the mount
+ * reports nothing. Derived from the compiled payload only (never from raw
+ * model prose) and always states that NOTHING was written — tier-1 actions
+ * move the workspace, they do not mutate records.
+ */
+function describeAgentAction(action: AgentActionEnvelope): string {
+  const target = action.target
+  const label =
+    target?.label ??
+    (target?.kind === 'protocol-step' ? target.stepId : undefined) ??
+    (target && target.kind !== 'protocol-step' ? target.id : undefined) ??
+    'the target'
+  if (action.action === 'open-surface') {
+    return `Opened ${action.surface ?? label} — nothing was written.`
+  }
+  return `Focused on ${label} — nothing was written.`
+}
+
 export interface UseChatThreadOptions {
   /** Stable surface id derived from the active viewer kind. */
   surface: string
   /** Whatever the agent should know about the active viewer/study. */
   context: Record<string, unknown>
   /**
+   * PB-CH-4 — the structured working focus (the step ChatContextHeader shows).
+   * Rides the request TOP-LEVEL (like protocolStepContext) so the server
+   * renders the WORKING FOCUS block; never folded into `context` — focus
+   * changes per turn and would churn the KV warm prefix.
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
+  /**
    * Called when a stream finishes with a draft-tool result, before the turn
    * commits to chat history. Deck surfaces use this to promote the draft
    * into the event editor's ghost preview.
    */
   onDraftResult?: (result: AssistDraftResult, prompt: string) => void
+  /**
+   * PB-CH-4 — tier-1 mount: fires when the server's workspace-action compiler
+   * emits a compiled `agent_action` (Ajv + spine + registry resolution already
+   * happened server-side). The mount (AiTabPanel via useWorkstateExecutor)
+   * applies it; returned text (if any) becomes the trace evidence. A raw model
+   * proposal NEVER rides this event — assistStream only relays compiled frames.
+   */
+  onAgentAction?: (action: AgentActionEnvelope) => string | void
+  /**
+   * PB-CH-4 — tier-2 mount: fires when the model proposes a workstate. Forwards
+   * the INTENT verbatim; the mount relays it to POST /api/drafts/compile. The
+   * hook itself touches NOTHING (no trace, no store) — the card owns the
+   * compile→review→accept flow.
+   */
+  onWorkstateProposal?: (workstate: Record<string, unknown>) => void
+  /**
+   * PB-CH-5 — tier-2 mount (analysis): fires when the model proposes an
+   * analysis composition. Forwards the INTENT verbatim; the mount relays it to
+   * POST /api/drafts/compile with adapter 'analysis'. Same zero-touch
+   * discipline as onWorkstateProposal — the card owns the flow.
+   */
+  onAnalysisProposal?: (analysis: Record<string, unknown>) => void
+  /**
+   * PB-CH-8 fix1 — turn marker (NOT a content relay): fires when the server's
+   * ledger_answer frame arrives during the turn. The hook still owns the
+   * kind:'ledger' trace render VERBATIM (the dispatch below is unchanged);
+   * this callback exists only so the mount can mark THIS turn a ledger turn —
+   * the ledger trace is that turn's only review surface and the event-graph
+   * draft-ready arm must not park the sidebar over an empty change list
+   * (defect: lanes/2/decisions/PB-CH-8-ledger-render-defect.md).
+   */
+  onLedgerAnswer?: () => void
   /**
    * Test seam — override the SSE runner. Real callers leave this unset
    * to use the default fetch-based client.
@@ -78,6 +142,11 @@ export function useChatThread({
   surface,
   context,
   onDraftResult,
+  onAgentAction,
+  onWorkstateProposal,
+  onAnalysisProposal,
+  onLedgerAnswer,
+  workingFocus,
   runStream,
 }: UseChatThreadOptions): UseChatThreadResult {
   const [state, dispatch] = useReducer(chatReducer, initialChatState)
@@ -130,6 +199,9 @@ export function useChatThread({
         ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
         ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
         ...(options?.protocolStepContext ? { protocolStepContext: options.protocolStepContext } : {}),
+        // PB-CH-4: focus rides the request top-level; ABSENT when nothing is
+        // focused (exactOptionalPropertyTypes — never `workingFocus: undefined`).
+        ...(workingFocus ? { workingFocus } : {}),
       }
 
       const stream = runStream ?? runAssistStream
@@ -191,6 +263,83 @@ export function useChatThread({
               case 'draft':
                 dispatch({ type: 'stream-trace', entry: { seq: traceSeq++, kind: 'draft', evidence: `${event.events.length} event(s) drafted` } })
                 return
+              case 'agent_action': {
+                // PB-CH-4 tier-1: the frame is the OUTPUT of the server's
+                // workspace-action compiler (Ajv + spine + registry already
+                // resolved). Hand it to the mount; whatever the mount reports
+                // becomes the trace evidence. A throwing mount must never
+                // break the chat turn (same wrapper as onDraftResult).
+                let mountText: string | void
+                try {
+                  mountText = onAgentAction?.(event.action)
+                } catch {
+                  mountText = 'Agent action failed to apply — nothing was written.'
+                }
+                dispatch({
+                  type: 'stream-trace',
+                  entry: { seq: traceSeq++, kind: 'action', evidence: mountText || describeAgentAction(event.action) },
+                })
+                return
+              }
+              case 'workstate_proposal':
+                // PB-CH-4 tier-2: forward the model's INTENT verbatim. The hook
+                // touches NOTHING else — no trace, no store, no compile. The
+                // card mount owns the compile→review→accept flow.
+                onWorkstateProposal?.(event.workstate)
+                return
+              case 'analysis_proposal':
+                // PB-CH-5 tier-2 (analysis): same zero-touch discipline — the
+                // mount relays the INTENT to POST /api/drafts/compile (adapter
+                // 'analysis'); the hook touches nothing else. The relay is
+                // wrapped so a throwing mount can never break the chat turn
+                // (the never-break-the-turn wrapper the agent_action case uses;
+                // the relay is async fire-and-forget, so its rejection is
+                // swallowed here too).
+                try {
+                  onAnalysisProposal?.(event.analysis)
+                } catch {
+                  // The card mount owns the flow; a mount explosion must not
+                  // end the turn or the chat.
+                }
+                return
+              case 'ledger_answer': {
+                // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot +
+                // server-known audit rows — fetched evidence, never model
+                // narration). The hook renders it as a trace entry from the
+                // server's own answerText VERBATIM (one wording authority) and
+                // touches NOTHING else: no compile relay, no store, no card.
+                // The found half's reattach card rides the SEPARATE
+                // workstate_proposal event the server emits — zero new app
+                // flow here.
+                // PB-CH-8 fix1: mark the turn BEFORE the dispatch so the mount
+                // (AiTabPanel.ledgerTurnRef) can suppress the event-graph
+                // draft-ready park for this turn (defect
+                // lanes/2/decisions/PB-CH-8-ledger-render-defect.md). The
+                // marker is fire-and-forget; a throwing mount must never break
+                // the chat turn (the agent_action wrapper precedent). The
+                // dispatch below is byte-identical.
+                try {
+                  onLedgerAnswer?.()
+                } catch {
+                  // The trace render below is the answer's surface; a mount
+                  // explosion must not end the turn or the chat.
+                }
+                dispatch({
+                  type: 'stream-trace',
+                  entry: {
+                    seq: traceSeq++,
+                    kind: 'ledger',
+                    evidence: event.answer.answerText ?? (event.answer.status === 'found'
+                      ? `Workstate ${event.answer.disclosure ?? `as captured at ${event.answer.capturedAt}`}.`
+                      : 'The ledger has no stored workstate history for that time.'),
+                    ...(event.answer.links ? { links: event.answer.links } : {}),
+                    ...(event.answer.labEvents
+                      ? { labEvents: event.answer.labEvents.map((e) => ({ occurredAt: e.occurredAt, action: e.action, subjectId: e.subjectId, recordId: e.recordId })) }
+                      : {}),
+                  },
+                })
+                return
+              }
               default: {
                 const _exhaustive: never = event
                 return _exhaustive
@@ -206,7 +355,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, onDraftResult, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onLedgerAnswer, runStream],
   )
 
   const stop = useCallback(() => {

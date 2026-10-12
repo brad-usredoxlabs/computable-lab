@@ -9,6 +9,9 @@ import type { MetricsSnapshot } from '../../extract/ExtractionMetrics.js';
 import { promoteCandidate as promoteCandidateLogic, type PromoteCandidateArgs } from '../../extract/CandidatePromoter.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import { extractPdfText } from '../../extract/PdfTextAdapter.js';
+import type { AuditEventService } from '../../governance/AuditEventService.js';
+import type { StoreResult } from '../../store/types.js';
+import type { SemanticPassRunner } from '../../ingestion/vendor-protocol/SemanticFamilyPass.js';
 
 type ExtractBody = {
   target_kind?: unknown;
@@ -38,6 +41,16 @@ export interface ExtractHandlers {
     request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<MetricsSnapshot | ApiError>;
+  /**
+   * W2-6 (OQ1 ruling (ii), P3): POST /extraction/vendor-candidates/:recordId/semantic-draft
+   * — wiring-only: param parse -> semantic pass service -> code->status map.
+   * NO policy logic here; the response is {recordId: XDR-...} + diagnostics
+   * and NEVER a literal-protocol payload or legacy draft-service output (A5).
+   */
+  semanticDraft(
+    request: FastifyRequest<{ Params: { recordId: string } }>,
+    reply: FastifyReply,
+  ): Promise<{ recordId: string; diagnostics: unknown } | ApiError>;
 }
 
 type UploadBody = {
@@ -57,6 +70,8 @@ export function createExtractHandlers(
   schemaRegistry: SchemaRegistry,
   validator: AjvValidator,
   metrics?: { snapshot: () => MetricsSnapshot },
+  auditService?: AuditEventService,
+  semanticPass?: SemanticPassRunner,
 ): ExtractHandlers {
   return {
     async extract(request, reply) {
@@ -240,6 +255,12 @@ export function createExtractHandlers(
       const outcome = promoteCandidateLogic(promoteArgs);
 
       if (!outcome.ok) {
+        // W2-5 §3.3a: a promoted protocol born non-draft while declaring a
+        // lifecycle is refused with the stable code, nothing persisted.
+        if (outcome.code === 'PROMOTION_CONTROLLED_ESCALATION') {
+          reply.code(422);
+          return { error: 'PROMOTION_CONTROLLED_ESCALATION', message: outcome.reason };
+        }
         if (outcome.validation_errors && outcome.validation_errors.length > 0) {
           reply.code(422);
           return { 
@@ -249,7 +270,13 @@ export function createExtractHandlers(
           };
         }
         reply.code(400);
-        return { error: 'PROMOTION_FAILED', message: outcome.reason };
+        // W2-5 §2.1: the ambiguity guard's refusal now names its stable twin
+        // code (xdr-promote-blocked-by-unresolved) machine-readably.
+        return {
+          error: 'PROMOTION_FAILED',
+          message: outcome.reason,
+          ...(outcome.code !== undefined ? { details: { code: outcome.code } } : {}),
+        };
       }
 
       // Persist the canonical record
@@ -265,6 +292,16 @@ export function createExtractHandlers(
       });
 
       if (!createResult.success) {
+        // W2-5 §3.3b — honest errors: a rule rejection (lint/validation
+        // findings from the store write wall, RecordStoreImpl.ts:492-504)
+        // answers 422 with the actionable machine-readable findings body;
+        // 500 STORE_ERROR is reserved for transport failures. Today this
+        // swallowed result.lint/result.validation behind a 500.
+        const blocked = storeRejectionBody(createResult);
+        if (blocked) {
+          reply.code(422);
+          return blocked;
+        }
         reply.code(500);
         return { error: 'STORE_ERROR', message: 'Failed to persist canonical record' };
       }
@@ -282,6 +319,11 @@ export function createExtractHandlers(
       });
 
       if (!promotionResult.success) {
+        const blocked = storeRejectionBody(promotionResult);
+        if (blocked) {
+          reply.code(422);
+          return blocked;
+        }
         reply.code(500);
         return { error: 'STORE_ERROR', message: 'Failed to persist promotion record' };
       }
@@ -313,8 +355,31 @@ export function createExtractHandlers(
       });
 
       if (!updateResult.success) {
+        const blocked = storeRejectionBody(updateResult);
+        if (blocked) {
+          reply.code(422);
+          return blocked;
+        }
         reply.code(500);
         return { error: 'STORE_ERROR', message: 'Failed to update extraction draft' };
+      }
+
+      // W2-5 §3.3c — audit the promotion itself (same best-effort service as
+      // the lifecycle-transition audit at RecordHandlers.ts:977-995;
+      // AuditEventService never fails the business operation). Action name
+      // obeys audit-event.schema.yaml:36 (`^[a-z][a-z0-9_]*$`).
+      if (auditService) {
+        await auditService.append({
+          actor: 'system',
+          action: 'candidate_promoted',
+          subjectType: 'extraction-draft',
+          subjectId: id,
+          data: {
+            candidate_path: candidatePath,
+            output_record_id: targetRecordId,
+            promotion_record_id: promotionRecordId,
+          },
+        });
       }
 
       return { success: true, recordId: targetRecordId, promotionId: promotionRecordId };
@@ -386,6 +451,13 @@ export function createExtractHandlers(
       });
 
       if (!updateResult.success) {
+        // W2-5 §3.3b: 422 + findings for rule rejections; 5xx only for
+        // transport errors (same discipline as the promote half).
+        const blocked = storeRejectionBody(updateResult);
+        if (blocked) {
+          reply.code(422);
+          return blocked;
+        }
         reply.code(500);
         return { error: 'STORE_ERROR', message: 'Failed to update extraction draft' };
       }
@@ -400,7 +472,82 @@ export function createExtractHandlers(
       }
       return metrics.snapshot();
     },
+
+    async semanticDraft(request, reply) {
+      // Wiring-only (spec §2.3): param parse -> service -> code->status map.
+      if (!semanticPass) {
+        reply.code(503);
+        return { error: 'SEMANTIC_PASS_UNAVAILABLE', message: 'Semantic pass is not configured (no ai.inference endpoint)' };
+      }
+      const { recordId } = request.params;
+      if (!recordId || !/^CAN-[A-Za-z0-9_-]+$/.test(recordId)) {
+        reply.code(400);
+        return { error: 'INVALID_INPUT', message: 'Invalid vendor-candidate record id (must be CAN-*)' };
+      }
+      const result = await semanticPass({ candidateRecordId: recordId });
+      if (result.ok) {
+        // A5: the route ends at the XDR record id + diagnostics — never a
+        // literal-protocol payload, never the legacy draft route's output.
+        return { recordId: result.recordId, diagnostics: result.diagnostics };
+      }
+      const status = result.error === 'SEMANTIC_PASS_NO_CANDIDATE' ? 404
+        : result.error === 'SEMANTIC_PASS_UNKNOWN_THINKING_LEVEL' ? 400
+        : result.error === 'SEMANTIC_PASS_STEP_COVERAGE' ? 422
+        : 502;
+      reply.code(status);
+      return {
+        error: result.error,
+        message: result.message,
+        ...(result.details !== undefined ? { details: result.details } : {}),
+      } as ApiError;
+    },
   };
+}
+
+/**
+ * W2-5 §3.3b — translate a store write-wall rejection into the actionable
+ * machine-readable body. When a store.create/update carries lint or
+ * validation findings (the write wall at RecordStoreImpl.ts:492-504 /
+ * :694-701), the promote/reject handlers answer 422 with the rule ids +
+ * paths instead of swallowing them behind a 500 STORE_ERROR. Returns null
+ * when the failure carries no findings (a transport error → 500).
+ */
+function storeRejectionBody(result: StoreResult): {
+  error: 'PROMOTION_LINT_BLOCKED';
+  message: string;
+  details: { lint_findings: Array<{ rule_id: string; severity: string; message: string; paths: string[] }> };
+} | null {
+  const lint = result.lint;
+  if (lint && !lint.valid && lint.violations.length > 0) {
+    return {
+      error: 'PROMOTION_LINT_BLOCKED',
+      message: result.error ?? 'Promotion refused by lint rules',
+      details: {
+        lint_findings: lint.violations.map(v => ({
+          rule_id: v.ruleId,
+          severity: v.severity,
+          message: v.message,
+          paths: v.path !== undefined ? [v.path] : [],
+        })),
+      },
+    };
+  }
+  const validation = result.validation;
+  if (validation && !validation.valid) {
+    return {
+      error: 'PROMOTION_LINT_BLOCKED',
+      message: result.error ?? 'Promotion refused by schema validation',
+      details: {
+        lint_findings: (validation.errors ?? []).map(e => ({
+          rule_id: 'schema-validation',
+          severity: 'error',
+          message: e.message,
+          paths: e.path !== undefined ? [e.path] : [],
+        })),
+      },
+    };
+  }
+  return null;
 }
 
 function buildArgs(

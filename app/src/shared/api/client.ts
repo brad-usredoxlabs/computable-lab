@@ -2267,6 +2267,53 @@ export const apiClient = {
     })
   },
 
+  /**
+   * PB-CH-4 — compile a tier-2 workstate proposal (THE trust boundary for the
+   * chat card). The client relays the model's INTENT here; the server's Ajv +
+   * spine + registry resolution decides `canAccept`. A blocked compile returns
+   * canAccept:false + diagnostics — never an actionable card. With draftId +
+   * revision it bumps the pending draft (the revise path). The actor rides the
+   * existing x-user-id header plumbing (request()); the drafts routes resolve it.
+   */
+  async compileWorkstateDraft(req: {
+    /** Registered draft adapters (config/drafting/adapters.yaml). PB-CH-5
+     * widens this to the registered set — 'analysis' is the second compiled
+     * composition target on the SAME seam; the endpoint is adapter-blind. */
+    adapter: 'workstate' | 'analysis'
+    intent: Record<string, unknown>
+    draftId?: string
+    revision?: number
+  }): Promise<{
+    draftId: string
+    revision: number
+    reviewHash: string
+    canAccept: boolean
+    diagnostics: Array<{ code?: string; severity?: string; outcome?: string; message: string }>
+    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }
+  }> {
+    return request(`/drafts/compile`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    })
+  },
+
+  /**
+   * PB-CH-4 — accept a compiled draft. Sends ONLY {draftId, revision,
+   * reviewHash}: the server returns the STORED compiled result (the flat
+   * {sessionDocument, summary, resolvedTerms} body) — the client can never
+   * resubmit a document. NO AI call is involved at accept time, ever.
+   */
+  async acceptWorkstateDraft(body: {
+    draftId: string
+    revision: number
+    reviewHash: string
+  }): Promise<{ sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }> {
+    return request(`/drafts/accept`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   /** GET /api/storage/devices — external storage devices (S3/NAS/USB). */
   async listStorageDevices(): Promise<{
     devices: Array<{ id: string; label: string; kind: string; default: boolean }>;
@@ -3947,6 +3994,26 @@ export const apiClient = {
     })
   },
 
+  /**
+   * POST /intent/compile — compile a scientist-intent YAML document through
+   * the deterministic compiler (SHORTHAND-CHAT: the chat panel's shorthand
+   * edit-recompile rides this EXISTING route; the server re-parses with Ajv as
+   * sole authority and recompiles — the client is render + POST only).
+   */
+  async intentCompile(intentYaml: string): Promise<{
+    outcome?: string
+    terminalArtifacts?: {
+      events?: unknown[]
+      gaps?: Array<{ message?: string } & Record<string, unknown>>
+      [key: string]: unknown
+    }
+  }> {
+    return request('/intent/compile', {
+      method: 'POST',
+      body: JSON.stringify({ intent: intentYaml }),
+    })
+  },
+
   /** POST /intent/accept — persist an accepted local-protocol from a macro. */
   async intentAccept(body: {
     sourceProtocolId: string
@@ -3970,6 +4037,13 @@ export const apiClient = {
     acceptedProtocolId?: string
     acceptedProtocolResult?: string
     localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    /**
+     * SHORTHAND-CORPUS WS1 (chat-Accept leg): the accepted shorthand as the
+     * VERBATIM YAML string the panel shows — the client is render + POST only
+     * (it never parses; the server decodes via parseYaml into the lift+Ajv
+     * capture door).
+     */
+    shorthandYaml?: string
     acceptedGraph?: Record<string, unknown>
     confirmedAt?: string
   }): Promise<{ ok: boolean; entryId?: string; deduped?: boolean; error?: string }> {
@@ -5015,6 +5089,11 @@ export const apiClient = {
    */
   artifactBlobUrl(studyId: string, artifactId: string): string {
     return `${API_BASE}/studies/${encodeURIComponent(studyId)}/artifacts/${encodeURIComponent(artifactId)}/blob`
+  },
+
+  /** POST the merged semantic pass over a CAN-* vendor-protocol-candidate (NOT the VPDF-* route id); lands an extraction-draft. */
+  async semanticDraft(candidateRecordId: string): Promise<{ recordId: string; diagnostics: unknown }> {
+    return request<{ recordId: string; diagnostics: unknown }>(`/extraction/vendor-candidates/${encodeURIComponent(candidateRecordId)}/semantic-draft`, { method: 'POST' })
   },
 
   /**

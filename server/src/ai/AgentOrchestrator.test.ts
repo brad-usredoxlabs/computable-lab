@@ -223,7 +223,13 @@ describe('createAgentOrchestrator', () => {
       type: 'status',
       message: `${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} was not emitted natively; asking AI for compiler arguments…`,
     });
-    expect(events.some((event) => event.type === 'tool_call' && event.toolName === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME)).toBe(true);
+    // PROTO-AI-9: the forced flow's terminal tool is `agent_intent`, so the
+    // recovered args are now wrapped AS that tool (intent inferred from the
+    // keys) instead of the compile-draft tool — the old wrap matched no
+    // dispatch branch and the draft vanished (finding PROTO-AI-9-recovery-
+    // coercion-finding.md). The recovered labwareAdditions draft must still
+    // reach the same draft path and produce the same result below.
+    expect(events.some((event) => event.type === 'tool_call' && event.toolName === AGENT_INTENT_TOOL_NAME)).toBe(true);
     expect(result.success).toBe(true);
     expect(result.labwareAdditions?.[0]?.deckSlot).toBe('B2');
   });

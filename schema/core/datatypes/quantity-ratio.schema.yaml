@@ -1,0 +1,47 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/quantity-ratio.schema.yaml"
+title: "QuantityRatio"
+description: >
+  A quantity-per-quantity ratio: numerator and denominator are each a full
+  Quantity (value+unit+dimension). Example (D6 forcing function): 5 bashing
+  beads per well = numerator {5, beads, count} over denominator {1, wells,
+  count} — BOTH dimension count but DIFFERENT units, which is exactly why a
+  ratio is not dimensionless and why the pair must stay typed.
+
+  ADJUDICATION (do not conflate — three "ratio" things exist in this repo):
+  this datatype is LOAD-BEARING. reference-ratio.schema.yaml (:4-11) is an
+  ADVISORY authoring annotation with bare numerator/denominator NUMBERS and is
+  never what the resolver uses to produce volumes; it stays untouched (W2-1
+  ruling: the two coexist). scientist-intent operations.yaml's add_material is a
+  separate verb vocabulary, not a ratio datatype. The same-dimension requirement
+  for the constraint class `ratio` is declared as DATA on the constraint
+  vocabulary (class dimensionRule), not in this datatype: cross-dimension
+  quantities-per-quantity are representable here (e.g. cells over uL) but the
+  ratio CLASS demands same-dimension.
+
+  This is a datatype, not a record kind (crosswalk forbidden_kinds).
+
+type: object
+additionalProperties: false
+required: [ numerator, denominator ]
+
+properties:
+  numerator:
+    $ref: "./quantity.schema.yaml"
+    description: "The first quantity of the ratio (e.g. 5 beads, dimension count)."
+
+  denominator:
+    $ref: "./quantity.schema.yaml"
+    description: "The quantity the ratio is expressed against (e.g. 1 well, dimension count)."
+
+  basis_label:
+    type: string
+    description: "Optional human label for the basis quantity (mirrors reference-ratio's affordance, e.g. 'well')."
+
+  ratioed_label:
+    type: string
+    description: "Optional human label for the quantity being ratioed (e.g. 'bashing bead')."
+
+  rationale:
+    type: string
+    description: "Optional freeform note (e.g. '5 bashing beads per well per kit instructions')."

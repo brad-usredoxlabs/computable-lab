@@ -15,6 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { OpenTabsProvider } from '../../../shared/shell/OpenTabsContext'
 import {
   WorkspaceProvider,
 } from '../../workspace/WorkspaceContext'
@@ -92,18 +93,23 @@ function renderWithTab(
   const base = defaultWorkspaceState('STU-000001')
   return render(
     <MemoryRouter>
-      <WorkspaceProvider
-        studyId="STU-000001"
-        saveDebounceMs={0}
-        loadFn={async () => ({
-          state: { ...base, ...(initialState as Record<string, unknown>) } as ReturnType<
-            typeof defaultWorkspaceState
-          >,
-        })}
-        saveFn={async (_id, s) => ({ state: s })}
-      >
-        <AiTabPanel />
-      </WorkspaceProvider>
+      {/* PB-CH-4: the panel now consumes useWorkstateExecutor, whose
+          useApplySessionDocument needs OpenTabsProvider — production mounts it
+          app-wide (App.tsx), so the harness matches production. */}
+      <OpenTabsProvider>
+        <WorkspaceProvider
+          studyId="STU-000001"
+          saveDebounceMs={0}
+          loadFn={async () => ({
+            state: { ...base, ...(initialState as Record<string, unknown>) } as ReturnType<
+              typeof defaultWorkspaceState
+            >,
+          })}
+          saveFn={async (_id, s) => ({ state: s })}
+        >
+          <AiTabPanel />
+        </WorkspaceProvider>
+      </OpenTabsProvider>
     </MemoryRouter>,
   )
 }

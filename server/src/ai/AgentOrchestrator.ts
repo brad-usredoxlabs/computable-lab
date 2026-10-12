@@ -6,7 +6,7 @@ import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity
  * graph fragments for preview.
  */
 
-import type { InferenceConfig, AgentConfig, OntologyConfig } from '../config/types.js';
+import type { InferenceConfig, AgentConfig, OntologyConfig, ShadowRouterConfig } from '../config/types.js';
 import type {
   InferenceClient,
   ToolBridge,
@@ -26,6 +26,8 @@ import type {
 } from './types.js';
 import type { AiSurface } from './systemPrompt.js';
 import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage, deriveContextCacheKey } from './systemPrompt.js';
+import { buildAnalysisGroundingBlockForSurface } from './analysisReferenceGrounding.js';
+import { buildWorkstateRulesBlockForSurface } from './workstateComposeRules.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
@@ -34,7 +36,7 @@ import {
   SUBMIT_SUGGESTION_INSTRUCTION,
   parseSubmitSuggestionArgs,
   AGENT_INTENT_TOOL_NAME,
-  AGENT_INTENT_TOOL_DEF,
+  buildAgentIntentToolDef,
   parseAgentIntentArgs,
   parseAlsoPlace,
   parseRecordCreations,
@@ -51,10 +53,30 @@ import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.j
 import { enrichMaterialDomains } from './enrichMaterialDomains.js';
 import { filterForbiddenAmountQuestions } from './filterModelClarifications.js';
 import { draftTermManifest } from './draftTermManifest.js';
-import { coerceToAgentIntentArgs } from './coerceAgentIntent.js';
+import { coerceToAgentIntentArgs, PROTOCOL_EDIT_ARG_KEYS, SHORTHAND_ARG_KEYS } from './coerceAgentIntent.js';
+import { ledgerAnswerText } from '../workspace-session/ledgerQuery.js';
+import { validateProtocolEditPayload, formatProtocolEditErrors } from './protocolEditValidation.js';
+import {
+  compileWorkspaceAction,
+  type CompileResult,
+  type WorkspaceActionCompilerDeps,
+} from './compileWorkspaceAction.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
 import type { SubmitCallLike } from './selectSubmitCall.js';
+import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
+import { surfaceDraftsShorthand } from './shorthandDrafting.js';
+import {
+  compileShorthandDeterministically,
+  composeLabwareHintLookupWithDeck,
+  holdShorthandIntent,
+  takeHeldShorthandIntent,
+  foldAnswersIntoShorthand,
+  heldReextractionContext,
+  malformedShorthandRepairPrompt,
+  shorthandResultFromCompile,
+} from './shorthandChat.js';
+import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -487,20 +509,20 @@ function stampDraftProvenance<T>(events: T[]): T[] {
 export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${AGENT_INTENT_TOOL_NAME} tool exactly once, choosing ONE intent from its menu.`,
-  '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_graph" and fill the event/labware fields.',
+  '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.',
   '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.',
   '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
-  '- ALWAYS return the events for an add-materials request (with {mint} for unknowns). NEVER return "events": [] for such a request, and never ask the user to confirm a volume or concentration they already stated.',
-  '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
-  '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
-  '- Choose ONE intent from the supplied tool schema in ONE call. `event_graph` drafts events onto the deck; `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
+  '- ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.',
+  '- When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.',
+  '- Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist\'s words) — never a hand-built labwareRequirements payload.',
+  '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
-  '- For operations, use canonical operation names when possible: dispense, transfer, mix, shake, incubate, centrifuge, wash, read, seed, harvest, etc. The system normalizes verbs automatically.',
+  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one.',
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
@@ -753,8 +775,18 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
     }
   }
   // Bare argument object: require a known draft key so unrelated prose-JSON
-  // (an example, a code block) is never fed to the compiler.
-  if (DRAFT_ARG_KEYS.some((k) => k in obj) || 'sequenceAction' in obj) return obj;
+  // (an example, a code block) is never fed to the compiler. The protocol_edit
+  // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
+  // table) rather than DRAFT_ARG_KEYS, because that list also drives the
+  // unknown-field diagnostic and must stay event-draft-only. Guard stays
+  // strict: `{intent, protocolId}` with no substantive key is still not a draft.
+  if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
+  if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return obj;
+  // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
+  // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
+  // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
+  if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return obj;
+  if ('sequenceAction' in obj) return obj;
   return null;
 }
 
@@ -762,11 +794,14 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
   return [
     `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
     'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
-    'For event drafting, use intent "event_graph" and allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
+    // SHORTHAND-CHAT: event drafting is a scientist-intent DOCUMENT now. The
+    // retry prompt demands the shorthand envelope — never events, never the
+    // old key-set coaching (the deterministic compiler owns the expansion).
+    'For event drafting, use intent "event_shorthand" with the scientist-intent YAML document in `shorthand`: top-level intentId + actions[] (closed vocabulary; natural-language noun labels; numeric parameters; optional sourceWells/targetWells). Never write events, labware record ids, or deck slots.',
     'For a deck layout change, use intent "deck_layout" with variantId (e.g. "manual_freeform") and leave the event fields empty.',
-    'For labware/deck setup, prefer labwareRequirements like {"classCurie":"CL:96_well_plate","deckSlot":"B2","reason":"96-well plate requested","specificity":"generic"}. Do not invent LBW-* recordIds.',
-    'Do not ask which vendor/catalog/plate subtype for a generic request like a 96-well plate. Emit the generic requirement.',
-    'For material nouns, use materials[].ref as {"curie":"..."} or {"mint":{"label":"...","domain":"..."}}.',
+    // PROTO-AI-9: the retry prompt must know the protocol_edit envelope too, or
+    // a protocol-edit turn can never be recovered by the slow path.
+    'For edits to the ATTACHED PROTOCOL (add/delete/reorder/modify its steps), use intent "protocol_edit" with ops:[...] — cite ONLY stepIds/roleIds from the ATTACHED PROTOCOL block; this proposes an edit and writes nothing.',
     `Original user prompt: ${originalPrompt}`,
   ].join('\n');
 }
@@ -887,6 +922,23 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
   assuranceThreshold?: number;
   /**
+   * PB-CH-1 — the declarative work-surface registry
+   * (schema/registry/surfaces/surfaces.yaml via loadDefaultSurfacesRegistry).
+   * The workspace-action compiler checks surface MEMBERSHIP through it — never
+   * a TS allow-list (surfaces.ts:64). Optional — without it a workspace_action
+   * cannot compile and surfaces a COMPILE_INTERNAL diagnostic.
+   */
+  surfaces?: import('../surfaces/surfaces.js').SurfacesRegistry;
+  /**
+   * PB-CH-8 — the ledger query host (workspace-session/ledgerQuery.ts
+   * createLedgerQueryHost). The `query_workstate_history` intent runs through
+   * it: spine resolution + server-known audit anchor + journal asOf + the
+   * SERVER-BUILT frames (OQ2 ruling). Optional — without it the intent answers
+   * honestly that no ledger is wired (the workspace_action COMPILE_INTERNAL
+   * precedent), never a silent no-op and never a header-fallback identity.
+   */
+  ledgerQuery?: import('../workspace-session/ledgerQuery.js').LedgerQueryHost;
+  /**
    * Ontology config — gives draft-time material labeling access to the
    * on-box OAK terms endpoint, so grounded CURIEs render as names in well
    * state instead of raw "CHEBI:…" ids. Optional — without it labeling
@@ -899,6 +951,17 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * tool-bearing turns. Computed once at construction.
    */
   residentContext?: string;
+  /**
+   * PROTO-AI-12 §4 shadow-router block (log-only, zero authority). MISSING =
+   * fully OFF: zero router calls, zero telemetry writes. Endpoints are DATA —
+   * never hardcoded in code. Production wiring: the createAgentOrchestrator
+   * call in server.ts:1068 passes `appConfig.ai.shadowRouter` through this
+   * same deps seam (alongside ontology at server.ts:1055 and
+   * assuranceThreshold at server.ts:1065).
+   */
+  shadowRouter?: ShadowRouterConfig;
+  /** fetch override (tests inject a spy); defaults to globalThis.fetch. */
+  fetch?: typeof fetch;
 }
 
 export function createAgentOrchestrator(
@@ -924,7 +987,42 @@ export function createAgentOrchestrator(
    */
   const defaultForceDraftTool = draftFlowMode !== 'preflight-llm';
 
+  /**
+   * PROTO-AI-12 §4 — the shadow router, resolved ONCE at construction from
+   * the config block (DATA). MISSING/disabled config or a disabled writer =
+   * null = fully OFF: zero inference calls, zero telemetry lines. The config
+   * arrives through the deps seam from the createAgentOrchestrator call in
+   * server.ts:1068 (see AgentOrchestratorDeps.shadowRouter).
+   */
+  const shadowSetup = deps.shadowRouter
+    ? shadowRouterDepsFromConfig({
+        shadowRouter: deps.shadowRouter,
+        fetch: deps.fetch ?? globalThis.fetch,
+        bigModel: inferenceConfig.model,
+      })
+    : null;
+
   const traceId = () => Math.random().toString(36).slice(2, 8);
+
+  /**
+   * PB-CH-4b — the forced draft tool def for THIS orchestrator instance,
+   * computed ONCE at construction from the injected surface registry
+   * (deps.surfaces -> surfaces.yaml ids). The static example pair in the
+   * AGENT_INTENT_TOOL_DEF descriptions left the model's menu blind (gate
+   * run-5: it guessed `surface: "protocol"` and was correctly rejected by
+   * the compiler's UNSUPPORTED_SURFACE — the single membership authority,
+   * untouched). The ids ARRIVE as data (repo rule #1); no enum, no second
+   * membership check here.
+   *
+   * Computed once, NOT per request: buildToolDefs below is shared by run()
+   * and buildPrefixRequest, and the warm/real prefix parity contract (see the
+   * buildToolDefs comment) requires both paths to carry the IDENTICAL tool
+   * object. Reference identity is what guarantees it. No registry -> the
+   * static const by reference (byte-identical fallback).
+   */
+  const intentToolDef = buildAgentIntentToolDef(
+    deps.surfaces ? deps.surfaces.list().map((surface) => surface.id) : undefined,
+  );
 
   /**
    * Tool definitions offered to the LLM for a non-doc turn. Shared by run()
@@ -938,7 +1036,13 @@ export function createAgentOrchestrator(
       // Draft mode offers the model a SINGLE forced emission tool whose own
       // schema is the constrained menu (event_graph | deck_layout), keeping
       // every turn a structured emission while widening beyond the lone draft.
-      return [deps.sequenceActionSchema ? sequenceIntentTool(AGENT_INTENT_TOOL_DEF, deps.sequenceActionSchema) : AGENT_INTENT_TOOL_DEF];
+      // PB-CH-4b: the registry-vocabulary variant computed ONCE at
+      // construction (see intentToolDef above) — the same reference on the
+      // warm and the real path, per the parity contract in this comment.
+      // Sequences surface (main): the sequence_action arm is added to the
+      // same construction-time def by a per-surface clone below — Ajv stays
+      // the sole authority; this only widens the offered enum.
+      return [deps.sequenceActionSchema ? sequenceIntentTool(intentToolDef, deps.sequenceActionSchema) : intentToolDef];
     }
     const allToolDefs = toolBridge.getToolDefinitions();
     const baseToolDefs = toolFilter
@@ -954,18 +1058,36 @@ export function createAgentOrchestrator(
    * ONE render path shared by run() and the background prompt warmer — if the
    * two ever drifted, warmed prefixes would never match real requests and the
    * KV cache would miss silently.
+   *
+   * PB-CH-10: the analysis reference grounding block is computed HERE — the
+   * one site both the warm and the real render pass through — so every surface
+   * the policy's `grounding.surfaces` list names gets the same ground-truth
+   * candidate list from one source. Async because the candidate scan is a store
+   * read; the warm manager already accepts a Promise prefix
+   * (WarmTarget.buildPrefix), so warm/real parity holds by construction.
    */
-  function buildPrefixRequest(args: {
+  async function buildPrefixRequest(args: {
     context: EditorContext;
     surface?: AiSurface;
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
-  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'> {
+  }): Promise<Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>> {
     const forceDraftTool = args.surface === 'sequences' ? true : args.forceDraftTool ?? defaultForceDraftTool;
     const systemPrompt = args.surface
       ? buildSurfaceAwarePrompt(args.surface, args.context)
       : buildSystemPrompt(args.context, systemPromptPath);
+    // Surface membership + cap + title are DATA (config/drafting/
+    // analysis-composition.yaml `grounding:`); the kind set is that policy's
+    // own referenceKinds. Zero surface names, zero kind nouns here (repo rule
+    // #1). No store ⇒ no scan, no block.
+    const groundingBlock = deps.store
+      ? await buildAnalysisGroundingBlockForSurface(deps.store, args.surface)
+      : null;
+    // PB-CH-6 fix1 F1: the WORKSTATE COMPOSE RULES block. Membership is DATA
+    // (config/drafting/workstate-composition.yaml `rules.surfaces`); zero
+    // surface names here (repo rule #1). No store scan — pure policy text.
+    const workstateRulesBlock = buildWorkstateRulesBlockForSurface(args.surface);
     const systemSections: string[] = [systemPrompt];
     if(args.surface==='sequences' && deps.sequenceActionSchema)systemSections.push(
       sequenceAuthoringGuidance,
@@ -976,6 +1098,12 @@ export function createAgentOrchestrator(
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+    // Pushed LAST so they sit adjacent to the forced-tool instruction (OQ1
+    // ruling: the grounding block carries the compose_analysis routing rule;
+    // the rules block carries the compose_workstate tab/target rule — pinned
+    // order: instruction, forced, grounding, rules).
+    if (groundingBlock) systemSections.push(groundingBlock);
+    if (workstateRulesBlock) systemSections.push(workstateRulesBlock);
 
     const historyMessages = Array.isArray(args.history)
       ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
@@ -1024,6 +1152,105 @@ export function createAgentOrchestrator(
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
+      /**
+       * SHORTHAND-CHAT run-scoped state. The raw-events refusal and the
+       * malformed-shorthand re-ask each get ONE re-ask per run (re-ask once,
+       * then an honest failure — never a silent repair). Membership of the
+       * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
+       */
+      const shorthandSurface = surfaceDraftsShorthand(surfaceName);
+      let eventGraphRefusalAsked = false;
+      let shorthandRepairAsked = false;
+      const conversationKey = deriveContextCacheKey(surface, context);
+
+      /**
+       * SHORTHAND deck-context threading: the labware-hint lookup the frozen
+       * compile sees is the store-backed lookup COMPOSED with the editor's
+       * deck (context.labwares). Deck plates are editor state, not records —
+       * without this, a draft naming the plate the scientist is looking at
+       * ("plate1") false-bars as unknown-noun. Exact-name deck matches win;
+       * everything else falls through to the store lookup byte-identically.
+       */
+      const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      const shorthandSearchLabwareByHint = composeLabwareHintLookupWithDeck(
+        shorthandDeckLabwares,
+        deps.searchLabwareByHint,
+      );
+
+      /**
+       * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
+       * after the authoritative intent branch has resolved (each call site
+       * sits after that branch built its result and logged its done line),
+       * so authoritativePick records what the big model DID, not what the
+       * router wished. Never awaited (S1) and fully swallowed inside the
+       * adapter: router code can never reach the user path.
+       */
+      function shadowRoute(authoritativePick: ShadowRouterPick, bigModelLatencyMs: number): void {
+        if (!shadowSetup) return;
+        shadowRouteIfNeeded(shadowSetup.deps, {
+          correlationId: tid,
+          turn: effectivePrompt,
+          authoritativePick,
+          bigModelLatencyMs,
+        });
+      }
+      // OQ3 ruling: with the run-chat event drafting moved to shorthand, an
+      // intent document REQUIRES extraction — there is no deterministic authoring
+      // path. A forced-tool shorthand turn with no model configured says so
+      // LOUDLY and never silently event-compiles. The deterministicOnly legacy
+      // modes stay as-is for the surfaces not yet moved.
+      // OQ1 mandatory arm: a clarification answer on a shorthand surface folds
+      // onto the HELD intent deterministically — splice the noun, Ajv re-parse,
+      // re-compile — ZERO model calls. No 1:1 mapping ⇒ the permitted fallback
+      // (below): one extraction-only re-ask with the held shorthand + answers as
+      // grounded context. The model still only writes shorthand, never events.
+      if (shorthandSurface && !deterministicOnly && clarificationAnswers && clarificationAnswers.length > 0) {
+        const held = takeHeldShorthandIntent(conversationKey);
+        if (held) {
+          const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
+          if (folded) {
+            const compiledFold = await compileShorthandDeterministically(folded.doc, {
+              ...(deps.store ? { store: deps.store } : {}),
+              ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
+            });
+            if (compiledFold) {
+              console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
+              if (compiledFold.outcome === 'needs-clarification') {
+                holdShorthandIntent(conversationKey, { yaml: folded.yaml, doc: folded.doc, clarifications: compiledFold.clarifications });
+              }
+              const foldResult = shorthandResultFromCompile(
+                compiledFold,
+                folded.yaml,
+                'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
+                shorthandDeckLabwares,
+              );
+              const foldElapsed = Date.now() - t0;
+              const foldSummary: AgentSummary = {
+                traceId: tid, surface: surfaceName, model, success: foldResult.success, elapsedMs: foldElapsed,
+                turns: [],
+                totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+                resolvedMentions: 0, bypass: null,
+              };
+              if (foldResult.error) foldSummary.error = foldResult.error;
+              logAgentSummary(tid, foldSummary);
+              console.log(`[agent ${tid}] done shorthand-fold success=${foldResult.success} events=${foldResult.events?.length ?? 0} elapsedMs=${foldElapsed}`);
+              return foldResult;
+            }
+          } else {
+            // No 1:1 mapping — re-hold and let the loop re-extract with the
+            // held document + answers as grounded context (extraction-only).
+            holdShorthandIntent(conversationKey, held);
+            console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
+          }
+        }
+      }
+      if (shorthandSurface && !deterministicOnly && !inferenceConfig.model) {
+        console.warn(`[agent ${tid}] no model configured — cannot draft shorthand on ${surfaceName}`);
+        return {
+          success: false,
+          error: 'No model configured — cannot draft: the shorthand drafting path needs a model to extract the scientist-intent document. Ask an administrator to configure the AI runtime.',
+        };
+      }
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -1322,17 +1549,27 @@ export function createAgentOrchestrator(
         const volatileContext = buildVolatileContextMessage(context);
         if (volatileContext) volatileParts.push(volatileContext);
         if (resolvedContextMessage) volatileParts.push(resolvedContextMessage);
-        const userContent = volatileParts.length > 0
+        // SHORTHAND-CHAT OQ1 fallback: when answers could not fold 1:1, the
+        // HELD shorthand + answers ride as grounded context so the model
+        // RE-EXTRACTS the corrected document (extraction-only — it still only
+        // writes shorthand).
+        const heldForReextract = shorthandSurface && clarificationAnswers && clarificationAnswers.length > 0
+          ? takeHeldShorthandIntent(conversationKey)
+          : null;
+        const reextractionBlock = heldForReextract
+          ? `\n\n${heldReextractionContext(heldForReextract.yaml, clarificationAnswers ?? [])}`
+          : '';
+        const userContent = (volatileParts.length > 0
           ? `${volatileParts.join('\n\n')}\n\n[User request]\n${prompt}`
-          : prompt;
+          : prompt) + reextractionBlock;
         messages = [
-          ...buildPrefixRequest({
+          ...(await buildPrefixRequest({
             context,
             ...(surface ? { surface } : {}),
             ...(history ? { history } : {}),
             ...(forceDraftTool ? { forceDraftTool } : {}),
             ...(toolFilter ? { toolFilter } : {}),
-          }).messages,
+          })).messages,
           { role: 'user', content: userContent },
         ];
       }
@@ -1687,22 +1924,36 @@ export function createAgentOrchestrator(
               ? coerceResponse.choices[0]!.message.content
               : '';
             const coercedArgs = extractJsonObject(coerceText);
-            if (coercedArgs) {
+            // The SAME discipline the fast path applies: the forced flow ships
+            // `agent_intent` as the terminal tool, so the recovered JSON must be
+            // callable AS that tool. Wrapping it as the compile-draft tool is
+            // what dropped a valid recovered protocol_edit envelope live
+            // (PROTO-AI-9: "no proposal … no usable draft arguments" while the
+            // SSE carried the right ops). A null coercion keeps the existing
+            // failed-to-coerce diagnostic — never invoke a tool with args it
+            // cannot honour.
+            const forcedAgentIntentArgs = coercedArgs && forceDraftTool
+              ? coerceToAgentIntentArgs(coercedArgs)
+              : coercedArgs;
+            if (forcedAgentIntentArgs) {
+              const coercedToolName = forceDraftTool
+                ? AGENT_INTENT_TOOL_NAME
+                : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME;
               assistantMsg.content = null;
               assistantMsg.tool_calls = [{
                 id: `call-coerced-${Date.now().toString(36)}`,
                 type: 'function',
                 function: {
-                  name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
-                  arguments: JSON.stringify(coercedArgs),
+                  name: coercedToolName,
+                  arguments: JSON.stringify(forcedAgentIntentArgs),
                 },
               }];
               choice.finish_reason = 'tool_calls';
               onEvent?.({
                 type: 'status',
-                message: `AI returned compiler arguments; invoking ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`,
+                message: `AI returned compiler arguments; invoking ${coercedToolName}…`,
               });
-              console.warn(`[agent ${tid}] model ignored forced tool call; coerced JSON args after stop contentPreview="${contentPreview}"`);
+              console.warn(`[agent ${tid}] model ignored forced tool call; coerced JSON args after stop as ${coercedToolName}${coercedArgs && forcedAgentIntentArgs !== coercedArgs ? ' (intent inferred)' : ''} contentPreview="${contentPreview}"`);
             } else {
               console.warn(`[agent ${tid}] failed to coerce compiler args from response: ${coerceText.replace(/\s+/g, ' ').slice(0, 400)}`);
             }
@@ -1885,6 +2136,161 @@ export function createAgentOrchestrator(
             }
 
 
+            // ---- SHORTHAND-CHAT: intent=event_shorthand ------------------
+            // The model wrote a scientist-intent document. THE ONLY producer
+            // of the event graph is the FROZEN deterministic pipeline:
+            // parseScientistIntent (Ajv sole authority, validate-in-place,
+            // NEVER a repaired re-parse) -> the frozen deterministic compiler
+            // via the chat seam (compileShorthandDeterministically) with the
+            // production deps. A schema-invalid payload is MALFORMED MODEL
+            // OUTPUT: re-ask ONCE with the contract quoted (the 502 class's
+            // chat analogue — origin-based, never substring-sniffing), then an
+            // honest failure. Harness gates ride at the INTENT boundary:
+            // needs-clarification -> the bar's ScientistIntentUnresolvedFacts
+            // VERBATIM on the chat clarification channel; well binding and
+            // material grounding already live inside the frozen compile.
+            if (agentIntent.intent === 'event_shorthand') {
+              const shorthandYaml = agentIntent.shorthand ?? '';
+              const elapsedSh = () => Date.now() - t0;
+              const shorthandSummary = (res: AgentResult): void => {
+                const elapsed = elapsedSh();
+                const summary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: res.success,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                };
+                if (res.error) summary.error = res.error;
+                logAgentSummary(tid, summary);
+                console.log(`[agent ${tid}] done event_shorthand success=${res.success} events=${res.events?.length ?? 0} clarifications=${res.clarificationRequests?.length ?? 0} elapsedMs=${elapsed}`);
+                shadowRoute('event_shorthand', elapsed);
+              };
+
+              if (!shorthandYaml.trim()) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const emptySh: AgentResult = {
+                  success: false,
+                  error: emptyDraftMessage({ truncated: truncatedToolCall, hadArguments: Object.keys(submitArgs).length > 0 }),
+                };
+                shorthandSummary(emptySh);
+                return emptySh;
+              }
+
+              // Ajv sole authority — validate-in-place, never a repaired re-parse.
+              let shorthandDoc: import('../compiler/scientistIntent/types.js').ScientistIntent;
+              try {
+                shorthandDoc = parseScientistIntent(shorthandYaml);
+              } catch (err) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                if (err instanceof ScientistIntentValidationError && !shorthandRepairAsked) {
+                  // Re-ask ONCE with the contract quoted (origin-based: this is
+                  // the model payload's own validation failure, not prose).
+                  shorthandRepairAsked = true;
+                  onEvent?.({ type: 'status', message: 'The shorthand document was rejected by the scientist-intent schema; asking the AI to re-emit it…' });
+                  messages.push({ role: 'user', content: malformedShorthandRepairPrompt(err, shorthandYaml) });
+                  continue;
+                }
+                const malformed = err instanceof ScientistIntentValidationError
+                  ? `The shorthand document was rejected by the scientist-intent schema and could not be repaired: ${err.message}`
+                  : `The shorthand document could not be parsed: ${err instanceof Error ? err.message : String(err)}`;
+                console.warn(`[agent ${tid}] ${malformed}`);
+                const malformedResult: AgentResult = { success: false, error: malformed };
+                shorthandSummary(malformedResult);
+                return malformedResult;
+              }
+
+              const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
+                ...(deps.store ? { store: deps.store } : {}),
+                ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
+              });
+              if (!compiledSh) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const unwired = 'event_shorthand cannot compile: this orchestrator has no record store wired for the deterministic compiler spine.';
+                console.warn(`[agent ${tid}] ${unwired}`);
+                const unwiredResult: AgentResult = { success: false, error: unwired };
+                shorthandSummary(unwiredResult);
+                return unwiredResult;
+              }
+
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
+              if (compiledSh.outcome === 'needs-clarification') {
+                // Hold the VALIDATED intent per conversation (the held localMacro
+                // precedent) so an answer folds deterministically next turn.
+                holdShorthandIntent(conversationKey, { yaml: shorthandYaml, doc: shorthandDoc, clarifications: compiledSh.clarifications });
+              }
+              const shResult = shorthandResultFromCompile(
+                compiledSh,
+                shorthandYaml,
+                'Draft compiled deterministically from the scientist-intent shorthand.',
+                shorthandDeckLabwares,
+              );
+              if (extraSubmissionNotes.length > 0) {
+                shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];
+              }
+              shorthandSummary(shResult);
+              return shResult;
+            }
+
+            // ---- SHORTHAND-CHAT: raw event_graph refusal (AS-4) ----------
+            // On a shorthand surface, an event_graph call is REFUSED — TOTAL:
+            // the FIRST call re-asks ONCE with the (rewritten) forced prompt
+            // demanding the shorthand document; a REPEAT call ends the turn
+            // with the honest cannot-draft failure (the malformed-shorthand
+            // arm's discipline). The raw payload is NEVER compiled on either
+            // attempt — a stubborn model must not reach the legacy raw-events
+            // path on the very surface the deterministic-only invariant covers
+            // (advc1 DEFECT-1). The event_graph enum and the legacy paths stay
+            // for surfaces not yet moved — retirement is when the LAST surface
+            // moves.
+            if (shorthandSurface && agentIntent.intent === 'event_graph') {
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+              if (!eventGraphRefusalAsked) {
+                eventGraphRefusalAsked = true;
+                onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused. Asking the AI for a shorthand document…' });
+                console.warn(`[agent ${tid}] refused raw event_graph on shorthand surface ${surfaceName}; re-asking for shorthand`);
+                messages.push({ role: 'user', content: buildForcedDraftJsonPrompt(effectivePrompt) });
+                continue;
+              }
+              const repeated = 'Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document.';
+              onEvent?.({ type: 'status', message: 'Event drafting on this surface goes through the scientist-intent shorthand; the raw event draft was refused again. The AI could not produce a shorthand document.' });
+              console.warn(`[agent ${tid}] refused a REPEAT raw event_graph on shorthand surface ${surfaceName}; ending the turn with the honest cannot-draft failure`);
+              const repeatedResult: AgentResult = { success: false, error: repeated };
+              const repeatedElapsed = Date.now() - t0;
+              const repeatedSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: false,
+                elapsedMs: repeatedElapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              repeatedSummary.error = repeated;
+              logAgentSummary(tid, repeatedSummary);
+              console.log(`[agent ${tid}] done event_graph_refusal success=false events=0 elapsedMs=${repeatedElapsed}`);
+              shadowRoute('event_graph', repeatedElapsed);
+              return repeatedResult;
+            }
+
             // intent=create_record: AUTHOR records (equipment/material/labware) the lab
             // does not have yet. Distinct from drafting events, and it writes nothing
             // itself — the client proposes the records and Accept materializes them
@@ -1926,6 +2332,9 @@ export function createAgentOrchestrator(
               if (creationResult.error) summary.error = creationResult.error;
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done create_record success=${creationResult.success} records=${creations.map((c) => c.kind).join(',') || '(none)'} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is create_record.
+              shadowRoute('create_record', elapsed);
               return creationResult;
             }
 
@@ -1958,7 +2367,424 @@ export function createAgentOrchestrator(
               if (deckResult.error) summary.error = deckResult.error;
               logAgentSummary(tid, summary);
               console.log(`[agent ${tid}] done deck_layout success=${deckResult.success} variant=${variantId ?? '(none)'} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is deck_layout.
+              shadowRoute('deck_layout', elapsed);
               return deckResult;
+            }
+
+            // intent=protocol_edit: propose declarative edits to the ATTACHED
+            // protocol. The payload is validated against the REGISTERED
+            // protocol-edit-op envelope (PROTO-AI-2) — the vocabulary is schema
+            // data, never a hand-rolled shape — and the proposal is emitted
+            // VERBATIM. Structurally NOTHING else runs: no compiler, no store
+            // read-modify-write, no event draft. Accept applies (PROTO-AI-8);
+            // until then this turn has written nothing (PROTO-AI-7).
+            if (agentIntent.intent === 'protocol_edit') {
+              const payload: Record<string, unknown> = {
+                ops: agentIntent.ops ?? [],
+                ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}),
+              };
+              const envelope = await validateProtocolEditPayload(payload);
+              const editOk = envelope.valid;
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: editOk, durationMs: 0 });
+              const elapsed = Date.now() - t0;
+              const editResult: AgentResult = editOk
+                ? { success: true, notes: [], protocolEdit: { ops: payload.ops as unknown[], ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}) } }
+                : {
+                  success: false,
+                  // The SAME channel every other validation failure uses today
+                  // (create_record's missing-`records` error below): success=false
+                  // with a corrective `error` string. Ajv's teaching suggestions
+                  // ride along so the corrective turn converges.
+                  error: `protocol_edit proposal rejected by the protocol-edit-op schema: ${formatProtocolEditErrors(envelope)}. No ops were applied; re-emit with the fields the schema names.`,
+                };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: editResult.success,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              if (editResult.error) summary.error = editResult.error;
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done protocol_edit success=${editResult.success} ops=${(payload.ops as unknown[]).length} elapsedMs=${elapsed}`);
+              // PROTO-AI-12 §4: shadow classification AFTER the authoritative
+              // branch resolved — this turn's authoritativePick is protocol_edit.
+              shadowRoute('protocol_edit', elapsed);
+              return editResult;
+            }
+
+            // intent=workspace_action: propose a workspace action (focus |
+            // open-surface). THE SERVER COMPILES IT (PB-CH-1 / AR-1): the model
+            // proposes VERBS AND TERMS; compileWorkspaceAction resolves terms
+            // through ResolveSpine + the declarative surfaces registry and
+            // store-verifies every id. ONLY a resolved, Ajv-revalidated action
+            // is emitted as `agent_action` — this branch is the ONE emit path
+            // (the MCP tool handler returns data only; AIHandlers.sendEvent
+            // passes AgentEvent frames through untyped, AIHandlers.ts:373-375).
+            // Unresolved/ambiguous/invented produce pipeline_diagnostics (the
+            // existing trace channel, pass_id 'workspace-action-compile') and
+            // ZERO action. Structurally NOTHING else runs: no compiler pass, no
+            // store write, no session push — propose, never write.
+            if (agentIntent.intent === 'workspace_action') {
+              const compileDeps: WorkspaceActionCompilerDeps | null =
+                deps.resolveSpine && deps.surfaces && deps.store
+                  ? { resolveSpine: deps.resolveSpine, surfaces: deps.surfaces, store: deps.store }
+                  : null;
+              const compiled: CompileResult = compileDeps
+                ? await compileWorkspaceAction(agentIntent.action, compileDeps)
+                : {
+                  ok: false,
+                  diagnostics: [{
+                    code: 'COMPILE_INTERNAL',
+                    message: 'workspace_action cannot compile: this orchestrator has no resolveSpine/surfaces/store wired.',
+                  }],
+                };
+              const elapsed = Date.now() - t0;
+              if (compiled.ok) {
+                onEvent?.({ type: 'agent_action', action: compiled.action });
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+                const resolvedLabel = compiled.action.target?.label ?? compiled.action.surface ?? 'the workspace';
+                const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
+                const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
+                const summary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: true,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                };
+                logAgentSummary(tid, summary);
+                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : compiled.action.target.stepId) : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
+                return wsResult;
+              }
+              const diagnostics = compiled.diagnostics.map((d) => ({
+                pass_id: 'workspace-action-compile',
+                code: d.code,
+                severity: 'error' as const,
+                message: d.message,
+              }));
+              onEvent?.({ type: 'pipeline_diagnostics', outcome: 'gap', diagnostics });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+              // A no-op with a visible reason is a SUCCESSFUL compile decision:
+              // success:false would ride the existing error surface and read as
+              // an endpoint failure. The corrective text rides the notes channel.
+              const wsResult: AgentResult = { success: true, notes: diagnostics.map((d) => d.message) };
+              const summary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, summary);
+              console.log(`[agent ${tid}] done workspace_action compile-rejected ${diagnostics.map((d) => d.code).join(',')} elapsedMs=${elapsed}`);
+              return wsResult;
+            }
+
+            // intent=compose_workstate (PB-CH-4): propose the workspace TABS to
+            // open. THE THIN-EVENT DESIGN (OQ1 ruling): this branch emits the
+            // model's workstate INTENT VERBATIM as ONE `workstate_proposal`
+            // event and runs NOTHING else — no compile, no store write, no
+            // session push, no shadow route. The drafts compile endpoint
+            // (POST /api/drafts/compile — Ajv against the registered
+            // workstate-intent $id + canAccept), NOT this stream, is the trust
+            // boundary: a raw term crossing the wire here is structurally
+            // non-actionable (the client renders a compiling slot, never an
+            // Accept, until the compile response says canAccept:true). An
+            // invalid envelope is NOT rejected here — the compile endpoint owns
+            // the diagnostic (canAccept:false + path-named diagnostics).
+            if (agentIntent.intent === 'compose_workstate') {
+              const workstate = agentIntent.workstate;
+              const elapsed = Date.now() - t0;
+              if (!workstate) {
+                // The existing error channel (create_record's missing-`records`
+                // precedent): success:false with a corrective `error` string,
+                // and NO workstate_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const envelopeError = 'compose_workstate requires a `workstate` envelope: {operation:"compose-workstate", tabs:[{surface, target:{term|recordId}}], activeTab?} — VERBS AND TERMS ONLY; the server compiles it into a review card and writes nothing.';
+                const emptyResult: AgentResult = {
+                  success: false,
+                  error: envelopeError,
+                };
+                const emptySummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: envelopeError,
+                };
+                logAgentSummary(tid, emptySummary);
+                console.log(`[agent ${tid}] done compose_workstate no-envelope elapsedMs=${elapsed}`);
+                return emptyResult;
+              }
+              onEvent?.({ type: 'workstate_proposal', workstate });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const wsProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed a workspace — review the card to accept; nothing was written.'],
+              };
+              const wsProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, wsProposalSummary);
+              console.log(`[agent ${tid}] done compose_workstate emitted elapsedMs=${elapsed}`);
+              return wsProposalResult;
+            }
+
+            // intent=compose_analysis (PB-CH-5): propose an analysis composition.
+            // THE SAME thin-event design (OQ1 ruling): this branch emits the
+            // model's analysis INTENT VERBATIM as ONE `analysis_proposal` event
+            // and runs NOTHING else — no compile, no store write, no session
+            // push, no execute, no promote. The drafts compile endpoint
+            // (POST /api/drafts/compile — Ajv against the registered
+            // analysis-intent $id + canAccept), NOT this stream, is the trust
+            // boundary: a raw term crossing the wire here is structurally
+            // non-actionable (the client renders a compiling slot, never an
+            // Accept, until the compile response says canAccept:true). Accept
+            // stages at most a QUEUED analysis-run create through the draft
+            // lifecycle — this turn NEVER executes a run and NEVER promotes an
+            // artifact. An invalid envelope is NOT rejected here — the compile
+            // endpoint owns the diagnostic (canAccept:false + path-named
+            // diagnostics).
+            if (agentIntent.intent === 'compose_analysis') {
+              const analysis = agentIntent.analysis;
+              const elapsed = Date.now() - t0;
+              if (!analysis) {
+                // The existing error channel (create_record's missing-`records`
+                // precedent): success:false with a corrective `error` string,
+                // and NO analysis_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const analysisEnvelopeError = 'compose_analysis requires an `analysis` envelope: {operation:"compose-analysis", target:{revision:{term|recordId}, newRun?} | {run:{term|recordId}}, focus?, open?} — VERBS AND TERMS ONLY; the server compiles it into a review card, Accept creates at most a QUEUED run, and nothing is executed or promoted.';
+                const emptyAnalysisResult: AgentResult = {
+                  success: false,
+                  error: analysisEnvelopeError,
+                };
+                const emptyAnalysisSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: analysisEnvelopeError,
+                };
+                logAgentSummary(tid, emptyAnalysisSummary);
+                console.log(`[agent ${tid}] done compose_analysis no-envelope elapsedMs=${elapsed}`);
+                return emptyAnalysisResult;
+              }
+              onEvent?.({ type: 'analysis_proposal', analysis });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const analysisProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed an analysis — review the card; nothing executed.'],
+              };
+              const analysisProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, analysisProposalSummary);
+              console.log(`[agent ${tid}] done compose_analysis emitted elapsedMs=${elapsed}`);
+              return analysisProposalResult;
+            }
+
+            // intent=query_workstate_history (PB-CH-8): the ledger READ riding
+            // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
+            // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the
+            // ledger host resolves the term/recordId through the spine, takes
+            // the time anchor from SERVER-KNOWN audit occurredAt only (policy
+            // query.anchor breaks ties), and answers from the journal. This
+            // branch emits the answer as ONE `ledger_answer` event whose text
+            // and envelope are the SERVER'S fetched evidence — never model
+            // narration — and, for `found`, ONE `workstate_proposal` built FROM
+            // THE SNAPSHOT BYTES (rides the existing compile→card→accept→shared-
+            // executor flow unchanged). `no-history` emits NO proposal: no card,
+            // zero session movement, never the current session as a stand-in.
+            // ZERO writes: the ledger reads (row 10).
+            if (agentIntent.intent === 'query_workstate_history') {
+              const elapsed = Date.now() - t0;
+              const ledgerHost = deps.ledgerQuery;
+              if (!ledgerHost) {
+                // Honest declared failure (the workspace_action COMPILE_INTERNAL
+                // precedent): never a silent no-op, never a header-fallback read.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const ledgerUnwired = 'query_workstate_history cannot answer: this orchestrator has no ledger query host wired.';
+                const unwiredResult: AgentResult = { success: false, error: ledgerUnwired };
+                const unwiredSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  error: ledgerUnwired,
+                };
+                logAgentSummary(tid, unwiredSummary);
+                console.log(`[agent ${tid}] done query_workstate_history no-host elapsedMs=${elapsed}`);
+                return unwiredResult;
+              }
+              // OQ1 ruling: the actor is the RESOLVED request user the handler
+              // passed in (resolveRequestUser). Absent ⇒ the ledger REFUSES
+              // (reason 'actor-unresolved'); the raw-header 'default' is NEVER
+              // substituted for a ledger read.
+              const query = agentIntent.ledgerQuery ?? {};
+              const term = typeof query.term === 'string' ? query.term : undefined;
+              const recordId = typeof query.recordId === 'string' ? query.recordId : undefined;
+              const outcome = await ledgerHost.run(
+                { ...(term !== undefined ? { term } : {}), ...(recordId !== undefined ? { recordId } : {}) },
+                request.ledgerActor ?? null,
+              ).catch((err) => {
+                // A ledger read failure is an honest no-history, never a crash
+                // of the turn (the assistStream error-channel precedent).
+                console.warn(`[agent ${tid}] ledger query failed: ${err instanceof Error ? err.message : String(err)}`);
+                return null;
+              });
+              if (!outcome) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const failed = 'The ledger could not answer this query. Nothing was retrieved and nothing was written.';
+                const failedResult: AgentResult = { success: false, error: failed };
+                const failedSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: false, elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: { turns: turn + 1, toolCalls: totalToolCalls, promptTokens: totalUsage.promptTokens, completionTokens: totalUsage.completionTokens, totalTokens: totalUsage.promptTokens + totalUsage.completionTokens },
+                  resolvedMentions: resolvedMentionsCount, bypass: null, error: failed,
+                };
+                logAgentSummary(tid, failedSummary);
+                return failedResult;
+              }
+              onEvent?.({ type: 'ledger_answer', answer: outcome.answer });
+              if (outcome.answer.status === 'found' && outcome.workstateProposal) {
+                // The reattachment half: the SERVER-built envelope FROM THE
+                // SNAPSHOT (targets are recordIds already in the snapshot —
+                // server-known), riding the SAME tier-2 card flow.
+                onEvent?.({ type: 'workstate_proposal', workstate: outcome.workstateProposal as unknown as Record<string, unknown> });
+              }
+              if (outcome.diagnostics !== undefined && outcome.diagnostics.length > 0) {
+                // Adversarial defect 1 (spec §4: "historical-surface
+                // incompatibility ⇒ visible diagnostic, never a guessed
+                // route"): the host NAMED the refusal (UNMAPPABLE_SNAPSHOT_TAB
+                // / NO_ANCHOR / UNKNOWN_RECORD) and ledgerQuery.ts explicitly
+                // relies on the CALLER surfacing it. Absorbing it here would
+                // ship a bare `found` line with no visible diagnostic and no
+                // blocked card. Forward through the EXISTING
+                // pipeline_diagnostics channel — same outcome/severity choice
+                // as the workspace_action compile refusal above (:2156) — so
+                // the client renders it as a diagnostic trace line.
+                onEvent?.({
+                  type: 'pipeline_diagnostics',
+                  outcome: 'gap',
+                  diagnostics: outcome.diagnostics.map((d) => ({
+                    pass_id: 'ledger-query',
+                    code: d.code,
+                    severity: 'error' as const,
+                    message: d.message,
+                  })),
+                });
+              }
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const ledgerNote = ledgerAnswerText(outcome.answer);
+              const ledgerResult: AgentResult = {
+                success: true,
+                notes: [ledgerNote],
+              };
+              const ledgerSummary: AgentSummary = {
+                traceId: tid, surface: surfaceName, model, success: true, elapsedMs: elapsed,
+                turns: turnStats,
+                totals: { turns: turn + 1, toolCalls: totalToolCalls, promptTokens: totalUsage.promptTokens, completionTokens: totalUsage.completionTokens, totalTokens: totalUsage.promptTokens + totalUsage.completionTokens },
+                resolvedMentions: resolvedMentionsCount, bypass: null,
+              };
+              logAgentSummary(tid, ledgerSummary);
+              console.log(`[agent ${tid}] done query_workstate_history ${outcome.answer.status} elapsedMs=${elapsed}`);
+              return ledgerResult;
             }
           }
 
@@ -2449,6 +3275,11 @@ export function createAgentOrchestrator(
           console.log(
             `[agent ${tid}] done success=${result.success} via ${submitCall.function.name} turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
           );
+          // PROTO-AI-12 §4: shadow classification AFTER the authoritative path
+          // resolved. Reaching here means the agent_intent matched none of the
+          // create_record/deck_layout/protocol_edit branches — the event_graph
+          // draft path is what actually executed.
+          shadowRoute('event_graph', elapsed);
           // The terms this draft used, classified ONCE, here: what each matched
           // (local record / ontology / vendor item / not yet in the lab) and where it
           // appeared. The review dialogue's term panel renders this verbatim — the

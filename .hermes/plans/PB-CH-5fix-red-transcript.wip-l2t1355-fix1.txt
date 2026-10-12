@@ -1,0 +1,2106 @@
+=== 0. defect evidence: grep analysis_proposal in the PRE-FIX (HEAD 04a47d40) pin test ===
+grep exit: 1 (no match -> the new member had NO drift protection)
+
+=== 1. OLD pin test vs MUTATED ai.ts (union member | AiAnalysisProposalEvent removed) ===
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+ ✓ src/types/aiStreamTypes.pin.test.ts  (5 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:03:27
+   Duration  3.29s (transform 56ms, setup 144ms, collect 25ms, tests 2ms, environment 1.13s, prepare 138ms)
+
+(old test PASSES despite the union member being GONE -> zero drift protection on this member)
+
+=== 2. NEW pin assertions vs same MUTATED ai.ts (expect FAIL on union assertion) ===
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+ ❯ src/types/aiStreamTypes.pin.test.ts  (6 tests | 1 failed) 7ms
+   ❯ src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+     → expected '/**\n * AI domain types for chat, str…' to match /\|\s*AiAnalysisProposalEvent/
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+AssertionError: expected '/**\n * AI domain types for chat, str…' to match /\|\s*AiAnalysisProposalEvent/
+
+- Expected: 
+/\|\s*AiAnalysisProposalEvent/
+
++ Received: 
+"/**
+ * AI domain types for chat, streaming, and agent results.
+ */
+
+import type { PlateEvent } from './events'
+import type { OntologyRef } from './ref'
+
+export interface PromptMention {
+  type: 'material' | 'labware' | 'selection' | 'protocol'
+  entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component'
+  selectionKind?: 'source' | 'target'
+  id?: string
+  label: string
+  labwareId?: string
+  wells?: string[]
+}
+
+export interface AiActiveDeckScope {
+  locked: boolean
+  runId?: string
+  platformId: string
+  variantId: string
+  allowedSurfaces: Array<'slot' | 'lawn'>
+  allowedSlots: string[]
+  allowedLabwareIds: string[]
+  focusedLabwareId?: string
+}
+
+// =============================================================================
+// SSE Stream Events (from POST /api/ai/draft-events/stream)
+// =============================================================================
+
+export interface AiStatusEvent {
+  type: 'status'
+  message: string
+}
+
+export interface AiToolCallEvent {
+  type: 'tool_call'
+  toolName: string
+  args?: Record<string, unknown>
+}
+
+export interface AiToolResultEvent {
+  type: 'tool_result'
+  toolName: string
+  result?: unknown
+}
+
+export interface AiThinkingEvent {
+  type: 'thinking'
+  text: string
+}
+
+export interface AiTextDeltaEvent {
+  type: 'text_delta'
+  delta: string
+}
+
+export interface AiDraftEvent {
+  type: 'draft'
+  events: PlateEvent[]
+  notes?: string[]
+}
+
+export interface AiDoneEvent {
+  type: 'done'
+  result: AiAgentResult
+}
+
+export interface AiErrorEvent {
+  type: 'error'
+  message: string
+  code?: string
+}
+
+export interface AiPipelineDiagnostic {
+  pass_id: string
+  code: string
+  severity: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export interface AiPipelineDiagnosticsEvent {
+  type: 'pipeline_diagnostics'
+  outcome: 'complete' | 'gap' | 'error'
+  diagnostics: AiPipelineDiagnostic[]
+}
+
+export interface AiProtocolExtractedEvent {
+  type: 'protocol_extracted'
+  candidate: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+}
+
+/**
+ * PB-CH-6 — the wave-1 channel envelopes, mirrored into the generic stack's
+ * union. Both unions are fed by the SAME server handler (POST
+ * /ai/assist/stream — AgentOrchestrator emits {type:'workstate_proposal',
+ * workstate} / {type:'agent_action', action}); the shapes here match
+ * `event-editor/right-pane/ai/assistStream.ts` (:204-210) member-for-member,
+ * and `types/aiStreamTypes.pin.test.ts` asserts the pin so the two hand-
+ * maintained unions cannot drift. Before this member existed, useAiChat
+ * silently DROPPED such frames — the defect class PB-CH-6 closes.
+ * exactOptionalPropertyTypes convention: optional fields are ABSENT, never
+ * `undefined`. The payload is forwarded verbatim — the trust boundary is
+ * POST /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export type AiAgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AiAgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AiAgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AiAgentActionTargetEnvelope[]
+}
+
+export interface AiAgentActionEvent {
+  type: 'agent_action'
+  action: AiAgentActionEnvelope
+}
+
+export interface AiWorkstateProposalEvent {
+  type: 'workstate_proposal'
+  workstate: Record<string, unknown>
+}
+
+/**
+ * PB-CH-5 repair — the analysis INTENT frame, mirrored into the generic
+ * stack's union the same way as the two members above. The SAME server
+ * handler emits it (POST /ai/assist/stream — AgentOrchestrator.ts:2337 emits
+ * {type:'analysis_proposal', analysis}); the shape matches
+ * `event-editor/right-pane/ai/assistStream.ts` (:259 — the wire-shape
+ * authority, `| { type: 'analysis_proposal'; analysis: Record<string,
+ * unknown> }`) member-for-member, and the pin test keeps the unions from
+ * drifting. Before this member existed, useAiChat silently DROPPED such
+ * frames on the /analysis mount — the defect class PB-CH-6 closes on the
+ * channel PB-CH-5 introduced. exactOptionalPropertyTypes convention: the
+ * payload is forwarded verbatim — the trust boundary is POST
+ * /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export interface AiAnalysisProposalEvent {
+  type: 'analysis_proposal'
+  analysis: Record<string, unknown>
+}
+
+export type AiStreamEvent =
+  | AiStatusEvent
+  | AiToolCallEvent
+  | AiToolResultEvent
+  | AiThinkingEvent
+  | AiTextDeltaEvent
+  | AiDraftEvent
+  | AiPipelineDiagnosticsEvent
+  | AiDoneEvent
+  | AiErrorEvent
+  | AiProtocolExtractedEvent
+  | AiAgentActionEvent
+  | AiWorkstateProposalEvent
+
+// =============================================================================
+// Agent Result (final output from AI)
+// =============================================================================
+
+export interface OntologyRefProposal {
+  ref: OntologyRef
+  suggestedType?: string
+  usedInEvents: string[]
+}
+
+export interface AiClarificationOption {
+  id: string
+  label: string
+  snippet?: string
+  source?: string
+  score?: number
+  ref?: Record<string, unknown>
+}
+
+export type AiClarificationKind =
+  | 'material'
+  | 'aliquot'
+  | 'labware'
+  | 'equipment'
+  | 'vendor-product'
+  | 'ontology'
+  | 'parameter'
+  | 'well-selection'
+  | 'sequence'
+  | 'general'
+
+export type AiClarificationMenuProvider = '/m' | '/l' | '/e' | 'choice'
+
+export interface AiClarification {
+  id?: string
+  prompt: string
+  entityType: string
+  options: AiClarificationOption[]
+  menuProvider?: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  allowCreateLocal?: boolean
+}
+
+export interface AiClarificationRequest {
+  id: string
+  kind: AiClarificationKind
+  prompt: string
+  entityType?: string
+  menuProvider: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  sourceSpan?: { start?: number; end?: number }
+  options: AiClarificationOption[]
+  allowCreateLocal?: boolean
+  /**
+   * Which material LAYER this question is about — the picker scopes its options
+   * to it (see SlashResolverContext.materialLayer). Set by the server's gate.
+   */
+  materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+}
+
+export interface AiClarificationAnswer {
+  requestId: string
+  optionId?: string
+  label?: string
+  value?: string
+  mentionToken?: string
+  ref?: Record<string, unknown>
+}
+
+
+export interface AiLabwareRequirement {
+  classCurie: string
+  handle?: string
+  reason?: string
+  deckSlot?: string
+  constraints?: string[]
+  specificity?: 'generic' | 'constrained' | 'concrete'
+  tubeVolumeClass?: '1.5ml' | '2ml' | '5ml' | '15ml' | '50ml'
+  rows?: number
+  columns?: number
+}
+
+export interface AiLabwareAddition {
+  recordId: string
+  reason?: string
+  deckSlot?: string
+}
+
+/**
+ * A request for BENCH EQUIPMENT (water bath, heat block, shaker, vortex, qPCR
+ * machine…). Equipment is NOT labware: it has no wells and no addressing, and it
+ * lives at its own bench position — never in a deck slot.
+ *
+ * Naming rules (mirrored in the server tool description):
+ *   - `recordId` — an `EQP-` id for real lab-owned equipment (records-first).
+ *   - `classCurie` — `equipment:<kind>` for a generic kind (`equipment:water_bath`)
+ *     or an `EQC-` id for a specific evidenced model. A minted `CL:` class CURIE
+ *     is DERIVED from `equipment:<kind>` on the client — the model never invents one.
+ *   - `settings` — keyed by the class's `settingsDefinition`
+ *     (e.g. `{ temperature_c: 55 }`), the value the equipment is set to.
+ */
+export type AiRecordCreationKind = 'equipment' | 'material' | 'labware'
+
+/**
+ * A record the draft wants AUTHORED — the add, as opposed to placing something that
+ * already exists. One shape for three kinds (the act is the same; the kind-specific
+ * facts differ). Nothing is written on emission: the user reviews the proposal and
+ * Accept materializes it, records-first (an existing match is reused with a warning).
+ */
+export interface AiRecordCreation {
+  kind: AiRecordCreationKind
+  name: string
+  handle?: string
+  /** equipment: `equipment:<kind>` for a GENERIC kind (user spoke generically). */
+  classKind?: string
+  /** equipment: an `EQC-` class record that already exists locally. */
+  classRecordId?: string
+  /** material: an ontology id when it IS that known entity. */
+  curie?: string
+  /** material: chemical | cell_line | organism | reagent | other. */
+  domain?: string
+  /** labware: plate | deepwell | reservoir | tube | tiprack | rack. */
+  labwareType?: string
+  /** labware: the well layout, when known. */
+  format?: { rows?: number; cols?: number; wellCount?: number }
+  /** equipment: values stated by the source, keyed by the settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: `user-description` | `exa:<url>` | `record:<id>`. */
+  source?: string
+  reason?: string
+}
+
+/**
+ * Put what was just created on the bench, in the same turn. Explicit: creating a
+ * record and placing it are two decisions, so a placement is asked for by name and is
+ * never a side effect of creating. Only equipment/labware can be placed — a material
+ * has no bench position.
+ */
+export interface AiAlsoPlace {
+  surface?: 'lawn' | 'slot'
+  slotId?: string
+}
+
+export interface AiEquipmentRequirement {
+  recordId?: string
+  classCurie?: string
+  handle?: string
+  reason?: string
+  /** Concrete settings for this instance, keyed by the class settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: where this model came from (user description, Exa, record…). */
+  source?: string
+}
+
+export type ExecutionScaleLevel =
+  | 'manual_tubes'
+  | 'bench_plate_multichannel'
+  | 'robot_deck'
+
+export type ExecutionScalePlanStatus = 'ready' | 'blocked'
+
+export type ExecutionScaleLabwareKind =
+  | 'tube'
+  | 'tube_rack'
+  | '2_well_reservoir'
+  | '8_well_reservoir'
+  | '12_well_reservoir'
+  | '96_well_plate'
+  | '384_well_plate'
+
+export interface ExecutionScalePlan {
+  kind: 'execution-scale-plan'
+  recordId: string
+  sourceRef?: Record<string, unknown>
+  profileRef?: string
+  sourceLevel: ExecutionScaleLevel
+  targetLevel: ExecutionScaleLevel
+  status: ExecutionScalePlanStatus
+  sampleLayout?: {
+    labwareRole: string
+    labwareKind: Extract<ExecutionScaleLabwareKind, 'tube_rack' | '96_well_plate' | '384_well_plate'>
+    labwareDefinition?: string
+    sampleCount?: number
+    wellGroups: Array<{ groupId: string; wells: string[] }>
+  }
+  reagentLayout: Array<{
+    materialRole: string
+    sourceLabwareRole: string
+    sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>
+    sourceLabwareDefinition?: string
+    sourceWells: string[]
+    reason: string
+  }>
+  pipettingStrategy?: {
+    pipetteMode: 'single_channel' | 'multi_channel_parallel'
+    channels: 1 | 8 | 12
+    laneStrategy: 'sequential_lanes' | 'parallel_lanes'
+    channelization: 'single_channel' | 'multi_channel_prefer' | 'multi_channel_force'
+    batching: 'none' | 'group_by_source' | 'group_by_destination' | 'multi_dispense_prefer'
+  }
+  deckBinding?: {
+    platform: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex'
+    requiredLabwareDefinitions: string[]
+    requiredTools: string[]
+  }
+  assumptions: string[]
+  blockers: Array<{ code: string; message: string; requiredInput?: string }>
+}
+
+export interface InstrumentRunFileWell {
+  well: string
+  channelMap?: Record<string, string>
+  sample?: string
+  target?: string
+}
+
+export interface InstrumentRunFile {
+  instrument: string
+  wells: InstrumentRunFileWell[]
+  runParameters?: Record<string, unknown>
+  analysisRules?: unknown[]
+}
+
+export interface InstrumentApplianceJob {
+  kind: 'instrument-appliance-job'
+  jobId: string
+  adapterId: 'molecular_devices_gemini'
+  operation: 'active_read'
+  instrument: string
+  request: {
+    adapterId: 'molecular_devices_gemini'
+    instrumentRef?: Record<string, unknown>
+    outputPath?: string
+    parameters: {
+      simulate?: boolean
+      mode?: 'fluorescence' | 'absorbance' | 'luminescence'
+      wavelengthNm?: number
+      integrationMs?: number
+    }
+  }
+  sourceRunFile: InstrumentRunFile
+  executionReadiness?: InstrumentExecutionReadiness
+}
+
+export interface InstrumentExecutionReadinessBlocker {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface InstrumentExecutionReadiness {
+  jobId: string
+  status: 'ready' | 'blocked'
+  executionMode?: 'simulate' | 'live'
+  requiresConfirmation: boolean
+  blockers: InstrumentExecutionReadinessBlocker[]
+}
+
+export interface InstrumentApplianceJobExecutionResult {
+  success: boolean
+  jobId?: string
+  measurementId?: string
+  logId?: string
+  rawDataPath?: string
+  applianceExecutionRecordPath?: string
+}
+
+export interface DraftOntologyBinding {
+  curie: string
+  recordId: string
+  minted: boolean
+  via: 'class-ref' | 'name'
+  label: string
+  lifecycleId?: 'lab-vocabulary-control'
+  state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated'
+  requiresReview?: boolean
+  draftOnly?: boolean
+}
+
+export interface AiAgentResult {
+  success: boolean
+  events: PlateEvent[]
+  notes: string[]
+  unresolvedRefs?: OntologyRefProposal[]
+  clarificationNeeded?: string
+  clarification?: AiClarification
+  clarificationRequests?: AiClarificationRequest[]
+  error?: string
+  labwareAdditions?: AiLabwareAddition[]
+  labwareRequirements?: AiLabwareRequirement[]
+  /** Bench equipment the draft wants on the deck (never labware, never a slot). */
+  equipmentRequirements?: AiEquipmentRequirement[]
+  /** Records the draft wants CREATED (the add; written only on Accept). */
+  recordCreations?: AiRecordCreation[]
+  /** Place the created record on the bench in the same turn (explicit, never implied). */
+  alsoPlace?: AiAlsoPlace
+  executionScalePlan?: ExecutionScalePlan
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
+  ontologyBindings?: DraftOntologyBinding[]
+  /** Prompt-level resolution assurance (RESOLVE/CONFIRM + structured blockers). */
+  assurance?: AiAssuranceResult
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    turns?: number
+    toolCalls?: number
+  }
+}
+
+export interface AiAssuranceFinding {
+  code:
+    | 'UNRESOLVED_REFERENCE'
+    | 'LOW_BINDING_CONFIDENCE'
+    | 'AMBIGUOUS_BINDING'
+    | 'NEW_LOCAL_ENTITY'
+    | 'MISSING_REQUIRED_QUANTITY'
+    | 'VALIDATION_ERROR'
+  disposition: 'BLOCK' | 'REDUCE_ASSURANCE' | 'INFORMATIONAL'
+  path?: string
+  mention?: string
+  score?: number
+  candidateIds?: string[]
+  message: string
+}
+
+export interface AiAssuranceResult {
+  score: number
+  threshold: number
+  decision: 'RESOLVE' | 'CONFIRM'
+  blockers: AiAssuranceFinding[]
+  degraders: AiAssuranceFinding[]
+  criticalSlotMinimum?: number
+}
+
+// =============================================================================
+// Chat Messages
+// =============================================================================
+
+export interface ChatMessageAttachment {
+  name: string
+  size: number
+  type: string
+  previewUrl?: string
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: number
+  /** Accumulated stream events for assistant messages */
+  streamEvents?: AiStreamEvent[]
+  /** Proposed events from the AI (on done) */
+  events?: PlateEvent[]
+  /** Token usage info */
+  usage?: AiAgentResult['usage']
+  /** Whether this message is still streaming */
+  isStreaming?: boolean
+  /** File attachments on user messages */
+  attachments?: ChatMessageAttachment[]
+  /** Structured clarification (numbered options) from the AI */
+  clarification?: AiClarification
+  /** Typed clarification cards that can be answered with menu-backed refs. */
+  clarificationRequests?: AiClarificationRequest[]
+  /** Proposed concrete labware additions from the AI */
+  labwareAdditions?: AiLabwareAddition[]
+  /** Proposed generic/constrained labware requirements from the AI */
+  labwareRequirements?: AiLabwareRequirement[]
+  /** Deterministic execution scaling handoff from the compiler */
+  executionScalePlan?: ExecutionScalePlan
+  /** Appliance active-control jobs emitted by the compiler */
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
+  /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for \"Apply to graph\". */
+  docDiscussion?: boolean
+  /**
+   * The resolved request context consumed to produce this turn (surface
+   * context + mentions + editor mode), captured on user messages so the
+   * thread self-contains the protocol step / surface state the draft was
+   * derived from — not just the typed prompt. Persisted as
+   * `metadata.consumedContext` for the training-pair exporter. A thread
+   * without this field is an incomplete (prompt, step, graph) training pair.
+   */
+  consumedContext?: Record<string, unknown>
+}
+
+export interface AiConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// =============================================================================
+// Request Context (sent to the AI)
+// =============================================================================
+
+export interface AiLabwareSummary {
+  labwareId: string
+  labwareType: string
+  name: string
+  rows?: number
+  columns?: number
+}
+
+export interface AiWellSelection {
+  labwareId: string
+  labwareName: string
+  wells: string[]
+}
+
+export interface AiWellMaterialSummary {
+  label: string
+  volume_uL?: number
+  concentration?: {
+    value: number
+    unit: string
+    basis?: string
+  }
+  concentrationUnknown?: boolean
+  count?: number
+  materialSpecRefId?: string
+  aliquotRefId?: string
+  materialInstanceRefId?: string
+  vendorProductRefId?: string
+}
+
+export interface AiWellStateSummary {
+  labwareId: string
+  labwareName: string
+  wellId: string
+  totalVolume_uL: number
+  materials: AiWellMaterialSummary[]
+  lastEventId?: string
+  eventCount: number
+  harvested: boolean
+}
+
+export interface AiProtocolCandidateEvidenceAnchor {
+  pageNumber?: number
+  snippet?: string
+  context?: string
+  sectionId?: string
+  stepNumber?: number
+}
+
+export interface AiProtocolCandidateItemSummary {
+  label: string
+  role?: string
+  normalizedId?: string
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+}
+
+export interface AiProtocolCandidateStepSummary {
+  stepNumber?: number
+  title?: string
+  text: string
+  materials?: string[]
+  labware?: string[]
+  equipment?: string[]
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+  uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived'
+}
+
+export interface AiProtocolCandidateSummary {
+  kind: 'vendor-protocol-candidate'
+  title: string
+  scope?: string
+  source?: {
+    documentId?: string
+    vendor?: string
+    title?: string
+    url?: string
+    sha256?: string
+  }
+  materials?: AiProtocolCandidateItemSummary[]
+  labware?: AiProtocolCandidateItemSummary[]
+  equipment?: AiProtocolCandidateItemSummary[]
+  steps?: AiProtocolCandidateStepSummary[]
+  diagnostics?: Array<{
+    code: string
+    severity: 'info' | 'warning' | 'error'
+    message: string
+    evidence?: AiProtocolCandidateEvidenceAnchor[]
+  }>
+}
+
+export interface AiSourcePdfSummary {
+  artifactPath?: string
+  url?: string
+  title?: string
+  vendor?: string
+  sha256?: string
+}
+
+export interface AiCurrentPreviewDraft {
+  events: PlateEvent[]
+  labwareRequirements: AiLabwareRequirement[]
+  labwareAdditions: AiLabwareAddition[]
+  ontologyBindings?: DraftOntologyBinding[]
+  sourcePrompt?: string
+  sourceSkips?: string[]
+}
+
+export interface AiDraftRevisionEntry {
+  prompt: string
+  createdAt: string
+}
+
+export interface AiDraftRevisionContext {
+  currentPreviewDraft: AiCurrentPreviewDraft
+  revisionHistory?: AiDraftRevisionEntry[]
+}
+
+export type AiGraphLemurRevisionEntry = AiDraftRevisionEntry
+
+export interface AiGraphLemurContext {
+  sourceProtocolCandidate?: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+  implementationContext?: string
+  revisionMode?: boolean
+  currentPreviewDraft?: AiCurrentPreviewDraft
+  revisionHistory?: AiGraphLemurRevisionEntry[]
+}
+
+export interface AiRequestContext {
+  labwares: AiLabwareSummary[]
+  eventSummary: string
+  vocabPackId: string
+  availableVerbs: string[]
+  selectedWells?: string[]
+  sourceSelection?: AiWellSelection
+  targetSelection?: AiWellSelection
+  wellStateSnapshot?: AiWellStateSummary[]
+  mentions?: PromptMention[]
+  deckPlatform?: string
+  deckVariant?: string
+  deckPlacements?: Array<{
+    slotId: string
+    labwareId?: string
+    moduleId?: string
+  }>
+  activeDeckScope?: AiActiveDeckScope
+  manualPipettingMode?: boolean
+  materialTracking?: {
+    mode: 'relaxed' | 'tracked'
+    allowAdHocEventInstances: boolean
+  }
+  /** Active ghost-preview draft being revised by the current prompt. */
+  draftRevision?: AiDraftRevisionContext
+  /** GraphLemur protocol-source and iterative-preview revision context. */
+  graphLemur?: AiGraphLemurContext
+}
+
+// =============================================================================
+// Health Status (from GET /api/health)
+// =============================================================================
+
+export interface AiHealthStatus {
+  available: boolean
+  inferenceUrl?: string
+  model?: string
+  provider?: string
+  error?: string
+}
+
+// =============================================================================
+// Knowledge Extraction Result (from POST /api/ai/extract-knowledge)
+// =============================================================================
+
+export interface KnowledgeExtractionResult {
+  success: boolean
+  claims: Array<Record<string, unknown>>
+  assertions: Array<Record<string, unknown>>
+  evidence: Array<Record<string, unknown>>
+  unresolvedRefs?: OntologyRefProposal[]
+  notes: string[]
+  error?: string
+  clarificationNeeded?: string
+  usage?: AiAgentResult['usage']
+}
+"
+
+ ❯ src/types/aiStreamTypes.pin.test.ts:67:24
+     65|     )
+     66|     // types/ai.ts: the member is actually IN the AiStreamEvent union.
+     67|     expect(aiTypesSrc).toMatch(/\|\s*AiAnalysisProposalEvent/)
+       |                        ^
+     68|     // assistStream.ts:259 (the wire-shape authority) carries the inli…
+     69|     // member; types/ai.ts mirrors it member-for-member via the interf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  15:03:35
+   Duration  1.06s (transform 34ms, setup 38ms, collect 14ms, tests 7ms, environment 361ms, prepare 99ms)
+
+
+=== 3. NEW pin assertions vs MUTATED ai.ts (export interface AiAnalysisProposalEvent block removed) ===
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+ ❯ src/types/aiStreamTypes.pin.test.ts  (6 tests | 1 failed) 6ms
+   ❯ src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+     → expected '/**\n * AI domain types for chat, str…' to match /export interface AiAnalysisProposalEv…/
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+AssertionError: expected '/**\n * AI domain types for chat, str…' to match /export interface AiAnalysisProposalEv…/
+
+- Expected: 
+/export interface AiAnalysisProposalEvent \{\s*\n\s*type: 'analysis_proposal'\s*\n\s*analysis: Record<string, unknown>\s*\n\s*\}/
+
++ Received: 
+"/**
+ * AI domain types for chat, streaming, and agent results.
+ */
+
+import type { PlateEvent } from './events'
+import type { OntologyRef } from './ref'
+
+export interface PromptMention {
+  type: 'material' | 'labware' | 'selection' | 'protocol'
+  entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component'
+  selectionKind?: 'source' | 'target'
+  id?: string
+  label: string
+  labwareId?: string
+  wells?: string[]
+}
+
+export interface AiActiveDeckScope {
+  locked: boolean
+  runId?: string
+  platformId: string
+  variantId: string
+  allowedSurfaces: Array<'slot' | 'lawn'>
+  allowedSlots: string[]
+  allowedLabwareIds: string[]
+  focusedLabwareId?: string
+}
+
+// =============================================================================
+// SSE Stream Events (from POST /api/ai/draft-events/stream)
+// =============================================================================
+
+export interface AiStatusEvent {
+  type: 'status'
+  message: string
+}
+
+export interface AiToolCallEvent {
+  type: 'tool_call'
+  toolName: string
+  args?: Record<string, unknown>
+}
+
+export interface AiToolResultEvent {
+  type: 'tool_result'
+  toolName: string
+  result?: unknown
+}
+
+export interface AiThinkingEvent {
+  type: 'thinking'
+  text: string
+}
+
+export interface AiTextDeltaEvent {
+  type: 'text_delta'
+  delta: string
+}
+
+export interface AiDraftEvent {
+  type: 'draft'
+  events: PlateEvent[]
+  notes?: string[]
+}
+
+export interface AiDoneEvent {
+  type: 'done'
+  result: AiAgentResult
+}
+
+export interface AiErrorEvent {
+  type: 'error'
+  message: string
+  code?: string
+}
+
+export interface AiPipelineDiagnostic {
+  pass_id: string
+  code: string
+  severity: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export interface AiPipelineDiagnosticsEvent {
+  type: 'pipeline_diagnostics'
+  outcome: 'complete' | 'gap' | 'error'
+  diagnostics: AiPipelineDiagnostic[]
+}
+
+export interface AiProtocolExtractedEvent {
+  type: 'protocol_extracted'
+  candidate: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+}
+
+/**
+ * PB-CH-6 — the wave-1 channel envelopes, mirrored into the generic stack's
+ * union. Both unions are fed by the SAME server handler (POST
+ * /ai/assist/stream — AgentOrchestrator emits {type:'workstate_proposal',
+ * workstate} / {type:'agent_action', action}); the shapes here match
+ * `event-editor/right-pane/ai/assistStream.ts` (:204-210) member-for-member,
+ * and `types/aiStreamTypes.pin.test.ts` asserts the pin so the two hand-
+ * maintained unions cannot drift. Before this member existed, useAiChat
+ * silently DROPPED such frames — the defect class PB-CH-6 closes.
+ * exactOptionalPropertyTypes convention: optional fields are ABSENT, never
+ * `undefined`. The payload is forwarded verbatim — the trust boundary is
+ * POST /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export type AiAgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AiAgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AiAgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AiAgentActionTargetEnvelope[]
+}
+
+export interface AiAgentActionEvent {
+  type: 'agent_action'
+  action: AiAgentActionEnvelope
+}
+
+export interface AiWorkstateProposalEvent {
+  type: 'workstate_proposal'
+  workstate: Record<string, unknown>
+}
+
+/**
+ * PB-CH-5 repair — the analysis INTENT frame, mirrored into the generic
+ * stack's union the same way as the two members above. The SAME server
+ * handler emits it (POST /ai/assist/stream — AgentOrchestrator.ts:2337 emits
+ * {type:'analysis_proposal', analysis}); the shape matches
+ * `event-editor/right-pane/ai/assistStream.ts` (:259 — the wire-shape
+ * authority, `| { type: 'analysis_proposal'; analysis: Record<string,
+ * unknown> }`) member-for-member, and the pin test keeps the unions from
+ * drifting. Before this member existed, useAiChat silently DROPPED such
+ * frames on the /analysis mount — the defect class PB-CH-6 closes on the
+ * channel PB-CH-5 introduced. exactOptionalPropertyTypes convention: the
+ * payload is forwarded verbatim — the trust boundary is POST
+ * /api/drafts/compile (Ajv + canAccept), not this stream.
+ */
+export type AiStreamEvent =
+  | AiStatusEvent
+  | AiToolCallEvent
+  | AiToolResultEvent
+  | AiThinkingEvent
+  | AiTextDeltaEvent
+  | AiDraftEvent
+  | AiPipelineDiagnosticsEvent
+  | AiDoneEvent
+  | AiErrorEvent
+  | AiProtocolExtractedEvent
+  | AiAgentActionEvent
+  | AiWorkstateProposalEvent
+  | AiAnalysisProposalEvent
+
+// =============================================================================
+// Agent Result (final output from AI)
+// =============================================================================
+
+export interface OntologyRefProposal {
+  ref: OntologyRef
+  suggestedType?: string
+  usedInEvents: string[]
+}
+
+export interface AiClarificationOption {
+  id: string
+  label: string
+  snippet?: string
+  source?: string
+  score?: number
+  ref?: Record<string, unknown>
+}
+
+export type AiClarificationKind =
+  | 'material'
+  | 'aliquot'
+  | 'labware'
+  | 'equipment'
+  | 'vendor-product'
+  | 'ontology'
+  | 'parameter'
+  | 'well-selection'
+  | 'sequence'
+  | 'general'
+
+export type AiClarificationMenuProvider = '/m' | '/l' | '/e' | 'choice'
+
+export interface AiClarification {
+  id?: string
+  prompt: string
+  entityType: string
+  options: AiClarificationOption[]
+  menuProvider?: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  allowCreateLocal?: boolean
+}
+
+export interface AiClarificationRequest {
+  id: string
+  kind: AiClarificationKind
+  prompt: string
+  entityType?: string
+  menuProvider: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  sourceSpan?: { start?: number; end?: number }
+  options: AiClarificationOption[]
+  allowCreateLocal?: boolean
+  /**
+   * Which material LAYER this question is about — the picker scopes its options
+   * to it (see SlashResolverContext.materialLayer). Set by the server's gate.
+   */
+  materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
+}
+
+export interface AiClarificationAnswer {
+  requestId: string
+  optionId?: string
+  label?: string
+  value?: string
+  mentionToken?: string
+  ref?: Record<string, unknown>
+}
+
+
+export interface AiLabwareRequirement {
+  classCurie: string
+  handle?: string
+  reason?: string
+  deckSlot?: string
+  constraints?: string[]
+  specificity?: 'generic' | 'constrained' | 'concrete'
+  tubeVolumeClass?: '1.5ml' | '2ml' | '5ml' | '15ml' | '50ml'
+  rows?: number
+  columns?: number
+}
+
+export interface AiLabwareAddition {
+  recordId: string
+  reason?: string
+  deckSlot?: string
+}
+
+/**
+ * A request for BENCH EQUIPMENT (water bath, heat block, shaker, vortex, qPCR
+ * machine…). Equipment is NOT labware: it has no wells and no addressing, and it
+ * lives at its own bench position — never in a deck slot.
+ *
+ * Naming rules (mirrored in the server tool description):
+ *   - `recordId` — an `EQP-` id for real lab-owned equipment (records-first).
+ *   - `classCurie` — `equipment:<kind>` for a generic kind (`equipment:water_bath`)
+ *     or an `EQC-` id for a specific evidenced model. A minted `CL:` class CURIE
+ *     is DERIVED from `equipment:<kind>` on the client — the model never invents one.
+ *   - `settings` — keyed by the class's `settingsDefinition`
+ *     (e.g. `{ temperature_c: 55 }`), the value the equipment is set to.
+ */
+export type AiRecordCreationKind = 'equipment' | 'material' | 'labware'
+
+/**
+ * A record the draft wants AUTHORED — the add, as opposed to placing something that
+ * already exists. One shape for three kinds (the act is the same; the kind-specific
+ * facts differ). Nothing is written on emission: the user reviews the proposal and
+ * Accept materializes it, records-first (an existing match is reused with a warning).
+ */
+export interface AiRecordCreation {
+  kind: AiRecordCreationKind
+  name: string
+  handle?: string
+  /** equipment: `equipment:<kind>` for a GENERIC kind (user spoke generically). */
+  classKind?: string
+  /** equipment: an `EQC-` class record that already exists locally. */
+  classRecordId?: string
+  /** material: an ontology id when it IS that known entity. */
+  curie?: string
+  /** material: chemical | cell_line | organism | reagent | other. */
+  domain?: string
+  /** labware: plate | deepwell | reservoir | tube | tiprack | rack. */
+  labwareType?: string
+  /** labware: the well layout, when known. */
+  format?: { rows?: number; cols?: number; wellCount?: number }
+  /** equipment: values stated by the source, keyed by the settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: `user-description` | `exa:<url>` | `record:<id>`. */
+  source?: string
+  reason?: string
+}
+
+/**
+ * Put what was just created on the bench, in the same turn. Explicit: creating a
+ * record and placing it are two decisions, so a placement is asked for by name and is
+ * never a side effect of creating. Only equipment/labware can be placed — a material
+ * has no bench position.
+ */
+export interface AiAlsoPlace {
+  surface?: 'lawn' | 'slot'
+  slotId?: string
+}
+
+export interface AiEquipmentRequirement {
+  recordId?: string
+  classCurie?: string
+  handle?: string
+  reason?: string
+  /** Concrete settings for this instance, keyed by the class settingsDefinition. */
+  settings?: Record<string, unknown>
+  /** Attribution: where this model came from (user description, Exa, record…). */
+  source?: string
+}
+
+export type ExecutionScaleLevel =
+  | 'manual_tubes'
+  | 'bench_plate_multichannel'
+  | 'robot_deck'
+
+export type ExecutionScalePlanStatus = 'ready' | 'blocked'
+
+export type ExecutionScaleLabwareKind =
+  | 'tube'
+  | 'tube_rack'
+  | '2_well_reservoir'
+  | '8_well_reservoir'
+  | '12_well_reservoir'
+  | '96_well_plate'
+  | '384_well_plate'
+
+export interface ExecutionScalePlan {
+  kind: 'execution-scale-plan'
+  recordId: string
+  sourceRef?: Record<string, unknown>
+  profileRef?: string
+  sourceLevel: ExecutionScaleLevel
+  targetLevel: ExecutionScaleLevel
+  status: ExecutionScalePlanStatus
+  sampleLayout?: {
+    labwareRole: string
+    labwareKind: Extract<ExecutionScaleLabwareKind, 'tube_rack' | '96_well_plate' | '384_well_plate'>
+    labwareDefinition?: string
+    sampleCount?: number
+    wellGroups: Array<{ groupId: string; wells: string[] }>
+  }
+  reagentLayout: Array<{
+    materialRole: string
+    sourceLabwareRole: string
+    sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>
+    sourceLabwareDefinition?: string
+    sourceWells: string[]
+    reason: string
+  }>
+  pipettingStrategy?: {
+    pipetteMode: 'single_channel' | 'multi_channel_parallel'
+    channels: 1 | 8 | 12
+    laneStrategy: 'sequential_lanes' | 'parallel_lanes'
+    channelization: 'single_channel' | 'multi_channel_prefer' | 'multi_channel_force'
+    batching: 'none' | 'group_by_source' | 'group_by_destination' | 'multi_dispense_prefer'
+  }
+  deckBinding?: {
+    platform: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex'
+    requiredLabwareDefinitions: string[]
+    requiredTools: string[]
+  }
+  assumptions: string[]
+  blockers: Array<{ code: string; message: string; requiredInput?: string }>
+}
+
+export interface InstrumentRunFileWell {
+  well: string
+  channelMap?: Record<string, string>
+  sample?: string
+  target?: string
+}
+
+export interface InstrumentRunFile {
+  instrument: string
+  wells: InstrumentRunFileWell[]
+  runParameters?: Record<string, unknown>
+  analysisRules?: unknown[]
+}
+
+export interface InstrumentApplianceJob {
+  kind: 'instrument-appliance-job'
+  jobId: string
+  adapterId: 'molecular_devices_gemini'
+  operation: 'active_read'
+  instrument: string
+  request: {
+    adapterId: 'molecular_devices_gemini'
+    instrumentRef?: Record<string, unknown>
+    outputPath?: string
+    parameters: {
+      simulate?: boolean
+      mode?: 'fluorescence' | 'absorbance' | 'luminescence'
+      wavelengthNm?: number
+      integrationMs?: number
+    }
+  }
+  sourceRunFile: InstrumentRunFile
+  executionReadiness?: InstrumentExecutionReadiness
+}
+
+export interface InstrumentExecutionReadinessBlocker {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface InstrumentExecutionReadiness {
+  jobId: string
+  status: 'ready' | 'blocked'
+  executionMode?: 'simulate' | 'live'
+  requiresConfirmation: boolean
+  blockers: InstrumentExecutionReadinessBlocker[]
+}
+
+export interface InstrumentApplianceJobExecutionResult {
+  success: boolean
+  jobId?: string
+  measurementId?: string
+  logId?: string
+  rawDataPath?: string
+  applianceExecutionRecordPath?: string
+}
+
+export interface DraftOntologyBinding {
+  curie: string
+  recordId: string
+  minted: boolean
+  via: 'class-ref' | 'name'
+  label: string
+  lifecycleId?: 'lab-vocabulary-control'
+  state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated'
+  requiresReview?: boolean
+  draftOnly?: boolean
+}
+
+export interface AiAgentResult {
+  success: boolean
+  events: PlateEvent[]
+  notes: string[]
+  unresolvedRefs?: OntologyRefProposal[]
+  clarificationNeeded?: string
+  clarification?: AiClarification
+  clarificationRequests?: AiClarificationRequest[]
+  error?: string
+  labwareAdditions?: AiLabwareAddition[]
+  labwareRequirements?: AiLabwareRequirement[]
+  /** Bench equipment the draft wants on the deck (never labware, never a slot). */
+  equipmentRequirements?: AiEquipmentRequirement[]
+  /** Records the draft wants CREATED (the add; written only on Accept). */
+  recordCreations?: AiRecordCreation[]
+  /** Place the created record on the bench in the same turn (explicit, never implied). */
+  alsoPlace?: AiAlsoPlace
+  executionScalePlan?: ExecutionScalePlan
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
+  ontologyBindings?: DraftOntologyBinding[]
+  /** Prompt-level resolution assurance (RESOLVE/CONFIRM + structured blockers). */
+  assurance?: AiAssuranceResult
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    turns?: number
+    toolCalls?: number
+  }
+}
+
+export interface AiAssuranceFinding {
+  code:
+    | 'UNRESOLVED_REFERENCE'
+    | 'LOW_BINDING_CONFIDENCE'
+    | 'AMBIGUOUS_BINDING'
+    | 'NEW_LOCAL_ENTITY'
+    | 'MISSING_REQUIRED_QUANTITY'
+    | 'VALIDATION_ERROR'
+  disposition: 'BLOCK' | 'REDUCE_ASSURANCE' | 'INFORMATIONAL'
+  path?: string
+  mention?: string
+  score?: number
+  candidateIds?: string[]
+  message: string
+}
+
+export interface AiAssuranceResult {
+  score: number
+  threshold: number
+  decision: 'RESOLVE' | 'CONFIRM'
+  blockers: AiAssuranceFinding[]
+  degraders: AiAssuranceFinding[]
+  criticalSlotMinimum?: number
+}
+
+// =============================================================================
+// Chat Messages
+// =============================================================================
+
+export interface ChatMessageAttachment {
+  name: string
+  size: number
+  type: string
+  previewUrl?: string
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: number
+  /** Accumulated stream events for assistant messages */
+  streamEvents?: AiStreamEvent[]
+  /** Proposed events from the AI (on done) */
+  events?: PlateEvent[]
+  /** Token usage info */
+  usage?: AiAgentResult['usage']
+  /** Whether this message is still streaming */
+  isStreaming?: boolean
+  /** File attachments on user messages */
+  attachments?: ChatMessageAttachment[]
+  /** Structured clarification (numbered options) from the AI */
+  clarification?: AiClarification
+  /** Typed clarification cards that can be answered with menu-backed refs. */
+  clarificationRequests?: AiClarificationRequest[]
+  /** Proposed concrete labware additions from the AI */
+  labwareAdditions?: AiLabwareAddition[]
+  /** Proposed generic/constrained labware requirements from the AI */
+  labwareRequirements?: AiLabwareRequirement[]
+  /** Deterministic execution scaling handoff from the compiler */
+  executionScalePlan?: ExecutionScalePlan
+  /** Appliance active-control jobs emitted by the compiler */
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
+  /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for \"Apply to graph\". */
+  docDiscussion?: boolean
+  /**
+   * The resolved request context consumed to produce this turn (surface
+   * context + mentions + editor mode), captured on user messages so the
+   * thread self-contains the protocol step / surface state the draft was
+   * derived from — not just the typed prompt. Persisted as
+   * `metadata.consumedContext` for the training-pair exporter. A thread
+   * without this field is an incomplete (prompt, step, graph) training pair.
+   */
+  consumedContext?: Record<string, unknown>
+}
+
+export interface AiConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// =============================================================================
+// Request Context (sent to the AI)
+// =============================================================================
+
+export interface AiLabwareSummary {
+  labwareId: string
+  labwareType: string
+  name: string
+  rows?: number
+  columns?: number
+}
+
+export interface AiWellSelection {
+  labwareId: string
+  labwareName: string
+  wells: string[]
+}
+
+export interface AiWellMaterialSummary {
+  label: string
+  volume_uL?: number
+  concentration?: {
+    value: number
+    unit: string
+    basis?: string
+  }
+  concentrationUnknown?: boolean
+  count?: number
+  materialSpecRefId?: string
+  aliquotRefId?: string
+  materialInstanceRefId?: string
+  vendorProductRefId?: string
+}
+
+export interface AiWellStateSummary {
+  labwareId: string
+  labwareName: string
+  wellId: string
+  totalVolume_uL: number
+  materials: AiWellMaterialSummary[]
+  lastEventId?: string
+  eventCount: number
+  harvested: boolean
+}
+
+export interface AiProtocolCandidateEvidenceAnchor {
+  pageNumber?: number
+  snippet?: string
+  context?: string
+  sectionId?: string
+  stepNumber?: number
+}
+
+export interface AiProtocolCandidateItemSummary {
+  label: string
+  role?: string
+  normalizedId?: string
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+}
+
+export interface AiProtocolCandidateStepSummary {
+  stepNumber?: number
+  title?: string
+  text: string
+  materials?: string[]
+  labware?: string[]
+  equipment?: string[]
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+  uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived'
+}
+
+export interface AiProtocolCandidateSummary {
+  kind: 'vendor-protocol-candidate'
+  title: string
+  scope?: string
+  source?: {
+    documentId?: string
+    vendor?: string
+    title?: string
+    url?: string
+    sha256?: string
+  }
+  materials?: AiProtocolCandidateItemSummary[]
+  labware?: AiProtocolCandidateItemSummary[]
+  equipment?: AiProtocolCandidateItemSummary[]
+  steps?: AiProtocolCandidateStepSummary[]
+  diagnostics?: Array<{
+    code: string
+    severity: 'info' | 'warning' | 'error'
+    message: string
+    evidence?: AiProtocolCandidateEvidenceAnchor[]
+  }>
+}
+
+export interface AiSourcePdfSummary {
+  artifactPath?: string
+  url?: string
+  title?: string
+  vendor?: string
+  sha256?: string
+}
+
+export interface AiCurrentPreviewDraft {
+  events: PlateEvent[]
+  labwareRequirements: AiLabwareRequirement[]
+  labwareAdditions: AiLabwareAddition[]
+  ontologyBindings?: DraftOntologyBinding[]
+  sourcePrompt?: string
+  sourceSkips?: string[]
+}
+
+export interface AiDraftRevisionEntry {
+  prompt: string
+  createdAt: string
+}
+
+export interface AiDraftRevisionContext {
+  currentPreviewDraft: AiCurrentPreviewDraft
+  revisionHistory?: AiDraftRevisionEntry[]
+}
+
+export type AiGraphLemurRevisionEntry = AiDraftRevisionEntry
+
+export interface AiGraphLemurContext {
+  sourceProtocolCandidate?: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+  implementationContext?: string
+  revisionMode?: boolean
+  currentPreviewDraft?: AiCurrentPreviewDraft
+  revisionHistory?: AiGraphLemurRevisionEntry[]
+}
+
+export interface AiRequestContext {
+  labwares: AiLabwareSummary[]
+  eventSummary: string
+  vocabPackId: string
+  availableVerbs: string[]
+  selectedWells?: string[]
+  sourceSelection?: AiWellSelection
+  targetSelection?: AiWellSelection
+  wellStateSnapshot?: AiWellStateSummary[]
+  mentions?: PromptMention[]
+  deckPlatform?: string
+  deckVariant?: string
+  deckPlacements?: Array<{
+    slotId: string
+    labwareId?: string
+    moduleId?: string
+  }>
+  activeDeckScope?: AiActiveDeckScope
+  manualPipettingMode?: boolean
+  materialTracking?: {
+    mode: 'relaxed' | 'tracked'
+    allowAdHocEventInstances: boolean
+  }
+  /** Active ghost-preview draft being revised by the current prompt. */
+  draftRevision?: AiDraftRevisionContext
+  /** GraphLemur protocol-source and iterative-preview revision context. */
+  graphLemur?: AiGraphLemurContext
+}
+
+// =============================================================================
+// Health Status (from GET /api/health)
+// =============================================================================
+
+export interface AiHealthStatus {
+  available: boolean
+  inferenceUrl?: string
+  model?: string
+  provider?: string
+  error?: string
+}
+
+// =============================================================================
+// Knowledge Extraction Result (from POST /api/ai/extract-knowledge)
+// =============================================================================
+
+export interface KnowledgeExtractionResult {
+  success: boolean
+  claims: Array<Record<string, unknown>>
+  assertions: Array<Record<string, unknown>>
+  evidence: Array<Record<string, unknown>>
+  unresolvedRefs?: OntologyRefProposal[]
+  notes: string[]
+  error?: string
+  clarificationNeeded?: string
+  usage?: AiAgentResult['usage']
+}
+"
+
+ ❯ src/types/aiStreamTypes.pin.test.ts:63:24
+     61|     // (server emits {type:'analysis_proposal', analysis} —
+     62|     // AgentOrchestrator.ts:2337).
+     63|     expect(aiTypesSrc).toMatch(
+       |                        ^
+     64|       /export interface AiAnalysisProposalEvent \{\s*\n\s*type: 'analy…
+     65|     )
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  15:03:37
+   Duration  1.17s (transform 55ms, setup 49ms, collect 28ms, tests 6ms, environment 356ms, prepare 80ms)
+
+
+=== 4. NEW pin assertions vs MUTATED assistStream.ts (inline analysis member removed from AssistStreamEvent) ===
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PB-CH-5fix-lane2-l2t1355/app
+
+ ❯ src/types/aiStreamTypes.pin.test.ts  (6 tests | 1 failed) 6ms
+   ❯ src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+     → expected '/**\n * assistStream — minimal SSE cl…' to match /\| \{ type: 'analysis_proposal'; anal…/
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/types/aiStreamTypes.pin.test.ts > AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6) > the analysis_proposal member (PB-CH-5) is pinned two-way too — no drift on the newest member
+AssertionError: expected '/**\n * assistStream — minimal SSE cl…' to match /\| \{ type: 'analysis_proposal'; anal…/
+
+- Expected: 
+/\| \{ type: 'analysis_proposal'; analysis: Record<string, unknown> \}/
+
++ Received: 
+"/**
+ * assistStream — minimal SSE client for the workspace AI panel.
+ *
+ * The backend's `/api/ai/assist/stream` endpoint accepts JSON and emits
+ * Server-Sent Events, one JSON object per `data:` line. The supported
+ * event types come from `server/src/ai/types.ts#AgentEvent`:
+ *   - `status`: pipeline progress strings
+ *   - `text_delta`: streamed assistant text chunks
+ *   - `done`: final result payload
+ *   - `error`: failure
+ *   - `thinking`, `tool_call`, `tool_result`, `draft`,
+ *     `pipeline_diagnostics`: observability events; ignored here
+ *
+ * The standard browser EventSource doesn't support POST, so this client
+ * uses fetch + a streaming reader. Caller passes an AbortSignal for the
+ * Stop button.
+ */
+
+import { API_BASE } from '../../../shared/api/base'
+import type { AiClarificationAnswer, AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
+import type { DraftTermRow } from './TermPanel'
+
+/**
+ * The compact ground-truth payload for the protocol ATTACHED to an
+ * event-editor chat (PROTO-AI-6), populated app-side into the request
+ * `context.attachedProtocol`. The server renders it as the ATTACHED PROTOCOL
+ * prompt block plus the protocol_edit instruction section ONLY when present;
+ * absent → neither. It rides in `context` (not a top-level field) so the
+ * warm render and the real request share one cacheable prefix.
+ * Mirrors `server/src/ai/types.ts#AttachedProtocolContext`.
+ */
+export interface AssistAttachedProtocol {
+  recordId: string
+  /** Current content sha of the attached record — the staleness anchor for
+   *  expectedSha at proposal-apply time; absent until the record fetch lands. */
+  sha?: string
+  steps: Array<{ stepId: string; ordinal: number; label: string; kind?: string }>
+  labwareRoles?: Array<{ roleId: string; description?: string; expectedLabwareKinds?: string[] }>
+  instrumentRoles?: Array<{ roleId: string; description?: string; allowedInstrumentIds?: string[] }>
+}
+
+export interface AssistStreamRequest {
+  prompt: string
+  /** Surface id sent to the orchestrator. Workspace uses `workspace.<viewer>`
+   *  so server-side telemetry / system-prompt selection can fork later. */
+  surface: string
+  /** Anything the agent should know about the active viewer / study. */
+  context: Record<string, unknown>
+  /** Prior conversation history — server expects `{role, content}`. */
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** Answers to structured clarification requests from an earlier assistant turn. */
+  clarificationAnswers?: AiClarificationAnswer[]
+  /** Opt into the model's chain-of-thought (off by default — it's slow). */
+  enableThinking?: boolean
+  /** Protocol-planning step context injected so the AI adapts/ghosts ONE step. */
+  protocolStepContext?: {
+    stepId: string
+    stepLabel: string
+    highlightedSection: string
+    selectedText: string
+  }
+  /**
+   * PB-CH-4 — structured working focus: the step the ChatContextHeader shows
+   * (`ProtocolSelectionContext.focusedStep`, display-only until now). Rides the
+   * request TOP-LEVEL (like protocolStepContext) so the server renders it as
+   * the WORKING FOCUS prompt block and the model can resolve \"the step I'm
+   * looking at\". NOT folded into `context`: focus changes per turn and would
+   * churn the KV warm prefix (attachedProtocol's stability precedent does not
+   * apply). Mirrors `server/src/api/handlers/AIHandlers.ts#AssistBody.workingFocus`.
+   */
+  workingFocus?: { protocolId: string; stepId: string; label: string; ordinal?: number }
+}
+
+/**
+ * A protocol_edit proposal emitted by the server (PROTO-AI-7) and rendered by
+ * the ChangesPanel diff (PROTO-AI-9). `ops` is the model's envelope ALREADY
+ * validated server-side against the registered protocol-edit-op schema
+ * (schema/workflow/protocol-edit-op.schema.yaml), re-emitted verbatim; the op
+ * shape is schema-owned data, so it stays an opaque validated array here
+ * rather than a hand-rolled TypeScript mirror of the op union.
+ * `protocolId` is only the model's explicit override; when absent, the
+ * attached-protocol scope of the conversation binds the target.
+ * PROPOSE-NEVER-WRITE: the server writes NOTHING for this payload — Accept
+ * (PROTO-AI-8) is the only path that applies it.
+ */
+export interface AiProtocolEditProposal {
+  ops: unknown[]
+  protocolId?: string
+}
+
+/**
+ * The slice of the backend's AgentResult the chat panel can render. In
+ * forced-draft-tool mode the model emits no prose at all — the entire answer
+ * lives in this payload, so dropping it renders as \"(no response)\".
+ */
+export interface AssistDraftResult {
+  success?: boolean
+  events?: unknown[]
+  /**
+   * What each term in the draft matched (local record / ontology / vendor /
+   * not yet in the lab), classified server-side for the term panel. Absent on
+   * older payloads — the panel simply does not render.
+   */
+  termManifest?: DraftTermRow[]
+  notes?: string[]
+  labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
+  labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
+  /**
+   * Bench equipment the draft proposes (water bath, heat block, shaker…).
+   * Equipment is NOT labware and never occupies a deck slot.
+   */
+  equipmentRequirements?: Array<{
+    recordId?: string
+    classCurie?: string
+    handle?: string
+    reason?: string
+    settings?: Record<string, unknown>
+    source?: string
+  }>
+  /** Records the draft wants CREATED (the add; nothing is written until Accept). */
+  recordCreations?: Array<{
+    kind?: 'equipment' | 'material' | 'labware'
+    name?: string
+    handle?: string
+    classKind?: string
+    classRecordId?: string
+    curie?: string
+    domain?: string
+    labwareType?: string
+    format?: { rows?: number; cols?: number; wellCount?: number }
+    settings?: Record<string, unknown>
+    source?: string
+    reason?: string
+  }>
+  /** Place the created record on the bench in the same turn (explicit). */
+  alsoPlace?: { surface?: 'lawn' | 'slot'; slotId?: string }
+  /**
+   * A protocol_edit proposal emitted via agent_intent (PROTO-AI-7). See
+   * AiProtocolEditProposal — the server validates the envelope against the
+   * registered schema and WRITES NOTHING; rendering is PROTO-AI-9, applying
+   * (on Accept) is PROTO-AI-8.
+   */
+  protocolEdit?: AiProtocolEditProposal
+  /** Draft-only ontology bindings; materialized into records on Accept. */
+  ontologyBindings?: unknown[]
+  clarificationNeeded?: string
+  clarification?: { prompt?: string }
+  clarificationRequests?: AiClarificationRequest[]
+  error?: string
+}
+
+export interface PipelineDiagnosticItem {
+  pass_id: string
+  code: string
+  severity: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export interface DraftEventProposal {
+  eventId?: string
+  event_type?: string
+  details?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+/**
+ * PB-CH-4 — transport mirror of `schema/workflow/agent-action.schema.yaml`
+ * after PB-CH-1's server-side compilation (THE SCHEMA IS THE AUTHORITY; this
+ * is typing convenience for the stream, mirroring `server/src/ai/types.ts#
+ * AgentActionPayload` — no import from server/**). A frame of this shape exists
+ * ONLY as the output of the workspace-action compiler: a raw model proposal
+ * never rides it. exactOptionalPropertyTypes discipline: optional fields are
+ * OMITTED, never `undefined`.
+ */
+export type AgentActionTargetEnvelope =
+  | { kind: 'protocol-step'; protocolId: string; stepId: string; label?: string }
+  | { kind: 'record'; id: string; type?: string; label?: string }
+  | { kind: 'ontology'; id: string; namespace?: string; label?: string; uri?: string }
+
+export interface AgentActionEnvelope {
+  action: 'focus' | 'open-surface'
+  target?: AgentActionTargetEnvelope
+  surface?: string
+  contextNote?: string
+  supportedBy?: AgentActionTargetEnvelope[]
+}
+
+/**
+ * PB-CH-8 — transport mirror of `server/src/workspace-session/ledgerQuery.ts#
+ * LedgerAnswerEnvelope` (no import from server/**; the same mirror discipline
+ * as `AgentActionEnvelope` above). The frame is SERVER-BUILT fetched evidence:
+ * the journal snapshot + server-known audit rows, never model narration.
+ * exactOptionalPropertyTypes discipline: optional fields are OMITTED, never
+ * `undefined`. `answerText` is the server's single wording authority — the
+ * client renders it verbatim instead of re-composing reason prose.
+ */
+export type LedgerNoHistoryReason =
+  | 'policy-disabled'
+  | 'journal-empty'
+  | 'predates-first-capture'
+  | 'pruned'
+  | 'no-anchor'
+  | 'actor-unresolved'
+
+export interface LedgerLabEventLine {
+  recordId: string
+  action: string
+  occurredAt: string
+  subjectId: string
+}
+
+export interface LedgerAnswerEnvelope {
+  status: 'found' | 'no-history'
+  /**
+   * The server-known audit time the query was answered at (never
+   * model-supplied). OPTIONAL (adversarial r2 F2, mirroring the server
+   * envelope): present exactly when a server-known audit time exists; the
+   * refusal paths (policy-disabled / actor-unresolved / no-anchor) OMIT the
+   * key — the server never emits a fabricated epoch as observed time.
+   */
+  asOf?: string
+  capturedAt?: string
+  disclosure?: string
+  links?: string[]
+  reason?: LedgerNoHistoryReason
+  labEvents?: LedgerLabEventLine[]
+  integrity?: Array<{ file: string; reason: string }>
+  answerText?: string
+}
+
+export type AssistStreamEvent =
+  | { type: 'status'; message: string }
+  | { type: 'text_delta'; delta: string }
+  | { type: 'done'; result?: AssistDraftResult }
+  | { type: 'error'; message: string }
+  | { type: 'protocol_extracted'; candidate: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
+  // Observability events — the AI's actual tool trail + pipeline diagnostics.
+  // These make the loop legible (\"why did a 24-well land for a T25 request\")
+  // instead of dropping the model's resolved decisions.
+  | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
+  | { type: 'pipeline_diagnostics'; outcome: string; diagnostics: PipelineDiagnosticItem[] }
+  | { type: 'draft'; events: DraftEventProposal[] }
+  // PB-CH-1's emission, mounted by PB-CH-4: the server-compiled tier-1 action.
+  // Before this item the app union had no member for it and dispatchFrame
+  // silently dropped it (grep agent_action app/src = 0).
+  | { type: 'agent_action'; action: AgentActionEnvelope }
+  // PB-CH-4 tier-2: the model's workstate INTENT — verbs and terms only. This
+  // is NOT a compiled draft and is NOT actionable alone: POST /api/drafts/compile
+  // (Ajv + canAccept) is the trust boundary, not this stream. Field name
+  // `workstate` mirrors the server frame (AgentOrchestrator emits
+  // {type:'workstate_proposal', workstate}).
+  | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
+  // PB-CH-5 tier-2 (analysis): the model's analysis INTENT — verbs and terms
+  // only, relayed verbatim. NOT a compiled draft and NOT actionable alone:
+  // POST /api/drafts/compile (Ajv + canAccept) is the trust boundary, not this
+  // stream. Field name `analysis` mirrors the server frame (AgentOrchestrator
+  // emits {type:'analysis_proposal', analysis}).
+  // PB-CH-8: the ledger ANSWER — SERVER-BUILT fetched evidence (never model
+  // narration). The client relays the envelope verbatim; `answerText` is the
+  // server's single wording authority. Deliberately assistStream-only: the
+  // generic `types/ai.ts` AiStreamEvent stack does not consume ledger answers
+  // this task (the aiStreamTypes.pin.test.ts rationale — stated, not silent).
+  | { type: 'ledger_answer'; answer: LedgerAnswerEnvelope }
+
+/** Render a draft-tool result as chat text for panels with no preview canvas. */
+export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
+  if (!result) return undefined
+  if (result.error) return `Draft failed: ${result.error}`
+  const clarificationRequests = Array.isArray(result.clarificationRequests) ? result.clarificationRequests : []
+  if (clarificationRequests.length > 0) {
+    return clarificationRequests.length === 1
+      ? clarificationRequests[0]?.prompt
+      : `${clarificationRequests.length} clarifications needed.`
+  }
+  const clarification = result.clarification?.prompt ?? result.clarificationNeeded
+  if (clarification) return clarification
+  const lines: string[] = []
+  const events = Array.isArray(result.events) ? result.events.length : 0
+  if (events > 0) lines.push(`Drafted ${events} event${events === 1 ? '' : 's'}.`)
+  for (const req of result.labwareRequirements ?? []) {
+    const what = req.classCurie ?? 'labware'
+    lines.push(`Proposed labware: ${what}${req.deckSlot ? ` in slot ${req.deckSlot}` : ''}.`)
+  }
+  for (const add of result.labwareAdditions ?? []) {
+    lines.push(`Proposed labware addition: ${add.recordId ?? 'unknown record'}${add.deckSlot ? ` in slot ${add.deckSlot}` : ''}.`)
+  }
+  // Equipment is not labware and has its own bucket: without this the panel told
+  // the user \"(no response)\" for a draft that DID propose an instrument.
+  for (const req of result.equipmentRequirements ?? []) {
+    const what = req.handle ?? req.recordId ?? req.classCurie ?? 'equipment'
+    const settings = req.settings && Object.keys(req.settings).length > 0
+      ? ` (${Object.entries(req.settings).map(([k, v]) => `${k.replace(/_/g, ' ')} ${String(v)}`).join(', ')})`
+      : ''
+    lines.push(`Proposed equipment on the bench: ${what}${settings}.`)
+  }
+  // Records the draft wants authored: an equipment-only (or material/labware-only)
+  // draft used to summarize to `undefined`, so the panel said \"(no response)\" for a
+  // turn that DID propose something.
+  for (const creation of result.recordCreations ?? []) {
+    const source = creation.source ? `source: ${creation.source}` : 'no source stated'
+    lines.push(`New ${creation.kind ?? 'record'} to create: ${creation.name ?? 'unnamed'} (${source}).`)
+  }
+  for (const note of result.notes ?? []) lines.push(note)
+  return lines.length > 0 ? lines.join('\\n') : undefined
+}
+
+export interface AssistStreamHandlers {
+  onEvent: (event: AssistStreamEvent) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Run one assist stream to completion. Resolves when the stream closes,
+ * rejects on transport errors (NOT on `error` events — those surface
+ * through `onEvent`). The caller is responsible for tracking AbortSignal
+ * triggers and translating them into UI state.
+ */
+export async function runAssistStream(
+  request: AssistStreamRequest,
+  handlers: AssistStreamHandlers,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/ai/assist/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    ...(handlers.signal ? { signal: handlers.signal } : {}),
+  })
+
+  if (!response.ok) {
+    handlers.onEvent({
+      type: 'error',
+      message: `HTTP ${response.status} ${response.statusText}`,
+    })
+    return
+  }
+  if (!response.body) {
+    handlers.onEvent({
+      type: 'error',
+      message: 'No response body',
+    })
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  // SSE frames are separated by `\\n\\n`. We buffer partial frames between
+  // chunks so a frame split across reads still parses.
+  let buffer = ''
+
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      let sep = buffer.indexOf('\\n\\n')
+      while (sep !== -1) {
+        const frame = buffer.slice(0, sep)
+        buffer = buffer.slice(sep + 2)
+        dispatchFrame(frame, handlers.onEvent)
+        sep = buffer.indexOf('\\n\\n')
+      }
+    }
+    // Flush a trailing frame if the server didn't terminate with \\n\\n.
+    if (buffer.trim().length > 0) {
+      dispatchFrame(buffer, handlers.onEvent)
+    }
+  } catch (err) {
+    // AbortError is expected when the user clicks Stop; surface as
+    // cancellation rather than an error.
+    if ((err as Error).name === 'AbortError') return
+    handlers.onEvent({
+      type: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    })
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function dispatchFrame(
+  frame: string,
+  onEvent: (event: AssistStreamEvent) => void,
+): void {
+  // Each frame is one or more lines; SSE spec allows multiple `data:`
+  // continuation lines for one event. The backend writes single-line
+  // JSON per frame, so we just strip the prefix.
+  const lines = frame.split('\\n')
+  const dataLines: string[] = []
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    }
+  }
+  if (dataLines.length === 0) return
+  const payload = dataLines.join('\\n')
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
+  try {
+    parsed = JSON.parse(payload)
+  } catch {
+    // Server sent a malformed frame — surface as an inline error rather
+    // than crashing the panel.
+    onEvent({ type: 'error', message: `Malformed SSE frame: ${payload.slice(0, 80)}` })
+    return
+  }
+  switch (parsed.type) {
+    case 'status':
+      onEvent({ type: 'status', message: parsed.message ?? '' })
+      return
+    case 'text_delta':
+      onEvent({ type: 'text_delta', delta: parsed.delta ?? '' })
+      return
+    case 'done':
+      onEvent({ type: 'done', ...(parsed.result ? { result: parsed.result } : {}) })
+      return
+    case 'error':
+      onEvent({ type: 'error', message: parsed.message ?? 'Unknown error' })
+      return
+    case 'tool_call':
+      onEvent({ type: 'tool_call', toolName: parsed.toolName ?? 'unknown', args: parsed.args ?? {} })
+      return
+    case 'tool_result':
+      onEvent({ type: 'tool_result', toolName: parsed.toolName ?? 'unknown', success: parsed.success === true, durationMs: parsed.durationMs ?? 0 })
+      return
+    case 'pipeline_diagnostics':
+      onEvent({ type: 'pipeline_diagnostics', outcome: parsed.outcome ?? 'unknown', diagnostics: Array.isArray(parsed.diagnostics) ? parsed.diagnostics : [] })
+      return
+    case 'draft':
+      onEvent({ type: 'draft', events: Array.isArray(parsed.events) ? parsed.events : [] })
+      return
+    case 'agent_action':
+      // PB-CH-1's compiled action (the server only emits this after Ajv +
+      // spine + registry resolution). Relay the envelope as-is — the mount
+      // hands it to the executor; a malformed frame carries no action and is
+      // dropped rather than guessed into one.
+      if (parsed.action && typeof parsed.action === 'object' && (parsed.action.action === 'focus' || parsed.action.action === 'open-surface')) {
+        onEvent({ type: 'agent_action', action: parsed.action })
+      }
+      return
+    case 'workstate_proposal':
+      // PB-CH-4 tier-2: relay the model's INTENT verbatim. NOT actionable
+      // alone — the mount relays it to POST /api/drafts/compile, which is the
+      // Ajv/canAccept trust boundary.
+      if (parsed.workstate && typeof parsed.workstate === 'object' && !Array.isArray(parsed.workstate)) {
+        onEvent({ type: 'workstate_proposal', workstate: parsed.workstate })
+      }
+      return
+    case 'analysis_proposal':
+      // PB-CH-5 tier-2 (analysis): same discipline — relay the model's INTENT
+      // verbatim; the mount relays it to POST /api/drafts/compile (adapter
+      // 'analysis'), which is the Ajv/canAccept trust boundary.
+      if (parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)) {
+        onEvent({ type: 'analysis_proposal', analysis: parsed.analysis })
+      }
+      return
+    case 'ledger_answer':
+      // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot + server-
+      // known audit rows — fetched evidence, never model narration). Relay the
+      // envelope verbatim; a frame without a recognized status is DROPPED,
+      // never guessed into an answer.
+      if (parsed.answer && typeof parsed.answer === 'object' && !Array.isArray(parsed.answer)
+        && (parsed.answer.status === 'found' || parsed.answer.status === 'no-history')) {
+        onEvent({ type: 'ledger_answer', answer: parsed.answer as LedgerAnswerEnvelope })
+      }
+      return
+    case 'protocol_extracted':
+      if (parsed.candidate) {
+        onEvent({
+          type: 'protocol_extracted',
+          candidate: parsed.candidate,
+          ...(parsed.sourcePdf ? { sourcePdf: parsed.sourcePdf } : {}),
+        })
+      }
+      return
+    default:
+      // thinking and genuinely unknown events are still ignored — they carry
+      // no UI value in the chat surface.
+      return
+  }
+}
+"
+
+ ❯ src/types/aiStreamTypes.pin.test.ts:74:23
+     72|     // member PB-CH-5 adds — is the only one with no drift protection,…
+     73|     // is what the ai.ts comment claims the pin does.
+     74|     expect(assistSrc).toMatch(/\| \{ type: 'analysis_proposal'; analys…
+       |                       ^
+     75|   })
+     76| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  15:03:40
+   Duration  1.03s (transform 43ms, setup 48ms, collect 22ms, tests 6ms, environment 331ms, prepare 56ms)
+
+
+=== sources restored; working tree should show ONLY the pin test modified ===
+ M app/src/types/aiStreamTypes.pin.test.ts

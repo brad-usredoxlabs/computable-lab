@@ -1,0 +1,82 @@
+# W2-3-PROTOCOL-SEMANTIC-UPGRADE — declared PDT-axes -> branch_axes data flow.
+# Registry-style DATA doc (wave2-naming-crosswalk.yaml precedent): NOT a
+# .schema.yaml (SchemaLoader's *.schema.yaml discovery skips it), NOT a record
+# kind, NOT one of the crosswalk's forbidden_kinds. It DECLARES the flow the
+# existing machinery already implements (code follows data, not policy):
+# protocol-decision-tree axes[] -> protocol branch_axes[].
+#
+# The rebinding rule is implemented at
+# server/src/protocol-intake/deriveDecisionTree.ts:9-13 (every axis condition
+# predicate path is rewritten to `$.branchSelection.${axisId}` so axes resolve
+# independently over one nested choices object); deriveBranchAxes lives at
+# server/src/ingestion/vendor-protocol/deriveBranchAxes.ts. This doc names the
+# mapping; it adds no code and no policy.
+kind: branch-axis-mapping
+version: 0.1.0
+campaign: semantic-protocol-family
+authority: "W2-3 spec §2.4 + D1/D4 rulings (wave2-naming-crosswalk.yaml 'branch axes' entry)"
+
+source:
+  kind: protocol-decision-tree
+  schema: schema/workflow/protocol-decision-tree.schema.yaml
+  collection: axes
+  collection_lines: "schema/workflow/protocol-decision-tree.schema.yaml:60-111"
+
+target:
+  kind: protocol
+  schema: schema/workflow/protocol.schema.yaml
+  collection: branch_axes
+  item_datatype: "schema/core/datatypes/condition.schema.yaml#/$defs/BranchAxis"
+  item_datatype_lines: "schema/core/datatypes/condition.schema.yaml:123-146"
+
+field_map:
+  # Carried into branch_axes:
+  - from: axes[*].axisId
+    to: branch_axes[*].axisId
+    note: "Both patterns ^[a-z][a-z0-9-]*$ — ids pass through unchanged."
+  - from: axes[*].question
+    to: branch_axes[*].label
+    note: "The PDT carries the reviewer-facing QUESTION; BranchAxis requires the executable LABEL (BranchAxis additionalProperties:false, condition.schema.yaml:125). question -> label is the rename."
+  - from: axes[*].conditions
+    to: branch_axes[*].conditions
+    note: "SAME datatype: PDT axes[].conditions items are $ref ../datatypes/condition.schema.yaml#/$defs/BranchCondition (protocol-decision-tree.schema.yaml:109-111) — the very datatype branch_axes consumes. Items pass through; the file's own note states the ids 'converge with the BranchCondition datatype ... SAME predicate language (DRY)' (:105-107)."
+  - from: axes[*].shared_stepIds
+    to: branch_axes[*].shared_stepIds
+    note: "Optional passthrough when present on both sides."
+
+  # NOT carried into branch_axes (BranchAxis closes its envelope):
+  - not_carried: [ choiceKey, origin, evidence, sectionId ]
+    where_they_live: >-
+      The PDT record itself remains the question/evidence surface (origin,
+      evidence spans, sectionId nesting). branch_axes carries only the
+      executable shape. Nothing is lost: the protocol record references its PDT
+      and the review surface reads the PDT.
+
+predicate_rebinding:
+  rule: "condition predicate paths target `$.branchSelection.<axisId>`"
+  implemented_by:
+    - "server/src/protocol-intake/deriveDecisionTree.ts:9-13"
+    - "server/src/ingestion/vendor-protocol/deriveBranchAxes.ts"
+  note: >-
+    Predicates are evaluated over one nested choices object keyed by axisId, so
+    several axes resolve independently (protocol-decision-tree.schema.yaml:55-59).
+    This doc declares the rule; the existing code implements it. No new code.
+
+scaleAxis:
+  carried: false
+  reason: >-
+    D9: execution scale is answered at REALIZATION (local-protocol.branch_resolution,
+    local-protocol.schema.yaml:88 — W2-7 territory). A universal protocol's
+    branch_axes carry starting-material/format branches, not scale answers.
+
+fixture_example:
+  # The T1(g) fixture in server/src/schema/Wave2ProtocolIntentSchema.test.ts is
+  # built BY THIS MAPPING from a PDT axis:
+  #   PDT axis  { axisId: axis-dnasource, question: "What is the DNA source?",
+  #               choiceKey: branchSelection, origin: document_branch,
+  #               conditions: [equals $.branchSelection.axis-dnasource ...] }
+  # -> BranchAxis { axisId: axis-dnasource, label: "What is the DNA source?",
+  #                 conditions: [same BranchCondition items], shared_stepIds }
+  validates_at:
+    - "condition.schema.yaml#/$defs/BranchAxis (datatype level)"
+    - "protocol.schema.yaml branch_axes (full record level)"

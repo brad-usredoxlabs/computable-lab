@@ -120,6 +120,14 @@ export interface GraphLemurPdfIngestResponse {
     studyId?: string;
     extractedTextPageCount: number;
   };
+  /**
+   * W2-8-FIX2 D2 (response honesty): set when the durable vendor-pdf record
+   * create FAILED (e.g. schema validation) even though the artifact bytes were
+   * written. The upload is content-addressed, so a retry after the data fix
+   * re-uses the same id; the caller must not read a missing `recordedArtifact`
+   * as success without checking this field.
+   */
+  recordWriteError?: string;
 }
 
 export interface VendorSearchHandlerOptions {
@@ -1514,6 +1522,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
       }
 
       let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
+      let recordWriteError: string | undefined;
       if (store) {
         const payload = {
           kind: 'vendor-pdf' as const,
@@ -1563,6 +1572,10 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
                 extractedTextPageCount: 0,
               };
             } else {
+              // W2-8-FIX2 D2: the bytes are durable but the RECORD is not.
+              // Surface the failure in the response instead of letting a 200
+              // imply a content-addressed success that never landed.
+              recordWriteError = result.error ?? 'vendor-pdf record create failed';
               request.log?.warn?.(
                 { error: result.error },
                 'GraphLemur PDF upload: vendor-pdf record create failed',
@@ -1612,6 +1625,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           diagnostics: [],
         },
         ...(recordedArtifact ? { recordedArtifact } : {}),
+        ...(recordWriteError ? { recordWriteError } : {}),
       };
     },
 

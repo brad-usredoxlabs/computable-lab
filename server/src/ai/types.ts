@@ -204,6 +204,15 @@ export interface AgentRequest {
    * The orchestrator injects them as grounded context for the next compile.
    */
   clarificationAnswers?: AgentClarificationAnswer[];
+  /**
+   * PB-CH-8 — the RESOLVED request user for this turn (OQ1 ruling:
+   * `LocalIdentityService.resolveRequestUser` — session token first, then
+   * header; inactive users refused). The assist handler resolves it BEFORE
+   * calling run(); a `query_workstate_history` turn with no resolved actor is
+   * REFUSED by the ledger (never the raw-header 'default' fallback — the
+   * session route's main.yaml path keeps that fallback, the ledger does not).
+   */
+  ledgerActor?: string | null;
 }
 
 /**
@@ -312,6 +321,45 @@ export interface GraphLemurContext {
   revisionMode?: boolean;
 }
 
+/** One step of an attached protocol, condensed for the prompt (PROTO-AI-6). */
+export interface AttachedProtocolStep {
+  stepId: string;
+  ordinal: number;
+  label: string;
+  /** Step kind (base ProtocolStep kinds); absent when the client could not resolve it. */
+  kind?: string;
+}
+
+/** Declared labware role of an attached protocol (mirror of LabwareRole). */
+export interface AttachedProtocolLabwareRole {
+  roleId: string;
+  description?: string;
+  expectedLabwareKinds?: string[];
+}
+
+/** Declared instrument role of an attached protocol (mirror of InstrumentRole). */
+export interface AttachedProtocolInstrumentRole {
+  roleId: string;
+  description?: string;
+  allowedInstrumentIds?: string[];
+}
+
+/**
+ * The protocol ATTACHED to the editor (run → plannedRunRef → protocolRef),
+ * resolved app-side into a compact ground-truth payload (PROTO-AI-6). When
+ * present, the system prompt carries the ATTACHED PROTOCOL context block AND
+ * the protocol_edit instruction section; when absent, NEITHER renders.
+ * `sha` is the record's current content sha — the staleness anchor for
+ * expectedSha at proposal-apply time.
+ */
+export interface AttachedProtocolContext {
+  recordId: string;
+  sha?: string;
+  steps: AttachedProtocolStep[];
+  labwareRoles?: AttachedProtocolLabwareRole[];
+  instrumentRoles?: AttachedProtocolInstrumentRole[];
+}
+
 export interface ActiveDeckScope {
   runId?: string;
   platformId: string;
@@ -408,6 +456,27 @@ export interface EditorContext {
     highlightedSection: string;
     selectedText?: string;
   };
+  /**
+   * PB-CH-4 — the structured WORKING FOCUS: the step the ChatContextHeader
+   * shows (ProtocolSelectionContext.focusedStep, display-only until now).
+   * Rides the request TOP-LEVEL (like protocolStepContext, which it must NOT
+   * be merged into — protocolStepContext ghosts the deck; workingFocus names
+   * what the user means by "the step I'm looking at"). Rendered as the
+   * WORKING FOCUS prompt block ONLY when present.
+   */
+  workingFocus?: {
+    protocolId: string;
+    stepId: string;
+    label: string;
+    ordinal?: number;
+  };
+  /**
+   * The protocol ATTACHED to this editor chat (resolved app-side). Present →
+   * the prompt carries a compact ground-truth context block (identity + steps
+   * + declared roles) and the protocol_edit instruction section; absent →
+   * neither renders (PROTO-AI-6).
+   */
+  attachedProtocol?: AttachedProtocolContext;
   /**
    * Plate-setting sections declared on the run's local protocol (labwares /
    * equipment / materials rows: { role, description?, ref? }). Read-only
@@ -529,6 +598,16 @@ export interface AgentClarificationRequest {
    * thing they were choosing. Set by the gate, consumed by the picker.
    */
   materialLayer?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product';
+  /**
+   * SHORTHAND-CHAT: the VERBATIM ScientistIntentUnresolvedFact this card maps —
+   * a PURE structural map (label/reason/candidates/actionLocation ride through
+   * untouched; the server mints no labels, confidences, or ids beyond the join
+   * id `unresolved-<index+1>`, mirroring the 422 verbatim rule at
+   * IntentCompileFromPromptHandlers.ts:274-287). The 422 round-trip test and
+   * the chat see the SAME facts; the answer-fold keys off this fact's
+   * actionLocation.
+   */
+  unresolvedFact?: import('../compiler/scientistIntent/types.js').ScientistIntentUnresolvedFact;
 }
 
 export interface AgentClarificationAnswer {
@@ -675,6 +754,27 @@ export interface AgentResult {
   /** Deck layout switch requested via agent_intent (intent: deck_layout). The
    *  client applies this to the live editor; nothing is drafted. */
   deckLayout?: { platformId: string; variantId: string };
+  /**
+   * SHORTHAND-CHAT (intent: event_shorthand): the scientist-intent shorthand
+   * document the model emitted, carried VERBATIM — byte-identical to what the
+   * deterministic compiler parsed. The AI panel renders it verbatim above the
+   * proposal; a scientist edit re-compiles it server-side (POST /intent/compile).
+   * exactOptionalPropertyTypes: every emission site uses the conditional-spread
+   * idiom — key ABSENT when the turn carried no shorthand, never `undefined`.
+   */
+  shorthand?: string;
+  /**
+   * Protocol-edit proposal emitted via agent_intent (intent: protocol_edit,
+   * PROTO-AI-7). `ops` is the model's envelope VALIDATED server-side against
+   * the registered protocol-edit-op schema (schema/workflow/
+   * protocol-edit-op.schema.yaml) and re-emitted VERBATIM. Nothing runs on
+   * emission — the client renders the proposal (PROTO-AI-9) and Accept applies
+   * it (PROTO-AI-8). `protocolId` is only the model's explicit override; when
+   * absent, the attached-protocol scope of the conversation binds the target.
+   * The op shape is schema-owned DATA, so `ops` stays an opaque validated
+   * array here rather than a hand-rolled TypeScript mirror of the union.
+   */
+  protocolEdit?: { ops: unknown[]; protocolId?: string };
   /** Semantic interpretation of the parsed prompt — operations, materials, parameters. */
   interpretation?: {
     operations: Array<{
@@ -779,6 +879,23 @@ export interface AgentProtocolExtractedEvent {
   sourcePdf?: { artifactPath?: string; url?: string; title?: string; vendor?: string; sha256?: string }
 }
 
+/**
+ * PB-CH-1 — transport shape of the VALIDATED agent-action schema
+ * (schema/workflow/agent-action.schema.yaml). THE SCHEMA IS THE AUTHORITY;
+ * this interface is typing convenience for the stream event only. An
+ * `agent_action` event exists ONLY as the output of the workspace-action
+ * compiler (server/src/ai/compileWorkspaceAction.ts) — a raw model proposal
+ * never rides this event. exactOptionalPropertyTypes discipline: optional
+ * fields are OMITTED, never `undefined`.
+ */
+export interface AgentActionPayload {
+  action: 'focus' | 'open-surface';
+  target?: import('./compileWorkspaceAction.js').ResolvedActionTarget;
+  surface?: string;
+  contextNote?: string;
+  supportedBy?: import('./compileWorkspaceAction.js').ResolvedActionTarget[];
+}
+
 export type AgentEvent =
   | { type: 'status'; message: string }
   | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
@@ -789,6 +906,37 @@ export type AgentEvent =
   | { type: 'done'; result: AgentResult }
   | { type: 'error'; message: string }
   | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> }
+  | { type: 'agent_action'; action: AgentActionPayload }
+  /**
+   * PB-CH-4 — the model's workstate INTENT, retained verbatim (compose_workstate).
+   * This is NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — Ajv against the registered
+   * workstate-intent $id + canAccept), NOT this stream, is the trust boundary.
+   * The event stays thin because the draft service — not this event — is the
+   * compilation trust boundary (OQ1 ruling, spec §4).
+   */
+  | { type: 'workstate_proposal'; workstate: Record<string, unknown> }
+  /**
+   * PB-CH-5 — the model's analysis INTENT, retained verbatim (compose_analysis).
+   * This is NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — Ajv against the registered
+   * analysis-intent $id + canAccept), NOT this stream, is the trust boundary.
+   * Accepting the compiled draft stages at most one QUEUED analysis-run create;
+   * nothing here executes a run or promotes an artifact (OQ1 ruling, thin-event
+   * design — same shape as workstate_proposal).
+   */
+  | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
+  /**
+   * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
+   * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors
+   * ledgerQuery.ts LedgerAnswerEnvelope field-for-field (status, asOf,
+   * capturedAt + disclosure for `found`, reason + lab-event lines for
+   * `no-history`, optional fields OMITTED — exactOptionalPropertyTypes).
+   * A `found` answer is followed by ONE server-built `workstate_proposal`
+   * (built FROM THE SNAPSHOT, riding the existing compile→card→accept flow);
+   * a `no-history` answer emits NO proposal — no card, zero session movement.
+   */
+  | { type: 'ledger_answer'; answer: import('../workspace-session/ledgerQuery.js').LedgerAnswerEnvelope }
   | AgentProtocolExtractedEvent;
 
 // ============================================================================
@@ -811,6 +959,11 @@ export interface AgentOrchestrator {
    * the template-rendered tool definitions) for a (surface, context) pair —
    * the same render path run() uses. Consumed by the background prompt
    * warmer; optional so test doubles stay minimal.
+   *
+   * PB-CH-10: ASYNC — the analysis reference grounding block is computed
+   * inside this shared render path (a store scan), and WarmTarget.buildPrefix
+   * already accepts a Promise prefix, so the warm and the real render stay
+   * byte-identical by construction.
    */
   buildPrefixRequest?(args: {
     context: EditorContext;
@@ -818,7 +971,7 @@ export interface AgentOrchestrator {
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
-  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>;
+  }): Promise<Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>>;
 }
 
 // ============================================================================

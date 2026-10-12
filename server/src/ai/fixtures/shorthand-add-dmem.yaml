@@ -1,0 +1,11 @@
+# SHORTHAND-CHAT chat-e2e golden fixture 1 (AS-2: colocated with the new chat
+# e2e test, NOT a SPINE-6 MANIFEST entry). The stubbed model emits ONLY this
+# shorthand document ("add 100 uL DMEM to A1:A12"-class); the deterministic
+# compiler owns the event graph.
+intentId: chat-add-dmem
+actions:
+  - action: add_material
+    labware: plate
+    material: DMEM
+    volumeUl: 100
+    targetWells: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12]

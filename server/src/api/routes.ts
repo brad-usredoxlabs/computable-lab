@@ -642,6 +642,9 @@ export function registerRoutes(
     fastify.get('/extract/metrics', extractHandlers.getMetrics.bind(extractHandlers));
     fastify.post('/extraction/drafts/:id/candidates/:i/promote', extractHandlers.promoteCandidate.bind(extractHandlers));
     fastify.post('/extraction/drafts/:id/candidates/:i/reject', extractHandlers.rejectCandidate.bind(extractHandlers));
+    // W2-6 (OQ1 (ii), P3): same extractHandlers family, wiring beside the
+    // promote/reject pair — NOT the legacy protocolHandlers block.
+    fastify.post('/extraction/vendor-candidates/:recordId/semantic-draft', extractHandlers.semanticDraft.bind(extractHandlers));
   }
 
   // ============================================================================

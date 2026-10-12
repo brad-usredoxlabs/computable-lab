@@ -1,0 +1,12 @@
+[
+  {
+    "requestModel": "qwen3.8-flash-next",
+    "toolCalls": [
+      {
+        "name": "emit_scientist_intent",
+        "arguments": "{\"intentId\": \"transfer-and-read-source\", \"actions\": [{\"transfer\": {\"source\": \"source plate\", \"target\": \"destination plate\", \"volumeUl\": 50}}, {\"read\": {\"source\": \"source plate\", \"mode\": \"absorbance\", \"wavelength\": \"450 nm\"}}], \"unresolved\": [{\"label\": \"source plate\", \"reason\": \"Specific labware or record ID for the source plate was not provided.\"}, {\"label\": \"destination plate\", \"reason\": \"Specific labware or record ID for the destination plate was not provided.\"}]}"
+      }
+    ],
+    "content": ""
+  }
+]

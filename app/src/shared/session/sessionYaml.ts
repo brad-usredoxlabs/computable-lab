@@ -58,13 +58,22 @@ export function sessionToYaml(state: OpenTabsState): string {
   return stringifyYaml(doc)
 }
 
-/** Parse + validate a session document from YAML (throws on malformed input). */
-export function sessionFromYaml(yaml: string): SessionDocument {
-  const parsed = parseYaml(yaml) as unknown
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+/**
+ * Validate a plain VALUE into a SessionDocument (throws on malformed input).
+ *
+ * Extracted from sessionFromYaml so the drafts accept body — a JSON OBJECT
+ * response, not YAML — shares the exact same rules without a
+ * stringify→re-parse round-trip. validate ≠ rebuild: no slot-id minting and
+ * no PROTO-AI-14 F3 dedupe here; those stay in sessionDocumentToState.
+ *
+ * The `tabs` array is COPIED (shallow) so a caller-held parsed value can never
+ * alias into the live tab store.
+ */
+export function sessionDocumentFromValue(value: unknown): SessionDocument {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('session document must be a mapping')
   }
-  const doc = parsed as Partial<SessionDocument>
+  const doc = value as Partial<SessionDocument>
   if (doc.version !== 1) throw new Error('session document version must be 1')
   if (!Array.isArray(doc.tabs)) throw new Error('session document must have a tabs array')
   for (const [i, tab] of doc.tabs.entries()) {
@@ -72,7 +81,12 @@ export function sessionFromYaml(yaml: string): SessionDocument {
       throw new Error(`session tab ${i} must have a kind`)
     }
   }
-  return { version: 1, activeTabId: doc.activeTabId ?? null, tabs: doc.tabs }
+  return { version: 1, activeTabId: doc.activeTabId ?? null, tabs: [...doc.tabs] }
+}
+
+/** Parse + validate a session document from YAML (throws on malformed input). */
+export function sessionFromYaml(yaml: string): SessionDocument {
+  return sessionDocumentFromValue(parseYaml(yaml))
 }
 
 /**
@@ -84,17 +98,28 @@ export function sessionDocumentToState(
   doc: SessionDocument,
   tabIdFor: (tab: WorkspaceTab) => string,
 ): OpenTabsState {
-  const tabs: OpenTabState[] = doc.tabs.map((rawTab) => {
+  // PROTO-AI-14 F3 — dedupe at the LOAD entry site, on the value-derived id.
+  // The document deliberately carries no ids (see sessionToYaml above), so ids
+  // are re-derived here; two document entries with the same tab VALUE therefore
+  // collapse to the SAME id, and both landing in `tabs` is what makes
+  // WorkspaceTabStrip's `key={tab.id}` hit React's duplicate-key warning. The
+  // reducer's 'open' case already replaces a same-id tab (OpenTabsContext.tsx
+  // ~136-168), so the loader follows the SAME convention: LAST-WINS — the later
+  // duplicate replaces the earlier entry in place (keeping the earlier slot's
+  // position), and the state can never hold two entries with one tab.id.
+  const byId = new Map<string, OpenTabState>()
+  for (const rawTab of doc.tabs) {
     const { activeRightPaneMode, breadcrumb, ...kindFields } = rawTab
     const tab = { ...kindFields, id: tabIdFor(kindFields as unknown as WorkspaceTab) } as WorkspaceTab
-    return {
+    byId.set(tab.id, {
       tab,
       activeRightPaneMode: activeRightPaneMode ?? defaultRightPaneMode(tab),
       breadcrumb: breadcrumb ?? [],
       contentHistory: [tab],
       contentCursor: 0,
-    }
-  })
+    })
+  }
+  const tabs: OpenTabState[] = [...byId.values()]
   const activeTabId =
     doc.activeTabId && tabs.some((t) => t.tab.id === doc.activeTabId)
       ? doc.activeTabId

@@ -1,0 +1,69 @@
+{
+  "status": 422,
+  "body": {
+    "error": "NEEDS_CLARIFICATION",
+    "outcome": "needs-clarification",
+    "clarifications": [
+      {
+        "label": "targetWells",
+        "reason": "missing-required-argument",
+        "actionLocation": {
+          "actionIndex": 0,
+          "action": "aliquot",
+          "argument": "targetWells"
+        }
+      }
+    ],
+    "localMacro": {
+      "kind": "scientist-intent",
+      "version": "0.1.0",
+      "intentId": "golden-missing-required-address",
+      "actions": [
+        {
+          "action": "aliquot",
+          "source": "source plate",
+          "target": "destination plate",
+          "volumeUl": 10
+        }
+      ],
+      "unresolved": []
+    },
+    "terminalArtifacts": {
+      "events": [],
+      "directives": [],
+      "gaps": [],
+      "protocolIntent": {
+        "kind": "protocol_intent",
+        "version": "0.1.0",
+        "intentId": "golden-missing-required-address",
+        "steps": [],
+        "resources": {
+          "labwareInstances": [
+            {
+              "id": "source plate",
+              "labwareHint": "source plate",
+              "role": "source",
+              "resolutionStatus": "candidate"
+            },
+            {
+              "id": "destination plate",
+              "labwareHint": "destination plate",
+              "role": "target",
+              "resolutionStatus": "candidate"
+            }
+          ],
+          "materialDefinitions": [],
+          "materialFormulations": [],
+          "materialAliquots": [],
+          "pipettes": [],
+          "tips": [],
+          "waste": []
+        },
+        "operations": [],
+        "patterns": [],
+        "assumptions": [],
+        "unresolved": []
+      }
+    }
+  }
+}

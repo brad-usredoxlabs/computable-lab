@@ -13,6 +13,51 @@ required:
 - intentId
 - actions
 
+# Shared definitions: the closed 31-verb vocabulary is declared ONCE here and
+# referenced by actions[].action AND unresolved[].actionLocation.action.
+# The verb enum is the fabrication gate at the contract layer (SPINE-1): a
+# fabricated action value anywhere in the document — including inside a
+# clarification's argument-location — is rejected by Ajv.
+$defs:
+  actionVerb:
+    type: string
+    enum:
+    # Simple biology verbs (simpleVerbs.ts expanders)
+    - seed
+    - incubate
+    - mix
+    - resuspend
+    - dilute
+    - shake
+    - count
+    - read
+    - add_material
+    - create_container
+    - transfer
+    - stain
+    - fix
+    - permeabilize
+    - block
+    - quench
+    - label
+    - transfect
+    # Compound verbs
+    - aliquot
+    - wash
+    - elute
+    - harvest
+    - passage
+    - freeze
+    - thaw
+    # Centrifugation
+    - spin
+    - pellet
+    # Geometric pattern macros (intent-layer unrolls geometry)
+    - serial_dilution
+    - media_swap_duplicate_columns
+    - source_wells_to_duplicate_target_columns
+    - repeat_rows
+
 properties:
   intentId:
     type: string
@@ -32,43 +77,7 @@ properties:
       - action
       properties:
         action:
-          type: string
-          enum:
-          # Simple biology verbs (simpleVerbs.ts expanders)
-          - seed
-          - incubate
-          - mix
-          - resuspend
-          - dilute
-          - shake
-          - count
-          - read
-          - add_material
-          - create_container
-          - transfer
-          - stain
-          - fix
-          - permeabilize
-          - block
-          - quench
-          - label
-          - transfect
-          # Compound verbs
-          - aliquot
-          - wash
-          - elute
-          - harvest
-          - passage
-          - freeze
-          - thaw
-          # Centrifugation
-          - spin
-          - pellet
-          # Geometric pattern macros (intent-layer unrolls geometry)
-          - serial_dilution
-          - media_swap_duplicate_columns
-          - source_wells_to_duplicate_target_columns
-          - repeat_rows
+          $ref: '#/$defs/actionVerb'
 
         # ---- symbolic noun labels (NEVER resolved IDs) ----
         source:
@@ -76,24 +85,53 @@ properties:
           minLength: 1
         sourceHint:
           type: string
+        # SPINE-7: the wells fields carry EITHER an explicit address array OR a
+        # single symbolic well-label (scalar form). The label form is what the
+        # SPINE-3 engine's existing scalar arm binds (resolutionEngine doc-door
+        # reads a trimmed string); the parse layer canonicalizes it. The array
+        # branch is declared FIRST so every currently-valid array document
+        # validates byte-identically.
         sourceWells:
-          type: array
-          items:
-            type: string
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: string
+            minLength: 1
         target:
           type: string
           minLength: 1
         targetHint:
           type: string
         targetWells:
-          type: array
-          items:
-            type: string
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: string
+            minLength: 1
         labware:
           type: string
           minLength: 1
         labwareHint:
           type: string
+
+        # ---- expected-domain slots (SPINE-1 declaration ONLY) ----
+        # Free-text domain tags naming WHICH KIND of thing an argument is
+        # expected to be. Nothing consumes them yet: SPINE-2's vocabulary YAML
+        # declares per-verb per-argument domains and SPINE-3's resolution engine
+        # evaluates them. No knowledge-layer ontology-term validation fires here
+        # (validating tags before their vocabulary exists would be a second
+        # policy home, which the lint DSL header forbids).
+        expectedSourceDomain:
+          type: string
+          minLength: 1
+        expectedTargetDomain:
+          type: string
+          minLength: 1
+        expectedLabwareDomain:
+          type: string
+          minLength: 1
 
         # ---- quantities / parameters ----
         source_name:
@@ -150,6 +188,30 @@ properties:
           type: string
         reason:
           type: string
+        # ---- argument-location identity (SPINE-1 contract extension) ----
+        # WHERE in the document the clarification bites: which action (by index
+        # and/or canonical verb) and which argument of it. All members optional;
+        # `action` re-uses the SAME 31-verb enum ($defs/actionVerb) so a
+        # fabricated canonical verb inside a clarification is rejected — the verb
+        # enum is the fabrication gate at the contract layer.
+        # Backward compat: absent today; parseScientistIntent.normalizeDocument
+        # PRESERVES it on the parsed document (parse-level contract). The
+        # normalizeScientistIntent unresolvedRefs boundary stays {kind,label,
+        # reason} — candidates+actionLocation are dropped there (SPINE-1 Q1
+        # ruling; SPINE-3's engine widens it).
+        actionLocation:
+          type: object
+          additionalProperties: false
+          unevaluatedProperties: false
+          properties:
+            actionIndex:
+              type: integer
+              minimum: 0
+            action:
+              $ref: '#/$defs/actionVerb'
+            argument:
+              type: string
+              minLength: 1
         candidates:
           type: array
           items:

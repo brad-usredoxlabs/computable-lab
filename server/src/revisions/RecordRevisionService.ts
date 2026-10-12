@@ -6,7 +6,7 @@ export interface RevisionRef { kind: 'record'; type: 'record-revision'; id: stri
 export interface RevisionPayload {
   kind: 'record-revision'; recordId: string; sourceRecordId: string; sourceSchemaId: string;
   snapshot: Record<string, unknown>; contentHash: string; recipeHash: string;
-  purpose: 'signature' | 'research-use' | 'derivation'; version?: string;
+  purpose: 'signature' | 'research-use' | 'derivation' | 'edit'; version?: string;
   sourceToken?: string; gitCommit?: string; createdBy: string; createdAt: string;
 }
 export class RevisionError extends Error {

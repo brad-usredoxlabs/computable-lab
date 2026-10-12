@@ -1,0 +1,130 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/analysis-intent.schema.yaml"
+title: "Analysis Intent"
+description: >-
+  An analysis PROPOSAL envelope for the drafts compile|accept lifecycle
+  (PB-CH-5). The model names the analysis METHOD or run it wants opened (and
+  optionally a new QUEUED run against that method); the server resolves every
+  term through the lab's own spine (ResolveSpine tiers [0,1], mint affordance
+  excluded), stages AT MOST one analysis-run create (status `queued`, initiator
+  = the authenticated actor), and projects a valid version:1 lab-session
+  document of record-edit landing tabs. Like agent-action.schema.yaml and
+  workstate-intent.schema.yaml this is a TRANSPORT envelope, not a record kind:
+  no lint/ui companion. The model never gets to name records it invented:
+  `recordId` targets are store-verified, terms are spine-resolved, the staged
+  run's id is minted by the server, and the activeTabId is server-derived —
+  never proposed. NOTHING here executes a run or promotes an artifact.
+type: object
+additionalProperties: false
+required:
+- operation
+- target
+properties:
+  operation:
+    const: compose-analysis
+    description: "The registered analysis verb (config/drafting/adapters.yaml operations list)."
+  requestId:
+    type: string
+    description: >-
+      Injected by the draft compiler (FormDraftService.evaluate) before staging;
+      the model never supplies it. Declared here so a real compile validates.
+  target:
+    description: >-
+      Exactly one of: an existing analysis-revision (optionally with a new
+      QUEUED run against it), an existing analysis-run to open, or a new run
+      against a named revision. XOR is enforced here AND re-checked by the
+      compile as path-named diagnostics.
+    oneOf:
+    - type: object
+      additionalProperties: false
+      required:
+      - revision
+      properties:
+        revision:
+          $ref: "#/$defs/targetRef"
+        newRun:
+          type: object
+          additionalProperties: false
+          description: >-
+            Stage AT MOST one new analysis-run create against the resolved
+            revision. The run's id, revisionRef, status (`queued`), and
+            initiator are all server-derived; only these display/parameter
+            fields come from the proposal.
+          properties:
+            title:
+              type: string
+              minLength: 1
+            parameters:
+              type: object
+              additionalProperties: true
+              description: "Parameter values for the run (validated against the revision's parameterSchema by the runner, not here)."
+            inputs:
+              type: object
+              description: >-
+                name → a target the server resolves through the declared
+                input kinds (config/drafting/analysis-composition.yaml). An
+                input that resolves outside those kinds is a WRONG_REFERENCE_KIND
+                diagnostic, never a silently skipped input.
+              additionalProperties:
+                $ref: "#/$defs/targetRef"
+    - type: object
+      additionalProperties: false
+      required:
+      - run
+      properties:
+        run:
+          $ref: "#/$defs/targetRef"
+  focus:
+    type: string
+    enum: [run, revision]
+    description: >-
+      Which landing tab is active. Default `run`. The server derives the tab id
+      from the kind→tab mapping (config/drafting/workstate-tab-kinds.yaml); a
+      focus that names a tab this proposal cannot project is an
+      ACTIVE_TAB_UNRESOLVED diagnostic.
+  open:
+    type: object
+    additionalProperties: false
+    description: "Extra cross-page tabs appended after the landing tabs, resolved with the same mapping + surfaces registry as the workstate adapter."
+    required:
+    - tabs
+    properties:
+      tabs:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required:
+          - surface
+          - target
+          properties:
+            surface:
+              type: string
+              minLength: 1
+              description: "Registered surface id (schema/registry/surfaces/surfaces.yaml). Membership is checked through the registry, never a TS allow-list."
+            target:
+              $ref: "#/$defs/targetRef"
+            title:
+              type: string
+              description: "Optional display title; the resolved record's authoritative label wins when absent."
+$defs:
+  targetRef:
+    description: "A proposed target: a TERM the server must resolve, or an explicit recordId the server verifies against the store."
+    oneOf:
+    - type: object
+      additionalProperties: false
+      required:
+      - term
+      properties:
+        term:
+          type: string
+          minLength: 1
+    - type: object
+      additionalProperties: false
+      required:
+      - recordId
+      properties:
+        recordId:
+          type: string
+          minLength: 1

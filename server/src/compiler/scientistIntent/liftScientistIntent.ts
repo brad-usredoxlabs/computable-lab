@@ -13,17 +13,8 @@
  * always the canonical set. The model's natural language is bridged here via a
  * declarative alias table — NOT hardcoded branch logic.
  */
+import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
 import type { ScientistIntentActionKind } from './types.js';
-
-/** Canonical action names the schema/compiler accept. */
-export const CANONICAL_ACTIONS: readonly ScientistIntentActionKind[] = [
-  'seed', 'incubate', 'mix', 'resuspend', 'dilute', 'shake', 'count', 'read',
-  'add_material', 'create_container', 'transfer', 'stain', 'fix', 'permeabilize',
-  'block', 'quench', 'label', 'transfect', 'aliquot', 'wash', 'elute', 'harvest',
-  'passage', 'freeze', 'thaw', 'spin', 'pellet', 'serial_dilution',
-  'media_swap_duplicate_columns', 'source_wells_to_duplicate_target_columns',
-  'repeat_rows',
-];
 
 /**
  * Natural-verb → canonical-action alias table. Small models read vendor protocol
@@ -106,13 +97,18 @@ export function canonicalActionName(raw: string | undefined): string {
   return ACTION_SYNONYMS[trimmed] ?? trimmed;
 }
 
-/** Are the given actions all present in the canonical closed set? */
-export function canonicalSet(): Set<string> {
-  return new Set<string>(CANONICAL_ACTIONS);
+/** The canonical closed set — derived from the vocabulary YAML (no TS list). */
+export function canonicalSet(
+  vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary(),
+): Set<string> {
+  return new Set<string>(vocab.verbs());
 }
 
 /** Lift one action: canonicalize the verb + coerce/whitelist params. */
-export function liftAction(rawArg: Record<string, unknown>): Record<string, unknown> {
+export function liftAction(
+  rawArg: Record<string, unknown>,
+  vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary(),
+): Record<string, unknown> {
   let raw = rawArg;
   // Small models sometimes nest params under a `parameters` object (OpenAI-style
   // tool output) instead of flattening them onto the action. Flatten first so
@@ -135,7 +131,7 @@ export function liftAction(rawArg: Record<string, unknown>): Record<string, unkn
       const v = raw[k];
       return (typeof v === 'object' && !Array.isArray(v)) || (typeof v === 'string' && v.trim().length > 0);
     });
-    if (verbKey && (ACTION_SYNONYMS[verbKey.toLowerCase()] || CANONICAL_ACTIONS.includes(verbKey as ScientistIntentActionKind))) {
+    if (verbKey && (ACTION_SYNONYMS[verbKey.toLowerCase()] || vocab.has(verbKey))) {
       actionName = canonicalActionName(verbKey);
       const verbValue = raw[verbKey];
       if (verbValue && typeof verbValue === 'object' && !Array.isArray(verbValue)) {
@@ -187,7 +183,10 @@ export function liftAction(rawArg: Record<string, unknown>): Record<string, unkn
  * strict Ajv validation and the deterministic compiler using only the closed
  * vocabulary.
  */
-export function liftScientistIntent(raw: unknown): Record<string, unknown> {
+export function liftScientistIntent(
+  raw: unknown,
+  vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary(),
+): Record<string, unknown> {
   const doc = (raw && typeof raw === 'object' && !Array.isArray(raw))
     ? raw as Record<string, unknown>
     : {};
@@ -224,7 +223,7 @@ export function liftScientistIntent(raw: unknown): Record<string, unknown> {
   return {
     ...(typeof doc.intentId === 'string' ? { intentId: doc.intentId } : {}),
     ...(typeof doc.sourcePrompt === 'string' ? { sourcePrompt: doc.sourcePrompt } : {}),
-    actions: actionsSrc.map(liftAction),
+    actions: actionsSrc.map((a) => liftAction(a, vocab)),
     ...(Array.isArray(doc.unresolved) ? { unresolved: doc.unresolved } : {}),
   };
 }

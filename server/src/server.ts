@@ -82,7 +82,7 @@ import {
   createProtocolBuilderHandlers,
   createCheckinHandlers,
 } from './api/handlers/index.js';
-import { createResolveSpineFromContext, createCompileOntologyResolver } from './resolve/index.js';
+import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -108,6 +108,7 @@ import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISp
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
 import { ChatHandlers } from './api/handlers/ChatHandlers.js';
 import { registerRoutes } from './api/routes.js';
+import { registerDraftRoutes } from './drafts/draftRoutes.js';
 import type { ServerConfig } from './api/types.js';
 import { resolveGitHubIdentity, type ResolvedIdentity } from './identity/GitHubIdentity.js';
 import { createMcpServer, mcpPlugin } from './mcp/index.js';
@@ -127,6 +128,7 @@ import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandl
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
+import { resolveSemanticPassInference, runSemanticFamilyPass, type SemanticPassRunner } from './ingestion/vendor-protocol/SemanticFamilyPass.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
 import { createPredicatesHandlers } from './api/handlers/PredicatesHandlers.js';
@@ -149,6 +151,10 @@ import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
+import { createLedgerQueryHost } from './workspace-session/ledgerQuery.js';
+import { journalPolicyPath } from './workspace-session/WorkstateJournal.js';
+import { canonicalReadStore, loadWorkstateTabKindMapping } from './drafts/workstateCompile.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
@@ -501,6 +507,9 @@ export async function initializeApp(
     author: identity?.username ?? 'record-store',
     email: identity?.email ?? 'store@computable-lab.com',
     ...(seedDir ? { seedDir } : {}),
+    // Same list the record API walls read below: the store backstop and the
+    // API answer 405/APPEND_ONLY from one data source (W2-5 §3.2).
+    appendOnlyKinds: appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
   });
 
   // Local credential/session stores live under server.dataDir/auth (non-git):
@@ -752,6 +761,9 @@ export async function createServer(
         ctx.appConfig?.lab?.policyBundleId ?? DEFAULT_APP_CONFIG.lab?.policyBundleId ?? 'POL-SANDBOX'
       ),
       getAppendOnlyKinds: () => ctx.appConfig?.server?.appendOnlyKinds ?? DEFAULT_APP_CONFIG.server?.appendOnlyKinds ?? [],
+      // Live accessor, same pattern: revision+audit on ordinary review edits
+      // for kinds listed in the revisionOnEditKinds data knob (W2-5 OQ1).
+      getRevisionOnEditKinds: () => ctx.appConfig?.server?.revisionOnEditKinds ?? DEFAULT_APP_CONFIG.server?.revisionOnEditKinds ?? [],
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
@@ -922,7 +934,27 @@ export async function createServer(
   // so the compile edge exists for every boot path; here we only bind the
   // HTTP handlers to it.
   const runner = ctx.extractionRunner!;
-  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!);
+  // W2-6 semantic pass wiring (P2/P3): the ONE resolution seam
+  // (resolveSemanticPassInference — optional ai.semanticPass block over the
+  // active profile) + createInferenceClient, mirroring the existing
+  // resolveAiProfile call-site pattern. Zero model/host literals here.
+  // W2-9 (F-W29-5): the availability gate stays boot-time (no endpoint at
+  // boot = SEMANTIC_PASS_UNAVAILABLE until restart, byte-unchanged behavior),
+  // but the inference is resolved LIVE per-request — the vendorSearchHandlers
+  // precedent (server.ts:767): PATCH /api/config reassigns ctx.appConfig via
+  // onConfigUpdate, so a semanticPass block saved in Settings is consumed by
+  // the NEXT extraction call without a server restart.
+  const semanticPassInference = ctx.appConfig?.ai ? resolveSemanticPassInference(ctx.appConfig.ai) : undefined;
+  const semanticPassRunner: SemanticPassRunner | undefined = semanticPassInference?.baseUrl
+    ? (input) => {
+        const liveInference = ctx.appConfig?.ai ? resolveSemanticPassInference(ctx.appConfig.ai) : semanticPassInference;
+        return runSemanticFamilyPass(
+          { store: ctx.store, client: createInferenceClient(liveInference), inference: liveInference },
+          input,
+        );
+      }
+    : undefined;
+  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,
@@ -1132,6 +1164,36 @@ export async function createServer(
         // The identity spine: lets a biologist's own words be resolved by the same
         // alias-first tier-0 lookup the UI and the compiler use.
         resolveSpine,
+        // PB-CH-1: the declarative surfaces registry for the workspace-action
+        // compiler (surface MEMBERSHIP is registry data, never a TS allow-list).
+        // Validated on load; cheap (routes/surfaces.ts has the same precedent).
+        surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+        // PB-CH-8: the ledger query host for the query_workstate_history intent.
+        // Parts are re-evaluated PER QUERY: the journal re-reads its policy YAML
+        // per call (hot-reload, verification 9), canonicalReadStore re-scans
+        // per call (a run created after boot must be queryable), and the SPINE
+        // IS RE-CREATED PER QUERY from that fresh read view (adversarial defect
+        // 4: the boot-captured `resolveSpine` closure at :733 memoizes a
+        // boot-time scan, so a post-boot record could resolve in store.get and
+        // still miss term resolution). Composed exactly like
+        // workstateDepsFromContext (workstateCompile.ts:207-231): tier-1 searches
+        // the kinds the DECLARATIVE mapping can project, not the material-family
+        // DEFAULT_KINDS. Canonical READ view only — the ledger never receives a
+        // write-capable store.
+        ledgerQuery: createLedgerQueryHost(() => {
+          const readStore = canonicalReadStore(ctx);
+          return {
+            workspaceRoot: ctx.workspaceRoot,
+            policyPath: journalPolicyPath(resolve(ctx.schemaDir)),
+            store: readStore,
+            resolveSpine: createResolveSpine({
+              ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
+              termProvider: createTermProvider(readStore),
+              recordProvider: createRecordProvider(readStore, Object.keys(loadWorkstateTabKindMapping())),
+            }),
+            surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+          };
+        }),
         ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       
@@ -1140,7 +1202,15 @@ export async function createServer(
         toolBridge,
         inferenceConfig,
         agentConfig,
-        placeholderDeps,
+        {
+          ...placeholderDeps,
+          // PROTO-AI-12 §4 — the shadow-router block rides the same deps seam
+          // as the rest of the AI config (ontology at :1055,
+          // assuranceThreshold at :1065). MISSING block = fully OFF inside the
+          // orchestrator; endpoints are DATA (config.yaml ai.shadowRouter),
+          // never hardcoded.
+          ...(appConfig?.ai?.shadowRouter ? { shadowRouter: appConfig.ai.shadowRouter } : {}),
+        },
       );
       currentOrchestrator = orchestrator;
       // Wire the orchestrator into the protocol-builder handlers (for draft endpoint).
@@ -1161,7 +1231,15 @@ export async function createServer(
         );
         void currentWarmup.restoreLibraryAtBoot();
       }
-      aiHandlersImpl = createAIHandlers(orchestrator, () => currentWarmup);
+      aiHandlersImpl = createAIHandlers(
+        orchestrator,
+        () => currentWarmup,
+        // PB-CH-8 (OQ1 ruling): the ledger actor is the RESOLVED request user
+        // (token > header, inactive refused) — the same resolution the drafts
+        // and session-capture paths use (draftRoutes.ts:9, server.ts:824
+        // precedent). Unresolved ⇒ null ⇒ the ledger REFUSES the read.
+        async (request) => (await ctx.localIdentityService.resolveRequestUser(request)).userId,
+      );
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
       aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);

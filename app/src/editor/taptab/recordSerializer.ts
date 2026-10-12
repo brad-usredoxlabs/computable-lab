@@ -57,12 +57,46 @@ function deleteValueAtPath(
 }
 
 /**
+ * A path is a DISPLAY HINT when it walks an array with a WILDCARD segment
+ * (`$.steps[*].intent.provenance`). Hints render data; they are not
+ * addressable fields — there is no single value at that path. Writing one back
+ * mints a literal `steps[*]` key in the payload (W2-8-FIX2 D1: the MEANT save
+ * polluted candidates[0].draft with hint keys, violating the "preserve every
+ * untouched field" contract). INDEXED paths (`$.lines[0].description`) are a
+ * different, pre-existing convention (the budget surface) and stay untouched.
+ */
+const WILDCARD_SEGMENT = /\[\*\]/;
+
+function isWildcardHintPath(path: string): boolean {
+  return WILDCARD_SEGMENT.test(path)
+}
+
+/** Does the base payload actually carry a value at this dotted path? */
+function hasValueAtPath(obj: unknown, parts: string[]): boolean {
+  let current: unknown = obj
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== 'object') return false
+    if (!(part in (current as Record<string, unknown>))) return false
+    const next = (current as Record<string, unknown>)[part]
+    if (next === null || next === undefined) return false
+    current = next
+  }
+  return true
+}
+
+/**
  * Recursively walks a TipTap document tree and extracts fieldRow path/value pairs.
  * @param nodes - Array of JSONContent nodes to walk
  * @param result - Accumulator object for extracted values
+ * @param base - The original payload, consulted so an untouched/absent field
+ *   never mints a new null key in the save payload
  * @returns The updated result object with extracted values
  */
-function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>): Record<string, unknown> {
+function extractFieldRows(
+  nodes: JSONContent[],
+  result: Record<string, unknown>,
+  base: Record<string, unknown>,
+): Record<string, unknown> {
   for (const node of nodes) {
     if (!node) continue;
 
@@ -75,7 +109,7 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
       // optional non-nullable field (e.g. a run with no protocol version yet).
       if (node.attrs.readOnly && value == null) continue;
 
-      if (typeof path === 'string') {
+      if (typeof path === 'string' && !isWildcardHintPath(path)) {
         // Value-emission contract (QMS-6E D3b, generalized by EDITOR-9): a
         // widget holding its unset/empty value is ABSENT from the payload.
         // For a ref that meant null/''/'—' into a `type: object` slot 422s;
@@ -89,20 +123,27 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
           result = deleteValueAtPath(result, stripJsonPath(path));
           // Recursively process child nodes
           if (node.content && node.content.length > 0) {
-            result = extractFieldRows(node.content, result);
+            result = extractFieldRows(node.content, result, base);
           }
           continue;
         }
         // Use stripJsonPath to remove $. prefix, then set the value
         const cleanPath = stripJsonPath(path);
-        // setValueAtPath returns a new object, so we need to capture it
-        result = setValueAtPath(result, cleanPath, value);
+        // A fieldRow whose value was never populated (the node attribute
+        // defaults to null) must not mint a key the payload never carried:
+        // clearing an existing value still writes, an absent one stays absent.
+        if (value === null && !hasValueAtPath(base, cleanPath.split('.'))) {
+          // Nothing to serialize for this slot.
+        } else {
+          // setValueAtPath returns a new object, so we need to capture it
+          result = setValueAtPath(result, cleanPath, value);
+        }
       }
     }
 
     // Recursively process child nodes
     if (node.content && node.content.length > 0) {
-      result = extractFieldRows(node.content, result);
+      result = extractFieldRows(node.content, result, base);
     }
   }
   return result;
@@ -149,7 +190,7 @@ export function serializeDocument(
 
   // Start extraction from the document's content
   if (doc.content && doc.content.length > 0) {
-    result = extractFieldRows(doc.content, result);
+    result = extractFieldRows(doc.content, result, baseRecord);
   }
 
   // System provenance is server-owned; never round-trip it through the client.
