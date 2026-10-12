@@ -14,12 +14,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { fireEvent } from '@testing-library/react'
+import { act } from 'react'
 import { EditorView } from '@codemirror/view'
 import { OwnershipPolicySection } from './OwnershipPolicySection'
-import { apiClient } from '../../../shared/api/client'
-import { ApiError } from '../../../shared/api/errors'
+import { apiClient, type OwnershipPolicyDocView } from '../../shared/api/client'
+import { ApiError } from '../../shared/api/errors'
 
-vi.mock('../../../shared/api/client', () => ({
+// NOTE: the spec draft wrote the mock path as '../../../shared/api/client';
+// from src/components/settings/ that resolves above src/. The correct relative
+// path (matching the component's own import) is '../../shared/api/client'.
+vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getOwnershipPolicy: vi.fn(),
     putOwnershipPolicy: vi.fn(),
@@ -64,7 +68,7 @@ const PAYLOAD = {
   ],
 }
 
-const RESOLVED = {
+const RESOLVED: OwnershipPolicyDocView = {
   recordId: 'OWN-LAB-DEFAULT',
   scope: { type: 'lab', id: 'lab' },
   labOwnerUserId: 'USR-LOCAL-ADMIN',
@@ -117,7 +121,9 @@ function openAdvancedEditor() {
 }
 
 function replaceDoc(view: EditorView, content: string) {
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } })
+  act(() => {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content } })
+  })
 }
 
 beforeEach(() => { vi.clearAllMocks() })
@@ -254,9 +260,9 @@ kindRules:
       ...PAYLOAD,
       kindRules: PAYLOAD.kindRules.map((r) => (r.kind === 'material' ? { ...r, visibility: 'shared' } : r)),
     }
-    const updatedResolved = {
+    const updatedResolved: OwnershipPolicyDocView = {
       ...RESOLVED,
-      kindRules: { ...RESOLVED.kindRules, material: { ...RESOLVED.kindRules.material, visibility: 'shared' } },
+      kindRules: { ...RESOLVED.kindRules, material: { ...RESOLVED.kindRules.material, visibility: 'shared' as const } },
     }
     vi.mocked(apiClient.getOwnershipPolicy)
       .mockResolvedValueOnce(policyResponse())
