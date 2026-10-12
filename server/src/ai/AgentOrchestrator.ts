@@ -66,6 +66,7 @@ import type { SubmitCallLike } from './selectSubmitCall.js';
 import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
+import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
@@ -1251,6 +1252,66 @@ export function createAgentOrchestrator(
           error: 'No model configured — cannot draft: the shorthand drafting path needs a model to extract the scientist-intent document. Ask an administrator to configure the AI runtime.',
         };
       }
+
+      /**
+       * W2-89 g2b-1/2 — THE WRITE WALL (deterministic, structural). The
+       * browser gate proved model discretion fails on the criterion-2
+       * negatives ("rewrite the vendor text…", "relabel … provenance as
+       * vendor truth"): both surfaced actionable Apply/Accept cards across
+       * two runs. The refusal therefore lives BEFORE the model: on a guarded
+       * surface (policy DATA: config/drafting/review-write-wall.yaml, loaded
+       * per call — the shorthand-drafting.yaml precedent), an ask matching a
+       * declared wall returns the refusal envelope INSTEAD of running the
+       * turn: zero inference, zero writes, NO proposal payload reaches the
+       * client, and the honest server-built wording rides the result so the
+       * chat shows a user-facing refusal (never raw reasoning, never
+       * "(no response)"). TS follows the data — no surface literal, no
+       * phrase literal here.
+       *
+       * advc-W289-l2t0525 DEFECT-2 (cycle-2 clause, SUPERSEDED by the W2-89
+       * cycle-3 authority decision, FIX-3): the ask wall now reads the user's
+       * ask AND the clarification-appended prompt. REVERSAL, explicitly: after
+       * the FIX-2 restructure (structural governance: leading-verb + adjacency
+       * triggers, strip/negation exemption on the stripped remainder) the
+       * predicate only fires on wall-crossing CONSTRUCTIONS, so an honest
+       * picker answer — option labels and resolved refs as appended by
+       * `appendClarificationAnswersToPrompt` — cannot trip it, while an answer
+       * that IS an imperative carrying a declared referent IS the attack
+       * (advc-W289-c2 DEFECT-3: the clarification-answer smuggle) and must be
+       * refused before the model. Per the W2-89 cycle-4 ruling (FIX-6), each
+       * clarification answer the user submitted is itself a governed turn: the
+       * ask wall reads the answer's RAW request fields alongside the ask and
+       * the appended prompt. The structured half of the wall (the
+       * payload-side backstop: forbidden op keys + CAN- target-id rules) is
+       * `reviewOpsWallFor` at the protocol_edit branch below.
+       */
+      const askWall = reviewAskWallFor(surfaceName, prompt)
+        ?? reviewAskWallFor(surfaceName, effectivePrompt)
+        ?? (request.clarificationAnswers ?? [])
+             .map((a) => [a.optionId, a.label, a.mentionToken, a.value,
+                          a.ref ? JSON.stringify(a.ref) : '']
+                       .filter((s): s is string => typeof s === 'string' && s.length > 0)
+                       .join('\n'))
+             .map((segment) => reviewAskWallFor(surfaceName, segment))
+             .find((w): w is ReviewWallRefusal => w !== null) ?? null;
+      if (askWall) {
+        console.log(`[agent ${tid}] write-wall refusal surface=${surfaceName} code=${askWall.code} — turn refused before the model (zero inference, zero writes)`);
+        onEvent?.({ type: 'tool_result', toolName: 'write-wall', success: false, durationMs: 0 });
+        const wallElapsed = Date.now() - t0;
+        const wallSummary: AgentSummary = {
+          traceId: tid, surface: surfaceName, model, success: true, elapsedMs: wallElapsed,
+          turns: [],
+          totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          resolvedMentions: 0, bypass: null,
+        };
+        logAgentSummary(tid, wallSummary);
+        return {
+          success: true,
+          notes: [],
+          refusal: { code: askWall.code, message: askWall.message },
+        };
+      }
+
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -2385,6 +2446,39 @@ export function createAgentOrchestrator(
                 ops: agentIntent.ops ?? [],
                 ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}),
               };
+              // W2-89 g2b-2 (defense-in-depth): an op carrying a
+              // provenance/source field is a provenance-falsification attempt
+              // — refused with the honest policy wording BEFORE the envelope
+              // is consulted. The schema's unevaluatedProperties:false stays
+              // the structural half; this is the honest-wording half. The op
+              // vocabulary is NOT extended (the forbidden keys are policy
+              // DATA, config/drafting/review-write-wall.yaml).
+              const opsWall = reviewOpsWallFor(surfaceName, payload);
+              if (opsWall) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const wallElapsed = Date.now() - t0;
+                const wallResult: AgentResult = {
+                  success: true,
+                  notes: [],
+                  refusal: { code: opsWall.code, message: opsWall.message },
+                };
+                const wallSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: true, elapsedMs: wallElapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount, bypass: null,
+                };
+                logAgentSummary(tid, wallSummary);
+                console.log(`[agent ${tid}] done protocol_edit write-wall refusal code=${opsWall.code} ops=${(payload.ops as unknown[]).length} elapsedMs=${wallElapsed}`);
+                shadowRoute('protocol_edit', wallElapsed);
+                return wallResult;
+              }
               const envelope = await validateProtocolEditPayload(payload);
               const editOk = envelope.valid;
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: editOk, durationMs: 0 });

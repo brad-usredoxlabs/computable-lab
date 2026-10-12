@@ -1,0 +1,1294 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server
+
+ ✓ src/ai/compiler/labwareLookup.test.ts  (8 tests) 8ms
+ ❯ src/ai/InferenceClient.config.test.ts  (10 tests | 2 failed) 16ms
+   ❯ src/ai/InferenceClient.config.test.ts > InferenceClient honors construction-time config > does NOT set enable_thinking when enableThinking is true
+     → expected true to be undefined
+   ❯ src/ai/InferenceClient.config.test.ts > InferenceClient honors construction-time config > construct false, request true → no kwarg in body
+     → expected true to be undefined
+ ✓ src/ai/materialRefLabels.test.ts  (20 tests) 11ms
+ ✓ src/ai/forceMaterialClarifications.test.ts  (44 tests) 15ms
+ ✓ src/ai/submitSuggestionTool.test.ts  (17 tests) 13ms
+ ✓ src/ai/shadowRouterAdapter.test.ts  (21 tests) 306ms
+ ✓ src/ai/promptMentions.test.ts  (22 tests) 9ms
+ ✓ src/ai/resolveDraftMaterials.test.ts  (12 tests) 8ms
+ ✓ src/ai/mentions/bindOntologyMentions.test.ts  (17 tests) 9ms
+ ✓ src/ai/shadowTelemetry.test.ts  (7 tests) 12ms
+stderr | src/ai/tubeEventDetailGate.tube.test.ts > tubeEventDetailGate — place_tube > repairs the real observed payload: tubeVolumeClass enum leaks into details
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+
+stderr | src/ai/tubeEventDetailGate.tube.test.ts > tubeEventDetailGate — remove_tube > passes a valid remove_tube untouched
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+
+stderr | src/ai/tubeEventDetailGate.tube.test.ts > tubeEventDetailGate — move_tube > passes a valid move_tube
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+unknown format "uri" ignored in schema at path "../../datatypes/ref.schema.yaml/properties/uri"
+
+ ✓ src/ai/tubeEventDetailGate.tube.test.ts  (13 tests) 98ms
+ ✓ src/ai/assurance.test.ts  (13 tests) 5ms
+ ✓ src/ai/compileWorkspaceAction.test.ts  (20 tests) 493ms
+ ✓ src/ai/systemPrompt.test.ts  (6 tests) 16ms
+ ❯ src/ai/ChatbotCompileDeckSlot.test.ts  (4 tests | 4 failed) 352ms
+   ❯ src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: deckSlot on candidateLabwares → deckLayoutPlan.pinned
+     → expected undefined to deeply equal []
+   ❯ src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: multiple labwares with mixed deckSlot presence
+     → expected undefined to deeply equal [ 'unlabeled plate' ]
+   ❯ src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: no candidateLabwares → empty deckLayoutPlan
+     → expected undefined to deeply equal []
+   ❯ src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: labware resolved (not added) → no labwareAddition for it
+     → expected [ { …(3) } ] to have a length of +0 but got 1
+ ✓ src/ai/runChatbotCompileProtocolIntentState.test.ts  (4 tests) 387ms
+ ✓ src/ai/runChatbotCompile.test.ts  (9 tests) 431ms
+ ✓ src/ai/filterModelClarifications.test.ts  (14 tests) 11ms
+ ✓ src/ai/createRecordIntent.test.ts  (11 tests) 35ms
+stdout | src/ai/createRecordIntent.test.ts > the orchestrator hands creations to the client > returns recordCreations + alsoPlace for a create_record turn
+[agent ogd9ql] start surface=default model=test-model promptLen=35 effectivePromptLen=35 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ogd9ql] skipping compiler preflight for forced draft tool mode
+[agent ogd9ql] tools=1 docDiscussion=false maxTurns=2
+[agent ogd9ql] turn 1 starting, promptChars=35956, docDiscussion=false
+[agent ogd9ql] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ogd9ql","surface":"default","model":"test-model","success":true,"elapsedMs":3,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ogd9ql] done create_record success=true records=equipment elapsedMs=3
+
+stdout | src/ai/createRecordIntent.test.ts > the orchestrator hands creations to the client > refuses a create_record turn with nothing to create, and says why
+[agent kc6zic] start surface=default model=test-model promptLen=13 effectivePromptLen=13 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent kc6zic] skipping compiler preflight for forced draft tool mode
+[agent kc6zic] tools=1 docDiscussion=false maxTurns=2
+[agent kc6zic] turn 1 starting, promptChars=35908, docDiscussion=false
+[agent kc6zic] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"kc6zic","surface":"default","model":"test-model","success":false,"elapsedMs":15,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"create_record requires at least one entry in `records` with a `kind` (equipment | material | labware) and a `name`."}
+[agent kc6zic] done create_record success=false records=(none) elapsedMs=15
+
+ ❯ src/ai/chatbotCompile.e2e.test.ts  (3 tests | 3 failed) 51ms
+   ❯ src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into an existing plate and returns one add_material event
+     → [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+   ❯ src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into a new plate and proposes an AiLabwareAddition
+     → [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+   ❯ src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > falls through to LLM loop when pipeline produces no events
+     → [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > gate ask (a) refuses deterministically: refusal envelope, NO protocolEdit, ZERO model calls
+[agent tgrtes] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"tgrtes","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":40,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > gate ask (b) refuses deterministically: refusal envelope, NO protocolEdit, ZERO model calls
+[agent rjr5l7] write-wall refusal surface=protocol-review code=PROVENANCE_FALSIFICATION — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"rjr5l7","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":9,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today
+[agent q2uuwa] start surface=protocol-review model=test-model promptLen=35 effectivePromptLen=35 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent q2uuwa] skipping compiler preflight for forced draft tool mode
+[agent q2uuwa] tools=1 docDiscussion=false maxTurns=2
+[agent q2uuwa] turn 1 starting, promptChars=8580, docDiscussion=false
+[agent q2uuwa] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+ ✓ src/ai/AgentOrchestrator.reconcileQuantities.test.ts  (3 tests) 101ms
+stdout | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > converts "Add 200uL of DMEM" from a count to a volume in the final draft
+[agent qcikfl] start surface=default model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent qcikfl] skipping compiler preflight for forced draft tool mode
+[agent qcikfl] tools=1 docDiscussion=false maxTurns=2
+[agent qcikfl] turn 1 starting, promptChars=31218, docDiscussion=false
+[agent qcikfl] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"qcikfl","surface":"default","model":"test-model","success":true,"elapsedMs":60,"turns":[{"turn":1,"durationMs":9,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent qcikfl] done success=true via agent_intent turns=1 events=1 elapsedMs=60
+
+stderr | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > converts "Add 200uL of DMEM" from a count to a volume in the final draft
+[agent qcikfl] I read the material data from the `materials` field the model invented (count 200, material_ref gained domain, id) and applied it to the event’s own details.
+[agent qcikfl] The biologist said "200 uL" for DMEM; I moved it to the 'volume' quantity field in the draft.
+
+stdout | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > keeps a genuine count (10,000 HepG2 cells) as a count
+[agent uqornl] start surface=default model=test-model promptLen=33 effectivePromptLen=33 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent uqornl] skipping compiler preflight for forced draft tool mode
+[agent uqornl] tools=1 docDiscussion=false maxTurns=2
+[agent uqornl] turn 1 starting, promptChars=31223, docDiscussion=false
+[agent uqornl] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"uqornl","surface":"default","model":"test-model","success":true,"elapsedMs":8,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent uqornl] done success=true via agent_intent turns=1 events=1 elapsedMs=8
+
+stderr | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > keeps a genuine count (10,000 HepG2 cells) as a count
+[agent uqornl] I read the material data from the `materials` field the model invented (count 10000, material_ref gained domain, id) and applied it to the event’s own details.
+[agent uqornl] The biologist said "10000 cells (per addition)" for HepG2 cells; I moved it to the 'count' quantity field in the draft.
+
+stdout | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > carries equipment and labware requirements onto the termManifest (kind-tagged)
+[agent 573ga8] start surface=default model=test-model promptLen=70 effectivePromptLen=70 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 573ga8] skipping compiler preflight for forced draft tool mode
+[agent 573ga8] tools=1 docDiscussion=false maxTurns=2
+[agent 573ga8] turn 1 starting, promptChars=31256, docDiscussion=false
+[agent 573ga8] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"573ga8","surface":"default","model":"test-model","success":true,"elapsedMs":17,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 573ga8] done success=true via agent_intent turns=1 events=0 elapsedMs=17
+
+stderr | src/ai/AgentOrchestrator.reconcileQuantities.test.ts > draft-friction: a volume the model misfiled as a count is healed (2026-09-21) > carries equipment and labware requirements onto the termManifest (kind-tagged)
+[agent 573ga8] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > executes multiple tool calls concurrently and preserves result order
+[agent cvopn7] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cvopn7] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent cvopn7] tools=3 docDiscussion=false maxTurns=3
+[agent cvopn7] turn 1 starting, promptChars=26034, docDiscussion=false
+[agent cvopn7] turn 1 finish=tool_calls contentLen=0 toolCalls=2 [toolA,toolB]
+
+ ✓ src/ai/AgentOrchestrator.workstateProposal.test.ts  (4 tests) 206ms
+ ✓ src/ai/AgentOrchestrator.analysisProposal.test.ts  (4 tests) 225ms
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > a found query emits ONE ledger_answer (server envelope verbatim) + ONE server-built workstate_proposal, host called once with terms + actor only
+[agent 3sxbsp] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3sxbsp] skipping compiler preflight for forced draft tool mode
+[agent 3sxbsp] tools=1 docDiscussion=false maxTurns=2
+[agent 3sxbsp] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent 3sxbsp] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"3sxbsp","surface":"default","model":"test-model","success":true,"elapsedMs":76,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 3sxbsp] done query_workstate_history found elapsedMs=76
+
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > a found outcome whose reattachment was refused FORWARDS the diagnostics as ONE pipeline_diagnostics frame (adversarial defect 1: visible diagnostic, never silently absorbed)
+[agent h8mti9] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent h8mti9] skipping compiler preflight for forced draft tool mode
+[agent h8mti9] tools=1 docDiscussion=false maxTurns=2
+[agent h8mti9] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent h8mti9] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"h8mti9","surface":"default","model":"test-model","success":true,"elapsedMs":22,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent h8mti9] done query_workstate_history found elapsedMs=22
+
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > a clean found outcome (no diagnostics) emits NO pipeline_diagnostics frame — the channel carries refusals only
+[agent ql8qqy] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ql8qqy] skipping compiler preflight for forced draft tool mode
+[agent ql8qqy] tools=1 docDiscussion=false maxTurns=2
+[agent ql8qqy] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent ql8qqy] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ql8qqy","surface":"default","model":"test-model","success":true,"elapsedMs":31,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ql8qqy] done query_workstate_history found elapsedMs=31
+
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > a no-history query emits ONE ledger_answer and NO workstate_proposal (no card, zero movement)
+[agent zyik6e] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent zyik6e] skipping compiler preflight for forced draft tool mode
+[agent zyik6e] tools=1 docDiscussion=false maxTurns=2
+[agent zyik6e] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent zyik6e] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"zyik6e","surface":"default","model":"test-model","success":true,"elapsedMs":58,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent zyik6e] done query_workstate_history no-history elapsedMs=58
+
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > no ledger host wired ⇒ honest declared failure (success:false), never a silent no-op
+[agent xkf3g2] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent xkf3g2] skipping compiler preflight for forced draft tool mode
+[agent xkf3g2] tools=1 docDiscussion=false maxTurns=2
+[agent xkf3g2] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent xkf3g2] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"xkf3g2","surface":"default","model":"test-model","success":false,"elapsedMs":6,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"query_workstate_history cannot answer: this orchestrator has no ledger query host wired."}
+[agent xkf3g2] done query_workstate_history no-host elapsedMs=6
+
+stdout | src/ai/AgentOrchestrator.ledger.test.ts > AgentOrchestrator — query_workstate_history branch (PB-CH-8) > an unresolved actor rides the host as null — the orchestrator NEVER substitutes a header identity
+[agent 9s7ldf] start surface=default model=test-model promptLen=46 effectivePromptLen=46 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 9s7ldf] skipping compiler preflight for forced draft tool mode
+[agent 9s7ldf] tools=1 docDiscussion=false maxTurns=2
+[agent 9s7ldf] turn 1 starting, promptChars=31232, docDiscussion=false
+[agent 9s7ldf] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"9s7ldf","surface":"default","model":"test-model","success":true,"elapsedMs":5,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 9s7ldf] done query_workstate_history no-history elapsedMs=5
+
+ ✓ src/ai/AgentOrchestrator.ledger.test.ts  (6 tests) 240ms
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > executes multiple tool calls concurrently and preserves result order
+[agent cvopn7] turn 1 tool toolA success=true durationMs=50
+[agent cvopn7] turn 1 tool toolB success=true durationMs=10
+[agent cvopn7] turn 2 starting, promptChars=26094, docDiscussion=false
+[agent cvopn7] turn 2 finish=stop contentLen=25 toolCalls=0
+[agent-summary] {"traceId":"cvopn7","surface":"default","model":"test-model","success":true,"elapsedMs":199,"turns":[{"turn":1,"durationMs":51,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[{"name":"toolA","durationMs":50,"success":true},{"name":"toolB","durationMs":10,"success":true}]},{"turn":2,"durationMs":2,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":2,"toolCalls":2,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent cvopn7] done success=true elapsedMs=199 turns=2 toolCalls=2 events=0
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > preserves message order even when faster tools complete first
+[agent io5g2m] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent io5g2m] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent io5g2m] tools=3 docDiscussion=false maxTurns=3
+[agent io5g2m] turn 1 starting, promptChars=26034, docDiscussion=false
+[agent io5g2m] turn 1 finish=tool_calls contentLen=0 toolCalls=2 [toolA,toolB]
+
+ ✓ src/ai/workstateComposeRules.test.ts  (15 tests) 279ms
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface=analysis: system message carries the rules block
+[agent nqppbt] start surface=analysis model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent nqppbt] skipping compiler preflight for forced draft tool mode
+[agent nqppbt] tools=1 docDiscussion=false maxTurns=1
+[agent nqppbt] turn 1 starting, promptChars=11172, docDiscussion=false
+[agent nqppbt] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent nqppbt] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"nqppbt","surface":"analysis","model":"test-model","success":true,"elapsedMs":21,"turns":[{"turn":1,"durationMs":3,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent nqppbt] done success=true via agent_intent turns=1 events=0 elapsedMs=21
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface=analysis: system message carries the rules block
+[agent nqppbt] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface=literature and surface=protocol-builder (the mounted accept-leg surfaces): block present
+[agent 2knseq] start surface=literature model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 2knseq] skipping compiler preflight for forced draft tool mode
+[agent 2knseq] tools=1 docDiscussion=false maxTurns=1
+[agent 2knseq] turn 1 starting, promptChars=10256, docDiscussion=false
+[agent 2knseq] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 2knseq] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"2knseq","surface":"literature","model":"test-model","success":true,"elapsedMs":14,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 2knseq] done success=true via agent_intent turns=1 events=0 elapsedMs=14
+[agent 12pbg3] start surface=protocol-builder model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 12pbg3] skipping compiler preflight for forced draft tool mode
+[agent 12pbg3] tools=1 docDiscussion=false maxTurns=1
+[agent 12pbg3] turn 1 starting, promptChars=11027, docDiscussion=false
+[agent 12pbg3] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 12pbg3] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"12pbg3","surface":"protocol-builder","model":"test-model","success":true,"elapsedMs":28,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 12pbg3] done success=true via agent_intent turns=1 events=0 elapsedMs=28
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface=literature and surface=protocol-builder (the mounted accept-leg surfaces): block present
+[agent 2knseq] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+[agent 12pbg3] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > membership arm: workspace.deck does NOT get the rules block (deck prefix stays token-cheap) but keeps its grounding block
+[agent vhp9s1] start surface=workspace.deck model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent vhp9s1] skipping compiler preflight for forced draft tool mode
+[agent vhp9s1] tools=1 docDiscussion=false maxTurns=1
+[agent vhp9s1] turn 1 starting, promptChars=32510, docDiscussion=false
+[agent vhp9s1] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent vhp9s1] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"vhp9s1","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":85,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Agent did not converge after 1 turns"}
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > membership arm: workspace.deck does NOT get the rules block (deck prefix stays token-cheap) but keeps its grounding block
+[agent vhp9s1] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent vhp9s1] done success=false reason=max_turns turns=1 toolCalls=0 elapsedMs=85
+
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface NOT in rules.surfaces (event-editor): block absent
+[agent lsgfid] start surface=event-editor model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent lsgfid] skipping compiler preflight for forced draft tool mode
+[agent lsgfid] tools=1 docDiscussion=false maxTurns=1
+[agent lsgfid] turn 1 starting, promptChars=31212, docDiscussion=false
+[agent lsgfid] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent lsgfid] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"lsgfid","surface":"event-editor","model":"test-model","success":true,"elapsedMs":7,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent lsgfid] done success=true via agent_intent turns=1 events=0 elapsedMs=7
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > surface NOT in rules.surfaces (event-editor): block absent
+[agent lsgfid] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > push order pinned: instruction, forced, grounding, rules (rules LAST, adjacent to the forced-tool instruction)
+[agent 0vz16n] start surface=analysis model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 0vz16n] skipping compiler preflight for forced draft tool mode
+[agent 0vz16n] tools=1 docDiscussion=false maxTurns=1
+[agent 0vz16n] turn 1 starting, promptChars=11172, docDiscussion=false
+[agent 0vz16n] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 0vz16n] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"0vz16n","surface":"analysis","model":"test-model","success":true,"elapsedMs":23,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 0vz16n] done success=true via agent_intent turns=1 events=0 elapsedMs=23
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > push order pinned: instruction, forced, grounding, rules (rules LAST, adjacent to the forced-tool instruction)
+[agent 0vz16n] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > warm/real parity: buildPrefixRequest (warm path) carries the identical system message the real run() renders
+[agent ask3lc] start surface=analysis model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ask3lc] skipping compiler preflight for forced draft tool mode
+[agent ask3lc] tools=1 docDiscussion=false maxTurns=1
+[agent ask3lc] turn 1 starting, promptChars=11172, docDiscussion=false
+[agent ask3lc] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent ask3lc] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"ask3lc","surface":"analysis","model":"test-model","success":true,"elapsedMs":6,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent ask3lc] done success=true via agent_intent turns=1 events=0 elapsedMs=6
+
+stderr | src/ai/workstateComposeRules.test.ts > outbound request capture — WORKSTATE COMPOSE RULES block (PB-CH-6 fix1 F1) > warm/real parity: buildPrefixRequest (warm path) carries the identical system message the real run() renders
+[agent ask3lc] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > preserves message order even when faster tools complete first
+[agent io5g2m] turn 1 tool toolA success=true durationMs=50
+[agent io5g2m] turn 1 tool toolB success=true durationMs=10
+[agent io5g2m] turn 2 starting, promptChars=26094, docDiscussion=false
+[agent io5g2m] turn 2 finish=stop contentLen=25 toolCalls=0
+[agent-summary] {"traceId":"io5g2m","surface":"default","model":"test-model","success":true,"elapsedMs":82,"turns":[{"turn":1,"durationMs":51,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[{"name":"toolA","durationMs":50,"success":true},{"name":"toolB","durationMs":10,"success":true}]},{"turn":2,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":2,"toolCalls":2,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent io5g2m] done success=true elapsedMs=82 turns=2 toolCalls=2 events=0
+
+ ✓ src/ai/AgentOrchestrator.parallel.test.ts  (2 tests) 293ms
+ ✓ src/ai/analysisReferenceGrounding.test.ts  (20 tests) 298ms
+stdout | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface=analysis: system message carries the block with real ids + the never-a-raw-id-in-term rule
+[agent 8jzdvj] start surface=analysis model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 8jzdvj] skipping compiler preflight for forced draft tool mode
+[agent 8jzdvj] tools=1 docDiscussion=false maxTurns=1
+[agent 8jzdvj] turn 1 starting, promptChars=11358, docDiscussion=false
+[agent 8jzdvj] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 8jzdvj] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"8jzdvj","surface":"analysis","model":"test-model","success":true,"elapsedMs":24,"turns":[{"turn":1,"durationMs":6,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 8jzdvj] done success=true via agent_intent turns=1 events=0 elapsedMs=24
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface=analysis: system message carries the block with real ids + the never-a-raw-id-in-term rule
+[agent 8jzdvj] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface=workspace.deck (the surface the PB-CH-5 gate actually sends on): same block
+[agent 46np9t] start surface=workspace.deck model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 46np9t] skipping compiler preflight for forced draft tool mode
+[agent 46np9t] tools=1 docDiscussion=false maxTurns=1
+[agent 46np9t] turn 1 starting, promptChars=32696, docDiscussion=false
+[agent 46np9t] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 46np9t] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"46np9t","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":37,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Agent did not converge after 1 turns"}
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface=workspace.deck (the surface the PB-CH-5 gate actually sends on): same block
+[agent 46np9t] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent 46np9t] done success=false reason=max_turns turns=1 toolCalls=0 elapsedMs=37
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface NOT in grounding.surfaces: block absent AND zero store scans
+[agent ksbkwi] start surface=event-editor model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ksbkwi] skipping compiler preflight for forced draft tool mode
+[agent ksbkwi] tools=1 docDiscussion=false maxTurns=1
+[agent ksbkwi] turn 1 starting, promptChars=31216, docDiscussion=false
+[agent ksbkwi] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent ksbkwi] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"ksbkwi","surface":"event-editor","model":"test-model","success":true,"elapsedMs":86,"turns":[{"turn":1,"durationMs":2,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent ksbkwi] done success=true via agent_intent turns=1 events=0 elapsedMs=86
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > surface NOT in grounding.surfaces: block absent AND zero store scans
+[agent ksbkwi] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > warm/real parity: buildPrefixRequest (warm path) carries the identical block
+[agent 91u6jp] start surface=analysis model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 91u6jp] skipping compiler preflight for forced draft tool mode
+[agent 91u6jp] tools=1 docDiscussion=false maxTurns=1
+[agent 91u6jp] turn 1 starting, promptChars=11358, docDiscussion=false
+[agent 91u6jp] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 91u6jp] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"91u6jp","surface":"analysis","model":"test-model","success":true,"elapsedMs":7,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 91u6jp] done success=true via agent_intent turns=1 events=0 elapsedMs=7
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > warm/real parity: buildPrefixRequest (warm path) carries the identical block
+[agent 91u6jp] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > determinism at capture level: two runs on the same surface render identical system messages
+[agent jzn2g1] start surface=analysis model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent jzn2g1] skipping compiler preflight for forced draft tool mode
+[agent jzn2g1] tools=1 docDiscussion=false maxTurns=1
+[agent jzn2g1] turn 1 starting, promptChars=11358, docDiscussion=false
+[agent jzn2g1] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent jzn2g1] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"jzn2g1","surface":"analysis","model":"test-model","success":true,"elapsedMs":5,"turns":[{"turn":1,"durationMs":1,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent jzn2g1] done success=true via agent_intent turns=1 events=0 elapsedMs=5
+[agent 353iya] start surface=analysis model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 353iya] skipping compiler preflight for forced draft tool mode
+[agent 353iya] tools=1 docDiscussion=false maxTurns=1
+[agent 353iya] turn 1 starting, promptChars=11358, docDiscussion=false
+[agent 353iya] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent 353iya] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"353iya","surface":"analysis","model":"test-model","success":true,"elapsedMs":5,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent 353iya] done success=true via agent_intent turns=1 events=0 elapsedMs=5
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > outbound request capture — grounded analysis reference block (PB-CH-10) > determinism at capture level: two runs on the same surface render identical system messages
+[agent jzn2g1] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+[agent 353iya] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > scan-failure degradation — store error must not sink the chat turn (DEFECT 1) > capture: a store whose list() throws => the chat turn PROCEEDS (outbound request still sent) and its system message carries NO block
+[agent rf4uuw] start surface=analysis model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent rf4uuw] skipping compiler preflight for forced draft tool mode
+[agent rf4uuw] tools=1 docDiscussion=false maxTurns=1
+[agent rf4uuw] turn 1 starting, promptChars=9878, docDiscussion=false
+[agent rf4uuw] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent rf4uuw] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"rf4uuw","surface":"analysis","model":"test-model","success":true,"elapsedMs":5,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent rf4uuw] done success=true via agent_intent turns=1 events=0 elapsedMs=5
+
+stdout | src/ai/analysisReferenceGrounding.test.ts > scan-failure degradation — store error must not sink the chat turn (DEFECT 1) > capture: a non-listed surface with a throwing store still costs ZERO scans (degradation is not a blanket try/catch)
+[agent ne54sg] start surface=event-editor model=test-model promptLen=30 effectivePromptLen=30 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ne54sg] skipping compiler preflight for forced draft tool mode
+[agent ne54sg] tools=1 docDiscussion=false maxTurns=1
+[agent ne54sg] turn 1 starting, promptChars=31216, docDiscussion=false
+[agent ne54sg] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent ne54sg] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"ne54sg","surface":"event-editor","model":"test-model","success":true,"elapsedMs":4,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent ne54sg] done success=true via agent_intent turns=1 events=0 elapsedMs=4
+
+stderr | src/ai/analysisReferenceGrounding.test.ts > scan-failure degradation — store error must not sink the chat turn (DEFECT 1) > capture: a non-listed surface with a throwing store still costs ZERO scans (degradation is not a blanket try/catch)
+[agent ne54sg] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+ ✓ src/ai/attachedProtocol.test.ts  (6 tests) 330ms
+stdout | src/ai/attachedProtocol.test.ts > outbound request capture — mocked inference client > attached-protocol request capture contains protocol identity + all stepIds + role list
+[agent echc4b] start surface=event-editor model=test-model promptLen=21 effectivePromptLen=21 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent echc4b] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent echc4b] tools=1 docDiscussion=false maxTurns=2
+[agent echc4b] turn 1 starting, promptChars=31573, docDiscussion=false
+[agent echc4b] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent-summary] {"traceId":"echc4b","surface":"event-editor","model":"test-model","success":true,"elapsedMs":218,"turns":[{"turn":1,"durationMs":1,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent echc4b] done success=true elapsedMs=218 turns=1 toolCalls=0 events=0
+
+stdout | src/ai/attachedProtocol.test.ts > outbound request capture — mocked inference client > no-attachment capture lacks BOTH the context block and the protocol_edit guidance
+[agent uazrkr] start surface=event-editor model=test-model promptLen=21 effectivePromptLen=21 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent uazrkr] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent uazrkr] tools=1 docDiscussion=false maxTurns=2
+[agent uazrkr] turn 1 starting, promptChars=26051, docDiscussion=false
+[agent uazrkr] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent-summary] {"traceId":"uazrkr","surface":"event-editor","model":"test-model","success":true,"elapsedMs":10,"turns":[{"turn":1,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent uazrkr] done success=true elapsedMs=10 turns=1 toolCalls=0 events=0
+
+ ✓ src/ai/AgentOrchestrator.test.ts  (11 tests) 392ms
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > includes prior user and assistant turns before the current prompt
+[agent fify88] start surface=default model=test-model promptLen=18 effectivePromptLen=18 historyLen=2 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent fify88] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent fify88] tools=1 docDiscussion=false maxTurns=2
+[agent fify88] turn 1 starting, promptChars=26121, docDiscussion=false
+[agent fify88] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent-summary] {"traceId":"fify88","surface":"default","model":"test-model","success":true,"elapsedMs":205,"turns":[{"turn":1,"durationMs":1,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent fify88] done success=true elapsedMs=205 turns=1 toolCalls=0 events=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > forces the event-editor fallback LLM call to use compile_event_graph_draft
+[agent 4vpy4a] start surface=default model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 4vpy4a] skipping compiler preflight for forced draft tool mode
+[agent 4vpy4a] tools=1 docDiscussion=false maxTurns=2
+[agent 4vpy4a] turn 1 starting, promptChars=31206, docDiscussion=false
+[agent 4vpy4a] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [compile_event_graph_draft]
+[agent-summary] {"traceId":"4vpy4a","surface":"default","model":"test-model","success":true,"elapsedMs":23,"turns":[{"turn":1,"durationMs":18,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 4vpy4a] done success=true via compile_event_graph_draft turns=1 events=0 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > coerces compiler draft JSON when the model ignores forced tool_choice
+[agent gsztqc] start surface=default model=test-model promptLen=32 effectivePromptLen=32 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent gsztqc] skipping compiler preflight for forced draft tool mode
+[agent gsztqc] tools=1 docDiscussion=false maxTurns=2
+[agent gsztqc] turn 1 starting, promptChars=31218, docDiscussion=false
+[agent gsztqc] turn 1 finish=stop contentLen=0 toolCalls=0
+[agent-summary] {"traceId":"gsztqc","surface":"default","model":"test-model","success":true,"elapsedMs":10,"turns":[{"turn":1,"durationMs":3,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":10,"completionTokens":5,"totalTokens":15},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent gsztqc] done success=true via agent_intent turns=1 events=0 elapsedMs=10
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > coerces compiler draft JSON when the model ignores forced tool_choice
+[agent gsztqc] model ignored forced tool call; coerced JSON args after stop as agent_intent (intent inferred) contentPreview="<empty>"
+[agent gsztqc] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > keeps structured material refs when compiler preflight strips grounded materials
+[agent b9xr6o] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent b9xr6o] skipping compiler preflight for forced draft tool mode
+[agent b9xr6o] tools=1 docDiscussion=false maxTurns=2
+[agent b9xr6o] turn 1 starting, promptChars=31209, docDiscussion=false
+[agent b9xr6o] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [compile_event_graph_draft]
+[agent-summary] {"traceId":"b9xr6o","surface":"default","model":"test-model","success":true,"elapsedMs":13,"turns":[{"turn":1,"durationMs":9,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent b9xr6o] done success=true via compile_event_graph_draft turns=1 events=2 elapsedMs=13
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > keeps structured material refs when compiler preflight strips grounded materials
+[agent b9xr6o] I read the material data from the `materials` field the model invented (material mesh:D056945, concentration {"value":90,"unit":"percent"}) and applied it to the event’s own details.
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics exactly once on fall-through with at most 6 diagnostics
+[agent hbr29y] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent hbr29y] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent hbr29y] tools=1 docDiscussion=false maxTurns=2
+[agent hbr29y] turn 1 starting, promptChars=26045, docDiscussion=false
+[agent-summary] {"traceId":"hbr29y","surface":"default","model":"test-model","success":false,"elapsedMs":14,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics exactly once on fall-through with at most 6 diagnostics
+[agent hbr29y] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics with empty array when all diagnostics are info
+[agent 1hkcq0] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 1hkcq0] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 1hkcq0] tools=1 docDiscussion=false maxTurns=2
+[agent 1hkcq0] turn 1 starting, promptChars=26045, docDiscussion=false
+[agent-summary] {"traceId":"1hkcq0","surface":"default","model":"test-model","success":false,"elapsedMs":14,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics with empty array when all diagnostics are info
+[agent 1hkcq0] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > does NOT emit pipeline_diagnostics when pipeline succeeds
+[agent gbsomm] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"gbsomm","surface":"default","model":"test-model","success":true,"elapsedMs":5,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent gbsomm] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > does not short-circuit a complete compiler result with no artifacts
+[agent 67ghsf] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 67ghsf] outcome=complete, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 67ghsf] tools=1 docDiscussion=false maxTurns=2
+[agent 67ghsf] turn 1 starting, promptChars=26059, docDiscussion=false
+[agent 67ghsf] turn 1 finish=stop contentLen=34 toolCalls=0
+[agent-summary] {"traceId":"67ghsf","surface":"default","model":"test-model","success":true,"elapsedMs":4,"turns":[{"turn":1,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 67ghsf] done success=true elapsedMs=4 turns=1 toolCalls=0 events=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > handles undefined diagnostics gracefully
+[agent 3fayt9] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3fayt9] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 3fayt9] tools=1 docDiscussion=false maxTurns=2
+[agent 3fayt9] turn 1 starting, promptChars=26045, docDiscussion=false
+[agent-summary] {"traceId":"3fayt9","surface":"default","model":"test-model","success":false,"elapsedMs":6,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > handles undefined diagnostics gracefully
+[agent 3fayt9] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > assurance CONFIRM routing (resolve-95%-or-ask) > holds events and surfaces a structured material clarification when assurance is CONFIRM
+[agent u7oljv] start surface=default model=test-model promptLen=25 effectivePromptLen=25 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"u7oljv","surface":"default","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent u7oljv] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > assurance CONFIRM routing (resolve-95%-or-ask) > still returns events when assurance is RESOLVE
+[agent 0zri3z] start surface=default model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"0zri3z","surface":"default","model":"test-model","success":true,"elapsedMs":19,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent 0zri3z] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+ ❯ src/ai/AgentOrchestratorForwarding.test.ts  (4 tests | 1 failed) 498ms
+   ❯ src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (b) outcome=complete with no events and no gaps still short-circuits
+     → expected false to be true // Object.is equality
+stdout | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (a) outcome=complete with events short-circuits LLM
+[agent dpc6kw] start surface=default model=test-model promptLen=40 effectivePromptLen=40 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"dpc6kw","surface":"default","model":"test-model","success":true,"elapsedMs":293,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent dpc6kw] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+stdout | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (b) outcome=complete with no events and no gaps still short-circuits
+[agent yebqr4] start surface=default model=test-model promptLen=37 effectivePromptLen=37 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent yebqr4] outcome=complete, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent yebqr4] tools=1 docDiscussion=false maxTurns=15
+[agent yebqr4] turn 1 starting, promptChars=3447, docDiscussion=false
+[agent-summary] {"traceId":"yebqr4","surface":"default","model":"test-model","success":false,"elapsedMs":36,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: completeStream should not be called"}
+
+stderr | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (b) outcome=complete with no events and no gaps still short-circuits
+[agent yebqr4] turn 1 inference error: completeStream should not be called
+
+stdout | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (c) outcome=gap with no events but 1 gap short-circuits and surfaces the gap
+[agent 15u552] start surface=default model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"15u552","surface":"default","model":"test-model","success":true,"elapsedMs":44,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent 15u552] chatbot-compile pipeline bypass: success, events=0, gaps=3
+
+stdout | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (d) outcome=error falls through to LLM fallback
+[agent oi3m30] start surface=default model=test-model promptLen=11 effectivePromptLen=11 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent oi3m30] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent oi3m30] tools=1 docDiscussion=false maxTurns=15
+[agent oi3m30] turn 1 starting, promptChars=3421, docDiscussion=false
+[agent-summary] {"traceId":"oi3m30","surface":"default","model":"test-model","success":false,"elapsedMs":95,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: completeStream should not be called"}
+
+stderr | src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (d) outcome=error falls through to LLM fallback
+[agent oi3m30] turn 1 inference error: completeStream should not be called
+
+ ✓ src/ai/AgentOrchestrator.instrumentation.test.ts  (2 tests) 454ms
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today
+[agent-summary] {"traceId":"q2uuwa","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":436,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent q2uuwa] done protocol_edit success=true ops=1 elapsedMs=436
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > ops wall (defense-in-depth): a protocol_edit op carrying provenance is refused with the honest wording, no protocolEdit emitted
+[agent j1zor3] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent j1zor3] skipping compiler preflight for forced draft tool mode
+[agent j1zor3] tools=1 docDiscussion=false maxTurns=2
+[agent j1zor3] turn 1 starting, promptChars=8573, docDiscussion=false
+[agent j1zor3] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"j1zor3","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":54,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent j1zor3] done protocol_edit write-wall refusal code=PROVENANCE_FALSIFICATION ops=1 elapsedMs=54
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > the refusal turn is user-facing: the refusal envelope rides the done result with honest wording (no raw reasoning, no "(no response)")
+[agent 7jp6mx] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"7jp6mx","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":15,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+ ✓ src/ai/AgentOrchestrator.reviewWriteWall.test.ts  (5 tests) 584ms
+ ✓ src/ai/draftTermManifest.test.ts  (12 tests) 30ms
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > compiles the stubbed shorthand-only turn into the SAME bound graph the deterministic compiler produces
+[agent 2j8tnu] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 2j8tnu] skipping compiler preflight for forced draft tool mode
+[agent 2j8tnu] tools=1 docDiscussion=false maxTurns=2
+[agent 2j8tnu] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent 2j8tnu] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"2j8tnu","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":238,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 2j8tnu] done event_shorthand success=true events=12 clarifications=0 elapsedMs=238
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > carries NO shorthand key at all when the turn carries none (exactOptionalPropertyTypes)
+[agent l4uzki] start surface=workspace.deck model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent l4uzki] skipping compiler preflight for forced draft tool mode
+[agent l4uzki] tools=1 docDiscussion=false maxTurns=2
+[agent l4uzki] turn 1 starting, promptChars=31274, docDiscussion=false
+[agent l4uzki] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"l4uzki","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":7,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent l4uzki] done deck_layout success=true variant=manual_freeform elapsedMs=7
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent nzf6uz] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent nzf6uz] skipping compiler preflight for forced draft tool mode
+[agent nzf6uz] tools=1 docDiscussion=false maxTurns=3
+[agent nzf6uz] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent nzf6uz] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent nzf6uz] turn 2 starting, promptChars=32144, docDiscussion=false
+[agent nzf6uz] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"nzf6uz","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":20,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent nzf6uz] done event_shorthand success=true events=12 clarifications=0 elapsedMs=20
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent nzf6uz] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent djad2o] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent djad2o] skipping compiler preflight for forced draft tool mode
+[agent djad2o] tools=1 docDiscussion=false maxTurns=3
+[agent djad2o] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent djad2o] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent djad2o] turn 2 starting, promptChars=32144, docDiscussion=false
+[agent djad2o] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"djad2o","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":6,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent djad2o] done event_graph_refusal success=false events=0 elapsedMs=6
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent djad2o] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent djad2o] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash
+[agent kfdtsj] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask
+[agent kfdtsj] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=144 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent kfdtsj] skipping compiler preflight for forced draft tool mode
+[agent kfdtsj] tools=1 docDiscussion=false maxTurns=2
+[agent kfdtsj] turn 1 starting, promptChars=32384, docDiscussion=false
+[agent kfdtsj] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"kfdtsj","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":102,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null}
+[agent kfdtsj] done event_shorthand success=true events=12 clarifications=0 elapsedMs=102
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document
+[agent 5vfa84] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 5vfa84] skipping compiler preflight for forced draft tool mode
+[agent 5vfa84] tools=1 docDiscussion=false maxTurns=3
+[agent 5vfa84] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent 5vfa84] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 5vfa84] turn 2 starting, promptChars=33041, docDiscussion=false
+[agent 5vfa84] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"5vfa84","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":76,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 5vfa84] done event_shorthand success=true events=12 clarifications=0 elapsedMs=76
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent cfcej5] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cfcej5] skipping compiler preflight for forced draft tool mode
+[agent cfcej5] tools=1 docDiscussion=false maxTurns=3
+[agent cfcej5] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent cfcej5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent cfcej5] turn 2 starting, promptChars=33041, docDiscussion=false
+[agent cfcej5] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"cfcej5","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":19,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)"}
+[agent cfcej5] done event_shorthand success=false events=0 clarifications=0 elapsedMs=19
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent cfcej5] The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the 422-class round-trip: needs-clarification rides the chat clarification channel VERBATIM
+[agent illitb] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent illitb] skipping compiler preflight for forced draft tool mode
+[agent illitb] tools=1 docDiscussion=false maxTurns=2
+[agent illitb] turn 1 starting, promptChars=31277, docDiscussion=false
+[agent illitb] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"illitb","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":40,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent illitb] done event_shorthand success=true events=0 clarifications=1 elapsedMs=40
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > a clarification answer folds deterministically: splice → Ajv re-parse → re-compile, ZERO model calls
+[agent vkygry] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent vkygry] skipping compiler preflight for forced draft tool mode
+[agent vkygry] tools=1 docDiscussion=false maxTurns=2
+[agent vkygry] turn 1 starting, promptChars=31277, docDiscussion=false
+[agent vkygry] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"vkygry","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":11,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent vkygry] done event_shorthand success=true events=0 clarifications=1 elapsedMs=11
+[agent z5o9y5] shorthand answer folded deterministically onto the held intent (event-editor:RUN-shorthand-test) — no model call
+[agent-summary] {"traceId":"z5o9y5","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":24,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent z5o9y5] done shorthand-fold success=true events=1 elapsedMs=24
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ3: a forced-draft shorthand turn with NO model configured says so LOUDLY and never silently event-compiles
+[agent p5w1mm] no model configured — cannot draft shorthand on workspace.deck
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ1 fallback: an answer with no 1:1 mapping falls back to ONE extraction-only re-ask carrying the held shorthand + answers as grounded context
+[agent mdvhf0] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent mdvhf0] skipping compiler preflight for forced draft tool mode
+[agent mdvhf0] tools=1 docDiscussion=false maxTurns=2
+[agent mdvhf0] turn 1 starting, promptChars=31277, docDiscussion=false
+[agent mdvhf0] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"mdvhf0","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":41,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent mdvhf0] done event_shorthand success=true events=0 clarifications=1 elapsedMs=41
+[agent vcm7ht] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask
+[agent vcm7ht] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent vcm7ht] skipping compiler preflight for forced draft tool mode
+[agent vcm7ht] tools=1 docDiscussion=false maxTurns=2
+[agent vcm7ht] turn 1 starting, promptChars=32000, docDiscussion=false
+[agent vcm7ht] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"vcm7ht","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":26,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent vcm7ht] done event_shorthand success=true events=12 clarifications=0 elapsedMs=26
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the shorthand path omits termManifest explicitly (bait 9: no raw-draft classifier to disagree with; the client never re-derives)
+[agent qq2r55] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent qq2r55] skipping compiler preflight for forced draft tool mode
+[agent qq2r55] tools=1 docDiscussion=false maxTurns=2
+[agent qq2r55] turn 1 starting, promptChars=31282, docDiscussion=false
+[agent qq2r55] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"qq2r55","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":47,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent qq2r55] done event_shorthand success=true events=12 clarifications=0 elapsedMs=47
+
+ ✓ src/ai/AgentOrchestrator.shorthandChat.test.ts  (16 tests) 736ms
+ ✓ src/ai/AgentOrchestrator.protocolEditRecovery.test.ts  (4 tests) 828ms
+ ✓ src/ai/AgentOrchestrator.protocolEdit.test.ts  (9 tests) 826ms
+ ✓ src/ai/promptBudget.test.ts  (6 tests) 9ms
+stdout | src/ai/promptBudget.test.ts > the draft prompt stays small enough for a small model > core instruction + templates + tool schema fit the ratchet ceiling
+draft prompt budget: 44934 chars (agent 24038 + material-rules 3849 + instruction 3061 + schema 13986) — ceiling 47180 (headroom 2246)
+
+ ✓ src/ai/materialBinding.test.ts  (8 tests) 11ms
+ ✓ src/ai/equipmentPlacementGate.test.ts  (11 tests) 12ms
+ ✓ src/ai/materialRangeClarification.test.ts  (7 tests) 17ms
+ ✓ src/ai/submitSuggestionTool.surfaceVocab.test.ts  (7 tests) 98ms
+ ✓ src/ai/reconcileDraftQuantities.test.ts  (12 tests) 31ms
+ ✓ src/ai/AgentOrchestrator.shadowRouter.test.ts  (6 tests) 1447ms
+ ✓ src/ai/submitSuggestionTool.equipment.test.ts  (9 tests) 12ms
+ ✓ src/ai/AgentOrchestrator.workspaceAction.test.ts  (10 tests) 1455ms
+ ❯ src/ai/AgentOrchestrator.bypass.test.ts  (2 tests | 1 failed) 297ms
+   ❯ src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should bypass LLM when all slots are filled with labware instance
+     → expected false to be true // Object.is equality
+stdout | src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should bypass LLM when all slots are filled with labware instance
+[agent cvkbsz] start surface=default model=test-model promptLen=82 effectivePromptLen=82 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cvkbsz] outcome=error, hasArtifacts=true; falling through to LLM loop forceDraftTool=false
+[agent cvkbsz] tools=1 docDiscussion=false maxTurns=15
+[agent cvkbsz] turn 1 starting, promptChars=4128, docDiscussion=false
+[agent-summary] {"traceId":"cvkbsz","surface":"default","model":"test-model","success":false,"elapsedMs":181,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":2,"bypass":null,"error":"Inference error on turn 1: inference should not be called"}
+
+stderr | src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should bypass LLM when all slots are filled with labware instance
+[agent cvkbsz] turn 1 inference error: inference should not be called
+
+stdout | src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should NOT bypass when labware is a definition
+[agent iro6gz] start surface=default model=test-model promptLen=95 effectivePromptLen=95 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent iro6gz] outcome=error, hasArtifacts=true; falling through to LLM loop forceDraftTool=false
+[agent iro6gz] tools=1 docDiscussion=false maxTurns=15
+[agent iro6gz] turn 1 starting, promptChars=4105, docDiscussion=false
+[agent-summary] {"traceId":"iro6gz","surface":"default","model":"test-model","success":false,"elapsedMs":74,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":2,"bypass":null,"error":"Inference error on turn 1: inference should not be called"}
+
+stderr | src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should NOT bypass when labware is a definition
+[agent iro6gz] turn 1 inference error: inference should not be called
+
+ ✓ src/ai/reviewWriteWall.test.ts  (9 tests) 143ms
+ ✓ src/ai/residentContext.test.ts  (13 tests) 100ms
+ ✓ src/ai/clarificationLoop.test.ts  (12 tests) 15ms
+ ✓ src/ai/systemPrompt.protocolReview.test.ts  (4 tests) 45ms
+ ✓ src/ai/materialFollowUp.test.ts  (11 tests) 28ms
+ ✓ src/ai/recoverInventedMaterialFields.test.ts  (7 tests) 27ms
+ ✓ src/ai/runChatbotCompileLabState.test.ts  (2 tests) 396ms
+ ✓ src/ai-threads/AiThreadStore.test.ts  (6 tests) 141ms
+ ✓ src/ai/submitSuggestionTool.workstate.test.ts  (6 tests) 44ms
+ ✓ src/ai/InferenceClient.reasoningChannel.test.ts  (3 tests) 12ms
+ ✓ src/ai/submitSuggestionTool.analysis.test.ts  (7 tests) 26ms
+ ✓ src/ai/submitSuggestionTool.protocolEdit.test.ts  (5 tests) 45ms
+ ✓ src/ai/coerceAgentIntent.test.ts  (9 tests) 21ms
+ ✓ src/ai/InferenceClient.streamTimeout.test.ts  (3 tests) 383ms
+ ✓ src/ai/mintLabelFidelity.test.ts  (8 tests) 26ms
+ ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts  (6 tests | 3 failed) 25ms
+   ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.properties.tube declares the event-contract tube descriptor
+     → expected undefined to be type of 'object'
+   ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.description explicitly forbids tubeVolumeClass drift
+     → expected 'Verb-specific parameters. Well-target…' to contain 'tubeVolumeClass'
+   ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > the event-graph-agent prompt names details.tube and the forbidden tubeVolumeClass
+     → expected '### place_tube\n\nPlace a tube of a g…' to contain 'details.tube'
+ ✓ src/ai/submitSuggestionTool.workstateTarget.test.ts  (4 tests) 45ms
+ ✓ src/ai/warm/PromptWarmupManager.test.ts  (6 tests) 22ms
+ ✓ src/ai/thinkingLevels.test.ts  (9 tests) 8ms
+ ✓ src/ai/materialIdentity.test.ts  (7 tests) 8ms
+ ✓ src/ai/enrichMaterialDomains.test.ts  (5 tests) 29ms
+ ✓ src/ai-threads/AiThreadStore.conversation.test.ts  (2 tests) 45ms
+ ✓ src/ai/wellPatterns.test.ts  (8 tests) 23ms
+ ✓ src/ai/MaterialResolution.test.ts  (7 tests) 9ms
+ ✓ src/ai/materialRefFields.test.ts  (5 tests) 27ms
+ ✓ src/ai/resolveMentions.test.ts  (5 tests) 14ms
+ ✓ src/ai/AgentOrchestrator.maxtokens.test.ts  (2 tests) 90ms
+stdout | src/ai/AgentOrchestrator.maxtokens.test.ts > AgentOrchestrator forwards maxTokens to InferenceClient > forwards inferenceConfig.maxTokens as max_tokens when set
+[agent cm7kqh] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cm7kqh] skipping compiler preflight for forced draft tool mode
+[agent cm7kqh] tools=1 docDiscussion=false maxTurns=2
+[agent cm7kqh] turn 1 starting, promptChars=31201, docDiscussion=false
+[agent cm7kqh] turn 1 finish=stop contentLen=2 toolCalls=0
+[agent-summary] {"traceId":"cm7kqh","surface":"default","model":"test-model","success":false,"elapsedMs":0,"turns":[{"turn":1,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"AI stopped without calling compile_event_graph_draft, and compiler-argument fallback did not produce valid JSON. Last text: ok"}
+
+stderr | src/ai/AgentOrchestrator.maxtokens.test.ts > AgentOrchestrator forwards maxTokens to InferenceClient > forwards inferenceConfig.maxTokens as max_tokens when set
+[agent cm7kqh] compiler-arg coercion failed: Cannot read properties of undefined (reading 'then')
+
+stdout | src/ai/AgentOrchestrator.maxtokens.test.ts > AgentOrchestrator forwards maxTokens to InferenceClient > falls back to 4096 when maxTokens is undefined
+[agent yflzqk] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent yflzqk] skipping compiler preflight for forced draft tool mode
+[agent yflzqk] tools=1 docDiscussion=false maxTurns=2
+[agent yflzqk] turn 1 starting, promptChars=31201, docDiscussion=false
+[agent yflzqk] turn 1 finish=stop contentLen=2 toolCalls=0
+[agent-summary] {"traceId":"yflzqk","surface":"default","model":"test-model","success":false,"elapsedMs":0,"turns":[{"turn":1,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"AI stopped without calling compile_event_graph_draft, and compiler-argument fallback did not produce valid JSON. Last text: ok"}
+
+stderr | src/ai/AgentOrchestrator.maxtokens.test.ts > AgentOrchestrator forwards maxTokens to InferenceClient > falls back to 4096 when maxTokens is undefined
+[agent] no ai.inference.maxTokens for model test-model; using 4096. A reasoning model needs far more — it will be cut off mid-draft (see config.example.yaml).
+[agent yflzqk] compiler-arg coercion failed: Cannot read properties of undefined (reading 'then')
+
+ ❯ src/ai/AgentOrchestrator.tubeGate.test.ts  (3 tests | 2 failed) 279ms
+   ❯ src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > repairs tubeVolumeClass → details.tube through the real event schemas
+     → expected undefined to deeply equal { sizeLabel: '1.5 mL', …(2) }
+   ❯ src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > drops an unrepairable tube event and surfaces a Dropped note
+     → expected true to be false // Object.is equality
+stdout | src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > repairs tubeVolumeClass → details.tube through the real event schemas
+[agent x6kxf6] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent x6kxf6] skipping compiler preflight for forced draft tool mode
+[agent x6kxf6] tools=1 docDiscussion=false maxTurns=2
+[agent x6kxf6] turn 1 starting, promptChars=35952, docDiscussion=false
+[agent x6kxf6] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [submit_suggestion]
+[agent-summary] {"traceId":"x6kxf6","surface":"default","model":"test-model","success":true,"elapsedMs":10,"turns":[{"turn":1,"durationMs":6,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent x6kxf6] done success=true via submit_suggestion turns=1 events=1 elapsedMs=10
+
+stdout | src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > drops an unrepairable tube event and surfaces a Dropped note
+[agent 3rh28x] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3rh28x] skipping compiler preflight for forced draft tool mode
+[agent 3rh28x] tools=1 docDiscussion=false maxTurns=2
+[agent 3rh28x] turn 1 starting, promptChars=35952, docDiscussion=false
+[agent 3rh28x] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [submit_suggestion]
+[agent-summary] {"traceId":"3rh28x","surface":"default","model":"test-model","success":true,"elapsedMs":1,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 3rh28x] done success=true via submit_suggestion turns=1 events=1 elapsedMs=1
+
+stdout | src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > leaves drafts untouched when eventDetailValidator is omitted (gate off)
+[agent tvnb0n] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent tvnb0n] skipping compiler preflight for forced draft tool mode
+[agent tvnb0n] tools=1 docDiscussion=false maxTurns=2
+[agent tvnb0n] turn 1 starting, promptChars=35952, docDiscussion=false
+[agent tvnb0n] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [submit_suggestion]
+[agent-summary] {"traceId":"tvnb0n","surface":"default","model":"test-model","success":true,"elapsedMs":1,"turns":[{"turn":1,"durationMs":0,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent tvnb0n] done success=true via submit_suggestion turns=1 events=1 elapsedMs=1
+
+ ✓ src/ai/selectSubmitCall.test.ts  (5 tests) 9ms
+ ✓ src/ai/clarifications.test.ts  (3 tests) 6ms
+ ✓ src/ai/wellRange.test.ts  (6 tests) 8ms
+ ✓ src/ai/graphPatches.test.ts  (4 tests) 5ms
+ ✓ src/ai/systemPrompt.workingFocus.test.ts  (3 tests) 6ms
+ ✓ src/ai/equipmentAdditions.test.ts  (2 tests) 43ms
+ ✓ src/ai/promptMentions.tube.test.ts  (2 tests) 21ms
+ ✓ src/ai/AgentOrchestrator.surfaceVocab.test.ts  (3 tests) 10ms
+ ✓ src/ai/AgentOrchestrator.equipmentE2E.test.ts  (1 test) 22ms
+stdout | src/ai/AgentOrchestrator.equipmentE2E.test.ts > AgentOrchestrator — equipment through the forced draft tool > carries the model's equipmentRequirements onto the AgentResult
+[agent ew0ij5] start surface=default model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ew0ij5] skipping compiler preflight for forced draft tool mode
+[agent ew0ij5] tools=1 docDiscussion=false maxTurns=2
+[agent ew0ij5] turn 1 starting, promptChars=31217, docDiscussion=false
+[agent ew0ij5] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ew0ij5","surface":"default","model":"test-model","success":true,"elapsedMs":11,"turns":[{"turn":1,"durationMs":2,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent ew0ij5] done success=true via agent_intent turns=1 events=0 elapsedMs=11
+
+stderr | src/ai/AgentOrchestrator.equipmentE2E.test.ts > AgentOrchestrator — equipment through the forced draft tool > carries the model's equipmentRequirements onto the AgentResult
+[agent ew0ij5] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+ ❯ src/ai/AgentOrchestrator.golden.test.ts  (1 test | 1 failed) 125ms
+   ❯ src/ai/AgentOrchestrator.golden.test.ts > AgentOrchestrator - golden test for auto-create labware > should bypass LLM and compile events when labware hint resolves via searchLabwareByHint
+     → expected false to be true // Object.is equality
+stdout | src/ai/AgentOrchestrator.golden.test.ts > AgentOrchestrator - golden test for auto-create labware > should bypass LLM and compile events when labware hint resolves via searchLabwareByHint
+[agent 3j96zm] start surface=default model=fake-model promptLen=144 effectivePromptLen=144 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3j96zm] outcome=error, hasArtifacts=true; falling through to LLM loop forceDraftTool=false
+[agent 3j96zm] tools=1 docDiscussion=false maxTurns=15
+[agent 3j96zm] turn 1 starting, promptChars=26584, docDiscussion=false
+[agent-summary] {"traceId":"3j96zm","surface":"default","model":"fake-model","success":false,"elapsedMs":112,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null,"error":"Inference error on turn 1: inferenceClient.completeStream(...)[Symbol.asyncIterator] is not a function"}
+
+stderr | src/ai/AgentOrchestrator.golden.test.ts > AgentOrchestrator - golden test for auto-create labware > should bypass LLM and compile events when labware hint resolves via searchLabwareByHint
+[agent] no ai.inference.maxTokens for model fake-model; using 4096. A reasoning model needs far more — it will be cut off mid-draft (see config.example.yaml).
+[agent 3j96zm] turn 1 inference error: inferenceClient.completeStream(...)[Symbol.asyncIterator] is not a function
+
+ ✓ src/ai/coerceDraftArgs.test.ts  (10 tests) 4ms
+ ✓ src/ai/normalizeDraftMaterialRefs.test.ts  (5 tests) 3ms
+ ✓ src/ai/equipmentVocabulary.test.ts  (4 tests) 305ms
+ ✓ src/ai/AgentOrchestrator.equipmentInstruction.test.ts  (2 tests) 3ms
+stdout | src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+[agent 1r33fp] start surface=default model=fake-model promptLen=144 effectivePromptLen=144 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+
+stderr | src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+[agent] no ai.inference.maxTokens for model fake-model; using 4096. A reasoning model needs far more — it will be cut off mid-draft (see config.example.yaml).
+[agent 1r33fp] turn 1 inference error: inferenceClient.completeStream(...)[Symbol.asyncIterator] is not a function
+
+stdout | src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+[agent 1r33fp] outcome=error, hasArtifacts=true; falling through to LLM loop forceDraftTool=false
+[agent 1r33fp] tools=1 docDiscussion=false maxTurns=15
+[agent 1r33fp] turn 1 starting, promptChars=26584, docDiscussion=false
+[agent-summary] {"traceId":"1r33fp","surface":"default","model":"fake-model","success":false,"elapsedMs":105,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null,"error":"Inference error on turn 1: inferenceClient.completeStream(...)[Symbol.asyncIterator] is not a function"}
+
+ ❯ src/ai/AgentOrchestrator.goldenWithSeeds.test.ts  (1 test | 1 failed) 8537ms
+   ❯ src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should bypass LLM when all slots are filled with labware instance
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/ai/AgentOrchestrator.bypass.test.ts:85:28
+     83| 
+     84|     // Verify success
+     85|     expect(result.success).toBe(true);
+       |                            ^
+     86|     
+     87|     // Verify events
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯
+
+ FAIL  src/ai/AgentOrchestrator.golden.test.ts > AgentOrchestrator - golden test for auto-create labware > should bypass LLM and compile events when labware hint resolves via searchLabwareByHint
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/ai/AgentOrchestrator.golden.test.ts:66:28
+     64| 
+     65|     // Assert success
+     66|     expect(result.success).toBe(true);
+       |                            ^
+     67| 
+     68|     // Assert exactly one event
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯
+
+ FAIL  src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/ai/AgentOrchestrator.goldenWithSeeds.test.ts:150:28
+    148| 
+    149|     // Assert success
+    150|     expect(result.success).toBe(true);
+       |                            ^
+    151| 
+    152|     // Assert exactly one event
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯
+
+ FAIL  src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > repairs tubeVolumeClass → details.tube through the real event schemas
+AssertionError: expected undefined to deeply equal { sizeLabel: '1.5 mL', …(2) }
+
+- Expected: 
+Object {
+  "maxVolume_uL": 1500,
+  "sizeLabel": "1.5 mL",
+  "wellShape": "round",
+}
+
++ Received: 
+undefined
+
+ ❯ src/ai/AgentOrchestrator.tubeGate.test.ts:129:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯
+
+ FAIL  src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > drops an unrepairable tube event and surfaces a Dropped note
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/ai/AgentOrchestrator.tubeGate.test.ts:139:65
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯
+
+ FAIL  src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (b) outcome=complete with no events and no gaps still short-circuits
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/ai/AgentOrchestratorForwarding.test.ts:208:28
+    206| 
+    207|     // Should short-circuit (outcome='complete') even with 0 events an…
+    208|     expect(result.success).toBe(true);
+       |                            ^
+    209|     expect(inferenceClient.completeStream).not.toHaveBeenCalled();
+    210|     expect(inferenceClient.complete).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯
+
+ FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: deckSlot on candidateLabwares → deckLayoutPlan.pinned
+AssertionError: expected undefined to deeply equal []
+
+- Expected: 
+Array []
+
++ Received: 
+undefined
+
+ ❯ src/ai/ChatbotCompileDeckSlot.test.ts:62:65
+     60|     ]);
+     61|     // --- Verify: unassigned is empty ---
+     62|     expect(result.terminalArtifacts.deckLayoutPlan!.unassigned).toEqua…
+       |                                                                 ^
+     63|     // --- Verify: labwareAdditions carries deckSlot ---
+     64|     expect(result.labwareAdditions).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯
+
+ FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: multiple labwares with mixed deckSlot presence
+AssertionError: expected undefined to deeply equal [ 'unlabeled plate' ]
+
+- Expected: 
+Array [
+  "unlabeled plate",
+]
+
++ Received: 
+undefined
+
+ ❯ src/ai/ChatbotCompileDeckSlot.test.ts:111:65
+    109|     ]);
+    110|     // --- Verify: unassigned has 1 entry ---
+    111|     expect(result.terminalArtifacts.deckLayoutPlan!.unassigned).toEqua…
+       |                                                                 ^
+    112|   });
+    113| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯
+
+ FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: no candidateLabwares → empty deckLayoutPlan
+AssertionError: expected undefined to deeply equal []
+
+- Expected: 
+Array []
+
++ Received: 
+undefined
+
+ ❯ src/ai/ChatbotCompileDeckSlot.test.ts:149:65
+    147|     // --- Verify: deckLayoutPlan is empty ---
+    148|     expect(result.terminalArtifacts.deckLayoutPlan!.pinned).toEqual([]…
+    149|     expect(result.terminalArtifacts.deckLayoutPlan!.unassigned).toEqua…
+       |                                                                 ^
+    150|   });
+    151| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯
+
+ FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: labware resolved (not added) → no labwareAddition for it
+AssertionError: expected [ { …(3) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/ai/ChatbotCompileDeckSlot.test.ts:191:37
+    189| 
+    190|     // --- Verify: no labwareAdditions (it was resolved, not added) ---
+    191|     expect(result.labwareAdditions).toHaveLength(0);
+       |                                     ^
+    192|     // --- Verify: deckLayoutPlan is empty (no additions to pin/assign…
+    193|     expect(result.terminalArtifacts.deckLayoutPlan!.pinned).toEqual([]…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯
+
+ FAIL  src/ai/InferenceClient.config.test.ts > InferenceClient honors construction-time config > does NOT set enable_thinking when enableThinking is true
+AssertionError: expected true to be undefined
+ ❯ src/ai/InferenceClient.config.test.ts:93:8
+     91| 
+     92|     expect((capturedBody.chat_template_kwargs as Record<string, unknow…
+     93|       .toBeUndefined();
+       |        ^
+     94|   });
+     95| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  src/ai/InferenceClient.config.test.ts > InferenceClient honors construction-time config > construct false, request true → no kwarg in body
+AssertionError: expected true to be undefined
+ ❯ src/ai/InferenceClient.config.test.ts:165:8
+    163| 
+    164|     expect((capturedBody.chat_template_kwargs as Record<string, unknow…
+    165|       .toBeUndefined();
+       |        ^
+    166|   });
+    167| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into an existing plate and returns one add_material event
+Error: [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+vi.mock("./systemPrompt.js", async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+ ❯ Object.run src/ai/AgentOrchestrator.ts:1148:31
+    1146|       let eventGraphRefusalAsked = false;
+    1147|       let shorthandRepairAsked = false;
+    1148|       const conversationKey = deriveContextCacheKey(surface, context);
+       |                               ^
+    1149| 
+    1150|       /**
+ ❯ src/ai/chatbotCompile.e2e.test.ts:135:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into a new plate and proposes an AiLabwareAddition
+Error: [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+vi.mock("./systemPrompt.js", async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+ ❯ Object.run src/ai/AgentOrchestrator.ts:1148:31
+    1146|       let eventGraphRefusalAsked = false;
+    1147|       let shorthandRepairAsked = false;
+    1148|       const conversationKey = deriveContextCacheKey(surface, context);
+       |                               ^
+    1149| 
+    1150|       /**
+ ❯ src/ai/chatbotCompile.e2e.test.ts:166:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > falls through to LLM loop when pipeline produces no events
+Error: [vitest] No "deriveContextCacheKey" export is defined on the "./systemPrompt.js" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+vi.mock("./systemPrompt.js", async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+ ❯ Object.run src/ai/AgentOrchestrator.ts:1148:31
+    1146|       let eventGraphRefusalAsked = false;
+    1147|       let shorthandRepairAsked = false;
+    1148|       const conversationKey = deriveContextCacheKey(surface, context);
+       |                               ^
+    1149| 
+    1150|       /**
+ ❯ src/ai/chatbotCompile.e2e.test.ts:192:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.properties.tube declares the event-contract tube descriptor
+AssertionError: expected undefined to be type of 'object'
+
+- Expected
++ Received
+
+- object
++ undefined
+
+ ❯ asJson src/ai/submitSuggestionTool.tubeSchema.test.ts:20:17
+ ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts:40:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.description explicitly forbids tubeVolumeClass drift
+AssertionError: expected 'Verb-specific parameters. Well-target…' to contain 'tubeVolumeClass'
+
+- Expected
++ Received
+
+- tubeVolumeClass
++ Verb-specific parameters. Well-targeted verbs (add_material, transfer, mix, …) MUST include labwareId (an existing editor labware id) and wells (e.g. ["A1","B2"]). Use structured quantities: volume {value,unit}, concentration {value,unit}.
+
+ ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts:50:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > the event-graph-agent prompt names details.tube and the forbidden tubeVolumeClass
+AssertionError: expected '### place_tube\n\nPlace a tube of a g…' to contain 'details.tube'
+
+- Expected
++ Received
+
+- details.tube
++ ### place_tube
++
++ Place a tube of a given size into one or more rack positions. Tube racks only
++ (bench labware on a freeform/lawn deck). Capacity follows the placed tube, so a
++ 0.5 mL tube in a larger slot caps at ~500 µL. Placement is permissive — any size
++ fits any slot.
++
++ ```json
++ {
++   "labwareId": "rack-1",
++   "wells": ["A1", "A2"],
++   "tube": { "sizeLabel": "15 mL", "maxVolume_uL": 15000 }
++ }
++ ```
++
++ ### move_tube
++
++ Move a tube — together with its contents — from one position to another, within
++ a rack or between racks. The source position becomes empty.
++
++ ```json
++ {
++   "source": { "labwareId": "rack-1", "well": "A1" },
++   "target": { "labwareId": "rack-2", "well": "B2" }
++ }
++ ```
++
++
+
+ ❯ src/ai/submitSuggestionTool.tubeSchema.test.ts:90:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: Should not be called
+ ❯ src/ai/AgentOrchestrator.golden.test.ts:21:49
+     19|     const inferenceClient: InferenceClient = {
+     20|       complete: vi.fn().mockRejectedValue(new Error('Should not be cal…
+     21|       completeStream: vi.fn().mockRejectedValue(new Error('Should not …
+       |                                                 ^
+     22|     };
+     23| 
+ ❯ ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:135:14
+ ❯ ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:60:26
+ ❯ runTest ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:781:17
+ ❯ runSuite ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:909:15
+ ❯ runSuite ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:909:15
+ ❯ runFiles ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:958:5
+ ❯ startTests ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:967:3
+ ❯ ../../../computable-lab/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+ ❯ withEnv ../../../computable-lab/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5
+
+This error originated in "src/ai/AgentOrchestrator.golden.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: Should not be called
+ ❯ src/ai/AgentOrchestrator.goldenWithSeeds.test.ts:107:49
+    105|     const inferenceClient: InferenceClient = {
+    106|       complete: vi.fn().mockRejectedValue(new Error('Should not be cal…
+    107|       completeStream: vi.fn().mockRejectedValue(new Error('Should not …
+       |                                                 ^
+    108|     };
+    109| 
+ ❯ ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:135:14
+ ❯ ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:60:26
+ ❯ runTest ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:781:17
+ ❯ runSuite ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:909:15
+ ❯ runSuite ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:909:15
+ ❯ runFiles ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:958:5
+ ❯ startTests ../../../computable-lab/node_modules/@vitest/runner/dist/index.js:967:3
+ ❯ ../../../computable-lab/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:116:7
+ ❯ withEnv ../../../computable-lab/node_modules/vitest/dist/chunks/runtime-runBaseTests.oAvMKtQC.js:83:5
+
+This error originated in "src/ai/AgentOrchestrator.goldenWithSeeds.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "AgentOrchestrator - golden test with real seed records". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+ Test Files  9 failed | 80 passed (89)
+      Tests  18 failed | 684 passed (702)
+     Errors  2 errors
+   Start at  06:27:56
+   Duration  18.62s (transform 9.96s, setup 11ms, collect 157.81s, tests 23.18s, environment 49ms, prepare 61.00s)
+

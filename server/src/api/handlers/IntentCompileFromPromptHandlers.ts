@@ -67,7 +67,7 @@ interface CompileFromPromptDeps {
   llmClient?: import('../../compiler/scientistIntent/intentCompile.js').ScientistIntentLlmClient;
 }
 
-function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0 } {
+function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0; apiKey?: string } {
   // The one-shot localization path follows the ACTIVE AI profile (default:
   // Ornith on appliance-2), so the compiler grounds against the lab's current
   // model. An explicit `smallModel` config override (or deps baseUrl/model for
@@ -75,11 +75,22 @@ function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { base
   // then to the historical local small model as a last resort.
   const ai = ctx.appConfig?.ai as Record<string, unknown> | undefined;
   const small = ai?.['smallModel'] as
-    | { baseUrl?: string; model?: string }
+    | { baseUrl?: string; model?: string; apiKey?: string }
     | undefined;
   const activeInference = ctx.appConfig?.ai
     ? resolveAiProfile(ctx.appConfig.ai).inference
     : undefined;
+  // W2-8 A5 (gate 2026-10-11_0110-a5b): the built config DROPPED the
+  // profile's apiKey, so createInferenceClient sent NO Authorization
+  // (InferenceClient.ts:52,69-70) and a key-required profile answered 401
+  // ("No cookie auth credentials found") — the accept->LPR half of A5 was
+  // unreachable. The key belongs to the endpoint the config names: a
+  // declared smallModel key wins with its own endpoint, else the ACTIVE
+  // PROFILE's key rides the profile endpoint (the W2-9 chat path's keyed-
+  // client injection, mirrored here). exactOptionalPropertyTypes: computed
+  // first, then conditionally spread — the key is ABSENT when no key
+  // exists, never undefined (the shorthandCorpus.ts:68-70 idiom).
+  const apiKey = small?.apiKey ?? activeInference?.apiKey;
   return {
     provider: 'openai-compatible',
     baseUrl: deps.baseUrl
@@ -92,6 +103,7 @@ function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { base
       ?? 'lfm2.5-2.6b',
     enableThinking: false,
     temperature: 0,
+    ...(apiKey !== undefined ? { apiKey } : {}),
   };
 }
 
