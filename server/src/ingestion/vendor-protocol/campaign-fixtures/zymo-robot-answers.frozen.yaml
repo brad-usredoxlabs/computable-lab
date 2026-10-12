@@ -1,0 +1,78 @@
+# W2-11 campaign frozen fixture — the lab answers (robot realization)
+# HAND-AUTHORED per the OPERATIVE W211-OQ3(b) pick (see PROVENANCE.md).
+# branch_axes below are the verbatim deriveBranchAxes output over the real
+# decoded Zymo candidate (PDF sha 257f57196f6c...); anchors are the real
+# per-step pageStart values. Self-pinned by sha256 inside the golden tests.
+axisAnswer:
+  chosenValue: robot
+  branchIds:
+    - branch-1
+sampleCount:
+  value: 96
+  unit: wells
+  dimension: count
+  qualifier: exact
+labwares:
+  - role: sample_plate
+    ref:
+      kind: record
+      type: labware
+      id: LAB-w211-sample-plate
+  - role: reagent_reservoir
+    ref:
+      kind: record
+      type: labware
+      id: LAB-w211-reservoir
+  - role: sample plate definition
+    ref:
+      kind: record
+      type: labware-definition
+      id: lbw-def-generic-96-well-plate
+  - role: reservoir definition
+    ref:
+      kind: record
+      type: labware-definition
+      id: lbw-def-generic-reservoir-1-v1
+equipment:
+  - role: multichannel pipette
+    ref:
+      kind: record
+      type: pipette-capability
+      id: pipette-capability/p20-multi-8
+  - role: bead beater
+    ref:
+      kind: ontology
+      id: CL:bead_beater
+      namespace: CL
+      label: bead beater
+materials:
+  - role: lysis_solution
+    ref:
+      kind: record
+      type: material
+      id: MAT-w211-lysis
+  - role: magbinding_beads
+    ref:
+      kind: record
+      type: material
+      id: MAT-w211-magbeads
+  - role: magbinding_buffer
+    ref:
+      kind: record
+      type: material
+      id: MAT-w211-magbuffer
+  - role: magwash_1
+    ref:
+      kind: record
+      type: material
+      id: MAT-w211-magwash1
+  - role: magwash_2
+    ref:
+      kind: record
+      type: aliquot
+      id: MAT-w211-magwash2
+  - role: dnase_rnase_free_water
+    ref:
+      kind: record
+      type: material
+      id: MAT-w211-water
