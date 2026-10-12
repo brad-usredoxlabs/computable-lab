@@ -215,6 +215,14 @@ async function apiPut(path, payload) {
   try { body = await res.json() } catch { /* non-JSON */ }
   return { status: res.status, body }
 }
+// Orch l2t1735 (harness): shadow/promoted-draft cleanup rides DELETE /records/:id
+// (routes.ts:238). Lane records are test data (Brad ruling).
+async function apiDelete(path) {
+  const res = await fetch(`${API}${path}`, { method: 'DELETE', headers: { 'x-user-id': USER_ID } })
+  let body = null
+  try { body = await res.json() } catch { /* non-JSON */ }
+  return { status: res.status, body }
+}
 async function getRecordEnvelope(recordId) {
   const res = await apiGet(`/records/${encodeURIComponent(recordId)}`)
   if (res.status !== 200 || !res.body?.record) throw new Error(`GET /records/${recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
@@ -255,6 +263,23 @@ async function seedVpdf() {
     })
     if (put.status !== 200) throw new Error(`VPDF extractedText backfill -> ${put.status}: ${JSON.stringify(put.body).slice(0, 300)}`)
   }
+  // Orch gate-harness fix l2t1735: the VPDF upload route auto-extracts and can
+  // mint a SHADOW extraction-draft for this artifact. findSemanticDraft binds the
+  // first NON-promoted draft (VendorPdfReviewPage.tsx:240), so a shadow draft
+  // silently re-routes every UI write away from XDR_ID (proven at l2t1735: D2
+  // saved into XDR-000006 and the gate honestly reported 0 revisions). Delete
+  // only pending un-promoted shadows for THIS artifact — never XDR_ID, never
+  // rejected/promoted history. All lane records are test data (Brad ruling).
+  const list = await apiGet('/records?kind=extraction-draft')
+  const shadows = (list.body?.records ?? []).filter((r) => {
+    const p = r.payload ?? {}
+    return p.kind === 'extraction-draft'
+      && p.source_artifact?.id === vpdfId
+      && r.recordId !== XDR_ID
+      && p.status !== 'promoted'
+      && p.status !== 'rejected'
+  })
+  for (const s of shadows) await apiDelete(`/records/${encodeURIComponent(s.recordId)}`)
   return getRecordEnvelope(vpdfId)
 }
 
@@ -262,7 +287,17 @@ async function seedXdr() {
   const { vpdfId, draftText } = fixtures()
   const draft = parseBlockYaml(draftText)
   const existing = await apiGet(`/records/${encodeURIComponent(XDR_ID)}`)
-  if (existing.status === 200 && existing.body?.record) return existing.body.record
+  if (existing.status === 200 && existing.body?.record) {
+    // Orch l2t1735: a promoted XDR has a server-locked draft body
+    // (XDR_CANDIDATE_LOCKED 409) and findSemanticDraft SKIPS promoted drafts —
+    // the editability legs (D2/D3) can never run against it. Force-reseed fresh
+    // so every gate run exercises the real un-promoted MEANT path.
+    if (existing.body.record.payload?.status === 'promoted') {
+      await apiDelete(`/records/${encodeURIComponent(XDR_ID)}`)
+    } else {
+      return existing.body.record
+    }
+  }
   const res = await apiPost('/records', {
     schemaId: 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml',
     payload: {
@@ -514,7 +549,11 @@ async function seededFamilyPayload() {
 }
 
 test.describe('W2-11 zymo campaign demo gate', () => {
-  test.describe.configure({ mode: 'serial' })
+  // l2t1735 harness fix: the config default is 30s/test; D3 alone budgets a
+  // 90s model turn + a 120s proposal wait + three 60s refusal waits (the W2-9
+  // panel gate ran the same flows under a raised timeout). Model legs need
+  // minutes — raise the ceiling, keep every wait/assert unchanged.
+  test.describe.configure({ mode: 'serial', timeout: 600_000 })
 
   test.beforeAll(async () => {
     const apiHealth = await fetch(`${API}/health`).then((r) => r.status)
@@ -524,23 +563,30 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     await seedVpdf()
     await seedXdr()
     await seedBioRecords()
-    familyId = await promoteFamily()
-    await seedRun(familyId)
+    // Orch l2t1735 (harness ordering): promotion LOCKS the XDR draft (and
+    // findSemanticDraft skips promoted drafts entirely), so D2/D3 can only edit
+    // the UN-promoted record. Promotion + run seeding now happen in D4, the
+    // first leg that needs a family. D2/D3 run against the live un-promoted
+    // MEANT path — which is exactly what they claim to gate.
   })
 
-  test('PRECHECK: seeded SAID + MEANT + family + run present', async () => {
+  test('PRECHECK: seeded SAID + MEANT present (family/run arrive with D4)', async () => {
     const { vpdfId } = fixtures()
     const vpdf = await getRecordEnvelope(vpdfId)
     expect(vpdf.payload.kind).toBe('vendor-pdf')
     const xdr = await getRecordEnvelope(XDR_ID)
     expect(xdr.payload.kind).toBe('extraction-draft')
     expect(xdr.payload.source_artifact.id).toBe(vpdfId)
-    const fam = await getRecordEnvelope(familyId)
-    expect(fam.payload.kind).toBe('protocol')
-    expect(fam.payload.protocolLayer).toBe('universal')
-    const ws = await apiGet(`/runs/${encodeURIComponent(RUN_ID)}/workspace`)
-    expect(ws.status, 'the seeded run must serve its workspace (OQ6 mechanics)').toBe(200)
-    console.log(`[seed] ${vpdfId} + ${XDR_ID} + family ${familyId} + ${RUN_ID} present (fixture sha ${ZYMO_PDF_SHA.slice(0, 12)})`)
+    // l2t1735: the shadow-draft invariant D2 depends on, asserted explicitly —
+    // the panel must see exactly ONE un-promoted draft for this artifact: XDR_ID.
+    const list = await apiGet('/records?kind=extraction-draft')
+    const openDrafts = (list.body?.records ?? []).filter((r) => {
+      const p = r.payload ?? {}
+      return p.kind === 'extraction-draft' && p.source_artifact?.id === vpdfId
+        && p.status !== 'promoted' && p.status !== 'rejected'
+    })
+    expect(openDrafts.map((r) => r.recordId), 'exactly one un-promoted draft must bind the panel').toEqual([XDR_ID])
+    console.log(`[seed] ${vpdfId} + ${XDR_ID} present (fixture sha ${ZYMO_PDF_SHA.slice(0, 12)})`)
   })
 
   test('D1: immutable SAID — sha equal, zero mutating controls', async ({ page }) => {
@@ -667,6 +713,17 @@ test.describe('W2-11 zymo campaign demo gate', () => {
   })
 
   test('D4: downstream questions — run workspace localization answers + accept -> LPR', async ({ page }) => {
+    // Orch l2t1735: promotion + run seeding live HERE (moved out of beforeAll)
+    // so D2/D3 gate the un-promoted MEANT path first. D5/D6 ride familyId.
+    if (!familyId) {
+      familyId = await promoteFamily()
+      await seedRun(familyId)
+    }
+    const famCheck = await getRecordEnvelope(familyId)
+    expect(famCheck.payload.kind).toBe('protocol')
+    expect(famCheck.payload.protocolLayer).toBe('universal')
+    const wsCheck = await apiGet(`/runs/${encodeURIComponent(RUN_ID)}/workspace`)
+    expect(wsCheck.status, 'the seeded run must serve its workspace (OQ6 mechanics)').toBe(200)
     await page.goto(`${BASE_URL}/`)
     await page.evaluate((u) => window.localStorage.setItem('cl.currentUserId', u), USER_ID)
     await page.goto(`${BASE_URL}/runs/${RUN_ID}`)
