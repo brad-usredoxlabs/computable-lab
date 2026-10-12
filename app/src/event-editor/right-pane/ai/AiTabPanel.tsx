@@ -369,6 +369,21 @@ export function AiTabPanel() {
     error?: string
   } | null>(null)
 
+  // SHORTHAND-CORPUS WS6 D2 (gate r4 OBS-1): the pair's prompt is the user
+  // TURNS of the current proposal (binding spec shape: prompt (user turns +
+  // SurfaceContext) -> accepted shorthand), not just the last turn. The
+  // thread is ALREADY held in chat state (chatReducer commits every user turn
+  // at send) — no forked store. This ref is only the boundary marker: the
+  // message count when a FRESH proposal starts (typed send, surface-context
+  // send, protocol-builder draft, Extract-Protocol CTA). Clarification-answer
+  // turns continue the proposal, so every user turn from this index onward
+  // belongs to the current proposal.
+  const proposalStartIndexRef = useRef(0)
+  // Mirror of `previewActive` (computed below at render) for the send-time
+  // boundary decision in handleSend — refs are current by the time a click
+  // or Enter fires.
+  const previewActiveRef = useRef(false)
+
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
@@ -763,6 +778,9 @@ export function AiTabPanel() {
   // corpus-capturable. Accepts extra chat.send options (e.g. protocolStepContext).
   const sendSurfaceContext = useCallback(
     (sc: SurfaceContext, extra?: Parameters<typeof chat.send>[1]) => {
+      // WS6 D2: a selection→AI seam starts a FRESH proposal — its pair's
+      // user-turn chain begins at this turn.
+      proposalStartIndexRef.current = messagesRef.current.length
       void sendChat(surfaceAiPrompt(sc), {
         enableThinking: false,
         ...(extra ?? {}),
@@ -862,9 +880,27 @@ export function AiTabPanel() {
     const draft = lastShorthandDraftRef.current
     if (!draft) return
     const { state } = editor
+    // WS6 D2 (OBS-1): the pair's prompt carries the user TURNS of the current
+    // proposal — the original drafting instruction plus every refinement turn
+    // that followed it — read from the thread the chat reducer ALREADY holds
+    // (no forked store). The server seam folds `userPrompt` + `thread` into
+    // one prompt (IntentTrainingPairHandlers.ts:74-79), so the existing POST
+    // body carries them: userPrompt = the drafting turn, thread = the
+    // refinements in order. Assistant turns are not part of the pair shape.
+    // surfaceContext is deliberately absent: the run-chat surface holds no
+    // SurfaceContext for a typed drafting prompt (only the selection→AI seams
+    // build one) — the client does not invent one.
+    const proposalTurns = messagesRef.current
+      .slice(proposalStartIndexRef.current)
+      .filter((m) => m.role === 'user' && m.text.trim().length > 0)
+      .map((m) => m.text.trim())
+    const [draftingTurn, ...refinementTurns] = proposalTurns
     void apiClient
       .intentTrainingPair({
-        userPrompt: draft.prompt,
+        userPrompt: draftingTurn ?? draft.prompt,
+        ...(refinementTurns.length > 0
+          ? { thread: refinementTurns.map((content) => ({ role: 'user', content })) }
+          : {}),
         shorthandYaml: sidebar.shorthand,
         acceptedGraph: {
           events: [...state.events, ...(state.preview?.previewEvents ?? [])],
@@ -968,6 +1004,13 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // WS6 D2: a send with NO mounted preview starts a FRESH proposal — the
+      // pair's user-turn chain begins at this turn. A send while a preview is
+      // mounted is a Revise (the UI says so) and CONTINUES the current
+      // proposal, so the boundary stays put.
+      if (!previewActiveRef.current) {
+        proposalStartIndexRef.current = messagesRef.current.length
+      }
       // PB-CH-4 D1: a fresh send starts a fresh turn — sendChat resets the
       // workstate flag at the choke point, so a flag from a previous turn
       // (e.g. one that ended on an SSE error with no `done` frame) can never
@@ -1115,6 +1158,7 @@ export function AiTabPanel() {
       (editorState.preview.previewPlacements.length > 0 ||
         editorState.preview.previewEvents.length > 0),
   )
+  previewActiveRef.current = previewActive
   const revisionCount = editorState?.preview?.revisionHistory?.length ?? 0
 
   return (
@@ -1182,6 +1226,8 @@ export function AiTabPanel() {
             }
             onDraft={(draftPrompt) => {
               resolvedClarificationsRef.current.clear()
+              // WS6 D2: a protocol-builder draft starts a FRESH proposal.
+              proposalStartIndexRef.current = messagesRef.current.length
 
               // Push the protocol candidate into the editor's graphLemurSource
               // so the context builder includes it in the graphLemur block.
@@ -1215,6 +1261,8 @@ export function AiTabPanel() {
               className="ai-tab__protocol-cta-btn"
               onClick={() => {
                 resolvedClarificationsRef.current.clear()
+                // WS6 D2: the Extract-Protocol CTA starts a FRESH proposal.
+                proposalStartIndexRef.current = messagesRef.current.length
                 void sendChat(
                   `Extract a protocol from the PDF in the active tab. Identify the procedure steps, materials, and labware.`,
                   { enableThinking: false },

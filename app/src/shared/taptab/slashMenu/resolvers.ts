@@ -24,6 +24,7 @@ import type {
   SlashSuggestion,
 } from './types'
 import { filterTubePresets } from '../../../types/tubeSizes'
+import { exaVendorEnabled } from '../../lib/integrationFlags'
 
 const PAGE = 8
 const MATERIAL_PAGE = 12
@@ -246,7 +247,17 @@ function vendorExaSuggestions(
   })
 }
 
-/** Kick off an Exa vendor-product search and append results via onUpdate. */
+/** Kick off an Exa vendor-product search and append results via onUpdate.
+ *
+ * SHORTHAND-CORPUS WS6 D1: the vendor tier is a DECLARED capability. The
+ * gate mirrors the server's own semantics (server/src/integrations/exa.ts
+ * normalizeConfig: disabled iff `enabled === false`; absent config = enabled)
+ * via the once-per-page-load cached config read (integrationFlags) — never a
+ * per-keystroke fetch. When the integration is declared off, NO request fires
+ * (a credential-less deployment 502s deterministically and the browser logs a
+ * resource error the app cannot suppress); the local/ontology tiers are
+ * untouched. Enabled/absent: behavior is byte-identical to before.
+ */
 function appendVendorExaHits(
   ctx: { signal: AbortSignal; onUpdate?: SlashResolverContext['onUpdate'] },
   seen: Set<string>,
@@ -254,20 +265,23 @@ function appendVendorExaHits(
   category: 'catalog' | 'labware' | 'equipment',
 ): void {
   if (!q || !ctx.onUpdate) return
-  void apiClient
-    .searchVendorExa({ q, category, limit: PAGE })
-    .then((res) => {
-      if (ctx.signal.aborted) return
-      const additions = vendorExaSuggestions(res.items ?? [], category).filter((s) => {
-        if (seen.has(s.key)) return false
-        seen.add(s.key)
-        return true
+  void exaVendorEnabled().then((enabled) => {
+    if (!enabled || ctx.signal.aborted) return
+    return apiClient
+      .searchVendorExa({ q, category, limit: PAGE })
+      .then((res) => {
+        if (ctx.signal.aborted) return
+        const additions = vendorExaSuggestions(res.items ?? [], category).filter((s) => {
+          if (seen.has(s.key)) return false
+          seen.add(s.key)
+          return true
+        })
+        if (additions.length > 0) ctx.onUpdate!(additions)
       })
-      if (additions.length > 0) ctx.onUpdate!(additions)
-    })
-    .catch(() => {
-      /* Exa unavailable — silently drop; user has earlier paints */
-    })
+      .catch(() => {
+        /* Exa unavailable — silently drop; user has earlier paints */
+      })
+  })
 }
 
 /**
