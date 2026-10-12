@@ -83,7 +83,9 @@ export interface CreateSignatureInput {
   password: string
 }
 
-/** Signature bound to an immutable snapshot; gitCommit exists only when verified. */
+/** 200 response of POST /signatures — bound to an immutable snapshot.
+ * Primary shape carries `revisionRef` + `contentHash`; `gitCommit` is only
+ * present when the subject's meta.commitSha resolves (i.e. when verified). */
 export interface SignatureResult {
   success: true
   signatureId: string
@@ -120,6 +122,21 @@ export function isReauthFailure(error: unknown): boolean {
     error.status === 403 &&
     (error.code === 'REAUTH_FAILED' || error.message.includes('REAUTH_FAILED'))
   )
+}
+
+/** The three server rejections that mean "this signature no longer fits this document". */
+export type SignatureRejection = 'STALE_SIGNATURE' | 'SIGNED_CONTENT_CHANGED' | 'SIGNATURE_TARGET_MISMATCH'
+
+/**
+ * True for a signature/revision rejection. Server truth (RecordHandlers.ts:747,750,753):
+ * the wire shape is `{ error: '<TOKEN>', message }` with NO `code` field, so — exactly as with
+ * REAUTH_FAILED — the token lands in ApiError.message and code degrades to HTTP_409 / HTTP_422.
+ * Both branches are checked so a future server-side `code` also works.
+ */
+export function isSignatureRejection(error: unknown, token?: SignatureRejection): boolean {
+  if (!ApiError.isApiError(error)) return false
+  const all: SignatureRejection[] = ['STALE_SIGNATURE', 'SIGNED_CONTENT_CHANGED', 'SIGNATURE_TARGET_MISMATCH']
+  return (token ? [token] : all).some(t => error.code === t || error.message.includes(t))
 }
 
 /** The persisted workspace session (GET/PUT /api/session). */
@@ -1879,7 +1896,7 @@ export type AccessRole = 'owner' | 'admin' | 'editor' | 'operator' | 'qa' | 'vie
 export type Visibility = 'private' | 'shared' | 'public'
 
 export interface AccessGrant {
-  principalType: 'user' | 'group'
+  principalType: 'user' | 'group' | 'project'
   principalId: string
   role: AccessRole
 }
@@ -2849,6 +2866,22 @@ export const apiClient = {
 
   async getLabSettings(): Promise<LabSettings> {
     return request<LabSettings>('/settings/lab')
+  },
+
+  /**
+   * Switch the lab's policy bundle (QMS-8 / Defect L1-A). PATCHes
+   * /settings/lab with {policyBundleId} only; the server validates the id
+   * against the bundle registry (unknown id -> actionable 400 naming the bad
+   * id + known ids), gates the switch on the admin role (403 FORBIDDEN),
+   * persists via the config writer, and answers with the same LabSettings
+   * body GET /settings/lab returns. Server rejections ({error, message})
+   * surface as ApiError so the Settings page can show the server's reason.
+   */
+  async patchLabSettings(patch: { policyBundleId: string }): Promise<LabSettings> {
+    return request<LabSettings>('/settings/lab', {
+      method: 'PATCH',
+      body: JSON.stringify({ policyBundleId: patch.policyBundleId }),
+    })
   },
 
   async listSemanticsInstruments(params: {

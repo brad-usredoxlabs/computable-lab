@@ -43,6 +43,7 @@ describe('GlobalNavbar', () => {
     expect(screen.getByTestId('global-nav-lab')).toBeDefined()
     expect(screen.getByTestId('global-nav-ingestion')).toBeDefined()
     expect(screen.getByTestId('global-nav-chat')).toBeDefined()
+    expect(screen.getByTestId('global-nav-registry')).toBeDefined()
   })
 
   it('renders global search bar', () => {
@@ -84,6 +85,7 @@ describe('GlobalNavbar', () => {
     expect(screen.getByTestId('global-nav-lab')).toBeDefined()
     expect(screen.getByTestId('global-nav-ingestion')).toBeDefined()
     expect(screen.getByTestId('global-nav-chat')).toBeDefined()
+    expect(screen.getByTestId('global-nav-registry')).toBeDefined()
     expect(screen.getByTestId('global-search-bar')).toBeDefined()
     expect(screen.getByTestId('create-menu')).toBeDefined()
 

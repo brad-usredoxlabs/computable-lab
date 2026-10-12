@@ -90,6 +90,37 @@ properties:
         items:
           $ref: "#/definitions/section"
 
+  # Document-style editor configuration (primary TapTab surface)
+  editor:
+    type: "object"
+    description: >-
+      Document-style editor contract. Blocks are the ordered document
+      structure; slots are the editable fields. Binding is declarative:
+      a block that declares `slots` claims exactly those slot ids, in list
+      order (loader-validated: no unknown refs, no double claims, no
+      unclaimed slots in an explicitly-bound spec). Blocks without `slots`
+      bind by path prefix (slot.path starts with block.path).
+    required:
+    - mode
+    - blocks
+    - slots
+    additionalProperties: false
+    properties:
+      mode:
+        type: "string"
+        const: "document"
+        description: "Editor mode — 'document' for document-style layout"
+      blocks:
+        type: "array"
+        description: "Ordered blocks in the document"
+        items:
+          $ref: "#/definitions/editorBlock"
+      slots:
+        type: "array"
+        description: "Editable slots that blocks claim"
+        items:
+          $ref: "#/definitions/editorSlot"
+
 definitions:
   # Section definition
   section:
@@ -270,6 +301,172 @@ definitions:
         enum: [ "text", "date", "number", "boolean", "ref" ]
         default: "text"
         description: "Display format"
+
+  # Editor block definition (document-style editor)
+  editorBlock:
+    type: "object"
+    required:
+    - id
+    - kind
+    properties:
+      id:
+        type: "string"
+        description: "Stable block identifier"
+      kind:
+        type: "string"
+        enum: [ "section", "paragraph", "repeater", "table" ]
+        description: "Block kind"
+      label:
+        type: "string"
+        description: "Display label"
+      help:
+        type: "string"
+        description: "Help text / description"
+      collapsible:
+        type: "boolean"
+        default: false
+        description: "Whether the block is collapsible"
+      collapsed:
+        type: "boolean"
+        default: false
+        description: "Whether the block starts collapsed"
+      path:
+        type: "string"
+        description: >-
+          For repeater/table: the path to the array field. Blocks without
+          `slots` bind slots whose path starts with this prefix.
+      columns:
+        type: "array"
+        description: "For table: column definitions"
+        items:
+          type: "object"
+          required:
+          - path
+          - label
+          properties:
+            path:
+              type: "string"
+              description: "Path to the field"
+            label:
+              type: "string"
+              description: "Column header label"
+            width:
+              type: ["string", "number"]
+              description: "Column width"
+            widget:
+              type: "string"
+              description: "Widget type for editing"
+      slots:
+        type: "array"
+        description: >-
+          Explicit slot-id claims (section/paragraph style). The block is
+          projected with exactly these slot ids, IN THIS LIST ORDER; claimed
+          ids must exist in `editor.slots`, may not be claimed by another
+          block, and in a spec with >=1 explicit binding every slot must be
+          claimed (explicitly or via prefix fallback) — enforced by
+          UISpecLoader.validateSpec.
+        items:
+          type: "string"
+      visible:
+        type: "object"
+        description: "Visibility condition"
+        properties:
+          when:
+            type: "string"
+            description: "Path to the controlling field"
+          operator:
+            type: "string"
+            enum: [ "equals", "notEquals", "in", "notIn", "exists", "notExists" ]
+          value:
+            description: "Value to compare against (for equals/notEquals/in/notIn)"
+
+  # Editor slot definition (document-style editor)
+  editorSlot:
+    type: "object"
+    required:
+    - id
+    - path
+    - label
+    - widget
+    properties:
+      id:
+        type: "string"
+        description: "Stable slot identifier (referenced by block.slots)"
+      path:
+        type: "string"
+        description: "JSONPath to the field in the payload"
+      label:
+        type: "string"
+        description: "Display label"
+      widget:
+        type: "string"
+        description: >-
+          Widget type to render. The canonical widget set lives in
+          UISpecLoader.VALID_WIDGET_TYPES (loader-enforced membership); the
+          schema intentionally keeps this an open string to avoid drift.
+      help:
+        type: "string"
+        description: "Help text / description"
+      required:
+        type: "boolean"
+        default: false
+        description: "Whether the slot is required"
+      suggestionProviders:
+        type: "array"
+        description: "Suggestion providers available for this slot"
+        items:
+          type: "string"
+          enum: [ "local-records", "local-vocab", "ontology", "vendor-search", "compiler" ]
+      visible:
+        type: "object"
+        description: "Visibility condition"
+        properties:
+          when:
+            type: "string"
+            description: "Path to the controlling field"
+          operator:
+            type: "string"
+            enum: [ "equals", "notEquals", "in", "notIn", "exists", "notExists" ]
+          value:
+            description: "Value to compare against (for equals/notEquals/in/notIn)"
+      options:
+        type: "array"
+        description: "Options for select/radio/multiselect"
+        items:
+          type: "object"
+          required:
+          - value
+          - label
+          properties:
+            value:
+              type: ["string", "number", "boolean"]
+              description: "Value to store"
+            label:
+              type: "string"
+              description: "Display label"
+            description:
+              type: "string"
+              description: "Optional description"
+            disabled:
+              type: "boolean"
+              description: "Whether the option is disabled"
+      refKind:
+        type: "string"
+        description: "For ref widgets: the target record kind"
+      items:
+        type: "object"
+        description: >-
+          For array widgets: item field-hint configuration (path/widget plus
+          the standard FieldHint shape).
+      fields:
+        type: "array"
+        description: "For object widgets: nested field hints"
+        items:
+          type: "object"
+      props:
+        type: "object"
+        description: "Additional widget-specific props (sources, ontologies, field, etc.)"
+        additionalProperties: true
 
 additionalProperties: false
 

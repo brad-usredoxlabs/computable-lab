@@ -13,6 +13,7 @@ import type {
 import { createRecordHandlers } from '../api/handlers/RecordHandlers.js';
 import { AuthorizationService, ACCESS_POLICY_SCHEMA_ID } from './AuthorizationService.js';
 import { LOCAL_ADMIN_USER_ID, LocalIdentityService, USER_SCHEMA_ID } from './LocalIdentityService.js';
+import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 
 class MemoryRecordStore implements RecordStore {
   records = new Map<string, RecordEnvelope>();
@@ -392,6 +393,49 @@ describe('local identity and authorization substrate', () => {
     expect((datPolicy?.payload as Record<string, unknown>).ownerUserId).toBe('USR-OWNER');
   });
 
+  it('resolves a project grant end-to-end through coercion (OWN-6 §T6 seam)', async () => {
+    // Study ACL carries a nested-group member + a direct user; the target record
+    // ACL carries a {project: STU-*} grant. If coercePolicy dropped 'project'
+    // grants, every member assertion below would be false.
+    const store = new MemoryRecordStore([
+      user('USR-OWNER'),
+      user('USR-MEMBER-1'),
+      user('USR-MEMBER-2'),
+      user('USR-STRANGER'),
+      {
+        recordId: 'GRP-MITO',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-MITO', memberUserIds: [], memberGroupIds: ['GRP-NESTED'] },
+      },
+      {
+        recordId: 'GRP-NESTED',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-NESTED', memberUserIds: ['USR-MEMBER-1'] },
+      },
+      study('STU-PROJECT'),
+      experiment('EXP-TARGET', 'STU-PROJECT'),
+      policy('ACL-STU-PROJECT', 'STU-PROJECT', 'study', 'USR-OWNER', [
+        { principalType: 'group', principalId: 'GRP-MITO', role: 'editor' },
+        { principalType: 'user', principalId: 'USR-MEMBER-2', role: 'editor' },
+      ]),
+      policy('ACL-EXP-TARGET', 'EXP-TARGET', 'experiment', 'USR-OWNER', [
+        { principalType: 'project', principalId: 'STU-PROJECT', role: 'editor' },
+      ]),
+    ]);
+    const authorization = new AuthorizationService(store);
+    const exp = await store.get('EXP-TARGET');
+    expect(exp).toBeTruthy();
+
+    // Member via nested group, member via direct user grant, and the study owner all open.
+    expect(await authorization.canAccess('USR-MEMBER-1', 'write', exp!)).toBe(true);
+    expect(await authorization.canAccess('USR-MEMBER-2', 'write', exp!)).toBe(true);
+    // Role-scoped: the project grant is 'editor', so admin is not carried.
+    expect(await authorization.canAccess('USR-MEMBER-1', 'admin', exp!)).toBe(false);
+    // A stranger never opens, and the index is keyed by resourceRef id (STU-PROJECT),
+    // not by the ACL recordId (ACL-STU-PROJECT).
+    expect(await authorization.canAccess('USR-STRANGER', 'write', exp!)).toBe(false);
+  });
+
   it('never guesses an owner for system-created records during backfill', async () => {
     const store = new MemoryRecordStore([
       user('USR-OWNER'),
@@ -409,5 +453,53 @@ describe('local identity and authorization substrate', () => {
     expect(await authorization.findPolicyForRecord('PRT-SYSTEM')).toBeNull();
     // Open = anyone can read.
     expect(await authorization.canAccess('USR-OWNER', 'read', (await store.get('PRT-SYSTEM'))!)).toBe(true);
+  });
+
+  it('stamps the declared visibility and owner for lab-shared kinds', async () => {
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-LOCAL-ADMIN'),
+      user('USR-ADMIN-2'),
+      user('USR-STRANGER'),
+      {
+        recordId: 'GRP-LAB-ADMINS',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/group.schema.yaml',
+        payload: { kind: 'group', recordId: 'GRP-LAB-ADMINS', memberUserIds: ['USR-ADMIN-2'] },
+      } as RecordEnvelope,
+      {
+        recordId: 'OWN-LAB-DEFAULT',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/ownership-policy.schema.yaml',
+        payload: {
+          kind: 'ownership-policy',
+          recordId: 'OWN-LAB-DEFAULT',
+          title: 'Lab policy',
+          scope: { type: 'lab', id: 'lab' },
+          labOwnerUserId: 'USR-LOCAL-ADMIN',
+          fallback: { owner: 'creator', visibility: 'private', filedTo: 'none', editRoles: ['owner'], shareTargets: ['user'] },
+          kindRules: [
+            { kind: 'instrument', owner: 'lab', visibility: 'public', filedTo: 'none', editRoles: ['owner', 'admin'], shareTargets: ['user', 'group', 'lab'], defaultGrants: [{ principalType: 'group', principalId: 'GRP-LAB-ADMINS', role: 'admin' }] },
+          ],
+        },
+      } as RecordEnvelope,
+    ]);
+    const authorization = new AuthorizationService(store, new OwnershipPolicyService(store));
+    const instrument = {
+      recordId: 'INS-MITO-SPECIAL',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/instrument.schema.yaml',
+      payload: { kind: 'instrument', id: 'INS-MITO-SPECIAL', name: 'Grant-funded imager' },
+    } as RecordEnvelope;
+
+    const stamped = await authorization.ensureOwnerPolicy(instrument, 'USR-BRAD');
+
+    expect((stamped?.payload as Record<string, unknown>).visibility).toBe('public');
+    expect((stamped?.payload as Record<string, unknown>).ownerUserId).toBe('USR-LOCAL-ADMIN');
+    // Declared lab-visible => a stranger can read it.
+    expect(await authorization.canAccess('USR-STRANGER', 'read', instrument)).toBe(true);
+    // MULTI-USER: the declared admin GROUP administers it — not just labOwnerUserId.
+    expect((stamped?.payload as Record<string, unknown>).grants).toEqual([
+      { principalType: 'group', principalId: 'GRP-LAB-ADMINS', role: 'admin' },
+    ]);
+    expect(await authorization.canAccess('USR-ADMIN-2', 'admin', instrument)).toBe(true);   // member of GRP-LAB-ADMINS
+    expect(await authorization.canAccess('USR-STRANGER', 'admin', instrument)).toBe(false); // not a member
   });
 });

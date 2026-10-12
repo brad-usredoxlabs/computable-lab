@@ -30,6 +30,7 @@ describe('ProtocolPhasesSchema', () => {
       'workflow/setting.schema.yaml',
       'core/common.schema.yaml',
       'core/datatypes/ref.schema.yaml',
+      'core/datatypes/revision-ref.schema.yaml',
       'core/datatypes/concentration.schema.yaml',
       'core/datatypes/reference-ratio.schema.yaml',
       'core/datatypes/condition.schema.yaml',

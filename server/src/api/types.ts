@@ -38,6 +38,12 @@ export interface CreateRecordRequest {
   payload: unknown;
   /** Commit message (optional) */
   message?: string;
+  /**
+   * Active project for this creation. When the ownership policy for this kind
+   * says filedTo: active-project and the payload carries no studyId, the record
+   * is filed into this study (links.studyId) at creation time.
+   */
+  studyId?: string;
 }
 
 /**

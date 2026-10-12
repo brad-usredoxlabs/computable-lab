@@ -30,6 +30,7 @@ import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
 import type { AuthorizationService } from '../../security/AuthorizationService.js';
+import type { OwnershipPolicyService } from '../../security/OwnershipPolicyService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
 import type { AuthoringPolicy } from '../../lint/types.js';
@@ -40,6 +41,7 @@ import type { AuditEventService } from '../../governance/AuditEventService.js';
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
   authorizationService?: AuthorizationService;
+  ownershipPolicyService?: OwnershipPolicyService;
   roleResolver?: RoleResolver;
   getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition };
   /** Best-effort audit trail; appends never fail the business operation. */
@@ -485,13 +487,33 @@ export function createRecordHandlers(
           }
         }
 
+        // Declarative filing: a kind whose ownership rule declares
+        // filedTo: active-project lands in the caller's project unless the
+        // payload already names one. The rule decides; this code only applies.
+        const filedStudyId = request.body.studyId;
+        const filingRule =
+          security?.ownershipPolicyService && user.userId && kind && typeof filedStudyId === 'string'
+            ? await security.ownershipPolicyService.ruleFor(kind)
+            : null;
+        const currentLinks =
+          typedPayload.links && typeof typedPayload.links === 'object'
+            ? (typedPayload.links as Record<string, unknown>)
+            : undefined;
+        const payloadForEnvelope =
+          filingRule?.filedTo === 'active-project' &&
+          typeof filedStudyId === 'string' &&
+          typeof currentLinks?.studyId !== 'string' &&
+          typeof typedPayload.studyId !== 'string'
+            ? { ...typedPayload, links: { ...(currentLinks ?? {}), studyId: filedStudyId } }
+            : typedPayload;
+
         // Create envelope
         const envelope = createEnvelope(
           // Stamp the resolved actor into the declared provenance field
           // (e.g. grantedBy) when the authoring policy asks for it.
           authoringPolicy?.stampActorAs && user.userId
-            ? { ...payloadWithProvenance, [authoringPolicy.stampActorAs]: user.userId }
-            : payloadWithProvenance,
+            ? { ...payloadForEnvelope, [authoringPolicy.stampActorAs]: user.userId }
+            : payloadForEnvelope,
           schemaId,
           {
             createdAt: now,

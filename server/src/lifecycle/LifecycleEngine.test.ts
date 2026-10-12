@@ -92,6 +92,11 @@ describe('TransitionInfo.requires (guard metadata pass-through)', () => {
       signatureRequired: true,
       signatureAction: 'approved',
       differentPersonThan: 'author',
+      // QMS-6F (decision option B): guard denialMessages pass through verbatim.
+      denialMessages: {
+        differentPerson:
+          'This transition requires a different person than the author. As the author you may not perform it — the document\'s state did not change.',
+      },
     })
   })
 

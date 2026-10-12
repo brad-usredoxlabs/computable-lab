@@ -163,6 +163,11 @@ export class UISpecLoader {
       errors.push(...this.validateDetailConfig(data.detail, 'detail'));
     }
     
+    // Validate editor config if present
+    if (data.editor !== undefined) {
+      errors.push(...this.validateEditorConfig(data.editor, 'editor'));
+    }
+    
     return errors;
   }
   
@@ -346,6 +351,253 @@ export class UISpecLoader {
       errors.push(`${path}.sections: must be an array`);
     }
     
+    return errors;
+  }
+
+  /**
+   * Valid editor block kinds (mirrors EditorBlockKind in types.ts).
+   */
+  private static readonly VALID_BLOCK_KINDS: Set<string> = new Set([
+    'section', 'paragraph', 'repeater', 'table',
+  ]);
+
+  /**
+   * Validate editor configuration (document-style editor surface).
+   *
+   * Shape checks mirror the EditorConfig type the projection consumes; the
+   * three SEMANTIC binding rules are enforced here so a broken spec fails
+   * at load time instead of rendering a blank editor:
+   *   (a) block.slots must reference known slot ids,
+   *   (b) a slot may be claimed by at most one block,
+   *   (c) in a spec with >=1 explicit binding, every slot must be claimed
+   *       (explicitly or via prefix fallback) by some block.
+   */
+  private validateEditorConfig(data: unknown, path: string): string[] {
+    const errors: string[] = [];
+
+    if (typeof data !== 'object' || data === null) {
+      errors.push(`${path}: must be an object`);
+      return errors;
+    }
+
+    const editor = data as Record<string, unknown>;
+
+    // Mode
+    if (editor.mode === undefined) {
+      errors.push(`${path}: missing required 'mode'`);
+    } else if (editor.mode !== 'document') {
+      errors.push(`${path}.mode: must be 'document'`);
+    }
+
+    // Blocks
+    let blocks: unknown[] | undefined;
+    if (editor.blocks === undefined) {
+      errors.push(`${path}: missing required 'blocks' array`);
+    } else if (!Array.isArray(editor.blocks)) {
+      errors.push(`${path}.blocks: must be an array`);
+    } else {
+      blocks = editor.blocks;
+      blocks.forEach((block, i) => {
+        errors.push(...this.validateEditorBlock(block, `${path}.blocks[${i}]`));
+      });
+    }
+
+    // Slots
+    let slots: unknown[] | undefined;
+    if (editor.slots === undefined) {
+      errors.push(`${path}: missing required 'slots' array`);
+    } else if (!Array.isArray(editor.slots)) {
+      errors.push(`${path}.slots: must be an array`);
+    } else {
+      slots = editor.slots;
+      slots.forEach((slot, i) => {
+        errors.push(...this.validateEditorSlot(slot, `${path}.slots[${i}]`));
+      });
+    }
+
+    if (blocks && slots) {
+      errors.push(...this.validateEditorBindings(blocks, slots, path));
+    }
+
+    return errors;
+  }
+
+  /**
+   * Validate an editor block shape.
+   */
+  private validateEditorBlock(data: unknown, path: string): string[] {
+    const errors: string[] = [];
+
+    if (typeof data !== 'object' || data === null) {
+      errors.push(`${path}: must be an object`);
+      return errors;
+    }
+
+    const block = data as Record<string, unknown>;
+
+    if (!block.id) {
+      errors.push(`${path}: missing required 'id'`);
+    } else if (typeof block.id !== 'string') {
+      errors.push(`${path}.id: must be a string`);
+    }
+
+    if (!block.kind) {
+      errors.push(`${path}: missing required 'kind'`);
+    } else if (typeof block.kind !== 'string') {
+      errors.push(`${path}.kind: must be a string`);
+    } else if (!UISpecLoader.VALID_BLOCK_KINDS.has(block.kind)) {
+      errors.push(`${path}.kind: invalid block kind '${block.kind}'`);
+    }
+
+    if (block.path !== undefined && typeof block.path !== 'string') {
+      errors.push(`${path}.path: must be a string`);
+    }
+
+    if (block.slots !== undefined) {
+      if (!Array.isArray(block.slots)) {
+        errors.push(`${path}.slots: must be an array of slot ids`);
+      } else {
+        block.slots.forEach((slotId, i) => {
+          if (typeof slotId !== 'string') {
+            errors.push(`${path}.slots[${i}]: must be a string slot id`);
+          }
+        });
+      }
+    }
+
+    if (block.collapsible !== undefined && typeof block.collapsible !== 'boolean') {
+      errors.push(`${path}.collapsible: must be a boolean`);
+    }
+    if (block.collapsed !== undefined && typeof block.collapsed !== 'boolean') {
+      errors.push(`${path}.collapsed: must be a boolean`);
+    }
+
+    return errors;
+  }
+
+  /**
+   * Validate an editor slot shape. The projection reads id/path/label/widget
+   * unconditionally, so those are required; widget must be a known type.
+   */
+  private validateEditorSlot(data: unknown, path: string): string[] {
+    const errors: string[] = [];
+
+    if (typeof data !== 'object' || data === null) {
+      errors.push(`${path}: must be an object`);
+      return errors;
+    }
+
+    const slot = data as Record<string, unknown>;
+
+    if (!slot.id) {
+      errors.push(`${path}: missing required 'id'`);
+    } else if (typeof slot.id !== 'string') {
+      errors.push(`${path}.id: must be a string`);
+    }
+
+    if (!slot.path) {
+      errors.push(`${path}: missing required 'path'`);
+    } else if (typeof slot.path !== 'string') {
+      errors.push(`${path}.path: must be a string`);
+    }
+
+    if (!slot.label) {
+      errors.push(`${path}: missing required 'label'`);
+    } else if (typeof slot.label !== 'string') {
+      errors.push(`${path}.label: must be a string`);
+    }
+
+    if (!slot.widget) {
+      errors.push(`${path}: missing required 'widget'`);
+    } else if (typeof slot.widget !== 'string') {
+      errors.push(`${path}.widget: must be a string`);
+    } else if (!VALID_WIDGET_TYPES.has(slot.widget)) {
+      errors.push(`${path}.widget: invalid widget type '${slot.widget}'`);
+    }
+
+    return errors;
+  }
+
+  /**
+   * Semantic slot-binding rules across blocks and slots.
+   *
+   * A slot is "claimed" when a block lists its id in `slots`, or when a
+   * block WITHOUT explicit `slots` has a `path` that prefixes the slot's
+   * path (the legacy fallback). The unclaimed-slot rule only applies when
+   * at least one block declares an explicit binding, so pure-prefix specs
+   * keep today's behavior.
+   */
+  private validateEditorBindings(
+    blocks: unknown[],
+    slots: unknown[],
+    path: string
+  ): string[] {
+    const errors: string[] = [];
+
+    const slotIds = new Set<string>();
+    const slotPaths = new Map<string, string>();
+    for (const slot of slots) {
+      if (typeof slot !== 'object' || slot === null) continue;
+      const s = slot as Record<string, unknown>;
+      if (typeof s.id === 'string') {
+        slotIds.add(s.id);
+        if (typeof s.path === 'string') slotPaths.set(s.id, s.path);
+      }
+    }
+
+    const explicitlyClaimed = new Set<string>();
+    let hasExplicitBinding = false;
+
+    blocks.forEach((block, i) => {
+      if (typeof block !== 'object' || block === null) return;
+      const b = block as Record<string, unknown>;
+      if (!Array.isArray(b.slots)) return;
+
+      hasExplicitBinding = true;
+      b.slots.forEach((slotId) => {
+        if (typeof slotId !== 'string') return;
+        if (!slotIds.has(slotId)) {
+          errors.push(
+            `${path}.blocks[${i}].slots: unknown slot id '${slotId}'`
+          );
+          return;
+        }
+        if (explicitlyClaimed.has(slotId)) {
+          errors.push(
+            `${path}.slots: slot id '${slotId}' claimed by multiple blocks`
+          );
+          return;
+        }
+        explicitlyClaimed.add(slotId);
+      });
+    });
+
+    if (hasExplicitBinding) {
+      // Prefix-fallback coverage: a slot not explicitly claimed is still
+      // reachable if any slot-less block's path prefixes it.
+      const prefixCapablePaths: string[] = [];
+      for (const block of blocks) {
+        if (typeof block !== 'object' || block === null) continue;
+        const b = block as Record<string, unknown>;
+        if (b.slots === undefined && typeof b.path === 'string') {
+          prefixCapablePaths.push(b.path);
+        }
+      }
+
+      for (const slotId of slotIds) {
+        if (explicitlyClaimed.has(slotId)) continue;
+        const slotPath = slotPaths.get(slotId);
+        const covered =
+          slotPath !== undefined &&
+          prefixCapablePaths.some((p) => slotPath.startsWith(p));
+        if (!covered) {
+          errors.push(
+            `${path}.slots: slot id '${slotId}' is not claimed by any block`
+          );
+        }
+      }
+    }
+
     return errors;
   }
 }

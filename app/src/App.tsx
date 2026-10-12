@@ -69,6 +69,8 @@ const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage'
 const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(m => ({ default: m.SequencesPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
+// QMS-5: record registry (multi-kind QMS browser). Default export.
+const RecordRegistryPage = lazy(async () => import('./pages/RecordRegistryPage').then((m) => ({ default: m.default })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -209,6 +211,8 @@ export function App() {
               <Route path="/analysis" element={<DeferredRoute><AnalysisPage /></DeferredRoute>} />
               {/* Standalone ChatGPT-style chat against the local AI model. */}
               <Route path="/chat" element={<DeferredRoute><ChatPage /></DeferredRoute>} />
+              {/* QMS-5: multi-kind record registry (people/equipment/training/…). */}
+              <Route path="/registry" element={<DeferredRoute><RecordRegistryPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />

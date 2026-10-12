@@ -51,7 +51,11 @@ properties:
       properties:
         principalType:
           type: string
-          enum: [ user, group ]
+          enum: [ user, group, project ]
+          description: >
+            project = members of the project (study) named by principalId (STU-*);
+            membership is the named study's own access-policy (owner, user grant,
+            group grant incl. nested, or a public study).
         principalId:
           type: string
         role:

@@ -393,6 +393,14 @@ export interface EditorBlock {
   path?: string;
   /** For table: column definitions */
   columns?: EditorTableColumn[];
+  /**
+   * Explicit slot-id claims for this block (section/paragraph style).
+   * A block declaring `slots` claims exactly those slots, projected into
+   * the block's `slotIds` IN THIS LIST ORDER; claimed slots are never
+   * reassigned by path-prefix matching. Blocks WITHOUT `slots` keep the
+   * path-prefix binding (repeater/table keep `path`).
+   */
+  slots?: string[];
   /** Visibility condition */
   visible?: VisibilityCondition;
 }

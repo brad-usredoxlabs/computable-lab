@@ -13,6 +13,48 @@
 
 import type { JSONContent } from '@tiptap/core';
 import { setValueAtPath, stripJsonPath } from '../../shared/lib/formHelpers';
+import { isEmptyFieldValue } from './refValue';
+
+/**
+ * Immutably remove the value at a dotted path. No-op when the path is absent.
+ * Used for the value-emission contract (QMS-6E refs, EDITOR-9 scalars): a
+ * cleared field must be DELETED, not written as a typed empty. Intermediate
+ * objects emptied by the deletion are pruned too — a residue `contact: {}`
+ * after clearing `contact.email` + `contact.phone` is a container the user
+ * never set; absence is its true state. Containers that still hold values
+ * (siblings the user filled or fields outside this projection) are kept.
+ */
+function deleteValueAtPath(
+  obj: Record<string, unknown>,
+  path: string,
+): Record<string, unknown> {
+  const parts = stripJsonPath(path).split('.')
+  if (parts.length === 0 || parts.some((p) => p.length === 0)) return obj
+
+  const result = { ...obj }
+  // Cloned ancestors, shallowest first, with the key each sits under.
+  const chain: Array<{ container: Record<string, unknown>; key: string }> = []
+  let current = result
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]!
+    const next = current[part]
+    if (next === null || typeof next !== 'object' || Array.isArray(next)) return obj
+    current[part] = { ...(next as Record<string, unknown>) }
+    current = current[part] as Record<string, unknown>
+    chain.push({ container: current, key: part })
+  }
+  delete current[parts[parts.length - 1]!]
+
+  // Prune emptied ancestors from the deepest upward; stop at the first
+  // container that still holds a value.
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const { container, key } = chain[i]!
+    if (Object.keys(container).length > 0) break
+    const holder = i === 0 ? result : chain[i - 1]!.container
+    delete holder[key]
+  }
+  return result
+}
 
 /**
  * Recursively walks a TipTap document tree and extracts fieldRow path/value pairs.
@@ -34,6 +76,23 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
       if (node.attrs.readOnly && value == null) continue;
 
       if (typeof path === 'string') {
+        // Value-emission contract (QMS-6E D3b, generalized by EDITOR-9): a
+        // widget holding its unset/empty value is ABSENT from the payload.
+        // For a ref that meant null/''/'—' into a `type: object` slot 422s;
+        // for a scalar optional it means null/'' into a `type: string` (or
+        // number) slot 422s the same way (Brad's person save: /organizationId,
+        // /contact/phone). Absence is the true empty value; a cleared field
+        // must also delete any base-payload value at the same path, or the
+        // clear silently un-clears. Required-but-empty is omitted too — the
+        // server's required-check is the correct validation error.
+        if (isEmptyFieldValue(value, node.attrs.widget)) {
+          result = deleteValueAtPath(result, stripJsonPath(path));
+          // Recursively process child nodes
+          if (node.content && node.content.length > 0) {
+            result = extractFieldRows(node.content, result);
+          }
+          continue;
+        }
         // Use stripJsonPath to remove $. prefix, then set the value
         const cleanPath = stripJsonPath(path);
         // setValueAtPath returns a new object, so we need to capture it

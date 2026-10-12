@@ -19,14 +19,17 @@ editor:
       kind: "section"
       label: "Identity"
       help: "Controlled-document identifiers. State advances only via lifecycle transitions, never as a form field."
+      slots: ["id-slot", "title-slot", "state-slot"]
     - id: "classification"
       kind: "section"
       label: "Classification"
       help: "Document class, human revision label, and role assignments."
+      slots: ["doctype-slot", "revision-slot", "author-ref-slot", "reviewer-ref-slot", "approver-ref-slot"]
     - id: "document-body"
       kind: "section"
       label: "Body"
       help: "Rich-text document content. Stored as an HTML string."
+      slots: ["body-slot"]
   slots:
     - id: "id-slot"
       path: "$.id"

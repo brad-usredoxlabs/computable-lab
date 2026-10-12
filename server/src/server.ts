@@ -159,9 +159,11 @@ import { SessionStore } from './security/SessionStore.js';
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
 import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
+import { OwnershipPolicyService } from './security/OwnershipPolicyService.js';
 import { StorageService } from './storage/StorageService.js';
 import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
 import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
+import { createOwnershipPolicyHandlers } from './api/handlers/OwnershipPolicyHandlers.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -257,6 +259,10 @@ export interface AppContext {
   credentialStore: CredentialStore;
   sessionStore: SessionStore;
   authorizationService: AuthorizationService;
+  /** The single ownership-policy service instance (constructed in initializeApp,
+   *  beside AuthorizationService's) — OWN-9 reuses it for the handlers: one
+   *  instance, one truth. */
+  ownershipPolicyService: OwnershipPolicyService;
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
@@ -504,7 +510,8 @@ export async function initializeApp(
   const sessionStore = new SessionStore(authDir);
   const localIdentityService = new LocalIdentityService(store, sessionStore, (userId) => credentialStore.hasCredential(userId));
   await localIdentityService.ensureLocalAdminUser();
-  const authorizationService = new AuthorizationService(store);
+  const ownershipPolicyService = new OwnershipPolicyService(store);
+  const authorizationService = new AuthorizationService(store, ownershipPolicyService);
   // Backfill owner policies for pre-existing policy-root records that have no
   // ACL (otherwise "no policy = open to everyone" leaks them to other users).
   // Idempotent; a no-op once everything is stamped.
@@ -647,6 +654,7 @@ export async function initializeApp(
     credentialStore,
     sessionStore,
     authorizationService,
+    ownershipPolicyService,
     platformRegistry,
     lifecycleEngine,
     policyBundleService,
@@ -733,6 +741,7 @@ export async function createServer(
     {
       identityService: ctx.localIdentityService,
       authorizationService: ctx.authorizationService,
+      ownershipPolicyService: ctx.ownershipPolicyService,
       roleResolver,
       auditService,
       // Declarative authoring gates (*.lint.yaml `authoring:` blocks).
@@ -843,7 +852,35 @@ export async function createServer(
   });
   const runContextAssembler = new RunContextAssembler(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
-  const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
+  const labSettingsHandlers = createLabSettingsHandlers({
+    // Live accessor, not a snapshot (the vendorSearchHandlers pattern below):
+    // onConfigUpdate reassigns ctx.appConfig, so GET/PATCH /settings/lab read
+    // the CURRENT config per request — a bundle switch is visible immediately,
+    // no restart (the snapshot trap the old by-value wiring created).
+    getAppConfig: () => ctx.appConfig,
+    bundleService: ctx.policyBundleService,
+    // Persistence reuses the PATCH /api/config writer (merge + validate +
+    // atomic tmp+rename + in-memory reassign + onConfigUpdate). Lazy
+    // reference: configHandlers is constructed later in this scope; the call
+    // happens per-request. One writer instance = one in-memory truth.
+    patchConfig: (request, reply) =>
+      configHandlers.patchConfig(request as Parameters<typeof configHandlers.patchConfig>[0], reply),
+    // Authz gate (QMS-8 spec DECISION): resolve the request user the way the
+    // lifecycle handlers do; require the admin role via the same RoleResolver
+    // the lifecycle transitions use. Fail closed; denial -> 403 FORBIDDEN.
+    resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
+    roleResolver,
+    auditService,
+  });
+  // OWN-9: the ownership-policy document API. REUSES the single
+  // ownershipPolicyService instance constructed in initializeApp (beside
+  // AuthorizationService's) — one instance, one truth; no second construction.
+  const ownershipPolicyHandlers = createOwnershipPolicyHandlers({
+    store: ctx.store,
+    service: ctx.ownershipPolicyService,
+    identityService: ctx.localIdentityService,
+    authorizationService: ctx.authorizationService,
+  });
   const lifecycleHandlers = createLifecycleHandlers({
     engine: ctx.lifecycleEngine,
     store: ctx.store,
@@ -1445,6 +1482,7 @@ export async function createServer(
       runDraftHandlers,
       platformHandlers,
       labSettingsHandlers,
+      ownershipPolicyHandlers,
       lifecycleHandlers,
       signatureHandlers,
       metaHandlers,

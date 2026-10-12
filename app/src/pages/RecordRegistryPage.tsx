@@ -3,10 +3,14 @@ import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobo
 import { CsvImportModal } from '../components/registry/CsvImportModal';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
+import { serializeDocument } from '../editor/taptab/recordSerializer';
 import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
+import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
+import { deriveSchemaNode } from '../browser/SchemaTree';
+import type { SchemaNode } from '../browser/SchemaTree';
 
 const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
@@ -17,6 +21,7 @@ const REGISTRY_TABS = [
   { id: 'calibrations', label: 'Calibrations', kinds: ['calibration-record', 'qualification-record'] },
   { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
   { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
+  { id: 'documents', label: 'Documents', kinds: ['controlled-document'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
@@ -40,34 +45,78 @@ export default function RecordRegistryPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // QMS-6A (delta D6 messaging): after a draft-copy the editing subject has
+  // silently changed — one honest clarifying line, no design decision.
+  const [draftRevisionNote, setDraftRevisionNote] = useState<string | null>(null);
 
   // Projection state for the selected record
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
 
+  // EDITOR-9 fix-1 (browser-gate defect 2): the create-from-search affordance
+  // was dead for every tab because the combobox received schemaId="" and the
+  // server's precompile endpoint refuses an empty id. The kind -> schema $id
+  // mapping is NOT hardcoded here: it is derived from the schema registry
+  // itself (GET /schemas + SchemaTree's deriveSchemaNode, the same wiring
+  // /browser uses), so a new schema/<domain>/<kind>.schema.yaml needs no
+  // frontend change.
+  const [schemaNodes, setSchemaNodes] = useState<SchemaNode[]>([]);
   useEffect(() => {
-    async function refreshRecords() {
-      const tab = REGISTRY_TABS.find(t => t.id === activeTab);
-      if (!tab) return;
-      setLoading(true);
-      try {
-        const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
-        const results = await Promise.all(promises);
-        const allRecords: RecordData[] = [];
-        for (const { records } of results) allRecords.push(...records);
-        allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
-        setRecords(allRecords);
-      } catch {
-        setRecords([]);
-      } finally {
-        setLoading(false);
-      }
+    let cancelled = false;
+    apiClient
+      .getSchemas()
+      .then((infos) => {
+        const nodes: SchemaNode[] = [];
+        for (const info of infos) {
+          const node = deriveSchemaNode(info);
+          if (node) nodes.push(node);
+        }
+        if (!cancelled) setSchemaNodes(nodes);
+      })
+      .catch((err) => {
+        console.warn('Schema registry unavailable; create-from-search disabled.', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // QMS-6E D5: request-sequence token for the record list. Every refresh (tab
+  // switch, post-save, post-transition) bumps the token; a response whose
+  // token is no longer current is STALE — its tab is gone — and is dropped
+  // instead of rendering the wrong tab's rows.
+  const refreshSeqRef = useRef(0);
+
+  // Single implementation of the record-list refresh — the tab-switch effect
+  // and every manual refresh (save, draft-copy, transitions, CSV import) share
+  // it. Previously the effect carried a private copy with no staleness guard.
+  const refreshRecords = useCallback(async () => {
+    const tab = REGISTRY_TABS.find(t => t.id === activeTab);
+    if (!tab) return;
+    const seq = ++refreshSeqRef.current;
+    setLoading(true);
+    try {
+      const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
+      const results = await Promise.all(promises);
+      if (seq !== refreshSeqRef.current) return; // A newer refresh won the race.
+      const allRecords: RecordData[] = [];
+      for (const { records } of results) allRecords.push(...records);
+      allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
+      setRecords(allRecords);
+    } catch {
+      if (seq !== refreshSeqRef.current) return;
+      setRecords([]);
+    } finally {
+      if (seq === refreshSeqRef.current) setLoading(false);
     }
-    refreshRecords();
+  }, [activeTab]);
+
+  useEffect(() => {
+    void refreshRecords();
     setSelectedRecord(null);
     setProjection(null);
     setDirty(false);
-  }, [activeTab]);
+  }, [activeTab, refreshRecords]);
 
   const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
     const recordData: RecordData = {
@@ -78,15 +127,26 @@ export default function RecordRegistryPage() {
     setSelectedRecord(recordData);
     setEditorMode('edit');
     setDirty(false);
+    setDraftRevisionNote(null);
 
     // Load editor projection for the selected record
     loadProjectionForRecord(recordData);
   };
 
-  const handleCreateRecord = (schemaId: string) => {
-    setSelectedRecord({ recordId: '', schemaId, payload: {} });
+  const handleCreateRecord = (schemaId: string, precompilePayload?: Record<string, unknown>) => {
+    // EDITOR-9 fix-2 (browser-gate defect 1, 20261011T0550-regate): the
+    // precompile payload the combobox already carries (kind/id/displayName/
+    // status — RecordSearchCombobox.tsx:187-193) must SEED the create base.
+    // serializeDocument clones this base and overlays only projection slot
+    // paths; the person draft projection has no `kind` slot, so a base of {}
+    // produced a POST body with no kind (Ajv 422) and no id (server 400).
+    // This is the same mechanism that makes EDIT mode work: edit keeps the
+    // record's own kind/id in the base. No client-side id minting here — the
+    // id comes from the precompile payload the server already produced.
+    setSelectedRecord({ recordId: '', schemaId, payload: { ...precompilePayload } });
     setEditorMode('create');
     setDirty(false);
+    setDraftRevisionNote(null);
 
     // Load draft editor projection for create mode
     loadDraftProjection(schemaId);
@@ -95,24 +155,6 @@ export default function RecordRegistryPage() {
   const handleSaved = async () => {
     await refreshRecords();
   };
-
-  async function refreshRecords() {
-    const tab = REGISTRY_TABS.find(t => t.id === activeTab);
-    if (!tab) return;
-    setLoading(true);
-    try {
-      const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
-      const results = await Promise.all(promises);
-      const allRecords: RecordData[] = [];
-      for (const { records } of results) allRecords.push(...records);
-      allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
-      setRecords(allRecords);
-    } catch {
-      setRecords([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const loadProjectionForRecord = async (recordData: RecordData) => {
     if (!recordData.recordId) return;
@@ -150,9 +192,15 @@ export default function RecordRegistryPage() {
     setError(null);
 
     try {
-      // Serialize from the TipTap editor JSON
+      // QMS-6E D3a: serialize the TipTap doc INTO the record's own payload —
+      // exactly like the /record sibling (RecordEditPanel). PUTting the raw
+      // doc as the payload loses kind/id/lifecycleId and every save of a
+      // lifecycle-bearing record dies with 409 LIFECYCLE_IMMUTABLE.
       const docJson = editor.getJSON();
-      const serialized = docJson as Record<string, unknown>;
+      const serialized = serializeDocument(
+        docJson,
+        selectedRecord.payload as Record<string, unknown>,
+      );
 
       if (editorMode === 'create') {
         await apiClient.createRecord(selectedRecord.schemaId, serialized);
@@ -175,6 +223,58 @@ export default function RecordRegistryPage() {
     setProjection(null);
     setDirty(false);
     setError(null);
+    setDraftRevisionNote(null);
+  };
+
+  // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
+  // In-place Save is replaced by a draft-copy; the server issues fresh
+  // authorship (no inherited reviewer/approver/signature assignments).
+  const contentLocked =
+    editorMode === 'edit' &&
+    ((selectedRecord?.payload as { state?: string } | undefined)?.state === 'approved' ||
+      (selectedRecord?.payload as { state?: string } | undefined)?.state === 'effective');
+
+  const handleCreateDraftRevision = async () => {
+    if (!selectedRecord?.recordId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await apiClient.createDraftCopy(selectedRecord.recordId, {});
+      const draft = result.record;
+      const draftData: RecordData = {
+        recordId: draft.recordId,
+        schemaId: draft.schemaId || (draft.payload as { schemaId?: string }).schemaId || selectedRecord.schemaId,
+        payload: draft.payload,
+      };
+      setSelectedRecord(draftData);
+      setDirty(false);
+      setDraftRevisionNote(
+        `Created draft revision ${draft.recordId} from ${selectedRecord.recordId} — signatures and approvals do not carry over.`,
+      );
+      await refreshRecords();
+      loadProjectionForRecord(draftData);
+    } catch (err) {
+      // Surface the server's refusal verbatim if the in-place path was refused.
+      setError(err instanceof Error ? err.message : 'Failed to create draft revision');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // After a lifecycle transition (or its failure) show the server's ACTUAL state.
+  const refreshSelectedRecord = async () => {
+    if (!selectedRecord?.recordId) return;
+    try {
+      const fresh = await apiClient.getRecord(selectedRecord.recordId);
+      setSelectedRecord({
+        recordId: fresh.recordId,
+        schemaId: fresh.schemaId,
+        payload: fresh.payload,
+      });
+    } catch {
+      // The list refresh below still reflects what the server has.
+    }
+    await refreshRecords();
   };
 
   // Event-driven dirty tracking via TapTabEditor callback — no polling
@@ -183,6 +283,13 @@ export default function RecordRegistryPage() {
   }, []);
 
   const activeTabConfig = REGISTRY_TABS.find(t => t.id === activeTab)!;
+
+  // EDITOR-9 fix-1: the tab's primary kind (first entry in its kinds list)
+  // resolves to its registered schema $id from the schema-registry metadata.
+  // Empty until the registry loads — the combobox then behaves as before
+  // instead of guessing a schema.
+  const activeTabSchemaId =
+    schemaNodes.find((node) => node.kind === activeTabConfig.kinds[0])?.schemaId ?? '';
 
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
 
@@ -213,11 +320,14 @@ export default function RecordRegistryPage() {
         <div className="p-2 border-b border-gray-100">
           <RecordSearchCombobox
             kinds={activeTabConfig.kinds as unknown as string[]}
-            schemaId=""
+            schemaId={activeTabSchemaId}
             placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
             onSelect={(record) => {
               if (record.isNew) {
-                handleCreateRecord(record.schemaId);
+                // EDITOR-9 fix-2: pass the combobox's precompile payload
+                // through so the create base carries kind/id (see
+                // handleCreateRecord).
+                handleCreateRecord(record.schemaId, record.payload);
               } else {
                 handleSelectRecord({ recordId: record.recordId, payload: record.payload });
               }
@@ -268,19 +378,34 @@ export default function RecordRegistryPage() {
               title={title}
               actions={
                 <>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !dirty}
-                    className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save'}
-                  </button>
+                  {contentLocked ? (
+                    <button
+                      onClick={handleCreateDraftRevision}
+                      disabled={saving}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {saving ? 'Creating...' : 'Create draft revision'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSave}
+                      disabled={saving || !dirty}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  )}
                   <button
                     onClick={handleCancel}
                     className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
                   >
                     Cancel
                   </button>
+                  {draftRevisionNote && (
+                    <span data-testid="draft-revision-note" className="text-xs text-blue-700">
+                      {draftRevisionNote}
+                    </span>
+                  )}
                   {dirty && !saving && (
                     <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
                   )}
@@ -303,13 +428,20 @@ export default function RecordRegistryPage() {
           }
         >
           <div className="flex-1 overflow-y-auto p-4">
+            {selectedRecord.recordId && editorMode === 'edit' && (
+              <DocumentControlBar
+                record={selectedRecord}
+                dirty={dirty}
+                onStateChanged={refreshSelectedRecord}
+              />
+            )}
             {hasProjection ? (
               <ProjectionTapTabEditor
                 ref={taptabRef}
                 blocks={projection.blocks}
                 slots={projection.slots}
                 data={selectedRecord.payload}
-                disabled={saving}
+                disabled={saving || contentLocked}
                 onUpdate={handleSerializedChange}
               />
             ) : (

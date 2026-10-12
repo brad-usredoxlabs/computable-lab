@@ -85,6 +85,12 @@ properties:
               signatureAction:
                 type: string
                 description: "Required signature action for requires_signature."
+              denialMessage:
+                type: string
+                description: >-
+                  Optional human-readable denial reason surfaced when THIS guard
+                  fails. Pure pass-through data; absent => the server's generic
+                  denial wording.
         description:
           type: string
   roles:

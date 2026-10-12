@@ -85,3 +85,10 @@ properties:
         type: { const: user }
         id: { type: string, pattern: "^USR-" }
     description: "Approver role assignment (lifecycle role: approver). USR-* id; assigned as the flow advances, so not required at draft."
+
+  derivedFromRevisionRef:
+    $ref: "./datatypes/revision-ref.schema.yaml"
+    readOnly: true
+    description: >
+      Lineage back to the captured revision this draft was derived from
+      (draft-copy only; set once by the server at derivation, never edited).

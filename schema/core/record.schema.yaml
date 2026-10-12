@@ -35,6 +35,7 @@ oneOf:
 - $ref: "../identity/user.schema.yaml"
 - $ref: "../identity/group.schema.yaml"
 - $ref: "../identity/access-policy.schema.yaml"
+- $ref: "../identity/ownership-policy.schema.yaml"
 - $ref: "./training-material.schema.yaml"
 - $ref: "./training-record.schema.yaml"
 - $ref: "./competency-authorization.schema.yaml"
