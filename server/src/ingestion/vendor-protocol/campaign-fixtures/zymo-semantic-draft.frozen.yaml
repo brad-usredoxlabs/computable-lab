@@ -1,0 +1,343 @@
+# W2-11 campaign frozen fixture — the MEANT body (semantic family draft payload)
+# HAND-AUTHORED per the OPERATIVE W211-OQ3(b) pick (see PROVENANCE.md).
+# branch_axes below are the verbatim deriveBranchAxes output over the real
+# decoded Zymo candidate (PDF sha 257f57196f6c...); anchors are the real
+# per-step pageStart values. Self-pinned by sha256 inside the golden tests.
+kind: protocol
+protocolLayer: universal
+recordId: PRT-CAN-w211-golden-semantic
+title: ZymoBIOMICS 96 MagBead DNA Kit — semantic family draft
+branch_axes:
+  - axisId: branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead-lysis-tubes
+    label: Branch variant on step-1, step-4
+    conditions:
+      - id: branch-1
+        label: a. If using ZymoBIOMICS BashingBead Lysis Rack (0.1 & 0.5 mm, D6002-96-7), add 550 µl ZymoBIOMICS Lysis Solution.
+        predicate:
+          op: equals
+          path: $.branchSelection
+          value: zymobiomics-bashingbead-lysis-rack
+        then_stepIds:
+          - step-1
+          - step-4
+      - id: branch-2
+        label: b. If using ZR BashingBead Lysis Tubes (0.1 & 0.5 mm), add 750 µl ZymoBIOMICS Lysis Solution.
+        predicate:
+          op: equals
+          path: $.branchSelection
+          value: zr-bashingbead-lysis-tubes
+        then_stepIds:
+          - step-1
+          - step-4
+steps:
+  - stepId: step-1
+    label: "Intent: Add sample to the BashingBead™ Lysis Mod"
+    ordinal: 1
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: add_material
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 9
+      materialNeeds:
+        - need: lysis_solution
+  - stepId: step-2
+    label: "Intent: When using the ZymoBIOMICS™ BashingBead™"
+    ordinal: 2
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: incubate
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 9
+  - stepId: step-3
+    label: "Intent: Secure in a bead beater fitted with the "
+    ordinal: 3
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: incubate
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+      materialNeeds:
+        - need: lysis_module
+          capabilityRequirement:
+            kind: ontology
+            id: CL:bead_beater
+            namespace: CL
+            label: bead beater
+  - stepId: step-4
+    label: "Intent: Centrifuge the BashingBead™ Lysis Module"
+    ordinal: 4
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: spin
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+  - stepId: step-5
+    label: "Intent: Transfer up to 200 µl of the deep-well b"
+    ordinal: 5
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: transfer
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+      materialNeeds:
+        - need: magbinding_beads
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 200
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-6
+    label: "Intent: Dispense 25 µl of ZymoBIOMICS™ MagBindin"
+    ordinal: 6
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: add_material
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+      materialNeeds:
+        - need: magbinding_beads
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 25
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-7
+    label: "Intent: Transfer the 96-well block to a magnetic"
+    ordinal: 7
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: pellet
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+  - stepId: step-8
+    label: "Intent: Dispense 500 µl of ZymoBIOMICS™ MagBindi"
+    ordinal: 8
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: add_material
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+      materialNeeds:
+        - need: magbinding_buffer
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 500
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-9
+    label: "Intent: Transfer the 96-well block to a magnetic"
+    ordinal: 9
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: pellet
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+  - stepId: step-10
+    label: "Intent: Dispense 500 µl of ZymoBIOMICS™ MagWash "
+    ordinal: 10
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: add_material
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+      materialNeeds:
+        - need: magwash_1
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 500
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-11
+    label: "Intent: Transfer the 96-well block to a magnetic"
+    ordinal: 11
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: pellet
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 10
+  - stepId: step-12
+    label: "Intent: Dispense 900 µl ZymoBIOMICS™ MagWash 2 a"
+    ordinal: 12
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: add_material
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
+      materialNeeds:
+        - need: magwash_2
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 900
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-13
+    label: "Intent: Transfer the deep-well block to a magnet"
+    ordinal: 13
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: pellet
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
+  - stepId: step-14
+    label: "Intent: Repeat the wash (Steps 12-13)."
+    ordinal: 14
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: wash
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
+      materialNeeds:
+        - need: magwash_2
+  - stepId: step-15
+    label: "Intent: Transfer the 96-Well Block onto a heatin"
+    ordinal: 15
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: incubate
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
+  - stepId: step-16
+    label: "Intent: Dispense 50 μl of ZymoBIOMICS™ DNase/RNa"
+    ordinal: 16
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: resuspend
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
+      materialNeeds:
+        - need: dnase_rnase_free_water
+      constraints:
+        - class: maximum
+          bindingKind: vendor_default
+          overridePolicy: lab-may-relax
+          bound:
+            value: 50
+            unit: uL
+            dimension: volume
+            qualifier: exact
+          subject:
+            ref: cf:constraint-maximum
+            role: fill_volume
+            dimensionKey: fill_volume:volume
+            bindingPolicyKey: lab-may-relax:vendor_default
+  - stepId: step-17
+    label: "Intent: Transfer the supernatant (containing the"
+    ordinal: 17
+    kind: other
+    intent:
+      semanticVerb:
+        canonical: elute
+      provenance:
+        - kind: record
+          type: vendor-protocol-candidate
+          id: CAN-w211-golden
+          pageStart: 11
