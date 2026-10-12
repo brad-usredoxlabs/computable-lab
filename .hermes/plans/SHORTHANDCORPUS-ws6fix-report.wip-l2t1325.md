@@ -235,4 +235,4 @@ No commit/push to trunk; work committed on the branch only.
 - Criterion (c) re-check needs a fresh browser run by cl-browser-reviewer; my pass
   is not the acceptance gate.
 
-WS6FIX DONE <head-sha>
+WS6FIX DONE 1ea29cc5abc0e5102f060a0ad6b357d3c884c492
