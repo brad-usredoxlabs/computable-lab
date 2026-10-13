@@ -153,6 +153,22 @@ describe('ShareRecordDialog preset row (§T12)', () => {
     expect(screen.getByRole('button', { name: 'Private to me' })).toBeInTheDocument()
   })
 
+  it('case 1b: a kind with NO kindRule falls back to the declared fallback rule (not "all")', async () => {
+    // kindRules has no entry for the record's kind; the fallback rule allows
+    // user+group only. Mirrors the server's ruleFor (kind first, fallback
+    // second, null only when NOTHING is declared).
+    const doc = policyDoc(['user', 'group', 'project', 'lab'])
+    doc.resolved!.kindRules = {}
+    doc.resolved!.fallback = { ...doc.resolved!.fallback, shareTargets: ['user', 'group'] }
+    vi.mocked(apiClient.getOwnershipPolicy).mockResolvedValue(doc)
+    renderDialog()
+    expect(await screen.findByRole('button', { name: 'Private to me' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Share with whole lab' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Share with project members' })).toBeNull()
+    // A declared fallback is NOT "policy unavailable" — no note.
+    expect(screen.queryByText(NOTE)).toBeNull()
+  })
+
   it('case 2: policy fetch failure shows all three presets + the verbatim note, never the error state', async () => {
     vi.mocked(apiClient.getOwnershipPolicy).mockRejectedValue(new Error('boom'))
     renderDialog()
@@ -191,6 +207,7 @@ describe('ShareRecordDialog preset row (§T12)', () => {
     unmount()
 
     // (b) active project present, record NOT filed to a project
+    mockTabsState = tabsState([projectTab('p1', 'STU-A', 'Alpha Study')], 'p1')
     vi.mocked(apiClient.getRecord).mockResolvedValue({ recordId: 'PRT-1', schemaId: 'protocol', payload: {} })
     renderDialog()
     const btn2 = await screen.findByRole('button', { name: 'Share with project members' })
