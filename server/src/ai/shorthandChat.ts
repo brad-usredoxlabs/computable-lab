@@ -203,6 +203,20 @@ export function bindShorthandEventsToDeck<T extends object>(
           delete nextDetails.well;
           nextDetails.wells = expanded;
           dChanged = true;
+        } else if (
+          expanded.length === 1
+          && !Array.isArray(d.wells)
+          && (boundTop || boundDetail || (typeof ev.labwareId === 'string' && knownIds.has(ev.labwareId)))
+        ) {
+          // COMP-1 Task 22 (Part IV criterion 1): the DECK channel
+          // (buildPreviewFromDraft -> buildPreviewWellIndex -> getAffectedWells)
+          // ghosts wells ONLY from details.wells — it never reads the singular
+          // details.well (the normalizePreviewEvents bridge runs on the
+          // labware-editor chat channel only). A deck-bound singular well must
+          // therefore ride the wells carrier too, or the ghost is invisible.
+          // Only fires when the labware is deck-provable (never invents).
+          nextDetails.wells = expanded;
+          dChanged = true;
         }
       }
       if (dChanged) {
