@@ -60,6 +60,7 @@ import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.j
 import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js';
 import { emptyLabState, type LabStateSnapshot } from '../state/LabState.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
+import { capResolvedLabwares } from './deckReviewFold.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
@@ -97,6 +98,10 @@ export interface ScientistIntentCompileDeps {
   /** SPINE-4: engine door override (tests stub the engine deps; the pass,
    *  reconciliation, registration, and the bar are always the real ones). */
   resolveNounsEngine?: ResolveNounsEngine;
+  /** DECK-FOLD-1: deck-review fold policy path override (tests inject a temp
+   *  policy to prove the cap is per-call DATA, not a process-cached literal;
+   *  production uses the shipped config/drafting/deck-review.yaml). */
+  deckReviewPolicyPath?: string | URL;
 }
 
 export interface ScientistIntentCompileResult {
@@ -291,6 +296,15 @@ export async function compileScientistIntent(
     gaps,
     ...(resolveLabwareOutput?.labwareAdditions && resolveLabwareOutput.labwareAdditions.length > 0
       ? { labwareAdditions: resolveLabwareOutput.labwareAdditions }
+      : {}),
+    // DECK-FOLD-1: the hints the pass bound against REAL inventory ride to the
+    // deck review as placement offers of the EXISTING records. Same
+    // non-empty-only idiom as labwareAdditions; capped at this single choke
+    // every consumer shares (OQ1) by config/drafting/deck-review.yaml
+    // maxResolvedOffers — rank is the pass-output order verbatim, truncation
+    // is a silent head-slice (a gap would flip outcome via computeOutcome).
+    ...(resolveLabwareOutput?.resolvedLabwares && resolveLabwareOutput.resolvedLabwares.length > 0
+      ? { resolvedLabwares: capResolvedLabwares(resolveLabwareOutput.resolvedLabwares, deps.deckReviewPolicyPath) }
       : {}),
     ...(labStateOutput ? {
       labStateDelta: {
