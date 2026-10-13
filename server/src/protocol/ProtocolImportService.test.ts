@@ -81,7 +81,9 @@ describe('importProtocolPdf — non-PDF formats dispatch (injectable seam kept)'
     );
     expect(extractSpy, 'a markdown import must never call the PDF extractor seam').not.toHaveBeenCalled();
     expect(response.success).toBe(true);
-    expect(response.document.title).toBe('Lysis protocol');
+    // The dispatcher declares markdown is read AS TEXT (headings not
+    // interpreted), so the heading marker survives into the derived title.
+    expect(response.document.title).toBe('# Lysis protocol');
     expect(response.document.materials).toContain('Lysis buffer');
     expect(response.document.steps).toHaveLength(2);
   });

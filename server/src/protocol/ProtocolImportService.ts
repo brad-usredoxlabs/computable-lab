@@ -1,4 +1,5 @@
 import { extractPdfLayoutText, type PdfPageText } from '../ingestion/pdf/TableExtractionService.js';
+import { decodeAttachmentText } from '../extract/decodeAttachment.js';
 
 export interface ProtocolImportRequest {
   fileName: string;
@@ -237,9 +238,29 @@ export async function importProtocolPdf(
 
   let pages: PdfPageText[] = [];
   let extractionMethod: 'pdf_text' | 'ocr' = 'pdf_text';
+  // DOCINGEST-A convergence site 3 (OQ1): a pre-branch, not an import swap.
+  // A PDF fileName keeps the injectable extractPdfText seam exactly as today
+  // (it is a test hook typed `typeof extractPdfLayoutText`); a non-PDF
+  // fileName routes through the ONE dispatcher and never touches the seam.
+  const isPdfImport = trimmedFileName.toLowerCase().endsWith('.pdf');
   try {
-    const pdf = await extract(buffer, trimmedFileName);
-    pages = pdf.pages;
+    if (isPdfImport) {
+      const pdf = await extract(buffer, trimmedFileName);
+      pages = pdf.pages;
+    } else {
+      const decoded = await decodeAttachmentText(trimmedFileName, undefined, buffer);
+      // A non-PDF has no page model: one pseudo-page keeps the page contract.
+      pages = [{ pageNumber: 1, text: decoded.text }];
+      for (const diagnostic of decoded.diagnostics) {
+        diagnostics.push({
+          id: `diag-dispatch-${diagnostics.length + 1}`,
+          severity: diagnostic.severity,
+          code: diagnostic.code,
+          message: diagnostic.message,
+          target: { kind: 'document' },
+        });
+      }
+    }
   } catch (err) {
     extractionMethod = 'ocr';
     diagnostics.push({
