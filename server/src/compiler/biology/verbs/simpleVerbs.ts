@@ -7,6 +7,7 @@
 
 import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type PlateEventPrimitive, type VerbInput } from '../BiologyVerbExpander.js';
 import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
+import { expandWellTokens } from '../../../ai/wellRange.js';
 
 /**
  * Shared helper for verbs that do add_material + incubate.
@@ -330,7 +331,20 @@ export const addMaterialExpander: BiologyVerbExpander = {
     const labwareId = (params.labware_id ?? params.labware) as string | undefined;
     const well = params.well as string | undefined;
     const material = params.material as Record<string, unknown> | string | undefined;
-    const wells = params.wells as string[] | undefined;
+    // SHORTHAND-COMP-1 Task 15 (Part III D3): the lowered shorthand candidate
+    // can carry `wells` as a compact ADDRESS RANGE string ("A1:H12" — the
+    // scalar `targetWells` form; add_material declares no kind:wells arg, so
+    // SPINE-7's symbolic-label branch never fires for it). Expand it through
+    // the ONE range parser (server/src/ai/wellRange.ts expandWellTokens — the
+    // same parser the raw path's expandEventWells uses) BEFORE the
+    // Array.isArray branch, so the existing per-well loop fires. A scalar on a
+    // DECLARED kind:wells arg is a symbolic label and routes to the spine
+    // (normalizeScientistIntent); a range string on an undeclared key is a
+    // literal address range and routes here. No second range parser.
+    const rawWells = params.wells as string[] | string | undefined;
+    const wells = typeof rawWells === 'string' && rawWells.trim()
+      ? expandWellTokens([rawWells])
+      : rawWells;
     const materialKind = params.materialKind as string | undefined;
     const volumeUl =
       typeof params.volume_uL === 'number'
@@ -348,6 +362,30 @@ export const addMaterialExpander: BiologyVerbExpander = {
             : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
               ? material.volume_uL
               : undefined;
+    // SHORTHAND-COMP-1 Task 14 (Part III D2): the DECLARED quantity object
+    // `{value, unit}` rides the candidate as `volume` (normalizeScientistIntent
+    // maps ['volume', ['volume']]). It was silently dropped here while
+    // transferExpander (below) already reads the exact same shape. Honor it in
+    // BOTH emit branches; an explicit object overrides the scalar forms.
+    // Unit honesty: NO conversion — `volumeUl` is derived only when the
+    // declared unit is literally 'uL'; {value:0.05, unit:'mL'} carries
+    // `volume` with no `volumeUl` (the Quantity datatype has no arithmetic).
+    const declaredVolume =
+      params.volume && typeof params.volume === 'object'
+        ? (params.volume as { value: number; unit: string })
+        : undefined;
+    const resolvedVolumeUl =
+      declaredVolume && typeof declaredVolume.value === 'number' && declaredVolume.unit === 'uL'
+        ? declaredVolume.value
+        : typeof volumeUl === 'number'
+          ? volumeUl
+          : undefined;
+    const volumeDetails: Record<string, unknown> =
+      typeof resolvedVolumeUl === 'number'
+        ? { volumeUl: resolvedVolumeUl, volume: declaredVolume ?? { value: resolvedVolumeUl, unit: 'uL' } }
+        : declaredVolume
+          ? { volume: declaredVolume }
+          : {};
 
     const events: PlateEventPrimitive[] = [];
 
@@ -362,7 +400,7 @@ export const addMaterialExpander: BiologyVerbExpander = {
             material: typeof material === 'string' ? material : undefined,
             ...(typeof material === 'object' && material !== null ? material : {}),
             ...(materialKind ? { materialKind } : {}),
-            ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
+            ...volumeDetails,
           },
           ...(labwareId ? { labwareId } : {}),
         });
@@ -377,7 +415,7 @@ export const addMaterialExpander: BiologyVerbExpander = {
           ...(typeof material === 'object' && material !== null ? material : {}),
           ...(typeof material === 'string' ? { material } : {}),
           ...(materialKind ? { materialKind } : {}),
-          ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
+          ...volumeDetails,
         },
         ...(labwareId ? { labwareId } : {}),
       });

@@ -175,12 +175,54 @@ export function bindShorthandEventsToDeck<T extends object>(
       if (boundDetail) {
         nextDetails.labwareId = boundDetail;
         dChanged = true;
+      } else if (boundTop && typeof d.labwareId !== 'string' && typeof d.labwareInstanceId !== 'string') {
+        // COMP-1 Task 21 (Part IV): the client buckets ghost wells by
+        // details.labwareId (collectEventLabwareIds, previewProjection.ts) —
+        // a top-level-only binding left the ghost with no bucket. When the
+        // event's labware label is deck-provable (exact deck-name match or
+        // already a deck id) and details carries NO labware identity, write
+        // the bound id there. NO-OP-safe: an existing details.labwareId OR
+        // details.labwareInstanceId (fix1/D5 — the instance-side identity
+        // carrier used by ProtocolExtractionService.ts:300 /
+        // GraphProjector.ts:153 / PlateMapExporter.ts:69; its presence means
+        // the event is ALREADY instanced) is never touched, and an unprovable
+        // label is never copied — the byte-passthrough arms below are
+        // unchanged.
+        nextDetails.labwareId = boundTop;
+        dChanged = true;
+      } else if (
+        typeof d.labwareId !== 'string'
+        && typeof d.labwareInstanceId !== 'string'
+        && typeof ev.labwareId === 'string'
+        && knownIds.has(ev.labwareId)
+      ) {
+        // The top-level ref is ALREADY a deck id (the model echoed one): the
+        // provable identity is copied down, never invented.
+        nextDetails.labwareId = ev.labwareId;
+        dChanged = true;
       }
       const well = d.well;
       if (typeof well === 'string') {
         const expanded = expandWellTokens([well]);
         if (expanded.length > 1) {
           delete nextDetails.well;
+          nextDetails.wells = expanded;
+          dChanged = true;
+        } else if (
+          expanded.length === 1
+          && !Array.isArray(d.wells)
+          && typeof d.labwareInstanceId !== 'string'
+          && (boundTop || boundDetail || (typeof ev.labwareId === 'string' && knownIds.has(ev.labwareId)))
+        ) {
+          // COMP-1 Task 22 (Part IV criterion 1): the DECK channel
+          // (buildPreviewFromDraft -> buildPreviewWellIndex -> getAffectedWells)
+          // ghosts wells ONLY from details.wells — it never reads the singular
+          // details.well (the normalizePreviewEvents bridge runs on the
+          // labware-editor chat channel only). A deck-bound singular well must
+          // therefore ride the wells carrier too, or the ghost is invisible.
+          // Only fires when the labware is deck-provable (never invents) and
+          // the event is not already instanced via details.labwareInstanceId
+          // (fix1/D5: an instanced event is a full no-op).
           nextDetails.wells = expanded;
           dChanged = true;
         }
@@ -496,6 +538,21 @@ export function shorthandResultFromCompile(
   return {
     success: true,
     events,
+    // COMP-1 Task 20 (Part IV): the raw mapper's precedent
+    // (compileResultToAgentResult, AgentOrchestrator.ts:612) — the compile
+    // already puts resolve_labware's additions on terminalArtifacts
+    // (compileScientistIntent.ts:288-294); without this leg the shorthand
+    // payload ships `labwares: {}` and the client has nothing to bucket the
+    // ghost wells under or place on the deck. Conditional spread only
+    // (exactOptionalPropertyTypes). DRY note: compileResultToAgentResult lives
+    // in AgentOrchestrator.ts (out of this item's file set) and maps a
+    // ChatbotCompileResult, not a ScientistIntentCompileResult — the bodies
+    // share a few spread lines, not half their shape, so the shared-mapper
+    // extraction is NOT warranted; the mapper stays one producer per result
+    // type.
+    ...(compiled.terminalArtifacts.labwareAdditions && compiled.terminalArtifacts.labwareAdditions.length > 0
+      ? { labwareAdditions: compiled.terminalArtifacts.labwareAdditions }
+      : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
     shorthand: shorthandYaml,
