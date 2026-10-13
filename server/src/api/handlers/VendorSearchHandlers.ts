@@ -20,6 +20,7 @@ import {
   extractVendorPdfText,
   vendorPdfArtifactRoot,
 } from '../../vendor-documents/pdfAcquisition.js';
+import { documentFormatFor } from '../../extract/decodeAttachment.js';
 import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 import type { RecordStore } from '../../store/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
@@ -1505,20 +1506,59 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
         };
       }
 
+      // DOCINGEST-A A5: the readable-format gate is DATA — the extension set
+      // comes from config/ingestion/document-extraction.yaml `formats:`, never
+      // a hardcoded list in TS (CLAUDE.md "The Hard Boundary"). What nothing
+      // can read is refused honestly (415-class) BEFORE any write or
+      // extraction: a refusal must leave nothing behind.
+      const format = await documentFormatFor(fileName);
+      if (!format) {
+        reply.status(415);
+        return {
+          error: 'UNSUPPORTED_DOCUMENT',
+          message: `Unsupported document type "${fileName}". Supported: the extensions declared in config/ingestion/document-extraction.yaml.`,
+        };
+      }
+
+      // A4/A5: the upload now runs REAL extraction through the ONE
+      // acquisition path (format-dispatched) instead of stamping an empty
+      // extractedText. A non-PDF arrives as one pseudo-page; the candidate
+      // pipeline downstream never cares about the source format.
+      let extraction: Awaited<ReturnType<typeof extractVendorPdfText>> | undefined;
+      let extractionError: string | undefined;
+      try {
+        extraction = await extractVendorPdfText({
+          workspaceRoot,
+          contentBase64,
+          fileName,
+          mode: 'both',
+        });
+      } catch (err) {
+        extractionError = err instanceof Error ? err.message : String(err);
+        request.log?.warn?.({ err }, 'GraphLemur document upload: extraction failed');
+      }
+      const extractedTextPages = extraction?.layoutText?.pages ?? [];
+      const pageCount = extractedTextPages.length > 0
+        ? extractedTextPages.length
+        : extraction?.plainText?.pageCount ?? 0;
+
       const sha256 = createHash('sha256').update(data).digest('hex');
       const recordId = `VPDF-${sha256.slice(0, 12).toUpperCase()}`;
-      const artifactTitle = title || url || fileName || 'Vendor PDF';
+      const artifactTitle = title || url || fileName || 'Vendor document';
 
       // Write the uploaded bytes into the artifact store, content-addressed,
       // so the record points at real bytes the user can open/extract later.
-      // Best-effort: if it fails (e.g. storage dir unavailable), still persist
-      // the durable record — the record is what makes the ingest findable.
-      const artifactPath = join(vendorPdfArtifactRoot(workspaceRoot), `${sha256.slice(0, 12)}.pdf`);
+      // The artifact keeps the ORIGINAL extension: a .md stored as .pdf would
+      // make the blob handler serve text as application/pdf and the review
+      // pane's pdf path choke. Best-effort: if it fails (e.g. storage dir
+      // unavailable), still persist the durable record — the record is what
+      // makes the ingest findable.
+      const artifactPath = join(vendorPdfArtifactRoot(workspaceRoot), `${sha256.slice(0, 12)}.${format.extension}`);
       try {
         await mkdir(dirname(artifactPath), { recursive: true });
         await writeFile(artifactPath, data);
       } catch (err) {
-        request.log?.warn?.({ err }, 'GraphLemur PDF upload: writing artifact bytes failed');
+        request.log?.warn?.({ err }, 'GraphLemur document upload: writing artifact bytes failed');
       }
 
       let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
@@ -1530,22 +1570,44 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           title: artifactTitle,
           state: 'ingested',
           source: {
-            engine: 'exa' as const,
+            // OQ3 contract: an upload has no Exa provenance — stamp 'upload'.
+            // (URL-ingest arms above keep 'exa'.) mediaKind/originalFileName
+            // are declared in vendor-pdf.schema.yaml; source is
+            // additionalProperties:false, so undeclared stamps would fail the
+            // real envelope at runtime.
+            engine: 'upload' as const,
             ...(vendor ? { vendor } : {}),
             ...(url ? { url } : {}),
             ...(ingestQuery ? { query: ingestQuery } : {}),
             ingestedAt: new Date().toISOString(),
-            pageCount: 0,
+            pageCount,
+            mediaKind: format.mediaKind,
+            originalFileName: fileName,
           },
           file: {
             file_name: fileName,
-            media_type: 'application/pdf',
+            // Honest media_type from the config-declared format map — never a
+            // hardcoded 'application/pdf'.
+            media_type: format.mediaType,
             ...(url ? { source_url: url } : {}),
             size_bytes: data.length,
             sha256,
             stored_path: relative(workspaceRoot, artifactPath),
+            // file-ref page_count has minimum 1: omit it for a non-paginated
+            // document (a text pseudo-page is not a page model).
+            ...(format.mediaKind === 'pdf' && pageCount > 0 ? { page_count: pageCount } : {}),
           },
-          extractedText: [],
+          extractedText: extractedTextPages,
+          // S5 honesty: the extraction diagnostics ride ON the record. A
+          // document nothing could read (e.g. .docx with no reader installed)
+          // is still stored — and it carries WHY, so the review pane shows the
+          // diagnostic instead of a blank successful-looking text pane.
+          ...(() => {
+            const diagnostics = (extraction?.plainText?.diagnostics as
+              | Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }>
+              | undefined) ?? []
+            return diagnostics.length > 0 ? { extractionDiagnostics: diagnostics } : {}
+          })(),
           vendorProtocolCandidateRef: {
             kind: 'record',
             type: 'vendor-protocol-candidate',
@@ -1569,7 +1631,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
               recordedArtifact = {
                 recordId,
                 ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
-                extractedTextPageCount: 0,
+                extractedTextPageCount: extractedTextPages.length,
               };
             } else {
               // W2-8-FIX2 D2: the bytes are durable but the RECORD is not.
@@ -1585,7 +1647,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
             recordedArtifact = {
               recordId,
               ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
-              extractedTextPageCount: 0,
+              extractedTextPageCount: extractedTextPages.length,
             };
           }
         }
@@ -1619,10 +1681,23 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           resolvedPdfUrl: url ?? '',
           resolution: 'direct',
           artifactPath: relative(workspaceRoot, artifactPath),
-          pageCount: 0,
+          pageCount,
           sectionCount: 0,
           tableCount: 0,
-          diagnostics: [],
+          diagnostics: [
+            ...(extraction?.plainText?.diagnostics as Array<{
+              code: string;
+              severity: 'info' | 'warning' | 'error';
+              message: string;
+            }> ?? []),
+            ...(extractionError
+              ? [{
+                  code: 'DOCUMENT_EXTRACTION_FAILED',
+                  severity: 'warning' as const,
+                  message: `Text extraction failed for ${fileName}: ${extractionError}. The document was stored; run extraction from its review page after fixing the cause.`,
+                }]
+              : []),
+          ],
         },
         ...(recordedArtifact ? { recordedArtifact } : {}),
         ...(recordWriteError ? { recordWriteError } : {}),

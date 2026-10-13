@@ -80,13 +80,33 @@ properties:
     required: [ engine, ingestedAt ]
     properties:
       engine:
-        const: "exa"
+        type: string
+        enum: [ exa, upload, lab ]
+        description: >-
+          How the document arrived: exa (found by vendor search), upload (a
+          file the user supplied), lab (authored in this lab — reserved,
+          unused in Stage A). An upload has no Exa provenance and must not
+          claim one.
       vendor: { type: string }
       title: { type: string }
       url: { type: string, format: uri }
       query: { type: string }
       ingestedAt: { type: string, format: date-time }
       pageCount: { type: integer, minimum: 0 }
+      mediaKind:
+        type: string
+        enum: [ pdf, text, spreadsheet, image ]
+        description: >-
+          What the stored file IS — drives the review pane's source preview
+          (pdf canvases | selectable text). Absent on records ingested before
+          DOCINGEST-A: consumers must default to the pdf path for those.
+          `image` is reserved for Stage B (DOCINGEST-B); until its reader
+          lands, an image-kind record renders via the pdf fallback.
+      originalFileName:
+        type: string
+        description: >-
+          The name the user's file actually had (the file_name in the file
+          ref may be the content-addressed artifact name).
 
   file:
     $ref: "./datatypes/file-ref.schema.yaml"
@@ -101,6 +121,23 @@ properties:
       properties:
         pageNumber: { type: integer, minimum: 1 }
         text: { type: string }
+
+  # DOCINGEST-A S5 honesty: when extraction could not read the document (e.g.
+  # the configured DOCX reader is not installed), the record is STILL stored —
+  # and it carries WHY on itself. The review pane renders these instead of a
+  # blank successful-looking text pane. An empty extractedText with no stored
+  # diagnostic is the state this field exists to make impossible.
+  extractionDiagnostics:
+    type: array
+    description: "Extraction diagnostics carried on the record (honest failure states)."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ severity, code, message ]
+      properties:
+        severity: { type: string, enum: [ info, warning, error ] }
+        code: { type: string }
+        message: { type: string }
 
   vendorProtocolCandidateRef:
     $ref: "./datatypes/ref.schema.yaml"
