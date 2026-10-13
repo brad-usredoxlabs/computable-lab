@@ -1,39 +1,68 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * COMP-1 Task 23.4 (Part IV) + fix1/D2 (adversarial review defect 2,
- * orchestrator ruling): the deck ghosts the shorthand proposal's wells — and
- * the interim blob bar stays authoritative for the canonical mixture prompt.
+ * COMP-1 Task 23.4 (Part IV) + fix1/D2 + fix2/N1 (adversarial re-review):
+ * the deck ghosts the shorthand proposal's wells — and the interim blob bar
+ * stays authoritative for the canonical mixture prompt.
  *
- * TWO legs, both stubbed with the payloads the FIXED server actually emits
- * (probed through the real parse→compile→shorthandResultFromCompile seam on
- * this branch — see the fix report §D2; no model, no live compile):
+ * TWO legs, both stubbed with payloads the FIXED server ACTUALLY emits for
+ * the deck state the leg seeds (fix2/N1: every stub byte-matches the real
+ * parse→compileShorthandDeterministically→shorthandResultFromCompile output
+ * for its document + deck state — pinned by
+ * server/src/ai/shorthandChat.e2eStubHonesty.test.ts, which extracts these
+ * stub builders and deep-compares them; no model, no live compile):
  *
  *  1. CANONICAL leg — "Add 50uL of 50:50 Trypsin-EDTA/DMEM to each well."
- *     The blob bar fires BEFORE any event exists: the turn yields the
- *     unrealized-mixture-blob-material clarification (naming the material and
- *     the cues) and NO events — so NOTHING ghosts and no blob record is
- *     minted. The stub here is the honest clarification turn (events: [] +
- *     clarificationRequests), NOT a ghost payload.
+ *     (empty deck). The blob bar fires BEFORE any event exists: the turn
+ *     yields THREE clarification requests — unknown-noun(plate),
+ *     unknown-noun(blob), unrealized-mixture-blob-material(blob) — and NO
+ *     events, so NOTHING ghosts and no blob record is minted. The stub is the
+ *     verbatim needs-clarification payload (fix2 minor: the real compile also
+ *     bars the unseeded 'plate' noun — the fix1 stub omitted that bar — and
+ *     the legacy clarification head is the FIRST request, the labware bar).
  *
- *  2. GHOST leg — "Add 50uL of DMEM to each well." (plain material). The
- *     fixed payload is the exact shorthandResultFromCompile shape after
- *     Tasks 14-22: 96 per-well add_material events carrying
- *     details.labwareId + details.well + details.wells + volume/volumeUl,
- *     plus the resolve_labware addition that places the labware. The ghost
- *     assertion lives here: ghost tile (data-ghost="true"), A1:H12 wells with
- *     the preview overlay (data-preview="true"), tooltip shows 50.
+ *  2. GHOST leg — "Add 50uL of DMEM to each well." (plain material) against
+ *     an EXISTING deck plate named 'ghost plate' (seeded via the honest
+ *     record PUT: labwares + lawn placement). The exact deck-name match is
+ *     what makes the server emit the Part IV carriers: bindShorthandEventsToDeck
+ *     rewrites the hint to the deck id and writes details.labwareId =
+ *     'LBW-96-1' + details.wells = [well] on all 96 events, and NO
+ *     labwareAdditions (the hint is bound to the deck, not proposed). The leg
+ *     then proves the server→deck path through the REAL client code: the
+ *     committed tile flips data-affected="true" (collectEventLabwareIds
+ *     bucketed the server-emitted details.labwareId onto the deck placement)
+ *     and drilling in shows 96 preview wells (data-preview="true") with the
+ *     tooltip naming 50 µL.
+ *
+ * WHY option (b) (existing deck plate) and not option (a) (stub the raw
+ * no-deck payload): with an empty deck the server emits details =
+ * {well, material, volumeUl, volume} — NO details.labwareId and NO
+ * details.wells — and collectEventLabwareIds (previewProjection.ts) reads
+ * details.* only, so the 96 events bucket under NO labware and the wells
+ * CANNOT ghost. An honest no-deck leg would prove the GAP, not the Part IV
+ * fix. The deck-matched state is the only single deck state where the server
+ * genuinely emits details.labwareId + details.wells, so it is the state this
+ * spec models. Pinned by the honesty test's no-deck characterization.
  */
 
 const EVG = 'EVG-SPK-VERIFY' // the seeded deck fixture the deck specs reset idempotently
 const CANONICAL_PROMPT = 'Add 50uL of 50:50 Trypsin-EDTA/DMEM to each well.'
 const GHOST_PROMPT = 'Add 50uL of DMEM to each well.'
+const GHOST_PLATE_ID = 'LBW-96-1'
+const GHOST_PLATE_NAME = 'ghost plate'
 
-/** Leg 1 stub: the REAL clarification turn the fixed server emits for the
- *  canonical blob document (probe: shorthandChat.labwareResult-style seam,
- *  needs-clarification arm — success true, events [], the bar's facts verbatim
- *  on clarificationRequests; the unknown-noun companion arm rides along when
- *  the blob label is store-unbound, exactly as probed). */
+// Legs share the one live-stack deck fixture (the stack's PUT does not CREATE
+// records), and they seed it DIFFERENTLY (empty vs plate-seeded) — so they
+// must not race in parallel workers.
+test.describe.configure({ mode: 'serial' })
+
+/** Leg 1 stub: the VERBATIM needs-clarification payload the real seam emits
+ *  for the canonical blob document with an empty deck (probe:
+ *  shorthandChat.e2eStubHonesty.test.ts — success true, events [], THREE
+ *  clarificationRequests [unknown-noun(plate), unknown-noun(blob),
+ *  unrealized-mixture-blob-material(blob)], the legacy clarification head is
+ *  the FIRST request (the labware bar, menuProvider '/l'), shorthand verbatim,
+ *  notes ABSENT). */
 function blobClarificationResult() {
   return {
     success: true,
@@ -41,6 +70,26 @@ function blobClarificationResult() {
     clarificationRequests: [
       {
         id: 'unresolved-1',
+        kind: 'labware',
+        prompt: 'The draft names "plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
+        origin: 'harness',
+        entityType: 'labware',
+        menuProvider: '/l',
+        query: 'plate',
+        options: [],
+        allowCreateLocal: true,
+        unresolvedFact: {
+          label: 'plate',
+          reason: 'unknown-noun',
+          candidates: [
+            { label: 'Create local term “plate”', confidence: 0.05 },
+            { label: 'Create local term “plate”', confidence: 0.05 },
+          ],
+          actionLocation: { actionIndex: 0, action: 'add_material', argument: 'labware' },
+        },
+      },
+      {
+        id: 'unresolved-2',
         kind: 'material',
         prompt: 'The draft names "50:50 Trypsin-EDTA/DMEM" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
         origin: 'harness',
@@ -60,7 +109,7 @@ function blobClarificationResult() {
         },
       },
       {
-        id: 'unresolved-2',
+        id: 'unresolved-3',
         kind: 'material',
         prompt: 'The draft names "50:50 Trypsin-EDTA/DMEM" and the lab spine could not bind it (unrealized-mixture-blob-material). Choose what it is, or create a local term.',
         origin: 'harness',
@@ -79,21 +128,24 @@ function blobClarificationResult() {
     ],
     clarification: {
       id: 'unresolved-1',
-      prompt: 'The draft names "50:50 Trypsin-EDTA/DMEM" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
-      entityType: 'material',
+      prompt: 'The draft names "plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
+      entityType: 'labware',
       options: [],
-      menuProvider: '/m',
-      query: '50:50 Trypsin-EDTA/DMEM',
+      menuProvider: '/l',
+      query: 'plate',
       allowCreateLocal: true,
     },
     shorthand: 'intentId: live-canonical-blob\nactions:\n  - action: add_material\n    labware: plate\n    material: 50:50 Trypsin-EDTA/DMEM\n    volume: { value: 50, unit: uL }\n    targetWells: A1:H12\n',
   }
 }
 
-/** Leg 2 stub: the FIXED ghost payload — the exact server output probed for
- *  the plain-material document (96 per-well events with details.labwareId +
- *  details.well + details.wells + volume/volumeUl, labwareAdditions placing
- *  'ghost plate'). */
+/** Leg 2 stub: the VERBATIM deck-matched ghost payload — the exact
+ *  shorthandResultFromCompile output for the plain-material document when the
+ *  deck carries a plate named 'ghost plate' (probe: 96 per-well events, each
+ *  labwareId = the DECK id 'LBW-96-1' and details = {well, material,
+ *  volumeUl, volume, labwareId:'LBW-96-1', wells:[well]}; NO labwareAdditions
+ *  — the hint is bound to the deck, not proposed). Self-contained (the honesty
+ *  test extracts and runs this builder verbatim). */
 function fixedShorthandResult() {
   const wells: string[] = []
   for (const row of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
@@ -104,26 +156,24 @@ function fixedShorthandResult() {
     event_type: 'add_material',
     verb: 'add_material',
     vocabPackId: 'general',
-    // The hint label rides BOTH the event and the addition (the live flow:
-    // bindShorthandEventsToDeck only rewrites to a deck id when the deck
-    // already carries a matching name; a proposed plate has none, so the
-    // symbolic label is the bucket key on both sides — the probe confirmed
-    // event labwareId === addition recordId in that case).
-    labwareId: 'ghost plate',
+    // Deck-provable label: bindShorthandEventsToDeck rewrote the scientist's
+    // 'ghost plate' hint to the deck id (exact unambiguous name match), and
+    // the Part IV carriers ride details (the keys collectEventLabwareIds +
+    // getAffectedWells read).
+    labwareId: 'LBW-96-1',
     details: {
       well,
-      wells: [well],
-      labwareId: 'ghost plate',
       material: 'DMEM',
       volumeUl: 50,
       volume: { value: 50, unit: 'uL' },
+      labwareId: 'LBW-96-1',
+      wells: [well],
     },
     provenance: { actor: 'ai-agent', timestamp: new Date().toISOString(), method: 'compiler', actionGroupId: 'compiler-draft' },
   }))
   return {
     success: true,
     events,
-    labwareAdditions: [{ recordId: 'ghost plate', reason: 'ProtocolIntent labware resource ghost plate' }],
     shorthand: 'intentId: live-plain-dmem\nactions:\n  - action: add_material\n    labwareHint: ghost plate\n    targetWells: A1:H12\n    volume: { value: 50, unit: uL }\n    material: DMEM\n',
     notes: ['Draft compiled deterministically from the scientist-intent shorthand.'],
   }
@@ -152,8 +202,8 @@ function stubAssistStream(page: Page, result: unknown) {
   }, sse)
 }
 
-async function resetGhostDeck(request: Parameters<typeof test>[0]['request']) {
-  await request.put(`/api/records/${EVG}`, {
+function deckPayload(labwares: unknown[], placements: unknown[]) {
+  return {
     data: {
       payload: {
         id: EVG,
@@ -162,18 +212,57 @@ async function resetGhostDeck(request: Parameters<typeof test>[0]['request']) {
         name: 'Shaker Search Verify',
         status: 'draft',
         events: [],
-        labwares: [],
+        labwares,
         methodContext: { runId: 'none', vocabId: 'liquid-handling/v1', platform: 'manual', deckVariant: 'manual_freeform', locked: false },
-        editorLayout: { surface: 'event-editor/v1', placements: [] },
+        editorLayout: { surface: 'event-editor/v1', placements },
       },
     },
-  })
+  }
+}
+
+async function resetEmptyDeck(request: Parameters<typeof test>[0]['request']) {
+  await request.put(`/api/records/${EVG}`, deckPayload([], []))
+}
+
+/** Seed the deck with an EXISTING plate the scientist already has — the honest
+ *  record-PUT path (labwares + lawn placement, schema-valid per
+ *  schema/workflow/event-graph.schema.yaml). Its NAME is what the server's
+ *  deck binding matches; its id is what the bound events must carry. */
+async function resetDeckWithPlate(request: Parameters<typeof test>[0]['request']) {
+  await request.put(
+    `/api/records/${EVG}`,
+    deckPayload(
+      [
+        {
+          labwareId: GHOST_PLATE_ID,
+          labwareType: 'plate_96',
+          name: GHOST_PLATE_NAME,
+          addressing: {
+            type: 'grid',
+            rows: 8,
+            columns: 12,
+            rowLabels: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+            columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+          },
+          geometry: { maxVolume_uL: 300, minVolume_uL: 10, wellShape: 'round' },
+        },
+      ],
+      [
+        {
+          placementId: `pl-${GHOST_PLATE_ID}`,
+          labwareId: GHOST_PLATE_ID,
+          location: { kind: 'lawn', xMm: 16, yMm: 16 },
+          orientation: 'landscape',
+        },
+      ],
+    ),
+  )
 }
 
 async function openFreeformDeckAndAsk(page: Page, prompt: string) {
   await page.goto(`/deck/${EVG}`)
 
-  // Freeform bench so a proposed plate would ghost on the lawn.
+  // Freeform bench so the lawn renders the seeded placement.
   const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
   await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
   await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
@@ -192,7 +281,7 @@ async function openFreeformDeckAndAsk(page: Page, prompt: string) {
 
 test('CANONICAL leg: the blob prompt yields the mixture clarification and ghosts NOTHING (interim bar, no blob record)', async ({ page, request }) => {
   await stubAssistStream(page, blobClarificationResult())
-  await resetGhostDeck(request)
+  await resetEmptyDeck(request)
   await openFreeformDeckAndAsk(page, CANONICAL_PROMPT)
 
   // The clarification turn renders: the questions panel names the blob label.
@@ -209,18 +298,25 @@ test('CANONICAL leg: the blob prompt yields the mixture clarification and ghosts
 
 test('GHOST leg: the plain-material proposal ghosts A1:H12 on the deck with volumes (no model)', async ({ page, request }) => {
   await stubAssistStream(page, fixedShorthandResult())
-  await resetGhostDeck(request)
+  await resetDeckWithPlate(request)
   await openFreeformDeckAndAsk(page, GHOST_PROMPT)
 
-  // The proposed plate ghosts on the lawn (data-ghost="true" — the ghost tile).
-  const ghostTile = page.locator('.tile[data-ghost="true"]').filter({ hasText: /ghost plate/i })
-  await expect(ghostTile.first()).toBeVisible({ timeout: 20_000 })
+  // The scientist's plate is on the lawn BEFORE the ask (a committed tile,
+  // not a proposed ghost tile — the deck-matched scenario, not a proposed
+  // plate).
+  const plateTile = page.locator('.tile[data-ghost="false"]').filter({ hasText: GHOST_PLATE_NAME })
+  await expect(plateTile.first()).toBeVisible({ timeout: 20_000 })
 
-  // Drill into the ghost: the declared wells carry the preview overlay.
-  await ghostTile.first().click()
+  // SERVER→DECK PROOF: the client's collectEventLabwareIds bucketed the
+  // server-emitted details.labwareId ('LBW-96-1') onto this placement, so the
+  // committed tile flips to the affected/Preview state.
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
+
+  // Drill into the plate: the server-emitted details.wells render as the
+  // preview overlay on all 96 wells.
+  await plateTile.first().click()
   const previewedWells = page.locator('[data-preview="true"]')
   await expect(previewedWells).toHaveCount(96, { timeout: 20_000 })
-  await expect(previewedWells.filter({ has: page.locator(':scope') }).first()).toBeVisible()
 
   // The tooltip for a ghosted well names the pending add with its volume.
   const wellA1 = page.locator('[data-well-id="A1"]')

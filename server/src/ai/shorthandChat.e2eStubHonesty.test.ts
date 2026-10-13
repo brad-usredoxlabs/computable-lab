@@ -30,6 +30,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { transform } from 'esbuild';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import {
   compileShorthandDeterministically,
@@ -99,11 +100,14 @@ function specText(): string {
   return readFileSync(SPEC_PATH, 'utf8');
 }
 
-function extractStubFn(spec: string, name: string): () => Record<string, unknown> {
+async function extractStubFn(spec: string, name: string): Promise<() => Record<string, unknown>> {
   const match = spec.match(new RegExp(`function ${name}\\(\\) \\{[\\s\\S]*?\\n\\}`));
   expect(match, `spec stub builder ${name}() not found in ${SPEC_PATH.pathname}`).not.toBeNull();
-  // The builder is self-contained (no host imports) — eval it as written.
-  return new Function(`return function ${match![0].slice('function '.length)}`)() as () => Record<string, unknown>;
+  // The builder is self-contained (no host imports) — transpile its TypeScript
+  // annotations with esbuild and run the function VERBATIM as the spec wrote it.
+  const ts = match![0];
+  const js = (await transform(ts, { loader: 'ts', target: 'es2020' })).code;
+  return new Function(`${js}; return ${name};`)() as () => Record<string, unknown>;
 }
 
 function comparable(payload: Record<string, unknown> | undefined) {
@@ -132,7 +136,7 @@ function comparable(payload: Record<string, unknown> | undefined) {
 
 describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for its deck state', () => {
   it('deck-match state (fix2 option (b)): stub === shorthandResultFromCompile(ghost doc, deck[plate named ghost plate])', async () => {
-    const stub = extractStubFn(specText(), 'fixedShorthandResult')();
+    const stub = (await extractStubFn(specText(), 'fixedShorthandResult'))();
     const real = await realResult(GHOST_DOC, SEEDED_DECK);
     // RED against the fix1 stub: it claims details.labwareId 'ghost plate' +
     // details.wells + labwareAdditions — the real deck-matched payload carries
@@ -163,7 +167,7 @@ describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for it
 
 describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarification payload (three bars, labware head)', () => {
   it('stub === shorthandResultFromCompile(canonical doc, no deck)', async () => {
-    const stub = extractStubFn(specText(), 'blobClarificationResult')();
+    const stub = (await extractStubFn(specText(), 'blobClarificationResult'))();
     const real = await realResult(CANONICAL_DOC, undefined);
     // RED against the fix1 stub: it carries TWO requests (both material) and
     // the material bar as the legacy head. The real compile emits THREE:
