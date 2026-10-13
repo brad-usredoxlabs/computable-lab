@@ -177,7 +177,16 @@ export function SequenceSearch() {
           >
             Import as sequence record
           </button>
-          {importedId && <p role="status" data-testid="sequence-imported">Imported: {importedId}</p>}
+          {importedId && (
+            <p role="status" data-testid="sequence-imported">
+              Imported: {importedId}{' '}
+              {/* ISEQ-2 §4b: the recordId is an OPEN affordance, not inert text —
+                  the deep link the SequencesPage ?record= effect consumes. */}
+              <a data-testid="sequence-imported-link" href={`/lab/sequences?record=${importedId}`}>
+                Open in Sequences
+              </a>
+            </p>
+          )}
         </div>
       )}
 
