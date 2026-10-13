@@ -112,4 +112,23 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
     expect((out[1]!.details as Record<string, unknown>).labwareId).toBeUndefined();
     expect(out[1]).toBe(input[1]); // byte-passthrough: unprovable label, nothing changed
   });
+
+  it('NO-OP (fix1/D5): an event already instanced via details.labwareInstanceId gets no details-side write — no labwareId, no wells rewrite', () => {
+    // details.labwareInstanceId is the instance-side identity carrier used by
+    // ProtocolExtractionService.ts:300 / GraphProjector.ts:153 /
+    // PlateMapExporter.ts:69. Its presence means the event is ALREADY
+    // instanced: the Task-21 no-op guarantee covers it too, so neither new
+    // details-side arm (labwareId write, singular-well->wells) may fire.
+    // (The pre-existing TOP-level deck-name binding is untouched behavior and
+    // still rewrites ev.labwareId — the no-op guarantee is about the details
+    // side this item added.)
+    const input = [
+      { eventId: 'e1', labwareId: 'plate', details: { labwareInstanceId: 'LWI-96-1', well: 'A1' } },
+    ];
+    const out = bindShorthandEventsToDeck(input, DECK);
+    const details = out[0]!.details as Record<string, unknown>;
+    expect(details.labwareId).toBeUndefined();
+    expect(details.wells).toBeUndefined();
+    expect(out[0]!.details).toBe(input[0]!.details); // details-side byte-passthrough
+  });
 });
