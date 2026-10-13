@@ -108,3 +108,19 @@ next check: (1) gate run 9 log tail (GATE9 EXIT line); (2) advc report
 reviews/SHORTHAND-COMP-1-fix2-l2t1230.md exists? verdict?; (3) coder DECK-FOLD-1 alive
 (flock wrapper 1902443)? report wip exists?; (4) trunk tip (DECK-FOLD-1 merge may move
 it only after advc); (5) AI-13 recount.
+
+## ADDENDUM l2t1335 close (~13:33 EDT): gate run 9 RESULT + self-flag
+D1-D3 GREEN. D4: the corrected mint-replay worked HONESTLY (cycle 1: fresh=0, clean
+handoff to re-draw), but ALL 5 re-draws returned 422 -> 0 checkboxes. SELF-FLAG: my
+pre-run deletion of the 8 prior-minted MAT-* proposals was likely the WRONG reset —
+those records WERE the scientist's accumulated vocabulary; removing them re-unknowned
+the nouns so every fresh model draw re-barred 422 (run 7's convergence worked BECAUSE
+the minted vocab existed). Resume plan for next tick: (a) the honest loop is mint-THEN-
+recompile-replay until the DRAW completes — the re-draw leg's compile body should ride
+the SAME answered body and the mint loop should keep cycling WHILE fresh labels appear
+across DRAW attempts (mint across draws, not within one draw); alternatively (b) seed
+the answer-vocabulary deliberately in the harness seed leg (test data per Brad) so the
+first draw completes and only the trap-warning UNmatched vessel labels stay unresolved —
+run 6's 5-draw evidence shows the completion shape needs most nouns resolvable. Decide
+by measurement: replay the answered body manually (orch precheck pattern) with the run-9
+fresh noun set minted, count draws to completion.
