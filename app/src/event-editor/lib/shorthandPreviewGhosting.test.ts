@@ -17,10 +17,21 @@
  * These assertions PASS today (they pin the failure mode, not a fix); the
  * second describe pins the required shape that ghosts.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { getAffectedWells } from '../../types/events'
 import { buildPreviewWellIndex } from './previewProjection'
+import { useAiChat } from '../../shared/hooks/useAiChat'
+import { streamAssist } from '../../shared/api/aiClient'
 import type { PlateEvent } from '../../types/events'
+
+vi.mock('../../shared/api/aiClient', () => ({
+  streamAssist: vi.fn(),
+  getAiHealth: vi.fn().mockResolvedValue({ available: true }),
+}))
+vi.mock('../../shared/api/client', () => ({
+  apiClient: { getRecord: vi.fn() },
+}))
 
 /** The exact payload the compiler returned for "Add 50uL of 50:50 Trypsin-EDTA/DMEM to each well." */
 const asShipped: PlateEvent = {
@@ -53,5 +64,63 @@ describe('the required shape ghosts', () => {
     const index = buildPreviewWellIndex({ previewEvents: [fixed] } as never)
     expect([...index.byLabware.keys()]).toEqual(['LBW-96-1'])
     expect([...(index.byLabware.get('LBW-96-1') ?? [])]).toEqual(['A1', 'A2', 'A3'])
+  })
+})
+
+/**
+ * Task 22 (Part IV): the END-TO-END leg — the REAL fixed payload (the exact
+ * shape shorthandResultFromCompile now emits: top-level labwareId bound to the
+ * deck id + singular details.well + volume) driven through the client's own
+ * seam (useAiChat's done-frame -> normalizePreviewEvents) yields populated
+ * details.wells + details.labwareId. The bridges (useAiChat.ts top-level
+ * labwareId copy + add_material well->wells) are exercised, not assumed.
+ */
+describe('the fixed shorthand payload ghosts end-to-end through normalizePreviewEvents', () => {
+  const fixedPayload = {
+    eventId: 'evt-add_material-fixed',
+    event_type: 'add_material',
+    labwareId: 'LBW-96-1',
+    details: {
+      well: 'A1',
+      material: 'Test Reagent',
+      volumeUl: 50,
+      volume: { value: 50, unit: 'uL' },
+    },
+  }
+
+  it('previewEvents carry details.wells + details.labwareId and bucket under the labware', async () => {
+    vi.mocked(streamAssist).mockImplementation(async function* () {
+      yield { type: 'status', message: 'compiling…' } as never
+      yield {
+        type: 'done',
+        result: {
+          success: true,
+          events: [fixedPayload],
+          labwareAdditions: [{ recordId: 'LBW-96-1', reason: 'placed via prompt' }],
+          notes: [],
+        },
+      } as never
+    })
+
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext: { surface: 'event-editor', surfaceContext: {}, summary: 'ghosting leg' },
+      }),
+    )
+
+    act(() => {
+      result.current.sendPrompt('add 50 uL of test reagent to plate A1')
+    })
+    await waitFor(() => expect(result.current.isStreaming).toBe(false))
+
+    const preview = result.current.previewEvents
+    expect(preview.length).toBe(1)
+    const details = preview[0]!.details as Record<string, unknown>
+    expect(details.labwareId).toBe('LBW-96-1')
+    expect(details.wells).toEqual(['A1'])
+    expect(getAffectedWells(preview[0]!)).toEqual(['A1'])
+    const index = buildPreviewWellIndex({ previewEvents: preview } as never)
+    expect([...index.byLabware.keys()]).toEqual(['LBW-96-1'])
+    expect([...(index.byLabware.get('LBW-96-1') ?? [])]).toEqual(['A1'])
   })
 })
