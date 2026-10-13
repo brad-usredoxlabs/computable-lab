@@ -52,6 +52,37 @@ vi.mock(
 import { createVendorSearchHandlers } from './VendorSearchHandlers.js';
 import type { RecordStore } from '../../store/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
+import { createSchemaRegistry } from '../../schema/SchemaRegistry.js';
+import { loadSchemasFromContent } from '../../schema/SchemaLoader.js';
+import { createValidator } from '../../validation/AjvValidator.js';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+/**
+ * Bait 5 guard: the upload payload the handler builds must pass the REAL
+ * vendor-pdf Ajv gate (strict, same registry load as the server runtime) —
+ * a stub store that accepts anything would hide an undeclared source field.
+ */
+async function validateAgainstVendorPdfSchema(payload: unknown): Promise<{ valid: boolean; errors: unknown }> {
+  const registry = createSchemaRegistry();
+  const validator = createValidator({ strict: true });
+  const schemaRoot = join(process.cwd(), '..', 'schema');
+  const paths = [
+    'lab/vendor-pdf.schema.yaml',
+    'core/common.schema.yaml',
+    'core/datatypes/file-ref.schema.yaml',
+    'core/datatypes/ref.schema.yaml',
+  ];
+  const contents = new Map<string, string>();
+  for (const path of paths) contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
+  const result = loadSchemasFromContent(contents);
+  registry.addSchemas(result.entries);
+  for (const id of registry.getTopologicalOrder()) {
+    const entry = registry.getById(id);
+    if (entry) validator.addSchema(entry.schema, entry.id);
+  }
+  return validator.validate(payload, 'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml');
+}
 
 function makeReply() {
   let statusCode = 200;
@@ -458,7 +489,11 @@ describe('GraphLemur PDF upload → durable vendor-pdf record', () => {
     expect(env.recordId).toBe(expected);
 
     const source = payload.source as Record<string, unknown>;
-    expect(source.engine).toBe('exa');
+    // DOCINGEST-A A5 (OQ3 contract inversion, deliberate): the upload path
+    // stamps engine 'upload'. Stamping 'exa' here was a false provenance —
+    // an uploaded file the user brought back has no Exa provenance. The
+    // URL-ingest arms above keep engine 'exa'.
+    expect(source.engine).toBe('upload');
     expect(source.url).toBe('https://vendor.example/protocol.pdf');
     const file = payload.file as Record<string, unknown>;
     expect(file.media_type).toBe('application/pdf');
@@ -480,6 +515,112 @@ describe('GraphLemur PDF upload → durable vendor-pdf record', () => {
       reply.reply,
     );
     expect(reply.statusCode).toBe(400);
+  });
+
+  // DOCINGEST-A A5 — the upload accepts what a lab actually has. A lab-
+  // authored .md becomes a durable vendor-pdf with honest upload provenance
+  // (engine 'upload', mediaKind 'text', originalFileName), an honest
+  // media_type from the config-declared format map, an extension-preserving
+  // artifact (a .md stored as .pdf would make the blob handler serve text as
+  // application/pdf), and REAL extraction (today the upload ran none).
+  it('uploads a lab markdown document: upload provenance, text mediaKind, .md artifact, real pseudo-page extraction', async () => {
+    const mdText = '# Lysis protocol\n\n1. Add 500 uL of buffer.\n';
+    mockExtractVendorPdfText.mockResolvedValue({
+      kind: 'vendor-pdf-text-extraction',
+      source: { fileName: 'lysis.md', sha256: SAMPLE_SHA },
+      mode: 'both',
+      mediaKind: 'text',
+      plainText: {
+        text: mdText,
+        pageCount: 1,
+        diagnostics: [{ severity: 'info', code: 'markdown_as_text', message: 'read as plain text' }],
+      },
+      layoutText: { pages: [{ pageNumber: 1, text: mdText }], pageCount: 1 },
+    });
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from(mdText).toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'Composer md probe', fileName: 'lysis.md', contentBase64: base64 }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+    expect(upserted).toHaveLength(1);
+    const payload = upserted[0].payload as Record<string, unknown>;
+    const source = payload.source as Record<string, unknown>;
+    expect(source.engine).toBe('upload');
+    expect(source.mediaKind).toBe('text');
+    expect(source.originalFileName).toBe('lysis.md');
+    expect(source.url, 'an upload must never fabricate a url').toBeUndefined();
+    const file = payload.file as Record<string, unknown>;
+    expect(file.media_type).toBe('text/markdown');
+    expect(file.file_name).toBe('lysis.md');
+    expect(String(file.stored_path).endsWith('.md'), 'the artifact keeps the ORIGINAL extension').toBe(true);
+    expect(file.page_count, 'file.page_count (minimum 1) must be omitted for a non-PDF').toBeUndefined();
+    const pages = payload.extractedText as Array<{ pageNumber: number; text: string }>;
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.text).toContain('Lysis protocol');
+    // Bait 5: the handler-built payload must pass the REAL Ajv gate, not just
+    // the stub store. Validate the exact payload the handler handed the store.
+    const { valid, errors } = await validateAgainstVendorPdfSchema(payload);
+    expect(valid, JSON.stringify(errors)).toBe(true);
+    const recorded = (result as { recordedArtifact?: { recordId: string; extractedTextPageCount?: number } }).recordedArtifact;
+    expect(recorded?.extractedTextPageCount).toBe(1);
+  });
+
+  // S5 honesty arms: when the configured reader is MISSING (pandoc is absent
+  // on this host), the record must still be stored AND must carry the honest
+  // diagnostic on itself — the review page reads it from the record. A stored
+  // docx with a silent empty text pane is the exact state §12 forbids.
+  it('stores a .docx upload with the honest DOCX_TOOL_MISSING diagnostic ON THE RECORD (never a blank success)', async () => {
+    mockExtractVendorPdfText.mockResolvedValue({
+      kind: 'vendor-pdf-text-extraction',
+      source: { fileName: 'demo-sop.docx', sha256: SAMPLE_SHA },
+      mode: 'both',
+      mediaKind: 'text',
+      plainText: {
+        text: '',
+        pageCount: 1,
+        diagnostics: [{ severity: 'error', code: 'DOCX_TOOL_MISSING', message: 'The configured DOCX reader "pandoc" is not installed on this host.' }],
+      },
+      layoutText: { pages: [{ pageNumber: 1, text: '' }], pageCount: 1 },
+    });
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from('PK\u0003\u0004 fake docx bytes').toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'DEMO docx probe', fileName: 'demo-sop.docx', contentBase64: base64 }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+    expect(upserted, 'the document IS stored — the honest state is stored-with-diagnostic, not refused').toHaveLength(1);
+    const payload = upserted[0].payload as Record<string, unknown>;
+    const diagnostics = payload.extractionDiagnostics as Array<{ code: string; severity: string }> | undefined;
+    expect(diagnostics, 'the record must carry the extraction diagnostics — a blank success is forbidden').toBeTruthy();
+    expect(diagnostics.some((d) => d.code === 'DOCX_TOOL_MISSING')).toBe(true);
+    const responseExtraction = (result as { extraction?: { diagnostics?: Array<{ code: string }> } }).extraction;
+    expect(responseExtraction?.diagnostics?.some((d) => d.code === 'DOCX_TOOL_MISSING')).toBe(true);
+    const { valid, errors } = await validateAgainstVendorPdfSchema(payload);
+    expect(valid, JSON.stringify(errors)).toBe(true);
+  });
+
+  it('refuses an unreadable upload (virus.exe) with UNSUPPORTED_DOCUMENT and writes NOTHING', async () => {
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from('MZ fake executable bytes').toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'not a document', fileName: 'virus.exe', contentBase64: base64 }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(415);
+    const body = result as unknown as { error?: string; message?: string };
+    expect(body.error).toBe('UNSUPPORTED_DOCUMENT');
+    expect(body.message).toContain('virus.exe');
+    expect(upserted, 'a refused upload must write no record').toHaveLength(0);
+    expect(mockExtractVendorPdfText, 'a refused upload must run no extraction').not.toHaveBeenCalled();
   });
 
   it('W2-8-FIX2 D2: a failed record create surfaces recordWriteError instead of a silent 200', async () => {
