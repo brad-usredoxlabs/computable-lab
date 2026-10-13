@@ -103,3 +103,13 @@ describe('IngestionPage', () => {
     expect(await screen.findByTestId('sequence-search')).toBeDefined()
   })
 })
+
+  // DOCINGEST-A A6: only the human LABEL moves. The tab id stays `vendor-pdf`
+  // and every data-testid/route keeps working (id rename is a separate
+  // campaign — spec bait 11).
+  it('the vendor-pdf tab reads "Documents" while its id/testid stay vendor-pdf', () => {
+    renderAt('/ingestion/vendor-pdf')
+    const tab = screen.getByTestId('ingestion-tab-vendor-pdf')
+    expect(tab.textContent).toBe('Documents')
+    expect(screen.getByTestId('ingestion-body-vendor-pdf')).toBeDefined()
+  })
