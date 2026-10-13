@@ -125,6 +125,10 @@ const esummaryCalls = (calls: StubCall[]) => calls.filter((c) => c.url.pathname.
 describe('ncbi_nucleotide_search (nuccore arm)', () => {
   it('two-pass RefSeq pin for the verbatim typo query "16S F Prausnitzi" — wildcard title terms, no taxonomy call', async () => {
     const calls = stubFetch((call) => {
+      if (call.url.pathname.endsWith('/esummary.fcgi')) {
+        const ids = (call.url.searchParams.get('id') ?? '').split(',');
+        return { ok: true, json: esummaryJson([nuccoreRefseqRow, nuccoreGeneralRow].filter((r) => ids.includes(r.uid))) };
+      }
       const db = call.url.searchParams.get('db');
       const term = call.url.searchParams.get('term') ?? '';
       if (db === 'taxonomy') return { ok: true, json: esearchJson([], '0') };
@@ -178,6 +182,7 @@ describe('ncbi_nucleotide_search (nuccore arm)', () => {
 
   it('canonicalOnly=true issues exactly ONE esearch and its term carries refseq[filter]', async () => {
     const calls = stubFetch((call) => {
+      if (call.url.pathname.endsWith('/esummary.fcgi')) return { ok: true, json: esummaryJson([nuccoreRefseqRow]) };
       const term = call.url.searchParams.get('term') ?? '';
       if (term.includes('refseq[filter]')) return { ok: true, json: esearchJson([REFSEQ_UID], '1') };
       return { ok: true, json: esearchJson([GENERAL_UID], '822') };
@@ -228,6 +233,10 @@ describe('ncbi_nucleotide_search (nuccore arm)', () => {
 
   it('a 429 on the refseq pass must not fail the whole call — falls back to the general pass alone', async () => {
     stubFetch((call) => {
+      if (call.url.pathname.endsWith('/esummary.fcgi')) {
+        const ids = (call.url.searchParams.get('id') ?? '').split(',');
+        return { ok: true, json: esummaryJson([nuccoreGeneralRow].filter((r) => ids.includes(r.uid))) };
+      }
       const term = call.url.searchParams.get('term') ?? '';
       if (term.includes('refseq[filter]')) return { ok: false, status: 429 };
       return { ok: true, json: esearchJson([GENERAL_UID], '822') };
@@ -245,7 +254,27 @@ describe('ncbi_nucleotide_search (nuccore arm)', () => {
 
 describe('ncbi_protein_search (protein arm)', () => {
   it('is registered and its esearch goes to db=protein', async () => {
+    // Live-verified protein esummary row (keyless probe: esummary.fcgi?db=protein&id=119703343):
+    // caption EAX15370, organism plain string, slen 394, biomol peptide, sourcedb insd.
+    const proteinRow = {
+      uid: '119703343',
+      caption: 'EAX15370',
+      title: 'lipid carrier protein or keto acyl-CoA thiolase ltp3 [Mycobacterium tuberculosis F11]',
+      extra: 'gi|119703343|gb|EAX15370.1||gnl|WGS:AAIX|TBFT_03514',
+      gi: 119703343,
+      taxid: 336982,
+      slen: 394,
+      biomol: 'peptide',
+      moltype: 'aa',
+      sourcedb: 'insd',
+      organism: 'Mycobacterium tuberculosis F11',
+      accessionversion: 'EAX15370.1',
+    };
     const calls = stubFetch((call) => {
+      if (call.url.pathname.endsWith('/esummary.fcgi')) {
+        const ids = (call.url.searchParams.get('id') ?? '').split(',');
+        return { ok: true, json: esummaryJson([proteinRow].filter((r) => ids.includes(r.uid))) };
+      }
       const term = call.url.searchParams.get('term') ?? '';
       if (term.includes('refseq[filter]')) {
         return { ok: true, json: esearchJson(['119703343'], '1') };
@@ -261,7 +290,12 @@ describe('ncbi_protein_search (protein arm)', () => {
     const searches = esearchCalls(calls);
     expect(searches.length).toBeGreaterThanOrEqual(1);
     for (const c of searches) expect(c.url.searchParams.get('db')).toBe('protein');
-    expect(body.results[0].accession).toBeDefined();
+    expect(body.results[0].accession).toBe('EAX15370');
+    expect(body.results[0].organism).toBe('Mycobacterium tuberculosis F11');
+    expect(body.results[0].length).toBe(394);
+    // sourcedb insd -> NOT canonical (the pin flag comes from esummary, not the db).
+    expect(body.results[0].canonical).toBe(false);
+    expect(body.total).toBe(40);
   });
 });
 
