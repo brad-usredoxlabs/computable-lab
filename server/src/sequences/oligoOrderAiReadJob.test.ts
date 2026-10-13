@@ -96,7 +96,7 @@ describe('oligo AI read job wiring (aiReadOligoOrder)', () => {
     expect(calls[0]?.model).toBe('stub-model');
 
     const jobEnv = await ctx.store.get(job.jobId);
-    const bundleId = String(object(object(jobEnv?.payload).bundle_refs)[0]?.id ?? '');
+    const bundleId = String(((jobEnv?.payload as Record<string, unknown>).bundle_refs as Array<{ id: string }> | undefined)?.[0]?.id ?? '');
     expect(bundleId).toBeTruthy();
 
     for (const candidate of result.candidates) {
@@ -194,6 +194,6 @@ describe('oligo AI read job wiring (aiReadOligoOrder)', () => {
   it('rejects an unknown job with an honest message', async () => {
     const { llmClient } = stubClient(() => JSON.stringify(draftRows()));
     await expect(aiReadOligoOrder(ctx, 'USR-test', 'ING-NOPE-000000', { llmClient, model: 'stub-model' }))
-      .rejects.toThrow(/ingestion job/i);
+      .rejects.toThrow(/Record not found/);
   });
 });
