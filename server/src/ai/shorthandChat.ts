@@ -175,6 +175,26 @@ export function bindShorthandEventsToDeck<T extends object>(
       if (boundDetail) {
         nextDetails.labwareId = boundDetail;
         dChanged = true;
+      } else if (boundTop && typeof d.labwareId !== 'string') {
+        // COMP-1 Task 21 (Part IV): the client buckets ghost wells by
+        // details.labwareId (collectEventLabwareIds, previewProjection.ts) —
+        // a top-level-only binding left the ghost with no bucket. When the
+        // event's labware label is deck-provable (exact deck-name match or
+        // already a deck id) and details carries NO labwareId, write the
+        // bound id there. NO-OP-safe: an existing details.labwareId (raw
+        // path) is never touched, and an unprovable label is never copied —
+        // the byte-passthrough arms below are unchanged.
+        nextDetails.labwareId = boundTop;
+        dChanged = true;
+      } else if (
+        typeof d.labwareId !== 'string'
+        && typeof ev.labwareId === 'string'
+        && knownIds.has(ev.labwareId)
+      ) {
+        // The top-level ref is ALREADY a deck id (the model echoed one): the
+        // provable identity is copied down, never invented.
+        nextDetails.labwareId = ev.labwareId;
+        dChanged = true;
       }
       const well = d.well;
       if (typeof well === 'string') {
