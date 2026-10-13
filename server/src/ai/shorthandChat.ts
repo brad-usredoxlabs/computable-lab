@@ -481,6 +481,18 @@ export function malformedShorthandRepairPrompt(
     'The contract: a scientist-intent YAML document — top-level `intentId` + `actions[]` (each action carries `action` from the CLOSED vocabulary plus natural-language noun labels and numeric parameters); optional `unresolved`. No resolved record ids, no deck slots, no event primitives.',
     'Schema errors:',
     ...errorLines,
+    // SHORTHAND-COMP-2: quote the CLOSED menu itself (generated from the
+    // vocabulary YAML) plus the ONE document shape the schema accepts — a
+    // rejection must not become a guessing game (one rejection became three
+    // when the model had to reverse-engineer the contract from prose alone).
+    'The shape the schema accepts (the verb is the VALUE of the `action` key):',
+    'intentId: <short id>',
+    'actions:',
+    '  - action: add_material',
+    '    material: "DMEM"',
+    '    volumeUl: 100',
+    '    targetWells: [A1]',
+    defaultScientistIntentVocabulary().contractBlock(),
     'Re-emit the agent_intent call with intent "event_shorthand" and a corrected `shorthand` document. Do not emit events.',
     'Rejected document:',
     rejectedYaml,

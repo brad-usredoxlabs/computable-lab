@@ -34,6 +34,16 @@ import {
   legacyClarificationFromRequests,
   parseClarificationRequests,
 } from './clarifications.js';
+import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+
+/**
+ * SHORTHAND-COMP-2 (PB-CH-4b pattern): the closed scientist-intent vocabulary
+ * + per-verb args, GENERATED from the vocabulary YAML (vocabulary.contractBlock
+ * — verbsFrozen + declared arg contracts). The model cannot guess a menu it was
+ * never shown; the disclosure IS the data the Ajv gate enforces, so the menu
+ * and the membership check cannot drift. Never a hand-written verb list.
+ */
+const SHORTHAND_CONTRACT_BLOCK = defaultScientistIntentVocabulary().contractBlock();
 
 export const SUBMIT_SUGGESTION_TOOL_NAME = 'submit_suggestion';
 export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
@@ -625,7 +635,16 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         shorthand: {
           type: 'string',
           description:
-            'event_shorthand only (SHORTHAND-CHAT): the scientist-intent YAML document — a closed-vocabulary list of high-level biology verbs with natural-language noun labels and numeric parameters (top-level intentId + actions, optional unresolved). NEVER resolved record ids, deck slots, or low-level event primitives: the deterministic compiler owns the event-graph expansion. The server validates the document against the registered scientist-intent schema (Ajv) and compiles it; an invalid document is re-asked, never repaired for you.',
+            'event_shorthand only (SHORTHAND-CHAT): the scientist-intent YAML document — a closed-vocabulary list of high-level biology verbs with natural-language noun labels and numeric parameters (top-level intentId + actions, optional unresolved). NEVER resolved record ids, deck slots, or low-level event primitives: the deterministic compiler owns the event-graph expansion. The server validates the document against the registered scientist-intent schema (Ajv) and compiles it; an invalid document is re-asked, never repaired for you.'
+            + '\n\n'
+            + 'The document shape the schema accepts (the verb is the VALUE of the `action` key):\n'
+            + 'intentId: <short id>\n'
+            + 'actions:\n'
+            + '  - action: add_material\n'
+            + '    material: "DMEM"\n'
+            + '    volumeUl: 100\n'
+            + '    targetWells: [A1]\n\n'
+            + SHORTHAND_CONTRACT_BLOCK,
         },
       },
     },
