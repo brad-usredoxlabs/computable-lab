@@ -22,8 +22,12 @@ import { useOptionalEventEditor } from '../../EventEditorContext'
 import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
+import { ClarificationPicker, requestHasPicker } from '../ai/ClarificationPicker'
+import { heldFactToClarificationRequest } from './ProtocolLocalizationThread.clarificationAdapter'
 import type { PlateEvent } from '../../../types/events'
 import type {
+  AiClarificationAnswer,
+  AiClarificationRequest,
   AiLabwareAddition,
   AiLabwareRequirement,
   AiResolvedLabware,
@@ -182,6 +186,14 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
   const [accepting, setAccepting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [messageKind, setMessageKind] = useState<'info' | 'error'>('info')
+  // THREAD-ASK-1 (Leg 2): the held 422's structured clarifications, kept as
+  // picker requests so the bar is ANSWERABLE where it is shown. Replaced whole
+  // on every fold (a re-send's held result re-folds through foldHeldBundle).
+  const [heldCards, setHeldCards] = useState<AiClarificationRequest[]>([])
+  // Answers picked on the cards, keyed by the clarification's own LABEL — the
+  // same key the server-side binding test pins (answers[<label>] = the
+  // [[material:MAT-…|label]] mention the picker produced).
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({})
 
   const setErrorMsg = useCallback((m: string) => {
     setMessage(m)
@@ -343,8 +355,67 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     setInfoMsg(facts
       ? `Compiled — unresolved facts to review before accepting: ${facts}`
       : 'Compiled — review the deck & labware, then place them.')
+    // THREAD-ASK-1 (Leg 2): the same held facts ALSO render as answerable
+    // cards (picker + mint) — additive. Facts with no answer surface map to
+    // null and stay infoMsg-only (no picker-less card). Card state is set
+    // BEFORE the gate call; the gate call itself is byte-unchanged.
+    setHeldCards(held.clarifications
+      .map((fact, index) => heldFactToClarificationRequest(fact, index))
+      .filter((request): request is AiClarificationRequest => request !== null))
     holdForReview(held.terminalArtifacts)
   }, [holdForReview])
+
+  // THREAD-ASK-1 (Leg 2): the answers map that rides every compile round-trip
+  // — the branch-axis answers (byte-unchanged axis semantics) merged with the
+  // clarification answers picked on the held cards (additive; a clarification
+  // answer's key is the fact's own label, its value the picker's
+  // [[material:MAT-…|label]] mention — the exact data shape Leg 1 binds).
+  const compileAnswers = useCallback((): Record<string, string> => ({
+    ...answers,
+    ...clarificationAnswers,
+  }), [answers, clarificationAnswers])
+
+  // A pick on a held card records the answer and RE-SENDS through the SAME
+  // apiClient.intentCompileFromPrompt round-trip the answers/corrections flows
+  // use (no new endpoint, no new fetch path). A re-send that re-bars re-folds
+  // through foldHeldBundle — never straight to the canvas.
+  const handleClarificationPick = useCallback((
+    answer: AiClarificationAnswer,
+    request: AiClarificationRequest,
+  ) => {
+    const label = request.prompt
+    const value = answer.mentionToken ?? answer.label ?? answer.value
+    if (!value) return
+    setClarificationAnswers((prev) => ({ ...prev, [label]: value }))
+    setLocalizing(true)
+    void (async () => {
+      try {
+        const res = await apiClient.intentCompileFromPrompt({
+          protocolText: protocolText.trim(),
+          ...(sourceProtocolId ? { sourceProtocolId } : {}),
+          answers: { ...answers, ...clarificationAnswers, [label]: value },
+        })
+        if ('held' in res && res.held === true) {
+          // The re-bar re-folds through the SAME gate path (cards refresh from
+          // the fresh held facts; the answered fact is gone when the spine
+          // bound it).
+          foldHeldBundle(res)
+        } else if (res.localMacro && res.terminalArtifacts) {
+          setNeedsAnswers(false)
+          setHeldCards([])
+          setLocalMacro(res.localMacro as LocalMacro)
+          setMessage('Ready — review the deck & labware, then place them.')
+          holdForReview(res.terminalArtifacts)
+        } else {
+          setErrorMsg('One-shot returned no draft after the clarification answer.')
+        }
+      } catch (err) {
+        setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setLocalizing(false)
+      }
+    })()
+  }, [protocolText, sourceProtocolId, answers, clarificationAnswers, foldHeldBundle, holdForReview])
 
   // W2-8 (spec §3 W4): load the FAMILY's questions once per source protocol.
   // The protocol record's branch_axes[] are its declared questions (data, not
@@ -432,7 +503,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       const res = await apiClient.intentCompileFromPrompt({
         protocolText: protocolText.trim(),
         sourceProtocolId,
-        answers,
+        // THREAD-ASK-1: the clarification answers ride ADDITIVELY (with no
+        // picks this is the same map as before — axis semantics byte-unchanged).
+        answers: compileAnswers(),
       })
       if ('held' in res && res.held === true) {
         // The 422 bar with a held macro: fold it EXACTLY like the 2xx branch
@@ -452,7 +525,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, answers, holdForReview, foldHeldBundle])
+  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
 
   // Per-step refinement: append a Correction, re-localize with the correction
   // (refinements fold into the final macro), then re-hold it through the gate.
@@ -468,7 +541,8 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       const res = await apiClient.intentCompileFromPrompt({
         protocolText: correctedText,
         sourceProtocolId,
-        answers,
+        // THREAD-ASK-1: clarification answers ride additively (see above).
+        answers: compileAnswers(),
       })
       if ('held' in res && res.held === true) {
         // A re-draft that bars with a held macro folds the same honest way
@@ -486,7 +560,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, answers, holdForReview, foldHeldBundle])
+  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
 
   const toggleDeckLabware = useCallback((key: string) => {
     setDeckPicked((prev) => {
@@ -631,6 +705,51 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
           >
             Apply &amp; compile
           </button>
+        </div>
+      ) : null}
+
+      {heldCards.length > 0 ? (
+        <div
+          className="protocol-localization-thread__held-clarifications"
+          data-testid="pl-clarification-cards"
+        >
+          <p className="pl-held-clarifications-title">Answer the unresolved facts</p>
+          {heldCards.map((request) => (
+            <section
+              key={request.id}
+              className="pl-held-clarification-card"
+              data-testid="pl-clarification-card"
+            >
+              <div className="pl-held-clarification-head">
+                <span className="pl-held-clarification-menu">{request.menuProvider}</span>
+                <span className="pl-held-clarification-label">{request.prompt}</span>
+              </div>
+              {request.options.length > 0 ? (
+                <div className="pl-held-clarification-options">
+                  {request.options.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="pl-held-clarification-option"
+                      disabled={localizing}
+                      data-testid={`pl-clarification-option-${request.id}`}
+                      onClick={() => handleClarificationPick({
+                        requestId: request.id,
+                        optionId: option.id,
+                        label: option.label,
+                        ...(option.ref ? { ref: option.ref } : {}),
+                      }, request)}
+                    >
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {requestHasPicker(request) ? (
+                <ClarificationPicker request={request} onPick={handleClarificationPick} />
+              ) : null}
+            </section>
+          ))}
         </div>
       ) : null}
 

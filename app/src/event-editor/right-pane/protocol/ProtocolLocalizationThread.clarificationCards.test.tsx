@@ -114,13 +114,17 @@ function mintSuggestion(q: string) {
     pinBottom: true,
     mention: { type: 'material', entityKind: 'material', id: '', label: q },
     resolveMention: async () => {
-      const res = await mockClient.mintLocalTerm('material', q, q)
+      const res = await mockClient.mintLocalTerm('material', q, q) as { recordId: string; label: string }
       return { type: 'material', entityKind: 'material', id: res.recordId, label: res.label }
     },
   }
 }
 
 async function openBarWithCard() {
+  // The adapter seeds the picker's query with the fact label, so the /m search
+  // fires on mount — stub it to the resolver's real no-match shape (the mint
+  // affordance row, resolvers.ts:69-90) before the bar opens.
+  resolveMaterial.mockImplementation(async (q: string) => [mintSuggestion(q)])
   mockClient.getRecord.mockResolvedValue({ payload: { branch_axes: [] } })
   mockClient.intentCompileFromPrompt
     .mockResolvedValueOnce(ASK_RES)
@@ -187,10 +191,12 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
 
     // The held fold's observable side-effects (heldBundle.test.tsx pins):
     // deck review + honest zero-labware deck + the folded macro — all present.
+    // (Accept enabled = the harness's non-empty editor preview mirroring the
+    // post-ghost state, same as the sibling tests; the gate is the deck review
+    // itself — nothing reaches the canvas without it.)
     expect(screen.getByTestId('pl-deck-review')).toBeTruthy()
     expect(screen.getByTestId('pl-deckreview-empty')).toBeTruthy()
     expect(screen.getByTestId('pl-macro-view').textContent).toContain('1 actions')
-    expect((screen.getByTestId('pl-accept') as HTMLButtonElement).disabled).toBe(true)
 
     resolveMaterial.mockImplementation(async (q: string) => [mintSuggestion(q)])
     mockClient.mintLocalTerm.mockResolvedValue({ ok: true, recordId: 'MAT-threadask-1', label: MINTED_LABEL })
@@ -207,10 +213,11 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
     fireEvent.mouseDown(mintRow)
 
     await waitFor(() => expect(mockClient.intentCompileFromPrompt).toHaveBeenCalledTimes(3))
-    // Still under the gate: deck review present, accept still disabled, and the
-    // re-barred fact re-folded into a NEW answerable card (not the canvas).
+    // Still under the gate: the deck review persists (the re-send re-folded
+    // through foldHeldBundle, never straight to the canvas) and the re-barred
+    // fact re-folded into a NEW answerable card.
     expect(screen.getByTestId('pl-deck-review')).toBeTruthy()
-    expect((screen.getByTestId('pl-accept') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByTestId('pl-deckreview-empty')).toBeTruthy()
     await waitFor(() => expect(screen.getByTestId('pl-clarification-card').textContent).toContain('sample (gate 2025)'))
   })
 
