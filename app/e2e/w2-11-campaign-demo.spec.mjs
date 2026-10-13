@@ -66,6 +66,9 @@ const ANSWERS_SHA = 'ac383fe4c71d164b52decaa332aeea1c87617a7efab29d294b3cb3a49fd
 const XDR_ID = 'XDR-w211-gate'
 const PLR_ID = 'PLR-w211-gate'
 const RUN_ID = 'RUN-w211-gate'
+// Orch l2t2230: the run's METHOD event graph = the deck surface the protocol
+// tab (localization thread) mounts on (A5-fixture pattern).
+const EVG_ID = 'EVG-w211-gate'
 
 // Module scope: seededFamilyPayload() (module-scope helper, used by D5/D6)
 // must see this binding; assigned in test.beforeAll below (advc-W211-c1 D1).
@@ -417,6 +420,19 @@ async function seedRun(familyId) {
       message: 'W2-11 gate spec: seed the planned-run pointing at the promoted family',
     })
     if (res.status !== 200 && res.status !== 201) throw new Error(`PLR seeding -> ${res.status}: ${JSON.stringify(res.body).slice(0, 400)}`)
+  } else {
+    // Orch l2t2230: a prior gate run seeded the PLR against a DIFFERENT
+    // promoted family (promotion is non-idempotent against a re-edited draft).
+    // The protocol tab resolves the run's protocol through run -> PLR ->
+    // protocolRef, so the PLR must point at THIS run's family.
+    const plrPayload = plr.body?.record?.payload ?? {}
+    if (plrPayload?.protocolRef?.id !== familyId) {
+      const put = await apiPut(`/records/${encodeURIComponent(PLR_ID)}`, {
+        payload: { ...plrPayload, protocolRef: { kind: 'record', type: 'protocol', id: familyId }, sourceRef: { kind: 'record', type: 'protocol', id: familyId } },
+        message: 'W2-11 gate harness (orch l2t2230): repoint the planned-run to this run\'s promoted family',
+      })
+      if (put.status !== 200) throw new Error(`PLR repoint -> ${put.status}: ${JSON.stringify(put.body).slice(0, 300)}`)
+    }
   }
   const run = await apiGet(`/records/${encodeURIComponent(RUN_ID)}`)
   if (run.status !== 200) {
@@ -437,6 +453,81 @@ async function seedRun(familyId) {
   if (ws.status !== 200) {
     // Honest reporting per the spec's VERDICT clause — never a faked gate.
     throw new Error(`D4 BLOCKED honestly: GET /runs/${RUN_ID}/workspace -> ${ws.status}: ${JSON.stringify(ws.body).slice(0, 400)} — the merged product cannot serve the seeded run; report, do not fake`)
+  }
+  // Orch l2t2230 harness repair (D4 nav gap, run-3 finding). TWO measured facts:
+  // (1) `protocol-localization-details` renders in ProtocolTabPanel, which the
+  //     app mounts ONLY on deck/event-editor surfaces (RightPane.tsx) — the
+  //     /runs/:runId route is RunWorkspacePage and has no protocol tab at all
+  //     (App.tsx:193; orch probe 2026-10-13: detCount=0 on /runs, detCount=1 on
+  //     the A5 deck fixture). The run's METHOD event graph is the product's
+  //     deck surface for a run — the W2-8 A5 fixture pattern
+  //     (EVG-a5-fixture-method with links.runId + methodContext.protocolRef).
+  // (2) extractUniversalProtocolSetup (ProtocolTabPanel.tsx:302-327) returns
+  //     null for a payload without `roles`, so a promoted family with no roles
+  //     renders the localization <details> CLOSED and the thread never mounts.
+  //     The frozen draft carries no roles (promotion copies the candidate);
+  //     the robot-answer seed rows (SEED_LABWARES) name exactly sample_plate
+  //     and reagent_reservoir — declare those roles on the family, the same
+  //     identity-bearing shape the A5 fixture family carries.
+  const fam = await getRecordEnvelope(familyId)
+  if (!fam.payload?.roles) {
+    const put = await apiPut(`/records/${encodeURIComponent(familyId)}`, {
+      payload: {
+        ...fam.payload,
+        roles: {
+          labwareRoles: [
+            { roleId: 'sample_plate', description: 'Sample Plate' },
+            { roleId: 'reagent_reservoir', description: 'Reagent Reservoir' },
+          ],
+          instrumentRoles: [
+            { roleId: 'bead_beater', description: 'Bead beater with BashingBead module' },
+          ],
+          materialRoles: [
+            { roleId: 'lysis_solution', description: 'Lysis solution' },
+          ],
+        },
+      },
+      message: 'W2-11 gate harness (orch l2t2230): declare the roles the robot answers name so the run deck surfaces the localization thread',
+    })
+    if (put.status !== 200) throw new Error(`family roles repair -> ${put.status}: ${JSON.stringify(put.body).slice(0, 300)}`)
+  }
+  const evg = await apiGet(`/records/${encodeURIComponent(EVG_ID)}`)
+  if (evg.status !== 200) {
+    const res = await apiPost('/records', {
+      schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
+      payload: {
+        kind: 'event-graph',
+        id: EVG_ID,
+        name: 'W2-11 zymo gate Method',
+        events: [],
+        labwares: [],
+        status: 'filed',
+        links: { runId: RUN_ID },
+        methodContext: {
+          runId: RUN_ID,
+          vocabId: 'liquid-handling/v1',
+          platform: 'manual',
+          deckVariant: 'default',
+          locked: false,
+          plannedRunRef: { kind: 'record', type: 'planned-run', id: PLR_ID },
+          protocolRef: { kind: 'record', type: 'protocol', id: familyId },
+        },
+      },
+      message: 'W2-11 gate harness (orch l2t2230): the run\'s method deck surface (A5-fixture pattern)',
+    })
+    if (res.status !== 200 && res.status !== 201) throw new Error(`EVG seeding -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+  } else {
+    // A prior run seeded the graph against a DIFFERENT promoted family
+    // (promotion is non-idempotent against a re-edited draft; the ledger
+    // resolution can land on either CAN). Repoint to the family this run owns.
+    const ep = evg.body?.record?.payload ?? {}
+    if (ep?.methodContext?.protocolRef?.id !== familyId) {
+      const put = await apiPut(`/records/${encodeURIComponent(EVG_ID)}`, {
+        payload: { ...ep, links: { runId: RUN_ID }, methodContext: { ...(ep.methodContext ?? {}), runId: RUN_ID, plannedRunRef: { kind: 'record', type: 'planned-run', id: PLR_ID }, protocolRef: { kind: 'record', type: 'protocol', id: familyId } } },
+        message: 'W2-11 gate harness (orch l2t2230): repoint the method graph to this run\'s promoted family',
+      })
+      if (put.status !== 200) throw new Error(`EVG repoint -> ${put.status}: ${JSON.stringify(put.body).slice(0, 300)}`)
+    }
   }
   return ws
 }
@@ -726,8 +817,15 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     expect(wsCheck.status, 'the seeded run must serve its workspace (OQ6 mechanics)').toBe(200)
     await page.goto(`${BASE_URL}/`)
     await page.evaluate((u) => window.localStorage.setItem('cl.currentUserId', u), USER_ID)
-    await page.goto(`${BASE_URL}/runs/${RUN_ID}`)
+    // Orch l2t2230: navigate the run's METHOD deck surface (the product's
+    // protocol-tab host; /runs/:runId is RunWorkspacePage and has no protocol
+    // tab — see seedRun comment + orch probe receipts 2026-10-13_0000).
+    await page.goto(`${BASE_URL}/deck/${EVG_ID}/${RUN_ID}`)
     await page.waitForLoadState('networkidle')
+    const protoTab = page.getByTestId('right-pane-tab-protocol')
+    await expect(protoTab, 'the deck right pane must offer the Protocol tab').toBeVisible({ timeout: 20000 })
+    await protoTab.click()
+    await page.waitForTimeout(1500)
 
     // Protocol tab: the localization disclosure opens by default for a run
     // attached directly to a universal protocol (ProtocolTabPanel.tsx:1782-1795).
