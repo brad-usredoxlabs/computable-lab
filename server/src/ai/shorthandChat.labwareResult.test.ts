@@ -27,6 +27,13 @@ const SEED_RECORDS = [
     schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
     payload: { kind: 'material', name: 'Test Reagent', title: 'Test Reagent', synonyms: ['test reagent'] },
   },
+  {
+    // fix1/D6: seeded so the COMPLETE-with-no-additions arm is exercisable —
+    // a bound labware means resolve_labware proposes nothing.
+    recordId: 'LBW-test-shelf-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+    payload: { kind: 'labware', name: 'Test Shelf', title: 'Test Shelf', synonyms: ['test shelf'] },
+  },
 ];
 
 function mockStore() {
@@ -83,17 +90,42 @@ actions:
     material: Test Reagent
     volumeUl: 10
 `);
-    // 'test reagent shelf' is unmatched too — but this leg pins the ABSENT
-    // shape when the compile carries none: a needs-clarification compile ships
-    // zero artifacts and zero additions.
+    // fix1/D6 (adversarial review defect 6): the old if/else asserted the SAME
+    // predicate on both legs, so the test could not fail for the branch it
+    // appeared to discriminate. The branch is now asserted CONCRETELY: this
+    // document's labware label matches no seeded record, so the compile takes
+    // the needs-clarification arm — the bar holds the WHOLE draft, which is
+    // why it carries zero additions.
     const compiled = await compileShorthandDeterministically(doc, { store: store as never });
     expect(compiled).not.toBeNull();
+    expect(compiled!.outcome).toBe('needs-clarification');
+    expect(compiled!.terminalArtifacts.labwareAdditions).toBeUndefined();
     const result = shorthandResultFromCompile(compiled!, 'yaml', 'test note') as AgentResult & { labwareAdditions?: unknown };
-    if (compiled!.outcome === 'complete' && !compiled!.terminalArtifacts.labwareAdditions) {
-      expect('labwareAdditions' in result).toBe(false);
-    } else {
-      // needs-clarification arm: the bar holds the WHOLE draft — no additions.
-      expect('labwareAdditions' in result).toBe(false);
-    }
+    expect(result.success).toBe(true);
+    expect(result.events).toEqual([]);
+    // ABSENCE, not an undefined-valued key (exactOptionalPropertyTypes).
+    expect(Object.prototype.hasOwnProperty.call(result, 'labwareAdditions')).toBe(false);
+    expect(result.labwareAdditions).toBeUndefined();
+  });
+
+  it('a COMPLETE compile with no additions also omits the key (the complete arm, not just the bar arm)', async () => {
+    const store = mockStore();
+    // 'Test Shelf' is seeded, so resolve_nouns binds it: the compile is
+    // complete and resolve_labware proposes nothing → zero additions.
+    const doc = parseScientistIntent(`intentId: labware-result-complete-none
+actions:
+  - action: add_material
+    labware: test shelf
+    material: Test Reagent
+    volumeUl: 10
+`);
+    const compiled = await compileShorthandDeterministically(doc, { store: store as never });
+    expect(compiled).not.toBeNull();
+    expect(compiled!.outcome).toBe('complete');
+    expect(compiled!.terminalArtifacts.labwareAdditions).toBeUndefined();
+    const result = shorthandResultFromCompile(compiled!, 'yaml', 'test note') as AgentResult & { labwareAdditions?: unknown };
+    expect(result.success).toBe(true);
+    expect((result.events ?? []).length).toBeGreaterThan(0);
+    expect(Object.prototype.hasOwnProperty.call(result, 'labwareAdditions')).toBe(false);
   });
 });
