@@ -24,8 +24,8 @@ fixtures:
   # drives the engine's levelFilter arm through the real route.
   - {name: golden.intent-to-clarification.material-level-mismatch, path: fixtures/material-level-mismatch.yaml, sha256: 53a86fe894d62bc32bc3d0b4cf8a0df90fd2e57b15537c38b83e28985cf0307c}
 records:
-  - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: f3253369857f6f31ec597a149ee7a045f5010ab8875c49be46a62d4f601ce02a}
-  - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: 11430dc4af75923b57253729a881f2f0a9b0402a81894d3d16ac9400d0b99afd}
+  - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
+  - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
   - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 47a15d732c3de98589b5e17fd28d59cd88070af9555546fb6e7b184c345f0089}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 085526acdc8ab30dd3d419dd2cdbce9b2462ddbce0bf324cacf16f424e60970a}
   - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 9b115f66c8af9071fd5081d61b4c65841a2d832a248d16a658bf8c77547063dd}
@@ -33,7 +33,13 @@ records:
   # SPINE7-REBLESS: rule-file pins re-hashed once on the SPINE-7 tip (wire
   # schema widened + aliquot.targetWells required); new golden records blessed
   # once on the same tip. Before/after diff in SPINE-7-report.wip-l2t0810.md.
-  - {name: golden.intent-to-graph.roles-seam, path: __records__/roles-seam.golden.json, sha256: c0ba793eaab0af8ce9a5dd4f4a5f9491f70025119f72e3c8ce12f45662cd921b}
+  # DECK-FOLD-1 REBLESS (this item): transfer-read + labware-hint-regression +
+  # roles-seam records re-blessed ONCE — the ONLY divergence is the new
+  # terminalArtifacts.resolvedLabwares key (drift probe proved: divergence path
+  # body.terminalArtifacts.resolvedLabwares and nothing else; normalization
+  # untouched). transfer-read/roles-seam entries come from the SPINE-4
+  # authoritative arm, labware-hint-regression from the one-match hint arm.
+  - {name: golden.intent-to-graph.roles-seam, path: __records__/roles-seam.golden.json, sha256: 8f83234dd6f9c96f2b9480613971e14e808a44a8c7703944d28b86b774976462}
   - {name: golden.intent-to-clarification.missing-required-address, path: __records__/missing-required-address.golden.json, sha256: 0b78c911ee929424bc876afd0c700ad4ef7352e1d761e843d1c60258bafe3e4a}
   # SPINE8-REBLESS: vocabulary pin re-hashed once on this item's tip (wash.material
   # level: aliquot declared — the ONLY treeState line this item moved; wire-schema
