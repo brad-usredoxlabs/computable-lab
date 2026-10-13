@@ -898,7 +898,11 @@ test.describe('W2-11 zymo campaign demo gate', () => {
           break
         }
         const labels = unknownLabelsOf(compile.body)
-        // Orch l2t1235 (run 8 evidence): draws are MODEL-DRAWN — every cycle can
+        // Orch l2t1350 diagnostic (assertion-unchanged): name WHY the 422 holds —
+        // run 10 proved the post-mint 422 carries ZERO unknown-noun labels yet
+        // still bars; the reasons list is the only way to see what binds it.
+        const reasons = (compile.body?.clarifications ?? []).map((c) => `${c.reason}:${String(c.label ?? '')}`)
+        console.log(`[D4 mint-cycle ${cycle}] 422 reasons: [${reasons.join('; ')}]`)
         // surface a DIFFERENT label set (5 old labels were all minted while 5 fresh
         // ones appeared: raw count 5->5 is not a stall, the fresh labels ARE
         // progress). Honest shrink metric = labels not yet answered. A draw whose
