@@ -160,13 +160,26 @@ describe('intent-compile-from-prompt.clarification-answers-ride-as-data (THREAD-
   });
 
   // -------------------------------------------------------------------------
-  // Test 6 — data-only proof: the SPINE (injected stub) receives the label.
-  // The handler adds NO branch on reason/label; it iterates request data and
-  // the spine stays the only binder.
+  // Test 6 — data-only proof: the SPINE (injected stub) receives the label
+  // AND is the ONLY binder. Fix cycle 1 (D2): the original assertions
+  // (spine called + label asked) also passed against a handler that PRE-BOUND
+  // the noun from the answers map and then still called the spine. The
+  // strengthened assertions falsify that mutant:
+  //  a. CALL SHAPE: every spine call carries the engine spine-adapter's
+  //     hot-path opts ({localOnly: true}) — the spine is reached THROUGH the
+  //     resolve_nouns adapter, not via a handler-level ad-hoc call;
+  //  b. CALL ORDER: the spine is first asked AFTER the model emission — a
+  //     pre-spine interception branch would ask before the LLM call;
+  //  c. SOLE CARRIER: the answer reaches the compile only as prompt data
+  //     (the settled-choices line rides verbatim);
+  //  d. BAR PERSISTENCE (the falsifier): the injected spine found NOTHING,
+  //     so the label MUST still bar as unknown-noun. A handler that bound the
+  //     noun itself from the answers data would clear that clarification even
+  //     though the spine — the only binder — resolved nothing.
   // -------------------------------------------------------------------------
   it('data-only: an injected spine stub receives the clarification label — the handler binds nothing itself', async () => {
     const store = mockStore([{ recordId: 'LAB-block', name: 'block' }]);
-    const { llm } = recordingStubLlm([
+    const { llm, userPrompts } = recordingStubLlm([
       { action: 'add_material', source: 'BashingBead Lysis Module', target: 'block', volumeUl: '600' },
     ]);
     const spineResolve = vi.fn(async () => [] as never[]);
@@ -185,13 +198,46 @@ describe('intent-compile-from-prompt.clarification-answers-ride-as-data (THREAD-
       }) as never,
       reply.r as never,
     );
-    // The spine adapter asked the SPINE about the label (tier-1 is the binder).
+
+    // (a) The spine adapter asked the SPINE about the label (tier-1 is the
+    // binder) — and every call rides the engine adapter's localOnly hot-path
+    // opts, i.e. the spine is reached through resolve_nouns, not a handler call.
     expect(spineResolve).toHaveBeenCalled();
     const askedLabels = spineResolve.mock.calls.map((c) => c[0]);
     expect(askedLabels).toContain('BashingBead Lysis Module');
-    // And the answer still rode the prompt as data (pass-through, not interception).
+    for (const call of spineResolve.mock.calls) {
+      expect(call[1]).toMatchObject({ localOnly: true });
+    }
+
+    // (b) The spine is asked only AFTER the model emission (inside the
+    // compile pass). A handler-level pre-spine interception would ask first.
+    expect(spineResolve.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      llm.complete.mock.invocationCallOrder[0]!,
+    );
+
+    // (c) The answer reached the compile as PROMPT DATA — the settled-choices
+    // line carries the label + chosen recordId verbatim (the sole carrier).
+    const intentPrompt = userPrompts.find((p) => p.includes('BashingBead Lysis Module'));
+    expect(intentPrompt).toBeDefined();
+    expect(intentPrompt!).toContain(
+      '- BashingBead Lysis Module = [[material:MAT-threadask-1|BashingBead Lysis Module]]',
+    );
+
+    // (d) BAR PERSISTENCE: the injected spine resolved NOTHING, so the label
+    // must still bar as unknown-noun. If the handler had bound the noun itself
+    // from the answers data, this clarification would be gone despite the
+    // spine (the only binder) finding no candidate — the mutant this test now
+    // falsifies.
+    expect(reply.calls).toHaveLength(1);
+    expect(reply.calls[0]!.status).toBe(422);
+    const clarifications = (reply.calls[0]!.payload as {
+      clarifications: Array<{ label: string; reason: string }>;
+    }).clarifications;
+    expect(
+      clarifications.some((c) => c.label === 'BashingBead Lysis Module' && c.reason === 'unknown-noun'),
+    ).toBe(true);
+
     zeroWrites(store);
-    void reply;
   });
 
   // -------------------------------------------------------------------------

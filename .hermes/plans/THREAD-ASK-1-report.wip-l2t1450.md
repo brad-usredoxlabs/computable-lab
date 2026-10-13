@@ -218,3 +218,106 @@ boundary. The OQ is stated in a comment at the adapter's menu-mapping site
   TypeError while all 18 pass (identical at base and tip; not chased).
 
 THREAD-ASK-1 DONE d5e388a0
+
+===============================================================================
+## Fix cycle 1 (adversarial review THREAD-ASK-1-l2t1550, VERDICT: fix — 2 minor)
+===============================================================================
+
+Base: tip 93c64bee (no rebase, no new features; only D1/D2 closed).
+All git commands run with -c core.fileMode=false (NFS mount).
+
+### D1 (minor) — stale held cards never cleared on non-pick success paths — FIXED
+
+RED-first (at tip 93c64bee, before any component edit): added tests 5-7 to
+ProtocolLocalizationThread.clarificationCards.test.tsx — a held card is open,
+then each non-pick success path (re-localize 2xx / answers re-submit 2xx /
+correction 2xx) runs; the test asserts the card surface collapses.
+
+  $ npx vitest run ...clarificationCards.test.tsx   (at tip, pre-fix)
+  AssertionError: expected <section …(2)>…(3)</section> to be null   x3
+    (lines 292 / 306 / 320 — tests 5, 6, 7)
+   Test Files  1 failed (1)
+        Tests  3 failed | 4 passed (7)
+
+RED proven: the stale <section data-testid="pl-clarification-card"> survives
+all three 2xx arms — exactly the reviewer's defect.
+
+Fix (ProtocolLocalizationThread.tsx): `setHeldCards([])` added to the 2xx arm
+of handleLocalize (after setNeedsAnswers(false)), handleSubmitAnswers (after
+setNeedsAnswers(false)), handleSendCorrection (before setLocalMacro) — the
+same lifecycle the pick's 2xx arm already had (:405). clarificationAnswers is
+NOT cleared: the picked answers keep riding later re-drafts as Leg 1 data
+(compileAnswers unchanged); only the card surface collapses. No exactOptionalPropertyTypes
+concern (no object properties touched; no `k: undefined` anywhere).
+
+GREEN:
+  $ npx vitest run ...clarificationCards.test.tsx
+   Test Files  1 passed (1)
+        Tests  7 passed (7)
+
+Gate intact: tests 5-7 each first await the deck-review side-effect
+(deck-labware-LAB-block appears — the success still goes through
+holdForReview) before asserting the cards are gone; foldHeldBundle and the
+pick path are byte-unchanged (diff shows only the three 2xx arms + comments).
+
+### D2 (minor) — server test 6 did not falsify its own headline claim — FIXED
+
+Strengthened test 6 in IntentCompileFromPromptHandlers.clarificationAnswers.test.ts
+with four assertions that a pre-spine interception mutant cannot survive:
+  a. CALL SHAPE — every spine.resolve call carries the engine spine-adapter's
+     hot-path opts ({localOnly: true}) (adapters.ts:79-86): the spine is
+     reached THROUGH resolve_nouns, not via a handler-level ad-hoc call;
+  b. CALL ORDER — spineResolve.invocationCallOrder[0] >
+     llm.complete.invocationCallOrder[0]: binding happens inside the compile
+     pass, after the model emission; a pre-spine branch would ask first;
+  c. SOLE CARRIER — the settled-choices line
+     `- BashingBead Lysis Module = [[material:MAT-threadask-1|...]]` rides the
+     driver prompt verbatim (the answer's only route to the compile);
+  d. BAR PERSISTENCE (the falsifier) — the injected spine resolved NOTHING, so
+     the reply MUST still be 422 with the label present as unknown-noun. A
+     handler that bound the noun itself from the answers data would clear that
+     clarification even though the only binder found no candidate.
+
+FALSIFICATION DEMONSTRATION (temporary local mutation, NOT committed): a
+handler-level branch was inserted after `const { intent, compile } = emitted`
+that filters out unknown-noun clarifications whose label is in `answers` and
+sends 200 'complete' when none remain. Run against the strengthened test:
+
+  $ npx vitest run ...clarificationAnswers.test.ts   (with MUTANT in handler)
+   ❯ data-only: ... the handler binds nothing itself
+     → expected undefined to be 422 // Object.is equality   (test 6 FAILS)
+   ❯ control: with NO minted record ... bars with unknown-noun
+     → expected undefined to be 422                          (control also fails)
+   Test Files  1 failed (1)
+        Tests  2 failed | 3 passed (5)
+
+The strengthened test 6 FAILS against the pre-binding mutant (the old test 6
+passed against it — that was the defect). The mutation was then REVERTED;
+`git status` confirms IntentCompileFromPromptHandlers.ts is byte-identical to
+tip (not in the modified list; the mutant never entered any commit).
+
+GREEN (clean handler):
+  $ npx vitest run ...clarificationAnswers.test.ts
+   Test Files  1 passed (1)
+        Tests  5 passed (5)
+
+### BASELINES RE-MEASURED AFTER THE FIX (same suites the reviewer measured)
+
+server tsc (`npm run typecheck -w server`) ....... 0 error lines            OK
+app tsc (`npx tsc --noEmit -p tsconfig.json | grep "error TS" | sort`)
+  23 error lines; sorted diff vs the pre-fix capture at tip: IDENTICAL
+  (diff empty — zero new error text; runDeckLock TS2339 line unchanged)     OK
+server IntentCompileFromPrompt 4 files .......... 4 passed / 24 tests        OK
+server spine leg (resolveNounsPass + nounResolution) 2 files / 33 tests     OK
+app thread 4 files ................ 4 passed / 23 tests (16 existing + 7 new
+  clarificationCards: 4 original + 3 lifecycle tests 5-7)                   OK
+app resolvedDeck sibling ........ 1 file / 4 tests                          OK
+app picker-consumers (ClarificationPicker.test.tsx,
+  client.intentCompileHeld.test.ts, ProtocolIdeShell.clarifications.test.tsx)
+  3 files / 18 tests passed + the 1 KNOWN pre-existing unhandled TypeError  OK
+No YAML touched. No file outside the two defect paths touched:
+  app/.../ProtocolLocalizationThread.tsx (3 x setHeldCards([]) + comments)
+  app/.../ProtocolLocalizationThread.clarificationCards.test.tsx (tests 5-7
+    + RESOLVED_RES/FAMILY_BRANCH_AXES fixtures + openBarWithCard param)
+  server/.../IntentCompileFromPromptHandlers.clarificationAnswers.test.ts
+    (test 6 strengthened only; tests 5/7/8 untouched)

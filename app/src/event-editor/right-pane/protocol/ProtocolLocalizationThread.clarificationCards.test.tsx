@@ -17,7 +17,11 @@
  *     re-send's held result re-folds through the same path, never straight to
  *     the canvas);
  *  4. the existing infoMsg honesty text stays for reasons with no answer
- *     surface (fallback — no picker-less card).
+ *     surface (fallback — no picker-less card);
+ *  5-7 (fix cycle 1, D1): every success path that RESOLVES the macro
+ *     (re-localize 2xx, answers re-submit 2xx, correction 2xx) clears the
+ *     held cards — the same lifecycle the pick's 2xx arm already has — so no
+ *     stale answerable card survives over an already-resolved macro.
  *
  * The mint flow is the REAL one the picker already uses: the /m resolver's
  * `mint:<q>` suggestion whose resolveMention calls
@@ -120,12 +124,36 @@ function mintSuggestion(q: string) {
   }
 }
 
-async function openBarWithCard() {
+/** A clean 2xx compile (the shape the three non-pick success arms consume):
+ *  resolved macro + a labware the deck review shows. Used by tests 5-7 to
+ *  prove a SUCCESS that resolves the macro also collapses the held cards. */
+const RESOLVED_RES = {
+  outcome: 'complete',
+  localMacro: {
+    kind: 'scientist-intent',
+    version: 1,
+    intentId: 'lyse-run',
+    actions: [{ action: 'add_material', source: MINTED_LABEL, target: 'block', volumeUl: '600' }],
+  },
+  terminalArtifacts: { events: [], labwareAdditions: [{ recordId: 'LAB-block', deckSlot: 'B2' }] },
+  axes: {},
+}
+
+/** A family-declared axis (the record's own data) so the clarify region — and
+ *  with it the "Apply & compile" button — stays rendered after a held fold.
+ *  Same axisId/choice as ASK_RES so mergeQuestionAxes dedupes to ONE control. */
+const FAMILY_BRANCH_AXES = [{
+  axisId: 'lysis_variant',
+  label: 'Which lysis variant?',
+  conditions: [{ id: 'variant_a', label: 'Lyse (variant a)' }],
+}]
+
+async function openBarWithCard(familyBranchAxes: unknown[] = []) {
   // The adapter seeds the picker's query with the fact label, so the /m search
   // fires on mount — stub it to the resolver's real no-match shape (the mint
   // affordance row, resolvers.ts:69-90) before the bar opens.
   resolveMaterial.mockImplementation(async (q: string) => [mintSuggestion(q)])
-  mockClient.getRecord.mockResolvedValue({ payload: { branch_axes: [] } })
+  mockClient.getRecord.mockResolvedValue({ payload: { branch_axes: familyBranchAxes } })
   mockClient.intentCompileFromPrompt
     .mockResolvedValueOnce(ASK_RES)
     .mockResolvedValueOnce(HELD_RES)
@@ -238,6 +266,57 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
     // The honesty line is unchanged...
     expect(screen.getByTestId('pl-msg').textContent).toContain('culture volume (missing-required-argument)')
     // ...and there is NO card/picker for a fact with no answer surface.
+    expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+  })
+
+  // -------------------------------------------------------------------------
+  // Tests 5-7 (fix cycle 1, D1): the card lifecycle is CONSISTENT with the
+  // pick path (which collapses cards on a successful 2xx at :405). Every
+  // success path that RESOLVES the macro must clear the held cards — a stale
+  // answerable card over an already-resolved macro is the defect. The gate
+  // itself must persist (the success still goes through holdForReview).
+  // -------------------------------------------------------------------------
+
+  it('5. a re-localize (one-shot) that returns 2xx clears the held cards (no stale card over a resolved macro)', async () => {
+    await openBarWithCard()
+    await screen.findByTestId('pl-clarification-card')
+
+    // The "Localize (one-shot)" button is always rendered (:670-677).
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(RESOLVED_RES)
+    fireEvent.click(screen.getByTestId('pl-localize-btn'))
+
+    // The success folded through the gate (deck review with the resolved labware)...
+    await waitFor(() => expect(screen.getByTestId('deck-labware-LAB-block')).toBeTruthy())
+    // ...and the held cards collapsed — same lifecycle as the pick's 2xx arm.
+    expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+  })
+
+  it('6. re-submitting branch answers that returns 2xx clears the held cards', async () => {
+    // Family-declared axis keeps the clarify region (and Apply & compile)
+    // rendered after the held fold, so the answers path is reachable.
+    await openBarWithCard(FAMILY_BRANCH_AXES)
+    await screen.findByTestId('pl-clarification-card')
+
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(RESOLVED_RES)
+    fireEvent.click(screen.getByTestId('pl-submit-answers'))
+
+    await waitFor(() => expect(screen.getByTestId('deck-labware-LAB-block')).toBeTruthy())
+    expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+  })
+
+  it('7. a correction (Refine / Re-Draft) that returns 2xx clears the held cards', async () => {
+    await openBarWithCard()
+    await screen.findByTestId('pl-clarification-card')
+
+    // The refine region is rendered because the held fold set a macro.
+    fireEvent.change(screen.getByTestId('pl-refine-input'), { target: { value: 'do the lysis at 4C' } })
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(RESOLVED_RES)
+    fireEvent.click(screen.getByTestId('pl-refine-send'))
+
+    await waitFor(() => expect(screen.getByTestId('deck-labware-LAB-block')).toBeTruthy())
     expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
     expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
   })

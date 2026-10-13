@@ -465,6 +465,12 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setInfoMsg('Answer the branch questions to localize.')
       } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
+        // THREAD-ASK-1 fix cycle 1 (D1): a success that RESOLVES the macro
+        // collapses the held cards — the same lifecycle the pick's 2xx arm
+        // already has (:405). No stale answerable card survives over a
+        // resolved macro. The picked answers stay in the answers map (Leg 1
+        // data keeps riding re-drafts); only the card surface clears.
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage(
           `Localized: ${res.outcome} — review the deck & labware, then load onto deck `
@@ -513,6 +519,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         foldHeldBundle(res)
       } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
+        // THREAD-ASK-1 fix cycle 1 (D1): resolved macro -> held cards collapse
+        // (same lifecycle as the pick's 2xx arm; see handleLocalize).
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Ready — review the deck & labware, then place them.')
         holdForReview(res.terminalArtifacts)
@@ -549,6 +558,10 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         // (OQ4(a)) instead of discarding the held bundle.
         foldHeldBundle(res)
       } else if (res.localMacro && res.terminalArtifacts) {
+        // THREAD-ASK-1 fix cycle 1 (D1): a correction that resolves the macro
+        // collapses the held cards too (same lifecycle as the pick's 2xx arm;
+        // see handleLocalize).
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
         holdForReview(res.terminalArtifacts)
