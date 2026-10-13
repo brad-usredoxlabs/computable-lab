@@ -88,3 +88,18 @@ blocker: none blocking lane flow.
 next check: (1) tail logs/w211-gate-full-l2t0230-run6.log (GATE6 EXIT line);
 (2) ps -p 34318 + worktree tip (coder close-out?); (3) fleet lock state before
 any dispatch.
+
+## ADDENDUM l2t0230 close (03:20 EDT): gate run 6 RESULT
+D1-D3 GREEN; D4: re-draw loop MECHANICALLY PROVEN (locator fixed, response-wait
+works, bounded 5 draws executed + logged) but ALL 5 answered draws returned
+422 NEEDS_CLARIFICATION 'unknown-noun' — the bar is now the DOMINANT shape, not
+flaky luck. Verdict: bounded retry per decision resume step 2 is CONSUMED. NO
+gate 7 blind (run-7 rule). Next diagnostic approach (next tick, cheap first):
+check whether the held-fold clarifications expose a PRODUCT resolution surface
+(the clarifications carry 'Create local term' candidates — if the thread or the
+refine input can legitimately accept a local-term answer, a scientist-honest
+resolution leg resolves the noun ONCE; that is data-driven, not a fake). Scout
+or direct read of ProtocolLocalizationThread clarification UI + the answered-
+prompt composition (composeAnsweredPrompt iterates answers into the prompt —
+the family-axis answers ride it; a labware-noun answer may too). If no honest
+surface exists, this is an architect re-consult, not a coder task.
