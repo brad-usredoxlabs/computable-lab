@@ -17,6 +17,13 @@ interface SourceMapping {
   fetchTool?: string;
   /** Name of the fetch argument that receives the source ID. */
   fetchIdArg?: string;
+  /**
+   * Extra fetch arguments declared as DATA in the map (never special-cased in
+   * the fetch branch). Needed because the fetch tool's db vocabulary differs
+   * from the search tool's internal Entrez db: ncbi_sequence_fetch takes
+   * 'nucleotide' | 'protein' while the search runs on 'nuccore' | 'protein'.
+   */
+  fetchArgs?: Record<string, string>;
 }
 
 const SOURCE_MAP: Record<string, SourceMapping> = {
@@ -27,6 +34,8 @@ const SOURCE_MAP: Record<string, SourceMapping> = {
   chebi:      { searchTool: 'chebi_search',      fetchTool: 'chebi_fetch',      fetchIdArg: 'chebiId' },
   reactome:   { searchTool: 'reactome_search',   fetchTool: 'reactome_pathway', fetchIdArg: 'stId' },
   ncbi_gene:  { searchTool: 'ncbi_gene_search' },
+  ncbi_nucleotide: { searchTool: 'ncbi_nucleotide_search', fetchTool: 'ncbi_sequence_fetch', fetchIdArg: 'accession', fetchArgs: { db: 'nucleotide' } },
+  ncbi_protein:    { searchTool: 'ncbi_protein_search',    fetchTool: 'ncbi_sequence_fetch', fetchIdArg: 'accession', fetchArgs: { db: 'protein' } },
 };
 
 const VALID_SOURCES = Object.keys(SOURCE_MAP);
@@ -37,7 +46,7 @@ const VALID_SOURCES = Object.keys(SOURCE_MAP);
 
 export interface BiosourceHandlers {
   search(
-    request: FastifyRequest<{ Params: { source: string }; Querystring: { q?: string; limit?: string } }>,
+    request: FastifyRequest<{ Params: { source: string }; Querystring: { q?: string; limit?: string; organism?: string; canonicalOnly?: string } }>,
     reply: FastifyReply,
   ): Promise<unknown>;
 
@@ -55,7 +64,7 @@ export function createBiosourceHandlers(toolRegistry: ToolRegistry): BiosourceHa
   return {
     async search(request, reply) {
       const { source } = request.params;
-      const { q, limit } = request.query;
+      const { q, limit, organism, canonicalOnly } = request.query;
 
       if (!q || typeof q !== 'string' || q.trim().length === 0) {
         reply.status(400);
@@ -82,6 +91,13 @@ export function createBiosourceHandlers(toolRegistry: ToolRegistry): BiosourceHa
         if (limit) {
           const n = parseInt(limit, 10);
           if (!Number.isNaN(n) && n > 0) args.limit = n;
+        }
+        // exactOptionalPropertyTypes: keys are ABSENT when not supplied, never undefined.
+        if (typeof organism === 'string' && organism.trim().length > 0) {
+          args.organism = organism.trim();
+        }
+        if (canonicalOnly === 'true') {
+          args.canonicalOnly = true;
         }
 
         const result = await entry.handler(args);
@@ -143,7 +159,9 @@ export function createBiosourceHandlers(toolRegistry: ToolRegistry): BiosourceHa
       }
 
       try {
-        const args: Record<string, unknown> = {};
+        // fetchArgs are data declared in SOURCE_MAP (e.g. {db:'nucleotide'}) —
+        // the fetch branch must not special-case a source's db in TypeScript.
+        const args: Record<string, unknown> = { ...(mapping.fetchArgs ?? {}) };
         args[mapping.fetchIdArg!] = id;
 
         const result = await entry.handler(args);

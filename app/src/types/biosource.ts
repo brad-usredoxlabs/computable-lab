@@ -10,6 +10,8 @@ export type BioSourceId =
   | 'chebi'
   | 'reactome'
   | 'ncbi_gene'
+  | 'ncbi_nucleotide'
+  | 'ncbi_protein'
 
 export interface BioSourceConfig {
   id: BioSourceId
@@ -37,6 +39,8 @@ export interface BioSourceResult {
   description?: string
   date?: string
   url?: string
+  /** True when the upstream flagged this hit as a canonical RefSeq record. */
+  canonical?: boolean
   badges?: Array<{ label: string; color: string }>
   raw: Record<string, unknown>
 }
