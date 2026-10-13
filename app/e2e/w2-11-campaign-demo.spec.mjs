@@ -905,6 +905,15 @@ test.describe('W2-11 zymo campaign demo gate', () => {
         }
         const count = labels.length
         console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${count} [${labels.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}]`)
+        // Orch l2t1150 (run 7 evidence): a 422 with ZERO unknown-noun labels is NOT
+        // the mint problem — the bar is a legitimate gap/other clarification and no
+        // mint can shrink it. Shrink accounting only has meaning while labels exist;
+        // count==0 twice used to fire a VACUOUS stall (0 -> 1 at run 7 cycle 7 after
+        // two zero-label cycles). Break honestly to the deck re-draw loop instead.
+        if (count === 0) {
+          console.log('[D4 mint-cycle] no unknown-noun labels on this 422 — mint replay cannot help; handing off to the deck re-draw loop')
+          break
+        }
         if (prevCount !== null && count >= prevCount) {
           stalls += 1
           if (stalls >= 2) throw new Error(`[D4] mint cycle stalled: unknown set did not shrink two cycles running (${prevCount} -> ${count}); per-cycle log above — spine defect, leg fails honestly`)
