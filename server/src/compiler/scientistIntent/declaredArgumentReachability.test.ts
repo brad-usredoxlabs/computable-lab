@@ -216,3 +216,68 @@ actions:
     expect(normalized.clarifications ?? []).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// fix1/D1 (adversarial review defect 1): a bare separator substring is NOT
+// mixture evidence. These are real, catalogued SINGLE reagents whose names
+// merely contain a separator or a percentage — they must compile through the
+// cue bar cleanly. The blob forms (ratio/quantity present) must still BAR.
+// ---------------------------------------------------------------------------
+describe('mixture-blob bar SHAPE (fix1/D1): bare separators do not false-bar real single reagents', () => {
+  const singleReagentDoc = (material: string) => `intentId: cue-shape-single
+actions:
+  - action: add_material
+    labware: plate
+    material: ${material}
+    volumeUl: 50
+`;
+  it.each([
+    'DMEM/F12',
+    'DMEM+GlutaMAX',
+    'HBSS with Ca/Mg',
+    'Trypsin-EDTA (0.25%)',
+  ])('GUARD-OFF: the real single reagent "%s" compiles through cleanly (no cue bar)', (material) => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(singleReagentDoc(material)));
+    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bars).toEqual([]);
+  });
+
+  const blobDoc = (material: string) => `intentId: cue-shape-blob
+actions:
+  - action: add_material
+    labware: plate
+    material: ${material}
+    volume: { value: 50, unit: uL }
+    targetWells: A1:H12
+`;
+  it.each([
+    'Trypsin-EDTA/DMEM (50:50)',
+    '50:50 Trypsin-EDTA/DMEM',
+  ])('GUARD: the ratio-shaped blob "%s" still bars', (material) => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(blobDoc(material)));
+    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.label).toBe(material);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fix1/D2 probe (adversarial review defect 2): the report §6.5/§8 live
+// expectation claims the canonical prompt ghosts A1:H12 on the deck. This
+// probe drives the canonical prompt's own shorthand document through the real
+// pipeline and asks: are there ghostable per-well events at all?
+// ---------------------------------------------------------------------------
+describe('fix1/D2 probe: reachability of the Part IV live ghost leg on the canonical prompt', () => {
+  it('the canonical prompt material must yield ghostable per-well events (the §6.5/§8 live expectation)', async () => {
+    const compiled = await compileReal(`intentId: live-canonical-blob
+actions:
+  - action: add_material
+    labware: plate
+    material: 50:50 Trypsin-EDTA/DMEM
+    volume: { value: 50, unit: uL }
+    targetWells: A1:H12
+`);
+    const events = compiled.terminalArtifacts.events as Array<Record<string, unknown>>;
+    expect(events.length).toBe(96);
+  });
+});
