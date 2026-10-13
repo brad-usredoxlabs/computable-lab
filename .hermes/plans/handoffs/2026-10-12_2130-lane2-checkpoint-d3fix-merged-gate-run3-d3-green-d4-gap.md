@@ -111,3 +111,15 @@ assumptions:
 blocker: none blocking lane flow (no coder queue; lock free).
 next check: (1) G2d worker exit -> final trail/shots judgement; (2) composer draft exists ->
 review + promote; (3) D4 probe; (4) PROTO-AI-13 recount.
+
+## EXIT CORRECTION 21:50 (same tick) — G2d tier-1 EXITED code=0, VERDICT: BLOCKED (INVALID route)
+Final REPORT cites UI_SPEC_NOT_FOUND from /record/VPDF-5256F3288E3C — the reviewer navigated
+the GENERIC record route instead of the mandated /ingestion/vendor-pdf/ route (its own
+leg-d-refusal.png, which I read, shows it WAS on the review host earlier). It never sent the
+ask (chat shows idle 'Send'), and its "no wall trace in backend.log" claim is refuted
+first-hand ([agent 9xmer4] refusal logged 20:36:48, inside its window). HONEST KERNEL worth
+carrying: the review host showed 'No semantic draft is open for this document' — leg D needs
+an OPEN un-promoted XDR bound to VPDF-5256F3288E3C (seed per the w2-11 D2/D3 binding
+mechanics: delete shadow drafts / create XDR with source_artifact.id = the VPDF) BEFORE the
+ask, and must use the ingestion route. G2e re-shoot = next tick (same prompt + the seed step
+embedded; determinstic Playwright-only brief). No lane flow blocked; composer still live.
