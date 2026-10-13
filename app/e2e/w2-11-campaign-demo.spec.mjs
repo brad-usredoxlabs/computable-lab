@@ -882,7 +882,12 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     const MAX_REDRAW = 5
     let boxCount = await labwareBoxes.count()
     for (let draw = 1; boxCount === 0 && draw <= MAX_REDRAW; draw += 1) {
-      const refineInput = page.getByTestId('pl-refine-input').locator('[contenteditable="true"], textarea, input[type="text"]').first()
+      // pl-refine-input IS the textarea (ProtocolLocalizationThread.tsx:666) —
+      // target it directly; it is only mounted while localMacro is set, and a
+      // held 422 fold DOES set localMacro (foldHeldBundle, :300), so the
+      // re-draw surface exists on both the complete-with-empty-review and the
+      // held-bar shapes.
+      const refineInput = page.getByTestId('pl-refine-input')
       await expect(refineInput, 'the refine re-send surface must be available for the bounded re-draw').toBeVisible({ timeout: 15000 })
       await refineInput.click()
       // Neutral re-draw nudge: asks for the SAME macro back; never resolves the
