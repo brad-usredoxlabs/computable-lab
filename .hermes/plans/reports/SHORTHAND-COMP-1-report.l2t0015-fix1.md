@@ -101,14 +101,29 @@ stub the canonical prompt's payload with a ghost. Two honest tests:
    that NOTHING ghosts (0 ghost tiles, 0 preview wells).
 2. GHOST leg uses the plain-material prompt with the exact probed fixed payload
    (96 events, `labwareId`/`details.labwareId` = the symbolic label 'ghost
-   plate' matching the addition recordId — the probe confirmed the server emits
-   the SAME label on both when the deck has no matching plate; the original
+   plate' matching the addition recordId — ~~the probe confirmed the server
+   emits the SAME label on both when the deck has no matching plate~~
+   **CORRECTED BY FIX2/N1: execution contradicts this sentence. The probe
+   confirmed the top-level `event.labwareId` carries the symbolic 'ghost plate'
+   label when the deck has no matching plate, but `details.labwareId` is NOT
+   emitted in that state at all (details = {well, material, volumeUl, volume};
+   the only details.labwareId writer is bindShorthandEventsToDeck and every
+   arm requires a deck-provable match). The deck-matched state emits
+   details.labwareId = the DECK id ('LBW-96-1'), never the symbolic label, and
+   no labwareAdditions. The fix1 stub therefore encoded a payload no single
+   deck state emits; fix2 rewrote the leg to the honest deck-matched scenario
+   (an existing plate named 'ghost plate') — see
+   SHORTHAND-COMP-1-report.l2t0015-fix2.md; the original
    spec's `ghost-plate` vs `ghost plate` mismatch was itself a latent stub bug
    and is fixed).
 
 Payload provenance: both stubs were generated from real `tsx` probes driving
 parse→compileShorthandDeterministically→shorthandResultFromCompile on this
-branch (outputs pasted into the spec's comments).
+branch (outputs pasted into the spec's comments). **FIX2/N1 addendum: the
+GHOST stub as written did NOT match any probed state (see the correction
+above); the fix2 spec stubs are now byte-compared against the real pipeline
+output by `server/src/ai/shorthandChat.e2eStubHonesty.test.ts`, which fails
+if a stub ever claims keys the server does not emit.**
 
 e2e run (against the already-running :5174 dev server, read-only, no stack
 touched — same convention as the original run's assumption 4):

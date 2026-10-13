@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type APIRequestContext } from '@playwright/test'
 
 /**
  * COMP-1 Task 23.4 (Part IV) + fix1/D2 + fix2/N1 (adversarial re-review):
@@ -220,7 +220,7 @@ function deckPayload(labwares: unknown[], placements: unknown[]) {
   }
 }
 
-async function resetEmptyDeck(request: Parameters<typeof test>[0]['request']) {
+async function resetEmptyDeck(request: APIRequestContext) {
   const res = await request.put(`/api/records/${EVG}`, deckPayload([], []))
   expect(res.ok(), `deck reset PUT failed: ${res.status()}`).toBe(true)
 }
@@ -229,7 +229,7 @@ async function resetEmptyDeck(request: Parameters<typeof test>[0]['request']) {
  *  record-PUT path (labwares + lawn placement, schema-valid per
  *  schema/workflow/event-graph.schema.yaml). Its NAME is what the server's
  *  deck binding matches; its id is what the bound events must carry. */
-async function resetDeckWithPlate(request: Parameters<typeof test>[0]['request']) {
+async function resetDeckWithPlate(request: APIRequestContext) {
   const res = await request.put(
     `/api/records/${EVG}`,
     deckPayload(
