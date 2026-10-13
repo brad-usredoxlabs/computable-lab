@@ -239,6 +239,59 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     expect(reviewAskWallFor('protocol-review', GATE_ASK_A, missing)).toBeNull();
   });
 
+  // W2-11 D3 fix (l2t1910): the W2-11 golden §D3 names "change the vendor text
+  // on page 1" as a MUST-REFUSE negative, but gate run 2 showed the wall never
+  // fired: said-vendor-rewrite's verb list carried only SAID-REWRITE verbs and
+  // "change" was absent (advc-W289-l2t0525 DEFECT-1 removed ordinary MEANT
+  // verbs from the LIST, yet the wall's object governance — adjacency
+  // maxGapWords + leading-verb blockers, not the verb list — is what separates
+  // "change the vendor text" from "change step 3 to match the vendor text".
+  // The verbs change/edit/update/modify/revise/alter are joined ADDITIVELY;
+  // the boundary corpus below must stay exempt BY GOVERNANCE.
+  it('W2-11 D3: ordinary MEANT verbs governing a SAID referent fire SAID_IMMUTABLE', () => {
+    for (const ask of [
+      'change the vendor text on page 1',
+      'change the vendor text',
+      'edit the vendor text',
+      'update the vendor document',
+      'change the vendor wording',
+      'can you change the vendor text please',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `D3 negative not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('SAID_IMMUTABLE');
+    }
+  });
+
+  // The exact DEFECT-1 boundary corpus re-asserted against the JOINED verbs:
+  // each stays exempt because GOVERNANCE breaks, not because the verb is absent.
+  // Adjacency: verb@0, noun starts token 6, gap 5 > maxGapWords 3.
+  // Leading-verb: blocker `to` sits between verb and referent -> unreachable.
+  it('W2-11 D3 boundary: "change step 3 to match the vendor text on page 2" stays exempt', () => {
+    expect(reviewAskWallFor('protocol-review', 'change step 3 to match the vendor text on page 2')).toBeNull();
+  });
+
+  // Leading-verb: blocker `so` sits between verb and referent -> MENTION.
+  it('W2-11 D3 boundary: "change step 3 so it reflects the vendor document" stays exempt', () => {
+    expect(reviewAskWallFor('protocol-review', 'change step 3 so it reflects the vendor document')).toBeNull();
+  });
+
+  // Honest boundary finding (spec §boundary corpus, third arm): "change the
+  // step label; the vendor text is wrong" is NOT exempt by governance.
+  // Adjacency: change(0) the(1) step(2) label;(3) the(4) vendor(5) — noun starts
+  // token 5, gap 5-1=4 > maxGapWords 3, adjacency does NOT fire. Leading-verb:
+  // the stripped remainder opens with the joined verb `change` and NO blocker
+  // token sits between it and the `vendor text` match (`label;` is not a blocker
+  // word — blocker matching is exact-token, punctuation included), so the
+  // leading-verb trigger FIRES. Per the spec this refusal is ACCEPTABLE: an
+  // independent clause naming the SAID referent with nothing blocking it is
+  // ambiguous, and the wall stays strong. NO blocker word is added to exempt it.
+  it('W2-11 D3 boundary (honest): "change the step label; the vendor text is wrong" FIRES via leading-verb governance', () => {
+    const refusal = reviewAskWallFor('protocol-review', 'change the step label; the vendor text is wrong');
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe('SAID_IMMUTABLE');
+  });
+
   it('present-but-malformed policy throws honestly', () => {
     const dir = mkdtempSync(join(tmpdir(), 'wall-bad-'));
     const bad = join(dir, 'bad.yaml');
