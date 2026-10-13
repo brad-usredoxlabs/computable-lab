@@ -16,17 +16,19 @@ import { normalizeOligoRawBases, type OligoModification, type OligoRow } from '.
 import { sequenceConfig } from './sequenceRuntime.js';
 
 export interface OligoOrderDraftRow {
-  name: string;
+  /** Omitted or null when the name itself is illegible on a garbled scan
+   *  (OLIGO-AI-3 D1' producer tolerance); a present name is a non-empty string. */
+  name?: string | null;
   sequence?: string | null;
   unreadable?: boolean;
   modifications?: OligoModification[];
-  scale?: string;
-  purification?: string;
-  yieldPmol?: number;
-  mass?: number;
-  concentrationUM?: number;
-  buffer?: string;
-  page?: number;
+  scale?: string | null;
+  purification?: string | null;
+  yieldPmol?: number | null;
+  mass?: number | null;
+  concentrationUM?: number | null;
+  buffer?: string | null;
+  page?: number | null;
   sourceQuote?: string;
 }
 export interface OligoOrderDraft {
@@ -52,7 +54,11 @@ export async function oligoRowsFromDraft(draft: OligoOrderDraft): Promise<OligoR
     if (entry.scale) metadata.synthesisScale = entry.scale;
     if (entry.purification) metadata.purification = entry.purification;
     const row: OligoRow = {
-      label: entry.name.trim(),
+      // D1' tolerance: an omitted/null name (illegible on a garbled scan)
+      // lowers to an EMPTY label — the consumer's existing 'No oligo name
+      // found. Enter a name before saving.' issue arms handle it below.
+      // No coercion, no invented name.
+      label: entry.name?.trim() ?? '',
       residues: '',
       raw: entry.sequence ?? '', // verbatim: the identity arm depends on raw matching the regex capture byte-for-byte
       page: entry.page ?? 1,

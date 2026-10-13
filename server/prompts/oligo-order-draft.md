@@ -18,9 +18,17 @@ Rules:
    read against the page; without the quote the row is unverifiable.
 6. Report what the document says about scale, purification, yield, mass,
    concentration and buffer; omit anything it does not print.
-7. If the text is too garbled to read at all, return ONE row per visible line
+7. If a field is NOT clearly printed or is illegible, OMIT it or set it to
+   `null` — NEVER a guessed value. This includes `name`: if the name itself is
+   garbled, set `name: null` (or omit it) and keep the row with its quote;
+   never invent a name. Metadata must match its own kind: a number field
+   (yieldPmol, mass, concentrationUM) is a number or `null` — never a string;
+   a text field (purification, buffer, scale) is a string or `null` — never a
+   number and never an empty string standing in for a missing value.
+8. If the text is too garbled to read at all, return ONE row per visible line
    item with `sequence: null`, `unreadable: true` and the quote — an empty draft
    is worse than an honest unreadable draft.
+9. Reply with ONLY the JSON object — no prose, no code fences, no commentary.
 
 Example (a Biosystems/IDT-style table, the text as OCR often delivers it):
 

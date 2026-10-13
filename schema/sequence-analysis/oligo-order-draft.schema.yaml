@@ -31,12 +31,18 @@ properties:
     items:
       type: object
       additionalProperties: false
-      required: [ name ]
+      required: [ sourceQuote ]
       properties:
         name:
-          type: string
+          type: [string, "null"]
           minLength: 1
-          description: "The oligo's name exactly as printed (never a guess)."
+          description: >-
+            The oligo's name exactly as printed (never a guess). Omitted or
+            NULL when the name itself is illegible on a garbled scan: the row
+            stays visible for review with an empty label and the lowerer flags
+            'No oligo name found. Enter a name before saving.' A PRESENT name
+            must still be a non-empty string — null/absence is honest
+            illegibility, never a placeholder and never a guessed name.
         sequence:
           type: [string, "null"]
           description: >-
@@ -57,22 +63,25 @@ properties:
               role: { type: string, enum: [reporter, quencher, other] }
               position: { type: string, enum: ["5-prime", "3-prime", "internal"] }
         scale:
-          type: string
+          type: [string, "null"]
         purification:
-          type: string
+          type: [string, "null"]
         yieldPmol:
-          type: number
+          type: [number, "null"]
         mass:
-          type: number
+          type: [number, "null"]
         concentrationUM:
-          type: number
+          type: [number, "null"]
         buffer:
-          type: string
+          type: [string, "null"]
         page:
-          type: integer
+          type: [integer, "null"]
           minimum: 1
         sourceQuote:
           type: string
+          minLength: 1
           description: >-
             The verbatim line(s) this row was read from. Required for review:
-            a human must be able to check the read against the page.
+            a human must be able to check the read against the page. STRICT
+            (required, non-empty): an AI row without a quote is not honest, and
+            this is where the producer contract keeps its teeth.

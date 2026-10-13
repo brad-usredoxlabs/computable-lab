@@ -129,14 +129,17 @@ describe('oligo AI read producer (oligoOrderAiRead)', () => {
   });
 
   it('(c) invalid draft once, valid on retry: the ONE repair re-ask quotes the validation diagnostic', async () => {
-    const broken = { kind: 'oligo-order-draft', rows: [{ sequence: 'ACGT' }] };
+    // D1' relaxation: `name` is no longer a REQUIRED key, but a PRESENT name
+    // must still be a non-empty string — an empty-string name is the
+    // placeholder the contract forbids. This row pins that diagnostic.
+    const broken = { kind: 'oligo-order-draft', rows: [{ name: '', sequence: 'ACGT', sourceQuote: 'x' }] };
     const { calls, llmClient } = stubClient((i) => (i === 0 ? JSON.stringify(broken) : JSON.stringify(VALID_DRAFT)));
     const result = await readOligoOrderWithAi('text', { llmClient, model: 'test-model' });
     expect(calls).toHaveLength(2);
     // The repair QUOTES the diagnostic — never a silent repair (spec §15.2).
     const repairPrompt = calls[1]!.messages.map((m) => m.content ?? '').join('\n');
     expect(repairPrompt).toContain('rejected');
-    expect(repairPrompt).toMatch(/Missing required property: name/);
+    expect(repairPrompt).toMatch(/\/rows\/0\/name: Must be at least 1 characters/);
     expect(result.error, result.error ?? '').toBeUndefined();
     expect(result.rows.map((r) => r.label)).toEqual(['Oformi_1784_ABY', 'Buulg_934_VIC']);
   });
