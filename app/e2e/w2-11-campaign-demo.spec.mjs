@@ -855,7 +855,65 @@ test.describe('W2-11 zymo campaign demo gate', () => {
       const checked = await axis.locator('input[type="radio"]:checked').count()
       if (checked === 0) await axis.locator('input[type="radio"]').first().check()
     }
+    // Orch l2t0958 (architect decision W2-11-d4-unknown-noun-resolution-decision.md
+    // VERDICT (i)): capture the ANSWERED compile request the UI actually sends so the
+    // honest mint-replay cycle below replays the scientist's own act verbatim.
+    const answeredReqPromise = page.waitForRequest(
+      (r) => r.url().includes('/intent/compile-from-prompt') && r.method() === 'POST'
+        && (r.postData() ?? '').includes('"answers"'),
+      { timeout: 120000 },
+    )
     await page.getByTestId('pl-submit-answers').click()
+    const answeredReq = await answeredReqPromise
+    let answeredBody = {}
+    try { answeredBody = JSON.parse(answeredReq.postData() ?? '{}') } catch { /* replay stays skipped below if empty */ }
+
+    // Orch l2t0958 — HONEST MINT REPLAY (architect decision VERDICT (i), harness
+    // discipline 1-4): a scientist facing the unknown-noun bar takes the mint
+    // affordance the clarification itself offers. Replay it at the API seam on the
+    // SAME answered body the UI just sent (unscrubbed text, same answers): on 422,
+    // mint every unknown-noun label via POST /vocab/mint {refKind:'material'} — the
+    // exact call ClarificationPicker's resolveMention fires — and re-send. Bounded
+    // 8 cycles, each cycle logged {draw, http, unknown_labels_before, minted_labels}.
+    // If a cycle does not strictly shrink the unknown set two cycles running, fail
+    // honestly: that is a spine defect, not a fixture defect. Minted records are
+    // MAT- materials -> resolve_labware stays zero-match (trap not tripped).
+    if (answeredBody?.protocolText) {
+      const unknownLabelsOf = (body) => (body?.clarifications ?? [])
+        .filter((c) => c.reason === 'unknown-noun')
+        .map((c) => String(c.label ?? '').trim()).filter(Boolean)
+      let prevCount = null
+      let stalls = 0
+      for (let cycle = 1; cycle <= 8; cycle += 1) {
+        const compile = await apiPost('/intent/compile-from-prompt', answeredBody)
+        if (compile.status === 500 || compile.status === 502) {
+          // Discipline 3: a flaky failed draw (MALFORMED_MODEL_OUTPUT / COMPILE_FAILED)
+          // is retried within the budget — it is model output, not an assertion outcome.
+          console.log(`[D4 mint-cycle ${cycle}] http=${compile.status} (flaky draw, retrying)`)
+          continue
+        }
+        if (compile.status !== 422) {
+          console.log(`[D4 mint-cycle ${cycle}] http=${compile.status} — draw completes, mint cycle done`)
+          break
+        }
+        const labels = unknownLabelsOf(compile.body)
+        const minted = []
+        for (const label of labels) {
+          const m = await apiPost('/vocab/mint', { refKind: 'material', label })
+          if (m.status === 200 || m.status === 201 || m.status === 409) minted.push(label)
+          else console.log(`[D4 mint-cycle ${cycle}] mint "${label}" -> ${m.status} ${JSON.stringify(m.body).slice(0, 160)}`)
+        }
+        const count = labels.length
+        console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${count} [${labels.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}]`)
+        if (prevCount !== null && count >= prevCount) {
+          stalls += 1
+          if (stalls >= 2) throw new Error(`[D4] mint cycle stalled: unknown set did not shrink two cycles running (${prevCount} -> ${count}); per-cycle log above — spine defect, leg fails honestly`)
+        } else {
+          stalls = 0
+        }
+        prevCount = count
+      }
+    }
 
     // Deck review gate: pick at least one labware, then accept.
     // Orch l2t0230 (architect decision W2-11-d4-deckreview-empty-decision.md,
