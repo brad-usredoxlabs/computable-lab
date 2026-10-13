@@ -26,6 +26,7 @@ import type { PlateEvent } from '../../../types/events'
 import type {
   AiLabwareAddition,
   AiLabwareRequirement,
+  AiResolvedLabware,
 } from '../../../types/ai'
 
 export interface BranchQuestionAxis {
@@ -84,13 +85,15 @@ export interface LocalMacro {
   [key: string]: unknown
 }
 
-/** One row in the Review-deck labware checklist. */
+/** One row in the Review-deck labware checklist. `kind` is the compiler
+ *  vocabulary (one term per entity): an addition to author, a symbolic
+ *  requirement, or a hint resolved against an EXISTING inventory record. */
 export interface DeckLabwareSuggestion {
   key: string
   label: string
   deckSlot?: string
   reason?: string
-  requirement: boolean
+  kind: 'addition' | 'requirement' | 'resolved'
 }
 
 export interface ProtocolLocalizationThreadProps {
@@ -104,10 +107,15 @@ export interface ProtocolLocalizationThreadProps {
   links?: { studyId?: string; experimentId?: string; runId?: string }
 }
 
-/** Fold the compile's labwareAdditions + labwareRequirements into a review list. */
+/** Fold the compile's labwareAdditions + labwareRequirements + resolvedLabwares
+ *  into a review list. */
 function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabwareSuggestion[] {
   const additions = (terminalArtifacts.labwareAdditions ?? []) as AiLabwareAddition[]
   const requirements = (terminalArtifacts.labwareRequirements ?? []) as AiLabwareRequirement[]
+  const resolved = Array.isArray(terminalArtifacts.resolvedLabwares)
+    ? (terminalArtifacts.resolvedLabwares as Array<{ hint?: unknown; recordId?: unknown; title?: unknown; deckSlot?: unknown }>)
+      .filter((r) => r && typeof r.recordId === 'string' && r.recordId.length > 0)
+    : []
   const out: DeckLabwareSuggestion[] = []
   const seen = new Set<string>()
   for (const req of requirements) {
@@ -117,7 +125,7 @@ function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabw
       key: req.classCurie,
       label: req.classCurie,
       ...(req.deckSlot ? { deckSlot: req.deckSlot } : {}),
-      requirement: true,
+      kind: 'requirement',
     })
   }
   for (const add of additions) {
@@ -128,7 +136,26 @@ function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabw
       label: add.recordId,
       ...(add.deckSlot ? { deckSlot: add.deckSlot } : {}),
       ...(add.reason ? { reason: add.reason } : {}),
-      requirement: false,
+      kind: 'addition',
+    })
+  }
+  // Resolved rows fold LAST through the same `seen` Set: when a recordId is
+  // both an addition (deckSlot arms on non-shorthand pipelines) and a resolved
+  // row, the entity gets ONE checkbox and the addition kind wins. The row
+  // label is the record's REAL title (never a string-guess).
+  for (const res of resolved) {
+    const recordId = res.recordId as string
+    if (seen.has(recordId)) continue
+    seen.add(recordId)
+    const title = typeof res.title === 'string' && res.title.length > 0 ? res.title : undefined
+    out.push({
+      key: recordId,
+      label: title ?? recordId,
+      // Tolerant shape: deckSlot is not on this path today; if a pipeline ever
+      // carries one it rides through the same conditional-spread idiom
+      // (exactOptionalPropertyTypes — absent-or-value, never :undefined).
+      ...(typeof res.deckSlot === 'string' && res.deckSlot.length > 0 ? { deckSlot: res.deckSlot } : {}),
+      kind: 'resolved',
     })
   }
   return out
@@ -240,17 +267,28 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     const platform = getPlatformManifest(state.platforms, chosenPlatformId)
     const variant = getVariantManifest(state.platforms, chosenPlatformId, state.variantId)
     const reviewedAdditions: AiLabwareAddition[] = proposedLabware
-      .filter((lw) => !lw.requirement && deckPicked.has(lw.key))
+      .filter((lw) => lw.kind === 'addition' && deckPicked.has(lw.key))
       .map((lw) => ({
         recordId: lw.key,
         ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
         ...(lw.reason ? { reason: lw.reason } : {}),
       }))
     const reviewedRequirements: AiLabwareRequirement[] = proposedLabware
-      .filter((lw) => lw.requirement && deckPicked.has(lw.key))
+      .filter((lw) => lw.kind === 'requirement' && deckPicked.has(lw.key))
       .map((lw) => ({
         classCurie: lw.key,
         ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+      }))
+    // The third kind: a picked resolved row ghosts a PLACEMENT of the EXISTING
+    // record (draftPreview's resolved arm — labwareId/sourceRecordId ===
+    // recordId, no proposedRecord; submitSuggestionTool.ts:311). reason stays
+    // addition-only; the row label carries the record's real title.
+    const reviewedResolved: AiResolvedLabware[] = proposedLabware
+      .filter((lw) => lw.kind === 'resolved' && deckPicked.has(lw.key))
+      .map((lw) => ({
+        recordId: lw.key,
+        ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+        ...(lw.label !== lw.key ? { title: lw.label } : {}),
       }))
     const { preview } = buildPreviewFromDraft({
       platform,
@@ -258,6 +296,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       events,
       labwareAdditions: reviewedAdditions,
       labwareRequirements: reviewedRequirements,
+      resolvedLabwares: reviewedResolved,
       existingLabwares: state.labwares,
       existingPlacements: state.placements,
       activeDeckScope: activeDeckScope(chosenPlatformId),

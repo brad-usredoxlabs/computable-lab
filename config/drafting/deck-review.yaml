@@ -1,0 +1,16 @@
+# DECK-FOLD-1 — deck-review fold policy (drafting-surface policy data).
+#
+# maxResolvedOffers: the cap on resolved-inventory placement offers the compile
+# propagates onto terminalArtifacts.resolvedLabwares (server-side at the single
+# propagation choke — every consumer shares it). Loaded PER CALL by
+# server/src/compiler/scientistIntent/deckReviewFold.ts (import.meta.url,
+# never process-cached; absent section = cap off; malformed = throw).
+#
+# Default rationale (measured reachable-slot counts of the shipped platform
+# variants, config/platforms/*.yaml, variant slot lists minus
+# trash/special/unreachable): ot2_standard 11, ot3_standard 10,
+# assist_plus_3pos 3 / assist_plus_4pos_portrait 4, manual 1/0 — the widest
+# deck any shipped platform can offer holds 11 physical slots (+lawn overflow),
+# so 12 covers "every hint could still land" on the largest shipped deck while
+# capping a broad-inventory echo.
+maxResolvedOffers: 12

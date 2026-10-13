@@ -103,7 +103,19 @@
         "patterns": [],
         "assumptions": [],
         "unresolved": []
-      }
+      },
+      "resolvedLabwares": [
+        {
+          "hint": "source plate",
+          "recordId": "LAB-source-plate",
+          "title": "Source Plate"
+        },
+        {
+          "hint": "destination plate",
+          "recordId": "LAB-dest-plate",
+          "title": "Destination Plate"
+        }
+      ]
     },
     "localMacro": {
       "kind": "scientist-intent",
