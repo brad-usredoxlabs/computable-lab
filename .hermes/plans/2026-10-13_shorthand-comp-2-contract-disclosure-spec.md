@@ -200,3 +200,27 @@ flight lanes/2/logs/advc-SHORTHANDCOMP1-20261013T0728.log). Dispatch this coder 
 COMP-1 merges AND the fleet lock is clear; re-anchor all shorthandChat.ts /
 AgentOrchestrator.ts numbers against the post-COMP-1 tip and re-measure the baseline table
 BEFORE C1 (the draft's re-anchor note applies verbatim).
+
+## ORCHESTRATOR PROMOTION NOTE (l2t1550, 2026-10-13T16:0x EDT) — re-anchor at trunk b25d2505
+
+Promoted to canonical. All spec line numbers were pinned at a28d9789. Re-verified FIRST-HAND
+at trunk tip b25d2505 (which now contains COMP-1 merge cf11174a + DECK-FOLD-1 merge afd2d0da):
+
+- liftScientistIntent.ts:157 skip line `params`/`parameters` continue — VERIFIED UNMOVED.
+- AgentOrchestrator.ts: FORCED_DRAFT_TOOL_INSTRUCTION :510 VERIFIED UNMOVED; the CLOSED-
+  vocabulary bullet is at :526 (last bullet before `].join`); parseScientistIntent(shorthandYaml)
+  :2280 and shorthandRepairAsked :1164/:2283-2286 VERIFIED UNMOVED.
+- shorthandChat.ts MOVED (COMP-1 merged): stringify-only yaml import :28 (add `parse as
+  parseYaml`); parseScientistIntent import :30-32; fold re-parse :405 (was :363);
+  malformedShorthandRepairPrompt :438 (was :396-412); shorthandResultFromCompile :500.
+  compileShorthandDeterministically: locate by name, not by the spec's :206.
+- vocabulary.ts interface :77-90 region VERIFIED (argContracts :82, promptVerbBlock :87,
+  toolActionEnum :89); impl promptVerbBlock :202, argContracts accessor :222, return literal
+  from :225.
+- intentCompile.ts:68-85 teaches map-key shape + :85 'NEVER write a literal action: key'
+  VERIFIED; registry template intent.compile.system.yaml teaches `- action:` VERIFIED (:18).
+- quantity.ts: QUANTITY_ID :254, module-private getQuantityValidator :257 (export it),
+  consumers :398/:423 VERIFIED. No quantityWireContract.test.ts exists (create per spec).
+- Tool def: AGENT_INTENT_TOOL_DEF shorthand arg :625-628 (description :628) VERIFIED UNMOVED.
+- Do NOT branch off a5b3999a; branch off the trunk tip AT DISPATCH (THREAD-ASK-1 merges
+  ahead of you; its diff touches ProtocolLocalizationThread/handlers — no overlap with yours).
