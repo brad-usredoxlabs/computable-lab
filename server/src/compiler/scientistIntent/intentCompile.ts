@@ -65,24 +65,24 @@ export function intentCompileSystemPrompt(
 
 OUTPUT ONLY YAML. No prose, no code fences.
 
-TOP-LEVEL SHAPE (write actions as a list of objects keyed by the verb — each key is the action name, its value is the params map):
+TOP-LEVEL SHAPE (each action is an object with the literal key 'action'; the verb is its VALUE, from the closed list below):
 intentId: <short id>
 actions:
-  - add_material:
-      material: "Lysis Solution"
-      volumeUl: 550
-  - transfer:
-      source: "block"
-      target: "plate"
-      volumeUl: 200
-  - spin:
-      rpm: 4000
-      duration: "5 min"
+  - action: add_material
+    material: "Lysis Solution"
+    volumeUl: 550
+  - action: transfer
+    source: "block"
+    target: "plate"
+    volumeUl: 200
+  - action: spin
+    rpm: 4000
+    duration: "5 min"
 unresolved:
   - label: "<thing you could not commit to>"
     reason: "<why>"
 
-NEVER write a literal 'action:' key. The verb IS the map key. Use 'volumeUl' (not volume_ul).
+Use 'volumeUl' (not volume_ul). The verb is the VALUE of 'action:' — never a map key of its own.
 
 ALLOWED ACTIONS (never invent another):
 ${vocab.promptVerbBlock()}
