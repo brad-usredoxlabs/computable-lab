@@ -1,7 +1,7 @@
 # COMP-1 Task 17 interim (Part III D1): the mixture-cue list is DATA.
 #
-# A `material` label containing one of these cues, with NO declared components
-# (params.composition), is a recipe blob — the producer bars it with the
+# A `material` label that is MIXTURE-SHAPED with NO declared components
+# (params.composition) is a recipe blob — the producer bars it with the
 # unrealized-mixture-blob-material clarification (citing the shipped rule at
 # AddMaterialSupport.ts: "A bare concept in a well is never right. Materialize
 # it: a composition or a concept+concentration → a formulation (material-spec)")
@@ -9,13 +9,54 @@
 # MaterialGrounding.ts:199, via normalizeCompositionMaterialRefs,
 # AddMaterialSupport.ts:385-390) mint the blob as one recipe-named material
 # record. Loaded PER call (never process-cached); an absent file or `cues:`
-# section turns the interim bar off. Zero cue literals in TypeScript (repo rule
-# #1). Interim until Part I's composition form decomposes the mixture into
+# section turns the interim bar OFF — LOUD (one console.warn naming the path,
+# fix1/D3), never silently. Zero cue literals in TypeScript (repo rule #1).
+# Interim until Part I's composition form decomposes the mixture into
 # components + a complex_composition material-spec.
+#
+# fix1/D1 (adversarial review defect 1): a bare separator SUBSTRING is NOT
+# mixture evidence on its own. Real, catalogued SINGLE reagents carry
+# separators and percentages in their names — DMEM/F12, DMEM+GlutaMAX,
+# HBSS with Ca/Mg, Trypsin-EDTA (0.25%) — and a substring-only bar false-bars
+# them, turning an already-compilable add_material into a clarification. Each
+# cue entry therefore declares its FIRING RULE (`firesOn`):
+#   • a SPACED cue (" / ", " + ", " in ") is itself mixture shape → fires on
+#     the substring;
+#   • a bare separator cue fires only on the declared mixture-shape evidence:
+#     a ratio/quantity ADJACENT to the cue occurrence (50:50, 1:1, 50 %) and/or
+#     >= minComponents component tokens FLANKING the occurrence;
+#   • a bare "%" is NEVER sufficient evidence by itself (a percentage is normal
+#     in single-reagent names) → it fires only on the flanking arm.
+# The TypeScript side interprets this generically: cue tokens, shape patterns,
+# thresholds and connective stop-words are DATA; no reagent name, cue literal,
+# or ratio literal is hardcoded in TS.
 cues:
-  - " / "
-  - " + "
-  - "%"
-  - " in "
-  - "/"
-  - "+"
+  - token: " / "
+  - token: " + "
+  - token: " in "
+  - token: "/"
+    firesOn: [ratioAdjacent, flankingComponents]
+  - token: "+"
+    firesOn: [ratioAdjacent]
+  - token: "%"
+    firesOn: [flankingComponents]
+
+mixtureShape:
+  # ADJACENCY: a ratio/quantity match whose span touches this many characters
+  # around a cue occurrence is mixture evidence — the blob idiom names its
+  # ratio next to the separator ("50:50 Trypsin-EDTA/DMEM",
+  # "Trypsin-EDTA/DMEM (50:50)").
+  adjacencyWindowChars: 16
+  ratioPatterns:
+    - "\\d+\\s*[:/xX×]\\s*\\d+"
+    - "\\d+\\s*%"
+  # FLANKING: OR the cue occurrence is flanked by at least this many COMPONENT
+  # tokens — a whole word matching componentPattern, at least minComponentLength
+  # chars, and not a connective word. Catalogue suffixes (F12, B27, A1) contain
+  # digits and so are NOT components; that is what separates the single reagent
+  # "DMEM/F12" from the blob "Trypsin-EDTA/DMEM".
+  flanking:
+    minComponents: 2
+    minComponentLength: 3
+    componentPattern: "[A-Za-z][A-Za-z-]*"
+    stopWords: [with, without, and, or, plus, in, of, per, for, to, the, a, an]

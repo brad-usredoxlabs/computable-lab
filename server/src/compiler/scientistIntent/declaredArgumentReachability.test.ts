@@ -30,9 +30,11 @@
  *     shape.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
-import { normalizeScientistIntent } from './normalizeScientistIntent.js';
+import { normalizeScientistIntent, WELL_ADDRESS_SHAPE_RE } from './normalizeScientistIntent.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 
@@ -262,13 +264,16 @@ actions:
 });
 
 // ---------------------------------------------------------------------------
-// fix1/D2 probe (adversarial review defect 2): the report §6.5/§8 live
-// expectation claims the canonical prompt ghosts A1:H12 on the deck. This
-// probe drives the canonical prompt's own shorthand document through the real
-// pipeline and asks: are there ghostable per-well events at all?
+// fix1/D2 (adversarial review defect 2, orchestrator ruling): the interim blob
+// bar STAYS authoritative for the canonical prompt. Its live expectation is
+// now: the turn yields the unrealized-mixture-blob-material clarification
+// naming the cues AND no blob record (NOT a ghost). The GHOST leg moves to a
+// plain-material live prompt ("Add 50uL of DMEM to each well.") plus the
+// declared-composition arm. Both campaign criteria stay proven here: blob
+// blocked (canonical prompt), ghost carriers produced (plain-material path).
 // ---------------------------------------------------------------------------
-describe('fix1/D2 probe: reachability of the Part IV live ghost leg on the canonical prompt', () => {
-  it('the canonical prompt material must yield ghostable per-well events (the §6.5/§8 live expectation)', async () => {
+describe('fix1/D2 live-leg expectations (orchestrator ruling): canonical prompt bars, plain-material path ghosts', () => {
+  it('CANONICAL leg: the canonical prompt material bars with the blob clarification naming the cues and ships NO events (no blob record, no ghost)', async () => {
     const compiled = await compileReal(`intentId: live-canonical-blob
 actions:
   - action: add_material
@@ -277,7 +282,125 @@ actions:
     volume: { value: 50, unit: uL }
     targetWells: A1:H12
 `);
+    expect(compiled.outcome).toBe('needs-clarification');
+    const bar = compiled.clarifications.find((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bar).toBeDefined();
+    expect((bar as { message?: string }).message ?? '').toContain('50:50');
+    // No event ships ⇒ nothing can ghost and the grounding door never sees
+    // the blob ⇒ no blob-named material record.
+    expect(compiled.terminalArtifacts.events).toEqual([]);
+  });
+
+  it('GHOST leg: the plain-material live prompt yields 96 ghostable per-well events (wells + volume carriers the deck ghosts)', async () => {
+    const compiled = await compileReal(`intentId: live-plain-dmem
+actions:
+  - action: add_material
+    labware: plate
+    material: DMEM
+    volume: { value: 50, unit: uL }
+    targetWells: A1:H12
+`);
+    expect(compiled.outcome).toBe('complete');
+    expect(compiled.clarifications).toEqual([]);
     const events = compiled.terminalArtifacts.events as Array<Record<string, unknown>>;
     expect(events.length).toBe(96);
+    const details = events[0]!.details as Record<string, unknown>;
+    expect(details['volume']).toEqual({ value: 50, unit: 'uL' });
+    expect(details['volumeUl']).toBe(50);
+  });
+
+  it('DECLARED-COMPOSITION arm: the same blob label with params.composition compiles (the bar is blob-shape-only)', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: live-composition-arm
+actions:
+  - action: add_material
+    labware: plate
+    material: 50:50 Trypsin-EDTA/DMEM
+    volume: { value: 50, unit: uL }
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: Trypsin-EDTA, role: solvent, fraction: "50%" }
+        - { material: DMEM, role: diluent, fraction: "50%" }
+`));
+    expect(normalized.clarifications ?? []).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fix1/D3 (adversarial review defect 3): the off-state stays (per-call load,
+// absent file ⇒ bar OFF) but must be LOUD — a console.warn naming the cue data
+// home — never a silent fallback that swallows the protection.
+// ---------------------------------------------------------------------------
+describe('cue-bar off-state (fix1/D3): an absent cue file yields zero cue bars AND a loud warn naming the path', () => {
+  const BLOB_DOC = `intentId: off-state-blob
+actions:
+  - action: add_material
+    labware: plate
+    material: Trypsin-EDTA/DMEM (50:50)
+    volume: { value: 50, unit: uL }
+    targetWells: A1:H12
+`;
+
+  it('absent cues file ⇒ zero cue bars (bar OFF) + exactly one console.warn naming the missing path', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const missing = new URL('./fixtures/__absent-mixture-cues-d3.yaml', import.meta.url);
+      const normalized = normalizeScientistIntent(parseScientistIntent(BLOB_DOC), { mixtureCuesPath: missing });
+      // Bar OFF: the blob that the shipped cue file bars compiles through untouched.
+      expect(normalized.clarifications ?? []).toEqual([]);
+      const blobBars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+      expect(blobBars).toHaveLength(0);
+      // LOUD: the off-state names the data home it could not find.
+      const offWarns = warnSpy.mock.calls.map((args) => args.map(String).join(' ')).filter((line) => line.includes('mixture-cue-bar-off'));
+      expect(offWarns.length).toBeGreaterThanOrEqual(1);
+      expect(offWarns[0]).toContain('__absent-mixture-cues-d3.yaml');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('the SHIPPED cue file is present and loads with structured firing rules (the bar is ON by default)', () => {
+    // No injected path: the default home must load — a build that drops
+    // config/drafting/ is caught by this pin, not only by the warn.
+    const normalized = normalizeScientistIntent(parseScientistIntent(BLOB_DOC));
+    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bars).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fix1/D4 (adversarial review defect 4): WELL_ADDRESS_SHAPE_RE duplicates the
+// canonical compiler's private WELL_RE (ChatbotCompilePasses.ts — out of this
+// item's edit scope, so it is NOT imported). The local copy stays, but the two
+// sources of truth are PARITY-PINNED: same regex source string AND the same
+// strings accepted/rejected. A plate-geometry change to either side fails here.
+// ---------------------------------------------------------------------------
+describe('well-address shape parity (fix1/D4): the local copy and the canonical WELL_RE cannot diverge', () => {
+  const canonicalSource = (() => {
+    const text = readFileSync(join(process.cwd(), 'src', 'compiler', 'pipeline', 'passes', 'ChatbotCompilePasses.ts'), 'utf-8');
+    const match = text.match(/^const WELL_RE = (\/.+\/);$/m);
+    if (!match) throw new Error('canonical WELL_RE literal not found in ChatbotCompilePasses.ts — the parity pin must be re-anchored');
+    return match[1]!.slice(1, -1); // strip the /.../ delimiters
+  })();
+
+  it('the local WELL_ADDRESS_SHAPE_RE source is byte-identical to the canonical WELL_RE source', () => {
+    expect(WELL_ADDRESS_SHAPE_RE.source).toBe(canonicalSource);
+  });
+
+  it.each([
+    ['A1', true],
+    ['H12', true],
+    ['P24', true],
+    ['A0', false],
+    ['A25', false],
+    ['Q1', false],
+    ['a1', false],
+    ['AA1', false],
+    ['A1 ', false],
+    ['', false],
+  ])('parity: "%s" accepted=%s by BOTH regexes', (value, accepted) => {
+    const canonical = new RegExp(canonicalSource);
+    expect(WELL_ADDRESS_SHAPE_RE.test(value)).toBe(accepted);
+    expect(canonical.test(value)).toBe(accepted);
   });
 });

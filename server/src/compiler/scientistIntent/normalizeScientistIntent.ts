@@ -28,35 +28,237 @@ import { expandWellTokens } from '../../ai/wellRange.js';
 import { parse as parseYaml } from 'yaml';
 
 /** Well-address SHAPE test (not a range parser — expandWellTokens remains the
- *  ONE range parser). Mirrors the canonical compiler WELL_RE
+ *  ONE range parser). Parity-pinned to the canonical compiler WELL_RE
  *  (ChatbotCompilePasses.ts:2798, /^[A-P](1-24)$/): a physical plate-address
- *  fact, not domain policy. */
-const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/;
+ *  fact, not domain policy. Exported so the parity pin test can compare the
+ *  two sources of truth byte-for-byte (fix1/D4) — ChatbotCompilePasses.ts is
+ *  out of this item's edit scope, so the canonical regex is NOT imported. */
+export const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/;
 
 /** Task 17 interim cue home (DATA): config/drafting/mixture-material-cues.yaml.
  *  Loaded PER call (the drafting-config precedent — never process-cached, so a
  *  cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
- *  interim blob bar is OFF. Zero cue literals in TypeScript (repo rule #1). */
+ *  interim blob bar is OFF — LOUD (fix1/D3: one console.warn naming the data
+ *  home, never a silent fallback). Zero cue literals in TypeScript (repo rule
+ *  #1): cue tokens, firing rules, shape patterns and thresholds are all DATA. */
 const MIXTURE_CUES_PATH = new URL('../../../../config/drafting/mixture-material-cues.yaml', import.meta.url);
 
-function loadMixtureCues(): readonly string[] | undefined {
-  if (!existsSync(MIXTURE_CUES_PATH)) return undefined;
+/** How one cue token is allowed to fire (declared per cue entry in the YAML).
+ *  `substring` — the token itself is mixture shape (the spaced cues).
+ *  `ratioAdjacent` — the token fires only when a DATA ratio/quantity pattern
+ *  sits adjacent to one of its occurrences (the blob idiom names its ratio).
+ *  `flankingComponents` — the token fires only when >= minComponents DATA
+ *  component tokens flank that occurrence.
+ *  A bare separator with NO declared firing rule is a data error (fix1/D1 is
+ *  exactly the bare-substring over-match), so the loader REQUIRES one. */
+const CUE_FIRE_MODES = ['substring', 'ratioAdjacent', 'flankingComponents'] as const;
+type CueFireMode = (typeof CUE_FIRE_MODES)[number];
+
+interface MixtureCueRule {
+  token: string;
+  firesOn: readonly CueFireMode[];
+}
+
+interface MixtureShapeRules {
+  adjacencyWindowChars: number;
+  ratioPatterns: readonly RegExp[];
+  flanking: {
+    minComponents: number;
+    minComponentLength: number;
+    componentPattern: RegExp;
+    stopWords: ReadonlySet<string>;
+  };
+}
+
+interface MixtureCueConfig {
+  cues: readonly MixtureCueRule[];
+  shape: MixtureShapeRules;
+}
+
+/** fix1/D3: the off-state must be LOUD. One warn per (path, reason) pair —
+ *  the per-call load stays (spec-mandated), the diagnostic does not spam. */
+const offStateWarned = new Set<string>();
+
+function warnCueBarOff(path: string, reason: string): void {
+  const key = `${path}\u0000${reason}`;
+  if (offStateWarned.has(key)) return;
+  offStateWarned.add(key);
+  console.warn(`[mixture-cue-bar-off] ${reason} — the interim mixture-blob bar is OFF for every material. Cue data home: ${path}`);
+}
+
+function isSpacedToken(token: string): boolean {
+  return token !== token.trim();
+}
+
+function parseCueEntry(entry: unknown, path: string): MixtureCueRule {
+  const token = typeof entry === 'string' ? entry : null;
+  if (token !== null) {
+    if (!token.length) throw new Error(`mixture cue list (${path}): empty cue token`);
+    if (!isSpacedToken(token)) {
+      throw new Error(
+        `mixture cue list (${path}): bare cue token "${token}" must declare a firing rule (firesOn: [ratioAdjacent|flankingComponents]) — a bare separator substring alone is not mixture evidence (fix1/D1)`,
+      );
+    }
+    return { token, firesOn: ['substring'] };
+  }
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    throw new Error(`mixture cue list (${path}): each cue entry must be a string or an object with \`token\``);
+  }
+  const rec = entry as Record<string, unknown>;
+  if (typeof rec.token !== 'string' || !rec.token.length) {
+    throw new Error(`mixture cue list (${path}): every cue object needs a non-empty \`token\``);
+  }
+  if (rec.firesOn === undefined || rec.firesOn === null) {
+    if (!isSpacedToken(rec.token)) {
+      throw new Error(
+        `mixture cue list (${path}): bare cue token "${rec.token}" must declare firesOn — a bare separator substring alone is not mixture evidence (fix1/D1)`,
+      );
+    }
+    return { token: rec.token, firesOn: ['substring'] };
+  }
+  if (!Array.isArray(rec.firesOn) || rec.firesOn.length === 0 || !rec.firesOn.every((m) => typeof m === 'string' && (CUE_FIRE_MODES as readonly string[]).includes(m))) {
+    throw new Error(`mixture cue list (${path}): \`firesOn\` must be a non-empty list of ${CUE_FIRE_MODES.join(' | ')}`);
+  }
+  return { token: rec.token, firesOn: rec.firesOn as CueFireMode[] };
+}
+
+function parseShapeRules(raw: unknown, path: string): MixtureShapeRules {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape:\` must be an object (adjacencyWindowChars, ratioPatterns, flanking)`);
+  }
+  const rec = raw as Record<string, unknown>;
+  if (typeof rec.adjacencyWindowChars !== 'number' || !Number.isInteger(rec.adjacencyWindowChars) || rec.adjacencyWindowChars < 1) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.adjacencyWindowChars\` must be a positive integer`);
+  }
+  if (!Array.isArray(rec.ratioPatterns) || rec.ratioPatterns.length === 0 || !rec.ratioPatterns.every((p) => typeof p === 'string' && p.length > 0)) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.ratioPatterns\` must be a non-empty string list`);
+  }
+  const ratioPatterns = rec.ratioPatterns.map((p) => new RegExp(String(p), 'u'));
+  const flankingRaw = rec.flanking;
+  if (!flankingRaw || typeof flankingRaw !== 'object' || Array.isArray(flankingRaw)) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.flanking\` must be an object (minComponents, minComponentLength, componentPattern, stopWords)`);
+  }
+  const f = flankingRaw as Record<string, unknown>;
+  if (typeof f.minComponents !== 'number' || !Number.isInteger(f.minComponents) || f.minComponents < 1) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.flanking.minComponents\` must be a positive integer`);
+  }
+  if (typeof f.minComponentLength !== 'number' || !Number.isInteger(f.minComponentLength) || f.minComponentLength < 1) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.flanking.minComponentLength\` must be a positive integer`);
+  }
+  if (typeof f.componentPattern !== 'string' || !f.componentPattern.length) {
+    throw new Error(`mixture cue list (${path}): \`mixtureShape.flanking.componentPattern\` must be a non-empty pattern string`);
+  }
+  const stopWords = new Set<string>(
+    Array.isArray(f.stopWords) ? f.stopWords.filter((w): w is string => typeof w === 'string' && w.length > 0) : [],
+  );
+  return {
+    adjacencyWindowChars: rec.adjacencyWindowChars,
+    ratioPatterns,
+    flanking: {
+      minComponents: f.minComponents,
+      minComponentLength: f.minComponentLength,
+      // WHOLE-WORD test: the DATA pattern must match the entire token, so a
+      // catalogue suffix like "F12" is not a component (an unanchored test
+      // would match its leading letters and re-open the fix1/D1 over-match).
+      componentPattern: new RegExp(`^(?:${String(f.componentPattern)})$`, 'u'),
+      stopWords,
+    },
+  };
+}
+
+/** Load + validate the cue DATA. Absent file / absent-or-empty `cues:` ⇒
+ *  undefined (bar OFF) WITH a loud warn naming the path (fix1/D3). A file that
+ *  exists but is malformed still throws — malformed DATA is not an off-state. */
+export function loadMixtureCues(path: URL | string = MIXTURE_CUES_PATH): MixtureCueConfig | undefined {
+  const displayPath = String(path);
+  if (!existsSync(path)) {
+    warnCueBarOff(displayPath, `cue data home not found (${displayPath})`);
+    return undefined;
+  }
   let raw: unknown;
   try {
-    raw = parseYaml(readFileSync(MIXTURE_CUES_PATH, 'utf8'));
+    raw = parseYaml(readFileSync(path, 'utf8'));
   } catch (error) {
     throw new Error(`mixture cue list unreadable: ${error instanceof Error ? error.message : String(error)}`);
   }
-  if (raw === undefined || raw === null) return undefined;
+  if (raw === undefined || raw === null) {
+    warnCueBarOff(displayPath, `cue data home (${displayPath}) is empty`);
+    return undefined;
+  }
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('mixture cue list must be an object with a `cues:` list');
   }
   const cues = (raw as Record<string, unknown>).cues;
-  if (cues === undefined || cues === null) return undefined;
-  if (!Array.isArray(cues) || cues.length === 0 || !cues.every((c) => typeof c === 'string' && c.length > 0)) {
-    throw new Error('mixture cue list: `cues` must be a non-empty string list');
+  if (cues === undefined || cues === null) {
+    warnCueBarOff(displayPath, `cue data home (${displayPath}) has no \`cues:\` section`);
+    return undefined;
   }
-  return cues.map((c) => String(c));
+  if (!Array.isArray(cues) || cues.length === 0) {
+    warnCueBarOff(displayPath, `cue data home (${displayPath}) has an empty \`cues:\` list`);
+    return undefined;
+  }
+  const shape = parseShapeRules((raw as Record<string, unknown>).mixtureShape, displayPath);
+  return { cues: cues.map((entry) => parseCueEntry(entry, displayPath)), shape };
+}
+
+function cueTokenOccurrences(value: string, token: string): number[] {
+  const positions: number[] = [];
+  let from = 0;
+  for (;;) {
+    const at = value.indexOf(token, from);
+    if (at < 0) break;
+    positions.push(at);
+    from = at + token.length;
+  }
+  return positions;
+}
+
+/** DATA ratio/quantity adjacent to the cue occurrence (the blob idiom names
+ *  its ratio next to its separator: "50:50 Trypsin-EDTA/DMEM",
+ *  "Trypsin-EDTA/DMEM (50:50)"). */
+function hasAdjacentRatio(value: string, occurrence: number, tokenLength: number, shape: MixtureShapeRules): boolean {
+  const lo = Math.max(0, occurrence - shape.adjacencyWindowChars);
+  const hi = Math.min(value.length, occurrence + tokenLength + shape.adjacencyWindowChars);
+  const window = value.slice(lo, hi);
+  return shape.ratioPatterns.some((pattern) => pattern.test(window));
+}
+
+/** DATA component tokens flanking the cue occurrence. A component is a whole
+ *  word matching the DATA componentPattern, long enough, and not a DATA
+ *  connective word — catalogue suffixes (F12, B27) carry digits and so are NOT
+ *  components, which is what separates the single reagent "DMEM/F12" from the
+ *  blob "Trypsin-EDTA/DMEM". */
+function flankingComponentCount(value: string, occurrence: number, tokenLength: number, shape: MixtureShapeRules): number {
+  const sides = [value.slice(0, occurrence), value.slice(occurrence + tokenLength)];
+  const words = /\b[\p{L}\p{N}][\p{L}\p{N}-]*\b/gu;
+  let count = 0;
+  for (const side of sides) {
+    for (const match of side.matchAll(words)) {
+      const word = match[0];
+      if (word.length < shape.flanking.minComponentLength) continue;
+      if (!shape.flanking.componentPattern.test(word)) continue;
+      if (shape.flanking.stopWords.has(word.toLowerCase())) continue;
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/** The generic, DATA-driven shape test: which cues fire on this label. No
+ *  reagent name, cue literal, or ratio literal appears in TypeScript. */
+function mixtureCuesFound(value: string, config: MixtureCueConfig): string[] {
+  const found: string[] = [];
+  for (const cue of config.cues) {
+    const occurrences = cueTokenOccurrences(value, cue.token);
+    if (occurrences.length === 0) continue;
+    const fired = cue.firesOn.some((mode) => {
+      if (mode === 'substring') return true;
+      if (mode === 'ratioAdjacent') return occurrences.some((at) => hasAdjacentRatio(value, at, cue.token.length, config.shape));
+      return occurrences.some((at) => flankingComponentCount(value, at, cue.token.length, config.shape) >= config.shape.flanking.minComponents);
+    });
+    if (fired) found.push(cue.token);
+  }
+  return found;
 }
 
 /** SPINE-7 fix1/D1: stable reason code for a schema-valid SCALAR well-label
@@ -113,6 +315,12 @@ export interface NormalizeOptions {
    *  resolve_nouns. Wells-arg detection MUST use the SAME instance the engine
    *  reads — never the default singleton behind an injected vocab. */
   vocabulary?: ScientistIntentVocabulary;
+  /** fix1/D3: override for the mixture-cue DATA home (same injection pattern
+   *  as `vocabulary` above). Defaults to the shipped
+   *  config/drafting/mixture-material-cues.yaml. Lets a deployment point the
+   *  bar at another cue file and lets tests pin the LOUD off-state (absent
+   *  file ⇒ bar OFF + one console.warn naming the path, never silent). */
+  mixtureCuesPath?: URL | string;
 }
 
 export interface ScientistIntentNormalized {
@@ -250,7 +458,7 @@ function toCandidateEvent(
   actionIndex: number,
   vocabulary: ScientistIntentVocabulary,
   unrealized: ProducerClarification[],
-  mixtureCues: readonly string[] | undefined,
+  mixtureCues: MixtureCueConfig | undefined,
 ): { verb: string; [key: string]: unknown } {
   const verb = (action.action as string) ?? 'unknown';
   const event: { verb: string; [key: string]: unknown } = { verb };
@@ -403,7 +611,7 @@ function toCandidateEvent(
   // mint the blob as ONE recipe-named material record — the inverse of the
   // shipped rule the bar cites. A label WITH declared components
   // (params.composition — Part I's form, schema-valid today) passes untouched.
-  if (mixtureCues && mixtureCues.length > 0) {
+  if (mixtureCues && mixtureCues.cues.length > 0) {
     const declaresMaterial = vocabulary.argContracts(verb).some((contract) => contract.name === 'material');
     const materialValue = action.material;
     const paramsRecord = action.params && typeof action.params === 'object' && !Array.isArray(action.params)
@@ -411,7 +619,11 @@ function toCandidateEvent(
       : undefined;
     const declaresComponents = Array.isArray(paramsRecord?.composition) && (paramsRecord!.composition as unknown[]).length > 0;
     if (declaresMaterial && typeof materialValue === 'string' && materialValue.trim() && !declaresComponents) {
-      const cuesFound = mixtureCues.filter((cue) => materialValue.includes(cue));
+      // fix1/D1: the cue list is structured DATA — each token declares how it
+      // may fire (substring for the spaced cues; ratio-adjacency and/or
+      // flanking-component evidence for the bare separators). A bare separator
+      // or a bare "%" is NOT mixture evidence on its own.
+      const cuesFound = mixtureCuesFound(materialValue, mixtureCues);
       if (cuesFound.length > 0) {
         unrealized.push({
           label: materialValue.trim(),
@@ -442,8 +654,8 @@ export function normalizeScientistIntent(
   // Task 17 interim cue list: DATA from config/drafting/mixture-material-cues.yaml,
   // loaded PER call — the drafting-config precedent (never process-cached, so a
   // cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
-  // interim bar is off.
-  const mixtureCues = loadMixtureCues();
+  // interim bar is OFF — LOUD (fix1/D3: one console.warn naming the path).
+  const mixtureCues = loadMixtureCues(options?.mixtureCuesPath ?? MIXTURE_CUES_PATH);
   // every distinct symbolic noun label becomes a candidate labware resource so
   // ProtocolIntent validation + resolve_labware can bind it downstream.
   const symbolicLabels = new Map<string, string>(); // label -> role hint
