@@ -221,7 +221,8 @@ function deckPayload(labwares: unknown[], placements: unknown[]) {
 }
 
 async function resetEmptyDeck(request: Parameters<typeof test>[0]['request']) {
-  await request.put(`/api/records/${EVG}`, deckPayload([], []))
+  const res = await request.put(`/api/records/${EVG}`, deckPayload([], []))
+  expect(res.ok(), `deck reset PUT failed: ${res.status()}`).toBe(true)
 }
 
 /** Seed the deck with an EXISTING plate the scientist already has — the honest
@@ -229,7 +230,7 @@ async function resetEmptyDeck(request: Parameters<typeof test>[0]['request']) {
  *  schema/workflow/event-graph.schema.yaml). Its NAME is what the server's
  *  deck binding matches; its id is what the bound events must carry. */
 async function resetDeckWithPlate(request: Parameters<typeof test>[0]['request']) {
-  await request.put(
+  const res = await request.put(
     `/api/records/${EVG}`,
     deckPayload(
       [
@@ -257,6 +258,7 @@ async function resetDeckWithPlate(request: Parameters<typeof test>[0]['request']
       ],
     ),
   )
+  expect(res.ok(), `deck seed PUT failed: ${res.status()}`).toBe(true)
 }
 
 async function openFreeformDeckAndAsk(page: Page, prompt: string) {
