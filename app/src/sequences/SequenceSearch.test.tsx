@@ -195,4 +195,18 @@ describe('SequenceSearch', () => {
     expect(await screen.findByTestId('sequence-imported')).toBeDefined()
     expect(screen.getByTestId('sequence-imported').textContent).toContain('SEQ-TEST-42')
   })
+
+  // ISEQ-2 RED (spec §4b): the imported recordId must be an OPEN affordance, not
+  // inert text — a link into /lab/sequences?record=<captured id> that the
+  // SequencesPage deep-link effect consumes.
+  it('after import the recordId links into /lab/sequences deep-link (?record=)', async () => {
+    stubProxy({ saveRecordId: 'SEQ-TEST-42' })
+    render(<SequenceSearch />)
+    await search()
+    fireEvent.click(screen.getByTestId('sequence-import-button'))
+    const link = await screen.findByTestId('sequence-imported-link')
+    expect(link.getAttribute('href')).toBe('/lab/sequences?record=SEQ-TEST-42')
+    // The existing "Imported: <id>" text stays visible alongside the link.
+    expect(screen.getByTestId('sequence-imported').textContent).toContain('Imported: SEQ-TEST-42')
+  })
 })
