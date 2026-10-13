@@ -11,12 +11,33 @@ import { buildIngestionJobEnvelope, buildIngestionArtifactEnvelope, buildIngesti
 import { SequenceService } from './SequenceService.js';
 import { normalizeSequence, type AlphabetSpec } from './sequenceEngine.js';
 import { sequenceConfig, SEQUENCE_SCHEMA } from './sequenceRuntime.js';
-export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:Array<{label:string;role:string;position:string}>; issues:string[]; metadata:Record<string,string> }
+export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:OligoModification[]; issues:string[]; metadata:Record<string,string> }
+export interface OligoModification { label:string; role:string; position:string }
+/**
+ * THE single normalization stage (oligoOrder.ts:38-45 as of the pre-extraction
+ * revision): declared sequenceNoise -> 5'/3' wrappers -> declared modification
+ * pattern table -> normalizeSequence with the honest leftover-symbol fallback.
+ * ONE compiler, two producers: the regex extractor AND the draft lowerer
+ * (oligoOrderDraft.ts) call this same function, so both producers are
+ * structurally identical, not merely equal today.
+ */
+export function normalizeOligoRawBases(rawBases: string, config: Record<string, unknown>, alphabets: Record<string, unknown>): { residues: string; modifications: OligoModification[]; issues: string[] } {
+  const noise=(config.sequenceNoise as string[]|undefined)??[];
+  const modifications:OligoModification[]=[];const issues:string[]=[];
+  let bases=rawBases;for(const pattern of noise) bases=bases.replace(new RegExp(pattern,'i'),'');
+  bases=bases.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
+  for(const mod of config.modifications as Array<{pattern:string;label:string;role:string;position:string}>) {
+    const regex=new RegExp(mod.pattern,'gi');
+    if(regex.test(bases)) {modifications.push({label:mod.label,role:mod.role,position:mod.position});bases=bases.replace(new RegExp(mod.pattern,'gi'),'');}
+  }
+  let residues:string;
+  try {residues=normalizeSequence(bases,alphabets.iupac_dna as AlphabetSpec);}catch(err){residues=bases.replace(/\s+/g,'');issues.push((err as Error).message);}
+  return {residues,modifications,issues};
+}
 export async function extractOligoRows(text: string): Promise<OligoRow[]> {
   const config=await sequenceConfig('oligo-order'); const alphabets=await sequenceConfig('alphabets');
   const formats:Array<{namePattern:string;sequencePattern:string}>=(config.formats as Array<{namePattern:string;sequencePattern:string}>|undefined)??[{namePattern:config.namePattern,sequencePattern:config.sequencePattern}];
   const nameMatchers=formats.map(f=>new RegExp(f.namePattern,'i'));const sequenceMatchers=formats.map(f=>new RegExp(f.sequencePattern,'i'));
-  const noise=(config.sequenceNoise as string[]|undefined)??[];
   const rows:OligoRow[]=[];const metadata:Record<string,string>={};
   for(const line of text.split(/\r?\n/))for(const [key,pattern] of Object.entries(config.metadata??{})){const match=new RegExp(String(pattern),'i').exec(line.trim());if(match)metadata[key]=match[1]!.trim();}
   for(const [pageIndex,page] of text.split('\f').entries()) {
@@ -36,13 +57,8 @@ export async function extractOligoRows(text: string): Promise<OligoRow[]> {
     }
   }
   for(const row of rows) {
-    let bases=row.raw;for(const pattern of noise) bases=bases.replace(new RegExp(pattern,'i'),'');
-    bases=bases.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
-    for(const mod of config.modifications) {
-      const regex=new RegExp(mod.pattern,'gi');
-      if(regex.test(bases)) {row.modifications.push({label:mod.label,role:mod.role,position:mod.position});bases=bases.replace(new RegExp(mod.pattern,'gi'),'');}
-    }
-    try {row.residues=normalizeSequence(bases,alphabets.iupac_dna as AlphabetSpec);}catch(err){row.residues=bases.replace(/\s+/g,'');row.issues.push((err as Error).message);}
+    const normalized=normalizeOligoRawBases(row.raw,config,alphabets);
+    row.residues=normalized.residues;row.modifications=normalized.modifications;row.issues.push(...normalized.issues);
     if(!row.label) row.issues.push('No oligo name found. Enter a name before saving.');
   }
   return rows;
