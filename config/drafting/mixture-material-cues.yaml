@@ -1,0 +1,21 @@
+# COMP-1 Task 17 interim (Part III D1): the mixture-cue list is DATA.
+#
+# A `material` label containing one of these cues, with NO declared components
+# (params.composition), is a recipe blob — the producer bars it with the
+# unrealized-mixture-blob-material clarification (citing the shipped rule at
+# AddMaterialSupport.ts: "A bare concept in a well is never right. Materialize
+# it: a composition or a concept+concentration → a formulation (material-spec)")
+# instead of letting the grounding door (ensureLocalMaterialForDraft,
+# MaterialGrounding.ts:199, via normalizeCompositionMaterialRefs,
+# AddMaterialSupport.ts:385-390) mint the blob as one recipe-named material
+# record. Loaded PER call (never process-cached); an absent file or `cues:`
+# section turns the interim bar off. Zero cue literals in TypeScript (repo rule
+# #1). Interim until Part I's composition form decomposes the mixture into
+# components + a complex_composition material-spec.
+cues:
+  - " / "
+  - " + "
+  - "%"
+  - " in "
+  - "/"
+  - "+"

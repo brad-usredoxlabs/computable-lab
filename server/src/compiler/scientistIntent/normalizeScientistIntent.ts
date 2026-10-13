@@ -23,6 +23,41 @@
 import type { ProtocolIntent, ProtocolPatternIntent } from '../protocolIntent/ProtocolIntent.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from './types.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { expandWellTokens } from '../../ai/wellRange.js';
+import { parse as parseYaml } from 'yaml';
+
+/** Well-address SHAPE test (not a range parser — expandWellTokens remains the
+ *  ONE range parser). Mirrors the canonical compiler WELL_RE
+ *  (ChatbotCompilePasses.ts:2798, /^[A-P](1-24)$/): a physical plate-address
+ *  fact, not domain policy. */
+const WELL_ADDRESS_SHAPE_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/;
+
+/** Task 17 interim cue home (DATA): config/drafting/mixture-material-cues.yaml.
+ *  Loaded PER call (the drafting-config precedent — never process-cached, so a
+ *  cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
+ *  interim blob bar is OFF. Zero cue literals in TypeScript (repo rule #1). */
+const MIXTURE_CUES_PATH = new URL('../../../../config/drafting/mixture-material-cues.yaml', import.meta.url);
+
+function loadMixtureCues(): readonly string[] | undefined {
+  if (!existsSync(MIXTURE_CUES_PATH)) return undefined;
+  let raw: unknown;
+  try {
+    raw = parseYaml(readFileSync(MIXTURE_CUES_PATH, 'utf8'));
+  } catch (error) {
+    throw new Error(`mixture cue list unreadable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('mixture cue list must be an object with a `cues:` list');
+  }
+  const cues = (raw as Record<string, unknown>).cues;
+  if (cues === undefined || cues === null) return undefined;
+  if (!Array.isArray(cues) || cues.length === 0 || !cues.every((c) => typeof c === 'string' && c.length > 0)) {
+    throw new Error('mixture cue list: `cues` must be a non-empty string list');
+  }
+  return cues.map((c) => String(c));
+}
 
 /** SPINE-7 fix1/D1: stable reason code for a schema-valid SCALAR well-label
  *  that the lowering chain has NO consumer for (the source-well family: no
@@ -31,6 +66,47 @@ import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from
  *  silent data loss; the producer emits this structured clarification instead
  *  and the compile runner bars atomically (422 needs-clarification arm). */
 export const UNREALIZED_WELL_LABEL_REASON = 'unrealized-well-label' as const;
+
+/** COMP-1 Task 16 (Part III D4): stable reason code for a declared
+ *  argument VALUE the lowering chain cannot carry to any emitted event (the
+ *  proven-lossy shapes: a `volume` that is neither a number nor a
+ *  {value, unit} quantity object; a literal-address claim on a verb with no
+ *  declared wells contract whose tokens are not well addresses). Same envelope
+ *  as the well-label bar: producer clarification → atomic 422 arm, never 500,
+ *  never a silent 'complete'.
+ *  TODO(COMP-2/general model): full declared-argument reachability
+ *  — every vocabulary-declared arg compared against the consumer keys of the
+ *  downstream pass that lowers it. Scoped here to the vocabulary's
+ *  `kind: quantity` contracts + the undeclared-wells address claim (the two
+ *  proven-lossy args, volume + scalar targetWells) per the spec. */
+export const UNREALIZED_DECLARED_ARGUMENT_REASON = 'unrealized-declared-argument' as const;
+
+/** COMP-1 Task 17 interim (Part III D1): stable reason code for a
+ *  mixture-shaped `material` label (cue-shaped per the DATA cue list in
+ *  config/drafting/mixture-material-cues.yaml) with NO declared
+ *  components. The shipped rule it bars for (AddMaterialSupport.ts: "A bare
+ *  concept in a well is never right. Materialize it: a composition or a
+ *  concept+concentration → a formulation (material-spec)") means the blob must
+ *  never reach an event where the grounding door
+ *  (ensureLocalMaterialForDraft, MaterialGrounding.ts:199, reached via
+ *  normalizeCompositionMaterialRefs, AddMaterialSupport.ts:385-390) would mint
+ *  it as ONE blob-named material record. Interim until Part I's composition
+ *  form decomposes it. */
+export const MIXTURE_BLOB_MATERIAL_REASON = 'unrealized-mixture-blob-material' as const;
+
+export type UnrealizedProducerReason =
+  | typeof UNREALIZED_WELL_LABEL_REASON
+  | typeof UNREALIZED_DECLARED_ARGUMENT_REASON
+  | typeof MIXTURE_BLOB_MATERIAL_REASON;
+
+/** One producer clarification (exactOptionalPropertyTypes: `message` is
+ *  absent-or-value, built by conditional spread only). */
+export interface ProducerClarification {
+  label: string;
+  reason: UnrealizedProducerReason;
+  actionLocation: ScientistIntentActionLocation;
+  message?: string;
+}
 
 export interface NormalizeOptions {
   /** SPINE-7 fix1/D4: the vocabulary instance the compile threads into
@@ -44,13 +120,9 @@ export interface ScientistIntentNormalized {
   candidateEvents: Array<{ verb: string; [key: string]: unknown }>;
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
   /** SPINE-7 fix1/D1 (additive): structured clarifications the producer emits
-   *  when a schema-valid scalar well-label has no lowering consumer. The
-   *  compile runner bars atomically on them (422 arm, never 500). */
-  clarifications?: Array<{
-    label: string;
-    reason: typeof UNREALIZED_WELL_LABEL_REASON;
-    actionLocation: ScientistIntentActionLocation;
-  }>;
+   *  when a schema-valid value has no lowering consumer. The compile runner
+   *  bars atomically on them (422 arm, never 500). */
+  clarifications?: ProducerClarification[];
 }
 
 /** Actions covered by the geometric-macro pattern expanders — DERIVED from the
@@ -106,7 +178,7 @@ function unrealizedPatternWellLabels(
   verb: string,
   actionIndex: number,
   vocabulary: ScientistIntentVocabulary,
-  unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }>,
+  unrealized: ProducerClarification[],
 ): void {
   for (const argument of declaredWellsArgs(verb, vocabulary)) {
     const value = action[argument];
@@ -177,7 +249,8 @@ function toCandidateEvent(
   action: Record<string, unknown>,
   actionIndex: number,
   vocabulary: ScientistIntentVocabulary,
-  unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }>,
+  unrealized: ProducerClarification[],
+  mixtureCues: readonly string[] | undefined,
 ): { verb: string; [key: string]: unknown } {
   const verb = (action.action as string) ?? 'unknown';
   const event: { verb: string; [key: string]: unknown } = { verb };
@@ -272,6 +345,84 @@ function toCandidateEvent(
     }
   }
 
+  // ── COMP-1 Task 16 (Part III D4): declared-argument reachability ──
+  // A declared value the lowering chain CANNOT carry to any emitted event bars
+  // with a structured producer clarification (same envelope as the well-label
+  // bar) instead of riding silently into a 'complete' compile. Scoped to the
+  // two proven-lossy shapes (spec); the general model is the TODO on
+  // UNREALIZED_DECLARED_ARGUMENT_REASON.
+  //
+  // (a) A vocabulary-declared `kind: quantity` argument (DATA: argContracts)
+  //     whose value is neither a number (the expander's bare-number arm) nor a
+  //     {value: number, unit: string} quantity object (the expander's declared
+  //     object arm) reaches no expander consumer — e.g. `volume: 50 uL` (a
+  //     string). Today: silently gone.
+  for (const contract of vocabulary.argContracts(verb)) {
+    if (contract.kind !== 'quantity') continue;
+    const value = action[contract.name];
+    if (value === undefined) continue;
+    const quantityObject =
+      value !== null && typeof value === 'object' && !Array.isArray(value)
+      && typeof (value as Record<string, unknown>).value === 'number'
+      && typeof (value as Record<string, unknown>).unit === 'string';
+    if (typeof value === 'number' || quantityObject) continue;
+    unrealized.push({
+      label: typeof value === 'string' ? value.trim() : JSON.stringify(value),
+      reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
+      actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: contract.name },
+    });
+  }
+
+  // (b) A SCALAR well claim on a verb with NO declared kind:wells argument
+  //     (add_material — Part III D3): the value is a LITERAL address claim,
+  //     not a symbolic label (the symbolic branch above only exists for
+  //     declared wells contracts). A compact range / address list is carried
+  //     by the expander's ONE parser (expandWellTokens, simpleVerbs Task 15);
+  //     anything that is not a well address has no consumer and would ship a
+  //     fabricated well — bar it instead.
+  if (wellsLabelArgs.size === 0) {
+    const wellsClaim = firstKeyed(action, ['targetWells', 'wells']);
+    if (wellsClaim && typeof wellsClaim.value === 'string' && wellsClaim.value.trim()) {
+      const tokens = expandWellTokens([wellsClaim.value.trim()]);
+      if (!tokens.every((token) => WELL_ADDRESS_SHAPE_RE.test(token))) {
+        unrealized.push({
+          label: wellsClaim.value.trim(),
+          reason: UNREALIZED_DECLARED_ARGUMENT_REASON,
+          actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: wellsClaim.key },
+        });
+      }
+    }
+  }
+
+  // ── COMP-1 Task 17 interim (Part III D1): the blob bar ──
+  // A mixture-shaped `material` label (cue-shaped per the DATA cue list —
+  // config/drafting/mixture-material-cues.yaml, zero cue literals
+  // here) with NO declared components must never reach an event: the store-
+  // write grounding door (ensureLocalMaterialForDraft, MaterialGrounding.ts:199
+  // via normalizeCompositionMaterialRefs, AddMaterialSupport.ts:385-390) would
+  // mint the blob as ONE recipe-named material record — the inverse of the
+  // shipped rule the bar cites. A label WITH declared components
+  // (params.composition — Part I's form, schema-valid today) passes untouched.
+  if (mixtureCues && mixtureCues.length > 0) {
+    const declaresMaterial = vocabulary.argContracts(verb).some((contract) => contract.name === 'material');
+    const materialValue = action.material;
+    const paramsRecord = action.params && typeof action.params === 'object' && !Array.isArray(action.params)
+      ? (action.params as Record<string, unknown>)
+      : undefined;
+    const declaresComponents = Array.isArray(paramsRecord?.composition) && (paramsRecord!.composition as unknown[]).length > 0;
+    if (declaresMaterial && typeof materialValue === 'string' && materialValue.trim() && !declaresComponents) {
+      const cuesFound = mixtureCues.filter((cue) => materialValue.includes(cue));
+      if (cuesFound.length > 0) {
+        unrealized.push({
+          label: materialValue.trim(),
+          reason: MIXTURE_BLOB_MATERIAL_REASON,
+          actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: 'material' },
+          message: `The material "${materialValue.trim()}" names a recipe, not a component (mixture cues found: ${cuesFound.map((c) => `"${c}"`).join(', ')}). A bare concept in a well is never right — materialize it: declare the components (params.composition) or name a single material; a composition becomes a formulation (material-spec).`,
+        });
+      }
+    }
+  }
+
   return event;
 }
 
@@ -285,8 +436,14 @@ export function normalizeScientistIntent(
   const unresolvedRefs: Array<{ kind: string; label: string; reason: string }> = [];
   // SPINE-7 fix1/D1: scalar well-labels the lowering chain cannot realize
   // (see toCandidateEvent) — surfaced as structured clarifications, never
-  // silently dropped.
-  const unrealized: Array<{ label: string; reason: typeof UNREALIZED_WELL_LABEL_REASON; actionLocation: ScientistIntentActionLocation }> = [];
+  // silently dropped. COMP-1 Task 16/17 adds the declared-argument
+  // and mixture-blob bars on the SAME channel.
+  const unrealized: ProducerClarification[] = [];
+  // Task 17 interim cue list: DATA from config/drafting/mixture-material-cues.yaml,
+  // loaded PER call — the drafting-config precedent (never process-cached, so a
+  // cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
+  // interim bar is off.
+  const mixtureCues = loadMixtureCues();
   // every distinct symbolic noun label becomes a candidate labware resource so
   // ProtocolIntent validation + resolve_labware can bind it downstream.
   const symbolicLabels = new Map<string, string>(); // label -> role hint
@@ -317,7 +474,7 @@ export function normalizeScientistIntent(
       if (pattern.targetLabware) updateSymbol(symbolicLabels, pattern.targetLabware, 'target');
       patterns.push(pattern);
     } else {
-      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized));
+      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized, mixtureCues));
     }
   });
 
