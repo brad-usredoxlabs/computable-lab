@@ -165,6 +165,20 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     | ExtractedPage[]
     | undefined
 
+  // DOCINGEST-A A7: the SAID pane previews the REAL source. source.mediaKind
+  // decides how it renders; mediaKind ABSENT (every legacy record) means
+  // today's pdf path exactly. Text-kind records never mount pdfjs.
+  const sourceMeta = (record?.payload as Record<string, unknown> | undefined)?.source as
+    | { mediaKind?: string; originalFileName?: string }
+    | undefined
+  const isTextKind = sourceMeta?.mediaKind === 'text' || sourceMeta?.mediaKind === 'spreadsheet'
+  // S5 honesty: a stored document nothing could read carries its extraction
+  // diagnostics on the record; the pane renders them instead of a blank
+  // successful-looking text pane.
+  const extractionDiagnostics = (record?.payload as Record<string, unknown> | undefined)?.extractionDiagnostics as
+    | Array<{ severity?: string; code?: string; message?: string }>
+    | undefined
+
   const pdfUrl = recordId ? apiClient.vendorPdfBlobUrl(recordId) : ''
 
   // Load the vendor-pdf record.
@@ -325,8 +339,20 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
   // Load the stored PDF once we have a blob URL. If it fails (no stored file
   // / 404), fall back to the extracted-text pane.
+  // DOCINGEST-A A7: a text-kind source (uploaded lab document) has no PDF
+  // blob — the extracted-text pane IS the source preview; pdfjs is never
+  // mounted and no blob fetch is attempted.
   useEffect(() => {
     if (!pdfUrl) return
+    // Wait for the record: mediaKind lives on the record, and a blob fetch
+    // attempted before it is known is exactly the blank-pane failure A7 pins.
+    if (!record) return
+    if (isTextKind) {
+      setPdfDoc(null)
+      setPages([])
+      setPdfView('text')
+      return
+    }
     setPdfDoc(null)
     setPdfError(null)
     setPages([])
@@ -351,7 +377,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     return () => {
       cancelled = true
     }
-  }, [pdfUrl])
+  }, [pdfUrl, isTextKind, record])
 
   const measurePane = useCallback(() => {
     const el = pagesRef.current
@@ -831,6 +857,20 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
           )}
           {showText ? (
             <div className="vpdf-review__text" data-testid="vpdf-review-text">
+              {isTextKind && sourceMeta?.originalFileName ? (
+                <div className="vpdf-review__text-source" data-testid="vpdf-review-text-source">
+                  Source: {sourceMeta.originalFileName}
+                </div>
+              ) : null}
+              {extractionDiagnostics && extractionDiagnostics.length > 0 ? (
+                <div className="vpdf-review__diagnostics" data-testid="vpdf-review-diagnostics" role="alert">
+                  {extractionDiagnostics.map((d, i) => (
+                    <p key={`${d.code ?? 'diag'}-${i}`} className={`vpdf-review__diagnostic vpdf-review__diagnostic--${d.severity ?? 'warning'}`}>
+                      {d.message ?? d.code ?? 'Extraction diagnostic'}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
               {extractedText && extractedText.length > 0 ? (
                 extractedText.map((pg) => (
                   <div key={pg.pageNumber} data-vpdf-page={pg.pageNumber} className="vpdf-review__text-page">
