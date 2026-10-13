@@ -415,6 +415,76 @@
 
 
 
+/* --- Held clarification cards (THREAD-ASK-1: the bar is answerable where shown) --- */
+.protocol-localization-thread__held-clarifications {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-1);
+}
+
+.pl-held-clarifications-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.pl-held-clarification-card {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  padding: 8px;
+}
+
+.pl-held-clarification-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.pl-held-clarification-menu {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--cl-accent);
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 45%, var(--cl-border));
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+.pl-held-clarification-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.pl-held-clarification-options {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pl-held-clarification-option {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.pl-held-clarification-option:disabled {
+  opacity: 0.5;
+}
+
 /* --- Review deck & labware (one-shot localization gate) --- */
 .protocol-localization-thread__deckreview {
   display: flex;

@@ -49,6 +49,7 @@ import { createResolveSpineFromContext } from '../../resolve/index.js';
 import type { AppContext } from '../../server.js';
 import type { RecordStore } from '../../store/types.js';
 import { ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
+import type { EngineSpineLike } from '../../compiler/resolution/adapters.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../../compiler/scientistIntent/types.js';
 import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import {
@@ -65,6 +66,16 @@ interface CompileFromPromptDeps {
   model?: string;
   /** Injected scientist-intent LLM client (tests). Defaults to config-built. */
   llmClient?: import('../../compiler/scientistIntent/intentCompile.js').ScientistIntentLlmClient;
+  /**
+   * THREAD-ASK-1 (Leg 1, test 6): an explicitly injected candidate spine —
+   * the declared test-seam arm of the SPINE-4 §3 fail-loud doctrine
+   * (compileScientistIntent.ts:139-145: "an explicitly injected ... spine is
+   * legal only as a declared test seam"). Production callers leave it absent
+   * and get the store-backed spine below; a test injects a stub to prove the
+   * clarification-answer binding is DATA: the handler routes the scientist's
+   * stated label to the SPINE (the only binder) and never binds it itself.
+   */
+  spine?: EngineSpineLike;
 }
 
 function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0; apiKey?: string } {
@@ -123,6 +134,14 @@ interface CompileFromPromptBody {
  * axisId and value ride verbatim from the request data (zero phrase/domain
  * literals here — the labels are the request's + the family record's). The ask
  * gate, the 422 envelope shape, and the OQ4(a) hold are unchanged.
+ *
+ * THREAD-ASK-1 (Leg 1): a clarification ANSWER rides this SAME map as data —
+ * key = the clarification's own label, value = the scientist's chosen record
+ * in the mention idiom ClarificationPicker's answerFromMention produces
+ * (`[[material:MAT-…|label]]`). Nothing here interprets it: the entry iterates
+ * like any other, and the spine's tier-1 remains the ONLY binder (decision
+ * fact 8 — a minted record is picked up by the next local search with no extra
+ * plumbing). No reason/label branch exists in this handler, by design.
  */
 function composeAnsweredPrompt(protocolText: string, answers: Record<string, string>): string {
   const entries = Object.entries(answers);
@@ -185,7 +204,13 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
   // tiers and FALSE-BARS store-resolvable nouns (e.g. add_material.material,
   // seed.material — resolvable, NO hintEligible). compileScientistIntent
   // throws LOUD when deps.spine is absent — injection, not a silent floor.
-  const spine = createResolveSpineFromContext({
+  // THREAD-ASK-1 (Leg 1): deps.spine is the declared test-seam arm of that
+  // doctrine — an explicitly injected spine (a stub proving the spine is the
+  // binder) replaces the store-backed composition; production callers never
+  // pass it. The clarification-answer binding stays pass-through either way:
+  // composeAnsweredPrompt iterates the request's answers entries and the
+  // SPINE remains the only binder.
+  const spine: EngineSpineLike = deps.spine ?? createResolveSpineFromContext({
     store,
     ...(ctx.appConfig !== undefined ? { appConfig: ctx.appConfig } : {}),
     getAppConfig: () => ctx.appConfig,
