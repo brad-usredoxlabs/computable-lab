@@ -1,0 +1,78 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sequence-analysis/oligo-order-draft.schema.yaml"
+title: "OligoOrderDraft"
+description: >-
+  An AI-read transcription of a vendor oligo order/production document. DATA
+  only: it describes WHAT the document says, one entry per ordered oligo, and
+  never claims lab record identity. Lowered deterministically into the same
+  rows the regex extractor produces (server/src/sequences/oligoOrderDraft.ts).
+type: object
+additionalProperties: false
+required: [ kind, rows ]
+properties:
+  kind:
+    const: "oligo-order-draft"
+  vendor:
+    type: string
+    description: "Vendor as printed (e.g. 'Thermo Fisher', 'Invitrogen'), or omitted when not printed."
+  orderId:
+    type: string
+  declaredRowCount:
+    type: integer
+    minimum: 0
+    description: >-
+      How many line items the document itself claims (an 'ITEMS'/'QTY' count or
+      the highest line number). Used to detect a PARTIAL read; omit when the
+      document states none.
+  notes:
+    type: string
+  rows:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: "The oligo's name exactly as printed (never a guess)."
+        sequence:
+          type: [string, "null"]
+          description: >-
+            Bases with 5'→3' orientation, whitespace allowed. NULL when the
+            bases are not legible — an unreadable row MUST be null with
+            `unreadable: true`; never invent or complete bases.
+        unreadable:
+          type: boolean
+          description: "True when the row was seen but its bases could not be read."
+        modifications:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [ label, role, position ]
+            properties:
+              label: { type: string }
+              role: { type: string, enum: [reporter, quencher, other] }
+              position: { type: string, enum: ["5-prime", "3-prime", "internal"] }
+        scale:
+          type: string
+        purification:
+          type: string
+        yieldPmol:
+          type: number
+        mass:
+          type: number
+        concentrationUM:
+          type: number
+        buffer:
+          type: string
+        page:
+          type: integer
+          minimum: 1
+        sourceQuote:
+          type: string
+          description: >-
+            The verbatim line(s) this row was read from. Required for review:
+            a human must be able to check the read against the page.
