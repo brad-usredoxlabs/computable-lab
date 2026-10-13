@@ -16,7 +16,7 @@
  *     volume key and no clarification — the silent drop this item exists to
  *     end. It must bar naming the argument.
  *  2. GUARD (Task 17 interim, Part III D1): a mixture-shaped `material` label
- *     (cue-shaped per config/drafting/shorthand-drafting.yaml `mixtureCues` —
+ *     (cue-shaped per config/drafting/mixture-material-cues.yaml `cues:` —
  *     DATA, no TS cue literals) with NO declared components must bar citing
  *     the shipped rule at AddMaterialSupport.ts ("A bare concept in a well is
  *     never right. Materialize it…"). The store seed makes the blob resolvable
