@@ -175,19 +175,24 @@ export function bindShorthandEventsToDeck<T extends object>(
       if (boundDetail) {
         nextDetails.labwareId = boundDetail;
         dChanged = true;
-      } else if (boundTop && typeof d.labwareId !== 'string') {
+      } else if (boundTop && typeof d.labwareId !== 'string' && typeof d.labwareInstanceId !== 'string') {
         // COMP-1 Task 21 (Part IV): the client buckets ghost wells by
         // details.labwareId (collectEventLabwareIds, previewProjection.ts) —
         // a top-level-only binding left the ghost with no bucket. When the
         // event's labware label is deck-provable (exact deck-name match or
-        // already a deck id) and details carries NO labwareId, write the
-        // bound id there. NO-OP-safe: an existing details.labwareId (raw
-        // path) is never touched, and an unprovable label is never copied —
-        // the byte-passthrough arms below are unchanged.
+        // already a deck id) and details carries NO labware identity, write
+        // the bound id there. NO-OP-safe: an existing details.labwareId OR
+        // details.labwareInstanceId (fix1/D5 — the instance-side identity
+        // carrier used by ProtocolExtractionService.ts:300 /
+        // GraphProjector.ts:153 / PlateMapExporter.ts:69; its presence means
+        // the event is ALREADY instanced) is never touched, and an unprovable
+        // label is never copied — the byte-passthrough arms below are
+        // unchanged.
         nextDetails.labwareId = boundTop;
         dChanged = true;
       } else if (
         typeof d.labwareId !== 'string'
+        && typeof d.labwareInstanceId !== 'string'
         && typeof ev.labwareId === 'string'
         && knownIds.has(ev.labwareId)
       ) {
@@ -206,6 +211,7 @@ export function bindShorthandEventsToDeck<T extends object>(
         } else if (
           expanded.length === 1
           && !Array.isArray(d.wells)
+          && typeof d.labwareInstanceId !== 'string'
           && (boundTop || boundDetail || (typeof ev.labwareId === 'string' && knownIds.has(ev.labwareId)))
         ) {
           // COMP-1 Task 22 (Part IV criterion 1): the DECK channel
@@ -214,7 +220,9 @@ export function bindShorthandEventsToDeck<T extends object>(
           // details.well (the normalizePreviewEvents bridge runs on the
           // labware-editor chat channel only). A deck-bound singular well must
           // therefore ride the wells carrier too, or the ghost is invisible.
-          // Only fires when the labware is deck-provable (never invents).
+          // Only fires when the labware is deck-provable (never invents) and
+          // the event is not already instanced via details.labwareInstanceId
+          // (fix1/D5: an instanced event is a full no-op).
           nextDetails.wells = expanded;
           dChanged = true;
         }
