@@ -11,6 +11,7 @@ import { buildIngestionJobEnvelope, buildIngestionArtifactEnvelope, buildIngesti
 import { SequenceService } from './SequenceService.js';
 import { normalizeSequence, type AlphabetSpec } from './sequenceEngine.js';
 import { sequenceConfig, SEQUENCE_SCHEMA } from './sequenceRuntime.js';
+import { aiReadTriggered, readAiFallbackPolicy } from './oligoOrderAiRead.js';
 export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:OligoModification[]; issues:string[]; metadata:Record<string,string> }
 export interface OligoModification { label:string; role:string; position:string }
 /**
@@ -83,6 +84,15 @@ export async function ingestOligoOrder(ctx: AppContext, actor:string, fileName:s
     }
   }
   const rows=await extractOligoRows(extraction.text);
+  // The WHEN of the AI read is DATA (config aiFallback + metadata.declaredItemCount):
+  // this block only consumes the generic evaluator — zero trigger semantics here
+  // (mirrors the config.ocr?.enabled precedent above). A PARTIAL read — the
+  // document declares more items than were recognized — must stop being silent.
+  const fallbackPolicy=readAiFallbackPolicy(await sequenceConfig('oligo-order'));
+  const declaredRaw=Number(rows[0]?.metadata?.declaredItemCount);
+  const fired=aiReadTriggered(fallbackPolicy,{rowCount:rows.length,issueRowCount:rows.filter(row=>row.issues.length>0).length,declaredCount:Number.isFinite(declaredRaw)?declaredRaw:null});
+  if(fired.includes('declared-count-mismatch'))extraction.diagnostics.push({severity:'warning',code:'OLIGO_PARTIAL_READ',message:`The document declares ${declaredRaw} items but only ${rows.length} were recognized. Review the pages before importing, or use the AI read.`});
+  if(fallbackPolicy.enabled && fallbackPolicy.mode==='manual' && fired.length)extraction.diagnostics.push({severity:'warning',code:'OLIGO_AI_READ_OFFERED',message:`The deterministic read could not account for the document (${fired.join(', ')}). An AI read can be offered.`});
   const job=buildIngestionJobEnvelope({sourceKind:'other',adapterKind:'oligo-order',name:fileName,submittedBy:actor});
   const artifact=buildIngestionArtifactEnvelope(job.payload,{fileName,mediaType:fileName.endsWith('.pdf')?'application/pdf':'text/plain',sha256});
   const blob=await new ArtifactBlobStore(ctx.workspaceRoot,join(ctx.recordsDir,'.ingestion-artifacts')).save({artifactId:artifact.recordId,fileName,contentBase64:bytes.toString('base64')});
