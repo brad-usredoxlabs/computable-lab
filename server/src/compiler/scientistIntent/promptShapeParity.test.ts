@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { INTENT_COMPILE_SYSTEM_PROMPT } from './intentCompile.js';
 import { defaultScientistIntentVocabulary } from './vocabulary.js';
 import { parseScientistIntent } from './parseScientistIntent.js';
-import { parseShorthandForChat } from '../../ai/shorthandChat.js';
+import { parseShorthandForChat, compileShorthandDeterministically } from '../../ai/shorthandChat.js';
 import { malformedShorthandRepairPrompt } from '../../ai/shorthandChat.js';
 import { ScientistIntentValidationError } from './parseScientistIntent.js';
 import { AGENT_INTENT_TOOL_DEF } from '../../ai/submitSuggestionTool.js';
@@ -106,5 +106,75 @@ describe('prompt shape parity — every taught shape parses (strict Ajv)', () =>
 
   it('the lift never launders a fabricated verb (the strict door stays the authority)', () => {
     expect(() => parseShorthandForChat('intentId: x\nactions:\n  - action: seed_cells\n')).toThrow(ScientistIntentValidationError);
+  });
+});
+
+/**
+ * SHORTHAND-COMP-2 Task 13 (headless equivalent of the task-list's "one-shot
+ * shape acceptance on the corpus-frozen goldens"): Brad's two run-chat prompts,
+ * written AS the ONE taught `action:` shape, must clear the chat parse door and
+ * the deterministic compile with NO shape complaint — no validation throw, no
+ * re-ask, and every clarification the compile raises is a NOUN bar carrying an
+ * actionLocation (composition CONTENT is SHORTHAND-COMP-3's business; SHAPE
+ * validity is this item's).
+ */
+describe('one-shot shape acceptance on both Brad prompts (headless)', () => {
+  // Prompt 1: "Add 50uL of 50% Thermo trypsin-EDTA / 50% Thermo DMEM with 10%
+  // FBS containing 200 HepG2 cells per uL to each well."
+  const PROMPT1_DOC = `intentId: add-trypsin-dmem-fbs-hepg2
+actions:
+  - action: add_material
+    labware: plate
+    material: "HepG2 cells in Thermo trypsin-EDTA / Thermo DMEM + FBS"
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - material: "HepG2 cells"
+          role: cells
+          quantity: { value: 10000, unit: cells, dimension: count }
+`;
+
+  // Prompt 2: "…200 HepG2 cells per uL. I need to seed each well with 10,000
+  // HepG2 cells."
+  const PROMPT2_DOC = `intentId: seed-hepg2-10000-cells-per-well
+actions:
+  - action: seed
+    labware: plate
+    material: "HepG2 cell suspension"
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      quantity: { value: 10000, unit: cells, dimension: count }
+      counter_density: { numerator: { value: 200, unit: cells, dimension: count }, denominator: { value: 1, unit: uL, dimension: volume } }
+`;
+
+  const mockStore = () => ({
+    get: async () => null,
+    getRecord: async () => null,
+    list: async () => [],
+  });
+
+  it.each([
+    ['prompt 1 (the 50uL mixture)', PROMPT1_DOC],
+    ['prompt 2 (seed 10,000 cells)', PROMPT2_DOC],
+  ] as const)('%s parses on the FIRST pass — no shape rejection, no re-ask', async (_name, doc) => {
+    const parsed = parseShorthandForChat(doc);
+    expect(parsed.actions.length).toBeGreaterThan(0);
+    // params (and therefore the composition/quantity content) survived the door.
+    expect((parsed.actions[0] as unknown as Record<string, unknown>).params).toBeDefined();
+
+    const compiled = await compileShorthandDeterministically(parsed, { store: mockStore() as never });
+    expect(compiled).not.toBeNull();
+    const result = compiled!;
+    // No compile error, and every bar is a NOUN bar with an actionLocation —
+    // nothing in the pipeline complains about the SHAPE.
+    expect(result.outcome).not.toBe('error');
+    for (const fact of result.clarifications) {
+      expect(fact.actionLocation, `shape-class clarification raised: ${fact.reason}`).toBeDefined();
+    }
   });
 });
