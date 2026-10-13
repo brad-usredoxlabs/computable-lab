@@ -88,6 +88,29 @@ it('(d) an honest server error renders verbatim and leaves the rows untouched',a
  expect(screen.getByRole('button',{name:/Read with AI/i})).toBeInTheDocument()
 })
 
+it('(f) per-job scope: a second upload in the SAME mount re-offers and never inherits the old AI notice (adversarial defect 1)',async()=>{
+ // Job A: offer -> AI read -> notice shown, offer spent. NO cleanup() here:
+ // the defect only exists within one mounted session.
+ await upload([offerDiagnostic])
+ vi.mocked(sequenceApi).mockResolvedValueOnce({jobId:'ING-OTHER-ABC123',candidates:[aiRow(1)],diagnostics:[{severity:'warning',code:'AI_READ_REVIEW',message:'The AI read produced 1 candidate row(s) using model settings-model.'}]})
+ fireEvent.click(screen.getByRole('button',{name:/Read with AI/i}))
+ await waitFor(()=>expect(screen.getByText('1 row(s) read by the AI. Verify every base against the PDF page before importing.')).toBeInTheDocument())
+ expect(screen.queryByRole('button',{name:/Read with AI/i})).toBeNull()
+ // Job B: a NEW document uploaded into the SAME mounted component (no
+ // remount). Its diagnostics carry the offer again.
+ vi.mocked(sequenceApi).mockResolvedValueOnce({jobId:'ING-OTHER-DEF456',artifactId:'IAF-2',sha256:'y',candidates:[{...deterministicRow,label:'Probe Beta',recordId:'ICD-OLIGO-BBB'}],text:'second vendor text',diagnostics:[offerDiagnostic]})
+ fireEvent.change(screen.getByLabelText('PDF or text file'),{target:{files:[new File(['y'],'order-b.pdf')]}})
+ await waitFor(()=>expect(screen.getByDisplayValue('Probe Beta')).toBeInTheDocument())
+ // (a) the legitimate offer for the NEW job must render again.
+ expect(screen.getByRole('button',{name:/Read with AI/i})).toBeInTheDocument()
+ // (b) job A's notice must NOT misattribute AI provenance to job B.
+ expect(screen.queryByText('1 row(s) read by the AI. Verify every base against the PDF page before importing.')).toBeNull()
+ // The spend is truly per-job: clicking offers the read for job B's id.
+ vi.mocked(sequenceApi).mockResolvedValueOnce({jobId:'ING-OTHER-DEF456',candidates:[aiRow(2)],diagnostics:[{severity:'warning',code:'AI_READ_REVIEW',message:'The AI read produced 1 candidate row(s) using model settings-model.'}]})
+ fireEvent.click(screen.getByRole('button',{name:/Read with AI/i}))
+ await waitFor(()=>expect(sequenceApi).toHaveBeenCalledWith('/order/ING-OTHER-DEF456/ai-read',{}))
+})
+
 it('(e) reopen returns AI-marked candidates with the warning intact (GET carries provenance)',async()=>{
  vi.mocked(sequenceApi).mockResolvedValueOnce({jobId:'ING-OTHER-ABC123',text:'extracted vendor text',candidates:[{...deterministicRow,status:'needs_review'},{...aiRow(1),status:'needs_review'}]})
  render(<SequenceImport orderOnly/>)
