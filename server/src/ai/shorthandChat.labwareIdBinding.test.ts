@@ -77,6 +77,12 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
     const details = ev.details as Record<string, unknown>;
     expect(details.labwareId).toBe('LBW-96-1');
     expect(details.well).toBe('A1');
+    // Task 22 (Part IV criterion 1): the deck channel (buildPreviewFromDraft ->
+    // buildPreviewWellIndex -> getAffectedWells) ghosts wells ONLY from
+    // details.wells — it never reads the singular details.well (the
+    // normalizePreviewEvents bridge runs only on the labware-editor channel).
+    // The deck-bound event must carry the address in the wells carrier.
+    expect(details.wells).toEqual(['A1']);
     expect(details.volume).toEqual({ value: 50, unit: 'uL' });
   });
 
@@ -86,6 +92,14 @@ describe('Task 21: the compiled shorthand event carries details.labwareId (chose
       DECK,
     );
     expect((out[0]!.details as Record<string, unknown>).labwareId).toBe('LBW-96-1');
+  });
+
+  it('deck-bound singular well rides the wells carrier the deck ghosts (details.wells)', () => {
+    const out = bindShorthandEventsToDeck(
+      [{ eventId: 'e1', labwareId: 'plate', details: { well: 'A1' } }],
+      DECK,
+    );
+    expect((out[0]!.details as Record<string, unknown>).wells).toEqual(['A1']);
   });
 
   it('NO-OP arms (raw-path byte-identity): an existing details.labwareId is never overwritten; an unprovable label is never copied', () => {
