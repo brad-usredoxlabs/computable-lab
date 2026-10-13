@@ -884,6 +884,7 @@ test.describe('W2-11 zymo campaign demo gate', () => {
         .map((c) => String(c.label ?? '').trim()).filter(Boolean)
       let prevCount = null
       let stalls = 0
+      const mintedEver = new Set()
       for (let cycle = 1; cycle <= 8; cycle += 1) {
         const compile = await apiPost('/intent/compile-from-prompt', answeredBody)
         if (compile.status === 500 || compile.status === 502) {
@@ -897,30 +898,39 @@ test.describe('W2-11 zymo campaign demo gate', () => {
           break
         }
         const labels = unknownLabelsOf(compile.body)
+        // Orch l2t1235 (run 8 evidence): draws are MODEL-DRAWN — every cycle can
+        // surface a DIFFERENT label set (5 old labels were all minted while 5 fresh
+        // ones appeared: raw count 5->5 is not a stall, the fresh labels ARE
+        // progress). Honest shrink metric = labels not yet answered. A draw whose
+        // unknowns are ALL already-minted twice running = mint replay genuinely
+        // cannot progress (spine defect); mint cannot help a zero-unknown 422
+        // (gap/ambiguity bar, run 7's vacuous 0->1) — either breaks to the re-draw loop.
+        const fresh = labels.filter((l) => !mintedEver.has(l))
+        if (labels.length > 0 && fresh.length === 0) {
+          stalls += 1
+          console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${labels.length} ALL already minted — no fresh label to answer (stall ${stalls})`)
+          if (stalls >= 2) throw new Error(`[D4] mint cycle stalled: two draws in a row unknown-noun-barred on ALREADY-MINTED labels — mint replay cannot progress; spine defect, leg fails honestly`)
+          continue
+        }
+        if (fresh.length !== prevCount) stalls = 0
+        prevCount = fresh.length
+        if (prevCount === 0 && cycle > 1) {
+          console.log('[D4 mint-cycle] no unknown-noun labels on this 422 — mint replay cannot help; handing off to the deck re-draw loop')
+          break
+        }
         const minted = []
         for (const label of labels) {
           const m = await apiPost('/vocab/mint', { refKind: 'material', label })
           if (m.status === 200 || m.status === 201 || m.status === 409) minted.push(label)
+          // Orch l2t1235 (run 8 evidence): the server surfaces a deterministic-id
+          // dedupe collision as 422 VALIDATION_FAILED 'Record already exists:
+          // MAT-...' — the term IS minted (idempotent by label), so the scientist
+          // has answered this label; count it, or shrink accounting lies.
+          else if (m.status === 422 && /Record already exists/.test(String(m.body?.message ?? ''))) minted.push(label)
           else console.log(`[D4 mint-cycle ${cycle}] mint "${label}" -> ${m.status} ${JSON.stringify(m.body).slice(0, 160)}`)
         }
-        const count = labels.length
-        console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${count} [${labels.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}]`)
-        // Orch l2t1150 (run 7 evidence): a 422 with ZERO unknown-noun labels is NOT
-        // the mint problem — the bar is a legitimate gap/other clarification and no
-        // mint can shrink it. Shrink accounting only has meaning while labels exist;
-        // count==0 twice used to fire a VACUOUS stall (0 -> 1 at run 7 cycle 7 after
-        // two zero-label cycles). Break honestly to the deck re-draw loop instead.
-        if (count === 0) {
-          console.log('[D4 mint-cycle] no unknown-noun labels on this 422 — mint replay cannot help; handing off to the deck re-draw loop')
-          break
-        }
-        if (prevCount !== null && count >= prevCount) {
-          stalls += 1
-          if (stalls >= 2) throw new Error(`[D4] mint cycle stalled: unknown set did not shrink two cycles running (${prevCount} -> ${count}); per-cycle log above — spine defect, leg fails honestly`)
-        } else {
-          stalls = 0
-        }
-        prevCount = count
+        for (const l of minted) mintedEver.add(l)
+        console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${labels.length} fresh=${fresh.length} [${fresh.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}]`)
       }
     }
 
