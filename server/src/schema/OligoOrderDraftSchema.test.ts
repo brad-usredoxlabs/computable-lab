@@ -94,6 +94,93 @@ describe('oligo-order-draft schema contract', () => {
     expect(result.valid, JSON.stringify(result.errors)).toBe(true);
   });
 
+  it("producer tolerance (OLIGO-AI-3 D1'): a garbled row with name:null + null metadata validates", () => {
+    // Fixture source: gate-3 raw-model probe
+    // /home/brad/.hermes/cl/receipts/OLIGO-AI-3/20261013T1240/raw-model-probe.txt
+    // (rows verbatim from the model's call-1 output on the real Thermo PDF,
+    // jobId ING-OTHER-9Z60CH) plus the probe-captured refusal shape
+    // {"name": null, "sequence": null, "unreadable": true, "sourceQuote": "…"}.
+    // Gate-3 refused 3 of 4 reads at the Ajv layer:
+    //   /rows/3/name: Expected type: string
+    //   /rows/3/concentrationUM: Expected type: number
+    //   /rows/3/buffer: Expected type: string
+    // The producer contract must tolerate honest absence/wrong-type metadata
+    // (name null-or-omitted; numeric/string metadata null-or-typed) because
+    // the consumer already handles empty labels ('No oligo name found…').
+    const draft = {
+      kind: 'oligo-order-draft',
+      vendor: 'Applied Biosystems',
+      orderId: '8493629',
+      declaredRowCount: 4,
+      rows: [
+        {
+          name: 'Zanumulumwm:Qu',
+          sequence: 'Cyanine 5-GGC TAA TGA GAA GCT TGA TGC CGA AGG AC-QSY2',
+          yieldPmol: 357350,
+          mass: 10422.49,
+          purification: 'Pass',
+          concentrationUM: 100,
+          buffer: '1 x TE Buffer',
+          sourceQuote: '10 Pass Zanumulumwm:Qu Cyanine 5-GGC TAA TGA GAA GCT TGA TGC CGA AGG AC-QSY2 29 357350 10422.49 Pass 6000 100ul',
+        },
+        {
+          name: 'Akk_GA4_1617ABY',
+          sequence: '6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY',
+          yieldPmol: 314470,
+          mass: 8494.92,
+          purification: 'Pass',
+          concentrationUM: 100,
+          buffer: '1 x TE Buffer',
+          sourceQuote: '30 Pass Akk_GA4_1617ABY |6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY 23 314470 8494.92 Pass 6000 100ul',
+        },
+        {
+          name: 'Praus_1686_ABY',
+          sequence: '6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY',
+          yieldPmol: 288510,
+          mass: 86365,
+          purification: 'Pass',
+          concentrationUM: 100,
+          buffer: '1. TE Buffer',
+          sourceQuote: '50 Pass Praus_1686_ABY |6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY 24 288510 86365 Pass 6000 100y',
+        },
+        {
+          name: null,
+          sequence: null,
+          unreadable: true,
+          concentrationUM: null,
+          buffer: null,
+          sourceQuote: '70 Pass RtorqGA4_1813_CY5 |Cyanine 5-GCA CAG GCG AAT ACA CCG CTT GAT G-QSY2 25 296620 9082.61 Pass 6000',
+        },
+      ],
+    };
+    const result = validator.validate(draft, DRAFT_SCHEMA_ID);
+    expect(result.valid, JSON.stringify(result.errors)).toBe(true);
+  });
+
+  it('honesty strictness preserved: empty sourceQuote and non-object rows still fail', () => {
+    // An AI row without a verbatim quote is not honest — the quote stays a
+    // required non-empty string even while metadata tolerance widens (D1'
+    // fix direction: provenance stays strict).
+    const emptyQuote = validator.validate(
+      { kind: 'oligo-order-draft', rows: [{ name: 'x', sequence: 'ACGT', sourceQuote: '' }] },
+      DRAFT_SCHEMA_ID,
+    );
+    expect(emptyQuote.valid).toBe(false);
+    expect(emptyQuote.errors.some((e) => e.keyword === 'minLength'), JSON.stringify(emptyQuote.errors)).toBe(true);
+
+    const missingQuote = validator.validate(
+      { kind: 'oligo-order-draft', rows: [{ name: 'x', sequence: 'ACGT' }] },
+      DRAFT_SCHEMA_ID,
+    );
+    expect(missingQuote.valid).toBe(false);
+    expect(missingQuote.errors.some((e) => e.keyword === 'required' && (e.params as { missingProperty?: string }).missingProperty === 'sourceQuote'), JSON.stringify(missingQuote.errors)).toBe(true);
+
+    // A row must remain an object.
+    const nonObjectRow = validator.validate({ kind: 'oligo-order-draft', rows: ['not a row'] }, DRAFT_SCHEMA_ID);
+    expect(nonObjectRow.valid).toBe(false);
+    expect(nonObjectRow.errors.some((e) => e.keyword === 'type'), JSON.stringify(nonObjectRow.errors)).toBe(true);
+  });
+
   it('rejects fabricated shapes (additionalProperties: false, declared enums)', () => {
     // A fabricated row key: the AI must never invent a `bases` field.
     const fabricated = validator.validate(
