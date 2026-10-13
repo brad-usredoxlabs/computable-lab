@@ -39,12 +39,13 @@
 #   honest picker answer cannot trip it while an answer that IS an imperative
 #   carrying a referent is refused). The structured-payload half of the wall is
 #   `opsWall`.
-# - `askWalls` — the declared wall-crossing asks. The verbs are the
-#   wall-crossing CONSTRUCTIONS only: ordinary MEANT-editing verbs
-#   (change/edit/update/fix/reword/modify/replace/…) are NOT listed on
-#   said-vendor-rewrite, because they are the verbs of legitimate draft work and
-#   object governance — not the verb list — is what separates "rewrite the
-#   vendor text" from "change step 3 to match the vendor text".
+# - `askWalls` — the declared wall-crossing asks. On said-vendor-rewrite the
+#   verbs are the SAID-REWRITE constructions PLUS the ordinary MEANT-editing
+#   verbs (change/edit/update/modify/revise/alter), joined additively by the
+#   W2-11 D3 fix: object governance — adjacency `maxGapWords` + the leading
+#   verb's `blockerWords` — not the verb list — is what separates "change the
+#   vendor text" (governed object, refused) from "change step 3 to match the
+#   vendor text" (a MENTION, never walled). See the wall's own comment block.
 # - `opsWall` — defense-in-depth at the protocol_edit branch: an op object
 #   carrying any `forbiddenFields` key is a provenance-falsification attempt
 #   (provenance/source_artifact are record structure, never chat-editable).
@@ -83,9 +84,20 @@ askWalls:
       The vendor document (SAID) is immutable — chat cannot rewrite vendor text.
       Edits apply only to the semantic draft (MEANT). No proposal was offered
       and nothing was written.
-    # Only the SAID-REWRITE construction: verbs that mean "author the source
-    # artefact's own text". Ordinary MEANT verbs are deliberately absent
-    # (advc-W289-l2t0525 DEFECT-1).
+    # W2-11 D3 fix (l2t1910, additive): the SAID-REWRITE verbs PLUS the ordinary
+    # MEANT-editing verbs (change/edit/update/modify/revise/alter). They are
+    # joined BECAUSE object governance — not the verb list — is what separates a
+    # wall-crossing ask from a legit one: adjacency (`maxGapWords`) requires the
+    # referent to START right after the verb, and the leading-verb trigger is
+    # broken by a `leadingVerb.blockerWords` token between verb and referent.
+    # So "change the vendor text on page 1" (governed object) is refused while
+    # "change step 3 to match the vendor text on page 2" stays a MENTION: the
+    # gap is 5 > 3 and the blocker `to` makes the referent unreachable. The
+    # W2-11 golden §D3 names "change the vendor text" a MUST-REFUSE negative;
+    # gate run 2 proved the wall never fired because the verb was absent from
+    # the list while the mechanism already handled the boundary correctly.
+    # advc-W289-l2t0525 DEFECT-1's protection is preserved BY GOVERNANCE, not
+    # by verb absence. Additive only — no existing entry removed or weakened.
     verbs:
       - rewrite
       - overwrite
@@ -94,6 +106,12 @@ askWalls:
       - redraft
       - transcribe
       - restate
+      - change
+      - edit
+      - update
+      - modify
+      - revise
+      - alter
     # Only referents that ARE the vendor/SAID artefact. Generic non-SOID
     # referents (`page \d+`, `the pdf`, `source document`, `original text`,
     # `original document`) are deliberately absent: they name the source without
