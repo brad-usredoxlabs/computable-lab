@@ -496,6 +496,21 @@ export function shorthandResultFromCompile(
   return {
     success: true,
     events,
+    // COMP-1 Task 20 (Part IV): the raw mapper's precedent
+    // (compileResultToAgentResult, AgentOrchestrator.ts:612) — the compile
+    // already puts resolve_labware's additions on terminalArtifacts
+    // (compileScientistIntent.ts:288-294); without this leg the shorthand
+    // payload ships `labwares: {}` and the client has nothing to bucket the
+    // ghost wells under or place on the deck. Conditional spread only
+    // (exactOptionalPropertyTypes). DRY note: compileResultToAgentResult lives
+    // in AgentOrchestrator.ts (out of this item's file set) and maps a
+    // ChatbotCompileResult, not a ScientistIntentCompileResult — the bodies
+    // share a few spread lines, not half their shape, so the shared-mapper
+    // extraction is NOT warranted; the mapper stays one producer per result
+    // type.
+    ...(compiled.terminalArtifacts.labwareAdditions && compiled.terminalArtifacts.labwareAdditions.length > 0
+      ? { labwareAdditions: compiled.terminalArtifacts.labwareAdditions }
+      : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
     shorthand: shorthandYaml,
