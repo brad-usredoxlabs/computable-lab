@@ -858,11 +858,46 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     await page.getByTestId('pl-submit-answers').click()
 
     // Deck review gate: pick at least one labware, then accept.
+    // Orch l2t0230 (architect decision W2-11-d4-deckreview-empty-decision.md,
+    // resume condition step 2): the small-model answered-localize draw is
+    // non-deterministic (measured 4/4 draws at l2t0230: run-4 completed with a
+    // fully-resolved macro -> zero zero-match additions; l2t0230's three draws
+    // ALL 422 NEEDS_CLARIFICATION 'unknown-noun' held bars — and a held 422
+    // folds a terminalArtifacts WITHOUT labware fields, decision fact 5 -> the
+    // deck review renders structurally EMPTY either way). A completing draw
+    // fills the review via the zero-match labwareAdditions arm; the macro's
+    // vessel labels ('96-well block', 'heating block', 'magnetic rack'...) are
+    // intentionally UNmatched against the seeded LAB rows — architect TRAP
+    // WARNING: seeding resolvable records flips hints into resolvedLabwares,
+    // which deriveDeckLabware ignores, re-emptying the review. So: RE-DRAW via
+    // the refine-send recompile up to a bounded N. Retrying a flaky small-model
+    // draw is NOT weakening the assertion — the >=1-placement assertion below
+    // stays pinned; a fixture never fakes it (a draw that completes with an
+    // empty review still fails, honestly).
+    test.setTimeout(15 * 60 * 1000)
     const deckReview = page.getByTestId('pl-deck-review')
     const deckAppeared = await deckReview.waitFor({ state: 'visible', timeout: 60000 }).then(() => true).catch(() => false)
     expect(deckAppeared, 'the compiled draft must route through the deck review gate').toBe(true)
     const labwareBoxes = deckReview.locator('input[type="checkbox"]')
-    const boxCount = await labwareBoxes.count()
+    const MAX_REDRAW = 5
+    let boxCount = await labwareBoxes.count()
+    for (let draw = 1; boxCount === 0 && draw <= MAX_REDRAW; draw += 1) {
+      const refineInput = page.getByTestId('pl-refine-input').locator('[contenteditable="true"], textarea, input[type="text"]').first()
+      await expect(refineInput, 'the refine re-send surface must be available for the bounded re-draw').toBeVisible({ timeout: 15000 })
+      await refineInput.click()
+      // Neutral re-draw nudge: asks for the SAME macro back; never resolves the
+      // noun gap on the scientist's behalf, never asks to skip labware.
+      await page.keyboard.type('Recompile the same macro with the same answers; nothing else changes.')
+      // Settle on the ACTUAL response — a held 422 folds via infoMsg, so
+      // pl-msg alone is not a reliable per-draw sentinel.
+      const resPromise = page.waitForResponse((r) => r.url().includes('/intent/compile-from-prompt') && r.request().method() === 'POST', { timeout: 180000 })
+      await page.getByTestId('pl-refine-send').click()
+      const res = await resPromise
+      console.log(`[D4 re-draw ${draw}] compile-from-prompt -> HTTP ${res.status()}`)
+      await page.waitForTimeout(1500) // let the fold/render pass settle
+      boxCount = await deckReview.locator('input[type="checkbox"]').count()
+      console.log(`[D4 re-draw ${draw}] deck-review checkboxes after recompile: ${boxCount}`)
+    }
     expect(boxCount, 'the deck review must offer labware placements').toBeGreaterThan(0)
     await labwareBoxes.first().check()
     await page.getByTestId('pl-load-deck').click()
