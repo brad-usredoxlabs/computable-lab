@@ -30,7 +30,7 @@ const SequenceSearch = lazy(() =>
 type IngestionTab = 'vendor-pdf' | 'literature' | 'sequences' | 'oligo-orders'
 
 const TABS: { id: IngestionTab; label: string }[] = [
-  { id: 'vendor-pdf', label: 'Vendor PDFs' },
+  { id: 'vendor-pdf', label: 'Documents' },
   { id: 'literature', label: 'Literature' },
   { id: 'sequences', label: 'Sequences' },
   { id: 'oligo-orders', label: 'Primer / probe orders' },

@@ -187,6 +187,9 @@ export function VendorPdfSearchSection({
   return (
     <section className="vendor-pdf-search" data-testid="vendor-pdf-search">
       <h4 className="right-panel__heading">Vendor PDF search (Exa)</h4>
+      <p className="vendor-pdf-search__doc-hint" data-testid="vendor-pdf-search-doc-hint">
+        Add a protocol document (PDF, Word, Markdown, text, or spreadsheet).
+      </p>
       <form
         className="vendor-pdf-search__form"
         onSubmit={(e) => {
@@ -281,12 +284,12 @@ export function VendorPdfSearchSection({
                 <div className="vendor-pdf-search__blocked" data-testid={`blocked-${hashKey(r.url)}`}>
                   <p className="vendor-pdf-search__blocked-text">
                     <strong>Step 1:</strong> Open the source URL in a new tab — your browser
-                    downloads the PDF automatically to its <em>Downloads</em> folder (no need to
+                    downloads the document automatically to its <em>Downloads</em> folder (no need to
                     choose where to save).
                   </p>
                   <p className="vendor-pdf-search__blocked-text">
                     <strong>Step 2:</strong> Once it&apos;s saved, use &quot;Bring the file back&quot; to
-                    <em>select that downloaded PDF</em> from your Downloads folder (look for the
+                    <em>select that downloaded document</em> from your Downloads folder (look for the
                     filename of this document) and upload it here.
                   </p>
                   <span className="vendor-pdf-search__blocked-actions">
@@ -299,12 +302,12 @@ export function VendorPdfSearchSection({
                     </button>
                     <label
                       className="vendor-pdf-search__blocked-bring"
-                      title="Select the PDF your browser downloaded to its Downloads folder"
+                      title="Select the document your browser downloaded to its Downloads folder"
                     >
                       {bringingBack ? 'Uploading…' : 'Step 2 — Bring the file back'}
                       <input
                         type="file"
-                        accept=".pdf,application/pdf"
+                        accept=".pdf,.docx,.doc,.rtf,.md,.markdown,.txt,.html,.htm,.xlsx,.xls,.csv,application/pdf"
                         data-testid="vendor-pdf-bring-back"
                         disabled={bringingBack}
                         onChange={(e) => {

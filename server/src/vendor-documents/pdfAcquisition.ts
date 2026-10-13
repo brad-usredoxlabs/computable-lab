@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { extractPdfText } from '../extract/PdfTextAdapter.js';
 import { extractPdfLayoutText, type PdfExtractionResult as LayoutPdfExtractionResult } from '../ingestion/pdf/TableExtractionService.js';
+import { decodeAttachmentText, documentFormatFor, type DocumentMediaKind } from '../extract/decodeAttachment.js';
 
 // A realistic browser UA — vendor CDNs (e.g. tools.thermofisher.com) 403 a
 // custom "ProtocolFoundry/1.0" token as a bot. Matches the UA the vendor
@@ -57,6 +58,12 @@ export interface VendorPdfExtractionResult {
     sha256: string;
   };
   mode: 'plain' | 'layout' | 'both';
+  /**
+   * What the stored file IS (from the config-declared format map). OPTIONAL:
+   * every pre-existing consumer (VendorSearchHandlers, LabwareSpecCandidate-
+   * Service, vendorPdfTools) compiles and behaves untouched without it.
+   */
+  mediaKind?: DocumentMediaKind;
   plainText?: {
     text: string;
     pageCount: number;
@@ -66,6 +73,8 @@ export interface VendorPdfExtractionResult {
     pages: Array<{ pageNumber: number; text: string }>;
     pageCount: number;
   };
+  /** Reserved for Stage B (DOCINGEST-B page images); Stage A never fills it. */
+  images?: Array<{ pageNumber: number; path: string }>;
 }
 
 export function vendorPdfArtifactRoot(workspaceRoot: string): string {
@@ -145,20 +154,57 @@ export async function extractVendorPdfText(input: VendorPdfExtractionInput): Pro
     mode,
   };
 
+  // DOCINGEST-A A3: format dispatch, not a second per-format if-chain. The
+  // PDF arm below is byte-identical to today (layout + fallback +
+  // diagnostics) — a .pdf buffer must NEVER reach the dispatcher's plain-text
+  // pdf arm, which would silently degrade vendor-PDF extraction. Everything
+  // else delegates to the ONE dispatcher (decodeAttachmentText); the mediaKind
+  // comes from the config-declared format map, never a hardcoded list.
+  const isPdf = fileName.toLowerCase().endsWith('.pdf');
+  if (isPdf) {
+    result.mediaKind = 'pdf';
+
+    if (mode === 'plain' || mode === 'both') {
+      const plain = await extractPdfText(buffer);
+      result.plainText = {
+        text: plain.text,
+        pageCount: plain.page_count,
+        diagnostics: plain.diagnostics,
+      };
+    }
+
+    if (mode === 'layout' || mode === 'both') {
+      const layout = await extractPdfLayoutText(buffer, fileName).catch(async () => fallbackLayoutExtraction(buffer));
+      result.layoutText = {
+        pages: layout.pages,
+        pageCount: layout.pages.length,
+      };
+    }
+
+    return result;
+  }
+
+  const decoded = await decodeAttachmentText(fileName, undefined, buffer);
+  const format = await documentFormatFor(fileName);
+  if (format) {
+    result.mediaKind = format.mediaKind;
+  }
+  // A non-PDF has no page model: one pseudo-page keeps the downstream page
+  // contract satisfied without pretending the document is paginated.
+  const pages = [{ pageNumber: 1, text: decoded.text }];
+
   if (mode === 'plain' || mode === 'both') {
-    const plain = await extractPdfText(buffer);
     result.plainText = {
-      text: plain.text,
-      pageCount: plain.page_count,
-      diagnostics: plain.diagnostics,
+      text: decoded.text,
+      pageCount: 1,
+      diagnostics: decoded.diagnostics,
     };
   }
 
   if (mode === 'layout' || mode === 'both') {
-    const layout = await extractPdfLayoutText(buffer, fileName).catch(async () => fallbackLayoutExtraction(buffer));
     result.layoutText = {
-      pages: layout.pages,
-      pageCount: layout.pages.length,
+      pages,
+      pageCount: pages.length,
     };
   }
 

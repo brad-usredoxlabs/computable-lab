@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { extractPdfLayoutText } from '../../extract/PdfTextAdapter.js';
+import { decodeAttachmentText } from '../../extract/decodeAttachment.js';
 import type { ExtractionDiagnostic } from '../../extract/ExtractorAdapter.js';
 import type {
   ExtractedCandidateItem,
@@ -348,7 +349,15 @@ export async function decodeVendorProtocolPdf(
   buffer: Buffer | Uint8Array,
   options: DecodeVendorProtocolPdfOptions = {},
 ): Promise<VendorProtocolDocument> {
-  const decoded = await extractPdfLayoutText(buffer);
+  // DOCINGEST-A convergence site 2 (OQ1: delegation, not import-swapping).
+  // PDF bytes keep the EXACT current layout call — routing them through the
+  // dispatcher's plain-text pdf arm would silently degrade vendor-PDF
+  // extraction. Non-PDF bytes (or an unknown extension) route through the
+  // ONE dispatcher (decodeAttachmentText).
+  const filename = options.filename ?? 'vendor-protocol.pdf';
+  const decoded = filename.toLowerCase().endsWith('.pdf')
+    ? await extractPdfLayoutText(buffer)
+    : await decodeAttachmentText(filename, undefined, buffer);
   const document = createVendorProtocolDocumentFromText(decoded.text, options);
   return {
     ...document,

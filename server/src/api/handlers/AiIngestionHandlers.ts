@@ -9,6 +9,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { InferenceClient } from '../../ai/types.js';
 import type { RecordStore } from '../../store/types.js';
 import { extractPdfLayoutText } from '../../ingestion/pdf/TableExtractionService.js';
+import { decodeAttachmentText, documentFormatFor } from '../../extract/decodeAttachment.js';
 
 // Maximum characters to send to AI (for 7B models, ~6000 chars is safe)
 const MAX_AI_CONTEXT_CHARS = 6000;
@@ -83,12 +84,20 @@ export interface AiIngestionHandlers {
 
 /**
  * Extract text content from a file buffer based on its MIME type.
+ *
+ * DOCINGEST-A convergence site 4 (OQ1): the hand-rolled per-extension if/else
+ * with private utf8 fallbacks is replaced by delegation to the ONE dispatcher
+ * (decodeAttachmentText). The PDF arm stays byte-identical (layout extraction
+ * via TableExtractionService — swapping it for the dispatcher's plain-text
+ * pdf arm would change analyze-ingestion behavior). The fileType label comes
+ * from the config-declared format map (analysisLabel), never a hardcoded
+ * list; an undeclared extension keeps today's 'other' fallback label.
  */
 async function extractFileContent(buffer: Buffer, fileName: string, mimeType: string): Promise<{ content: string; fileType: string }> {
   const lowerName = fileName.toLowerCase();
   const lowerMime = mimeType.toLowerCase();
 
-  // PDF: Use TableExtractionService
+  // PDF: Use TableExtractionService (arm byte-identical)
   if (lowerName.endsWith('.pdf') || lowerMime === 'application/pdf') {
     try {
       const result = await extractPdfLayoutText(buffer, fileName);
@@ -105,46 +114,16 @@ async function extractFileContent(buffer: Buffer, fileName: string, mimeType: st
     }
   }
 
-  // CSV: Read as text
-  if (lowerName.endsWith('.csv') || lowerMime === 'text/csv' || lowerMime === 'text/tab-separated-values') {
-    const text = buffer.toString('utf8');
-    // For CSV, include first 100 rows
-    const lines = text.split('\n').slice(0, 101);
-    return {
-      content: truncateToContext(lines.join('\n'), MAX_AI_CONTEXT_CHARS),
-      fileType: 'csv',
-    };
-  }
-
-  // Excel: Read as text (will be raw binary, but we'll try to get some info)
-  if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || 
-      lowerMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      lowerMime === 'application/vnd.ms-excel') {
-    // For Excel files, we can't easily extract text without a library
-    // Return a placeholder indicating it's a spreadsheet
-    return {
-      content: `[Excel file: ${fileName} - Binary format requires spreadsheet parser]`,
-      fileType: 'xlsx',
-    };
-  }
-
-  // HTML: Read as UTF-8 text
-  if (lowerName.endsWith('.html') || lowerName.endsWith('.htm') || 
-      lowerMime === 'text/html' || lowerMime.startsWith('text/html')) {
-    const text = buffer.toString('utf8');
-    // Strip HTML tags for cleaner text
-    const plainText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    return {
-      content: truncateToContext(plainText, MAX_AI_CONTEXT_CHARS),
-      fileType: 'html',
-    };
-  }
-
-  // Plain text or other: Read as UTF-8
-  const text = buffer.toString('utf8');
+  // Everything else: the ONE dispatcher. The label is the config-declared
+  // analysisLabel (csv stays csv, xlsx stays xlsx, html stays html, txt
+  // stays txt); the dispatcher's readers replace the old private regexes and
+  // the "[Excel file: ... requires spreadsheet parser]" placeholder.
+  const decoded = await decodeAttachmentText(fileName, mimeType, buffer);
+  const format = await documentFormatFor(fileName);
+  const fileType = format?.analysisLabel ?? (lowerName.endsWith('.txt') ? 'txt' : 'other');
   return {
-    content: truncateToContext(text, MAX_AI_CONTEXT_CHARS),
-    fileType: lowerName.endsWith('.txt') ? 'txt' : 'other',
+    content: truncateToContext(decoded.text, MAX_AI_CONTEXT_CHARS),
+    fileType,
   };
 }
 

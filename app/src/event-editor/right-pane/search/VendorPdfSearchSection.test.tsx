@@ -311,3 +311,45 @@ describe('VendorPdfSearchSection', () => {
     )
   })
 })
+
+// DOCINGEST-A A6 — the picker accepts what a lab actually has.
+describe('document picker accepts lab documents', () => {
+  it('the bring-back input accepts lab document types (and NO image types — those ride Stage B)', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    const uploadMock = vi.fn().mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: { diagnostics: [] },
+      recordedArtifact: { recordId: 'VPDF-UPLOADED' },
+    })
+    const { apiClient } = await import('../../../shared/api/client')
+    ;(apiClient as unknown as { uploadGraphLemurVendorPdf: typeof uploadMock }).uploadGraphLemurVendorPdf = uploadMock
+
+    renderSection()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() => expect(screen.getByText('NEBNext Ultra II')).toBeTruthy())
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: { diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: 'blocked' }] },
+    })
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    await waitFor(() => expect(screen.getByText(/Step 1 — Open source URL/)).toBeTruthy())
+
+    const input = screen.getByTestId('vendor-pdf-bring-back') as HTMLInputElement
+    const accept = input.accept
+    expect(accept).toContain('.pdf')
+    expect(accept).toContain('.docx')
+    expect(accept).toContain('.md')
+    expect(accept).toContain('.markdown')
+    expect(accept).toContain('.txt')
+    expect(accept).toContain('.html')
+    expect(accept).toContain('.xlsx')
+    expect(accept).toContain('.csv')
+    // Stage A uploads no images (Stage B's upload arm owns them).
+    for (const imageExt of ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.webp']) {
+      expect(accept, `image type ${imageExt} rides Stage B's upload arm`).not.toContain(imageExt)
+    }
+  })
+})
