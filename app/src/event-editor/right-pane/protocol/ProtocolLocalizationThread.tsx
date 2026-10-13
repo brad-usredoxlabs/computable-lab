@@ -462,6 +462,15 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setAnswers({})
         setLocalMacro(null)
         setPendingDraft(null)
+        // THREAD-ASK-1 fix cycle 2 (D1 residual): this arm DISCARDS the macro
+        // (setLocalMacro(null) + setPendingDraft(null) above), so the cycle-1
+        // invariant applies here too — no stale answerable card survives over
+        // a replaced/discarded macro. Reachable: the always-rendered "Localize
+        // (one-shot)" button sends no answers, so the server returns
+        // needsAnswers while a prior held fold's cards are open. Only the card
+        // SURFACE clears; the clarificationAnswers map is deliberately NOT
+        // cleared — the Leg-1 answers keep riding re-drafts (compileAnswers).
+        setHeldCards([])
         setInfoMsg('Answer the branch questions to localize.')
       } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)

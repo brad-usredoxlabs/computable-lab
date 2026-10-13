@@ -22,6 +22,14 @@
  *     (re-localize 2xx, answers re-submit 2xx, correction 2xx) clears the
  *     held cards — the same lifecycle the pick's 2xx arm already has — so no
  *     stale answerable card survives over an already-resolved macro.
+ *  8 (fix cycle 2, D1 residual): the needsAnswers arm of handleLocalize also
+ *     discards the macro (setLocalMacro(null) + setPendingDraft(null)), so it
+ *     must clear the held cards too — reachable via the always-rendered
+ *     "Localize (one-shot)" button (sends no answers -> the server returns
+ *     needsAnswers) while a prior held fold's cards are open. The answers map
+ *     is NOT cleared there: the Leg-1 clarificationAnswers keep riding
+ *     re-drafts (pinned by the follow-up submit body carrying the minted
+ *     MAT- answer).
  *
  * The mint flow is the REAL one the picker already uses: the /m resolver's
  * `mint:<q>` suggestion whose resolveMention calls
@@ -319,5 +327,66 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
     await waitFor(() => expect(screen.getByTestId('deck-labware-LAB-block')).toBeTruthy())
     expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
     expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+  })
+
+  // -------------------------------------------------------------------------
+  // Test 8 (fix cycle 2, D1 residual): the needsAnswers arm of handleLocalize
+  // REPLACES the macro (setLocalMacro(null) + setPendingDraft(null)), so the
+  // cycle-1 D1 invariant applies here too — no stale answerable card survives
+  // over a discarded macro. Reachable via the always-rendered "Localize
+  // (one-shot)" button: it sends no answers, so the server answers with
+  // needsAnswers while a prior held fold's cards are open. The answers map
+  // must NOT be cleared: the minted clarification answer keeps riding.
+  // -------------------------------------------------------------------------
+
+  it('8. a one-shot re-localize that returns needsAnswers clears the held cards over the discarded macro, and the minted clarification answer keeps riding', async () => {
+    await openBarWithCard()
+    await screen.findByTestId('pl-clarification-card')
+
+    // Mint an answer on the held card: the pick re-sends (call 3) and the
+    // answer lands in the clarificationAnswers map (Leg 1 data). The re-send
+    // RE-BARS with a different held fact, so a card is STILL open afterwards
+    // (the minted answer rides the map even though its own fact got bound).
+    resolveMaterial.mockImplementation(async (q: string) => [mintSuggestion(q)])
+    mockClient.mintLocalTerm.mockResolvedValue({ ok: true, recordId: 'MAT-threadask-1', label: MINTED_LABEL })
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce({
+      ...HELD_RES,
+      clarifications: [{ label: 'sample (gate 2025)', reason: 'unknown-noun' }],
+    })
+    const input = screen.getByPlaceholderText(/mint a local term/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: MINTED_LABEL } })
+    const mintRow = await screen.findByText(`Create local term "${MINTED_LABEL}"`)
+    fireEvent.mouseDown(mintRow)
+    await waitFor(() => expect(mockClient.intentCompileFromPrompt).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(screen.getByTestId('pl-clarification-card').textContent).toContain('sample (gate 2025)'))
+
+    // The defect path: the always-rendered "Localize (one-shot)" button (:685)
+    // sends NO answers, so the server returns needsAnswers (handler :290)
+    // while a held fold's cards are open. The arm discards the macro
+    // (setLocalMacro(null) + setPendingDraft(null)) — the cards must go too.
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(ASK_RES)
+    fireEvent.click(screen.getByTestId('pl-localize-btn'))
+
+    // The needs-answers gate is shown...
+    await waitFor(() => expect(screen.getByTestId('pl-clarify').textContent).toContain('Which lysis variant?'))
+    // ...the discarded macro's surfaces are gone (no refine region, no deck review)...
+    expect(screen.queryByTestId('pl-refine')).toBeNull()
+    expect(screen.queryByTestId('pl-deck-review')).toBeNull()
+    // ...and NO stale answerable card survives over the discarded macro.
+    expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
+    expect(document.querySelector('.message-log__clarification-picker')).toBeNull()
+
+    // The answers map was NOT cleared: re-answering the axis and submitting
+    // sends a body where the minted clarification answer is STILL riding
+    // (only the axis answer was reset by the arm).
+    mockClient.intentCompileFromPrompt.mockResolvedValueOnce(RESOLVED_RES)
+    fireEvent.click(screen.getByLabelText('Lyse (variant a)'))
+    fireEvent.click(screen.getByTestId('pl-submit-answers'))
+    await waitFor(() => expect(mockClient.intentCompileFromPrompt).toHaveBeenCalledTimes(5))
+    const body = mockClient.intentCompileFromPrompt.mock.calls[4]![0] as { answers?: Record<string, string> }
+    expect(body.answers).toBeDefined()
+    expect(Object.keys(body.answers!)).toContain(MINTED_LABEL)
+    expect(body.answers![MINTED_LABEL]).toContain('MAT-threadask-1')
+    expect(body.answers!['lysis_variant']).toBe('variant_a')
   })
 })

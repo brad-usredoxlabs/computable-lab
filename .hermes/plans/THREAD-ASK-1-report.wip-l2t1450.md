@@ -321,3 +321,61 @@ No YAML touched. No file outside the two defect paths touched:
     + RESOLVED_RES/FAMILY_BRANCH_AXES fixtures + openBarWithCard param)
   server/.../IntentCompileFromPromptHandlers.clarificationAnswers.test.ts
     (test 6 strengthened only; tests 5/7/8 untouched)
+
+
+## Fix cycle 2 (D1 residual — needsAnswers arm leaks held cards)
+
+Defect (reviews/THREAD-ASK-1-c2-l2t1650.md, major, FIX-INCOMPLETE / D1 residual):
+the `else if (res.needsAnswers)` arm of handleLocalize (ProtocolLocalizationThread.tsx
+:459-465 at tip 70fd2524) REPLACES the macro (setLocalMacro(null) + setPendingDraft(null))
+but did not clear heldCards. Reachable via the always-rendered "Localize (one-shot)"
+button (:685): it sends no answers (handleLocalize :453), so the server returns
+needsAnswers (handler :290) while a prior held fold's cards are open — stale answerable
+cards sat over the "Answer the branch questions" state with the macro discarded.
+
+### RED (test 8 written FIRST, run against unmodified tip 70fd2524)
+
+Test 8 in ProtocolLocalizationThread.clarificationCards.test.tsx: held fold -> mint a
+card answer (pick re-sends, call 3, re-bars with a NEW held fact so a card is provably
+open) -> click "Localize (one-shot)" (mocked needsAnswers) -> assert cards gone,
+needs-answers gate shown, discarded macro's surfaces gone (pl-refine, pl-deck-review),
+then re-answer + submit and assert the minted clarification answer STILL rides the
+request body (answers[MINTED_LABEL] contains MAT-threadask-1; axis answer present).
+
+  $ npx vitest run ...clarificationCards.test.tsx
+   ❯ ... (8 tests | 1 failed)
+     8. ... → expected <section …(2)>…(2)</section> to be null   (test file :376)
+   Test Files  1 failed (1)
+        Tests  1 failed | 7 passed (8)
+
+RED is precise: the stale pl-clarification-card survives exactly where the reviewer said;
+tests 1-7 stay green (no collateral).
+
+### FIX
+
+ProtocolLocalizationThread.tsx, `else if (res.needsAnswers)` arm: added
+`setHeldCards([])` alongside the existing setLocalMacro(null)/setPendingDraft(null)
+(+ explanatory comment). The clarificationAnswers map is NOT cleared there — Leg-1
+answers keep riding re-drafts via compileAnswers (pinned by test 8's follow-up submit
+body). HARD CONSTRAINT honored: holdForReview(res.terminalArtifacts) byte-unchanged in
+position and argument; foldHeldBundle untouched. git diff --stat: 2 files, 78 insertions,
+0 deletions (additive-only).
+
+### GREEN + BASELINES (after the fix)
+
+  $ npx vitest run ...clarificationCards.test.tsx ...heldBundle.test.tsx
+   ✓ clarificationCards.test.tsx  (8 tests)
+   ✓ heldBundle.test.tsx          (3 tests)
+   Test Files  2 passed (2)
+        Tests  11 passed (11)
+
+  server tsc (`npx tsc --noEmit -p .`) ............ 0 error lines                 OK
+  app tsc (`npx tsc --noEmit -p tsconfig.json | grep "error TS" | sort`)
+    head 23 lines; detach-base parity (stash -> re-run at tip 70fd2524 -> pop):
+    base 23 / head 23; comm -23 and comm -13 both EMPTY -> ZERO NEW (runDeckLock
+    TS2339 line unchanged)                                                        OK
+
+Files touched (fix cycle 2 only):
+  app/.../ProtocolLocalizationThread.tsx (needsAnswers arm: +setHeldCards([]) + comment)
+  app/.../ProtocolLocalizationThread.clarificationCards.test.tsx (header item 8 + test 8)
+No YAML touched. No port/stack/:5193/:3093 touched. Nothing merged.
