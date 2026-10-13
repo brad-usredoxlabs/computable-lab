@@ -12,8 +12,11 @@ export async function searchBioSource(
   source: BioSourceId,
   query: string,
   limit = 10,
+  filters?: { organism?: string; canonicalOnly?: boolean },
 ): Promise<{ results: BioSourceResult[]; total: number; raw: unknown }> {
   const params = new URLSearchParams({ q: query, limit: String(limit) })
+  if (filters?.organism) params.set('organism', filters.organism)
+  if (filters?.canonicalOnly) params.set('canonicalOnly', 'true')
   const response = await fetch(`${API_BASE}/biosource/${source}/search?${params}`)
 
   if (!response.ok) {
@@ -69,6 +72,9 @@ function normalizeBioSourceResults(
       return normalizeReactome(raw)
     case 'ncbi_gene':
       return normalizeNcbiGene(raw)
+    case 'ncbi_nucleotide':
+    case 'ncbi_protein':
+      return normalizeNuccore(source, raw)
     default:
       return []
   }
@@ -225,6 +231,32 @@ function normalizeNcbiGene(raw: unknown): BioSourceResult[] {
         ...(geneId ? [{ label: `Gene:${geneId}`, color: '#364fc7' }] : []),
         ...(symbol ? [{ label: symbol, color: '#4c6ef5' }] : []),
       ],
+      raw: item,
+    }
+  })
+}
+
+/**
+ * ncbi_nucleotide / ncbi_protein search rows (server ncbi_*_search tools):
+ * {accession, uid, title, organism, taxId, length, biomol, sourcedb, canonical, url}
+ */
+function normalizeNuccore(source: 'ncbi_nucleotide' | 'ncbi_protein', raw: unknown): BioSourceResult[] {
+  const results = getArray(raw, 'results')
+  return results.map((r: unknown) => {
+    const item = r as Record<string, unknown>
+    const accession = str(item.accession || item.uid)
+    const length = typeof item.length === 'number' ? item.length : undefined
+    const organism = str(item.organism)
+    return {
+      source,
+      sourceId: accession,
+      title: str(item.title) || accession,
+      subtitle: length !== undefined ? `${organism} — ${length} bp` : organism,
+      canonical: item.canonical === true,
+      url: str(item.url) || undefined,
+      badges: accession
+        ? [{ label: accession, color: item.canonical === true ? '#2b8a3e' : '#364fc7' }]
+        : [],
       raw: item,
     }
   })

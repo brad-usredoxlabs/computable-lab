@@ -42,3 +42,12 @@
 .sequence-modification label { flex: 1; min-width: 6rem; }
 .sequence-native-fields { margin-top: .5rem; }
 .sequence-native-fields:disabled { opacity: 1; }
+
+/* ISEQ-1 — Sequences ingestion tab (SequenceSearch) */
+.sequence-search { display: flex; flex-direction: column; gap: .8rem; }
+.sequence-search__controls { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem; padding: .8rem; border: 1px solid var(--cl-border, #d0d7de); border-radius: .5rem; background: var(--cl-bg-elev, #fff); color: var(--cl-text, #1f2328); }
+.sequence-search__controls label { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; }
+.sequence-search__canonical { padding: .8rem; border: 2px solid var(--cl-success, #3fb950); border-radius: .5rem; background: var(--cl-success-soft, rgba(63,185,80,.15)); color: var(--cl-text, #1f2328); }
+.sequence-search__canonical h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.sequence-search__canonical p { margin: 0 0 .4rem; overflow-wrap: anywhere; }
+.sequence-search__result { padding: .4rem 0; border-bottom: 1px solid var(--cl-border, #d0d7de); overflow-wrap: anywhere; }
