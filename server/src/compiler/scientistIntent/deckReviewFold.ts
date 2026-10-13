@@ -3,16 +3,16 @@
  *
  * How many resolved-inventory placement offers the deck review may carry is
  * DATA: the `maxResolvedOffers` key of config/drafting/deck-review.yaml (the
- * shorthand-drafting.yaml / analysis-composition.yaml precedent — loaded PER
- * call, never process-cached). The compile runner applies the cap at the ONE
- * propagation choke every consumer shares (OQ1: server-side), so a broad-
- * inventory echo can never flood the review deck. Zero numeric cap literals
- * in TypeScript (repo rule #1).
+ * config/drafting per-call policy-loader precedent — loaded PER call, never
+ * process-cached). The compile runner applies the cap at the ONE propagation
+ * choke every consumer shares (OQ1: server-side), so a broad-inventory echo
+ * can never flood the review deck. Zero numeric cap literals in TypeScript
+ * (repo rule #1).
  *
  * ABSENT file/section => null => cap OFF (legacy pass-through, the same
- * absent-means-off doctrine as shorthandDrafting.ts). PRESENT-but-malformed
- * (not a positive integer) throws honestly, naming the key
- * (analysisReferenceGrounding.ts maxPerKind wording precedent).
+ * absent-means-off doctrine as the other config/drafting loaders).
+ * PRESENT-but-malformed (not a positive integer) throws honestly, naming the
+ * key (analysisReferenceGrounding.ts maxPerKind wording precedent).
  *
  * Truncation is a silent head-slice of the already-deterministic pass-output
  * order (candidate order = protocol order — the same determinism the goldens
