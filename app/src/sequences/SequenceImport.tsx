@@ -4,7 +4,7 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
  const [source,setSource]=useState(initialSource??'ncbi');const [accession,setAccession]=useState(initialAccession??'');const [db,setDb]=useState('nucleotide')
  const [rows,setRows]=useState<any[]>([]);const [options,setOptions]=useState<any[]>([]);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [text,setText]=useState('');const [jobId,setJobId]=useState('')
  const [message,setMessage]=useState('');const [diagnostics,setDiagnostics]=useState<any[]>([])
- const [aiBusy,setAiBusy]=useState(false);const [aiNotice,setAiNotice]=useState('')
+ const [aiBusy,setAiBusy]=useState(false);const [aiNotice,setAiNotice]=useState('');const [noticeJobId,setNoticeJobId]=useState('')
  useEffect(()=>{if(initialSource)setSource(initialSource);if(initialAccession)setAccession(initialAccession)},[initialSource,initialAccession])
  async function load(s=source,a=accession,d=db) {
   setBusy(true);setError('');setMessage('');setRows([])
@@ -28,7 +28,7 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
    // are re-placed (a server-side idempotent repeat re-places the same records).
    setRows(previous=>[...previous.filter(r=>r.extractedBy!=='ai-draft'),...(data.candidates??[]).map((r:any)=>({...r,selected:true,alphabet:'iupac_dna',topology:'linear'}))])
    setDiagnostics(previous=>{const seen=new Set(previous.map((d:any)=>d.code));return [...previous,...(data.diagnostics??[]).filter((d:any)=>!seen.has(d.code))]})
-   setAiNotice(`${(data.candidates??[]).length} row(s) read by the AI. Verify every base against the PDF page before importing.`)
+   setAiNotice(`${(data.candidates??[]).length} row(s) read by the AI. Verify every base against the PDF page before importing.`);setNoticeJobId(id)
   }catch(e){setError((e as Error).message)}finally{setAiBusy(false)}
  }
  async function save() {
@@ -55,9 +55,12 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
    <label>Reopen ingestion job<input value={jobId} onChange={e=>setJobId(e.target.value)} placeholder="Job ID (or last uploaded job)"/></label><button disabled={busy} onClick={()=>void reopen()}>Reopen review</button>
    {diagnostics.map((d,i)=><p key={i} className="sequence-warning">{d.message}</p>)}
    {text&&<details><summary>Original extracted text</summary><pre>{text}</pre></details>}
-   {/* 'ai-draft' mirrors the server's OLIGO_AI_READ_PRODUCER constant (the app already mirrors 'iupac_dna'). */}
-   {diagnostics.some(d=>d.code==='OLIGO_AI_READ_OFFERED'||d.code==='OLIGO_PARTIAL_READ')&&(jobId||sessionStorage.getItem('cl-oligo-job'))&&!aiNotice&&<button disabled={busy||aiBusy} onClick={()=>void aiRead()}>Read with AI</button>}
-   {aiNotice&&<p role="status">{aiNotice}</p>}
+   {/* 'ai-draft' mirrors the server's OLIGO_AI_READ_PRODUCER constant (the app already mirrors 'iupac_dna').
+       The spend is per-job: the notice records the job it belongs to (noticeJobId), and both the
+       button and the notice gate on it matching the CURRENT job — a new upload re-offers and never
+       inherits the previous job's notice (no cross-job provenance misattribution). */}
+   {diagnostics.some(d=>d.code==='OLIGO_AI_READ_OFFERED'||d.code==='OLIGO_PARTIAL_READ')&&(jobId||sessionStorage.getItem('cl-oligo-job'))&&!(aiNotice&&noticeJobId===(jobId||sessionStorage.getItem('cl-oligo-job')))&&<button disabled={busy||aiBusy} onClick={()=>void aiRead()}>Read with AI</button>}
+   {aiNotice&&noticeJobId===(jobId||sessionStorage.getItem('cl-oligo-job'))&&<p role="status">{aiNotice}</p>}
   </fieldset>
   {rows.map((row,i)=><fieldset key={i}><legend>{row.label||`Oligo ${i+1}`} {row.page?`— page ${row.page}`:''}</legend>
    {row.saved?<p>Imported: {row.saved}</p>:<>
