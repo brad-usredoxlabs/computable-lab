@@ -1,4 +1,5 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +12,7 @@ import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
 import { createRecordStore } from '../store/RecordStoreImpl.js';
 import type { AppContext } from '../server.js';
 import { extractOligoRows, ingestOligoOrder } from './oligoOrder.js';
+import { oligoRowsFromDraft, type OligoOrderDraft } from './oligoOrderDraft.js';
 import { sequenceConfig } from './sequenceRuntime.js';
 import { aiReadTriggered, readAiFallbackPolicy } from './oligoOrderAiRead.js';
 describe('oligo order extraction',()=>{
@@ -162,5 +164,55 @@ describe('oligo order ingest diagnostics',()=>{
   expect(result.candidates).toHaveLength(2);
   expect(result.diagnostics.some(d=>d.code==='OLIGO_PARTIAL_READ')).toBe(false);
   expect(result.diagnostics.some(d=>d.code==='OLIGO_AI_READ_OFFERED')).toBe(false);
+ });
+});
+// Task 10 (OLIGO-AI-3): regression pins on the REAL failing document class —
+// the local-OCR text of a scanned Biosystems order (fixtures/thermo-biosystems-
+// scan.txt, regenerated with pdftoppm -r 200 + tesseract from the vendor scan;
+// the PDF itself is never committed). These pin EXISTING merged compiler
+// behavior; the dye-token leak is the documented reason the AI read exists.
+// If a later config-data item strips 6FAM/Cyanine, that change updates THIS
+// pin consciously (spec OQ3: the config follow-up is a carried finding, not a
+// silent re-baseline mid-gate).
+describe('scanned Biosystems order class (fixture pins)',()=>{
+ const fixtureText=readFileSync(fileURLToPath(new URL('./fixtures/thermo-biosystems-scan.txt',import.meta.url)),'utf8');
+ it('pin 1: the deterministic extractor on the real OCR text yields 4 rows, EVERY row carries an issue, and the un-stripped dye tokens stay visible in residues',async()=>{
+  const rows=await extractOligoRows(fixtureText);
+  expect(rows).toHaveLength(4);
+  expect(rows.every(r=>r.issues.length>0)).toBe(true);
+  // Honest limit: 6FAM- and Cyanine 5- are NOT in the config modification
+  // table, so they leak into residues instead of being silently eaten.
+  expect(rows[1]?.residues).toContain('6FAM-');
+  expect(rows[2]?.residues).toContain('6FAM-');
+  expect(rows[0]?.residues).toContain('Cyanine5-');
+  expect(rows[3]?.residues).toContain('Cyanine5-');
+  // Where the table DOES cover a dye, it is stripped and declared.
+  expect(rows[1]?.modifications).toEqual([{label:'QSY',role:'quencher',position:'3-prime'}]);
+  // The OCR-garbled first label is kept honestly, not guessed away.
+  expect(rows.map(r=>r.label)).toEqual(['Zanumulumwm','Akk_GA4_1617ABY','Praus_1686_ABY','RtorqGA4_1813_CY5']);
+  // The order id rides the declared metadata table.
+  expect(rows[0]?.metadata.orderId).toBe('8493629');
+ });
+ it('pin 2: the lowerer on a draft equivalent of the same document flags the unreadable row and declares only table-covered modifications (accounted vs unaccounted)',async()=>{
+  const draft:OligoOrderDraft={kind:'oligo-order-draft',declaredRowCount:4,rows:[
+   {name:'Zanumulumwm:Qu',sequence:null,unreadable:true,sourceQuote:'10 Pass Zanumulumwm:Qu Cyanine 5-GGC TAA TGA GAA GCT TGA TGC CGA AGG AC-QSY2 29 357350 10422.49 Pass 6000 100ul'},
+   {name:'Akk_GA4_1617ABY',sequence:'6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY',sourceQuote:'30 Pass Akk_GA4_1617ABY |6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY 23 314470 8494.92 Pass 6000 100ul'},
+   {name:'Praus_1686_ABY',sequence:'6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY',sourceQuote:'50 Pass Praus_1686_ABY |6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY 24 288510 86365 Pass 6000 100y'},
+   {name:'RtorqGA4_1813_CY5',sequence:'Cyanine 5-GCA CAG GCG AAT ACA CCG CTT GAT G-QSY2',sourceQuote:'70 Pass RtorqGA4_1813_CY5 |Cyanine 5-GCA CAG GCG AAT ACA CCG CTT GAT G-QSY2 25 296620 9082.61 Pass 6000'},
+  ]};
+  const rows=await oligoRowsFromDraft(draft);
+  expect(rows).toHaveLength(4);
+  // The unreadable arm: visible for review, flagged, never invented bases.
+  expect(rows[0]?.residues).toBe('');
+  expect(rows[0]?.issues.some(i=>i.includes('could not be read'))).toBe(true);
+  // Accounted: the QSY quencher the pattern table covers is declared on the
+  // rows whose raw ends in -QSY; the uncovered 6FAM/Cyanine/QSY2 tokens stay
+  // visible in residues (same honest limit as pin 1 — one compiler, two
+  // producers; the table covers QSY$ but NOT QSY2).
+  for(const row of rows.slice(1,3)) expect(row.modifications.some(m=>m.label==='QSY'&&m.role==='quencher')).toBe(true);
+  expect(rows[3]?.modifications.some(m=>m.label==='QSY')).toBe(false);
+  expect(rows[1]?.residues).toContain('6FAM-');
+  expect(rows[3]?.residues).toContain('Cyanine5-');
+  expect(rows[3]?.residues).toContain('QSY2');
  });
 });
