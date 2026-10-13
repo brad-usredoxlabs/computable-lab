@@ -4,6 +4,7 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
  const [source,setSource]=useState(initialSource??'ncbi');const [accession,setAccession]=useState(initialAccession??'');const [db,setDb]=useState('nucleotide')
  const [rows,setRows]=useState<any[]>([]);const [options,setOptions]=useState<any[]>([]);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [text,setText]=useState('');const [jobId,setJobId]=useState('')
  const [message,setMessage]=useState('');const [diagnostics,setDiagnostics]=useState<any[]>([])
+ const [aiBusy,setAiBusy]=useState(false);const [aiNotice,setAiNotice]=useState('');const [noticeJobId,setNoticeJobId]=useState('')
  useEffect(()=>{if(initialSource)setSource(initialSource);if(initialAccession)setAccession(initialAccession)},[initialSource,initialAccession])
  async function load(s=source,a=accession,d=db) {
   setBusy(true);setError('');setMessage('');setRows([])
@@ -15,6 +16,21 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
   try{const data=await sequenceApi('/order',form);setRows(data.candidates.map((r:any)=>({...r,selected:true,alphabet:'iupac_dna',topology:'linear'})));setText(data.text);setDiagnostics(data.diagnostics??[]);setJobId(data.jobId);sessionStorage.setItem('cl-oligo-job',data.jobId);setMessage(data.message??'Review each sequence and its modifications before importing.');setOptions([])}catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  async function reopen() {const id=jobId||sessionStorage.getItem('cl-oligo-job');if(!id)return;setBusy(true);setError('');try{const data=await sequenceApi(`/order/${encodeURIComponent(id)}`);setJobId(id);setText(data.text??'');setDiagnostics([]);setRows(data.candidates.map((r:any)=>({...r,selected:r.status!=='published',saved:r.status==='published'?'Previously imported':undefined,alphabet:'iupac_dna',topology:'linear'})))}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ // The offer is DATA-driven: it appears only when the deterministic read's own
+ // diagnostics say the document could not be accounted for (OLIGO_AI_READ_OFFERED
+ // / OLIGO_PARTIAL_READ from the config aiFallback predicate) — never on jobId
+ // alone (no dead chrome). One click per session job: the notice spends the offer.
+ async function aiRead() {
+  const id=jobId||sessionStorage.getItem('cl-oligo-job');if(!id)return;setAiBusy(true);setError('')
+  try {
+   const data=await sequenceApi(`/order/${encodeURIComponent(id)}/ai-read`,{})
+   // No substitution: deterministic rows stay untouched; only prior ai-draft rows
+   // are re-placed (a server-side idempotent repeat re-places the same records).
+   setRows(previous=>[...previous.filter(r=>r.extractedBy!=='ai-draft'),...(data.candidates??[]).map((r:any)=>({...r,selected:true,alphabet:'iupac_dna',topology:'linear'}))])
+   setDiagnostics(previous=>{const seen=new Set(previous.map((d:any)=>d.code));return [...previous,...(data.diagnostics??[]).filter((d:any)=>!seen.has(d.code))]})
+   setAiNotice(`${(data.candidates??[]).length} row(s) read by the AI. Verify every base against the PDF page before importing.`);setNoticeJobId(id)
+  }catch(e){setError((e as Error).message)}finally{setAiBusy(false)}
+ }
  async function save() {
   setBusy(true);setError('')
   try {
@@ -39,6 +55,12 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
    <label>Reopen ingestion job<input value={jobId} onChange={e=>setJobId(e.target.value)} placeholder="Job ID (or last uploaded job)"/></label><button disabled={busy} onClick={()=>void reopen()}>Reopen review</button>
    {diagnostics.map((d,i)=><p key={i} className="sequence-warning">{d.message}</p>)}
    {text&&<details><summary>Original extracted text</summary><pre>{text}</pre></details>}
+   {/* 'ai-draft' mirrors the server's OLIGO_AI_READ_PRODUCER constant (the app already mirrors 'iupac_dna').
+       The spend is per-job: the notice records the job it belongs to (noticeJobId), and both the
+       button and the notice gate on it matching the CURRENT job — a new upload re-offers and never
+       inherits the previous job's notice (no cross-job provenance misattribution). */}
+   {diagnostics.some(d=>d.code==='OLIGO_AI_READ_OFFERED'||d.code==='OLIGO_PARTIAL_READ')&&(jobId||sessionStorage.getItem('cl-oligo-job'))&&!(aiNotice&&noticeJobId===(jobId||sessionStorage.getItem('cl-oligo-job')))&&<button disabled={busy||aiBusy} onClick={()=>void aiRead()}>Read with AI</button>}
+   {aiNotice&&noticeJobId===(jobId||sessionStorage.getItem('cl-oligo-job'))&&<p role="status">{aiNotice}</p>}
   </fieldset>
   {rows.map((row,i)=><fieldset key={i}><legend>{row.label||`Oligo ${i+1}`} {row.page?`— page ${row.page}`:''}</legend>
    {row.saved?<p>Imported: {row.saved}</p>:<>
@@ -46,6 +68,7 @@ export function SequenceImport({onSaved,initialSource,initialAccession,orderOnly
    <label>Name<input value={row.label} onChange={e=>edit(i,'label',e.target.value)}/></label>
    <label>Sequence, 5′ → 3′<textarea spellCheck={false} value={row.residues} onChange={e=>edit(i,'residues',e.target.value)}/></label>
    {row.raw&&<details><summary>Source transcription</summary><pre>{row.raw}</pre></details>}
+   {row.extractedBy==='ai-draft'&&<><p className="sequence-warning">AI read — verify against the PDF.</p>{row.sourceQuote&&<details><summary>AI source quote</summary><pre>{row.sourceQuote}</pre></details>}</>}
    {(row.issues??[]).map((issue:string,j:number)=><p key={j} className="sequence-warning">Extraction needs review: {issue}</p>)}
    {row.recordId&&<><label>5′ reporter<input value={row.modifications?.find((m:any)=>m.role==='reporter')?.label??''} onChange={e=>edit(i,'modifications',[...(row.modifications??[]).filter((m:any)=>m.role!=='reporter'),...(e.target.value?[{label:e.target.value,role:'reporter',position:'5-prime'}]:[])])}/></label><label>3′ quencher<input value={row.modifications?.find((m:any)=>m.role==='quencher')?.label??''} onChange={e=>edit(i,'modifications',[...(row.modifications??[]).filter((m:any)=>m.role!=='quencher'),...(e.target.value?[{label:e.target.value,role:'quencher',position:'3-prime'}]:[])])}/></label></>}
    </>}
