@@ -850,6 +850,31 @@ export interface LabSettings {
   }>
 }
 
+export interface OwnershipPolicyKindRule {
+  owner: 'creator' | 'lab'
+  visibility: 'private' | 'shared' | 'public'
+  filedTo: 'none' | 'active-project'
+  editRoles: string[]
+  shareTargets: string[]
+  defaultGrants?: Array<{ principalType: 'user' | 'group' | 'project'; principalId: string; role: string }>
+  publishRole?: string
+}
+
+export interface OwnershipPolicyDocView {
+  recordId: string
+  scope: { type: 'lab' | 'project'; id: string }
+  labOwnerUserId: string
+  fallback: OwnershipPolicyKindRule
+  /** KEYED MAP keyed by kind (server coerces the payload array — OwnershipPolicyService.ts:46). */
+  kindRules: Record<string, OwnershipPolicyKindRule>
+}
+
+export interface OwnershipPolicyResponse {
+  record: RecordEnvelope | null
+  resolved: OwnershipPolicyDocView | null
+  defaults?: null   // present-null only on the handler's not-found branch (:78-79)
+}
+
 export interface FormulationSummary {
   recipeId: string
   recipeName: string
@@ -2928,6 +2953,27 @@ export const apiClient = {
     return request<LabSettings>('/settings/lab', {
       method: 'PATCH',
       body: JSON.stringify({ policyBundleId: patch.policyBundleId }),
+    })
+  },
+
+  async getOwnershipPolicy(): Promise<OwnershipPolicyResponse> {
+    return request<OwnershipPolicyResponse>('/settings/ownership-policy')
+  },
+
+  /**
+   * Replace the lab ownership policy (OWN-11 / §T11). PUT is a WHOLESALE
+   * payload replace — the body is the full record payload (kindRules ARRAY,
+   * exactly what the settings YAML editor shows). The server validates it
+   * against the ownership-policy schema (422 INVALID_POLICY + validation
+   * errors), gates it on the admin role (403 ACCESS_DENIED), and answers
+   * with {success:true, record} (OwnershipPolicyHandlers.ts:133 — NOT a
+   * WriteResponse). Server rejections surface as ApiError with
+   * status/code/validation.
+   */
+  async putOwnershipPolicy(payload: Record<string, unknown>): Promise<{ success: true; record: RecordEnvelope }> {
+    return request<{ success: true; record: RecordEnvelope }>('/settings/ownership-policy', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     })
   },
 

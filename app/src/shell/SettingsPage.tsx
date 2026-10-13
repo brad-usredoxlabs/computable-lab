@@ -13,6 +13,7 @@ import { useServerMeta } from '../shared/hooks/useServerMeta'
 import { useConfig } from '../shared/hooks/useConfig'
 import { apiClient, type LabSettings } from '../shared/api/client'
 import { PolicyBundleSelector } from '../components/settings/PolicyBundleSelector'
+import { OwnershipPolicySection } from '../components/settings/OwnershipPolicySection'
 import {
   RepositorySection,
   AddRepositorySection,
@@ -319,6 +320,11 @@ export function SettingsPage() {
               )}
             </>
           )}
+        </Section>
+
+        {/* ---- Ownership & Sharing policy (OWN-11 / §T11) ---- */}
+        <Section title="Ownership & Sharing">
+          <OwnershipPolicySection />
         </Section>
 
         {/* ---- Sync controls (from meta) ---- */}
