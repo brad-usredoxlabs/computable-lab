@@ -73,7 +73,7 @@ describe('POST /sequences/order/:id/ai-read route', () => {
     const { ctx, root } = await buildHarness();
     const job = await ingestOligoOrder(ctx, 'USR-test', 'order.txt', Buffer.from(ORDER_TEXT));
     const app = Fastify();
-    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never); });
+    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never); }, { prefix: '/api' });
     await app.ready();
     const response = await app.inject({ method: 'POST', url: `/api/sequences/order/${job.jobId}/ai-read`, payload: {} });
     expect(response.statusCode).toBe(503);
@@ -87,7 +87,7 @@ describe('POST /sequences/order/:id/ai-read route', () => {
     const job = await ingestOligoOrder(ctx, 'USR-test', 'order.txt', Buffer.from(ORDER_TEXT));
     const { calls, llmClient } = stubClient();
     const app = Fastify();
-    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); });
+    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); }, { prefix: '/api' });
     await app.ready();
     const response = await app.inject({ method: 'POST', url: `/api/sequences/order/${job.jobId}/ai-read`, payload: {} });
     expect(response.statusCode).toBe(200);
@@ -100,14 +100,18 @@ describe('POST /sequences/order/:id/ai-read route', () => {
     await app.close(); await rm(root, { recursive: true, force: true });
   });
 
-  it('422s with an honest message for an unknown job', async () => {
+  it('404s with an honest message for an unknown job (SequenceService.read\'s honest status, mapped faithfully by handle)', async () => {
     const { ctx, root } = await buildHarness();
     const { llmClient } = stubClient();
     const app = Fastify();
-    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); });
+    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); }, { prefix: '/api' });
     await app.ready();
     const response = await app.inject({ method: 'POST', url: '/api/sequences/order/ING-NOPE-000000/ai-read', payload: {} });
-    expect(response.statusCode).toBe(422);
+    // Spec §11 C3 sketched 422; the honest in-family status for a missing record
+    // is SequenceError(...,404) from SequenceService.read:21 — the same status
+    // the existing GET /sequences/order/:id gives. Forcing 422 here would be
+    // chrome that hides which lookup failed.
+    expect(response.statusCode).toBe(404);
     expect(response.json().message).toContain('Record not found');
     await app.close(); await rm(root, { recursive: true, force: true });
   });
@@ -117,7 +121,7 @@ describe('POST /sequences/order/:id/ai-read route', () => {
     const job = await ingestOligoOrder(ctx, 'USR-test', 'order.txt', Buffer.from(ORDER_TEXT));
     const { llmClient } = stubClient();
     const app = Fastify();
-    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); });
+    await app.register(async (instance) => { registerSequenceRoutes(instance, ctx, {} as never, { getAiDeps: () => ({ llmClient, model: 'stub-model' }) }); }, { prefix: '/api' });
     await app.ready();
     const post = await app.inject({ method: 'POST', url: `/api/sequences/order/${job.jobId}/ai-read`, payload: {} });
     expect(post.statusCode).toBe(200);

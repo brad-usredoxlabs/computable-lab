@@ -2,6 +2,7 @@ import { registerDraftRoutes } from './drafts/draftRoutes.js';
 import { sequenceConfig } from './sequences/sequenceRuntime.js';
 import { sequenceActionPromptSchema } from './sequences/sequenceIntent.js';
 import { registerSequenceRoutes } from './sequences/sequenceRoutes.js';
+import type { OligoAiReadClient } from './sequences/oligoOrderAiRead.js';
 /**
  * Server entry point for computable-lab API.
  * 
@@ -1527,7 +1528,10 @@ export async function createServer(
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
-    registerSequenceRoutes(instance, ctx, toolRegistry);
+    // The AI read route reads the SAME settings-filled holder the protocol-ide
+    // streaming endpoint uses, lazily at request time, so a settings change or
+    // an initializeAiRuntime re-entry is always honored. No eager capture.
+    registerSequenceRoutes(instance, ctx, toolRegistry, { getAiDeps: () => { const c = protocolIdeAiDeps.current; return c?.llmClient ? { llmClient: c.llmClient as OligoAiReadClient, ...(c.model ? { model: c.model } : {}) } : undefined; } });
     registerDraftRoutes(instance, ctx);
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
