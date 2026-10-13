@@ -27,7 +27,7 @@ afterEach(()=>{cleanup();sessionStorage.clear()})
 beforeEach(()=>{vi.clearAllMocks()})
 
 const deterministicRow={recordId:'ICD-OLIGO-AAA',label:'Probe Alpha',residues:'ACGTACGT',raw:"5'-ACGT ACGT-3'",page:1,modifications:[],issues:[],metadata:{}}
-const aiRow=(n=1)=>({recordId:`ICD-OLIGO-AI${n}`,label:`AI Probe ${n}`,residues:'TTTTACGC',raw:'TTTT ACGC',page:1,modifications:[],issues:[],metadata:{},extractedBy:'ai-draft',model:'settings-model',sourceQuote:'10 Pass AI Probe 1 |TTTT ACGC 23'})
+const aiRow=(n=1)=>({recordId:`ICD-OLIGO-AI${n}`,label:`AI Probe ${n}`,residues:'TTTTACGC',raw:'TTTT ACGC',page:1,modifications:[],issues:[],metadata:{},extractedBy:'ai-draft',model:'settings-model',sourceQuote:`10 Pass AI Probe ${n} |TTTT ACGC 23`})
 const offerDiagnostic={severity:'warning',code:'OLIGO_AI_READ_OFFERED',message:'The deterministic read could not account for the document (any-issue). An AI read can be offered.'}
 
 function uploadResponse(diagnostics:any[],candidates=[deterministicRow]){return {jobId:'ING-OTHER-ABC123',artifactId:'IAF-1',sha256:'x',candidates,text:'extracted vendor text',diagnostics}}
@@ -62,7 +62,7 @@ it('(c) one click appends AI rows beside the deterministic rows, marks them hone
  await upload([offerDiagnostic])
  vi.mocked(sequenceApi).mockResolvedValueOnce({jobId:'ING-OTHER-ABC123',candidates:[aiRow(1),aiRow(2)],diagnostics:[{severity:'warning',code:'AI_READ_REVIEW',message:'The AI read produced 2 candidate row(s) using model settings-model.'}]})
  fireEvent.click(screen.getByRole('button',{name:/Read with AI/i}))
- await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('2 row(s) read by the AI'))
+ await waitFor(()=>expect(screen.getByText('2 row(s) read by the AI. Verify every base against the PDF page before importing.')).toBeInTheDocument())
  expect(sequenceApi).toHaveBeenCalledWith('/order/ING-OTHER-ABC123/ai-read',{})
  // No substitution: the deterministic card is still on screen.
  expect(screen.getByDisplayValue('Probe Alpha')).toBeInTheDocument()
