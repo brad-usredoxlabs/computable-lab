@@ -25,11 +25,12 @@
  *  - malformed-payload repair prompt: quotes the contract (the 502 class's
  *    chat analogue — origin-based, never message-substring sniffing).
  */
-import { stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   parseScientistIntent,
   ScientistIntentValidationError,
 } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { liftScientistIntent } from '../compiler/scientistIntent/liftScientistIntent.js';
 import {
   compileScientistIntent,
   type ScientistIntentCompileResult,
@@ -257,6 +258,33 @@ export async function compileShorthandDeterministically(
   });
 }
 
+/**
+ * Parse a MODEL-EMITTED document for the chat turn: lift first (the
+ * declarative alias table absorbs `verb:`, the verb-as-map-key shape, nested
+ * `parameters:`, snake_case keys — the same door the corpus capture and the
+ * headless route use), THEN Ajv as the sole validation authority (rule #3).
+ * Without the lift, every alias the rest of the system forgives is a hard
+ * rejection on this surface, and each rejection costs a model turn spent
+ * guessing. The lift canonicalizes aliases; a fabricated verb still fails the
+ * Ajv enum gate. Idempotent on an already-canonical document (the fold leg
+ * re-serializes canonically before re-parsing through here).
+ * @throws ScientistIntentValidationError (YAML faults are wrapped, so the
+ * caller's re-ask budget sees the SAME error class as before).
+ */
+export function parseShorthandForChat(yamlText: string): ScientistIntent {
+  let raw: unknown;
+  try {
+    raw = parseYaml(yamlText);
+  } catch (error) {
+    throw new ScientistIntentValidationError(
+      `scientist-intent YAML parse failed: ${error instanceof Error ? error.message : String(error)}`,
+      [error],
+    );
+  }
+  const lifted = liftScientistIntent(raw ?? {});
+  return parseScientistIntent(JSON.stringify(lifted));
+}
+
 // ---------------------------------------------------------------------------
 // Held intent per conversation (the getDefaultLabStateCache precedent)
 // ---------------------------------------------------------------------------
@@ -402,7 +430,13 @@ export function foldAnswersIntoShorthand(
   // fallback route — a parse fault must never escape run() as a turn-crashing
   // exception.
   try {
-    return { yaml: yamlText, doc: parseScientistIntent(yamlText) };
+    // The fold re-serializes a canonical document first, so the lift is
+    // idempotent here — routed through parseShorthandForChat for symmetry with
+    // the turn path (one chat-side parse door). The null-return contract is
+    // unchanged: the lift makes strictly MORE documents parse, and a genuinely
+    // invalid folded document still returns null (the caller's permitted
+    // extraction-only fallback).
+    return { yaml: yamlText, doc: parseShorthandForChat(yamlText) };
   } catch (error) {
     if (error instanceof ScientistIntentValidationError) return null;
     throw error;

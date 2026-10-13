@@ -64,6 +64,9 @@ const ALLOWED_PARAM_KEYS = new Set<string>([
   'factor', 'points', 'replicates', 'ratio',
   'volume', 'volumeUl', 'cycles', 'duration', 'temperatureC', 'rpm',
   'mode', 'wavelength', 'instrument', 'assayId', 'readout', 'material',
+  // SPINE-1 expected-domain slots (declaration only — the wire schema accepts
+  // them; the lift must not silently drop what the schema allows).
+  'expectedSourceDomain', 'expectedTargetDomain', 'expectedLabwareDomain',
   'params',
 ]);
 

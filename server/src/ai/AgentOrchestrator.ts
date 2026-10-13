@@ -75,9 +75,10 @@ import {
   foldAnswersIntoShorthand,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
+  parseShorthandForChat,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
-import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -2274,10 +2275,12 @@ export function createAgentOrchestrator(
                 return emptySh;
               }
 
-              // Ajv sole authority — validate-in-place, never a repaired re-parse.
+              // Ajv sole authority — lift model aliases first (the same door
+              // the corpus capture and the headless route use), then
+              // validate-in-place, never a repaired re-parse.
               let shorthandDoc: import('../compiler/scientistIntent/types.js').ScientistIntent;
               try {
-                shorthandDoc = parseScientistIntent(shorthandYaml);
+                shorthandDoc = parseShorthandForChat(shorthandYaml);
               } catch (err) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 if (err instanceof ScientistIntentValidationError && !shorthandRepairAsked) {
