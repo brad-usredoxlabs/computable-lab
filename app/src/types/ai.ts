@@ -258,6 +258,18 @@ export interface AiLabwareAddition {
 }
 
 /**
+ * A labware hint the compile resolved against a REAL inventory record — the
+ * existing record itself, offered as a PLACEMENT (never a re-creation: a
+ * resolved offer must not reach the recordCreations/proposedRecord path,
+ * submitSuggestionTool.ts:311). Mirrors the server's ResolvedLabware.
+ */
+export interface AiResolvedLabware {
+  recordId: string
+  title?: string
+  deckSlot?: string
+}
+
+/**
  * A request for BENCH EQUIPMENT (water bath, heat block, shaker, vortex, qPCR
  * machine…). Equipment is NOT labware: it has no wells and no addressing, and it
  * lives at its own bench position — never in a deck slot.

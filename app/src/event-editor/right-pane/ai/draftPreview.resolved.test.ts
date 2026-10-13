@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildPreviewFromDraft } from './draftPreview'
+import type { AiActiveDeckScope } from '../../../types/ai'
 import type { PlatformManifest, PlatformVariantManifest } from '../../../types/platformRegistry'
 
 const singlePlateVariant: PlatformVariantManifest = {
@@ -28,12 +29,12 @@ const platform: PlatformManifest = {
   variants: [singlePlateVariant],
 }
 
-const lockedSinglePlateScope = {
+const lockedSinglePlateScope: AiActiveDeckScope = {
   locked: true,
   runId: 'RUN-001',
   platformId: 'manual',
   variantId: 'manual_single_plate',
-  allowedSurfaces: ['slot'] as const,
+  allowedSurfaces: ['slot'],
   allowedSlots: ['PLATE'],
   allowedLabwareIds: [],
 }
@@ -69,7 +70,7 @@ describe('buildPreviewFromDraft resolved placement offers (DECK-FOLD-1)', () => 
     expect(ghosted.name).toBe('hint plate')
   })
 
-  it('a resolved offer without a title falls back to the recordId label (never name: undefined)', () => {
+  it('a resolved offer without a title falls back to the best-effort payload name (never name: undefined)', () => {
     const result = buildPreviewFromDraft({
       platform,
       variant: singlePlateVariant,
@@ -82,7 +83,12 @@ describe('buildPreviewFromDraft resolved placement offers (DECK-FOLD-1)', () => 
     })
     expect(result.skips).toEqual([])
     const ghosted = result.preview.previewLabwares['LAB-bare-plate']!
-    expect(ghosted.name).toBe('LAB-bare-plate')
+    // Same honest best-effort the additions arm ships: no title => the fallback
+    // payload's recordId-derived label (labwareRecordFallbackPayload turns
+    // separators into spaces). The ghost is still keyed BY THE RECORD ID.
+    expect(ghosted.name).toBe('LAB bare plate')
+    expect(ghosted.labwareId).toBe('LAB-bare-plate')
+    expect(ghosted.sourceRecordId).toBe('LAB-bare-plate')
     expect(Object.keys(ghosted)).not.toContain('proposedRecord')
   })
 

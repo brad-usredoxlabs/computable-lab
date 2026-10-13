@@ -34,8 +34,12 @@ const mockClient = apiClient as unknown as {
 }
 
 // A capture of the ghost the thread builds, so the test can assert the REAL
-// placement identity instead of trusting the UI alone.
-let capturedPreview: Record<string, unknown> | null = null
+// placement identity instead of trusting the UI alone. The mock mirrors the
+// real context: setPreview lands in editor state, so the accept gate opens on
+// the ghosted placement (not on a pre-seeded preview).
+const editorHarness = vi.hoisted(() => ({
+  preview: null as Record<string, unknown> | null,
+}))
 
 vi.mock('../../EventEditorContext', () => ({
   useOptionalEventEditor: () => ({
@@ -50,10 +54,10 @@ vi.mock('../../EventEditorContext', () => ({
       events: [],
       // No preview until the ghost lands: the accept gate must OPEN on the
       // resolved placement, not ride a pre-seeded preview.
-      preview: null,
+      preview: editorHarness.preview,
     },
     actions: {
-      setPreview: (preview: Record<string, unknown>) => { capturedPreview = preview },
+      setPreview: (preview: Record<string, unknown>) => { editorHarness.preview = preview },
       commitPreview: vi.fn(),
       clearPreview: vi.fn(),
       setPlatform: vi.fn(),
@@ -86,7 +90,7 @@ const CORPUS_RES = { ok: true, entryId: 'CRM-1' }
 describe('ProtocolLocalizationThread — resolved inventory as placement offers (DECK-FOLD-1)', () => {
   afterEach(() => {
     vi.clearAllMocks()
-    capturedPreview = null
+    editorHarness.preview = null
   })
 
   it('resolved-only compile renders checkable placement offers (NOT the empty state)', async () => {
@@ -126,8 +130,8 @@ describe('ProtocolLocalizationThread — resolved inventory as placement offers 
 
     fireEvent.click(screen.getByTestId('pl-load-deck'))
 
-    await waitFor(() => expect(capturedPreview).not.toBeNull())
-    const preview = capturedPreview!
+    await waitFor(() => expect(editorHarness.preview).not.toBeNull())
+    const preview = editorHarness.preview!
     const placements = preview.previewPlacements as Array<Record<string, unknown>>
     expect(placements).toHaveLength(1)
     // The ghost is a placement of the EXISTING record: labwareId === recordId,
