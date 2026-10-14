@@ -95,3 +95,21 @@ next check: (1) reviews/advc-W29-g2dfix-c1-l2t0430.md VERDICT (bash 215139; expe
 the adversarial route is proven); (2) coder-COMP3-A6fix marker "COMP3-A6-FIX DONE <sha>"
 + pid 210628 liveness; (3) trunk tip 29fa7e20 (g2dfix merge expected); (4) stack 200 +
 profile thunderbeast; (5) AI-13 recount.
+
+## ADDENDUM (same tick, 05:35 EDT) — advc c1 rendered, cycle-2 queued
+advc-W29-g2dfix c1 exited code=0: VERDICT: fix (5 defects: D1 BLOCKER — the criterion's
+abstract "retarget to a different protocolId" construction falls through FREE (lookahead
++ blocker-word 'to' + gap>3 root-caused by the reviewer); D2/D3 missing natural verbs and
+alternate frames; D4 over-block 'switch to the protocol tab'; D5 report integrity). All
+mechanical criteria PASS (additive-only proven, RED reproduced, batteries, tsc, zero
+interpreter change). Reviewer's full probe sets are in the review file.
+CYCLE-2 coder QUEUED 3rd on fleet lock (behind live COMP3-A6FIX 210628): chain
+scripts/coder-chain-W29-g2dfix2-l2t0430.sh bash 242926, prompt prompts/
+coder-W29-g2dfix2-l2t0430.txt (defect list verbatim + reviewer probe mandate), log logs/
+coder-W29-g2dfix2-l2t0430.log, same worktree/branch, marker "W29-G2DFIX2 DONE <sha>".
+Max-two-cycle rule: if cycle-2 advc still says fix with no improvement, route to architect
+with evidence (not a third blind fix).
+NEXT TICK order becomes: (1) COMP3-A6FIX exit -> advc -> battery -> merge -> restart ->
+gate r2; (2) g2dfix2 exit -> advc c2 (reviews/advc-W29-g2dfix-c2-l2t*.md) -> merge ->
+restart -> G2e; (3) rest per priority list above. Fleet lock pid-file semantics honored:
+one live coder (A6FIX) at checkpoint; both fix chains flock-queued, never parallel.
