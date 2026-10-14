@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { extractPdfText } from '../extract/PdfTextAdapter.js';
 import { extractPdfLayoutText, type PdfExtractionResult as LayoutPdfExtractionResult } from '../ingestion/pdf/TableExtractionService.js';
 import { decodeAttachmentText, documentFormatFor, type DocumentMediaKind } from '../extract/decodeAttachment.js';
+import { loadImageOcrConfig, IMAGE_DIAGNOSTIC_CODES, LOCAL_OCR_REVIEW_MESSAGE, type ExecFn } from '../extract/ImageTextAdapter.js';
+import type { ExtractionDiagnostic } from '../extract/ExtractorAdapter.js';
 
 // A realistic browser UA — vendor CDNs (e.g. tools.thermofisher.com) 403 a
 // custom "ProtocolFoundry/1.0" token as a bot. Matches the UA the vendor
@@ -48,6 +53,13 @@ export interface VendorPdfExtractionInput {
   contentBase64?: string;
   fileName?: string;
   mode?: 'plain' | 'layout' | 'both';
+  /**
+   * DOCINGEST-B test seam for the OCR arms: an injected configPath (absolute
+   * tmpdir YAML — never cwd-relative) and/or exec (argv pin without real
+   * tools). Production callers pass nothing; defaults are the shipped config
+   * and promisify(execFile).
+   */
+  ocr?: { configPath?: string; exec?: ExecFn };
 }
 
 export interface VendorPdfExtractionResult {
@@ -75,10 +87,33 @@ export interface VendorPdfExtractionResult {
   };
   /** Reserved for Stage B (DOCINGEST-B page images); Stage A never fills it. */
   images?: Array<{ pageNumber: number; path: string }>;
+  /**
+   * DOCINGEST-B: the scan arm's OCR diagnostics (LOCAL_OCR_REVIEW caution,
+   * LOCAL_OCR_PAGE_LIMIT coverage warning, IMAGE_OCR_* honest failures) ride
+   * on the result so the upload handler can persist them on the record.
+   */
+  diagnostics?: ExtractionDiagnostic[];
 }
 
 export function vendorPdfArtifactRoot(workspaceRoot: string): string {
   return resolve(workspaceRoot, 'artifacts', 'foundry', 'pdfs');
+}
+
+/**
+ * DOCINGEST-B §B2 — the ONE page-image naming convention, shared by the
+ * writer (acquisition) AND the reader (the page route). Page images are
+ * data-referenced artifacts under the workspace artifact root (git-ignored
+ * via `artifacts/`), never committed. Files are `page-NNN.<image-ext>`
+ * (1-based, zero-padded): `page-001.png` for rasterized scan pages, and the
+ * record's config-declared image extension for a direct photo upload (a .jpg
+ * kept as .png would be served under a dishonest media type).
+ */
+export function vendorPdfPageDir(workspaceRoot: string, sha12: string): string {
+  return join(vendorPdfArtifactRoot(workspaceRoot), 'pages', sha12.slice(0, 12));
+}
+
+export function vendorPdfPageFileName(pageNumber: number, extension: string): string {
+  return `page-${String(pageNumber).padStart(3, '0')}.${extension.replace(/^\./, '')}`;
 }
 
 export async function downloadVendorPdf(input: VendorPdfDownloadInput): Promise<VendorPdfDownloadResult> {
@@ -175,6 +210,36 @@ export async function extractVendorPdfText(input: VendorPdfExtractionInput): Pro
 
     if (mode === 'layout' || mode === 'both') {
       const layout = await extractPdfLayoutText(buffer, fileName).catch(async () => fallbackLayoutExtraction(buffer));
+
+      // DOCINGEST-B B2 — the scan arm. THE scan detector is the oligo
+      // precedent (oligoOrder.ts:73-74): the PDF's own text layer is empty.
+      // A text-layer PDF never reaches this block, so it never touches the
+      // rasterizer (bait 5). A scan rasterizes via the config-declared
+      // pdftoppm, KEEPS the page images under the per-record page dir, and
+      // OCRs each page via the config-declared tesseract.
+      if (layout.pages.length === 0) {
+        const scan = await rasterizeAndOcrPdf({
+          buffer,
+          workspaceRoot: input.workspaceRoot,
+          sha12: sha256.slice(0, 12),
+          ...(input.ocr ? { ocr: input.ocr } : {}),
+        });
+        if (scan) {
+          result.mediaKind = 'image';
+          result.layoutText = { pages: scan.pages, pageCount: scan.pages.length };
+          result.images = scan.images;
+          result.diagnostics = scan.diagnostics;
+          if (mode === 'both') {
+            result.plainText = {
+              text: scan.pages.map((page) => page.text).join('\f'),
+              pageCount: scan.pages.length,
+              diagnostics: scan.diagnostics,
+            };
+          }
+          return result;
+        }
+      }
+
       result.layoutText = {
         pages: layout.pages,
         pageCount: layout.pages.length,
@@ -189,8 +254,28 @@ export async function extractVendorPdfText(input: VendorPdfExtractionInput): Pro
   if (format) {
     result.mediaKind = format.mediaKind;
   }
+
+  // DOCINGEST-B B1/B2 — a photographed page (direct image upload) OCRs its
+  // own bytes through the ONE dispatcher's image arm (no rasterizer: the
+  // bytes ARE the page) and keeps the page image under the same per-record
+  // page dir the scan arm writes.
+  if (format?.mediaKind === 'image') {
+    const pageDir = vendorPdfPageDir(input.workspaceRoot, sha256.slice(0, 12));
+    const pageName = vendorPdfPageFileName(1, format.extension);
+    const pagePath = join(pageDir, pageName);
+    try {
+      await mkdir(pageDir, { recursive: true });
+      await writeFile(pagePath, buffer);
+      result.images = [{ pageNumber: 1, path: relative(input.workspaceRoot, pagePath) }];
+    } catch {
+      // A page image that could not be kept is reported by its absence; the
+      // OCR text (and its diagnostics) still travel.
+    }
+  }
+
   // A non-PDF has no page model: one pseudo-page keeps the downstream page
-  // contract satisfied without pretending the document is paginated.
+  // contract satisfied without pretending the document is paginated. An image
+  // IS one page, so the same shape holds honestly.
   const pages = [{ pageNumber: 1, text: decoded.text }];
 
   if (mode === 'plain' || mode === 'both') {
@@ -209,6 +294,102 @@ export async function extractVendorPdfText(input: VendorPdfExtractionInput): Pro
   }
 
   return result;
+}
+
+/**
+ * DOCINGEST-B B2 — rasterize a scan (empty text layer) with the config-declared
+ * rasterizer, KEEP the page images under the per-record page dir, and OCR each
+ * page with the config-declared reader. The argv discipline is the oligo
+ * precedent (oligoOrder.ts:76-85): mkdtemp scratch, `-r dpi -f 1 -l maxPages
+ * -png`, numeric-sorted page list, per-page tesseract with timeout+maxBuffer,
+ * pages joined with \f, LOCAL_OCR_REVIEW caution on success, honest error
+ * diagnostic on failure, scratch removed in `finally`.
+ *
+ * maxPages is a CAP with a warning, never a silent truncation (bait 11): when
+ * the rasterizer produced exactly maxPages pages, the result carries
+ * LOCAL_OCR_PAGE_LIMIT so nobody mistakes a capped read for a complete one.
+ *
+ * Returns null when no OCR is configured at all — the caller then keeps the
+ * Stage-A PDF behavior (mediaKind 'pdf', empty layout) rather than inventing
+ * an image kind nothing can read.
+ */
+async function rasterizeAndOcrPdf(input: {
+  buffer: Buffer;
+  workspaceRoot: string;
+  sha12: string;
+  ocr?: { configPath?: string; exec?: ExecFn };
+}): Promise<{ pages: Array<{ pageNumber: number; text: string }>; images: Array<{ pageNumber: number; path: string }>; diagnostics: ExtractionDiagnostic[] } | null> {
+  const config = await loadImageOcrConfig(input.ocr?.configPath);
+  if (!config) return null;
+
+  const exec: ExecFn = input.ocr?.exec ?? ((file, args, opts) => promisify(execFile)(file, args, opts));
+  const timeout = config.timeoutSeconds * 1000;
+  const dir = await mkdtemp(join(tmpdir(), 'cl-scan-ocr-'));
+  try {
+    const source = join(dir, 'source.pdf');
+    await writeFile(source, input.buffer);
+    await exec(config.rasterizer, [
+      '-r', String(config.dpi),
+      '-f', '1',
+      '-l', String(config.maxPages),
+      '-png',
+      source,
+      join(dir, 'page'),
+    ], { timeout, maxBuffer: 10 * 1024 * 1024 });
+
+    const pageFiles = (await readdir(dir))
+      .filter((f) => f.endsWith('.png'))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const diagnostics: ExtractionDiagnostic[] = [];
+    const pages: Array<{ pageNumber: number; text: string }> = [];
+    const images: Array<{ pageNumber: number; path: string }> = [];
+    const pageDir = vendorPdfPageDir(input.workspaceRoot, input.sha12);
+    await mkdir(pageDir, { recursive: true });
+
+    for (const [index, pageFile] of pageFiles.entries()) {
+      const pageNumber = index + 1;
+      const { stdout } = await exec(config.executable, [join(dir, pageFile), 'stdout', '-l', config.language], {
+        timeout,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      pages.push({ pageNumber, text: stdout.trimEnd() });
+      // KEEP the page image: move it out of the scratch dir into the
+      // per-record page dir under the ONE naming convention.
+      const keptName = vendorPdfPageFileName(pageNumber, 'png');
+      const keptPath = join(pageDir, keptName);
+      await rename(join(dir, pageFile), keptPath);
+      images.push({ pageNumber, path: relative(input.workspaceRoot, keptPath) });
+    }
+
+    diagnostics.push({ severity: 'warning', code: 'LOCAL_OCR_REVIEW', message: LOCAL_OCR_REVIEW_MESSAGE });
+    if (pageFiles.length >= config.maxPages) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'LOCAL_OCR_PAGE_LIMIT',
+        message: `OCR covered the first ${pageFiles.length} page(s) — the configured page limit (images.maxPages) was reached, so later pages may be missing.`,
+      });
+    }
+    return { pages, images, diagnostics };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const missing = /ENOENT/.test(message);
+    return {
+      pages: [],
+      images: [],
+      diagnostics: [
+        {
+          severity: 'error',
+          code: missing ? IMAGE_DIAGNOSTIC_CODES.IMAGE_OCR_TOOL_MISSING : IMAGE_DIAGNOSTIC_CODES.IMAGE_OCR_FAILED,
+          message: missing
+            ? `The configured scan reader "${config.rasterizer}"/"${config.executable}" is not installed on this host. The PDF was stored, but its pages could not be read.`
+            : `Scan OCR failed: ${message}`,
+        },
+      ],
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function fallbackLayoutExtraction(buffer: Buffer): Promise<LayoutPdfExtractionResult> {
