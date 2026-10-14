@@ -123,3 +123,34 @@ Treat these as exact user-selected local references.
 - `selection:source` and `selection:target` mentions should dominate source/destination inference.
 - For transfer events, use source and target mentions directly unless the user explicitly overrides them.
 - For add-material events, prefer `selection:target` as the destination wells/labware. If only one selection mention is present, use that one as the destination by default.
+## Mixtures: name the components, never a blob
+
+A material that is a MIXTURE is never one material. When the scientist names a
+mixture — a ratio, a percent, a "in" clause, a medium plus additives, cells in a
+suspension — carry EVERY component separately in the action's `params.composition`
+array, one entry per component:
+
+```yaml
+- action: add_material
+  labware: plate
+  volumeUl: 50
+  targetWells: [A1]
+  params:
+    composition:
+      - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+      - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+      - { material: "Thermo FBS", role: additive, fraction: "10%" }
+      - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+```
+
+Rules:
+- `material` is the component's own name, in the scientist's words, one per entry.
+- `role` is one of `solute | solvent | buffer_component | additive | activity_source | cells | other`.
+- `fraction` is the volume fraction of the mixture when the scientist stated one ("50%").
+- A `cells` component carries a COUNT (`count`), never a volume. If the scientist
+  gave a density ("200 cells per uL") and a volume, `count = density × volume`;
+  carry both the `count` and the `counterDensity` so the arithmetic is auditable.
+- `material` (the single-material field) names the MIXTURE itself, or is omitted.
+  NEVER put a mixture sentence in `material` — a blob is not a material and it
+  cannot bind to anything in the lab.
+- Do not invent components the scientist did not name. Do not invent percentages.
