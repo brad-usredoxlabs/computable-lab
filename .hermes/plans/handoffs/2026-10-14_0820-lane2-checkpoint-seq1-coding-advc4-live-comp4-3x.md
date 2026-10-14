@@ -93,3 +93,16 @@ next check: (1) reviews/advc-W29-g2dfix-c4-l2t0815.md present + "ADV-C4 DONE" in
   l2t0550.md present OR session 20261014_060135_b7e667 motion stopped -> PROVISIONAL route;
   (4) trunk tip 950b98ce until g2dfix4 merges; (5) stack 200 + profile thunderbeast;
   (6) AI-13 recount (n=237).
+
+ADDENDUM 08:35 (same tick): COMP-4 composer CLOSED before the 3x point (session
+20261014_060135_b7e667 agent_close 08:05, SPEC-DRAFT-DONE present). Orch reviewed the draft
+FIRST-HAND (resolutionEngine.ts:244 RED hook, lift ALLOWED_PARAM_KEYS drop, normalize :715
+params-only bar exemption, MANIFEST treeState pins 014ca71f/bb5cc4d0 match live sha256sum,
+MANIFEST blob 83fda3b42519... verified, SPINE-8 precedent 40ef080d, 422 arms :176/:344 —
+spec's 174/337 drifted 2 lines, re-anchor clause covers), ruled OQ1=teach both wire forms,
+OQ2=seed IN with one-line compositionSnapshotFromParams reuse, OQ3=realization stays at
+resolver/golden layer. Promoted canonical .hermes/plans/2026-10-14_0830-COMP4-stageB-
+vocabulary.md (committed). PROVISIONAL route NOT needed. No in-flight battery pins the old
+MANIFEST hash (grep clean). NEXT-TICK queue (3) becomes: dispatch COMP-4 coder chain when
+HARNESS-SEQ-1 exits (fleet single-coder), fresh worktree off dispatch tip; post-merge record
+the NEW MANIFEST blob hash.
