@@ -264,6 +264,54 @@ askWalls:
   # already an established DATA shape in this file (opsWall.targetIdRules).
   # Additive only — no existing entry, verb, noun, or blocker was removed or
   # weakened.
+  #
+  # W2-9-G2DFIX CYCLE-2 (advc-W29-g2dfix-c1-l2t0430, VERDICT: fix). Three
+  # leaks and one over-block, all closed in DATA (the interpreter is still
+  # untouched — governance, maxGapWords and blockerWords are unchanged):
+  #
+  # (1) BLOCKER — the criterion's OWN abstract construction "Retarget this
+  #     review to a different protocolId." fell through FREE. Every cycle-1
+  #     qualifier noun carried the `(?![a-z-])` lookahead, so `to a different
+  #     protocol` could not match the glued spelling `to a different
+  #     protocolId`; the only surviving noun `protocolid` sat BEHIND the blocker
+  #     word `to` (matching.leadingVerb.blockerWords) and at gap 5 >
+  #     maxGapWords 3. Same accepted amendment class as the g2c `to a protocol`
+  #     and the g2d `to protocol` fixes: declare the protocolId-SUFFIXED
+  #     qualifier forms as nouns that START on the preposition itself, so no
+  #     blocker token can sit between the verb and the referent and the gap is
+  #     measured from `to`/`at` (gap 3 <= 3, adjacency fires too).
+  # (2) MAJOR — the natural retarget verbs the gate reviewer measured FREE with
+  #     a concrete id (point/aim/move/route/send) were absent from the verbs
+  #     list, so no trigger could govern the already-declared `to protocol`/
+  #     `at protocol` nouns. Added with the same past/progressive shape as the
+  #     retarget/retargeted/retargeting triple.
+  # (3) MAJOR — alternate frames with an ALREADY-declared verb evaded: `onto
+  #     protocol`, `towards`/`toward protocol`, the interposed `to use
+  #     protocol`, and the reversed `the <record-id> protocol` word order.
+  #     Declared as nouns (the reversed order is an id-shape noun, the same
+  #     established DATA shape as `to prt-`/opsWall.targetIdRules).
+  # (4) MINOR (over-block) — `switch to the protocol tab` / `switch the view to
+  #     the protocol tab` were refused: on this surface switching the panel/view
+  #     to the protocol context is a legitimate ask, and the bare article nouns
+  #     `to the protocol`/`at the protocol` swallowed it. Those two nouns are
+  #     REPLACED by id-requiring article forms (`to the prt-`, `at the prt-`,
+  #     `to the protocolid`, `at the protocolid`): the retarget wall now needs a
+  #     retarget OBJECT, so the nav ask is FREE while a concrete-id retarget in
+  #     the same frame still fires. No existing test or gate ask depended on the
+  #     bare article forms (gate ask (e) matches `to protocol`; the boundary arms
+  #     match `to a different protocol`/`to another protocol`).
+  #
+  # ACCEPTED RESIDUALS (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'accepted-residual boundary' tests and listed in the
+  # cycle-2 report §residual-risk table):
+  #   LEAK side: bare article frame with NO id — "retarget this review to the
+  #     protocol" (the deliberate price of not over-blocking the panel nav ask);
+  #     `for protocol <id>` is not a declared retarget-object frame.
+  #   OVER-BLOCK side: a nav ask that names a record id INSIDE the article
+  #     frame — "switch to the PRT-4iaey2 protocol tab" — cannot be told apart
+  #     from a retarget by DATA alone (the same ambiguity the leading-verb
+  #     governance already accepts, cf. the W2-11 D3 honest arm). Narrow: it
+  #     needs a literal record-id token in the nav phrase.
   - id: retarget-protocol
     code: RETARGET_NOT_ON_THIS_SURFACE
     message: >-
@@ -285,20 +333,72 @@ askWalls:
       - switch
       - switched
       - switching
+      # CYCLE-2 (2): the natural retarget verbs the reviewer measured FREE with
+      # a concrete id, same past/progressive shape as the triple above.
+      - point
+      - pointed
+      - pointing
+      - aim
+      - aiming
+      - move
+      - moved
+      - route
+      - routed
+      - routing
+      - send
+      - sent
     nouns:
       - to protocol(?![a-z-])
       - to a protocol(?![a-z-])
-      - to the protocol(?![a-z-])
+      # CYCLE-2 (4): the bare article frames are REPLACED by id-requiring forms
+      # (the brief's DEFECT-4 fix direction: require the retarget OBJECT). The
+      # lookahead demands a record-id-shape token next (`PRT-`, `CAN-`, ...), so
+      # `switch to the protocol tab` is FREE while `to the protocol PRT-4iaey2`
+      # still fires.
+      - to the protocol(?=\s+[a-z]+-)
       - to another protocol(?![a-z-])
       - to a different protocol(?![a-z-])
       - to different protocol(?![a-z-])
       - at protocol(?![a-z-])
       - at a protocol(?![a-z-])
-      - at the protocol(?![a-z-])
+      - at the protocol(?=\s+[a-z]+-)
       - to prt-
       - at prt-
       - protocol id
       - protocolid
+      # CYCLE-2 (1): the protocolId-SUFFIXED qualifier class — the criterion's
+      # own wording. Each starts on the preposition, so the blocker word `to`
+      # can never sit between the verb and the referent and the gap is measured
+      # from `to`/`at` (<= maxGapWords). `protocolid` also matches the plural
+      # `protocolIds` (prefix match, case-insensitive like every other noun).
+      - to a different protocolid
+      - to another protocolid
+      - to different protocolid
+      - to the protocolid
+      - at a different protocolid
+      - at another protocolid
+      - at the protocolid
+      # CYCLE-2 (3): alternate preposition frames and the reversed word order.
+      - onto protocol(?![a-z-])
+      - onto a protocol(?![a-z-])
+      - onto prt-
+      - onto a different protocolid
+      - towards protocol(?![a-z-])
+      - toward protocol(?![a-z-])
+      - towards a protocol(?![a-z-])
+      - toward a protocol(?![a-z-])
+      - towards prt-
+      - toward prt-
+      - towards a different protocolid
+      - toward a different protocolid
+      - to use protocol(?![a-z-])
+      - to use a protocol(?![a-z-])
+      - to use prt-
+      # reversed order: `the <record-id> protocol` / `the <record-id> protocolId`.
+      # NOTE: the interpreter lowercases noun PATTERNS too, so these use only
+      # lowercase-safe escapes (`[^ ]`, `\s`) — `\S` would silently become `\s`.
+      - the prt-[^ ]+ protocol
+      - the can-[^ ]+ protocol
 opsWall:
   code: PROVENANCE_FALSIFICATION
   message: >-
