@@ -49,16 +49,24 @@ COMPLETED THIS TICK:
    no action.
 
 QUEUE / NEXT TICK (priority):
-(1) advc c1 COMP-4 verdict (reviews/advc-COMP4-c1-l2t1035.md; ~30-45 min from 10:50,
-    2x ~11:35, 3x ~12:20): ACCEPT -> orch verify MYSELF in wt/COMP-4-lane2-l2t0910:
-    vitest src/compiler/resolution src/compiler/scientistIntent; git diff base..tip opened
-    (three-dot; base 7be527f4+); engine zero-domain-literal grep; MANIFEST blob recompute
-    (git rev-parse HEAD:server/src/compiler/scientistIntent/goldens/MANIFEST.yaml ==
-    fbf743ab... claim); compositionDecomposition.test.ts zero-hunks proof; server tsc
-    baseline equality. THEN grep the trunk for any test pinning blob 83fda3b4 BEFORE
-    merge; merge --no-ff cl/COMP-4-lane2-l2t0910 (trunk may have moved — inspect); RESTART
-    stack background=true (YAML!); post-merge targeted re-run. FIX -> defect list verbatim
-    to a new coder run same worktree via the fleet-lock chain.
+(0) ADV C COMP-4 c1 = VERDICT: ACCEPT (0 gate defects; F1-F4 minor non-gating; report birth
+    10:53:15 — note the fast 7-min run: treat the battery as UNVERIFIED; the merge gate is
+    MY OWN verification, below). NEXT TICK ACTION 1: orch self-verify wt/COMP-4-lane2-l2t0910
+    (tip aa13b0e0, base 233231a5 = coder rebase point, 7be527f4 ancestor-verified):
+    (a) open the real diff (20 files +1157/-41); (b) run MYSELF: cd server && npx vitest run
+    src/compiler/resolution src/compiler/scientistIntent (expect 27 files/320 tests),
+    goldens (16), golden-replay.ts (37/37), promptBudget (expect 47090<=47180),
+    compositionDecomposition UNMODIFIED (git diff vs 233231a5 empty); (c) recompute
+    MANIFEST blob (git hash-object — expect fbf743ab...); (d) grep trunk tests pinning
+    83fda3b4 BEFORE merge — any pin must be updated as part of the merge commit's scope
+    (battery pinning the old blob would break post-merge); (e) engine zero-domain-literal
+    grep on resolutionEngine/resolveNounsPass. THEN merge --no-ff cl/COMP-4-lane2-l2t0910
+    (inspect trunk tip first — SEQ1fix may merge first), promote report to
+    .hermes/plans/reports/SHORTHAND-COMP4-report.md, RESTART stack background=true (YAML
+    delta: vocabulary/wire schema), post-restart targeted re-run + :5193/:3093 health.
+    Mark COMP-4 done + handoff. F3 latent (wire composition global vs per-verb) — record
+    as assumption carried, spec-directed, not a gate.
+(1) [superseded by (0)] advc c1 COMP-4 verdict: ~~ACCEPT path above~~ DONE 11:25 accept.
 (2) SEQ1fix exit (proc_b888defd7082; log streamed, look for "HARNESS-SEQ-1 FIX1 DONE
     <sha>"): read report fix1 -> quick advc fix-review OR (if the fix is a <=30-line
     handler/race fix) orch self-verify the diff + run the spec wall myself on a lane-local
