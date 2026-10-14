@@ -1196,11 +1196,17 @@ export function registerRoutes(
 
   // Free-floating vendor-pdf blobs (no study scope) — serve the stored PDF
   // bytes so the review surface's pdfjs can fetch them.
+  // DOCINGEST-B B3: the page-image route for image-kind records — the kept
+  // page images (per-record page dir) the review pane renders.
   const { vendorPdfBlobHandlers } = options;
   if (vendorPdfBlobHandlers) {
     fastify.get(
       '/vendor-pdfs/:recordId/pdf',
       vendorPdfBlobHandlers.getVendorPdfBlob,
+    );
+    fastify.get(
+      '/vendor-pdfs/:recordId/page/:pageNumber',
+      vendorPdfBlobHandlers.getPageImage,
     );
   }
 
