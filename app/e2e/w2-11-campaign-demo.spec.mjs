@@ -882,6 +882,44 @@ test.describe('W2-11 zymo campaign demo gate', () => {
       const unknownLabelsOf = (body) => (body?.clarifications ?? [])
         .filter((c) => c.reason === 'unknown-noun')
         .map((c) => String(c.label ?? '').trim()).filter(Boolean)
+      // Orch l2t2010 (gate-run-13 prep, post-THREAD-ASK-1): the product now binds
+      // clarification answers as DATA — answers[<clarification label>] rides every
+      // compile round-trip via composeAnsweredPrompt (IntentCompileFromPromptHandlers.ts
+      // :146; the client sends exactly this shape, ProtocolLocalizationThread
+      // clarificationAnswers :196/:396). The harness replays the SAME acts a
+      // scientist takes on the answerable cards:
+      //  - ambiguous-noun (a CHOICE act, mint cannot help): answer with the
+      //    highest-confidence candidate the clarification itself offers.
+      //  - free-text gap facts (parameter/gap): answer with the pre-registered
+      //    fixture values measured first-hand by the l2t1450 answered-gaps
+      //    precheck, matched by normalized label; unmapped gaps answer with the
+      //    clarification's own prompt so the answer is the question's data.
+      // Every answer goes through the product's data binding — zero interpreter
+      // change, assertion (>=1 placement offer) UNTOUCHED.
+      const choiceActs = (body) => (body?.clarifications ?? [])
+        .filter((c) => c.reason === 'ambiguous-noun')
+        .map((c) => [String(c.label ?? '').trim(), (c.candidates ?? [])
+          .map((cd) => [String(cd.label ?? '').trim(), cd.confidence ?? 0])
+          .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+          .map(([l]) => l).filter(Boolean)[0]]
+          .filter(([label, pick]) => label && pick))
+      const GAP_ANSWERS = [
+        [/centrifug/i, "4000 rpm for 2 min"],
+        [/bead.?beat|bead beater|beating/i, "30 s at maximum speed in the bench bead beater"],
+        [/heat/i, "55 C for 5 min"],
+        [/transfer.*volume|supernatant/i, "40 uL"],
+        [/sample.*(volume|identity)|volume.*sample/i, "50 uL sample to the BashingBead Lysis Module"],
+        [/wash/i, "use the seeded wash station labware"],
+      ]
+      const gapAnswerFor = (fact) => {
+        const probe = `${fact.label ?? ''} ${fact.reason ?? ''} ${fact.message ?? ''} ${fact.prompt ?? ''}`.toLowerCase()
+        for (const [re, value] of GAP_ANSWERS) if (re.test(probe)) return value
+        const ask = asStringLoose(fact.prompt ?? fact.message)
+        return ask ? `Scientist answer to: ${ask}` : null
+      }
+      function asStringLoose(v) { return typeof v === 'string' && v.trim().length > 0 ? v.trim().slice(0, 300) : null }
+      const answeredEver = new Map()
+      answeredBody.answers = { ...(answeredBody.answers ?? {}) }
       let prevCount = null
       let stalls = 0
       const mintedEver = new Set()
@@ -903,22 +941,29 @@ test.describe('W2-11 zymo campaign demo gate', () => {
         // still bars; the reasons list is the only way to see what binds it.
         const reasons = (compile.body?.clarifications ?? []).map((c) => `${c.reason}:${String(c.label ?? '')}`)
         console.log(`[D4 mint-cycle ${cycle}] 422 reasons: [${reasons.join('; ')}]`)
-        // surface a DIFFERENT label set (5 old labels were all minted while 5 fresh
-        // ones appeared: raw count 5->5 is not a stall, the fresh labels ARE
-        // progress). Honest shrink metric = labels not yet answered. A draw whose
-        // unknowns are ALL already-minted twice running = mint replay genuinely
-        // cannot progress (spine defect); mint cannot help a zero-unknown 422
-        // (gap/ambiguity bar, run 7's vacuous 0->1) — either breaks to the re-draw loop.
+        // Orch l2t2010: answer EVERY answerable fact shape the product exposes —
+        // unknown-noun -> mint act; ambiguous-noun -> CHOICE act (candidate pick,
+        // rides answers[label] as data); gap/free-text fact -> the scientist's own
+        // stated value. Progress metric = facts with no replayed act yet. A draw
+        // whose facts are ALL already answered twice running = the answer binding
+        // cannot progress (spine defect); fail honestly.
         const fresh = labels.filter((l) => !mintedEver.has(l))
-        if (labels.length > 0 && fresh.length === 0) {
+        const choices = choiceActs(compile.body).filter(([l]) => !answeredEver.has(l))
+        const gaps = (compile.body?.clarifications ?? [])
+          .filter((c) => c.reason !== 'unknown-noun' && c.reason !== 'ambiguous-noun')
+          .filter((c) => !answeredEver.has(String(c.label ?? '').trim()))
+          .map((c) => [String(c.label ?? '').trim(), gapAnswerFor(c)])
+          .filter(([l, a]) => l && a)
+        const outstanding = fresh.length + choices.length + gaps.length
+        if (labels.length > 0 && fresh.length === 0 && choices.length === 0 && gaps.length === 0) {
           stalls += 1
           console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${labels.length} ALL already minted — no fresh label to answer (stall ${stalls})`)
           if (stalls >= 2) throw new Error(`[D4] mint cycle stalled: two draws in a row unknown-noun-barred on ALREADY-MINTED labels — mint replay cannot progress; spine defect, leg fails honestly`)
           continue
         }
-        if (fresh.length !== prevCount) stalls = 0
-        prevCount = fresh.length
-        if (prevCount === 0 && cycle > 1) {
+        if (outstanding !== prevCount) stalls = 0
+        prevCount = outstanding
+        if (outstanding === 0 && cycle > 1) {
           console.log('[D4 mint-cycle] no unknown-noun labels on this 422 — mint replay cannot help; handing off to the deck re-draw loop')
           break
         }
@@ -934,7 +979,18 @@ test.describe('W2-11 zymo campaign demo gate', () => {
           else console.log(`[D4 mint-cycle ${cycle}] mint "${label}" -> ${m.status} ${JSON.stringify(m.body).slice(0, 160)}`)
         }
         for (const l of minted) mintedEver.add(l)
-        console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${labels.length} fresh=${fresh.length} [${fresh.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}]`)
+        const fed = []
+        for (const [label, pick] of choices) {
+          answeredBody.answers[label] = pick
+          answeredEver.set(label, pick)
+          fed.push(`choice:${label}->${pick}`)
+        }
+        for (const [label, value] of gaps) {
+          answeredBody.answers[label] = value
+          answeredEver.set(label, value)
+          fed.push(`gap:${label}`)
+        }
+        console.log(`[D4 mint-cycle ${cycle}] draw=http422 unknown_labels_before=${labels.length} fresh=${fresh.length} [${fresh.join('; ')}] minted_labels=${minted.length} [${minted.join('; ')}] fed_answers=[${fed.join('; ')}]`)
       }
     }
 
