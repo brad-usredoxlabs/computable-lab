@@ -605,6 +605,14 @@ clean afterwards — no probe file is committed). 99 arms, 63 expected-WALL,
 
 ## 15. Residual-risk list (explicit; nothing here is silent)
 
+> CORRECTION (cycle 3, advc-W29-g2dfix-c2 DEFECT-3): as written at the
+> cycle-2 head this claim was FALSE — the DEFECT-1/DEFECT-2 leaks measured in
+> the c2 review were neither pinned nor listed here, and the R4 row said
+> "not pinned". Cycle 3 closes the DEFECT-1/2 leaks, pins the R4 arms as
+> visible tests, and adds the newly measured residuals. The AUTHORITATIVE
+> residual table is now §21 (cycle 3): every row there is pinned in the
+> committed suite. This §15 table is kept as the cycle-2 historical record.
+
 Every row below is pinned in the committed suite so a later reviewer can see the
 boundary move, and each is named in the YAML comment block.
 
@@ -663,3 +671,445 @@ it does, that is residual R3 firing and should come back as a defect, not a
 pass.
 
 W2-9-G2DFIX2 DONE df2952f6
+
+
+---
+
+# W2-9-G2DFIX CYCLE-3 (advc-W29-g2dfix-c2-l2t0630, VERDICT: fix)
+
+## 18. What cycle 3 changed (all DATA + tests; interpreter still ZERO change)
+
+DEFECT 1 (major) — the five retarget variants that fell FREE at the cycle-2
+head (review §D DEFECT 1) now WALL. Closed in DATA, at the root causes the
+reviewer named:
+- verbs: `reassign/reassigned/reassigning`, `target/targeted/targeting`
+  (same past/progressive shape as the existing families).
+- nouns: `to the different protocolid` and `at the different protocolid`
+  (the missing member of the id-suffixed qualifier class);
+  `to the protocol id(?=\s+[a-z]+-)` and `at the protocol id(?=\s+[a-z]+-)`
+  (the spaced article form — the old article noun required the hyphen
+  immediately and the bare `protocol id` sat behind the blocker `to` at gap
+  4 > maxGapWords 3; the new nouns START on `to`/`at`, so no blocker token
+  can sit between verb and referent and the gap is measured from the
+  preposition, and the spaced form demands a record-id token);
+  `to "prt-` and `at "prt-` (the quoted-id frame — the quote broke `to prt-`).
+All five reviewer strings are pinned VERBATIM as WALL tests at BOTH levels
+(interpreter + orchestrator), and the pins were run — see §20 RED and §22
+sweep.
+
+DEFECT 2 (minor, over-block) — `move the draft to protocol format`, `move the
+draft to protocol steps`, `route the draft to protocol guidance`, `point the
+draft at protocol examples` were refused: the cycle-2 common verbs
+(move/route/point/send) combined with the bare `to protocol`/`at protocol`
+nouns to swallow ordinary MEANT asks that merely mention a protocol context.
+The bare frames now REQUIRE the retarget OBJECT — the same narrowing class
+cycle 2 applied to the article nouns (c1 DEFECT-4):
+`to protocol(?=\s+[a-z]+-)`, `at protocol(?=\s+[a-z]+-)`,
+`onto protocol(?=\s+[a-z]+-)`, `towards protocol(?=\s+[a-z]+-)`,
+`toward protocol(?=\s+[a-z]+-)`. The `a protocol`/qualifier forms are NOT
+narrowed — they carry the pinned qualifier-class WALL arms (`repoint the
+review to a different protocol`, `switch the review to another protocol tab`).
+Concrete-id retargets in these frames still fire, including the substring
+behaviour (`to protocol` matches inside `into protocol PRT-...` — the pinned
+R5 arm re-runs green). The reviewer's FREE arms are re-pinned, at the
+interpreter AND orchestrator level.
+
+DEFECT 3 (report integrity) — §15 carries an explicit correction (the
+"nothing here is silent" claim was false at the cycle-2 head), and §23 is the
+new AUTHORITATIVE residual table: every row is pinned as a visible test in
+the committed suite. The c2 R4 row said "not pinned" — its arms are now
+pinned FREE in the 'g2dfix3 accepted-residual boundary' test.
+
+DEFECT 4 (documentation) — the YAML comment (cycle-2 block, item (4)) named
+patterns that do not exist in the file (`to the prt-`, `at the prt-`,
+`to the protocolid`, `at the protocolid` as the article-noun replacements).
+The comment now names the committed patterns
+`to the protocol(?=\s+[a-z]+-)` / `at the protocol(?=\s+[a-z]+-)` and
+records the correction. The report's §10 already named the correct patterns
+(grep confirms the report never carried the wrong names — the inaccuracy was
+the YAML comment only).
+
+INTERPRETER CHANGE: STILL ZERO. `git diff --name-only df2952f6..HEAD | grep
+-E '\.(ts|tsx)$' | grep -v -i test` -> EMPTY. `matching.maxGapWords`,
+`leadingVerb.blockerWords`, strip patterns and negation tokens are untouched.
+
+Non-additive YAML edits (complete list of removed non-comment lines,
+verbatim — 5 noun lines, each REPLACED in place by a strictly narrower
+id-requiring form in the same entry):
+```
+-      - to protocol(?![a-z-])
+-      - at protocol(?![a-z-])
+-      - onto protocol(?![a-z-])
+-      - towards protocol(?![a-z-])
+-      - toward protocol(?![a-z-])
+```
+No pinned WALL arm depends on a removed spelling: every pinned arm in these
+frames names a concrete id (`retarget this review onto protocol PRT-4iaey2`,
+`retarget the review towards protocol PRT-4iaey2`, `retarget this review
+toward protocol PRT-4iaey2`, `move this review to protocol PRT-4iaey2`, gate
+ask (e)) and re-runs green at head (§22). The 2 remaining removed lines are
+the corrected comment pair.
+
+## 19. Changed paths (git diff --stat, cycle 3 fix commit)
+
+```
+ config/drafting/review-write-wall.yaml             | 101 +++++++++++++-
+ .../ai/AgentOrchestrator.reviewWriteWall.test.ts   |  50 +++++++
+ server/src/ai/reviewWriteWall.test.ts              | 145 +++++++++++++++++++++
+ 3 files changed, 289 insertions(+), 7 deletions(-)
+```
+(plus this report file in the docs commit; interpreter `.ts` diff EMPTY.)
+
+## 20. RED evidence (tests written BEFORE the YAML edit)
+
+RED captured with the FINAL test files against the committed cycle-2 YAML
+(the DATA edit came after):
+
+```
+ Test Files  2 failed | 1 passed (3)
+      Tests  7 failed | 57 passed (64)
+```
+
+Failing tests (verbatim vitest headers):
+```
+ FAIL  src/ai/reviewWriteWall.test.ts > ... > g2dfix3 DEFECT-1: the reviewer's c2 leak strings (review §D DEFECT 1) fire RETARGET_NOT_ON_THIS_SURFACE
+ FAIL  src/ai/reviewWriteWall.test.ts > ... > g2dfix3 DEFECT-2: bare non-id `protocol <common-noun>` objects stay FREE (review §D DEFECT 2)
+ FAIL  src/ai/reviewWriteWall.test.ts > ... > g2dfix3 accepted-residual boundary: the narrowed no-id frames stay FREE (visible leak)
+ FAIL  src/ai/reviewWriteWall.test.ts > ... > g2dfix3 accepted-residual boundary: the new-verb over-block surface stays WALL (visible)
+ FAIL  src/ai/AgentOrchestrator.reviewWriteWall.test.ts > ... > g2dfix3 DEFECT-1: "reassign this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope
+ FAIL  src/ai/AgentOrchestrator.reviewWriteWall.test.ts > ... > g2dfix3 DEFECT-1: "target this review to protocol PRT-4iaey2 instead" refuses deterministically with the declared envelope
+ FAIL  src/ai/AgentOrchestrator.reviewWriteWall.test.ts > ... > g2dfix3 DEFECT-2 boundary: "move the draft to protocol format" is NOT walled (the model runs)
+```
+
+Independent RED reproduction (worktree policy untouched): the cycle-2 policy
+extracted via `git show df2952f6:config/drafting/review-write-wall.yaml` ->
+/tmp/yaml_c2.yaml; each string run against BOTH policies (throwaway probe,
+deleted after the run):
+
+```
+D1 c2=FREE head=WALL RETARGET_NOT_ON_THIS_SURFACE  retarget this review to the different protocolId
+D1 c2=FREE head=WALL RETARGET_NOT_ON_THIS_SURFACE  retarget this review to the protocol id PRT-4iaey2
+D1 c2=FREE head=WALL RETARGET_NOT_ON_THIS_SURFACE  reassign this review to protocol PRT-4iaey2
+D1 c2=FREE head=WALL RETARGET_NOT_ON_THIS_SURFACE  retarget this review to "PRT-4iaey2"
+D1 c2=FREE head=WALL RETARGET_NOT_ON_THIS_SURFACE  target this review to protocol PRT-4iaey2 instead
+D2 c2=WALL RETARGET_NOT_ON_THIS_SURFACE head=FREE  move the draft to protocol format
+D2 c2=WALL RETARGET_NOT_ON_THIS_SURFACE head=FREE  move the draft to protocol steps
+D2 c2=WALL RETARGET_NOT_ON_THIS_SURFACE head=FREE  route the draft to protocol guidance
+D2 c2=WALL RETARGET_NOT_ON_THIS_SURFACE head=FREE  point the draft at protocol examples
+```
+
+## 21. GREEN battery (verbatim vitest blocks, spliced from raws)
+
+Targeted server suites (reviewWriteWall + AgentOrchestrator.reviewWriteWall +
+AgentOrchestrator.honestRefusal):
+```
+ Test Files  3 passed (3)
+      Tests  64 passed (64)
+```
+App pair (ReviewAiPanel.writeWall + ReviewAiPanel):
+```
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+```
+Server tsc: `npx --no-install tsc --noEmit` -> exit 0, zero output.
+App tsc: 23 `error TS` (the standing baseline); `grep -c writeWall` on the
+same output -> 0. No app file is in the cycle-3 diff, so the app base-vs-head
+tsc set-diff is EMPTY by construction.
+Full server `src/ai` suite at HEAD:
+```
+ Test Files  10 failed | 87 passed (97)
+      Tests  18 failed | 792 passed (810)
+     Errors  2 errors
+```
+The 10 failing files are bypass / AgentOrchestratorForwarding / golden /
+goldenWithSeeds / tubeGate / attachedProtocol / ChatbotCompileDeckSlot /
+chatbotCompile.e2e / createRecordIntent / submitSuggestionTool.tubeSchema —
+the SAME list the c2 review recorded (zero-new; none is reviewWriteWall*).
+The +8 passing tests vs the c2 review's 784 are exactly the 8 new cycle-3
+pins (5 interpreter + 3 orchestrator). `Errors 2 errors` is the pre-existing
+src/ai unhandled-error debt, unchanged base->head.
+
+## 22. Full probe sweep (cycle-3 head; per-string)
+
+Captured by a throwaway vitest probe file (written, run, deleted; `git
+status` clean afterwards — no probe file is committed). 158 arms, 94
+expected-WALL, 64 expected-FREE, 0 mismatches:
+`SWEEP_TOTAL 158 WALL 94 FREE 64 MISMATCH 0`, plus a 3-arm residual addendum
+`ADDENDUM_TOTAL 3 MISMATCH 0` (rows in §23 R6/R2). Every previously-WALL
+string STILL walls (zero regressions) and every benign arm stays FREE.
+
+### C.1 — reviewer c2 §C.1 WALL arms (re-run: every previously-WALL string STILL walls)
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `Retarget this review to protocol PRT-4iaey2 instead.` |
+| WALL | WALL | `RETARGET THIS REVIEW TO PROTOCOL PRT-4IAEY2 INSTEAD.` |
+| WALL | WALL | `Please retarget this review to protocol PRT-4iaey2.` |
+| WALL | WALL | `repoint this review to PRT-4iaey2` |
+| WALL | WALL | `switch this review to protocol PRT-4iaey2` |
+| WALL | WALL | `re-aim the review at protocol PRT-4iaey2` |
+| WALL | WALL | `redirect the review to protocol PRT-4iaey2` |
+| WALL | WALL | `can you retarget this review to protocol PRT-4iaey2?` |
+| WALL | WALL | `retarget this review to PRT-4iaey2` |
+| WALL | WALL | `switch over to protocol PRT-4iaey2` |
+
+### C.2 — reviewer c2 §C.2 FREE arms (re-run)
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `what does this protocol say?` |
+| FREE | FREE | `change step 3 to match the vendor text on page 2` |
+| FREE | FREE | `switch the draft to protocol-style steps` |
+| FREE | FREE | `Apply the change to protocol PRT-4iaey2 instead of this draft.` |
+| FREE | FREE | `retarget the draft step label so it matches the protocol wording` |
+| FREE | FREE | `switch the deck view to the freeform bench` |
+| FREE | FREE | `why can you not retarget the review to protocol PRT-4iaey2?` |
+
+### D1 — reviewer c2 §C.3 D1 arms
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `Retarget this review to a different protocolId.` |
+| WALL | WALL | `Retarget the review to a different protocolId instead.` |
+| WALL | WALL | `retarget this review to another protocolId` |
+| WALL | WALL | `retarget this review to different protocolIds` |
+| WALL | WALL | `switch this review to a different protocolId` |
+| WALL | WALL | `repoint the review to a different protocolId` |
+| WALL | WALL | `redirect the review to a different protocolId` |
+
+### D2 — reviewer c2 §C.3 D2 arms
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `point this review at PRT-4iaey2` |
+| WALL | WALL | `aim this review at protocol PRT-4iaey2` |
+| WALL | WALL | `move this review to protocol PRT-4iaey2` |
+| WALL | WALL | `route this review to protocol PRT-4iaey2` |
+| WALL | WALL | `send this review to protocol PRT-4iaey2` |
+
+### D3 — reviewer c2 §C.3 D3 arms
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `retarget this review onto protocol PRT-4iaey2` |
+| WALL | WALL | `retarget the review towards protocol PRT-4iaey2` |
+| WALL | WALL | `retarget this review to use protocol PRT-4iaey2` |
+| WALL | WALL | `switch the review to the PRT-4iaey2 protocol` |
+
+### D4 — reviewer c2 §C.3 D4 arms
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `switch to the protocol tab` |
+| FREE | FREE | `switch the view to the protocol tab` |
+
+### NEW — reviewer c2 §C.3 NEW arms (previously-WALL: zero regressions)
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `Retarget this review to a different protocolId` |
+| WALL | WALL | `RETARGET THIS REVIEW TO A DIFFERENT PROTOCOLID.` |
+| WALL | WALL | `retarget this review to a different protocolids` |
+| WALL | WALL | `retarget this review to a different protocolID` |
+| WALL | WALL | `retarget this review now to protocol PRT-4iaey2` |
+| WALL | WALL | `please retarget this review to a different protocolId` |
+| WALL | WALL | `can you please retarget this review to a different protocolId?` |
+| WALL | WALL | `retarget this review to the protocol PRT-4iaey2` |
+| WALL | WALL | `retarget this review onto a different protocolId` |
+
+### D1LEAK — c2 DEFECT-1 leak strings (measured FREE at c2 head -> WALL at c3 head)
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `retarget this review to the different protocolId` |
+| WALL | WALL | `retarget this review to the protocol id PRT-4iaey2` |
+| WALL | WALL | `reassign this review to protocol PRT-4iaey2` |
+| WALL | WALL | `retarget this review to "PRT-4iaey2"` |
+| WALL | WALL | `target this review to protocol PRT-4iaey2 instead` |
+
+### D2OB — c2 DEFECT-2 over-block strings (measured WALL at c2 head -> FREE at c3 head)
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `move the draft to protocol format` |
+| FREE | FREE | `move the draft to protocol steps` |
+| FREE | FREE | `route the draft to protocol guidance` |
+| FREE | FREE | `point the draft at protocol examples` |
+
+### OVER — reviewer c2 §C.3 OVER arms
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `compare this draft to protocol PRT-4iaey2` |
+| FREE | FREE | `switch the review tab to the protocol view` |
+| FREE | FREE | `send this to the protocol team for review` |
+| FREE | FREE | `open the protocol document on page 2` |
+
+### PIN — cycle-1/cycle-2 committed pins (no-regression re-run)
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `Retarget this review to protocol PRT-4iaey2 instead` |
+| WALL | WALL | `repoint the review to protocol PRT-4iaey2` |
+| WALL | WALL | `re-aim this review at protocol PRT-4iaey2` |
+| WALL | WALL | `reaim the review at protocol PRT-4iaey2` |
+| WALL | WALL | `repoint the review to a different protocol` |
+| WALL | WALL | `switch the review to another protocol` |
+| WALL | WALL | `retarget to protocol id PRT-4iaey2` |
+| WALL | WALL | `retarget the protocolId to PRT-4iaey2` |
+| WALL | WALL | `please switch this review to protocol PRT-4iaey2` |
+| WALL | WALL | `Retarget the review to a different protocolId instead.` |
+| WALL | WALL | `Retarget this review to a different protocolId instead` |
+| WALL | WALL | `Retarget this review to Another ProtocolId` |
+| WALL | WALL | `retarget this review to a different protocolIds` |
+| WALL | WALL | `re-aim this review at a different protocolId` |
+| WALL | WALL | `retarget this review at another protocolId` |
+| WALL | WALL | `pointed the review at protocol PRT-4iaey2` |
+| WALL | WALL | `aiming the review at protocol PRT-4iaey2` |
+| WALL | WALL | `moved this review to protocol PRT-4iaey2` |
+| WALL | WALL | `routing the review to protocol PRT-4iaey2` |
+| WALL | WALL | `sent the review to protocol PRT-4iaey2` |
+| WALL | WALL | `move this review to a different protocolId` |
+| WALL | WALL | `send this review to another protocolId` |
+| WALL | WALL | `point this review at a different protocolId` |
+| WALL | WALL | `retarget this review toward protocol PRT-4iaey2` |
+| WALL | WALL | `repoint the review onto a different protocolId` |
+| WALL | WALL | `redirect the review towards a different protocolId` |
+| WALL | WALL | `retarget this review onto PRT-4iaey2` |
+| WALL | WALL | `retarget this review towards PRT-4iaey2` |
+| WALL | WALL | `switch the review to the PRT-4iaey2 protocolId` |
+| WALL | WALL | `switch this review into protocol PRT-4iaey2` |
+| WALL | WALL | `re-aim this review at the protocol PRT-4iaey2` |
+| WALL | WALL | `switch this review to the protocol CAN-w29-gate` |
+| WALL | WALL | `can you move this review to protocol PRT-4iaey2?` |
+| WALL | WALL | `please point the review at protocol PRT-4iaey2` |
+| WALL | WALL | `switch to the PRT-4iaey2 protocol tab` |
+| WALL | WALL | `switch the view to the PRT-4iaey2 protocol tab` |
+| WALL | WALL | `switch the review to another protocol tab` |
+| FREE | FREE | `retarget the review so it points to protocol PRT-4iaey2` |
+| FREE | FREE | `switch the step wording so it reads like the vendor protocol document` |
+| FREE | FREE | `retarget the note that references the protocol document on page 2` |
+| FREE | FREE | `what does the protocol say about the wash step?` |
+| FREE | FREE | `rename the draft so it reads like a protocol` |
+| FREE | FREE | `does this draft follow the vendor protocol?` |
+| FREE | FREE | `reword step 3’s label for our bench` |
+| FREE | FREE | `why can you not retarget the review to a different protocolId?` |
+| FREE | FREE | `switch the panel to the protocol tab` |
+| FREE | FREE | `move the view to the protocol tab` |
+| FREE | FREE | `send the panel to the protocol tab` |
+| FREE | FREE | `switch over to the protocol tab` |
+| FREE | FREE | `switch to the protocol tab and show the steps` |
+| FREE | FREE | `move the incubation step to the end of the draft` |
+| FREE | FREE | `move step 3 so it reads like the vendor text` |
+| FREE | FREE | `send the wash step notes to the draft comments` |
+| FREE | FREE | `point out the step that references the pdf` |
+| FREE | FREE | `aim the draft label at the bench wording` |
+| FREE | FREE | `route the draft step label so it matches the vendor text` |
+| FREE | FREE | `move the review so it points to protocol PRT-4iaey2` |
+| FREE | FREE | `retarget the review so it points to a different protocolId` |
+| FREE | FREE | `switch to the protocol view` |
+| FREE | FREE | `send the review to the vendor protocol document` |
+| FREE | FREE | `what does the PRT-4iaey2 protocol say?` |
+| FREE | FREE | `retarget this review to the protocol` |
+| FREE | FREE | `switch this review to the protocol` |
+| FREE | FREE | `retarget this review for protocol PRT-4iaey2` |
+
+### C3W — cycle-3 new WALL arms
+| expected | actual | ask |
+|---|---|---|
+| WALL | WALL | `reassign the review to a different protocolId` |
+| WALL | WALL | `reassigned this review to protocol PRT-4iaey2` |
+| WALL | WALL | `reassigning the review to the protocol PRT-4iaey2` |
+| WALL | WALL | `target the review at protocol PRT-4iaey2` |
+| WALL | WALL | `targeted this review to the different protocolId` |
+| WALL | WALL | `can you reassign this review to protocol PRT-4iaey2?` |
+| WALL | WALL | `please target this review to the different protocolId` |
+| WALL | WALL | `retarget this review at the different protocolId` |
+| WALL | WALL | `move this review to the protocol id PRT-4iaey2` |
+| WALL | WALL | `switch this review to "PRT-4iaey2"` |
+| WALL | WALL | `point the review at "PRT-4iaey2"` |
+| WALL | WALL | `route the draft to protocol PRT-4iaey2` |
+| WALL | WALL | `point the draft at protocol PRT-4iaey2` |
+| WALL | WALL | `retarget this review onto the protocol PRT-4iaey2` |
+
+### C3F — cycle-3 new FREE arms
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `send the draft to protocol guidance` |
+| FREE | FREE | `switch the draft to protocol examples` |
+| FREE | FREE | `reassign the draft to protocol format` |
+| FREE | FREE | `target the draft at protocol guidance` |
+| FREE | FREE | `move the draft to the protocol format` |
+| FREE | FREE | `point the draft at the protocol examples` |
+| FREE | FREE | `route the draft to protocol name` |
+
+### RES — cycle-3 residual pins (visible, never silent)
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `retarget this review to protocol` |
+| FREE | FREE | `reassign this review at protocol` |
+| FREE | FREE | `move the draft to protocol` |
+| FREE | FREE | `point the draft at protocol` |
+| FREE | FREE | `retarget this review onto protocol` |
+| FREE | FREE | `retarget this review towards protocol` |
+| FREE | FREE | `retarget this review to the protocol id` |
+| FREE | FREE | `retarget this review towards the protocol PRT-4iaey2` |
+| FREE | FREE | `retarget this review toward the protocol PRT-4iaey2` |
+| FREE | FREE | `retarget this review to the different protocol` |
+| FREE | FREE | `retarget this review to protocol PRT` |
+| FREE | FREE | `retarget this review to "CAN-w29-gate"` |
+| FREE | FREE | `retarget this review to the "PRT-4iaey2" protocol` |
+| WALL | WALL | `what is the target protocolId?` |
+| WALL | WALL | `what is the target protocol id?` |
+| WALL | WALL | `move the draft to "PRT-4iaey2"` |
+
+### addendum (residual rows re-run after the final test-file edit)
+| expected | actual | ask |
+|---|---|---|
+| FREE | FREE | `retarget this review to the protocol ids` |
+| FREE | FREE | `reassign this review for protocol PRT-4iaey2` |
+| FREE | FREE | `target this review for protocol PRT-4iaey2` |
+
+## 23. Residual-risk table (cycle 3 — AUTHORITATIVE; every row pinned as a visible test)
+
+| # | residual | direction | pinned as | why accepted |
+|---|---|---|---|---|
+| R1 | `retarget this review to the protocol` / `switch this review to the protocol` (bare article frame, NO id) | LEAK | FREE test 'accepted-residual boundary' (cycle 2) | the direct price of c2's DEFECT-4 fix; no record named, no focus can fire (weakest attack class). |
+| R2 | `retarget/reassign/target this review for protocol PRT-4iaey2` | LEAK | FREE tests (cycle 2 + g2dfix3 residual test) | `for` is not a declared retarget-object preposition; adding it risks the DEFECT-2 over-block class. |
+| R3 | `switch to the PRT-4iaey2 protocol tab` / `switch the view to the PRT-4iaey2 protocol tab` / `switch the review to another protocol tab` | OVER-BLOCK | WALL test (cycle 2) | DATA cannot tell "open that protocol's tab" from "retarget to that protocol" once a literal id sits in the article frame (same class the file already accepts, W2-11 D3 honest arm). |
+| R4 | `retarget this review towards/toward the protocol PRT-4iaey2` (article frame on the towards/toward prepositions) | LEAK | NOW PINNED FREE in 'g2dfix3 accepted-residual boundary' (was "not pinned" at c2 — corrected) | the id-suffixed/article class was declared for `to`/`at`/`onto` only; `onto the protocol <id>` fires incidentally via the `to the protocol` substring. Compound variant, cheap to add if a gate ask shows it. |
+| R5 | `switch this review into protocol PRT-4iaey2` | covered, not residual | pinned WALL | fires via the `to protocol` noun matching INSIDE `into protocol` (substring semantics). Documented so nobody reads it as an intentional `into` frame. |
+| R6 | bare frames that name NO target: `retarget this review to protocol`, `reassign this review at protocol`, `move the draft to protocol`, `point the draft at protocol`, `retarget this review onto/towards protocol`, `retarget this review to the protocol id(s)` (no id token) | LEAK | pinned FREE in 'g2dfix3 accepted-residual boundary' | the deliberate price of the DEFECT-2 narrowing; no record is named and no focus action can fire — the weakest form of the attack. |
+| R7 | quoted-id scope: `retarget this review to "CAN-w29-gate"`, `retarget this review to the "PRT-4iaey2" protocol` (reversed order with a quote) | LEAK | pinned FREE in 'g2dfix3 accepted-residual boundary' | the quoted nouns mirror the existing PRT-scope of `to prt-`/`at prt-`; the unquoted CAN-/reversed-quoted gaps already existed at c2. Extending quoted non-PRT ids was not requested and would widen the wall. |
+| R8 | `retarget this review to protocol PRT` (id token without the hyphen) | LEAK | pinned FREE in 'g2dfix3 accepted-residual boundary' | the narrowed nouns demand a hyphenated record-id token (`[a-z]+-`), the same shape as the committed c2 article nouns. |
+| R9 | `what is the target protocolId?` / `what is the target protocol id?` | OVER-BLOCK | pinned WALL in 'g2dfix3 accepted-residual boundary' | `target` as a verb + the bare `protocolid` noun at gap 0: a question ABOUT the current target id is adjacency-governed. Same ambiguity class as R3 / the W2-11 D3 honest arm. Exempting it would mean editing the SHARED blockerWords/negation governance — a governance change, out of cycle scope. |
+| R10 | `move the draft to "PRT-4iaey2"` | OVER-BLOCK | pinned WALL in 'g2dfix3 accepted-residual boundary' | a quoted concrete id as the object of a new verb reads as a retarget target; the id IS named, so the refusal is defensible. |
+
+## 24. Assumptions disclosed (cycle 3)
+
+1. The DEFECT-2 narrowing took the id-requiring-lookahead route (same class
+   as c2's article-noun fix) because the interpreter has no per-verb noun
+   binding — verbs and nouns are two flat lists per wall.
+2. The lookahead `(?=\s+[a-z]+-)` demands a hyphenated record-id token;
+   `protocol PRT` (no hyphen) is out of scope (residual R8). The shape is
+   byte-identical to the committed c2 article nouns for consistency.
+3. Quoted-id nouns are PRT-scoped (`to "prt-`, `at "prt-`), mirroring
+   `to prt-`/`at prt-`. Quoted non-PRT ids stay FREE (residual R7).
+4. Adding `target` as a verb creates the R9 over-block class (questions about
+   the current target id). It is pinned VISIBLE rather than exempted, because
+   exemption would require changing the SHARED `matching.leadingVerb.blockerWords`
+   / `negationTokens` governance — prohibited this cycle.
+5. The five removed noun lines are each replaced in place by a strictly
+   narrower form; no pinned WALL arm depends on a removed spelling (all
+   re-run green, §22 PIN/NEW/C.1 groups).
+6. No YAML reload was performed for the running stack (policy is loaded per
+   call, so tests are correct without one). Making the running gate stack
+   serve the new YAML is the ORCHESTRATOR's restart step.
+7. Pre-existing debt untouched and proven identical base->head: 10 failing
+   server src/ai files / 18 tests, `Errors 2 errors`, 23 app tsc errors.
+8. No app file was modified in cycle 3; the app batteries were re-run anyway
+   to prove the narrowed DATA did not disturb the client pins.
+
+## 25. Gate re-shoot guidance for the orchestrator (cycle 3)
+
+After the stack restart: the five c2 leak strings (`retarget this review to
+the different protocolId`, `retarget this review to the protocol id
+PRT-4iaey2`, `reassign this review to protocol PRT-4iaey2`, `retarget this
+review to "PRT-4iaey2"`, `target this review to protocol PRT-4iaey2
+instead`) must show the red `review-ai-refusal` banner with the
+RETARGET_NOT_ON_THIS_SURFACE wording, no Apply/Accept card, zero writes.
+`move the draft to protocol format` / `route the draft to protocol guidance`
+/ `point the draft at protocol examples` must NOT show that banner.
+`what is the target protocolId?` WILL show the banner — that is residual R9
+firing by design, expected, not a defect.
+
+W2-9-G2DFIX3 DONE 5b2eb3d0
