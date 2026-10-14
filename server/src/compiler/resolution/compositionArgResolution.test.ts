@@ -42,6 +42,7 @@ import { resolveScientistIntentNouns } from './resolutionEngine.js';
 import { createSpineAdapter } from './adapters.js';
 import { buildStrategyRegistry } from './strategies.js';
 import type { EngineDeps } from './types.js';
+import type { ScientistIntent, ScientistIntentActionValue } from '../scientistIntent/types.js';
 
 // ---------------------------------------------------------------------------
 // Seeds: 3 of the 4 mixture components exist in the store; 'FBS' is
@@ -68,6 +69,11 @@ const SEED_RECORDS = [
     recordId: 'MAT-dmem-1',
     schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
     payload: { kind: 'material', name: 'DMEM', title: 'DMEM', synonyms: [] },
+  },
+  {
+    recordId: 'MAT-fbs-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+    payload: { kind: 'material', name: 'FBS', title: 'FBS', synonyms: [] },
   },
   {
     recordId: 'MAT-hepg2-1',
@@ -115,8 +121,8 @@ const COMPONENTS = [
   { material: 'HepG2 cells', role: 'cells', count: 10000, counterDensity: { value: 200, unit: 'cells/uL' } },
 ];
 
-/** Action-level declared composition (Stage B wire form). 'FBS' is the
- *  UNSEEDED component the bar must name. */
+/** Action-level declared composition (Stage B wire form). 'Equine Serum' is
+ *  the UNSEEDED component the bar must name (shares no token with any seed). */
 const ACTION_LEVEL_WITH_UNSEEDED = `intentId: comp4-t1
 actions:
   - action: add_material
@@ -126,7 +132,7 @@ actions:
     composition:
       - { material: "trypsin-EDTA", role: solvent, fraction: "50%" }
       - { material: "DMEM", role: buffer_component, fraction: "50%" }
-      - { material: "FBS", role: additive, fraction: "10%" }
+      - { material: "Equine Serum", role: additive, fraction: "10%" }
       - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
 
@@ -164,7 +170,7 @@ describe('comp4.t1-declared-composition-bar', () => {
     const item = compositionItems[0]!;
     // The 422 names the COMPONENT: label is the unresolvable component name,
     // NOT the argument name.
-    expect(item.label).toBe('FBS');
+    expect(item.label).toBe('Equine Serum');
     expect(item.reason).toBe('unknown-noun');
     expect(item.actionLocation).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
 
@@ -172,7 +178,7 @@ describe('comp4.t1-declared-composition-bar', () => {
     const bar = compiled.diagnostics.find((d) => d.code === 'unresolved_arguments');
     expect(bar).toBeDefined();
     const carried = (bar!.details?.['clarifications'] as Array<Record<string, unknown>>) ?? [];
-    expect(carried.some((c) => c['label'] === 'FBS')).toBe(true);
+    expect(carried.some((c) => c['label'] === 'Equine Serum')).toBe(true);
 
     // No partial mint: the cascade barrier skipped every downstream pass.
     expect(compiled.terminalArtifacts.events).toEqual([]);
@@ -197,8 +203,8 @@ describe('comp4.t2-declared-composition-binds', () => {
     const compositionBindings = outcome.bindings.filter((b) => b.argument === 'composition');
     expect(compositionBindings.map((b) => b.label).sort()).toEqual([
       'DMEM',
-      'HepG2 cells',
       'FBS',
+      'HepG2 cells',
       'trypsin-EDTA',
     ]);
     expect(outcome.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
@@ -338,44 +344,56 @@ describe('comp4.t6-cardinality-follows-declared-data', () => {
     const dir = tmpTriplet('comp4-vocab-cardinality-flip');
     const dataPath = join(dir, 'scientist-intent-vocabulary.yaml');
     const text = readFileSync(dataPath, 'utf-8');
-    // Flip: drop the two declared multiplicity lines from the composition arg
+    // Flip: drop the two declared multiplicity lines from BOTH composition args
     // (declaration order: name, kind, required, domain, cardinality,
-    // itemNounField).
+    // itemNounField). The meta-schema + lint copies stay SHIPPED — the flipped
+    // doc is data-only and stays valid (lint P5 passes: no cardinality declared).
     const flipped = text.replace(
-      /( {6}- name: composition\n(?: {8}[^\n]*\n){4}) {8}cardinality: many\n {8}itemNounField: material\n/,
+      /( {6}- name: composition\n(?: {8}[^\n]*\n){3}) {8}cardinality: many\n {8}itemNounField: material\n/g,
       '$1',
     );
     expect(flipped).not.toBe(text);
     expect(flipped).not.toMatch(/cardinality: many/);
     writeFileSync(dataPath, flipped);
-    // Copy the meta-schema WITHOUT the new properties so the flipped doc stays
-    // structurally valid (the flip is data-only, exactly like SPINE-8's flip).
-    const schemaPath = join(dir, 'scientist-intent-vocabulary.schema.yaml');
-    const schemaText = readFileSync(schemaPath, 'utf-8')
-      .replace(/^ {14}cardinality:\n(?: {16}[^\n]*\n)+/m, '')
-      .replace(/^ {14}itemNounField:\n(?: {16}[^\n]*\n)+/m, '');
-    expect(schemaText).not.toMatch(/cardinality:/);
-    writeFileSync(schemaPath, schemaText);
-    // Copy the lint WITHOUT the new P5 rule (the flipped doc lacks
-    // itemNounField; P5 would otherwise fire and muddy the leg).
-    const lintPath = join(dir, 'scientist-intent-vocabulary.lint.yaml');
-    const lintText = readFileSync(lintPath, 'utf-8');
-    const lintIdx = lintText.indexOf('vocab-many-args-declare-item-noun-field');
-    expect(lintIdx).toBeGreaterThan(-1);
-    const ruleStart = lintText.lastIndexOf('- id:', lintIdx);
-    const ruleEnd = lintText.indexOf('\n\n', lintIdx);
-    writeFileSync(lintPath, lintText.slice(0, ruleStart - 2) + lintText.slice(ruleEnd));
 
-    const vocab = loadScientistIntentVocabulary({ path: dataPath });
-    const compositionArg = vocab.argContracts('add_material').find((a) => a.name === 'composition');
+    const flippedVocab = loadScientistIntentVocabulary({ path: dataPath });
+    const compositionArg = flippedVocab.argContracts('add_material').find((a) => a.name === 'composition');
     expect(compositionArg).toBeDefined();
     expect(Object.keys(compositionArg!)).not.toContain('cardinality');
 
-    const intent = parseScientistIntent(ACTION_LEVEL_WITH_UNSEEDED, { vocabulary: vocab });
+    // ONE hand-built intent (resolveNounsPass.test.ts intentOf idiom) run
+    // through the SAME engine door under BOTH vocabularies — the only variable
+    // is the DECLARED data.
+    const intent: ScientistIntent = {
+      kind: 'scientist-intent',
+      version: '0.1.0',
+      intentId: 'comp4-t6',
+      actions: [{
+        action: 'add_material',
+        labware: 'plate',
+        composition: [
+          { material: 'trypsin-EDTA', role: 'solvent' },
+          { material: 'DMEM', role: 'buffer_component' },
+          { material: 'Equine Serum', role: 'additive' },
+          { material: 'HepG2 cells', role: 'cells' },
+        ],
+      } as unknown as ScientistIntentActionValue],
+      unresolved: [],
+    };
     const deps = await engineDepsWithStoreSpine();
-    const outcome = await resolveScientistIntentNouns(intent, vocab, deps);
-    // Without the declared cardinality, the door treats the array as it treats
-    // every non-string today: SKIPPED. Zero composition requests/clarifications.
+
+    // SHIPPED declaration: the door iterates the array — one request per entry
+    // (3 resolvable bind, the unseeded one clarifies).
+    const shipped = await resolveScientistIntentNouns(intent, defaultScientistIntentVocabulary(), deps);
+    expect(shipped.bindings.filter((b) => b.argument === 'composition').map((b) => b.label).sort())
+      .toEqual(['DMEM', 'HepG2 cells', 'trypsin-EDTA']);
+    expect(shipped.clarifications.filter((c) => c.actionLocation?.argument === 'composition').map((c) => c.label))
+      .toEqual(['Equine Serum']);
+
+    // FLIPPED copy (cardinality/itemNounField removed): the SAME intent + SAME
+    // engine treats the array like every non-string today — SKIPPED. Zero
+    // composition requests. The behavior follows the DECLARED data, not a TS table.
+    const outcome = await resolveScientistIntentNouns(intent, flippedVocab, deps);
     expect(outcome.bindings.filter((b) => b.argument === 'composition')).toHaveLength(0);
     expect(outcome.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
   });
@@ -467,12 +485,12 @@ actions:
     targetWells: [A1]
     composition:
       - { material: "trypsin-EDTA", role: solvent }
-      - { material: "FBS", role: additive }
+      - { material: "Equine Serum", role: additive }
 `);
     expect(compiled.outcome).toBe('needs-clarification');
     const items = compiled.clarifications.filter((c) => c.actionLocation?.argument === 'composition');
     expect(items).toHaveLength(1);
-    expect(items[0]!.label).toBe('FBS');
+    expect(items[0]!.label).toBe('Equine Serum');
     expect(items[0]!.actionLocation).toEqual({ actionIndex: 0, action: 'seed', argument: 'composition' });
     expect(compiled.terminalArtifacts.events).toEqual([]);
     expect(store.create).not.toHaveBeenCalled();

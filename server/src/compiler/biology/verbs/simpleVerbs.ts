@@ -64,13 +64,26 @@ export const seedExpander: BiologyVerbExpander = {
     const material = (params.cell_ref || params.material_ref || params.cells) as string;
     const volume = params.volume as string | undefined;
     const labwareId = params.labware_id as string | undefined;
-    
+    // SHORTHAND-COMP-4 Stage B (OQ2 ruling): the declared composition arg is
+    // CONSUMED, not silently dropped (declared-reachability doctrine) — the
+    // SAME helper the add_material expander uses, no new name knowledge.
+    const composition = compositionSnapshotFromParams(params.composition, params.material);
+
     return [{
       eventId: makeEventId('seed'),
       event_type: 'add_material',
       details: {
         material,
         ...(volume ? { volume } : {}),
+        ...(composition
+          ? {
+              composition_snapshot: composition.snapshot,
+              formulation_kind: composition.formulationKind,
+              material_ref: composition.materialRef,
+              ...(composition.count !== undefined ? { count: composition.count } : {}),
+              ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+            }
+          : {}),
       },
       labwareId,
     }];

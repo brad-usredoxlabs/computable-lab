@@ -648,6 +648,22 @@ function toCandidateEvent(
     }
   }
 
+  // COMP-4 Stage B: a DECLARED `cardinality: many` argument (DATA:
+  // argContracts — membership from the vocabulary, no key literal here) rides
+  // onto the candidate event under its declared name. The chatbot chain hands
+  // the WHOLE candidate to the verb expander as `params`
+  // (ChatbotCompilePasses.ts:1091), so the expander's existing
+  // compositionSnapshotFromParams(params.composition, …) consumes the declared
+  // action-level form with NO expander-side name knowledge. The params
+  // passthrough above wins when both forms are present (Part I byte-honesty).
+  for (const contract of vocabulary.argContracts(verb)) {
+    if (contract.cardinality !== 'many') continue;
+    const value = action[contract.name];
+    if (Array.isArray(value) && value.length > 0 && event[contract.name] === undefined) {
+      event[contract.name] = value;
+    }
+  }
+
   // ── COMP-1 Task 16 (Part III D4): declared-argument reachability ──
   // A declared value the lowering chain CANNOT carry to any emitted event bars
   // with a structured producer clarification (same envelope as the well-label
@@ -712,7 +728,18 @@ function toCandidateEvent(
     const paramsRecord = action.params && typeof action.params === 'object' && !Array.isArray(action.params)
       ? (action.params as Record<string, unknown>)
       : undefined;
-    const declaresComponents = Array.isArray(paramsRecord?.composition) && (paramsRecord!.composition as unknown[]).length > 0;
+    const declaresComponents =
+      (Array.isArray(paramsRecord?.composition) && (paramsRecord!.composition as unknown[]).length > 0)
+      // COMP-4 Stage B: the exemption ALSO honors a DECLARED
+      // action-level many-arg (vocabulary DATA: cardinality many — the same
+      // contract the resolve_nouns door iterates). A label+declared-arg
+      // mixture must NOT double-bar.
+      || vocabulary.argContracts(verb).some(
+        (contract) =>
+          contract.cardinality === 'many'
+          && Array.isArray(action[contract.name])
+          && (action[contract.name] as unknown[]).length > 0,
+      );
     if (declaresMaterial && typeof materialValue === 'string' && materialValue.trim() && !declaresComponents) {
       // fix1/D1: the cue list is structured DATA — each token declares how it
       // may fire (substring for the spaced cues; ratio-adjacency and/or
