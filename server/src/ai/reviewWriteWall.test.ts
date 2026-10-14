@@ -550,6 +550,295 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════
+  // W2-9-G2DFIX CYCLE-4 (advc-W29-g2dfix-c3-l2t0650, VERDICT: fix).
+  // All pins below are the reviewer's OWN c3 probe strings (verbatim) plus the
+  // benign arms the reviewer measured FREE and mandated stay FREE.
+  // DATA-only repair: the interpreter stays untouched.
+  //
+  // DEFECT 1 (major): the retarget-verb SYNONYMS `forward` / `transfer` /
+  // `assign` are absent from the DATA verbs list (yaml verbs block), so
+  // neither governance trigger can fire even though the noun matches — the
+  // mandate's OWN example 'forward this review to protocol PRT-4iaey2' reached
+  // the model with a CONCRETE record id (review §D N6/N16/N45/N46). Closed in
+  // DATA by adding the verb families; the verbs only wall when a declared
+  // retarget noun follows them, exactly like the existing families.
+  it('g2dfix4 DEFECT-1: the retarget verb synonyms (review §D N6/N16/N45/N46) fire RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // reviewer §D verbatim (all measured FREE(null) at the cycle-3 head)
+      'forward this review to protocol PRT-4iaey2',
+      'transfer this review to protocol PRT-4iaey2',
+      'assign this review to protocol PRT-4iaey2',
+      'forward this review to a different protocol',
+      // same families: past/progressive forms, the article frame, the
+      // qualifier class, question dress, the quoted-protocol frame
+      'forwarded this review to the protocol PRT-4iaey2',
+      'forwarding this review to another protocolId',
+      'transferred this review to protocol PRT-4iaey2',
+      'assigns this review to a different protocolId',
+      'forward this review to the protocol PRT-4iaey2',
+      'can you forward this review to protocol PRT-4iaey2?',
+      'please transfer this review to a different protocolId',
+      'forward this review to "protocol PRT-4iaey2"',
+      // the new verbs carry every already-declared retarget frame: the spaced
+      // article id, the `onto`/`towards` frames, the `at` frame, the qualifier
+      // class, the nav-adjacent qualifier frame, the `any other` spelling
+      'forward this review to the protocol id PRT-4iaey2',
+      'assign this review to the protocol id PRT-4iaey2',
+      'transfer this review onto protocol PRT-4iaey2',
+      'forward this review towards a different protocolId',
+      'assign this review at protocol PRT-4iaey2',
+      'transfer this review to a different protocol',
+      'assign this review to a different protocol',
+      'forward this review to another protocol tab',
+      'assign this review to the protocol PRT-4iaey2',
+      'forward this review to any other protocol PRT-4iaey2',
+      'assign the review at a different protocolId',
+      'can you assign this review to a different protocolId?',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-1 verb-synonym leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT 1 boundary (the reviewer's own benign arms, review §D over-block
+  // hunt): the new verbs must only wall when a declared retarget noun follows.
+  // 'forward the note to the review tab', 'transfer the sample to the
+  // incubator', 'assign this step to bench 2' MUST stay FREE.
+  it('g2dfix4 DEFECT-1 boundary: the new verbs with non-retarget objects stay FREE', () => {
+    for (const ask of [
+      // reviewer §D over-block hunt verbatim
+      'forward the note to the review tab',
+      'transfer the sample to the incubator',
+      'assign this step to bench 2',
+      'what is the current target id?',
+      'retarget the draft step label so it matches the vendor protocol',
+      // same class: the new verbs with a protocol CONTEXT noun that is not a
+      // retarget referent, the bare no-id frame (R6 class), the nav frame (R1
+      // class), the equipment-verb ask, and the negated question (exemption)
+      'forward the note to the protocol team',
+      'transfer the draft to protocol format',
+      'assign the wash step to bench 2',
+      'transfer 10 uL of DMEM from reservoir A1 to well B2',
+      'assign this review to the protocol tab',
+      'forward this review to the protocol',
+      // the negation exemption (matching.negationTokens) is unchanged DATA
+      // governance: a question ABOUT the wall stays exempt for the new verbs
+      // exactly as it already does for the cycle-2/3 verbs
+      'why can you not forward this review to protocol PRT-4iaey2?',
+      'why can you not reassign this review to protocol PRT-4iaey2?',
+      'why can you not retarget this review to protocol PRT-4iaey2?',
+      'transfer this review to protocol',
+      'forward the review to protocol guidance',
+      'forward this review to "protocol"',
+      // the interposed-qualifier noun demands the record-id token: the no-id
+      // spelling and the non-retarget verbs that merely MENTION `other
+      // protocol <id>` stay FREE (no new over-block class)
+      'forward this review to any other protocol',
+      'compare this draft to some other protocol PRT-4iaey2',
+      'rename the draft so it reads like some other protocol PRT-4iaey2',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `DEFECT-1 new-verb over-block: ${ask}`).toBeNull();
+    }
+  });
+
+  // DEFECT 2 (minor): the `at`-frame qualifier is asymmetric with the `to`-
+  // frame — 'retarget this review to a different protocol' WALLed while the
+  // `at` sibling leaked (review §D N27). Closed by declaring the bare `at`
+  // qualifier nouns, mirroring the `to` forms' structure exactly.
+  it('g2dfix4 DEFECT-2: the at-frame qualifier is symmetric with the to-frame (review §D N27)', () => {
+    for (const ask of [
+      'retarget this review at a different protocol',
+      'retarget this review at another protocol',
+      'assigned this review at a different protocol',
+      'assign this review at another protocol',
+      'retarget this review at different protocol PRT-4iaey2',
+      // the `at` qualifier now carries the same arms the `to` qualifier has
+      // carried since cycle 2 (base-vs-head proven: FREE at the cycle-3 head)
+      'retarget this review at another protocol tab',
+      'retarget this review at a different protocol tab',
+      'retarget this review at some other protocol PRT-4iaey2',
+      'retarget this review to any other protocol PRT-4iaey2',
+      'retarget this review to another protocol tab',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-2 at-frame leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT 3 (minor): concrete-id leaks via an interposed qualifier ('to some
+  // OTHER protocol <id>') and a quoted word ('to "protocol <id>"') — review
+  // §D N49/N34. Closed by the interposed-qualifier noun and the quoted-protocol
+  // frame, both demanding the record-id token so no new over-block class opens.
+  it('g2dfix4 DEFECT-3: interposed-qualifier and quoted-protocol frames with a concrete id fire (review §D N49/N34)', () => {
+    for (const ask of [
+      'retarget this review to some other protocol PRT-4iaey2',
+      'retarget this review to "protocol PRT-4iaey2"',
+      'switch the review to some other protocol PRT-4iaey2',
+      'move the draft to "protocol PRT-4iaey2"',
+      'retarget this review at "protocol PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-3 leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT-3 boundary: the new nouns demand the record-id token, so the no-id
+  // spellings and the reversed quoted order stay the documented residuals.
+  it('g2dfix4 DEFECT-3 boundary: the no-id and reversed-quoted spellings stay FREE (visible residual)', () => {
+    for (const ask of [
+      'retarget this review to some other protocolId',
+      'retarget this review to some other protocol',
+      'retarget this review to the "PRT-4iaey2" protocol',
+      'compare this draft to the other protocol PRT-4iaey2',
+      'rename the draft so it reads like the other protocol PRT-4iaey2',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `DEFECT-3 boundary unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  // Zero-regression pin for the arms the cycle-4 nouns/verbs could touch:
+  // every previously-pinned WALL still walls, every pinned FREE stays FREE.
+  it('g2dfix4 regression: the c1/c2/c3-pinned arms the new nouns/verbs could touch are unchanged', () => {
+    for (const ask of [
+      're-aim this review at a different protocolId',
+      'retarget this review at another protocolId',
+      'point this review at a different protocolId',
+      'switch the review to another protocol tab',
+      'repoint the review to a different protocol',
+      'move the draft to "PRT-4iaey2"',
+      'retarget this review onto a different protocolId',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `pinned WALL arm regressed: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+    for (const ask of [
+      'reassign this review at protocol',
+      'aim the draft label at the bench wording',
+      'target the draft at protocol guidance',
+      'point the draft at the protocol examples',
+      'retarget this review to "CAN-w29-gate"',
+      'retarget this review to the protocol id',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `pinned FREE arm regressed: ${ask}`).toBeNull();
+    }
+  });
+
+  // DOCUMENTED ASYMMETRY (pinned visible, never silent): the `onto` qualifier
+  // frame has carried the no-id qualifier noun since cycle 2 (the `to a
+  // different protocol` noun matches INSIDE `onto a different protocol`,
+  // substring semantics), so the bare `onto a different protocol` WALLs while
+  // the `towards`/`toward` siblings leak. Cycle 4 closed the `at` sibling and
+  // deliberately did NOT add `towards/toward a different protocol` (no reviewer
+  // arm named it; adding it would widen the qualifier class unasked). Both
+  // sides are pinned here so the boundary is measurable; neither is weakened.
+  it('g2dfix4 documented asymmetry: onto-qualifier WALLs while the towards-qualifier leaks (visible)', () => {
+    const onto = reviewAskWallFor('protocol-review', 'retarget this review onto a different protocol');
+    expect(onto, 'onto-qualifier arm changed').not.toBeNull();
+    expect(onto?.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(reviewAskWallFor('protocol-review', 'retarget this review towards a different protocol')).toBeNull();
+    expect(reviewAskWallFor('protocol-review', 'retarget this review toward a different protocol')).toBeNull();
+  });
+
+  // DISCLOSED ENUMERATION LIMIT (pinned visible, never silent): the verbs list
+  // is a finite DATA enumeration; further retarget synonyms are NOT declared
+  // and stay FREE. Pinned so the residual is measurable, not silent.
+  it('g2dfix4 accepted-residual boundary: undeclared verb synonyms stay FREE (visible enumeration limit)', () => {
+    for (const ask of [
+      'hand this review to protocol PRT-4iaey2',
+      'delegate this review to protocol PRT-4iaey2',
+      'push this review to protocol PRT-4iaey2',
+      'migrate this review to a different protocolId',
+      'reroute this review to protocol PRT-4iaey2',
+      'shift this review to a different protocolId',
+      // the same class on the OTHER side of the boundary: a verb outside the
+      // enumeration that merely compares/points at a protocol (reviewer c2
+      // §C.3 OVER arm and the cycle-2 §14 MENTION arm — pinned here so the
+      // enumeration limit is measurable on both sides)
+      'compare this draft to protocol PRT-4iaey2',
+      'move the review so it points to protocol PRT-4iaey2',
+      'retarget the review so it points to a different protocolId',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `undeclared-verb arm unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  it('g2dfix4: the cycle-4 arms are surface-scoped like every other wall', () => {
+    for (const ask of [
+      'forward this review to protocol PRT-4iaey2',
+      'retarget this review at a different protocol',
+      'retarget this review to some other protocol PRT-4iaey2',
+    ]) {
+      expect(reviewAskWallFor('event-editor', ask)).toBeNull();
+      expect(reviewAskWallFor('workspace.deck', ask)).toBeNull();
+      expect(reviewAskWallFor(undefined, ask)).toBeNull();
+    }
+  });
+
+  // FULL-SWEEP PIN (c3 DEFECT-4(b) discipline): every arm my own 214-row
+  // cycle-4 sweep measured — WALL side and FREE side — is pinned verbatim in
+  // the committed suite, so the "never silent" claim is checkable row-by-row
+  // rather than asserted. WALL side first (the constructions the wall covers).
+  it('g2dfix4 sweep pin: every WALL arm measured in the cycle-4 sweep fires', () => {
+    for (const ask of [
+      'move the draft to protocol PRT-4iaey2',
+      'redirect this review to a different protocol',
+      'retarget the review onto protocol PRT-4iaey2',
+      'reassign this to another protocol PRT-x',
+      'reassign this review to protocol prt-4iaey2',
+      'point this review toward protocol PRT-4iaey2',
+      'reassign this review to protocol PRT-4iaey2.',
+      'aim this review at the different protocolId',
+      'switch this review over to a different protocol',
+      'reassign this review towards protocol PRT-4iaey2',
+      'move this review on to protocol PRT-4iaey2',
+      'retarget this review to protocol PRT-4iaey2 please',
+      'could you reassign the review to protocol PRT-4iaey2',
+      'reassign this review to the protocolId PRT-4iaey2',
+      'retarget this review to a different protocol id',
+      'retarget this review at a different protocol id',
+      're-target this review to protocol PRT-4iaey2',
+      'retarget the review onto the protocol PRT-4iaey2',
+      'send this review to the protocol PRT-4iaey2',
+      'point this review at PRT-4iaey2 instead',
+      'move the draft to protocol PRT-4iaey2',
+      'retarget this review to a protocol PRT-4iaey2',
+      'retarget this review towards a different protocolId',
+      'retarget this review to "protocol id PRT-4iaey2"',
+      'transfer this review to some other protocol PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `sweep WALL arm not pinned: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  it('g2dfix4 sweep pin: every FREE arm measured in the cycle-4 sweep stays free', () => {
+    for (const ask of [
+      'switch the review tab to the protocol view',
+      'send this to the protocol team for review',
+      'open the protocol document on page 2',
+      'move the incubation step to the end of the draft',
+      'point out the step that references the pdf',
+      'route the draft step label so it matches the vendor text',
+      'send the review to the vendor protocol document',
+      'redirect the draft to protocol examples',
+      'target the draft at protocol examples',
+      'route the draft to the protocol guidance',
+      'send the review to the protocol team',
+      'retarget this review to protocol 4iaey2',
+      'move the draft step to the end of the section',
+      'what is the target protocol?',
+      'target the settings panel',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `sweep FREE arm not pinned: ${ask}`).toBeNull();
+    }
+  });
+
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
     expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();

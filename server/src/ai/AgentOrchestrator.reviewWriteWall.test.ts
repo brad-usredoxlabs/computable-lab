@@ -291,6 +291,96 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
+  // CYCLE-4 DEFECT-1 (advc-W29-g2dfix-c3-l2t0650): the retarget verb SYNONYMS
+  // the c3 reviewer measured FREE with a concrete id reach the model and can
+  // render the affirmative focus bubble the gate recorded. After the DATA verb
+  // addition they must refuse BEFORE the model, exactly like the gate ask (e).
+  it('g2dfix4 DEFECT-1: "forward this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.refusal!.message).toContain('protocolId');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    // Deterministic: the wall fired BEFORE the model — zero inference spent.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix4 DEFECT-1: "transfer this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'transfer this review to protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix4 DEFECT-1: "assign this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'assign this review to protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  // CYCLE-4 DEFECT-1 boundary (the reviewer's benign arms): the new verbs must
+  // NOT over-block — an ordinary forward/transfer/assign ask with a non-retarget
+  // object runs the model exactly like any other legit ask.
+  it('g2dfix4 DEFECT-1 boundary: "transfer the sample to the incubator" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'transfer the sample to the incubator',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix4 DEFECT-1 boundary: "assign this step to bench 2" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'assign this step to bench 2',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix4 DEFECT-1 boundary: "forward the note to the review tab" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward the note to the review tab',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
   it('a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today', async () => {
     const store = mutationTripwire();
     const { result, completeStream } = await runReviewTurn(
