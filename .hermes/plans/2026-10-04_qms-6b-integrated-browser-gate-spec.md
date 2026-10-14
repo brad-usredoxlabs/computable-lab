@@ -153,3 +153,24 @@ passwords or secrets in any receipt.**
 `VERDICT: fix` → back to the owning worker (`EDITOR-2` vs `QMS-6A` by surface) with reproduced evidence
 and the absolute screenshot paths. New platform gaps → architect, never absorbed. No reviewer-harness
 redesign. Never weaken criteria; never report an untested flow as passing.
+
+## AMENDMENT — 2026-10-04T16:55Z (lane-1 tick 20261004T1640)
+
+**(A) LANE RESTART IS A PRECONDITION FOR THE NEXT RUN.** The lane worktree was missing 10 schemas + 8 lints
+(`cl-lane-sync.sh` had linked them as SYMLINKS and `SchemaLoader.ts:130-142` keeps only `entry.isFile()`, so
+symlinked `*.schema.yaml` are silently skipped). The orchestrator materialized all 29 `schema/` symlinks as real
+files and patched the sync script, but **`tsx --watch` does NOT reload YAML** — a lane restart is required before
+the schemas appear. Before reviewing, run:
+`/home/brad/.hermes/profiles/orchestrator/scripts/cl-lane-stack.sh 1 restart`
+then confirm `GET http://localhost:3092/api/schemas` contains `record-revision` (it was ABSENT pre-fix). If it is
+still absent after a restart, STOP as BLOCKED-infra; do NOT report it as a product defect.
+
+**(B) REVISION CAPTURE / "schema not loaded" IS A LANE-ENV ARTIFACT, NOT A PRODUCT DEFECT.** A prior attempt spent
+15:08–16:41 investigating "revision capture fails: record-revision schema not loaded". That was the symlink bug
+above. Post-restart, revision capture should work; surface 11's positive case (a record with revisions) and the
+three API probes should be exercisable. If capture still fails on a RESTARTED lane with the schema present, then
+— and only then — is it a candidate product finding: re-verify via API before reporting (reviewer reliability rule).
+
+**(C) ENDPOINT STATE.** appliance-2:11434 (`qwen3.6-35b-a3b`) has oscillated healthy <-> unreachable for hours; a
+`/v1/models` 200 or a text completion is NOT proof the vision path works. Do not start until a VISION completion
+is confirmed.
