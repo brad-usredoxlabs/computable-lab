@@ -1,0 +1,35 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/server
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+[agent 6kk3yx] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 6kk3yx] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 6kk3yx] tools=1 docDiscussion=false maxTurns=2
+[agent 6kk3yx] turn 1 starting, promptChars=28217, docDiscussion=false
+[agent 6kk3yx] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"6kk3yx","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":36,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 6kk3yx] done event_shorthand success=true events=12 clarifications=0 elapsedMs=36
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts  (5 tests | 1 failed | 4 skipped) 41ms
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+     → expected "runChatbotCompile" to be called at least once
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+AssertionError: expected "runChatbotCompile" to be called at least once
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:278:24
+    276| 
+    277|     // The preflight-llm flow itself is byte-unchanged: the compiler p…
+    278|     expect(compileSpy).toHaveBeenCalled();
+       |                        ^
+    279|     expect(result.success).toBe(true);
+    280|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  05:29:21
+   Duration  1.72s (transform 708ms, setup 0ms, collect 1.14s, tests 41ms, environment 0ms, prepare 96ms)
+

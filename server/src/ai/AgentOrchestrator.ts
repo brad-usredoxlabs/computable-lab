@@ -1729,10 +1729,22 @@ export function createAgentOrchestrator(
             if (!choice) continue;
 
             // --- Text content delta ---
+            // COMP3-A6 (architect route (a), emission-side): on a forced-tool
+            // draft flow the model's interleaved first-person deliberation
+            // must never reach the chat pipe — the turn's answer rides the
+            // terminal RESULT payload (summarizeDraftResult -> stream-done
+            // fallbackText), not deltas. Keyed on this instance's DECLARED
+            // draftFlowMode — constructor data, the same declared fork already
+            // branched at :993/:1149/:1155/:3262/:3278 — not a model/host sniff.
+            // accumulatedContent stays byte-unchanged in BOTH modes: history
+            // fidelity and the stop-coercion path + its contentPreview
+            // diagnostic consume it.
             const deltaContent = choice.delta?.content;
             if (typeof deltaContent === 'string' && deltaContent.length > 0) {
               accumulatedContent += deltaContent;
-              onEvent?.({ type: 'text_delta', delta: deltaContent });
+              if (draftFlowMode !== 'forced-tool') {
+                onEvent?.({ type: 'text_delta', delta: deltaContent });
+              }
             }
 
             // --- Tool-call deltas (structure not in ChatMessage type; needs local cast) ---
