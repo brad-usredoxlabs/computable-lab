@@ -1,0 +1,18 @@
+FAIL  src/ai/AgentOrchestrator.bypass.test.ts > AgentOrchestrator compiler bypass > should bypass LLM when all slots are filled with labware instance
+FAIL  src/ai/AgentOrchestratorForwarding.test.ts > AgentOrchestrator outcome-based forwarding > (b) outcome=complete with no events and no gaps still short-circuits
+FAIL  src/ai/AgentOrchestrator.golden.test.ts > AgentOrchestrator - golden test for auto-create labware > should bypass LLM and compile events when labware hint resolves via searchLabwareByHint
+FAIL  src/ai/AgentOrchestrator.goldenWithSeeds.test.ts > AgentOrchestrator - golden test with real seed records > should bypass LLM and compile events with REAL seed records
+FAIL  src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > drops an unrepairable tube event and surfaces a Dropped note
+FAIL  src/ai/AgentOrchestrator.tubeGate.test.ts > AgentOrchestrator tube-event detail gate wiring > repairs tubeVolumeClass → details.tube through the real event schemas
+FAIL  src/ai/attachedProtocol.test.ts > buildSystemPrompt — attached protocol block > renders the guidance for attachment and not for absence from the SAME template (render purity)
+FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: deckSlot on candidateLabwares → deckLayoutPlan.pinned
+FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: labware resolved (not added) → no labwareAddition for it
+FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: multiple labwares with mixed deckSlot presence
+FAIL  src/ai/ChatbotCompileDeckSlot.test.ts > spec-012: deck-slot binding on labware-resolve > runChatbotCompile: no candidateLabwares → empty deckLayoutPlan
+FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > falls through to LLM loop when pipeline produces no events
+FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into a new plate and proposes an AiLabwareAddition
+FAIL  src/ai/chatbotCompile.e2e.test.ts > chatbot-compile E2E > seeds into an existing plate and returns one add_material event
+FAIL  src/ai/createRecordIntent.test.ts > the create_record intent > is one of exactly three intents, on the single forced tool
+FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.description explicitly forbids tubeVolumeClass drift
+FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > details.properties.tube declares the event-contract tube descriptor
+FAIL  src/ai/submitSuggestionTool.tubeSchema.test.ts > submit_suggestion place_tube schema (event-contract shape) > the event-graph-agent prompt names details.tube and the forbidden tubeVolumeClass
