@@ -69,6 +69,19 @@ const SEED_RECORDS = [
       synonyms: ['trypsin-edta/dmem (50:50)'],
     },
   },
+  // CUE-EXEMPT-1: the measured false-bar case is a CATALOGUED single reagent
+  // (seeded here so the bar under test is the PRODUCER blob arm, not the
+  // resolve_nouns unknown-noun arm — same seed idiom as MAT-blob-1 above).
+  {
+    recordId: 'MAT-catalogued-single-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+    payload: {
+      kind: 'material',
+      name: 'DNase/RNase Free Water',
+      title: 'DNase/RNase Free Water',
+      synonyms: ['dnase/rnase free water'],
+    },
+  },
 ];
 
 function mockStore() {
@@ -260,6 +273,40 @@ actions:
     const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bars).toHaveLength(1);
     expect(bars[0]!.label).toBe(material);
+  });
+
+  // CUE-EXEMPT-1 (architect W211-D4 follow-on): the measured false-bar case.
+  // "DNase/RNase Free Water" is ONE catalogued single reagent whose name merely
+  // contains a separator, yet the bare-"/" cue's flanking arm fires on it:
+  // "DNase" and "RNase" both match the DATA componentPattern, exceed
+  // minComponentLength, and are not stop-words — minComponents=2 is satisfied
+  // and the label bars. That is exactly the over-bar class fix1/D1 exists to
+  // prevent (the DMEM/F12 analogy; "F12" escapes only because it carries a
+  // digit). The exemption is DATA (config/drafting/mixture-material-cues.yaml
+  // `exempt:`), never a reagent literal in TypeScript.
+  it('GUARD-OFF (CUE-EXEMPT-1): the catalogued single reagent "DNase/RNase Free Water" compiles with NO blob clarification', async () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: cue-exempt-single
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+`));
+    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bars).toEqual([]);
+    // Full pipeline: the seeded catalogued record (SEED_RECORDS) keeps the
+    // resolve_nouns arm quiet, so a clean compile proves the PRODUCER arm
+    // no longer bars this label.
+    const compiled = await compileReal(`intentId: cue-exempt-single-live
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+    targetWells: [A1]
+`);
+    expect(compiled.clarifications.filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+    expect(compiled.outcome).toBe('complete');
   });
 });
 
