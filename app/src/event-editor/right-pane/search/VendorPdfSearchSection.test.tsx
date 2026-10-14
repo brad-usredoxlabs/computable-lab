@@ -313,8 +313,14 @@ describe('VendorPdfSearchSection', () => {
 })
 
 // DOCINGEST-A A6 — the picker accepts what a lab actually has.
+// DOCINGEST-B B1 — Stage B's upload arm landed: the picker now ALSO accepts
+// the config-declared page-image extensions. This deliberately INVERTS
+// Stage A's "NO image types" pin (same contract-inversion pattern as A5's
+// engine pin): the accept list mirrors config `images.formats` exactly —
+// a UI accepting an extension the handler 415s on (or vice versa) is
+// split-brain (bait 18).
 describe('document picker accepts lab documents', () => {
-  it('the bring-back input accepts lab document types (and NO image types — those ride Stage B)', async () => {
+  it('the bring-back input accepts lab document types AND the config-declared page images (Stage B arm landed)', async () => {
     searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
     const uploadMock = vi.fn().mockResolvedValue({
       sourcePdf: {},
@@ -347,9 +353,10 @@ describe('document picker accepts lab documents', () => {
     expect(accept).toContain('.html')
     expect(accept).toContain('.xlsx')
     expect(accept).toContain('.csv')
-    // Stage A uploads no images (Stage B's upload arm owns them).
+    // DOCINGEST-B: exactly the config `images.formats` extensions — no more,
+    // no less (bait 18: the handler gate and this list must never drift).
     for (const imageExt of ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.webp']) {
-      expect(accept, `image type ${imageExt} rides Stage B's upload arm`).not.toContain(imageExt)
+      expect(accept, `config-declared image type ${imageExt} must be pickable`).toContain(imageExt)
     }
   })
 })

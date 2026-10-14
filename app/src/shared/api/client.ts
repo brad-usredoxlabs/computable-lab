@@ -5151,6 +5151,15 @@ export const apiClient = {
     return `${API_BASE}/vendor-pdfs/${encodeURIComponent(recordId)}/pdf`
   },
 
+  /**
+   * URL of ONE kept page image of an image-kind vendor-pdf (DOCINGEST-B B3).
+   * Same encodeURIComponent discipline as vendorPdfBlobUrl — the page number
+   * is encoded too, so a crafted value can never ride the URL into a path.
+   */
+  vendorPdfPageUrl(recordId: string, pageNumber: number): string {
+    return `${API_BASE}/vendor-pdfs/${encodeURIComponent(recordId)}/page/${encodeURIComponent(String(pageNumber))}`
+  },
+
   // === Per-study Workspace State ===
 
   /**

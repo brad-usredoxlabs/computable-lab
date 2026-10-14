@@ -1,7 +1,7 @@
 /**
  * Shared helper: decode an uploaded attachment's buffer into plain text
  * using the right per-format adapter (PDF / HTML / XLSX / DOCX / RTF /
- * Markdown / plain-text).
+ * Markdown / image OCR / plain-text).
  *
  * Used by both the chatbot-compile pipeline's extract_entities pass and
  * the AgentOrchestrator fallthrough path that injects attachment text
@@ -20,6 +20,7 @@ import { extractHtmlText } from './HtmlTextAdapter.js';
 import { extractXlsxText } from './XlsxTextAdapter.js';
 import { extractDocxText } from './DocxTextAdapter.js';
 import { DOCUMENT_EXTRACTION_CONFIG_PATH } from './DocxTextAdapter.js';
+import { extractImageText } from './ImageTextAdapter.js';
 
 export interface DecodedAttachment {
   text: string;
@@ -50,6 +51,11 @@ const DOCUMENT_MEDIA_KINDS: readonly DocumentMediaKind[] = ['pdf', 'text', 'spre
  * stamp from it; no extension list or media_type map may live in TypeScript
  * (CLAUDE.md "The Hard Boundary"). Changing what the ingestor accepts is a
  * config edit, not a code edit.
+ *
+ * DOCINGEST-B: an `image`-kind entry is only live while it ALSO appears in
+ * the `images:` block's `formats:` list — the OCR reader's own gate. Removing
+ * an extension from EITHER list removes it from the ingestor (mutation probe:
+ * drop `webp` -> a webp upload is refused UNSUPPORTED_DOCUMENT).
  */
 export async function loadDocumentFormats(): Promise<DocumentFormat[]> {
   let raw: string;
@@ -58,13 +64,18 @@ export async function loadDocumentFormats(): Promise<DocumentFormat[]> {
   } catch {
     return [];
   }
-  let doc: { formats?: unknown } | null = null;
+  let doc: { formats?: unknown; images?: { formats?: unknown } } | null = null;
   try {
-    doc = parseYaml(raw) as { formats?: unknown } | null;
+    doc = parseYaml(raw) as { formats?: unknown; images?: { formats?: unknown } } | null;
   } catch {
     return [];
   }
   const entries = Array.isArray(doc?.formats) ? doc.formats : [];
+  const imageGate = new Set(
+    (Array.isArray(doc?.images?.formats) ? doc.images.formats : [])
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.toLowerCase().replace(/^\./, '')),
+  );
   const formats: DocumentFormat[] = [];
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
@@ -77,8 +88,10 @@ export async function loadDocumentFormats(): Promise<DocumentFormat[]> {
     ) {
       continue;
     }
+    const extension = e.extension.toLowerCase().replace(/^\./, '');
+    if (e.mediaKind === 'image' && !imageGate.has(extension)) continue;
     formats.push({
-      extension: e.extension.toLowerCase().replace(/^\./, ''),
+      extension,
       mediaKind: e.mediaKind as DocumentMediaKind,
       mediaType: e.mediaType,
       analysisLabel: e.analysisLabel,
@@ -117,6 +130,10 @@ export async function decodeAttachmentText(
   const isDocx = lowerName.endsWith('.docx') || lowerName.endsWith('.doc') || mime.includes('wordprocessingml');
   const isRtf = lowerName.endsWith('.rtf');
   const isMarkdown = lowerName.endsWith('.md') || lowerName.endsWith('.markdown');
+  // DOCINGEST-B: the image gate is the config-declared format map (extension
+  // -> mediaKind 'image', itself gated by `images.formats`) plus the image
+  // mime family. No extension literal lives here (bait 10).
+  const isImageKind = (await documentFormatFor(name))?.mediaKind === 'image' || mime.startsWith('image/');
 
   try {
     if (isPdf) {
@@ -130,6 +147,14 @@ export async function decodeAttachmentText(
     if (isXlsx) {
       const res = await extractXlsxText(buf);
       return { text: res.text, diagnostics: res.diagnostics ?? [] };
+    }
+    if (isImageKind) {
+      // A photographed/scanned page goes through the config-declared OCR
+      // reader (config/ingestion/document-extraction.yaml `images:`). An unset
+      // block or an absent binary returns an honest IMAGE_OCR_* error
+      // diagnostic — never a blank page and never the utf8 fallback.
+      const res = await extractImageText(buf, { fileName: lowerName });
+      return { text: res.text, diagnostics: res.diagnostics };
     }
     if (isDocx || isRtf) {
       // The reader tool is config-declared (config/ingestion/document-

@@ -307,7 +307,7 @@ export function VendorPdfSearchSection({
                       {bringingBack ? 'Uploading…' : 'Step 2 — Bring the file back'}
                       <input
                         type="file"
-                        accept=".pdf,.docx,.doc,.rtf,.md,.markdown,.txt,.html,.htm,.xlsx,.xls,.csv,application/pdf"
+                        accept=".pdf,.docx,.doc,.rtf,.md,.markdown,.txt,.html,.htm,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.tif,.tiff,.webp,application/pdf"
                         data-testid="vendor-pdf-bring-back"
                         disabled={bringingBack}
                         onChange={(e) => {
