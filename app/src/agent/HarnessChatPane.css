@@ -1,0 +1,8 @@
+/* HarnessChatPane — shared right-pane chat shell (HARNESS-SEQ-1). */
+.harness-chat-pane { display:flex; flex-direction:column; min-height:0; height:100%; box-sizing:border-box; }
+.harness-chat-pane > .sequence-chat { flex:1 1 auto; min-height:0; }
+.harness-chat-pane__empty { padding:1rem; font-size:.9rem; color:var(--cl-text-dim, #555); }
+.harness-chat-pane label { display:block; margin:.7rem 1rem 0; }
+.harness-chat-pane textarea { display:block; box-sizing:border-box; width:100%; padding:.5rem; margin-top:.25rem; border:1px solid var(--cl-border, #aaa); border-radius:.3rem; color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); }
+.harness-chat-pane > button { align-self:flex-start; margin:.5rem 1rem; color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); border:1px solid var(--cl-border, #aaa); border-radius:.3rem; padding:.4rem .6rem; }
+.harness-chat-pane > button:disabled { opacity:.5; cursor:default; }

@@ -1,0 +1,7 @@
+/* SurfaceFocusHeader — mirrors ChatContextHeader's visual contract (label +
+   value, --cl-* tokens) with its own class names and testid. */
+.surface-focus-header { display:flex; align-items:flex-start; gap:8px; padding:6px 10px; border-bottom:1px solid var(--cl-border); background:var(--cl-bg-elev-2); font-size:12px; }
+.surface-focus-header__label { flex-shrink:0; font-weight:600; text-transform:uppercase; letter-spacing:.04em; font-size:10px; color:var(--cl-text-dim); background:var(--cl-bg-elev); border-radius:4px; padding:1px 6px; }
+.surface-focus-header__value { flex:1 1 auto; min-width:0; color:var(--cl-text); overflow-wrap:anywhere; }
+.surface-focus-header--active { background:color-mix(in srgb, var(--cl-accent) 10%, var(--cl-bg-elev-2)); }
+.surface-focus-header--active .surface-focus-header__label { background:color-mix(in srgb, var(--cl-accent) 25%, transparent); color:var(--cl-accent); }

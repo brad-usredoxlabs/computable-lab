@@ -6,14 +6,30 @@
  * step in ProtocolSelectionContext) — never an AI-authored note. This is the
  * shared conversational subject: "EDITING: Step 3 — <concept>". When no step
  * is focused it says so plainly.
+ *
+ * HARNESS-SEQ-1 delegation: when a ChatFocusContext is present AND non-null,
+ * the header renders that published focus instead. The run page publishes no
+ * ChatFocusContext, so its output is the existing useProtocolSelection path
+ * byte-for-byte (same testid, same strings, same data-attr).
  */
 
+import { useChatFocus } from '../../../agent/ChatFocusContext'
 import { useProtocolSelection } from '../../protocol/ProtocolSelectionContext'
 import './ChatContextHeader.css'
 
 export function ChatContextHeader() {
+  const chatFocus = useChatFocus()
   const sel = useProtocolSelection()
   const focused = sel?.focusedStep
+
+  if (chatFocus) {
+    return (
+      <div className="chat-context-header chat-context-header--active" data-testid="chat-context-header">
+        <span className="chat-context-header__label">Working focus</span>
+        <span className="chat-context-header__value" title={chatFocus.detail ?? chatFocus.label}>{chatFocus.label}</span>
+      </div>
+    )
+  }
 
   if (!focused) {
     return (
