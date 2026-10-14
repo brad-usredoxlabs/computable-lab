@@ -23,7 +23,6 @@ import {
   extractImageText,
   loadImageOcrConfig,
 } from './ImageTextAdapter.js';
-
 const PNG_BYTES = Buffer.from('\u0089PNG\r\n\u001a\n fake-png-bytes-for-argv-pin');
 
 let configDir: string;
@@ -113,10 +112,11 @@ describe('ImageTextAdapter — success arm via injected exec (argv pinned from c
     expect(text).toContain('LYSIS BUFFER ADD 500 uL');
     expect(calls).toHaveLength(1);
     const [file, args, options] = calls[0]!;
-    // The buffer is written into a scratch dir under a name derived from the
-    // file (oligo writes the page path; the docx adapter writes the input).
-    expect(file).toMatch(/photographed-page\.png$/);
-    // Oligo precedent (oligoOrder.ts:82): [input, 'stdout', '-l', language]
+    // Oligo precedent (oligoOrder.ts:82): exec(executable, [page, 'stdout',
+    // '-l', language]) — the CONFIG-DECLARED tool is the executable, and the
+    // buffer is written into a scratch dir under a name derived from the file.
+    expect(file).toBe('tesseract');
+    expect(args[0]).toMatch(/photographed-page\.png$/);
     expect(args[1]).toBe('stdout');
     expect(args[2]).toBe('-l');
     expect(args[3]).toBe('eng');
