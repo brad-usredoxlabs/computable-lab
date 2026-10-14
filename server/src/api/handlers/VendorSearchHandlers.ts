@@ -1541,6 +1541,12 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
       const pageCount = extractedTextPages.length > 0
         ? extractedTextPages.length
         : extraction?.plainText?.pageCount ?? 0;
+      // DOCINGEST-B: the acquisition path KNOWS what the bytes turned out to
+      // be — a raster-only PDF comes back mediaKind 'image' from the scan arm
+      // even though the extension maps to pdf. Trust the extraction; fall
+      // back to the config format map. media_type stays the honest extension
+      // stamp (a scan.pdf is still a PDF file; its pages are the images).
+      const mediaKind = extraction?.mediaKind ?? format.mediaKind;
 
       const sha256 = createHash('sha256').update(data).digest('hex');
       const recordId = `VPDF-${sha256.slice(0, 12).toUpperCase()}`;
@@ -1581,7 +1587,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
             ...(ingestQuery ? { query: ingestQuery } : {}),
             ingestedAt: new Date().toISOString(),
             pageCount,
-            mediaKind: format.mediaKind,
+            mediaKind,
             originalFileName: fileName,
           },
           file: {
@@ -1594,8 +1600,9 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
             sha256,
             stored_path: relative(workspaceRoot, artifactPath),
             // file-ref page_count has minimum 1: omit it for a non-paginated
-            // document (a text pseudo-page is not a page model).
-            ...(format.mediaKind === 'pdf' && pageCount > 0 ? { page_count: pageCount } : {}),
+            // document (a text pseudo-page is not a page model). A paginated
+            // document — a PDF or a real page image — carries its honest count.
+            ...((mediaKind === 'pdf' || mediaKind === 'image') && pageCount > 0 ? { page_count: pageCount } : {}),
           },
           extractedText: extractedTextPages,
           // S5 honesty: the extraction diagnostics ride ON the record. A
