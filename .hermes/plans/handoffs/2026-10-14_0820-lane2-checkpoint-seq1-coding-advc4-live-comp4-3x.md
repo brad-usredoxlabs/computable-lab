@@ -106,3 +106,24 @@ vocabulary.md (committed). PROVISIONAL route NOT needed. No in-flight battery pi
 MANIFEST hash (grep clean). NEXT-TICK queue (3) becomes: dispatch COMP-4 coder chain when
 HARNESS-SEQ-1 exits (fleet single-coder), fresh worktree off dispatch tip; post-merge record
 the NEW MANIFEST blob hash.
+
+ADDENDUM 2 08:40 (same tick): ADVC C4 RETURNED VERDICT: fix (reviews/advc-W29-g2dfix-
+c4-l2t0815.md, ADV-C4 DONE, exited 0). Genuine closures verified by the reviewer AND
+consistent with my cycle accounting: D1 named strings WALL, D2 CLOSED, D3 two named
+strings closed, D4(a) closed, ZERO regressions across 84 pinned rows, batteries green,
+interpreter .ts zero change, additive-DATA-only, 24 fresh benign arms FREE. NEW: DEFECT-1
+(major) — interposed-qualifier CONCRETE-ID frame closed only for literal 'some other'/'any
+other'; 'yet another / one more / a further ... protocol PRT-<id>' leaks FREE (7 measured
+arms). Reviewer's own probe-2 PROVES the fix is avoidable, not an enumeration necessity:
+mention arms stay FREE regardless of qualifier because the DISCRIMINATOR IS THE VERB ->
+generic qualifier-gap noun with the record-id lookahead does not over-block. DEFECT-2
+(minor) — never-silent claim scoped to coder-measured arms only; R13 under-describes.
+D1-TRIPWIRE NOT FIRED (D1 itself closed; this is the c3-D3 class claimed-closed reopen).
+CYCLE 5 DISPATCHED 08:35 as FINAL repair cycle: prompt prompts/coder-W29-g2dfix5-l2t0835.txt
+(generic-pattern preferred, enumerate-fallback + explicit residual if pinned arms collide;
+full c4 §C/§D tables + mention arms as regression battery; marker "W2-9-G2DFIX5 DONE <sha>"),
+chain scripts/coder-chain-W29-g2dfix5-l2t0835.sh bash 724005 QUEUED on fleet lock BEHIND
+HARNESS-SEQ-1 (acquires when SEQ-1 exits). FLEET QUEUE NOW: SEQ-1 coding (since 08:13) ->
+g2dfix5 queued -> COMP-4 (dispatch manually after SEQ-1, worktree fresh off tip). IF CYCLE-5
+REOPENS ANY CLAIMED CLASS -> ARCHITECT TRIPWIRE (finite-enumeration vs generic-frame rule
+question, all five review files as evidence); do NOT run cycle 6 blind.
