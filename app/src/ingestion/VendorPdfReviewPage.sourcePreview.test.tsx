@@ -22,6 +22,7 @@ const getIntakeReviewMock = vi.fn()
 const listRecordsByKindMock = vi.fn()
 const getDocumentMock = vi.fn()
 const blobUrlMock = vi.fn((recordId: string) => (recordId ? `/api/vendor-pdfs/${recordId}/pdf` : ''))
+const pageUrlMock = vi.fn((recordId: string, pageNumber: number) => `/api/vendor-pdfs/${recordId}/page/${pageNumber}`)
 
 vi.mock('../shared/api/client', () => ({
   apiClient: {
@@ -31,6 +32,7 @@ vi.mock('../shared/api/client', () => ({
     updateRecord: vi.fn(),
     createRecord: vi.fn(),
     vendorPdfBlobUrl: (recordId: string) => blobUrlMock(recordId),
+    vendorPdfPageUrl: (recordId: string, pageNumber: number) => pageUrlMock(recordId, pageNumber),
     semanticDraft: vi.fn(),
     getEditorDraftProjection: () => Promise.reject(new Error('no projection in test')),
     realizeIntakeBranch: vi.fn(),
@@ -125,6 +127,9 @@ describe('review pane source preview (source.mediaKind)', () => {
     // No pdfjs machinery at all — not even a blob fetch attempt.
     expect(getDocumentMock, 'a text-kind record must never mount pdfjs').not.toHaveBeenCalled()
     expect(document.querySelector('canvas'), 'no pdf canvas may exist for a text-kind record').toBeNull()
+    // Bait 12: the OCR caution is derived from mediaKind 'image' — it must be
+    // ABSENT on the text branch (never a static string on the pane).
+    expect(screen.queryByTestId('vpdf-review-ocr-caution'), 'no OCR caution on a text-kind record').toBeNull()
   })
 
   it("mediaKind ABSENT (legacy record): today's pdf path exactly — pdfjs runs, no blankout", async () => {
@@ -141,22 +146,59 @@ describe('review pane source preview (source.mediaKind)', () => {
     // Today's behavior: the pdf attempt happens, and the existing text
     // fallback renders when the blob cannot be painted in jsdom.
     await screen.findByTestId('vpdf-review-text')
+    // Bait 12 + bait 17: the legacy pdf branch is untouched — no page images,
+    // no OCR caution.
+    expect(screen.queryByTestId('vpdf-review-ocr-caution')).toBeNull()
+    expect(screen.queryByTestId('vpdf-review-page-image')).toBeNull()
   })
 
-  it('mediaKind "image" (Stage B reserved): renders via the pdf fallback, not a blank pane', async () => {
+  // DOCINGEST-B B3 — the real image branch. An image-kind record renders ONE
+  // <img> per page (src = vendorPdfPageUrl) with the OCR caution, and pdfjs is
+  // NEVER mounted. The caution wording is pinned here AND its absence on the
+  // pdf/text branches is pinned below (bait 12: the caution is derived from
+  // the record's actual mediaKind, never a static string on the branch).
+  it('mediaKind "image": one <img> per page from the page endpoint, the OCR caution is visible, and pdfjs is NEVER mounted', async () => {
     getRecordMock.mockResolvedValue(
       envelope(
-        { engine: 'upload', ingestedAt: '2026-10-13T12:00:00.000Z', mediaKind: 'image', originalFileName: 'page.jpg' },
-        [{ pageNumber: 1, text: 'OCR text placeholder.' }],
+        { engine: 'upload', ingestedAt: '2026-10-13T12:00:00.000Z', mediaKind: 'image', originalFileName: 'photographed-page.png', pageCount: 2 },
+        [
+          { pageNumber: 1, text: 'LYSIS BUFFER ADD 500 uL' },
+          { pageNumber: 2, text: 'INCUBATE 10 MIN' },
+        ],
       ),
     )
 
     renderPage()
 
-    // Until Stage B's page-image endpoint exists, an image-kind record takes
-    // today's pdf path (getDocument runs; the text fallback covers the gap).
-    await waitFor(() => expect(getDocumentMock).toHaveBeenCalledTimes(1), { timeout: 2000 })
-    await screen.findByTestId('vpdf-review-text')
+    const images = await screen.findAllByTestId('vpdf-review-page-image')
+    expect(images, 'an image-kind record renders one <img> per page').toHaveLength(2)
+    expect(images[0]?.getAttribute('src')).toBe('/api/vendor-pdfs/VPDF-MDTEXT012345/page/1')
+    expect(images[1]?.getAttribute('src')).toBe('/api/vendor-pdfs/VPDF-MDTEXT012345/page/2')
+    // The caution is DERIVED from mediaKind === 'image' — pinned wording.
+    const caution = await screen.findByTestId('vpdf-review-ocr-caution')
+    expect(caution.textContent).toContain(
+      'Transcribed using local OCR (up to the configured page limit). Check page coverage and every volume against the page image before importing.',
+    )
+    // No pdfjs machinery at all for an image-kind record.
+    expect(getDocumentMock, 'an image-kind record must never mount pdfjs').not.toHaveBeenCalled()
+    expect(document.querySelector('canvas'), 'no pdf canvas may exist for an image-kind record').toBeNull()
+    // The OCR text is still readable per page (the existing text pane).
+    const textPane = await screen.findByTestId('vpdf-review-text')
+    expect(textPane.textContent).toContain('LYSIS BUFFER ADD 500 uL')
+    expect(textPane.textContent).toContain('INCUBATE 10 MIN')
+  })
+
+  it('mediaKind "image" with NO extractedText: the page images and the caution still render (never a blank pane)', async () => {
+    getRecordMock.mockResolvedValue(
+      envelope(
+        { engine: 'upload', ingestedAt: '2026-10-13T12:00:00.000Z', mediaKind: 'image', originalFileName: 'page.jpg', pageCount: 1 },
+        [],
+      ),
+    )
+    renderPage()
+    await screen.findByTestId('vpdf-review-page-image')
+    await screen.findByTestId('vpdf-review-ocr-caution')
+    expect(getDocumentMock).not.toHaveBeenCalled()
   })
 
   it('text-kind record WITH extractionDiagnostics: the honest diagnostic renders in the pane — never a blank success', async () => {
