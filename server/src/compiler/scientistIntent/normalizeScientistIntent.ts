@@ -171,20 +171,27 @@ function parseShapeRules(raw: unknown, path: string): MixtureShapeRules {
 }
 
 /** CUE-EXEMPT-1: parse the OPTIONAL `exempt:` section — the DATA-declared
- *  catalogued single-reagent names that are never mixture evidence. Absent or
- *  null section ⇒ undefined ⇒ NO exemptions, SILENT (unlike the LOUD cue-off
- *  rule: the bar itself stays ON; only the exemption list is empty). A present
- *  but malformed section is a data error and throws naming the data path
- *  (parity with the existing loader errors). Zero reagent literals here —
- *  TypeScript knows only "this label equals / whole-word-contains a
- *  DATA-declared exempt name". */
+ *  catalogued single-reagent names that are never mixture evidence. Genuinely
+ *  absent section (no `exempt:` key / `exempt: null`) or a present-but-null
+ *  `names:` ⇒ undefined ⇒ NO exemptions, SILENT (unlike the LOUD cue-off rule:
+ *  the bar itself stays ON; only the exemption list is empty). A PRESENT
+ *  object-shaped `exempt:` WITHOUT a `names:` key is a data error and throws
+ *  naming the data path (adversarial D1: a typo'd key must not silently
+ *  re-open the false bar this section exists to kill); every other malformed
+ *  shape throws too (parity with the existing loader errors). Zero reagent
+ *  literals here — TypeScript knows only "this label equals / whole-word-
+ *  contains a DATA-declared exempt name". */
 function parseExemptNames(raw: unknown, path: string): readonly string[] | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error(`mixture cue list (${path}): \`exempt:\` must be an object with a \`names:\` list of catalogued single-reagent labels`);
   }
-  const names = (raw as Record<string, unknown>).names;
-  if (names === undefined || names === null) return undefined;
+  const section = raw as Record<string, unknown>;
+  if (!('names' in section)) {
+    throw new Error(`mixture cue list (${path}): present \`exempt:\` section needs a \`names:\` list`);
+  }
+  const names = section.names;
+  if (names === null) return undefined;
   if (!Array.isArray(names) || !names.every((n) => typeof n === 'string' && n.trim().length > 0)) {
     throw new Error(`mixture cue list (${path}): \`exempt.names\` must be a list of non-empty name strings (entries are names, not regexes)`);
   }
@@ -192,11 +199,18 @@ function parseExemptNames(raw: unknown, path: string): readonly string[] | undef
 }
 
 /** CUE-EXEMPT-1 matching rule (documented in the YAML): case-folded and
- *  whitespace-normalized, the label EQUALS an exempt entry, or the entry holds
+ *  whitespace-normalized, the label EQUALS an exempt entry, OR the entry holds
  *  inside the label as a WHOLE-WORD RUN — the entry's first/last characters
  *  may not sit inside a longer word (word chars are letters/digits/hyphens,
  *  the same alphabet the flanking arm treats as component words). Entries are
- *  names, not regexes: the entry is escaped before any pattern use. */
+ *  names, not regexes: the entry is escaped before any pattern use.
+ *  Adversarial D2 (orchestrator-amended rule): the exemption exists ONLY for
+ *  a label that IS one catalogued single reagent. The CONTAINMENT arm applies
+ *  only when the label carries NO ratio/quantity evidence anywhere — tested
+ *  against the config's OWN `mixtureShape.ratioPatterns` DATA (zero new
+ *  literals). A composite ratio blob that merely embeds the exempt phrase
+ *  ("… Free Water + … (50:50)") is a blob again; the equality arm is
+ *  unchanged. */
 function normalizeCueLabel(value: string): string {
   return value.trim().replace(/\s+/gu, ' ').toLowerCase();
 }
@@ -205,12 +219,20 @@ function isCueWordChar(char: string): boolean {
   return /[\p{L}\p{N}-]/u.test(char);
 }
 
-function isExemptMaterialLabel(label: string, exemptNames: readonly string[]): boolean {
+function isExemptMaterialLabel(
+  label: string,
+  exemptNames: readonly string[],
+  ratioPatterns: readonly RegExp[],
+): boolean {
   const normalizedLabel = normalizeCueLabel(label);
+  // D2 ratio guard: ANY ratio/quantity match anywhere in the label is
+  // ratio evidence — the containment arm then does not apply.
+  const hasRatioEvidence = ratioPatterns.some((pattern) => pattern.test(normalizedLabel));
   return exemptNames.some((entry) => {
     const normalizedEntry = normalizeCueLabel(entry);
     if (!normalizedEntry.length) return false;
     if (normalizedLabel === normalizedEntry) return true;
+    if (hasRatioEvidence) return false;
     let from = 0;
     for (;;) {
       const at = normalizedLabel.indexOf(normalizedEntry, from);
@@ -317,7 +339,7 @@ function flankingComponentCount(value: string, occurrence: number, tokenLength: 
  *  separator) is NOT mixture evidence at all; the exemption is checked BEFORE
  *  any cue fires, so it suppresses every firing arm generically. */
 function mixtureCuesFound(value: string, config: MixtureCueConfig): string[] {
-  if (config.exemptNames !== undefined && config.exemptNames.length > 0 && isExemptMaterialLabel(value, config.exemptNames)) {
+  if (config.exemptNames !== undefined && config.exemptNames.length > 0 && isExemptMaterialLabel(value, config.exemptNames, config.shape.ratioPatterns)) {
     return [];
   }
   const found: string[] = [];

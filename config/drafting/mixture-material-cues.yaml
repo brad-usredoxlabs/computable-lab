@@ -74,6 +74,14 @@ mixtureShape:
 # a whole-word run — the entry's first/last characters may not sit inside a
 # longer word (an exempt name never matches as a substring of a bigger word).
 # Entries are NAMES, not regexes.
+# RATIO GUARD (adversarial D2, orchestrator ruling): the exemption exists ONLY
+# for a label that IS one catalogued single reagent. The whole-word CONTAINMENT
+# arm applies only when the label carries NO ratio/quantity evidence anywhere —
+# no match of any `mixtureShape.ratioPatterns` pattern above (DATA, no new
+# literals). "DNase/RNase Free Water" and "Mix DNase/RNase Free Water Buffer"
+# (no ratio) stay exempt; "DNase/RNase Free Water + Trypsin-EDTA/DMEM (50:50)"
+# and "Mix DNase/RNase Free Water 50:50" (ratio present) BAR again. The
+# EQUALITY arm is unchanged: an exact entry match is exempt regardless.
 # This section is OPTIONAL: an absent `exempt:` means NO exemptions and is
 # SILENT (unlike the LOUD cue-off rule above — the bar itself stays ON); a
 # present-but-malformed `exempt:` is a data error and throws, naming the path.

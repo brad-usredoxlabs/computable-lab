@@ -528,6 +528,24 @@ actions:
     expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 
+  // Adversarial D1 (fix run l2t2351-f1): a PRESENT `exempt:` mapping that
+  // lacks a `names:` key is a data error, NOT a silent no-exemption. A typo'd
+  // key (`name:` for `names:`) must not re-open the measured false bar with
+  // zero signal. Genuinely-absent (`exempt:` key missing / `exempt: null`)
+  // and a present-but-null `names:` stay the SILENT no-exemption case.
+  it('malformed `exempt:` (present object with NO `names:` key) throws naming the path (D1)', () => {
+    const path = writeCueFile('cues-exempt-no-names.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  other: 1\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/present `exempt:` section needs a `names:` list/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('genuinely-absent exempt DATA stays SILENT: `exempt:` null and `names:` null parse to no exemption (D1 boundary)', () => {
+    const nullSection = writeCueFile('cues-exempt-null-section.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n`);
+    expect('exemptNames' in loadMixtureCues(nullSection)!).toBe(false);
+    const nullNames = writeCueFile('cues-exempt-names-null.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n`);
+    expect('exemptNames' in loadMixtureCues(nullNames)!).toBe(false);
+  });
+
   it('the exemption is whole-word: an exempt name never matches INSIDE a longer blob word (reviewer bait 6)', () => {
     // A synthetic exempt entry (test-local DATA file — the shipped list names
     // nothing blob-like) proves the boundary rule generically.
@@ -561,5 +579,58 @@ actions:
     for (const blob of ['Trypsin-EDTA/DMEM (50:50)', '50:50 Trypsin-EDTA/DMEM']) {
       expect(config!.exemptNames!.some((n) => n.toLowerCase() === blob.toLowerCase())).toBe(false);
     }
+  });
+
+  // Adversarial D2 (orchestrator-amended matching rule, fix run l2t2351-f1):
+  // the containment arm exists ONLY for a label that IS one catalogued single
+  // reagent — it applies only when the label carries NO ratio/quantity
+  // evidence anywhere (checked against the config's OWN mixtureShape.ratioPatterns,
+  // zero new literals). A composite ratio blob that merely embeds the exempt
+  // phrase is a blob again; the ratio-free containment phrase stays exempt.
+  it('D2: a composite ratio blob embedding the exempt phrase BARS again (shipped config)', () => {
+    for (const material of [
+      'DNase/RNase Free Water + Trypsin-EDTA/DMEM (50:50)',
+      'Mix DNase/RNase Free Water 50:50',
+    ]) {
+      const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-ratio-guard
+actions:
+  - action: add_material
+    labware: plate
+    material: ${material}
+    volumeUl: 50
+`));
+      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    }
+  });
+
+  it('D2: a ratio-free label carrying the exempt phrase as whole words still EXEMPTS', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-ratio-free
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix DNase/RNase Free Water Buffer
+    volumeUl: 50
+`));
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+  });
+
+  it('D2: the ratio guard is DATA-driven (synthetic exempt entry, config ratioPatterns)', () => {
+    const path = writeCueFile('cues-exempt-ratio-guard.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n    - "Alpha/Beta"\n`);
+    const barred = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-guard-bar
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta 50:50
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((barred.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    const exempt = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-guard-ok
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta Buffer
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((exempt.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
   });
 });
