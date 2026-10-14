@@ -73,6 +73,10 @@ interface MixtureShapeRules {
 interface MixtureCueConfig {
   cues: readonly MixtureCueRule[];
   shape: MixtureShapeRules;
+  /** CUE-EXEMPT-1: DATA-declared catalogued single-reagent labels that are
+   *  NEVER mixture evidence (config `exempt:` section). Absent section ⇒ the
+   *  property is absent (exactOptionalPropertyTypes: never `undefined`). */
+  exemptNames?: readonly string[];
 }
 
 /** fix1/D3: the off-state must be LOUD. One warn per (path, reason) pair —
@@ -166,9 +170,64 @@ function parseShapeRules(raw: unknown, path: string): MixtureShapeRules {
   };
 }
 
+/** CUE-EXEMPT-1: parse the OPTIONAL `exempt:` section — the DATA-declared
+ *  catalogued single-reagent names that are never mixture evidence. Absent or
+ *  null section ⇒ undefined ⇒ NO exemptions, SILENT (unlike the LOUD cue-off
+ *  rule: the bar itself stays ON; only the exemption list is empty). A present
+ *  but malformed section is a data error and throws naming the data path
+ *  (parity with the existing loader errors). Zero reagent literals here —
+ *  TypeScript knows only "this label equals / whole-word-contains a
+ *  DATA-declared exempt name". */
+function parseExemptNames(raw: unknown, path: string): readonly string[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`mixture cue list (${path}): \`exempt:\` must be an object with a \`names:\` list of catalogued single-reagent labels`);
+  }
+  const names = (raw as Record<string, unknown>).names;
+  if (names === undefined || names === null) return undefined;
+  if (!Array.isArray(names) || !names.every((n) => typeof n === 'string' && n.trim().length > 0)) {
+    throw new Error(`mixture cue list (${path}): \`exempt.names\` must be a list of non-empty name strings (entries are names, not regexes)`);
+  }
+  return names as string[];
+}
+
+/** CUE-EXEMPT-1 matching rule (documented in the YAML): case-folded and
+ *  whitespace-normalized, the label EQUALS an exempt entry, or the entry holds
+ *  inside the label as a WHOLE-WORD RUN — the entry's first/last characters
+ *  may not sit inside a longer word (word chars are letters/digits/hyphens,
+ *  the same alphabet the flanking arm treats as component words). Entries are
+ *  names, not regexes: the entry is escaped before any pattern use. */
+function normalizeCueLabel(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ').toLowerCase();
+}
+
+function isCueWordChar(char: string): boolean {
+  return /[\p{L}\p{N}-]/u.test(char);
+}
+
+function isExemptMaterialLabel(label: string, exemptNames: readonly string[]): boolean {
+  const normalizedLabel = normalizeCueLabel(label);
+  return exemptNames.some((entry) => {
+    const normalizedEntry = normalizeCueLabel(entry);
+    if (!normalizedEntry.length) return false;
+    if (normalizedLabel === normalizedEntry) return true;
+    let from = 0;
+    for (;;) {
+      const at = normalizedLabel.indexOf(normalizedEntry, from);
+      if (at < 0) return false;
+      const before = at === 0 ? '' : normalizedLabel.charAt(at - 1);
+      const after = at + normalizedEntry.length >= normalizedLabel.length ? '' : normalizedLabel.charAt(at + normalizedEntry.length);
+      if (!isCueWordChar(before) && !isCueWordChar(after)) return true;
+      from = at + 1;
+    }
+  });
+}
+
 /** Load + validate the cue DATA. Absent file / absent-or-empty `cues:` ⇒
  *  undefined (bar OFF) WITH a loud warn naming the path (fix1/D3). A file that
- *  exists but is malformed still throws — malformed DATA is not an off-state. */
+ *  exists but is malformed still throws — malformed DATA is not an off-state.
+ *  The `exempt:` section is OPTIONAL (CUE-EXEMPT-1): absent ⇒ no exemptions,
+ *  silent; malformed ⇒ throws naming the path. */
 export function loadMixtureCues(path: URL | string = MIXTURE_CUES_PATH): MixtureCueConfig | undefined {
   const displayPath = String(path);
   if (!existsSync(path)) {
@@ -198,7 +257,14 @@ export function loadMixtureCues(path: URL | string = MIXTURE_CUES_PATH): Mixture
     return undefined;
   }
   const shape = parseShapeRules((raw as Record<string, unknown>).mixtureShape, displayPath);
-  return { cues: cues.map((entry) => parseCueEntry(entry, displayPath)), shape };
+  const exemptNames = parseExemptNames((raw as Record<string, unknown>).exempt, displayPath);
+  return {
+    cues: cues.map((entry) => parseCueEntry(entry, displayPath)),
+    shape,
+    // exactOptionalPropertyTypes: the optional field rides by CONDITIONAL
+    // SPREAD — an absent `exempt:` leaves the config byte-identical to today.
+    ...(exemptNames !== undefined ? { exemptNames } : {}),
+  };
 }
 
 function cueTokenOccurrences(value: string, token: string): number[] {
@@ -245,8 +311,15 @@ function flankingComponentCount(value: string, occurrence: number, tokenLength: 
 }
 
 /** The generic, DATA-driven shape test: which cues fire on this label. No
- *  reagent name, cue literal, or ratio literal appears in TypeScript. */
+ *  reagent name, cue literal, or ratio literal appears in TypeScript.
+ *  CUE-EXEMPT-1: a label matching a DATA-declared exempt name (the optional
+ *  `exempt:` section — catalogued single reagents whose names merely contain a
+ *  separator) is NOT mixture evidence at all; the exemption is checked BEFORE
+ *  any cue fires, so it suppresses every firing arm generically. */
 function mixtureCuesFound(value: string, config: MixtureCueConfig): string[] {
+  if (config.exemptNames !== undefined && config.exemptNames.length > 0 && isExemptMaterialLabel(value, config.exemptNames)) {
+    return [];
+  }
   const found: string[] = [];
   for (const cue of config.cues) {
     const occurrences = cueTokenOccurrences(value, cue.token);

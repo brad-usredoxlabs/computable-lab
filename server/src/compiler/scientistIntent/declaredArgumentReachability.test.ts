@@ -30,11 +30,12 @@
  *     shape.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
-import { normalizeScientistIntent, WELL_ADDRESS_SHAPE_RE } from './normalizeScientistIntent.js';
+import { loadMixtureCues, normalizeScientistIntent, WELL_ADDRESS_SHAPE_RE } from './normalizeScientistIntent.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 
@@ -449,5 +450,116 @@ describe('well-address shape parity (fix1/D4): the local copy and the canonical 
     const canonical = new RegExp(canonicalSource);
     expect(WELL_ADDRESS_SHAPE_RE.test(value)).toBe(accepted);
     expect(canonical.test(value)).toBe(accepted);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CUE-EXEMPT-1 (architect W211-D4 follow-on): the loader-shape pins for the
+// OPTIONAL `exempt:` section. Malformed exempt DATA throws naming the data
+// path (parity with the existing loader errors); an absent `exempt:` leaves
+// today's behavior byte-identical (the LOUD cue-off rule for `cues:` stays).
+// ---------------------------------------------------------------------------
+describe('exemption loader shape (CUE-EXEMPT-1): exempt is optional DATA, malformed exempt throws naming the path', () => {
+  const SHIPPED_CUES = readFileSync(
+    new URL('../../../../config/drafting/mixture-material-cues.yaml', import.meta.url),
+    'utf-8',
+  );
+  // The shipped file's own `exempt:` section is the LAST top-level block; the
+  // mutation fixtures strip it first so a test-appended `exempt:` is the only
+  // one (duplicate YAML keys would throw the parser's own error, not ours).
+  const CUES_WITHOUT_EXEMPT = SHIPPED_CUES.replace(/\nexempt:\n[\s\S]*$/, '\n');
+  const tempDir = mkdtempSync(join(tmpdir(), 'cue-exempt-'));
+  const writeCueFile = (name: string, text: string): string => {
+    const path = join(tempDir, name);
+    writeFileSync(path, text, 'utf-8');
+    return path;
+  };
+
+  it('GUARD: the SHIPPED cue file parses an exempt list carrying the measured catalogued label', () => {
+    const config = loadMixtureCues();
+    expect(config).toBeDefined();
+    expect(config!.exemptNames).toBeDefined();
+    expect(config!.exemptNames).toContain('DNase/RNase Free Water');
+  });
+
+  it('absent `exempt:` ⇒ NO exemptions and NO warn — behavior byte-identical to today (the bar stays ON)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const withoutExempt = CUES_WITHOUT_EXEMPT;
+      expect(withoutExempt).not.toMatch(/^exempt:/m);
+      const path = writeCueFile('cues-no-exempt.yaml', withoutExempt);
+      const config = loadMixtureCues(path);
+      expect(config).toBeDefined();
+      // exactOptionalPropertyTypes: the property is ABSENT, not undefined-valued.
+      expect('exemptNames' in config!).toBe(false);
+      expect(warnSpy.mock.calls.filter((args) => String(args[0]).includes('mixture-cue-bar-off'))).toEqual([]);
+      // Byte-identical behavior: the blob still bars, the exempt label is NOT exempt here.
+      const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-absent-blob
+actions:
+  - action: add_material
+    labware: plate
+    material: Trypsin-EDTA/DMEM (50:50)
+    volume: { value: 50, unit: uL }
+    targetWells: [A1]
+`), { mixtureCuesPath: path });
+      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+      const single = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-absent-single
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+      expect((single.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('malformed `exempt:` (names: 42) throws a data-path-naming loader error', () => {
+    const path = writeCueFile('cues-exempt-malformed.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names: 42\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/exempt\.names/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('malformed `exempt:` (a bare list, not an object) throws naming the path', () => {
+    const path = writeCueFile('cues-exempt-not-object.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  - some name\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/`exempt:` must be an object/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('the exemption is whole-word: an exempt name never matches INSIDE a longer blob word (reviewer bait 6)', () => {
+    // A synthetic exempt entry (test-local DATA file — the shipped list names
+    // nothing blob-like) proves the boundary rule generically.
+    const path = writeCueFile('cues-exempt-boundary.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n    - "Alpha/Beta"\n`);
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-boundary
+actions:
+  - action: add_material
+    labware: plate
+    material: GammaAlpha/BetaDelta (50:50)
+    volume: { value: 50, unit: uL }
+    targetWells: [A1]
+`), { mixtureCuesPath: path });
+    // "Alpha/Beta" sits inside the longer words Gamma…/…Delta — NOT a match:
+    // the blob still bars.
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    // Same entry at word boundaries (hyphen-joined) DOES exempt.
+    const spaced = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-boundary-ok
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta Buffer
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((spaced.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+  });
+
+  it('the exemption does NOT weaken the bar for true blobs: the shipped exemption names nothing blob-like', () => {
+    // The shipped file's exempt list must not contain any ratio-shaped blob
+    // label used by the existing pins.
+    const config = loadMixtureCues();
+    for (const blob of ['Trypsin-EDTA/DMEM (50:50)', '50:50 Trypsin-EDTA/DMEM']) {
+      expect(config!.exemptNames!.some((n) => n.toLowerCase() === blob.toLowerCase())).toBe(false);
+    }
   });
 });

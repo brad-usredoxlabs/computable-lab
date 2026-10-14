@@ -60,3 +60,26 @@ mixtureShape:
     minComponentLength: 3
     componentPattern: "[A-Za-z][A-Za-z-]*"
     stopWords: [with, without, and, or, plus, in, of, per, for, to, the, a, an]
+
+# CUE-EXEMPT-1 (architect W211-D4 follow-on): the declarative NON-COMPONENT
+# exemption. A label that is ONE catalogued single reagent whose name merely
+# CONTAINS a separator must never be cue-hit. The flanking arm cannot tell
+# "DNase/RNase Free Water" (one catalogued reagent) from a blob: both flanking
+# words look like components ("F12" escapes only because it carries a digit),
+# and the stopWord list has no arm for this fact class. The exemption IS that
+# arm — DATA, seeded with the measured case.
+# MATCHING RULE (interpreted generically by the loader; zero reagent literals
+# in TypeScript): a material label is exempt when, case-folded and
+# whitespace-normalized, it EQUALS one entry, OR the entry holds inside it as
+# a whole-word run — the entry's first/last characters may not sit inside a
+# longer word (an exempt name never matches as a substring of a bigger word).
+# Entries are NAMES, not regexes.
+# This section is OPTIONAL: an absent `exempt:` means NO exemptions and is
+# SILENT (unlike the LOUD cue-off rule above — the bar itself stays ON); a
+# present-but-malformed `exempt:` is a data error and throws, naming the path.
+# The exemption names NOTHING blob-like: `cues:` and `mixtureShape:` above are
+# untouched — a label carrying ratio evidence is still a blob unless it is
+# listed here as a catalogued single reagent.
+exempt:
+  names:
+    - "DNase/RNase Free Water"
