@@ -126,6 +126,16 @@ test('sequences right pane is the harness chat pane with a derived focus header'
   await expect(log).toContainText('2. BamHI')
   const requestsBeforePick = await page.evaluate(() => (window as StreamWindow).clStreamRequests?.length ?? 0)
   await page.getByRole('button', { name: '1. EcoRI' }).click()
+  // The pick goes through chat.sendPrompt, which flushSyncs the user bubble and
+  // then awaits waitForNextPaint() (requestAnimationFrame + setTimeout 0) before
+  // the stream fetch fires — measured: fetch lands ~6ms after the React onClick
+  // and ~37ms after the pre-pick read, i.e. AFTER a single eager page.evaluate
+  // round-trip (~2-5ms) following click(). Poll the SAME count instead of
+  // reading it once: the assertion is unchanged (exactly one additional request,
+  // proven fired, with the term in its body), only the read is timed.
+  await expect
+    .poll(() => page.evaluate(() => (window as StreamWindow).clStreamRequests?.length ?? 0), { timeout: 10_000 })
+    .toBe(requestsBeforePick + 1)
   const requestsAfterPick = await page.evaluate(() => (window as StreamWindow).clStreamRequests?.length ?? 0)
   expect(requestsAfterPick).toBe(requestsBeforePick + 1)
   const lastBody = await page.evaluate(() => (window as StreamWindow).clStreamRequests?.at(-1) ?? '')
