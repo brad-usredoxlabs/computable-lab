@@ -25,9 +25,17 @@ Running 6 tests using 6 workers
   6 passed (10.3s)
 ```
 
-### 1b. `npm run typecheck -w app` baseline (sorted error lines, 23) — identical to trunk's 23 (diff empty)
+### 1b. `npm run typecheck -w app` baseline (sorted error lines, 23) — identical to trunk's 23 (set-diff empty)
 
-Captured AFTER the §0 symlink repair (the repair is environment-only, touches no tracked file, and is what makes the lane baseline equal trunk's). Verbatim `/tmp/hs1-tsc-baseline-sorted.txt`:
+CORRECTED 2026-10-14T09:40 EDT BY THE ORCHESTRATOR (advc c1 DEFECT 1): the block originally
+quoted here held 28 lines — a pre-/mid-symlink-repair capture (5 stale TS2307/TS7006 lines
+from unresolved exclude symlinks: draftChanges, ParameterAnswerInput+QuestionsPanel,
+WorkstateProposalCard x2) plus two `in type`/`on type` wording drift lines. The corrected
+capture below was RE-RUN post-repair by the orchestrator in THIS worktree (`cd app &&
+npx --no-install tsc --noEmit`, sorted) and is byte-identical to the trunk capture taken the
+same minute in /mnt/vast/home/brad/git/cl-integration-2/app (set-diff empty; 23 == 23). The
+zero-new conclusion in the original run stands; only the quoted evidence was mislabelled.
+Verbatim post-repair HEAD capture (== trunk baseline):
 
 ```
 src/event-editor/deck/LawnSurface.moveAcross.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
@@ -36,17 +44,12 @@ src/event-editor/editorHistory.test.ts(176,34): error TS2345: Argument of type '
 src/event-editor/editorHistory.test.ts(199,37): error TS2345: Argument of type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: PlateEvent[]; labwares: {}; placements: never[]; }' is not assignable to parameter of type 'EventEditorAction'.
 src/event-editor/EventEditorContext.tsx(1288,29): error TS2339: Property 'equipments' does not exist on type '{ eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; placements: EventEditorPlacement[]; }'.
 src/event-editor/focus/LabwareFocus.instrument.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
-src/event-editor/right-pane/ai/AiTabPanel.tsx(35,40): error TS2307: Cannot find module './draftChanges' or its corresponding type declarations.
-src/event-editor/right-pane/ai/QuestionsPanel.tsx(123,30): error TS7006: Parameter 'ans' implicitly has an 'any' type.
-src/event-editor/right-pane/ai/QuestionsPanel.tsx(12,38): error TS2307: Cannot find module './ParameterAnswerInput' or its corresponding type declarations.
 src/event-editor/right-pane/ai/systemPromptForViewer.ts(45,3): error TS2322: Type '"document" | "protocol-review" | "pdf" | "deck" | "project-details"' is not assignable to type 'SystemPromptKind'.
 src/event-editor/right-pane/ai/useChatThread.deckLayout.test.tsx(52,9): error TS2353: Object literal may only specify known properties, and 'onDeckLayout' does not exist in type 'UseChatThreadOptions'.
 src/event-editor/right-pane/ai/useChatThread.deckLayout.test.tsx(84,9): error TS2353: Object literal may only specify known properties, and 'onDeckLayout' does not exist in type 'UseChatThreadOptions'.
-src/event-editor/right-pane/ai/WorkstateProposalCard.tsx(14,36): error TS2307: Cannot find module '../../../shared/surfaces/registry' or its corresponding type declarations.
-src/event-editor/right-pane/ai/WorkstateProposalCard.tsx(73,34): error TS7006: Parameter 's' implicitly has an 'any' type.
 src/event-editor/right-pane/protocol/ProtocolLocalizationThread.tsx(232,35): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
-src/event-editor/topbar/DeckModeSwitcher.tsx(11,24): error TS2339: Property 'runDeckLock' does not exist in type 'EventEditorState'.
-src/event-editor/viewer/deck/DeckToolbar.tsx(38,31): error TS2339: Property 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/topbar/DeckModeSwitcher.tsx(11,24): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
+src/event-editor/viewer/deck/DeckToolbar.tsx(38,31): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
 src/event-editor/viewer/ViewerToolbar.tsx(54,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
 src/event-editor/viewer/Viewer.tsx(64,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
 src/ingestion/components/IngestionUploadModal.tsx(232,23): error TS2554: Expected 2 arguments, but got 1.
