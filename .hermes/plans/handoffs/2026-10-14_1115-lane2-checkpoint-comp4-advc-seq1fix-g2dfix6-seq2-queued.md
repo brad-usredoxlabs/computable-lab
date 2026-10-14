@@ -135,3 +135,37 @@ next checks (cheap gate): (1) reviews/advc-COMP4-c1-l2t1035.md VERDICT; (2) SEQ1
 marker "HARNESS-SEQ-1 FIX1 DONE" + EXITED + FLOCK-RC; (3) G2DFIX6 "LOCK-ACQUIRED"/marker;
 (4) SEQ2 bootstrap "SEQ2-BOOTSTRAP-EXITED code=0"; (5) trunk tip (merges move it); (6) AI-
 13 recount (n=237); (7) stack :3093/:5193 200.
+
+# ---- LATE ADDENDA (same tick l2t1045, 11:25-11:52) ----
+# COMP-4 ACCEPTED+MERGED 11:25: advc c1 VERDICT: accept (0 gate defects; F1-F4 minor).
+#   ORCH SELF-BATTERY (never trust a 7-min reviewer run): diff opened (20 files
+#   +1157/-41), vitest resolution+scientistIntent 320/320 MY OWN RUN, golden-replay 37/37,
+#   promptBudget 47090<=47180 headroom 90, MANIFEST blob hash-object = fbf743ab... exact,
+#   compositionDecomposition diff EMPTY, engine zero-domain-literal grep clean, trunk grep
+#   zero pins on old 83fda3b4. MERGE bd1d650a -> 3bc6ab0b --no-ff clean; trunk blob
+#   re-verified post-merge. Stack restarted (YAML), :5193/:3093 200. Reports promoted.
+#   AS-LANE2-COMP4-WIRE-COMPOSITION-GLOBAL recorded (F3, spec-directed latent).
+# SEQ1 FIX1 DONE+MERGED 11:40: coder exited "FIX1 DONE 25758f0d" 11:24. Root cause PROVEN
+#   and orch-verified first-hand: NOT product — useAiChat.ts:437-445 flushSync+
+#   waitForNextPaint (:1350) delays the stream fetch ~6ms post-onClick/~20-37ms post
+#   eager-evaluate; HarnessChatPane.tsx:54 routes option clicks through chat.sendPrompt.
+#   Fix = timing-tolerant READ ONLY (expect.poll exact-increment before+1; every assertion
+#   verbatim; +10 spec lines; ZERO product delta) — the justified race path my dispatch
+#   allowed. Coder evidence: served-build probe timings (vite preview :5312), tsc 23==23
+#   set-diff empty, src/agent 24 green, app vitest stash-parity comm EMPTY. MERGED --no-ff
+#   8688a376 -> 353800da. EVIDENCE DEBT AS-LANE2-SEQ1-CLARIF-CLICK-SERVED-ONLY-FAIL
+#   CLOSED (mechanism named+measured).
+# GATE r2 DISPATCHED 11:50: tier-1 (r1 was substantive real-receipts, so tier-1 legitimate
+#   per 6c), bash proc_19c3ff496d40 pid 1272990, prompt prompts/review-SEQ1-gate-r2-l2t1045
+#   .txt (corrected /runs/:runId route; candidate 353800da; primary leg = fixed spec wall
+#   against :5193), receipts receipts/HARNESS-SEQ-1/2026-10-14_1150-r2/, log streamed to
+#   the process. Expected ~30-45 min; 2x ~12:35, 3x ~13:20. Accept -> mark SEQ-1 DONE +
+#   promote reports; fix -> defect list to a new coder run on the SAME worktree; dead/hang/
+#   no-trail -> rule 6c tier-2 (deepseek-v4.1-flash), NO blind tier-1 retry.
+# G2DFIX6 LIVE since 11:24:21 (proc_fc00cbb19cf5 pid 1160933; lock pid file "G2DFIX6
+#   <pid>"): expected ~60-120 min -> 2x ~13:25, 3x ~15:25. On exit: advc c6 (carry c5 §B
+#   arms as the regression battery + disclosure-table audit + interpreter-diff-empty vs
+#   e1b62bd6). CYCLE CAP stands (cap note in the W2-9 task block): c6 fix-no-improvement ->
+#   architect, NOT cycle 7.
+# SEQ-2 coder queued 2nd (proc_a7659880efea pid 1188852): bootstrap DONE (linked=62
+#   copied=62); acquires the lock when g2dfix6 exits. Do NOT re-dispatch while alive.
