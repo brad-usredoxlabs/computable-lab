@@ -623,6 +623,116 @@ describe('GraphLemur PDF upload → durable vendor-pdf record', () => {
     expect(mockExtractVendorPdfText, 'a refused upload must run no extraction').not.toHaveBeenCalled();
   });
 
+  // DOCINGEST-B B1/B3 — a photographed page upload becomes a durable
+  // vendor-pdf with mediaKind 'image', OCR pages as extractedText, honest
+  // image media_type from the config map, and upload provenance. The gate is
+  // config-driven (images.formats): drop webp from the config and a webp
+  // upload is refused (mutation probe, bait 10).
+  it('uploads a photographed .png: mediaKind image, OCR extractedText, honest image media_type, page_count stamped', async () => {
+    const ocrText = 'DEMO LYSIS BUFFER ADD 500 uL\n';
+    mockExtractVendorPdfText.mockResolvedValue({
+      kind: 'vendor-pdf-text-extraction',
+      source: { fileName: 'photographed-page.png', sha256: SAMPLE_SHA },
+      mode: 'both',
+      mediaKind: 'image',
+      plainText: {
+        text: ocrText,
+        pageCount: 1,
+        diagnostics: [{ severity: 'warning', code: 'LOCAL_OCR_REVIEW', message: 'Transcribed using local OCR (up to the configured page limit). Check page coverage and every volume against the page image before importing.' }],
+      },
+      layoutText: { pages: [{ pageNumber: 1, text: ocrText }], pageCount: 1 },
+      images: [{ pageNumber: 1, path: 'artifacts/foundry/pdfs/pages/abc123def456/page-001.png' }],
+    });
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from('\u0089PNG\r\n\u001a\n demo png bytes').toString('base64');
+    const result = await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'Composer scan probe', fileName: 'photographed-page.png', contentBase64: base64 }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+    expect(upserted).toHaveLength(1);
+    const payload = upserted[0].payload as Record<string, unknown>;
+    const source = payload.source as Record<string, unknown>;
+    expect(source.engine).toBe('upload');
+    expect(source.mediaKind).toBe('image');
+    expect(source.originalFileName).toBe('photographed-page.png');
+    expect(source.pageCount, 'an image record carries its page count').toBe(1);
+    const file = payload.file as Record<string, unknown>;
+    expect(file.media_type, 'an image upload must NOT be re-stamped application/pdf').toBe('image/png');
+    expect(String(file.stored_path).endsWith('.png'), 'the artifact keeps the image extension').toBe(true);
+    expect(file.page_count, 'file-ref page_count (minimum 1) is honest for a real page').toBe(1);
+    const pages = payload.extractedText as Array<{ pageNumber: number; text: string }>;
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.text).toContain('LYSIS');
+    // The OCR caution persists on the record (schema-declared
+    // extractionDiagnostics — NOT stuffed into source, bait 15).
+    const diagnostics = payload.extractionDiagnostics as Array<{ code: string }> | undefined;
+    expect(diagnostics?.some((d) => d.code === 'LOCAL_OCR_REVIEW')).toBe(true);
+    const { valid, errors } = await validateAgainstVendorPdfSchema(payload);
+    expect(valid, JSON.stringify(errors)).toBe(true);
+  });
+
+  it('a scanned PDF upload stamps mediaKind image with pageCount from the OCR pages', async () => {
+    mockExtractVendorPdfText.mockResolvedValue({
+      kind: 'vendor-pdf-text-extraction',
+      source: { fileName: 'scan.pdf', sha256: SAMPLE_SHA },
+      mode: 'both',
+      mediaKind: 'image',
+      plainText: { text: 'page one \f page two', pageCount: 2, diagnostics: [] },
+      layoutText: {
+        pages: [{ pageNumber: 1, text: 'page one' }, { pageNumber: 2, text: 'page two' }],
+        pageCount: 2,
+      },
+      images: [
+        { pageNumber: 1, path: 'artifacts/foundry/pdfs/pages/abc123def456/page-001.png' },
+        { pageNumber: 2, path: 'artifacts/foundry/pdfs/pages/abc123def456/page-002.png' },
+      ],
+    });
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    const base64 = Buffer.from('%PDF-1.4 raster-only demo scan').toString('base64');
+    await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'Scanned kit manual', fileName: 'scan.pdf', contentBase64: base64 }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+    const payload = upserted[0].payload as Record<string, unknown>;
+    const source = payload.source as Record<string, unknown>;
+    expect(source.mediaKind).toBe('image');
+    expect(source.pageCount).toBe(2);
+    const file = payload.file as Record<string, unknown>;
+    expect(file.media_type).toBe('application/pdf');
+    expect(file.page_count).toBe(2);
+    const { valid, errors } = await validateAgainstVendorPdfSchema(payload);
+    expect(valid, JSON.stringify(errors)).toBe(true);
+  });
+
+  it('non-image gate unchanged: a .docx still acquires as text and an unreadable file still 415s', async () => {
+    // The image arms must not widen the gate beyond the config: .exe stays
+    // refused (pinned above) and .docx keeps its Stage-A behavior.
+    mockExtractVendorPdfText.mockResolvedValue({
+      kind: 'vendor-pdf-text-extraction',
+      source: { fileName: 'demo-sop.docx', sha256: SAMPLE_SHA },
+      mode: 'both',
+      mediaKind: 'text',
+      plainText: { text: '', pageCount: 1, diagnostics: [{ severity: 'error', code: 'DOCX_TOOL_MISSING', message: 'reader absent' }] },
+      layoutText: { pages: [{ pageNumber: 1, text: '' }], pageCount: 1 },
+    });
+    const { store, upserted } = makeStubStore();
+    const handlers = createVendorSearchHandlers({ workspaceRoot: '/workspace', store });
+    const reply = makeReply();
+    await handlers.ingestGraphLemurPdfUpload(
+      ingestRequest({ title: 'docx control', fileName: 'demo-sop.docx', contentBase64: Buffer.from('PK fake').toString('base64') }),
+      reply.reply,
+    );
+    expect(reply.statusCode).toBe(200);
+    const source = upserted[0].payload as Record<string, unknown>;
+    expect((source.source as Record<string, unknown>).mediaKind).toBe('text');
+  });
+
   it('W2-8-FIX2 D2: a failed record create surfaces recordWriteError instead of a silent 200', async () => {
     // The upload-by-content path (no url in the body). Before the schema
     // conditional, the store rejected this payload ('Missing required
