@@ -93,3 +93,20 @@ next checks (cheap gate): (1) r3 receipts report.md VERDICT + trail.json exists;
 (2) g2dfix6 marker "W2-9-G2DFIX6 DONE" + EXITED + FLOCK-RC; (3) lock pid file (SEQ2 after
 g2dfix6 releases); (4) trunk tip (merges move it); (5) AI-13 recount (n=237);
 (6) stack :3093/:5193 200.
+
+# ---- LATE ADDENDA (same tick l2t1150, 12:15-12:25) ----
+# HARNESS-SEQ-1 DONE 12:15: TIER-2 GATE r3 EXITED ACCEPT with valid full receipts in
+#   ~15 min (proc_39ecdee3b4e4). trail.json + spec-wall-trail.json + logs/ + 7 screenshots;
+#   served revision 353800da-ancestor CONFIRMED before measuring; primary spec 1 passed
+#   (matches my first-hand run); three-pane 5/5 unmodified (sha-pinned); honest-empty via
+#   HarnessChatPane.test.tsx 24/24; focus-follows-tab zero stream requests captured; run
+#   page non-regression proven on real run id RUN-2026-09-07-run-nzrs (the EXR id from my
+#   prompt resolves only as a record — route itself proven green). ORCH verified the
+#   receipts myself before marking done. ONE informational finding: sequence-chat-scroll
+#   spec 3/6 flap PRE-EXISTING (byte-identical ChatLog body vs 9c7bb5ab^, frozen spec,
+#   three prior attributions) — not reopened, retry-at-gate convention stands. Data gap:
+#   live catalog has zero sequence records -> live record-click leg stub-proven (criterion
+#   met via spec). Reports promoted: reports/HARNESSSEQ1-report.md + gate r3 report.
+#   TASK LIST: HARNESS-SEQ-1 -> done. Ready set after: EMPTY except blocked/BRAD-pending
+#   (W2-8/9/11 legs in-flight or capped; PROTO-AI-13 n=237 INSUFFICIENT-side). G2DFIX6
+#   still live (hermes 1262125); SEQ-2 coder queued 2nd.
