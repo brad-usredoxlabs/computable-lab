@@ -37,8 +37,10 @@ images:
 
 # What a readable lab document IS. One entry per accepted extension:
 #   mediaKind   — what the stored file is (drives the review pane's source
-#                 preview: pdf canvases | selectable text). `image` is reserved
-#                 for Stage B and must not appear here until its reader exists.
+#                 preview: pdf canvases | selectable text | page images).
+#                 DOCINGEST-B: `image` entries landed WITH their reader
+#                 (server/src/extract/ImageTextAdapter.ts) — the reservation
+#                 this map declared is now lifted.
 #   mediaType   — the honest file.media_type stamp for the stored artifact.
 #   analysisLabel — the file-type label the analyze-ingestion prompt uses
 #                 (preserves today's endpoint vocabulary).
@@ -55,3 +57,11 @@ formats:
   - { extension: xlsx,     mediaKind: spreadsheet, mediaType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, analysisLabel: xlsx }
   - { extension: xls,      mediaKind: spreadsheet, mediaType: application/vnd.ms-excel, analysisLabel: xlsx }
   - { extension: csv,      mediaKind: text,        mediaType: text/csv, analysisLabel: csv }
+  # DOCINGEST-B page images (photographs/scans). The upload gate additionally
+  # requires membership in `images.formats` above — both lists are config.
+  - { extension: png,      mediaKind: image,       mediaType: image/png, analysisLabel: other }
+  - { extension: jpg,      mediaKind: image,       mediaType: image/jpeg, analysisLabel: other }
+  - { extension: jpeg,     mediaKind: image,       mediaType: image/jpeg, analysisLabel: other }
+  - { extension: tif,      mediaKind: image,       mediaType: image/tiff, analysisLabel: other }
+  - { extension: tiff,     mediaKind: image,       mediaType: image/tiff, analysisLabel: other }
+  - { extension: webp,     mediaKind: image,       mediaType: image/webp, analysisLabel: other }
