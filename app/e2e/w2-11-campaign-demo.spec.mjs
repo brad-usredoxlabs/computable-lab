@@ -369,7 +369,12 @@ const SEED_MATERIALS = [
   // these records, and the name/tag strings are unchanged -> expressed as a
   // material, matching its sibling MagWash 1.
   { recordId: 'MAT-w211-magwash2', payload: { kind: 'material', id: 'MAT-w211-magwash2', domain: 'reagent', name: 'MagWash 2', synonyms: ['magwash_2'] } },
-  { recordId: 'MAT-w211-water', payload: { kind: 'material', id: 'MAT-w211-water', domain: 'reagent', name: 'DNase/RNase Free Water', synonyms: ['dnase_rnase_free_water'] } },
+  // l2t2150 (architect ruling W211-D4-noun-drift-fixture-decision, grounding 2): the D4
+  // prompt names this reagent 'nuclease-free water' — one token, no separator cue. The
+  // label 'DNase/RNase Free Water' fires the blob-material cue DATA (flanking 'DNase'/'RNase'
+  // as components) on a catalogued SINGLE reagent; the cue-exemption product task is separate
+  // queue work. The name stays for the other legs; this synonym routes D4's noun tier-1.
+  { recordId: 'MAT-w211-water', payload: { kind: 'material', id: 'MAT-w211-water', domain: 'reagent', name: 'DNase/RNase Free Water', synonyms: ['dnase_rnase_free_water', 'nuclease-free water'] } },
 ]
 
 // The recordingStore canon rows the D5/D6 server legs resolve against (the
@@ -867,6 +872,34 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     const answeredReq = await answeredReqPromise
     let answeredBody = {}
     try { answeredBody = JSON.parse(answeredReq.postData() ?? '{}') } catch { /* replay stays skipped below if empty */ }
+
+    // Orch l2t2150 — D4 PROMPT FIXTURE REWRITE (architect ruling
+    // decisions/W211-D4-noun-drift-fixture-decision-l2t2150.md VERDICT (A), DISCLOSED
+    // per its contract). The truncated-vendor reconstruction made the draw re-invent
+    // noun labels every cycle (run 13: 21->23->29 fresh labels across snake/case/rename
+    // variants) — a MODEL naming-stability property, not a chain defect. D4's contract
+    // is the CHAIN (localize -> answer -> deck -> accept -> LPR). The fixture is now a
+    // fully-specified scientist-plausible intent: every noun matches the seeded
+    // inventory exactly; wells and parameters are stated (no missing-required-argument);
+    // exactly ONE intentionally-UNmatched labware noun — 'magnetic rack' — keeps the
+    // unknown-noun->mint arm and the labwareAdditions checkbox (boxCount>0, :1043,
+    // byte-identical) NON-VACUOUS. No LAB record is added for the rack (DECK-FOLD-1
+    // trap). The mint loop, stall clause, MAX_REDRAW and the assertion stay UNTOUCHED.
+    const D4_PROMPT = [
+      'Manual zymoBIOMICS-style prep on the bench, single plate workflow.',
+      'Bring one Sample Plate holding 50 uL sample in wells A1-D4 to the bench.',
+      'Add 50 uL Lysis Solution to the sample in each of wells A1-D4 of the Sample Plate.',
+      'Homogenize in the bench bead beater for 30 s at maximum speed.',
+      'Spin the plate at 4000 rpm for 2 min.',
+      'Transfer 40 uL supernatant from each well A1-D4 to a magnetic rack holding wells A1-D4.',
+      'Add 40 uL MagBinding Beads to each well A1-D4 in the magnetic rack, then add 40 uL MagBinding Buffer to each well.',
+      'Wash the beads in the magnetic rack with 40 uL MagWash 1 per well, then wash with 40 uL MagWash 2 per well.',
+      'Elute with 40 uL nuclease-free water per well A1-D4 in the magnetic rack.',
+      'Heat the eluate in the magnetic rack at 55 C for 5 min.',
+    ].join('\n')
+    if (answeredBody?.protocolText) {
+      answeredBody.protocolText = D4_PROMPT
+    }
 
     // Orch l2t0958 — HONEST MINT REPLAY (architect decision VERDICT (i), harness
     // discipline 1-4): a scientist facing the unknown-noun bar takes the mint
