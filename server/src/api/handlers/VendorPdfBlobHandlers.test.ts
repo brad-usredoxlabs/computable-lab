@@ -191,9 +191,11 @@ describe('VendorPdfBlobHandlers', () => {
   // anything else. The `../..` arm is plan-B3-MANDATED (bait 2).
   describe('getPageImage (GET /vendor-pdfs/:recordId/page/:pageNumber)', () => {
     const sha12 = 'abc123def456'
-    const pageDir = join(workspaceRoot, 'artifacts', 'foundry', 'pdfs', 'pages', sha12)
 
     async function seedImageRecord(mediaKind: string | undefined, storedPath = `artifacts/foundry/pdfs/${sha12}.png`) {
+      // vendorPdfPageDir's shape, asserted here so the test and the writer
+      // agree on the ONE convention.
+      const pageDir = join(workspaceRoot, 'artifacts', 'foundry', 'pdfs', 'pages', sha12)
       await mkdir(pageDir, { recursive: true })
       await writeFile(join(pageDir, 'page-001.png'), 'fake-png-bytes', 'utf-8')
       return makeHandlers([

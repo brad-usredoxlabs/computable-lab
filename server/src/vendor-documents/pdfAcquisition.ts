@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -355,10 +355,13 @@ async function rasterizeAndOcrPdf(input: {
       });
       pages.push({ pageNumber, text: stdout.trimEnd() });
       // KEEP the page image: move it out of the scratch dir into the
-      // per-record page dir under the ONE naming convention.
+      // per-record page dir under the ONE naming convention. copyFile (not
+      // rename): the scratch dir (tmpdir) and the artifact root can live on
+      // different filesystems (EXDEV) — proven by the §7 live probe.
       const keptName = vendorPdfPageFileName(pageNumber, 'png');
       const keptPath = join(pageDir, keptName);
-      await rename(join(dir, pageFile), keptPath);
+      await copyFile(join(dir, pageFile), keptPath);
+      await rm(join(dir, pageFile), { force: true });
       images.push({ pageNumber, path: relative(input.workspaceRoot, keptPath) });
     }
 
