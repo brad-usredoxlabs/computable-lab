@@ -41,11 +41,11 @@ function state(overrides: Partial<SequencesAgentActionState> = {}): SequencesAge
 
 describe('applyAgentAction — the pure decision (it decides, it never navigates)', () => {
   it('a declared sequence-tab target yields the setTab effect and nothing else', () => {
-    const action: AiAgentActionEnvelope = {
+    const action = {
       action: 'open-surface',
       surface: 'sequences',
       target: { kind: 'sequence-tab', tab: 'Analysis' },
-    } as AiAgentActionEnvelope
+    } as unknown as AiAgentActionEnvelope
     const result = applyAgentAction(action, state())
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -150,7 +150,7 @@ describe('createSequencesAgentActionHandler — the mount adapter (guard INHERIT
   function mount(overrides: { canLeave?: boolean | undefined } = {}) {
     const setTab = vi.fn()
     const selectRecord = vi.fn()
-    const editorCanLeave = vi.fn<() => boolean | undefined>(() => overrides.canLeave)
+    const editorCanLeave = vi.fn(() => overrides.canLeave as boolean | undefined)
     const handler = createSequencesAgentActionHandler({
       tabs: TABS,
       records: () => [{ recordId: 'SEQ-PUC19' }],

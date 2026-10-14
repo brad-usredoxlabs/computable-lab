@@ -2623,7 +2623,7 @@ export function createAgentOrchestrator(
               if (compiled.ok) {
                 onEvent?.({ type: 'agent_action', action: compiled.action });
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
-                const resolvedLabel = compiled.action.target?.label ?? compiled.action.surface ?? 'the workspace';
+                const resolvedLabel = (compiled.action.target && 'label' in compiled.action.target ? compiled.action.target.label : undefined) ?? ('tab' in (compiled.action.target ?? {}) ? (compiled.action.target as { tab: string }).tab : undefined) ?? compiled.action.surface ?? 'the workspace';
                 const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
                 const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
                 const summary: AgentSummary = {
@@ -2644,7 +2644,7 @@ export function createAgentOrchestrator(
                   bypass: null,
                 };
                 logAgentSummary(tid, summary);
-                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : compiled.action.target.stepId) : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
+                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : 'kind' in compiled.action.target && compiled.action.target.kind === 'protocol-step' ? compiled.action.target.stepId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-record' ? compiled.action.target.recordId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-tab' ? compiled.action.target.tab : '-') : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
                 return wsResult;
               }
               const diagnostics = compiled.diagnostics.map((d) => ({
