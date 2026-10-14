@@ -113,7 +113,9 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           <p>{message.content}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
           {message.clarification && <div className="chat-log-clarification">
-            <p>{message.clarification.prompt}</p>
+            {/* useAiChat already surfaces clarification.prompt as the message
+                body; only repeat it when the body differs. */}
+            {message.content !== message.clarification.prompt && <p>{message.clarification.prompt}</p>}
             {onClarificationPick && <ol className="chat-log-clarification-options">
               {message.clarification.options.map((option, optionIndex) => <li key={option.id}>
                 <button onClick={() => onClarificationPick(clarificationAnswerPrompt(

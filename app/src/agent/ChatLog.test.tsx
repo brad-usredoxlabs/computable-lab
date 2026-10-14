@@ -76,4 +76,32 @@ describe('sequence conversation scrolling', () => {
     expect(log.scrollTop).toBe(log.scrollHeight)
     expect(screen.queryByRole('button', { name: 'Latest messages' })).toBeNull()
   })
+
+  it('renders a clarification turn and answers it as the next chat turn (lane-2 answer text)', () => {
+    const onClarificationPick = vi.fn()
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
+      message('user', 'user', 'Which enzyme should cut this?'),
+      { ...message('clarify', 'assistant'), content: 'Which enzyme should cut this?', clarification: {
+        id: 'clar-1', prompt: 'Which enzyme should cut this?', entityType: 'sequence',
+        options: [{ id: 'opt-1', label: 'EcoRI' }, { id: 'opt-2', label: 'BamHI' }],
+      } },
+    ]} />)
+    const log = screen.getByRole('log', { name: 'Conversation' })
+    expect(log).toHaveTextContent('1. EcoRI')
+    expect(log).toHaveTextContent('2. BamHI')
+    fireEvent.click(screen.getByRole('button', { name: '1. EcoRI' }))
+    // The answer rides the exported lane-2 helper: "Use <value> for <target>."
+    expect(onClarificationPick).toHaveBeenCalledWith('Use EcoRI for sequence.')
+  })
+
+  it('omits clarification option buttons when the host offers no answer path', () => {
+    render(<ChatLog {...props} messages={[
+      { ...message('clarify', 'assistant'), content: 'Which enzyme?', clarification: {
+        id: 'clar-1', prompt: 'Which enzyme?', entityType: 'sequence',
+        options: [{ id: 'opt-1', label: 'EcoRI' }],
+      } },
+    ]} />)
+    expect(screen.getByRole('log', { name: 'Conversation' })).toHaveTextContent('Which enzyme?')
+    expect(screen.queryByRole('button', { name: '1. EcoRI' })).toBeNull()
+  })
 })
