@@ -123,3 +123,101 @@ These are untracked lane scaffolding; `git status` shows only `?? app/node_modul
 
 - Nothing blocking. The D4 fixture rewrite (harness-owned, orch-executed per the architect ruling) is independent of this change; with the exemption merged, the W2-11 prompt could in principle name the catalogued label directly, but the ruling's synonym routing stands — not my call.
 - Orchestrator verification: rerun `cd server && npx tsc --noEmit` and `npx vitest run src/compiler/scientistIntent/` in the worktree; MANIFEST hash above; `git -c core.fileMode=false diff --name-only fd1e496e..HEAD`.
+
+---
+
+# Fix run l2t2351-f1 (adversarial review CUE-EXEMPT-1-c1: VERDICT fix, D1 + D2)
+
+Review read: `/home/brad/.hermes/cl/lanes/2/reviews/CUE-EXEMPT-1-c1-l2t2351.md`. Both MINOR defects fixed in ONE commit:
+
+- `14c2cfc2` fix(cues): present-exempt-without-names throws + containment requires ratio-free labels (adversarial D1/D2)
+
+Files touched (3, exactly the scoped files; `git -c core.fileMode=false show --stat 14c2cfc2`):
+
+```
+ config/drafting/mixture-material-cues.yaml         |  8 +++
+ .../declaredArgumentReachability.test.ts           | 71 ++++++++++++++++++++++
+ .../scientistIntent/normalizeScientistIntent.ts    | 48 +++++++++++----
+ 3 files changed, 114 insertions(+), 13 deletions(-)
+```
+
+## D1 — present `exempt:` without a `names:` key now throws naming the data path
+
+`parseExemptNames` (normalizeScientistIntent.ts): the silent `names === undefined` fallthrough is split. A present object-shaped `exempt:` lacking the `names` KEY (`!('names' in section)`) throws:
+
+```
+mixture cue list (<path>): present `exempt:` section needs a `names:` list
+```
+
+Genuinely-absent stays the SILENT no-exemption case: no `exempt:` key, `exempt:` null (YAML empty value), and present-but-null `names:` all parse to "no exemption, property absent" (the `names: null` shape is kept silent deliberately — an explicit null is an intentional "no exemptions" declaration; only a missing key is a data error). Loader contract comment updated to state this.
+
+New pins (loader-shape describe):
+- `malformed exempt: (present object with NO names: key) throws naming the path (D1)` — fixture `exempt:\n  other: 1\n`, asserts the error message AND the data path in the message.
+- `genuinely-absent exempt DATA stays SILENT: exempt: null and names: null parse to no exemption (D1 boundary)` — asserts `'exemptNames' in config === false` for both shapes.
+
+## D2 — containment arm narrowed: exemption by containment requires a RATIO-FREE label (orchestrator-amended rule)
+
+`isExemptMaterialLabel(label, exemptNames, ratioPatterns)` now takes the config's OWN `mixtureShape.ratioPatterns` (passed from `mixtureCuesFound` via `config.shape.ratioPatterns` — zero new literals, zero new patterns). Rule implemented:
+- EQUALITY arm unchanged: a normalized label equal to an entry is exempt regardless of ratio.
+- CONTAINMENT arm: first computes `hasRatioEvidence = ratioPatterns.some(p => p.test(normalizedLabel))` — ANY ratio/quantity match ANYWHERE in the label; when true, containment does NOT exempt.
+
+Effect (matches the orchestrator ruling exactly):
+- `DNase/RNase Free Water` (equality) and `Mix DNase/RNase Free Water Buffer` (ratio-free containment) stay EXEMPT.
+- `DNase/RNase Free Water + Trypsin-EDTA/DMEM (50:50)` and `Mix DNase/RNase Free Water 50:50` (ratio present) BAR again — the reviewer's probe3 bars=0 cases are now bars=1.
+
+New pins:
+- `D2: a composite ratio blob embedding the exempt phrase BARS again (shipped config)` — both reviewer-named labels, 1 bar each.
+- `D2: a ratio-free label carrying the exempt phrase as whole words still EXEMPTS` — `Mix DNase/RNase Free Water Buffer`, 0 bars.
+- `D2: the ratio guard is DATA-driven (synthetic exempt entry, config ratioPatterns)` — synthetic `Alpha/Beta`: `Mix Alpha/Beta 50:50` bars, `Mix Alpha/Beta Buffer` exempts (proves the guard is generic, not shipped-name-specific).
+
+YAML comment block: MATCHING RULE section gained a `RATIO GUARD (adversarial D2, orchestrator ruling)` paragraph stating the containment-requires-ratio-free rule, the DATA source (`mixtureShape.ratioPatterns`), and the four named example outcomes. `cues:` and `mixtureShape:` values remain untouched (comment-only YAML diff, +8 lines).
+
+## RED (verbatim, new pins before the loader/matching fix)
+
+`cd server && npx vitest run src/compiler/scientistIntent/` after adding the 5 new pins only:
+
+```
+ FAIL  ... > exemption loader shape (CUE-EXEMPT-1): ... > malformed `exempt:` (present object with NO `names:` key) throws naming the path (D1)
+AssertionError: expected [Function] to throw error matching /present `exempt:` section needs a `names:` list/ but got null
+
+ FAIL  ... > exemption loader shape (CUE-EXEMPT-1): ... > D2: a composite ratio blob embedding the exempt phrase BARS again (shipped config)
+AssertionError: expected [] to have a length of 1 but got +0
+
+ FAIL  ... > exemption loader shape (CUE-EXEMPT-1): ... > D2: the ratio guard is DATA-driven (synthetic exempt entry, config ratioPatterns)
+AssertionError: expected [] to have a length of 1 but got +0
+
+ Test Files  1 failed | 20 passed (21)
+      Tests  3 failed | 237 passed (240)
+   Duration  6.24s (transform 3.05s, setup 1ms, collect 26.84s, tests 8.89s, environment 5ms, prepare 13.83s)
+```
+
+3 genuine REDs (D1 x1, D2 x2); the 2 boundary/still-exempt pins were already green and stay green (they pin the behavior that must NOT change).
+
+## GREEN (verbatim, after the fix commit)
+
+`cd server && npx vitest run src/compiler/scientistIntent/` (raw tail lines spliced from the raw, leading space preserved):
+
+```
+ ✓ src/compiler/scientistIntent/declaredArgumentReachability.test.ts  (41 tests) 313ms
+
+ Test Files  21 passed (21)
+      Tests  240 passed (240)
+   Start at  00:53:23
+   Duration  3.88s (transform 2.11s, setup 1ms, collect 14.71s, tests 7.55s, environment 5ms, prepare 3.72s)
+```
+
+Targeted single file: `npx vitest run src/compiler/scientistIntent/declaredArgumentReachability.test.ts` → ` Test Files  1 passed (1)` / `      Tests  41 passed (41)` (36 → 41 = +5 new pins).
+
+## Verification gates (fix commit 14c2cfc2)
+
+| Check | Result | Gate |
+|---|---|---|
+| `cd server && npx vitest run src/compiler/scientistIntent/` | 21 files / 240 tests passed, exit 0 | all green, zero new failures (235 → 240 = +5 fix pins) |
+| `cd server && npx tsc --noEmit` | exit 0 (TSC_EXIT=0) | zero errors |
+| `git -c core.fileMode=false hash-object server/src/compiler/scientistIntent/goldens/MANIFEST.yaml` | `83fda3b42519eed879bc5e49290e724f727be509` | unchanged, no re-bless |
+| `git -c core.fileMode=false status --porcelain --untracked-files=no` (post-commit) | empty | no tracked file outside the 3 scoped files touched |
+
+Reviewer-bait re-check after the fix: bait 1 (blob pins `Trypsin-EDTA/DMEM (50:50)` / `50:50 Trypsin-EDTA/DMEM` still green, bars=1); bait 2 (no reagent literal in TS — the D2 guard reads `config.shape.ratioPatterns`, the new YAML text is comment-only); bait 5 (whole-word boundary pin `GammaAlpha/BetaDelta` still green); bait 6 (exactOptionalPropertyTypes: conditional spread untouched, tsc 0); bait 7 (MANIFEST byte-identical). The D2 fix strictly STRENGTHENS the bar (two former bars=0 labels now bar); no existing exemption pin weakened.
+
+Assumption AS-F1-1: `names: null` (explicit null value) stays the silent no-exemption declaration; only a MISSING `names` key on a present object throws. The task text says "Keep genuinely-absent (no key / null) as the silent no-exemption case" — read as: absent section (no key / null section) stays silent, and an explicit null `names:` value is a declaration, not a typo; the typo class the review names (`name:` for `names:`) is a missing-key shape and throws.
+
