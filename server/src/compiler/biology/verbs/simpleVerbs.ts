@@ -319,6 +319,82 @@ export const readExpander: BiologyVerbExpander = {
 };
 
 /**
+ * SHORTHAND-COMP-3 (Part I task 3): a mixture the scientist names arrives as
+ * `params.composition` — one entry per component. Emit it as the event's
+ * `composition_snapshot` (one ledger line per component; the store-write
+ * normalization in AddMaterialSupport mints a material record per component
+ * and one complex_composition material-spec for the mixture). A `cells`
+ * component carries a COUNT, never a volume — no code path here derives a
+ * count from a volume or a density.
+ *
+ * OQ1 ruling (a): the mixture ITSELF gets a draft `material_ref`
+ * ({kind:'draft', id:'mint:<label>', label}) so the existing store-write
+ * chain (upsertProposedMaterialSpecFromComposition requires details.material_ref
+ * at AddMaterialSupport.ts:215) can mint the one composition spec. The label
+ * is the model's own mixture name when it gave one, else the joined component
+ * labels — the same data-driven naming idiom the chain itself uses
+ * (componentLabels.join(' + '), AddMaterialSupport.ts:224-228). No noun
+ * literals: every string here comes from the document.
+ *
+ * Defensive drops (OQ2 ruling): entries without a non-empty string component
+ * name are SKIPPED; a non-string role becomes 'other' (the role enum lives in
+ * composition-entry.schema.yaml, not in a TS table); fewer than two valid
+ * entries ⇒ null (a single component is a plain add).
+ */
+function compositionSnapshotFromParams(
+  composition: unknown,
+  declaredMixtureLabel: unknown,
+): {
+  snapshot: Record<string, unknown>[];
+  materialRef: Record<string, unknown>;
+  formulationKind: string;
+  count?: number;
+  counterDensity?: Record<string, unknown>;
+} | null {
+  if (!Array.isArray(composition) || composition.length < 2) return null;
+  const snapshot: Record<string, unknown>[] = [];
+  const componentLabels: string[] = [];
+  let count: number | undefined;
+  let counterDensity: Record<string, unknown> | undefined;
+  for (const raw of composition) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const entry = raw as Record<string, unknown>;
+    const label = typeof entry.material === 'string' ? entry.material.trim() : '';
+    if (!label) continue;
+    const role = typeof entry.role === 'string' && entry.role.trim() ? entry.role.trim() : 'other';
+    // A component with no CURIE is a DRAFT ref — the exact shape
+    // MaterialGrounding.ensureLocalMaterialForDraft mints into a MAT- record.
+    const componentRef: Record<string, unknown> = { kind: 'draft', id: `mint:${label}`, label };
+    snapshot.push({
+      component_ref: componentRef,
+      role,
+      ...(entry.concentration !== undefined ? { concentration: entry.concentration } : {}),
+      ...(typeof entry.fraction === 'string' ? { source: `${entry.fraction} of the mixture` } : {}),
+    });
+    componentLabels.push(label);
+    if (role === 'cells') {
+      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) count = entry.count;
+      const density = entry.counterDensity;
+      if (density && typeof density === 'object' && !Array.isArray(density)) {
+        counterDensity = density as Record<string, unknown>;
+      }
+    }
+  }
+  if (snapshot.length < 2) return null;
+  const mixtureLabel =
+    typeof declaredMixtureLabel === 'string' && declaredMixtureLabel.trim()
+      ? declaredMixtureLabel.trim()
+      : componentLabels.join(' + ');
+  return {
+    snapshot,
+    materialRef: { kind: 'draft', id: `mint:${mixtureLabel}`, label: mixtureLabel },
+    formulationKind: 'complex_composition',
+    ...(count !== undefined ? { count } : {}),
+    ...(counterDensity ? { counterDensity } : {}),
+  };
+}
+
+/**
  * add_material: single add_material event.
  * Supports params: labware_id, well, material (object with kind/materialId/volumeUl),
  * or legacy params: labware, material (string), wells (array).
@@ -386,6 +462,13 @@ export const addMaterialExpander: BiologyVerbExpander = {
         : declaredVolume
           ? { volume: declaredVolume }
           : {};
+    // SHORTHAND-COMP-3 (Part I task 3): the declared components ride the open
+    // params slot (normalizeScientistIntent carries them; ChatbotCompilePasses
+    // hands the whole candidate as `params`). Compute the snapshot ONCE, add it
+    // to BOTH emit branches below. A document without params.composition gets
+    // `undefined` here and emits byte-identically to before (the spreads are
+    // gated on the value).
+    const composition = compositionSnapshotFromParams(params.composition, params.material);
 
     const events: PlateEventPrimitive[] = [];
 
@@ -401,6 +484,15 @@ export const addMaterialExpander: BiologyVerbExpander = {
             ...(typeof material === 'object' && material !== null ? material : {}),
             ...(materialKind ? { materialKind } : {}),
             ...volumeDetails,
+            ...(composition
+              ? {
+                  composition_snapshot: composition.snapshot,
+                  formulation_kind: composition.formulationKind,
+                  material_ref: composition.materialRef,
+                  ...(composition.count !== undefined ? { count: composition.count } : {}),
+                  ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+                }
+              : {}),
           },
           ...(labwareId ? { labwareId } : {}),
         });
@@ -416,6 +508,15 @@ export const addMaterialExpander: BiologyVerbExpander = {
           ...(typeof material === 'string' ? { material } : {}),
           ...(materialKind ? { materialKind } : {}),
           ...volumeDetails,
+          ...(composition
+            ? {
+                composition_snapshot: composition.snapshot,
+                formulation_kind: composition.formulationKind,
+                material_ref: composition.materialRef,
+                ...(composition.count !== undefined ? { count: composition.count } : {}),
+                ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+              }
+            : {}),
         },
         ...(labwareId ? { labwareId } : {}),
       });
