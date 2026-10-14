@@ -30,11 +30,12 @@
  *     shape.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
-import { normalizeScientistIntent, WELL_ADDRESS_SHAPE_RE } from './normalizeScientistIntent.js';
+import { loadMixtureCues, normalizeScientistIntent, WELL_ADDRESS_SHAPE_RE } from './normalizeScientistIntent.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 
@@ -67,6 +68,19 @@ const SEED_RECORDS = [
       name: 'Trypsin-EDTA/DMEM (50:50)',
       title: 'Trypsin-EDTA/DMEM (50:50)',
       synonyms: ['trypsin-edta/dmem (50:50)'],
+    },
+  },
+  // CUE-EXEMPT-1: the measured false-bar case is a CATALOGUED single reagent
+  // (seeded here so the bar under test is the PRODUCER blob arm, not the
+  // resolve_nouns unknown-noun arm — same seed idiom as MAT-blob-1 above).
+  {
+    recordId: 'MAT-catalogued-single-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+    payload: {
+      kind: 'material',
+      name: 'DNase/RNase Free Water',
+      title: 'DNase/RNase Free Water',
+      synonyms: ['dnase/rnase free water'],
     },
   },
 ];
@@ -261,6 +275,40 @@ actions:
     expect(bars).toHaveLength(1);
     expect(bars[0]!.label).toBe(material);
   });
+
+  // CUE-EXEMPT-1 (architect W211-D4 follow-on): the measured false-bar case.
+  // "DNase/RNase Free Water" is ONE catalogued single reagent whose name merely
+  // contains a separator, yet the bare-"/" cue's flanking arm fires on it:
+  // "DNase" and "RNase" both match the DATA componentPattern, exceed
+  // minComponentLength, and are not stop-words — minComponents=2 is satisfied
+  // and the label bars. That is exactly the over-bar class fix1/D1 exists to
+  // prevent (the DMEM/F12 analogy; "F12" escapes only because it carries a
+  // digit). The exemption is DATA (config/drafting/mixture-material-cues.yaml
+  // `exempt:`), never a reagent literal in TypeScript.
+  it('GUARD-OFF (CUE-EXEMPT-1): the catalogued single reagent "DNase/RNase Free Water" compiles with NO blob clarification', async () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: cue-exempt-single
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+`));
+    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    expect(bars).toEqual([]);
+    // Full pipeline: the seeded catalogued record (SEED_RECORDS) keeps the
+    // resolve_nouns arm quiet, so a clean compile proves the PRODUCER arm
+    // no longer bars this label.
+    const compiled = await compileReal(`intentId: cue-exempt-single-live
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+    targetWells: [A1]
+`);
+    expect(compiled.clarifications.filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+    expect(compiled.outcome).toBe('complete');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -402,5 +450,187 @@ describe('well-address shape parity (fix1/D4): the local copy and the canonical 
     const canonical = new RegExp(canonicalSource);
     expect(WELL_ADDRESS_SHAPE_RE.test(value)).toBe(accepted);
     expect(canonical.test(value)).toBe(accepted);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CUE-EXEMPT-1 (architect W211-D4 follow-on): the loader-shape pins for the
+// OPTIONAL `exempt:` section. Malformed exempt DATA throws naming the data
+// path (parity with the existing loader errors); an absent `exempt:` leaves
+// today's behavior byte-identical (the LOUD cue-off rule for `cues:` stays).
+// ---------------------------------------------------------------------------
+describe('exemption loader shape (CUE-EXEMPT-1): exempt is optional DATA, malformed exempt throws naming the path', () => {
+  const SHIPPED_CUES = readFileSync(
+    new URL('../../../../config/drafting/mixture-material-cues.yaml', import.meta.url),
+    'utf-8',
+  );
+  // The shipped file's own `exempt:` section is the LAST top-level block; the
+  // mutation fixtures strip it first so a test-appended `exempt:` is the only
+  // one (duplicate YAML keys would throw the parser's own error, not ours).
+  const CUES_WITHOUT_EXEMPT = SHIPPED_CUES.replace(/\nexempt:\n[\s\S]*$/, '\n');
+  const tempDir = mkdtempSync(join(tmpdir(), 'cue-exempt-'));
+  const writeCueFile = (name: string, text: string): string => {
+    const path = join(tempDir, name);
+    writeFileSync(path, text, 'utf-8');
+    return path;
+  };
+
+  it('GUARD: the SHIPPED cue file parses an exempt list carrying the measured catalogued label', () => {
+    const config = loadMixtureCues();
+    expect(config).toBeDefined();
+    expect(config!.exemptNames).toBeDefined();
+    expect(config!.exemptNames).toContain('DNase/RNase Free Water');
+  });
+
+  it('absent `exempt:` ⇒ NO exemptions and NO warn — behavior byte-identical to today (the bar stays ON)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const withoutExempt = CUES_WITHOUT_EXEMPT;
+      expect(withoutExempt).not.toMatch(/^exempt:/m);
+      const path = writeCueFile('cues-no-exempt.yaml', withoutExempt);
+      const config = loadMixtureCues(path);
+      expect(config).toBeDefined();
+      // exactOptionalPropertyTypes: the property is ABSENT, not undefined-valued.
+      expect('exemptNames' in config!).toBe(false);
+      expect(warnSpy.mock.calls.filter((args) => String(args[0]).includes('mixture-cue-bar-off'))).toEqual([]);
+      // Byte-identical behavior: the blob still bars, the exempt label is NOT exempt here.
+      const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-absent-blob
+actions:
+  - action: add_material
+    labware: plate
+    material: Trypsin-EDTA/DMEM (50:50)
+    volume: { value: 50, unit: uL }
+    targetWells: [A1]
+`), { mixtureCuesPath: path });
+      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+      const single = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-absent-single
+actions:
+  - action: add_material
+    labware: plate
+    material: DNase/RNase Free Water
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+      expect((single.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('malformed `exempt:` (names: 42) throws a data-path-naming loader error', () => {
+    const path = writeCueFile('cues-exempt-malformed.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names: 42\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/exempt\.names/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('malformed `exempt:` (a bare list, not an object) throws naming the path', () => {
+    const path = writeCueFile('cues-exempt-not-object.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  - some name\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/`exempt:` must be an object/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  // Adversarial D1 (fix run l2t2351-f1): a PRESENT `exempt:` mapping that
+  // lacks a `names:` key is a data error, NOT a silent no-exemption. A typo'd
+  // key (`name:` for `names:`) must not re-open the measured false bar with
+  // zero signal. Genuinely-absent (`exempt:` key missing / `exempt: null`)
+  // and a present-but-null `names:` stay the SILENT no-exemption case.
+  it('malformed `exempt:` (present object with NO `names:` key) throws naming the path (D1)', () => {
+    const path = writeCueFile('cues-exempt-no-names.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  other: 1\n`);
+    expect(() => loadMixtureCues(path)).toThrowError(/present `exempt:` section needs a `names:` list/);
+    expect(() => loadMixtureCues(path)).toThrowError(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('genuinely-absent exempt DATA stays SILENT: `exempt:` null and `names:` null parse to no exemption (D1 boundary)', () => {
+    const nullSection = writeCueFile('cues-exempt-null-section.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n`);
+    expect('exemptNames' in loadMixtureCues(nullSection)!).toBe(false);
+    const nullNames = writeCueFile('cues-exempt-names-null.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n`);
+    expect('exemptNames' in loadMixtureCues(nullNames)!).toBe(false);
+  });
+
+  it('the exemption is whole-word: an exempt name never matches INSIDE a longer blob word (reviewer bait 6)', () => {
+    // A synthetic exempt entry (test-local DATA file — the shipped list names
+    // nothing blob-like) proves the boundary rule generically.
+    const path = writeCueFile('cues-exempt-boundary.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n    - "Alpha/Beta"\n`);
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-boundary
+actions:
+  - action: add_material
+    labware: plate
+    material: GammaAlpha/BetaDelta (50:50)
+    volume: { value: 50, unit: uL }
+    targetWells: [A1]
+`), { mixtureCuesPath: path });
+    // "Alpha/Beta" sits inside the longer words Gamma…/…Delta — NOT a match:
+    // the blob still bars.
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    // Same entry at word boundaries (hyphen-joined) DOES exempt.
+    const spaced = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-boundary-ok
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta Buffer
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((spaced.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+  });
+
+  it('the exemption does NOT weaken the bar for true blobs: the shipped exemption names nothing blob-like', () => {
+    // The shipped file's exempt list must not contain any ratio-shaped blob
+    // label used by the existing pins.
+    const config = loadMixtureCues();
+    for (const blob of ['Trypsin-EDTA/DMEM (50:50)', '50:50 Trypsin-EDTA/DMEM']) {
+      expect(config!.exemptNames!.some((n) => n.toLowerCase() === blob.toLowerCase())).toBe(false);
+    }
+  });
+
+  // Adversarial D2 (orchestrator-amended matching rule, fix run l2t2351-f1):
+  // the containment arm exists ONLY for a label that IS one catalogued single
+  // reagent — it applies only when the label carries NO ratio/quantity
+  // evidence anywhere (checked against the config's OWN mixtureShape.ratioPatterns,
+  // zero new literals). A composite ratio blob that merely embeds the exempt
+  // phrase is a blob again; the ratio-free containment phrase stays exempt.
+  it('D2: a composite ratio blob embedding the exempt phrase BARS again (shipped config)', () => {
+    for (const material of [
+      'DNase/RNase Free Water + Trypsin-EDTA/DMEM (50:50)',
+      'Mix DNase/RNase Free Water 50:50',
+    ]) {
+      const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-ratio-guard
+actions:
+  - action: add_material
+    labware: plate
+    material: ${material}
+    volumeUl: 50
+`));
+      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    }
+  });
+
+  it('D2: a ratio-free label carrying the exempt phrase as whole words still EXEMPTS', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-ratio-free
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix DNase/RNase Free Water Buffer
+    volumeUl: 50
+`));
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+  });
+
+  it('D2: the ratio guard is DATA-driven (synthetic exempt entry, config ratioPatterns)', () => {
+    const path = writeCueFile('cues-exempt-ratio-guard.yaml', `${CUES_WITHOUT_EXEMPT}exempt:\n  names:\n    - "Alpha/Beta"\n`);
+    const barred = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-guard-bar
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta 50:50
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((barred.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    const exempt = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-guard-ok
+actions:
+  - action: add_material
+    labware: plate
+    material: Mix Alpha/Beta Buffer
+    volumeUl: 50
+`), { mixtureCuesPath: path });
+    expect((exempt.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
   });
 });
