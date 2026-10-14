@@ -169,9 +169,26 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   // decides how it renders; mediaKind ABSENT (every legacy record) means
   // today's pdf path exactly. Text-kind records never mount pdfjs.
   const sourceMeta = (record?.payload as Record<string, unknown> | undefined)?.source as
-    | { mediaKind?: string; originalFileName?: string }
+    | { mediaKind?: string; originalFileName?: string; pageCount?: number }
     | undefined
   const isTextKind = sourceMeta?.mediaKind === 'text' || sourceMeta?.mediaKind === 'spreadsheet'
+  // DOCINGEST-B B3: the real image branch. An image-kind record renders its
+  // kept page images (<img> per page via the page endpoint) with the OCR
+  // caution — pdfjs is NEVER mounted for it.
+  const isImageKind = sourceMeta?.mediaKind === 'image'
+  // §B2: the caution is DERIVED from mediaKind === 'image' — an image-kind
+  // record by construction went through the OCR arm. Wording mirrors the
+  // server's LOCAL_OCR_REVIEW diagnostic reworded for protocols (pinned in
+  // the sourcePreview test; bait 12: never a static string on the branch).
+  const OCR_CAUTION =
+    'Transcribed using local OCR (up to the configured page limit). Check page coverage and every volume against the page image before importing.'
+  const imagePageNumbers = (() => {
+    if (!isImageKind) return []
+    const fromText = (extractedText ?? []).map((page) => page.pageNumber)
+    if (fromText.length > 0) return fromText
+    const declared = typeof sourceMeta?.pageCount === 'number' ? sourceMeta.pageCount : 0
+    return declared > 0 ? Array.from({ length: declared }, (_, i) => i + 1) : []
+  })()
   // S5 honesty: a stored document nothing could read carries its extraction
   // diagnostics on the record; the pane renders them instead of a blank
   // successful-looking text pane.
@@ -353,6 +370,15 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       setPdfView('text')
       return
     }
+    // DOCINGEST-B B3: an image-kind record has no PDF blob to paint — its kept
+    // page images ARE the source preview. pdfjs is NEVER mounted for it.
+    if (isImageKind) {
+      setPdfDoc(null)
+      setPdfError(null)
+      setPages([])
+      setPdfView('text')
+      return
+    }
     setPdfDoc(null)
     setPdfError(null)
     setPages([])
@@ -377,7 +403,7 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
     return () => {
       cancelled = true
     }
-  }, [pdfUrl, isTextKind, record])
+  }, [pdfUrl, isTextKind, isImageKind, record])
 
   const measurePane = useCallback(() => {
     const el = pagesRef.current
@@ -855,6 +881,28 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
               ))}
             </div>
           )}
+          {isImageKind && recordId ? (
+            <div className="vpdf-review__pages vpdf-review__pages--images" data-testid="vpdf-review-page-images">
+              <p className="vpdf-review__ocr-caution" data-testid="vpdf-review-ocr-caution" role="note">
+                {OCR_CAUTION}
+              </p>
+              {imagePageNumbers.map((pageNum) => (
+                <div key={pageNum} data-vpdf-page={pageNum} className="vpdf-review__page vpdf-review__page--image">
+                  <div className="vpdf-review__text-page-header">Page {pageNum}</div>
+                  <img
+                    data-testid="vpdf-review-page-image"
+                    src={apiClient.vendorPdfPageUrl(recordId, pageNum)}
+                    alt={`Page ${pageNum} of ${sourceMeta?.originalFileName ?? recordId}`}
+                    loading="lazy"
+                    // A photographed page is camera-sized; it must fit the pane
+                    // rather than blow it out (inline so the C12 file set stays
+                    // exactly the spec's — the pane's own CSS owns the rest).
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {showText ? (
             <div className="vpdf-review__text" data-testid="vpdf-review-text">
               {isTextKind && sourceMeta?.originalFileName ? (
