@@ -94,3 +94,25 @@ next checks (cheap gate): (1) reviews/advc-HARNESSSEQ1-c1-l2t0855.md exists + VE
 (2) g2dfix5 log marker "W2-9-G2DFIX5 DONE" + EXITED; (3) COMP-4 log LOCK-ACQUIRED + no
 BOOTSTRAP-MISSING; (4) SEQ-2 draft SPEC-DRAFT-DONE; (5) stack 200 + profile thunderbeast;
 (6) AI-13 recount (n=237); (7) trunk tip 7be527f4 until merges.
+
+ADDENDUM 09:50 (same tick l2t0850, budget expiry): ADVC SEQ-1 C1 returned VERDICT: fix with
+ONE report-only defect (DEFECT 1: report §1b quoted a 28-line pre-repair tsc block labelled
+"23, identical to trunk"; reviewer's own runs proved the zero-new CONCLUSION true: head 23 ==
+trunk 23). Orchestrator resolved it HIMSELF on the same branch: live re-capture (worktree head
+23 == trunk 23, set-diff empty), corrected §1b with an explicit correction note, docs-only
+commit 7e40d18a (code delta eb1821e9..7e40d18a EMPTY, verified). Re-reviewed via the
+reviewer's own mandate 7 (docs-only) — no cycle-2 needed: no code changed, so no new code can
+introduce new defects; the gate's substantive verdict was an accept-with-report-nit. Orch
+verified the code gates MYSELF: vitest four suites (3 pre-existing symlink-exclude LOAD
+failures, 321/321 tests passed), app tsc set-diff empty. MERGED --no-ff -> trunk 22d0bb00.
+No YAML delta -> no restart. Served tip confirmed (:5193 serves app/src/agent/HarnessChatPane.tsx).
+BROWSER GATE TIER-1 DISPATCHED 09:45: bash 925925, log logs/review-HARNESSSEQ1-gate-l2t0945.log,
+receipts receipts/HARNESS-SEQ-1/2026-10-14_0945/, prompt carries the flap-retry clause and the
+stub-depth bound. Expected ~30-45 min; 2x ~10:35, 3x ~11:20 (rule 7b; on dead attempt -> tier-2
+deepseek-v4.1-flash per 6c ladder, no blind tier-1 retry).
+QUEUE STATE AT CHECKPOINT: fleet lock held by W29-G2DFIX5 (since 08:53, live); COMP-4 queued
+third (bash 856630); SEQ-2 composer live (bash 864687). Trunk tip 22d0bb00.
+NEXT TICK: (1) gate verdict -> accept: promote report to .hermes/plans/HARNESS-SEQ-1-report.md,
+mark SEQ-1 DONE, handoff; fix: defect list + absolute shots -> new coder run same worktree
+(fleet-queue); (2) g2dfix5 exit -> advc c5 per prior plan (tripwire unchanged); (3) COMP-4 start
+check; (4) SEQ-2 draft review; (5) AI-13 recount (n=237).
