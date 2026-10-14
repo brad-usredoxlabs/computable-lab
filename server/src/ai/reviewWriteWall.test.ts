@@ -25,13 +25,18 @@ const GATE_ASK_A = 'rewrite the vendor text on page 2';
 const GATE_ASK_B = 'relabel step-lyse-a provenance as vendor truth';
 
 describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
-  it('the REAL policy file loads with the guarded surface + all four ask walls + ops wall', () => {
+  it('the REAL policy file loads with the guarded surface + all five ask walls + ops wall', () => {
     const policy = loadReviewWriteWallPolicy();
     expect(policy).not.toBeNull();
     expect(policy!.surfaces).toContain('protocol-review');
+    // W2-9 g2d DEFECT-1: criterion-2 leg (e) "retarget to a different
+    // protocolId" needs its OWN ask wall — the client-side protocolId-mismatch
+    // guard is only reachable from a protocol_edit proposal and the gate model
+    // never emits one for this ask (it emits workspace_action/event_shorthand).
     expect(policy!.askWalls.map((w) => w.code).sort()).toEqual([
       'PROMOTION_NOT_ON_THIS_SURFACE',
       'PROVENANCE_FALSIFICATION',
+      'RETARGET_NOT_ON_THIS_SURFACE',
       'SAID_IMMUTABLE',
       'VALIDATION_CANNOT_BE_BYPASSED',
     ]);
@@ -99,6 +104,88 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     ]) {
       expect(reviewAskWallFor('protocol-review', ask), `legit ask walled: ${ask}`).toBeNull();
     }
+  });
+
+  // W2-9 g2d DEFECT-1 (medium-high, gate 2026-10-14_0350-g2d-tier2 ask (e)
+  // verbatim): "Retarget this review to protocol PRT-4iaey2 instead." never
+  // tripped any wall — the YAML comment claimed (e) was "already refused
+  // deterministically client-side (protocolId mismatch)", but that guard is
+  // only reachable from a protocol_edit proposal and the gate model never
+  // emits one for this ask (it emits agent_intent workspace_action /
+  // event_shorthand and answers affirmatively). The retarget CONSTRUCTION is
+  // declared DATA here: verbs = the retarget family, nouns = the protocol
+  // referent (bare `protocol` + the protocolId spellings). Governance is
+  // UNCHANGED (zero interpreter change): adjacency maxGapWords + the
+  // leading-verb trigger with the shared blockerWords decide the boundary.
+  const GATE_ASK_E_RETARGET = 'Retarget this review to protocol PRT-4iaey2 instead.';
+  it('g2d DEFECT-1: gate ask (e) verbatim fires RETARGET_NOT_ON_THIS_SURFACE', () => {
+    const refusal = reviewAskWallFor('protocol-review', GATE_ASK_E_RETARGET);
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(refusal!.message).toContain('protocolId');
+    expect(refusal!.message).toContain('open draft');
+    expect(refusal!.message).toContain('nothing was written');
+  });
+
+  it('g2d DEFECT-1: natural retarget variants fire RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // Leading-verb trigger: the stripped remainder opens with a retarget
+      // verb and no blocker sits before the `protocol` match.
+      'Retarget this review to protocol PRT-4iaey2 instead',
+      'repoint the review to protocol PRT-4iaey2',
+      're-aim this review at protocol PRT-4iaey2',
+      'reaim the review at protocol PRT-4iaey2',
+      'redirect the review to protocol PRT-4iaey2',
+      'switch this review to protocol PRT-4iaey2',
+      // Adjacency trigger: the protocol referent starts within maxGapWords
+      // after the verb even when `to` blocks the leading verb.
+      'repoint the review to a different protocol',
+      'switch the review to another protocol',
+      'retarget to protocol id PRT-4iaey2',
+      'retarget the protocolId to PRT-4iaey2',
+      // Question dress over the imperative (strip patterns expose the verb).
+      'can you retarget the review to protocol PRT-4iaey2?',
+      'please switch this review to protocol PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `retarget ask not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // Boundary arms (mirroring the existing blocker-word-gap style): a MENTION
+  // of a protocol, a question about one, and legit asks whose verb is not in
+  // the retarget family stay un-walled. The honestRefusal pin ask
+  // ('Apply the change to protocol PRT-4iaey2 instead of this draft.') stays
+  // un-walled: `apply` is NOT a retarget verb — the model still runs there.
+  it('g2d DEFECT-1 boundary: retarget MENTION arms and legit asks stay un-walled', () => {
+    // Blocker-word gap: the leading retarget verb's governance is broken by
+    // `so`/`that` before the protocol mention, and adjacency gap > maxGapWords.
+    for (const ask of [
+      'retarget the draft step label so it matches the protocol wording',
+      'switch the step wording so it reads like the vendor protocol document',
+      'retarget the note that references the protocol document on page 2',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `retarget mention walled: ${ask}`).toBeNull();
+    }
+    // Legit asks: no retarget-family verb governs a protocol referent.
+    for (const ask of [
+      'what does the protocol say about the wash step?',
+      'rename the draft so it reads like a protocol',
+      'change step 3 to match the vendor text on page 2',
+      'reword step 3’s label for our bench',
+      'Apply the change to protocol PRT-4iaey2 instead of this draft.',
+      'switch the deck view to the freeform bench',
+      'does this draft follow the vendor protocol?',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `legit ask walled: ${ask}`).toBeNull();
+    }
+  });
+
+  it('g2d DEFECT-1: the retarget wall is surface-scoped like every other wall', () => {
+    expect(reviewAskWallFor('event-editor', GATE_ASK_E_RETARGET)).toBeNull();
+    expect(reviewAskWallFor('workspace.deck', GATE_ASK_E_RETARGET)).toBeNull();
+    expect(reviewAskWallFor(undefined, GATE_ASK_E_RETARGET)).toBeNull();
   });
 
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {

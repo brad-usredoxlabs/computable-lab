@@ -140,6 +140,50 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.delete).not.toHaveBeenCalled();
   });
 
+  // W2-9 g2d DEFECT-1 (gate 2026-10-14_0350-g2d-tier2 ask (e) verbatim): the
+  // retarget ask must refuse BEFORE the model like a/b/c/d — the gate proved
+  // the model never declines (it emits agent_intent workspace_action
+  // action=focus target=PRT-4iaey2, or is coerced into event_shorthand) while
+  // the bubble claims focus succeeded. The retarget ask wall (DATA) closes the
+  // turn with the refusal envelope: zero inference, NO tool execution, zero
+  // writes — the affirmative bubble can no longer render.
+  it('g2d gate ask (e) "Retarget this review to protocol PRT-4iaey2 instead." refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'Retarget this review to protocol PRT-4iaey2 instead.',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.refusal!.message).toContain('protocolId');
+    expect(result.refusal!.message).toContain('nothing was written');
+    // NO proposal payload and NO workspace action reaches the client.
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    // Deterministic: the wall fired BEFORE the model — zero inference spent.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  // Boundary: the honestRefusal pin ask (AgentOrchestrator.honestRefusal.test.ts)
+  // must stay un-walled — `apply` is not a retarget verb, so that prose-decline
+  // path still runs the model exactly as pinned.
+  it('g2d boundary: "Apply the change to protocol PRT-4iaey2 instead of this draft." is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'Apply the change to protocol PRT-4iaey2 instead of this draft.',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(result.protocolEdit).toBeDefined();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
   it('a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today', async () => {
     const store = mutationTripwire();
     const { result, completeStream } = await runReviewTurn(

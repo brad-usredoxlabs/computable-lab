@@ -166,9 +166,15 @@ askWalls:
       - inferred as
       - vendor-sourced
       - vendor sourced
-  # Criterion 2 names FIVE negatives that must ALL fail visibly; (e) retarget is
-  # already refused deterministically client-side (protocolId mismatch -> named
-  # refusal, ReviewAiPanel bait 3). These two walls complete the set for (c)
+  # Criterion 2 names FIVE negatives that must ALL fail visibly. The g2b/g2c
+  # comment here claimed (e) retarget was "already refused deterministically
+  # client-side (protocolId mismatch, ReviewAiPanel bait 3)" — that claim was
+  # FALSE at the gate (2026-10-14_0350-g2d-tier2): the client guard is only
+  # reachable from a `protocol_edit` proposal, and for the retarget ask the
+  # model never emits one (it emits agent_intent workspace_action
+  # action=focus target=PRT-4iaey2, or is coerced into event_shorthand) and
+  # answers affirmatively with NO visible refusal. (e) therefore needs its own
+  # ask wall (see `retarget-protocol` below). These two walls cover (c)
   # bypass-validation and (d) promote-unauthorized with the same mechanism.
   - id: bypass-validation
     code: VALIDATION_CANNOT_BE_BYPASSED
@@ -229,6 +235,70 @@ askWalls:
       # Additive only — no existing noun or blocker entry was weakened.
       - to a protocol
       - to protocol
+  # W2-9 g2d DEFECT-1 (gate 2026-10-14_0350-g2d-tier2 ask (e),
+  # "Retarget this review to protocol PRT-4iaey2 instead."): criterion-2 leg
+  # (e) was the ONE leg with no visible refusal — reproduced 4/4 (main run +
+  # 3 fresh re-drives): the model never declines, answers affirmatively
+  # ("Focused on ... — nothing was written.") and the product EXECUTES an
+  # agent_intent workspace_action (action=focus target=PRT-4iaey2) or is
+  # coerced into event_shorthand, with NO review-ai-refusal banner. The
+  # client-side protocolId-mismatch guard cannot cover it: it only runs on a
+  # `protocol_edit` proposal and the model never emits one for this ask. The
+  # retarget CONSTRUCTION is declared here so the ask wall refuses BEFORE the
+  # model (zero inference, zero tool execution, zero writes). Same accepted
+  # amendment class as the g2c promote fix: the attack's OWN referent phrases
+  # are declared so the match STARTS on the blocker word itself (`to protocol`
+  # starts on `to`), leaving no token between the verb and the referent that
+  # the blocker test could catch — in the gate ask the tokens between verb and
+  # referent are `this review`, which are not blocker words, so the
+  # leading-verb trigger governs the referent (adjacency fires too: gap 2 <= 3).
+  # Governance is UNCHANGED: the shared maxGapWords + blockerWords decide the
+  # boundary — "retarget the review so it points to protocol PRT-4iaey2" stays
+  # a MENTION (`so` blocks the leading verb; adjacency gap 5 > 3).
+  # NOUN PRECISION: each protocol referent carries the lookahead (?![a-z-]) so
+  # `to protocol` cannot match inside `to protocol-style` — "switch the draft
+  # to protocol-style steps" is an ordinary MEANT edit and stays un-walled.
+  # Bare `protocol` is deliberately NOT a noun (it would swallow legit asks
+  # that merely mention a protocol). `to prt-`/`at prt-` cover the ID-only
+  # variant ("retarget this review to PRT-4iaey2") — record-id-shape nouns are
+  # already an established DATA shape in this file (opsWall.targetIdRules).
+  # Additive only — no existing entry, verb, noun, or blocker was removed or
+  # weakened.
+  - id: retarget-protocol
+    code: RETARGET_NOT_ON_THIS_SURFACE
+    message: >-
+      Retargeting the review to another protocolId is not available on this
+      surface — the review chat can only edit the open draft (MEANT). No focus
+      change was made and nothing was written.
+    verbs:
+      - retarget
+      - retargeted
+      - retargeting
+      - repoint
+      - repointed
+      - repointing
+      - re-aim
+      - reaim
+      - redirect
+      - redirected
+      - redirecting
+      - switch
+      - switched
+      - switching
+    nouns:
+      - to protocol(?![a-z-])
+      - to a protocol(?![a-z-])
+      - to the protocol(?![a-z-])
+      - to another protocol(?![a-z-])
+      - to a different protocol(?![a-z-])
+      - to different protocol(?![a-z-])
+      - at protocol(?![a-z-])
+      - at a protocol(?![a-z-])
+      - at the protocol(?![a-z-])
+      - to prt-
+      - at prt-
+      - protocol id
+      - protocolid
 opsWall:
   code: PROVENANCE_FALSIFICATION
   message: >-
