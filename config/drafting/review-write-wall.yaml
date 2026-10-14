@@ -358,6 +358,51 @@ askWalls:
   #     target id is adjacency-governed (same ambiguity class as R3 / the W2-11
   #     D3 honest arm). And a quoted concrete id as a new-verb object — "move
   #     the draft to \"PRT-4iaey2\"" — reads as a retarget target.
+  #
+  # W2-9-G2DFIX CYCLE-5 (advc-W29-g2dfix-c4-l2t0815, VERDICT: fix). One leak
+  # class, closed in DATA (interpreter still untouched, maxGapWords/
+  # blockerWords/strip/negation unchanged):
+  #
+  # (1) MAJOR — the interposed-qualifier CONCRETE-ID frame the cycle-4 nouns
+  #     closed for the two LITERAL qualifier words only: `yet another`/
+  #     `one more`/`still another`/`a further ... protocol PRT-<id>` leaked
+  #     FREE for every declared verb across the to/at/onto/towards/toward
+  #     frames (review §D M1/M4/M15-M19, §E DEFECT-1). Closed GENERICALLY,
+  #     not by enumerating qualifier words: the preposition-started nouns now
+  #     allow an arbitrary lowercase-word gap before `protocol` while still
+  #     demanding the record-id token — the committed patterns are
+  #     `to|at|onto|towards|toward (?:(?!the )[a-z]+ )+protocol(?![a-z-])`
+  #     `(?=\s+[a-z]+-)` and the quoted-word forms `to|at "(?:[a-z]+ )+`
+  #     `protocol(?![a-z-])(?=\s+[a-z]+-)`. Safe because the c4 probe-2 sweep
+  #     proved the discriminator in this frame is the VERB: `compare`/`rename`
+  #     mention arms stay FREE for ANY qualifier word (undeclared verbs). The
+  #     article `the` is excluded from the gap so the pinned R4 residual
+  #     ("towards/toward the protocol PRT-4iaey2") and every article noun are
+  #     unchanged. The `protocolId` spelling takes the ENUMERATED siblings
+  #     `to|at (yet another|one more|still another|a further) protocolid`
+  #     (the existing id-suffixed class shape — no id lookahead, which is what
+  #     the reviewer's M15 leak 'forward this review to yet another
+  #     protocolId', NO id token, needs) instead: a generic gap there would
+  #     flip the pinned FREE R13 arm "retarget this review to some other
+  #     protocolId".
+  #
+  #
+  # CYCLE-5 ACCEPTED RESIDUAL (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'g2dfix5 DEFECT-1 boundary' and in the cycle-5
+  # report residual table):
+  #   LEAK side: the interposed-qualifier frame with NO record-id token —
+  #     "retarget this review to yet another protocol", "forward this review
+  #     to a different other protocolId", "retarget this review to some other
+  #     protocolId" (R13 class, both spellings). The generic gaps demand the
+  #     record-id token; the no-id spellings name no target (weakest attack
+  #     class, no focus can fire), and closing them would fire on the
+  #     pinned-FREE mention arms. The id-present side of the class is closed
+  #     for ANY qualifier word on BOTH spellings (generic gaps, cycle-5 (1)
+  #     and (3)); the enumerated id-suffixed forms (yet another / one more /
+  #     still another / a further, to|at) exist only to carry the reviewer's
+  #     no-id M15 leak, which the generic lookahead cannot reach. The
+  #     towards|toward ARTICLE+qualifier+id frame stays the pinned R4 residual
+  #     (cycle-5 (4) closes the article frame for to/at only).
   - id: retarget-protocol
     code: RETARGET_NOT_ON_THIS_SURFACE
     message: >-
@@ -478,6 +523,69 @@ askWalls:
       - at any other protocol(?=\s+[a-z]+-)
       - to "protocol(?=\s+[a-z]+-)
       - at "protocol(?=\s+[a-z]+-)
+      # CYCLE-5 (1): the GENERIC interposed-qualifier frame (c4 DEFECT-1). The
+      # c4 reviewer's 144-row sweep proved the two nouns above close the frame
+      # for the two LITERAL qualifier words only — `yet another`/`one more`/
+      # `still another`/`a further ... protocol <record-id>` leaked FREE across
+      # the to/at/onto/towards/toward frames. Instead of enumerating qualifier
+      # words, the interposed gap is DATA: an arbitrary run of lowercase words
+      # between the preposition and `protocol`, still demanding the record-id
+      # token. The c4 probe-2 proof makes this safe: in this frame the
+      # DISCRIMINATOR IS THE VERB — `compare`/`rename` mention arms stay FREE
+      # for ANY qualifier word because they are undeclared retarget verbs — so
+      # a generic gap opens no over-block class. The article `the` is EXCLUDED
+      # from the gap: the pinned R4 residual ('towards/toward the protocol
+      # <id>') and every existing article noun stay byte-identical, and the
+      # article+id frames remain what they were (walled for to/at/onto via the
+      # article nouns, leaked for towards/toward — R4 unchanged).
+      - to (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      # CYCLE-5 (4): the ARTICLE + qualifier frame with a record id (`to the
+      # other protocol PRT-<id>`) — the same class measured FREE in the cycle-5
+      # sweep. The existing article nouns only cover `to|at the protocol <id>`
+      # with no qualifier between. Closed for `to`/`at` only (the article class
+      # has always been to/at-scoped): the `towards|toward the ...` siblings
+      # stay the pinned R4 residual, so no pinned FREE arm flips. The id
+      # lookahead keeps every no-id article arm (`to the protocol`, `to the
+      # protocol id`, `to the different protocol`, the nav asks) FREE.
+      - to the (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at the (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - to "(?:[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at "(?:[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      # CYCLE-5 (2): the `protocolId` spelling of the same frame takes the
+      # ENUMERATED sibling qualifiers instead of the generic gap: the
+      # id-suffixed class walls WITHOUT an id token (`to some other
+      # protocolid` is the pinned FREE R13 arm), so a generic gap there would
+      # flip a pinned residual. These enumerated forms follow the EXISTING
+      # id-suffixed class shape (`to another protocolid` etc. — no id
+      # lookahead), which is what the c4 reviewer's M15 leak
+      # ('forward this review to yet another protocolId', NO id token) needs.
+      # THE QUALIFIER-WORD ENUMERATION LIMIT IS DISCLOSED: yet another / one
+      # more / still another / a further are declared; an unenumerated qualifier
+      # word on the `protocolId` spelling with a record id (e.g. 'to a
+      # different other protocolId PRT-4iaey2') stays the visible residual
+      # (report §31 R13/R15), pinned FREE in 'g2dfix5 DEFECT-1 boundary'.
+      - to yet another protocolid
+      - to one more protocolid
+      - to still another protocolid
+      - to a further protocolid
+      - at yet another protocolid
+      - at one more protocolid
+      - at still another protocolid
+      - at a further protocolid
+      # CYCLE-5 (3): the GENERIC gap on the `protocolId` spelling too, but
+      # ONLY with the record-id lookahead — this closes the id-present side of
+      # the class for ANY qualifier word without flipping the pinned FREE R13
+      # no-id arms ('to some other protocolid' has no id token, so the
+      # lookahead fails). The no-id side stays the documented R13 residual.
+      - to (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
       # CYCLE-3 (1): the quoted-id frames — the reviewer's leak
       # 'retarget this review to "PRT-4iaey2"' (the quote broke `to prt-`). Same
       # PRT-shape scope as `to prt-`/`at prt-` (a quoted non-PRT id stays the

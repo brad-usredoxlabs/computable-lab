@@ -381,6 +381,85 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
+  // CYCLE-5 DEFECT-1 (advc-W29-g2dfix-c4-l2t0815 §E): the interposed-qualifier
+  // concrete-id frame leaked for every qualifier word except `some other`/
+  // `any other` (review §D M1/M4/M15-M19 measured FREE(null) at the cycle-4
+  // head). After the DATA generic-qualifier nouns they must refuse BEFORE the
+  // model, exactly like the gate ask (e).
+  it('g2dfix5 DEFECT-1: "forward this review to yet another protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to yet another protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.refusal!.message).toContain('protocolId');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    // Deterministic: the wall fired BEFORE the model — zero inference spent.
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix5 DEFECT-1: "transfer this review to one more protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'transfer this review to one more protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix5 DEFECT-1: "forward this review to yet another protocolId" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to yet another protocolId',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  // CYCLE-5 DEFECT-1 boundary (the c4 probe-2 discriminator): the generic
+  // qualifier gap must not over-block — a mention arm with a generic qualifier
+  // and an undeclared verb runs the model exactly like any other legit ask.
+  it('g2dfix5 DEFECT-1 boundary: "compare this draft to yet another protocol PRT-4iaey2" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'compare this draft to yet another protocol PRT-4iaey2',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix5 DEFECT-1 boundary: "forward the sample to yet another bench" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward the sample to yet another bench',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
   it('a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today', async () => {
     const store = mutationTripwire();
     const { result, completeStream } = await runReviewTurn(

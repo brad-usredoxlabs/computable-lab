@@ -839,6 +839,349 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     }
   });
 
+  // ══════════════════════════════════════════════════════════════════════
+  // W2-9-G2DFIX CYCLE-5 (advc-W29-g2dfix-c4-l2t0815, VERDICT: fix).
+  // The c4 reviewer's 144-row sweep proved the interposed-qualifier
+  // CONCRETE-ID frame (c3 DEFECT-3, closed in cycle 4) is closed ONLY for the
+  // two literal qualifier words `some other`/`any other`: every sibling
+  // qualifier ('yet another', 'one more', 'still another', 'a further') with
+  // a declared verb + concrete record id measured FREE across the to/at/onto/
+  // towards frames (review §D M1/M4/M15-M19, §E DEFECT-1). Closed in DATA by
+  // a GENERIC qualifier gap before `protocol` (an arbitrary word run + the
+  // record-id lookahead) instead of enumerating qualifier words — the c4
+  // probe-2 proof: in this frame the discriminator is the VERB (compare/
+  // rename mention arms stay FREE regardless of the qualifier word), so the
+  // generic gap opens no over-block. The article `the` is excluded from the
+  // gap so the pinned R4 residual ('towards/toward the protocol <id>') and
+  // every existing article noun stay byte-identical. The `protocolId`
+  // spelling takes the ENUMERATED sibling qualifiers instead (the id-suffixed
+  // class walls WITHOUT an id token, so a generic gap would flip the pinned
+  // FREE R13 arm 'to some other protocolId'); the enumeration limit is
+  // disclosed in the residual table. DATA-only; interpreter untouched.
+  it('g2dfix5 DEFECT-1: the interposed-qualifier concrete-id frame fires for every qualifier word (review c4 §E/§D)', () => {
+    for (const ask of [
+      // the c4 reviewer's mandated leak strings (review §E DEFECT-1, verbatim)
+      'forward this review to yet another protocol PRT-4iaey2',
+      'transfer this review to yet another protocol PRT-4iaey2',
+      'reassign this review to yet another protocol PRT-4iaey2',
+      'forward this review to one more protocol PRT-4iaey2',
+      'forward this review to a still another protocol PRT-4iaey2',
+      'forward this review to still another protocol PRT-4iaey2',
+      'forward this review to a further protocol PRT-4iaey2',
+      'forward this review at yet another protocol PRT-4iaey2',
+      'forward this review onto yet another protocol PRT-4iaey2',
+      'forward this review towards yet another protocol PRT-4iaey2',
+      'forward this review toward yet another protocol PRT-4iaey2',
+      'retarget this review to "yet another protocol PRT-4iaey2"',
+      'forward this review to yet another protocolId',
+      // reviewer c4 §D M-rows (measured FREE(null) at the cycle-4 head)
+      'transfer this review to yet another protocolId',
+      'retarget this review to yet another protocol PRT-4iaey2',
+      'assign this review to one more protocol PRT-4iaey2',
+      'retarget this review at still another protocol PRT-4iaey2',
+      // reviewer c4 probe-2 group (the class exactly)
+      'transfer this review to one more protocol PRT-4iaey2',
+      'assign this review to a further protocol PRT-4iaey2',
+      'retarget this review onto a further protocol PRT-4iaey2',
+      'retarget this review towards one more protocol PRT-4iaey2',
+      // question dress and polite prefixes expose the same imperative
+      'can you forward this review to yet another protocol PRT-4iaey2?',
+      'please transfer this review to one more protocolId',
+      // the generic gap on the id-suffixed spelling too (record-id lookahead):
+      // ANY qualifier word with a concrete id walls, not just the four
+      // enumerated siblings
+      'forward this review to a different other protocolId PRT-4iaey2',
+      'transfer this review onto yet another protocolId PRT-4iaey2',
+      'retarget this review towards a still another protocolId PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-1 interposed-qualifier leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT-1 boundary (the c4 probe-2 discriminator): the generic qualifier
+  // gap must NOT over-block. Mention arms stay FREE regardless of the
+  // qualifier word because compare/rename are undeclared retarget verbs; the
+  // no-id spellings stay the documented residuals (the generic noun demands
+  // the record-id token); the pinned R4 article arms stay FREE because `the`
+  // is excluded from the gap; the negation exemption is unchanged governance.
+  it('g2dfix5 DEFECT-1 boundary: mention arms, no-id arms, and the R4 article arms stay FREE (visible residual)', () => {
+    for (const ask of [
+      // reviewer c4 probe-2 mention arms (measured FREE, MUST stay FREE)
+      'compare this draft to yet another protocol PRT-4iaey2',
+      'rename the draft so it reads like yet another protocol PRT-4iaey2',
+      'compare this draft to one more protocol PRT-4iaey2',
+      'rename the draft so it reads like a further protocol PRT-4iaey2',
+      'compare this draft to a still another protocol PRT-4iaey2',
+      // the no-id spellings: the generic noun demands the record-id token
+      // (R13 class — no record named, no focus can fire)
+      'retarget this review to yet another protocol',
+      'forward this review to one more protocol',
+      'forward this review to a further protocol',
+      'retarget this review to "yet another protocol"',
+      // the pinned R13 protocolId arms (no-id side of the class, never flipped)
+      'retarget this review to some other protocolId',
+      'retarget this review to any other protocolId',
+      'forward this review to some other protocolId',
+      // the no-id side of the disclosed enumeration limit: an unenumerated
+      // qualifier word on the id-suffixed spelling WITHOUT a record id stays
+      // FREE (weakest attack class — no record named, no focus can fire)
+      'forward this review to a different other protocolId',
+      'retarget this review to a different other protocolId',
+      // the pinned R4 article arms: `the` is excluded from the generic gap
+      'retarget this review towards the protocol PRT-4iaey2',
+      'retarget this review toward the protocol PRT-4iaey2',
+      // the R4 asymmetry carried to the qualifier+id frame: the article+
+      // qualifier nouns are declared for to/at only (the existing article
+      // class), so the towards/toward siblings stay FREE (visible residual)
+      'retarget this review towards the different protocol PRT-4iaey2',
+      'retarget this review toward the other protocol PRT-4iaey2',
+      // reversed quoted order with an article stays the R7 scope limit
+      'retarget this review to the "protocol PRT-4iaey2"',
+      // the cycle-4 pinned no-id interposed arms stay FREE (unchanged)
+      'retarget this review to some other protocol',
+      'forward this review to any other protocol',
+      // fresh benign arms with the generic qualifiers (no retarget referent)
+      'forward the sample to yet another bench',
+      'transfer this to one more protocol section',
+      'forward the note to yet another protocol team',
+      'assign this step to yet another bench',
+      'transfer the draft to a further format',
+      'route the review to one more protocol guidance',
+      // the negation exemption (matching.negationTokens) is unchanged
+      'why can you not forward this review to yet another protocol PRT-4iaey2?',
+      // the bare article frame (R1) stays FREE
+      'forward this review to the protocol',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `DEFECT-1 boundary unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  // Zero-regression pin for the arms the cycle-5 generic nouns could touch:
+  // every c1/c2/c3/c4-pinned WALL still walls, every pinned FREE stays FREE.
+  it('g2dfix5 regression: the pinned arms the generic qualifier gap could touch are unchanged', () => {
+    for (const ask of [
+      'retarget this review to some other protocol PRT-4iaey2',
+      'retarget this review at some other protocol PRT-4iaey2',
+      'transfer this review to some other protocol PRT-4iaey2',
+      'retarget this review to any other protocol PRT-4iaey2',
+      'retarget this review to "protocol PRT-4iaey2"',
+      'retarget this review to the protocol PRT-4iaey2',
+      'retarget this review to a different protocol',
+      'retarget this review at a different protocol',
+      'retarget this review onto a different protocolId',
+      'switch the review to another protocol tab',
+      'retarget this review at another protocol tab',
+      'move the draft to "PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `pinned WALL arm regressed: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+    for (const ask of [
+      'retarget this review to the protocol',
+      'retarget this review for protocol PRT-4iaey2',
+      'retarget this review to the protocol id',
+      'retarget this review to protocol PRT',
+      'retarget this review to protocol 4iaey2',
+      'retarget this review to the "PRT-4iaey2" protocol',
+      'retarget this review to "CAN-w29-gate"',
+      'retarget this review towards a different protocol',
+      'retarget this review toward a different protocol',
+      'retarget this review to the different protocol',
+      'hand this review to protocol PRT-4iaey2',
+      'shift this review to a different protocolId',
+      'move the review so it points to protocol PRT-4iaey2',
+      'retarget the review so it points to a different protocolId',
+      'send the review to the vendor protocol document',
+      'switch the draft to protocol-style steps',
+      'Apply the change to protocol PRT-4iaey2 instead of this draft.',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `pinned FREE arm regressed: ${ask}`).toBeNull();
+    }
+  });
+
+  // FULL-SWEEP PIN (c4 DEFECT-2 discipline): every arm the cycle-5 sweep
+  // measured that no earlier test names is pinned verbatim here, so the
+  // never-silent claim is checkable row-by-row against the sweep that
+  // INCLUDES the c4 reviewer's own leak arms.
+  it('g2dfix5 sweep pin: reviewer c4 §D M-rows and the probe-2 group are pinned', () => {
+    for (const ask of [
+      // reviewer c4 §D M-rows that already walled at the cycle-4 head
+      'transferring this review over to protocol PRT-4iaey2',
+      're-assign this review to protocol PRT-4iaey2',
+      'transfer this review at a different protocol',
+      'forward this review at another protocol',
+      'assign this review at a different protocol PRT-4iaey2',
+      'forward this review toward protocol PRT-4iaey2',
+      'forwarded the review onto protocol PRT-4iaey2',
+      'forward this review to the protocol PRT-4iaey2',
+      'forward the review to different protocol PRT-4iaey2',
+      'assign this review into protocol PRT-4iaey2',
+      'transfer the review to the protocol id PRT-4iaey2',
+      'forward this review onto a different protocolId',
+      'forward this review to another protocol PRT-4iaey2',
+      // reviewer c4 probe-2: the some/any-other arms stay WALL
+      'retarget this review to some other protocol PRT-4iaey2',
+      'retarget this review at some other protocol PRT-4iaey2',
+      'transfer this review at some other protocol PRT-4iaey2',
+      'assign this review at any other protocol PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `reviewer c4 WALL arm not pinned: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  it('g2dfix5 sweep pin: reviewer c4 §C.1/§C.2/§C.4 and the fresh benign arms are pinned', () => {
+    for (const ask of [
+      // reviewer c4 §C.1 pinned WALL group (16)
+      'repoint the review to a different protocol',
+      'switch the review to another protocol',
+      'retarget to protocol id PRT-4iaey2',
+      'retarget the protocolId to PRT-4iaey2',
+      'reaim the review at protocol PRT-4iaey2',
+      'switch this review into protocol PRT-4iaey2',
+      'move this review to a different protocolId',
+      'point this review at a different protocolId',
+      'retarget this review toward protocol PRT-4iaey2',
+      'repoint the review onto a different protocolId',
+      'redirect the review towards a different protocolId',
+      'retarget this review onto PRT-4iaey2',
+      'retarget this review towards PRT-4iaey2',
+      'switch to the PRT-4iaey2 protocol tab',
+      'switch the view to the PRT-4iaey2 protocol tab',
+      'switch the review to another protocol tab',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `reviewer c4 §C.1 WALL arm regressed: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+    for (const ask of [
+      // reviewer c4 §C.2 pinned FREE group (13)
+      'retarget this review to the protocol',
+      'switch this review to the protocol',
+      'retarget this review for protocol PRT-4iaey2',
+      'switch the panel to the protocol tab',
+      'move the view to the protocol tab',
+      'send the panel to the protocol tab',
+      'move the incubation step to the end of the draft',
+      'point out the step that references the pdf',
+      'aim the draft label at the bench wording',
+      'route the draft step label so it matches the vendor text',
+      'move the review so it points to protocol PRT-4iaey2',
+      'retarget the review so it points to a different protocolId',
+      'send the review to the vendor protocol document',
+      // reviewer c4 §C.4 mandated benign arms (5)
+      'forward the note to the review tab',
+      'transfer the sample to the incubator',
+      'assign this step to bench 2',
+      'what is the current target id?',
+      'retarget the draft step label so it matches the vendor protocol',
+      // reviewer c4 §D.1 over-block hunt (24) — all stay FREE
+      'forward the sample to the sequencing core',
+      'transfer the plate to the incubator',
+      'assign the run to bench 3',
+      'forward the email to the lab manager',
+      'transfer ownership of this step to the analyst',
+      'assign two wells to the control group',
+      'forward the deck to the review tab',
+      'transfer the note to the protocol section',
+      'assign this task to the protocol team',
+      'forward this review to the vendor',
+      'transfer this draft to a different format',
+      'assign this draft to a different reviewer',
+      'forward the sample to another bench',
+      'transfer the sample to another incubator',
+      'assign this operator to another bench',
+      'forward the request to protocol support',
+      'transfer the contents to a clean tube',
+      'assign the plate reader to this step',
+      'forward the draft to the protocol owner',
+      'transfer this to the protocol folder',
+      'assign this to the protocol tab',
+      'forward the note to the protocol team',
+      'transfer 10 uL of DMEM from reservoir A1 to well B2',
+      'assign bench 2 to the wash step',
+      // coder cycle-5 fresh benign arms with generic qualifiers (15)
+      'forward the sample to yet another bench',
+      'transfer this to one more protocol section',
+      'forward the note to yet another protocol team',
+      'assign this step to yet another bench',
+      'transfer the draft to a further format',
+      'route the review to one more protocol guidance',
+      'forward the plate to yet another incubator',
+      'assign the wash step to one more bench',
+      'transfer the note to a further protocol section',
+      'forward the draft to yet another review tab',
+      'assign this task to a further reviewer',
+      'transfer the contents to yet another clean tube',
+      'forward the request to one more protocol support',
+      'route the sample to a further wash step',
+      'assign the deck to yet another operator',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `reviewer c4 FREE arm regressed: ${ask}`).toBeNull();
+    }
+  });
+
+  // FULL-SWEEP PIN (c4 DEFECT-2 discipline, continued): the remaining arms my
+  // own cycle-5 sweep measured that no earlier test names — pinned verbatim
+  // so the never-silent claim is checkable row-by-row (0 unpinned rows).
+  it('g2dfix5 sweep pin: remaining cycle-5 WALL arms are pinned', () => {
+    for (const ask of [
+      'forwarded this review to yet another protocol PRT-4iaey2',
+      'assigning this review to a further protocol PRT-4iaey2',
+      'transfer this review to one more protocolId PRT-4iaey2',
+      'retarget this review to "one more protocol PRT-4iaey2"',
+      'forward this review to "a further protocol PRT-4iaey2"',
+      // carried c3/c4 arms re-measured in the cycle-5 sweep
+      'aim this review at the protocol PRT-4iaey2',
+      'target this review to protocol PRT-4iaey2',
+      'retarget this review to another protocol',
+      // the article + qualifier + record-id frame (cycle-5 (4))
+      'forward this review to the other protocol PRT-4iaey2',
+      'retarget this review to the different protocol PRT-4iaey2',
+      'transfer this review at the other protocol PRT-4iaey2',
+      // DISCLOSED over-block side effect of the generic gap: ANY single word
+      // between the preposition and `protocol` + a concrete id reads as a
+      // retarget target (same id-inside-the-frame class as R3) — pinned
+      // visible, not silent
+      'forward this review to my protocol PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `cycle-5 sweep WALL arm not pinned: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  it('g2dfix5 sweep pin: remaining cycle-5 FREE arms are pinned', () => {
+    for (const ask of [
+      // mention arms with generic qualifiers (undeclared-verb governance)
+      'move the review so it points to yet another protocol PRT-4iaey2',
+      'retarget the review so it points to one more protocol PRT-4iaey2',
+      // the no-id interposed spellings (R13 class, both spellings)
+      'forward this review to yet another protocol',
+      // carried c3/c4 residual arms re-measured in the cycle-5 sweep
+      'aim this review at protocol PRT',
+      'move this review to protocol',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `cycle-5 sweep FREE arm not pinned: ${ask}`).toBeNull();
+    }
+  });
+
+  it('g2dfix5: the cycle-5 arms are surface-scoped like every other wall', () => {
+    for (const ask of [
+      'forward this review to yet another protocol PRT-4iaey2',
+      'forward this review to yet another protocolId',
+      'retarget this review to "yet another protocol PRT-4iaey2"',
+    ]) {
+      expect(reviewAskWallFor('event-editor', ask)).toBeNull();
+      expect(reviewAskWallFor('workspace.deck', ask)).toBeNull();
+      expect(reviewAskWallFor(undefined, ask)).toBeNull();
+    }
+  });
+
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
     expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();
