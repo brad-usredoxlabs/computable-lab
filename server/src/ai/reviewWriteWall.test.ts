@@ -1438,6 +1438,171 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     }
   });
 
+  // ================= W2-9 g2dfix CYCLE-7 (advc-W29-g2dfix-c6-l2t1150 §C) ============
+  // DEFECT-1 (major): the cycle-6 quote class was NOT COMPOSABLE. A quote AFTER
+  // `protocol` that wraps the record id with a DIFFERENT/LEFT orientation
+  // (‘…’ or “…”), or an OUTER opening quote combined with a quoted id, leaked
+  // the same declared-verb + concrete-id retarget (review X13/X15/Y1/Y2/Y3/Y10).
+  // The DATA fix makes the id-lookahead quote class symmetric: any declared
+  // quote character may sit before the id token, whitespace on either side of
+  // it, and the outer opening quote composes with it.
+  it('g2dfix7 DEFECT-1: nested/opposite-orientation quote frames fire RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // reviewer c6 verbatim (measured FREE(null) at the cycle-6 head)
+      'forward this review to "yet another protocol ‘PRT-4iaey2’"',
+      'forward this review to "yet another protocol “PRT-4iaey2”"',
+      'forward this review to ‘yet another protocol "PRT-4iaey2"’',
+      'retarget this review towards "yet another protocol ‘PRT-4iaey2’"',
+      // symmetric siblings: the id-suffixed spelling, the other prepositions,
+      // the outer-quote frame with NO qualifier word, outer quote + linking hop
+      'forward this review to "yet another protocolId ‘PRT-4iaey2’"',
+      'retarget this review toward ‘still another protocolId “PRT-4iaey2”’',
+      'transfer this review onto "one more protocol ‘PRT-4iaey2’"',
+      'forward this review at “a further protocolId ‘PRT-4iaey2’”',
+      'forward this review to ‘protocol "PRT-4iaey2"’',
+      'forward this review to "yet another protocol named ‘PRT-4iaey2’"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-1 nested-quote leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT-2 (major): the cycle-6 linking-word hop closed only the UNQUOTED-id
+  // frame — a declared linking word (named|called|for) followed by a QUOTED
+  // record id leaked (review X2/X15/Y5/Y6). The linking nouns' id-lookahead now
+  // accepts the same optional quote class.
+  it('g2dfix7 DEFECT-2: linking word + quoted record id fires RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // reviewer c6 verbatim (measured FREE(null) at the cycle-6 head)
+      'forward this review to yet another protocol named "PRT-4iaey2"',
+      'forward this review to yet another protocol named “PRT-4iaey2”',
+      'forward this review to protocol named "PRT-4iaey2"',
+      'forward this review to yet another protocol called "PRT-4iaey2"',
+      'forward this review to yet another protocol for “PRT-4iaey2”',
+      // symmetric siblings: the bare frame with the other linking words and
+      // quotes, the other prepositions
+      'forward this review to protocol called “PRT-4iaey2”',
+      'retarget this review onto protocol for ‘PRT-4iaey2’',
+      'transfer this review at a further protocol named “PRT-4iaey2”',
+      'assign this review towards one more protocol called ‘PRT-4iaey2’',
+      'retarget this review toward protocol for "PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-2 linked+quoted leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // CYCLE-7 boundary + DISCLOSED RESIDUALS (never silent): what the widened
+  // quote class deliberately does NOT cover is pinned here as visible FREE rows
+  // (report §57 R22/R23), alongside the carried R4/R7/R8/R13/R18/R19/R20/R21
+  // residuals and the reviewer's mention/near-miss arms.
+  it('g2dfix7 boundary: disclosed residuals and near-miss arms stay FREE (visible)', () => {
+    for (const ask of [
+      // R22 (NEW, disclosed): quote-CHARACTER enumeration limit — the declared
+      // quote characters are the straight double quote and the four curly
+      // quotes (U+201C/U+201D/U+2018/U+2019). A straight apostrophe or a
+      // guillemet wrapping the id names no declared quote frame.
+      "forward this review to yet another protocol 'PRT-4iaey2'",
+      'forward this review to yet another protocol «PRT-4iaey2»',
+      'forward this review to "yet another protocol «PRT-4iaey2»"',
+      // R23 (NEW, disclosed): article + quoted-id compound — `the` stays
+      // excluded from every gap so the pinned R4/R15/R7/R20 article residuals
+      // do not flip; the article frame with a quoted id is not declared.
+      'forward this review to the protocol “PRT-4iaey2”',
+      'retarget this review towards the protocol “PRT-4iaey2”',
+      'retarget this review toward the protocol "PRT-4iaey2"',
+      'retarget this review to the protocol named “PRT-4iaey2”',
+      'forward this review to "the protocol PRT-4iaey2"',
+      // R19 carried: unenumerated linking word, bare or quoted id
+      'forward this review to yet another protocol dubbed PRT-4iaey2',
+      'forward this review to "yet another protocol dubbed PRT-4iaey2"',
+      'forward this review to yet another protocol dubbed “PRT-4iaey2”',
+      // R24 (NEW, disclosed): outer-quote ORIENTATION limit — the outer-prefix
+      // quote class is the OPENING orientation (`["“‘]` right after the
+      // preposition). A CLOSING-orientation character used as the outer opener
+      // (`to ”yet another protocol PRT-4iaey2“`) names no declared frame.
+      'forward this review to ”yet another protocol PRT-4iaey2“',
+      'forward this review to ”yet another protocol ‘PRT-4iaey2’“',
+      // R25 (NEW, disclosed): outer quote + linking hop on the `protocolId`
+      // spelling — the class-A protocolid nouns demand the id separator right
+      // after `protocolid`, and the linking hop is declared for the `protocol`
+      // spelling only (R19 compound), so the quoted compound stays FREE.
+      'forward this review to “yet another protocolId named ‘PRT-4iaey2’”',
+      'forward this review to “yet another protocol dubbed ‘PRT-4iaey2’”',
+      // R21 carried: mid-frame quote (before `protocol`, not after the preposition)
+      'forward this review to yet another “protocol PRT-4iaey2”',
+      'forward this review to yet-another “protocol PRT-4iaey2”',
+      'forward this review to yet another “protocol named PRT-4iaey2”',
+      // R18/R8 carried: id shapes outside the hyphenated record-id token class
+      'forward this review to yet another protocol PRT_4iaey2',
+      'retarget this review to protocol PRT',
+      // R13/R6/R4/R15/R7 carried: no-id and article residuals unflipped
+      'forward this review to "yet another protocolId"',
+      'retarget this review to the protocol id',
+      'retarget this review towards the protocol PRT-4iaey2',
+      'retarget this review towards the other protocol PRT-4iaey2',
+      'retarget this review to the "protocol PRT-4iaey2"',
+      'forward this review to the “protocol PRT-4iaey2”',
+      // R2 carried: `for` as a PREPOSITION is still not a declared frame, even
+      // with the cycle-7 quoted-id encoding behind it
+      'forward this review for protocol named “PRT-4iaey2”',
+      // reviewer mention/near-miss arms (undeclared verb — the discriminator)
+      'compare this draft to "yet another protocol ‘PRT-4iaey2’"',
+      'compare this draft to yet another protocol named "PRT-4iaey2"',
+      'the notes explain how to forward a draft to yet another protocol tube',
+      'forward the sample to yet another protocol named tube',
+      'route the draft to protocol format',
+      'switch the draft to protocol-style steps',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `boundary arm unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  // FULL-SWEEP PIN (c6 DEFECT discipline): the reviewer's c6 §B fresh-attack
+  // arms that already WALL (its §B abbreviations reconstructed to the exact
+  // strings measured in-worktree) plus the carried c5 WALL battery — pinned so
+  // the never-silent claim is checkable row-by-row.
+  it('g2dfix7 sweep pin: reviewer c6 WALL-side arms fire', () => {
+    for (const ask of [
+      // reviewer c6 §B "correctly WALL" arms (X4/X5-class outer-quote frames,
+      // Y7 hyphen + straight-quoted id, Y8/Y9 protocolid + curly-wrapped id)
+      'retarget this review towards ‘one more protocolId’ PRT-4iaey2',
+      'forward this review to yet-another protocol "PRT-4iaey2"',
+      'forward this review to yet another protocolid “PRT-4iaey2”',
+      'forward this review to yet another protocolid ‘PRT-4iaey2’',
+      'forward this review to “a further protocolId” PRT-4iaey2',
+      // carried c5 WALL battery (must not regress)
+      'forward this review to yet another protocol “PRT-4iaey2”',
+      'forward this review to “yet another protocol PRT-4iaey2”',
+      'forward this review to yet another protocol named PRT-4iaey2',
+      'retarget this review to protocol named PRT-4iaey2',
+      'forward this review towards "yet another protocol PRT-4iaey2"',
+      'forward this review to yet-another protocol PRT-4iaey2',
+      'forward this review to "one more protocolId" PRT-4iaey2',
+      'forward this review to "protocol PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `reviewer c6 WALL arm not pinned: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  it('g2dfix7: the cycle-7 arms are surface-scoped like every other wall', () => {
+    for (const ask of [
+      'forward this review to "yet another protocol ‘PRT-4iaey2’"',
+      'forward this review to ‘yet another protocol "PRT-4iaey2"’',
+      'retarget this review towards "yet another protocol ‘PRT-4iaey2’"',
+      'forward this review to yet another protocol named "PRT-4iaey2"',
+      'forward this review to protocol called “PRT-4iaey2”',
+    ]) {
+      expect(reviewAskWallFor('event-editor', ask)).toBeNull();
+      expect(reviewAskWallFor('workspace.deck', ask)).toBeNull();
+      expect(reviewAskWallFor(undefined, ask)).toBeNull();
+    }
+  });
+
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
     expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();

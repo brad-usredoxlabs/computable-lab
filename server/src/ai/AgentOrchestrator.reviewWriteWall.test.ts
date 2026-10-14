@@ -511,6 +511,72 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
+  // CYCLE-7 DEFECT-1/DEFECT-2 (advc-W29-g2dfix-c6-l2t1150 §C): the nested/
+  // opposite-orientation quote frame and the linking-word + quoted-id frame
+  // carry a DECLARED verb and a CONCRETE record id, so they can render the
+  // affirmative focus bubble the wall exists to prevent. After the DATA widening
+  // they must refuse BEFORE the model, exactly like the gate ask (e).
+  it('g2dfix7 DEFECT-1: nested-quote frame "forward this review to \\\\"yet another protocol \\u2018PRT-4iaey2\\u2019\\\\"" refuses deterministically', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to "yet another protocol ‘PRT-4iaey2’"',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix7 DEFECT-2: linked+quoted frame "forward this review to yet another protocol named \\\\"PRT-4iaey2\\\\"" refuses deterministically', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to yet another protocol named "PRT-4iaey2"',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  // CYCLE-7 boundary: the disclosed residuals must NOT over-block — the mention
+  // arm with the same nested-quote encoding and the article+quoted-id compound
+  // (R23) run the model exactly like any other legit ask.
+  it('g2dfix7 boundary: "compare this draft to \\\\"yet another protocol \\u2018PRT-4iaey2\\u2019\\\\"" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'compare this draft to "yet another protocol ‘PRT-4iaey2’"',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix7 boundary: "forward this review to the protocol \\u201cPRT-4iaey2\\u201d" (R23) is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'forward this review to the protocol “PRT-4iaey2”',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
   it('g2dfix5 DEFECT-1: "forward this review to yet another protocolId" refuses deterministically with the declared envelope', async () => {
     const store = mutationTripwire();
     const { result, completeStream } = await runReviewTurn(
