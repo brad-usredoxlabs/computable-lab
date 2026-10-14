@@ -405,6 +405,151 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     expect(reviewAskWallFor(undefined, GATE_ASK_E_RETARGET)).toBeNull();
   });
 
+  // ══════════════════════════════════════════════════════════════════════
+  // W2-9-G2DFIX CYCLE-3 (advc-W29-g2dfix-c2-l2t0630, VERDICT: fix).
+  // All pins below are the reviewer's OWN c2 probe strings (verbatim).
+  // DATA-only repair: the interpreter stays untouched.
+  //
+  // DEFECT 1 (major): five retarget-construction variants still fell FREE at
+  // the cycle-2 head (review §D DEFECT 1). Root causes named by the reviewer:
+  // `to the different protocolid` absent from the id-suffixed class;
+  // `to the protocol id <id>` not a declared noun (the article noun required
+  // the hyphen immediately, and the bare `protocol id` sat behind the blocker
+  // `to` at gap 4 > maxGapWords 3); `reassign`/`target` absent from the verbs;
+  // the leading quote broke `to prt-`. Closed in DATA.
+  it('g2dfix3 DEFECT-1: the reviewer\'s c2 leak strings (review §D DEFECT 1) fire RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // reviewer §D DEFECT-1 verbatim (all measured FREE(null) at cycle-2 head)
+      'retarget this review to the different protocolId',
+      'retarget this review to the protocol id PRT-4iaey2',
+      'reassign this review to protocol PRT-4iaey2',
+      'retarget this review to "PRT-4iaey2"',
+      'target this review to protocol PRT-4iaey2 instead',
+      // same class: the other new verbs, the `at` frame, question dress,
+      // past/progressive shapes, the article frame with the spaced id
+      'reassign the review to a different protocolId',
+      'reassigned this review to protocol PRT-4iaey2',
+      'reassigning the review to the protocol PRT-4iaey2',
+      'target the review at protocol PRT-4iaey2',
+      'targeted this review to the different protocolId',
+      'can you reassign this review to protocol PRT-4iaey2?',
+      'please target this review to the different protocolId',
+      'retarget this review at the different protocolId',
+      'move this review to the protocol id PRT-4iaey2',
+      'switch this review to "PRT-4iaey2"',
+      'point the review at "PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `DEFECT-1 leak not walled: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // DEFECT 2 (minor): the cycle-2 verbs move/route/point combined with the
+  // pre-existing bare `to protocol`/`at protocol` nouns to refuse ordinary
+  // MEANT asks that merely mention a protocol context (`protocol format`,
+  // `protocol guidance`, `protocol examples`). The bare nouns now require the
+  // retarget OBJECT (record-id shape) — the same narrowing class cycle 2
+  // applied to the article nouns (DEFECT-4). The reviewer's FREE arms re-pinned.
+  it('g2dfix3 DEFECT-2: bare non-id `protocol <common-noun>` objects stay FREE (review §D DEFECT 2)', () => {
+    for (const ask of [
+      // reviewer §D DEFECT-2 verbatim (all measured WALL at cycle-2 head)
+      'move the draft to protocol format',
+      'move the draft to protocol steps',
+      'route the draft to protocol guidance',
+      'point the draft at protocol examples',
+      // same class with the other new verbs and the article frame
+      'send the draft to protocol guidance',
+      'switch the draft to protocol examples',
+      'reassign the draft to protocol format',
+      'target the draft at protocol guidance',
+      'move the draft to the protocol format',
+      'point the draft at the protocol examples',
+      'route the draft to protocol name',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `DEFECT-2 over-block: ${ask}`).toBeNull();
+    }
+  });
+
+  // Zero-regression pin: every reviewer §C.3 NEW arm that already WALLed at
+  // the cycle-2 head must STILL wall after the cycle-3 narrowing — no
+  // c1/c2-pinned WALL is weakened by the narrowed bare nouns or the new verbs.
+  it('g2dfix3 regression: reviewer §C.3 NEW WALL arms still fire', () => {
+    for (const ask of [
+      'Retarget this review to a different protocolId',
+      'RETARGET THIS REVIEW TO A DIFFERENT PROTOCOLID.',
+      'retarget this review to a different protocolids',
+      'retarget this review to a different protocolID',
+      'retarget this review now to protocol PRT-4iaey2',
+      'please retarget this review to a different protocolId',
+      'can you please retarget this review to a different protocolId?',
+      'retarget this review to the protocol PRT-4iaey2',
+      'retarget this review onto a different protocolId',
+      'move this review to protocol PRT-4iaey2',
+      'route the draft to protocol PRT-4iaey2',
+      'point the draft at protocol PRT-4iaey2',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `§C.3 WALL arm regressed: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // ACCEPTED RESIDUALS (cycle 3 — visible, never silent; pinned here and
+  // listed in the report's cycle-3 residual table).
+  it('g2dfix3 accepted-residual boundary: the narrowed no-id frames stay FREE (visible leak)', () => {
+    for (const ask of [
+      // the price of the DEFECT-2 narrowing: a bare frame that names NO target
+      // (same weakest-attack class as R1 — no record is named, no focus can fire)
+      'retarget this review to protocol',
+      'reassign this review at protocol',
+      'move the draft to protocol',
+      'point the draft at protocol',
+      'retarget this review onto protocol',
+      'retarget this review towards protocol',
+      // the spaced article frame with no id token (plural spelling too)
+      'retarget this review to the protocol id',
+      'retarget this review to the protocol ids',
+      // R2 class extended to the cycle-3 verbs: `for protocol <id>` is still
+      // not a declared retarget-object frame
+      'reassign this review for protocol PRT-4iaey2',
+      'target this review for protocol PRT-4iaey2',
+      // R4 class (carried from cycle 2): `towards`/`toward` + article frame is
+      // not declared (`onto the protocol <id>` fires only incidentally, via the
+      // `to the protocol` substring inside `onto the protocol`)
+      'retarget this review towards the protocol PRT-4iaey2',
+      'retarget this review toward the protocol PRT-4iaey2',
+      // the article + qualifier frame WITHOUT the id suffix (pre-existing class,
+      // measured FREE at the cycle-2 head too)
+      'retarget this review to the different protocol',
+      // id-shape scope: the narrowed nouns demand a hyphenated record-id token
+      'retarget this review to protocol PRT',
+      // the quoted-id noun mirrors the existing `to prt-`/`at prt-` scope: PRT-
+      // shape only; a quoted non-PRT id is the same documented scope limit
+      'retarget this review to "CAN-w29-gate"',
+      // reversed order with a leading quote is not a declared noun
+      'retarget this review to the "PRT-4iaey2" protocol',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `residual unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  it('g2dfix3 accepted-residual boundary: the new-verb over-block surface stays WALL (visible)', () => {
+    for (const ask of [
+      // `target` as a verb + the bare `protocolid`/`protocol id` noun: a question
+      // ABOUT the current target id is adjacency-governed (gap 0) — the same
+      // ambiguity class the file already accepts (R3 / the W2-11 D3 honest arm).
+      'what is the target protocolId?',
+      'what is the target protocol id?',
+      // a quoted concrete id as the object of a new verb names a retarget target
+      'move the draft to "PRT-4iaey2"',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `residual unexpectedly free: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
   it('a legitimate MEANT-only ask never trips a wall (verb AND noun both required)', () => {
     expect(reviewAskWallFor('protocol-review', 'reword step 3’s label for our bench')).toBeNull();
     expect(reviewAskWallFor('protocol-review', 'what does the lyse step do?')).toBeNull();

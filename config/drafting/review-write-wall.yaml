@@ -294,8 +294,12 @@ askWalls:
   #     the protocol tab` were refused: on this surface switching the panel/view
   #     to the protocol context is a legitimate ask, and the bare article nouns
   #     `to the protocol`/`at the protocol` swallowed it. Those two nouns are
-  #     REPLACED by id-requiring article forms (`to the prt-`, `at the prt-`,
-  #     `to the protocolid`, `at the protocolid`): the retarget wall now needs a
+  #     REPLACED by id-requiring article forms — the actual committed patterns
+  #     are `to the protocol(?=\s+[a-z]+-)` and `at the protocol(?=\s+[a-z]+-)`
+  #     (see the nouns block below; the earlier version of this comment named
+  #     `to the prt-`/`at the prt-`/`to the protocolid`/`at the protocolid`,
+  #     patterns that do not exist in this file — corrected in cycle 3 per
+  #     advc-W29-g2dfix-c2 DEFECT-4): the retarget wall now needs a
   #     retarget OBJECT, so the nav ask is FREE while a concrete-id retarget in
   #     the same frame still fires. No existing test or gate ask depended on the
   #     bare article forms (gate ask (e) matches `to protocol`; the boundary arms
@@ -312,6 +316,48 @@ askWalls:
   #     from a retarget by DATA alone (the same ambiguity the leading-verb
   #     governance already accepts, cf. the W2-11 D3 honest arm). Narrow: it
   #     needs a literal record-id token in the nav phrase.
+  #
+  # W2-9-G2DFIX CYCLE-3 (advc-W29-g2dfix-c2-l2t0630, VERDICT: fix). Two leaks
+  # and one over-block class, all closed in DATA (interpreter still untouched,
+  # maxGapWords/blockerWords/strip/negation unchanged):
+  #
+  # (1) MAJOR — five retarget variants fell FREE: `to the different protocolId`
+  #     (absent from the id-suffixed class), `to the protocol id <id>` (the
+  #     article noun required the hyphen immediately; the bare `protocol id` sat
+  #     behind the blocker `to` at gap 4 > maxGapWords 3), `reassign`/`target`
+  #     (absent verbs), and the quoted id `"PRT-4iaey2"` (the quote broke
+  #     `to prt-`). Closed: verbs `reassign/reassigned/reassigning`,
+  #     `target/targeted/targeting`; nouns `to|at the different protocolid`,
+  #     `to|at the protocol id(?=\s+[a-z]+-)`, `to "prt-`, `at "prt-`.
+  # (2) MINOR (over-block) — the cycle-2 common verbs (move/route/point/send)
+  #     combined with the bare `to protocol`/`at protocol` nouns to refuse
+  #     ordinary MEANT asks that merely mention a protocol context ("move the
+  #     draft to protocol format", "route the draft to protocol guidance",
+  #     "point the draft at protocol examples"). The bare frames now REQUIRE the
+  #     retarget OBJECT: `to|at|onto|towards|toward protocol(?=\s+[a-z]+-)` —
+  #     the same narrowing class cycle 2 applied to the article nouns. The
+  #     `a protocol`/qualifier forms are NOT narrowed (they carry the pinned
+  #     qualifier-class WALL arms). Concrete-id retargets in these frames still
+  #     fire, including the substring behaviour (`to protocol` matches inside
+  #     `into protocol PRT-...`).
+  # (3) MINOR (documentation) — the (4) comment above named patterns that do
+  #     not exist in this file; corrected to the committed ones.
+  #
+  # CYCLE-3 ACCEPTED RESIDUALS (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'g2dfix3 accepted-residual boundary' tests and in
+  # the cycle-3 report residual table):
+  #   LEAK side: bare frames that name NO target — "retarget this review to
+  #     protocol", "reassign this review at protocol", "retarget this review to
+  #     the protocol id" (no id token) — the deliberate price of not
+  #     over-blocking the `protocol <common-noun>` asks; weakest attack class
+  #     (no record named, no focus can fire). Quoted-id nouns mirror the PRT-
+  #     scope of `to prt-`/`at prt-`: `retarget this review to "CAN-w29-gate"`
+  #     stays FREE (documented scope limit, same as the unquoted CAN- gap).
+  #   OVER-BLOCK side: `what is the target protocolId?` — `target` as a verb
+  #     with the bare `protocolid` noun at gap 0; a question ABOUT the current
+  #     target id is adjacency-governed (same ambiguity class as R3 / the W2-11
+  #     D3 honest arm). And a quoted concrete id as a new-verb object — "move
+  #     the draft to \"PRT-4iaey2\"" — reads as a retarget target.
   - id: retarget-protocol
     code: RETARGET_NOT_ON_THIS_SURFACE
     message: >-
@@ -347,8 +393,29 @@ askWalls:
       - routing
       - send
       - sent
+      # CYCLE-3 (1): the two retarget verbs the c2 reviewer measured FREE with a
+      # concrete id ('reassign this review to protocol PRT-...', 'target this
+      # review to protocol PRT-... instead'), same shape as the families above.
+      - reassign
+      - reassigned
+      - reassigning
+      - target
+      - targeted
+      - targeting
     nouns:
-      - to protocol(?![a-z-])
+      # CYCLE-3 (2): the bare `protocol` frames now REQUIRE the retarget OBJECT
+      # (a record-id-shape token), the same narrowing class cycle 2 applied to
+      # the article nouns (c1 DEFECT-4). With the cycle-2 common verbs
+      # (move/route/point/send) the bare nouns had swallowed ordinary MEANT
+      # asks that merely mention a protocol context ('move the draft to protocol
+      # format', 'route the draft to protocol guidance', 'point the draft at
+      # protocol examples'). A concrete-id retarget in the same frame still
+      # fires ('move this review to protocol PRT-4iaey2', and the substring
+      # behaviour is preserved: `to protocol` still matches inside
+      # `into protocol PRT-...`). The `a protocol`/qualifier forms are NOT
+      # narrowed — they carry the pinned qualifier-class WALL arms
+      # ('repoint the review to a different protocol').
+      - to protocol(?=\s+[a-z]+-)
       - to a protocol(?![a-z-])
       # CYCLE-2 (4): the bare article frames are REPLACED by id-requiring forms
       # (the brief's DEFECT-4 fix direction: require the retarget OBJECT). The
@@ -359,11 +426,17 @@ askWalls:
       - to another protocol(?![a-z-])
       - to a different protocol(?![a-z-])
       - to different protocol(?![a-z-])
-      - at protocol(?![a-z-])
+      - at protocol(?=\s+[a-z]+-)
       - at a protocol(?![a-z-])
       - at the protocol(?=\s+[a-z]+-)
       - to prt-
       - at prt-
+      # CYCLE-3 (1): the quoted-id frames — the reviewer's leak
+      # 'retarget this review to "PRT-4iaey2"' (the quote broke `to prt-`). Same
+      # PRT-shape scope as `to prt-`/`at prt-` (a quoted non-PRT id stays the
+      # documented scope limit, pinned FREE as residual R8).
+      - to "prt-
+      - at "prt-
       - protocol id
       - protocolid
       # CYCLE-2 (1): the protocolId-SUFFIXED qualifier class — the criterion's
@@ -375,16 +448,30 @@ askWalls:
       - to another protocolid
       - to different protocolid
       - to the protocolid
+      # CYCLE-3 (1): the reviewer's leak 'to the different protocolid' (absent
+      # from the class) and the SPACED article form 'to the protocol id <id>'
+      # (the article noun required the hyphen immediately and the bare
+      # `protocol id` sat behind the blocker `to` at gap 4 > maxGapWords 3).
+      # The spaced forms demand the record-id token, so the no-id spelling
+      # 'retarget this review to the protocol id' stays the documented residual
+      # R7 (pinned FREE).
+      - to the different protocolid
+      - to the protocol id(?=\s+[a-z]+-)
+      - at the different protocolid
+      - at the protocol id(?=\s+[a-z]+-)
       - at a different protocolid
       - at another protocolid
       - at the protocolid
       # CYCLE-2 (3): alternate preposition frames and the reversed word order.
-      - onto protocol(?![a-z-])
+      # CYCLE-3 (2): the bare `onto`/`towards`/`toward` frames carry the same
+      # id-requiring lookahead as `to protocol`/`at protocol` (no pinned arm
+      # depends on the no-id spelling; the pinned arms all name a concrete id).
+      - onto protocol(?=\s+[a-z]+-)
       - onto a protocol(?![a-z-])
       - onto prt-
       - onto a different protocolid
-      - towards protocol(?![a-z-])
-      - toward protocol(?![a-z-])
+      - towards protocol(?=\s+[a-z]+-)
+      - toward protocol(?=\s+[a-z]+-)
       - towards a protocol(?![a-z-])
       - toward a protocol(?![a-z-])
       - towards prt-

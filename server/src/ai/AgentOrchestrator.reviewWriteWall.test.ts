@@ -226,6 +226,56 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(store.update).not.toHaveBeenCalled();
   });
 
+  // CYCLE-3 DEFECT-1 (advc-W29-g2dfix-c2-l2t0630): the reviewer's leak strings
+  // must refuse BEFORE the model too — the affirmative focus bubble the gate
+  // observed cannot render for these variants either.
+  it('g2dfix3 DEFECT-1: "reassign this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'reassign this review to protocol PRT-4iaey2',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.refusal!.message).toContain('protocolId');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(result.events ?? []).toHaveLength(0);
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfix3 DEFECT-1: "target this review to protocol PRT-4iaey2 instead" refuses deterministically with the declared envelope', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'target this review to protocol PRT-4iaey2 instead',
+      { intent: 'workspace_action', action: 'focus', target: 'PRT-4iaey2' },
+      store,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    expect(result.protocolEdit).toBeUndefined();
+    expect(completeStream).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  // CYCLE-3 DEFECT-2 boundary (re-pinned at the orchestrator level): the bare
+  // non-id `protocol <common-noun>` asks the reviewer measured as over-block
+  // must reach the model exactly like any other legit ask.
+  it('g2dfix3 DEFECT-2 boundary: "move the draft to protocol format" is NOT walled (the model runs)', async () => {
+    const store = mutationTripwire();
+    const { result, completeStream } = await runReviewTurn(
+      'move the draft to protocol format',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(completeStream).toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
   // CYCLE-2 DEFECT-4 boundary (re-pinned at the orchestrator level): the
   // panel-navigation ask the reviewer measured as an over-block must reach the
   // model exactly like any other legit ask.
