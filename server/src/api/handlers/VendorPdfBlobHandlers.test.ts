@@ -186,5 +186,77 @@ describe('VendorPdfBlobHandlers', () => {
     expect(reply.headers['content-disposition']).toContain('sample.pdf')
   })
 
+  // DOCINGEST-B B3 — the page-image route. It serves the record's OWN kept
+  // page images from the per-record page dir (vendorPdfPageDir), refuses
+  // anything else. The `../..` arm is plan-B3-MANDATED (bait 2).
+  describe('getPageImage (GET /vendor-pdfs/:recordId/page/:pageNumber)', () => {
+    const sha12 = 'abc123def456'
+    const pageDir = join(workspaceRoot, 'artifacts', 'foundry', 'pdfs', 'pages', sha12)
+
+    async function seedImageRecord(mediaKind: string | undefined, storedPath = `artifacts/foundry/pdfs/${sha12}.png`) {
+      await mkdir(pageDir, { recursive: true })
+      await writeFile(join(pageDir, 'page-001.png'), 'fake-png-bytes', 'utf-8')
+      return makeHandlers([
+        makeVendorPdfEnvelope('VPDF-IMAGING000', {
+          source: { engine: 'upload', ingestedAt: '2026-10-13T12:00:00.000Z', ...(mediaKind ? { mediaKind } : {}) },
+          file: { file_name: 'photographed-page.png', media_type: 'image/png', stored_path: storedPath },
+        }),
+      ])
+    }
+
+    it('serves the record\u2019s own page PNG with image/png', async () => {
+      const handlers = await seedImageRecord('image')
+      const reply = makeReply()
+      await handlers.getPageImage(makeRequest({ recordId: 'VPDF-IMAGING000', pageNumber: '1' }), reply.reply)
+      expect(reply.statusCode).toBe(200)
+      expect(reply.headers['content-type']).toBe('image/png')
+      expect(reply.body, 'a stream is sent, not a zero-byte auto-reply').toBeTruthy()
+    })
+
+    it('pageNumber "../.." (and URL-encoded / non-numeric / huge) -> 404 BEFORE any filesystem contact (plan-B3-mandated)', async () => {
+      const handlers = await seedImageRecord('image')
+      for (const pageNumber of ['../..', '..%2f..', '1/../..', '/etc/passwd', '0', '999999999999999999999', '1%00', 'abc']) {
+        const reply = makeReply()
+        await handlers.getPageImage(makeRequest({ recordId: 'VPDF-IMAGING000', pageNumber }), reply.reply)
+        expect(reply.statusCode, `pageNumber ${JSON.stringify(pageNumber)} must 404`).toBe(404)
+      }
+    })
+
+    it('missing page (page 99) -> 404 honest no-page', async () => {
+      const handlers = await seedImageRecord('image')
+      const reply = makeReply()
+      await handlers.getPageImage(makeRequest({ recordId: 'VPDF-IMAGING000', pageNumber: '99' }), reply.reply)
+      expect(reply.statusCode).toBe(404)
+      expect((reply.body as { error?: string }).error).toBe('PAGE_NOT_FOUND')
+    })
+
+    it('non-image record (mediaKind pdf or absent) -> 404: only image-kind records have page images', async () => {
+      for (const mediaKind of ['pdf', undefined]) {
+        const handlers = await seedImageRecord(mediaKind)
+        const reply = makeReply()
+        await handlers.getPageImage(makeRequest({ recordId: 'VPDF-IMAGING000', pageNumber: '1' }), reply.reply)
+        expect(reply.statusCode, `mediaKind ${String(mediaKind)} has no page images`).toBe(404)
+      }
+    })
+
+    it('a crafted stored_path cannot move the page dir outside the workspace (resolve+prefix guard)', async () => {
+      const handlers = await seedImageRecord('image', '../../../../etc/foundry/pdfs/abc123def456.png')
+      const reply = makeReply()
+      await handlers.getPageImage(makeRequest({ recordId: 'VPDF-IMAGING000', pageNumber: '1' }), reply.reply)
+      expect(reply.statusCode).toBe(400)
+      expect((reply.body as { error?: string }).error).toBe('PATH_TRAVERSAL')
+    })
+
+    it('unknown record -> 404; malformed recordId -> 400 (mirrors the blob guard shape)', async () => {
+      const handlers = makeHandlers([])
+      const reply = makeReply()
+      await handlers.getPageImage(makeRequest({ recordId: 'VPDF-NOPE000000', pageNumber: '1' }), reply.reply)
+      expect(reply.statusCode).toBe(404)
+      const bad = makeReply()
+      await handlers.getPageImage(makeRequest({ recordId: 'not-a-vpdf', pageNumber: '1' }), bad.reply)
+      expect(bad.statusCode).toBe(400)
+    })
+  })
+
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
 })
