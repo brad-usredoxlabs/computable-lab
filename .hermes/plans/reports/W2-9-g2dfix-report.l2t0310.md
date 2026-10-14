@@ -242,4 +242,4 @@ After the stack restart, criterion-2 leg (e) should settle like a/b/c/d:
 surface..." wording, no Apply/Accept card, zero writes, and the server log
 line `write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE`.
 
-W2-9-G2DFIX DONE 7b784d10
+W2-9-G2DFIX DONE e1b62bd6 (fix commit; the branch tip commit carrying this report line is the commit that follows it — verify via `git log --oneline -1` on cl/W2-9-g2dfix-lane2-l2t0310)
