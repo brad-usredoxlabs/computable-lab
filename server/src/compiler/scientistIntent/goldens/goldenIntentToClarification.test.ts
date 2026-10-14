@@ -229,3 +229,37 @@ describe('golden.intent-to-clarification.model-unresolved-passthrough', () => {
     expect(eq.ok).toBe(true);
   });
 });
+
+describe('golden.intent-to-clarification.unresolvable-mixture-component', () => {
+  it('golden.intent-to-clarification.unresolvable-mixture-component', async () => {
+    // COMP-4 Stage B fixture: the SHIPPED vocabulary declares
+    // add_material.composition cardinality: many (vocabulary DATA — the
+    // resolve_nouns door iterates it, one request per entry, each label read
+    // from the declared itemNounField). Three of the four components are
+    // seeded; 'Equine Serum' matches nothing => the EXISTING unknown-noun arm
+    // clarifies naming the COMPONENT (label is the component name, NOT the
+    // argument), the pass bars atomically, and the cascade barrier skips every
+    // downstream pass: zero events, zero writes, no partial mint.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-clarification.unresolvable-mixture-component');
+    const run = await runGolden(fixture);
+    const payload = assertBar(run);
+
+    const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
+    expect(clarifications).toHaveLength(1);
+    const item = clarifications[0]!;
+    expect(item['label']).toBe('Equine Serum');
+    expect(item['reason']).toBe('unknown-noun');
+    expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+    const candidates = item['candidates'] as Array<Record<string, unknown>>;
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates[0]).toEqual({ label: 'Create local term “Equine Serum”', confidence: 0.05 });
+
+    assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
+    expect(run.spies.writeCalls).toBe(0);
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-clarification.unresolvable-mixture-component');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+  });
+});

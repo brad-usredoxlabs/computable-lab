@@ -170,6 +170,48 @@ properties:
           type: string
         readout:
           type: string
+        # SHORTHAND-COMP-4 Stage B: the DECLARED mixture-component slot. Each
+        # entry names ONE component as a symbolic material noun; the
+        # resolve_nouns pass binds every component and bars atomically (422) on
+        # an unresolvable one. Concrete-instance objects are rejected BY
+        # CONSTRUCTION: `material` is type string and additionalProperties:false
+        # forbids kind/id/curie/recordId anywhere in an entry. During the
+        # transition the open params.composition slot remains valid too — both
+        # forms validate.
+        composition:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required: [material, role]
+            properties:
+              material:
+                type: string
+                minLength: 1
+                description: "Symbolic material noun (the scientist's words) — NEVER a concrete-instance object/ref."
+              role:
+                type: string
+                enum: [solute, solvent, buffer_component, additive, activity_source, cells, other]
+              fraction:
+                type: string
+              concentration:
+                type: object
+                additionalProperties: false
+                required: [value, unit]
+                properties:
+                  value: { type: number }
+                  unit: { type: string, minLength: 1 }
+              count:
+                type: number
+              counterDensity:
+                type: object
+                additionalProperties: false
+                required: [value, unit]
+                properties:
+                  value: { type: number }
+                  unit: { type: string, minLength: 1 }
         params:
           type: object
           additionalProperties: true

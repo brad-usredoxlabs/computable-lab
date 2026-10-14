@@ -439,3 +439,92 @@ describe('spine4.resolve-nouns-pass', () => {
     expect((result.output as ResolveNounsOutput).clarifications).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP4-MANY — the vocabulary-declared `cardinality: many` slot at the pass
+// seam (SPINE-8 levelFor precedent): the shipped declaration drives the
+// doc-door's per-entry iteration GENERICALLY (zero verb/arg name literals in
+// the pass or engine — the arg NAME only ever appears as contract data), and a
+// fixture-copy flip of the declared data flips the behavior with zero TS diff.
+// ---------------------------------------------------------------------------
+
+describe('comp4.many-cardinality at the pass seam', () => {
+  const mixtureAction = {
+    action: 'add_material' as const,
+    labware: 'plate',
+    composition: [
+      { material: 'trypsin-EDTA', role: 'solvent' },
+      { material: 'Equine Serum', role: 'additive' },
+    ],
+  };
+
+  it('shipped declaration: the many-arg iterates per entry — resolvedByLabel keys the COMPONENT labels and the unbindable component bars naming IT', async () => {
+    // Precondition: the shipped vocabulary declares the multiplicity (DATA).
+    const declared = shippedVocab().argContracts('add_material').find((a) => a.name === 'composition');
+    expect(declared?.cardinality).toBe('many');
+    expect(declared?.itemNounField).toBe('material');
+
+    const result = await createResolveNounsPass({
+      intent: intentOf([mixtureAction]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({
+        plate: [['local:LAB-plate', '96-well plate']],
+        'trypsin-EDTA': [['local:MAT-trypsin', 'trypsin-EDTA']],
+      }),
+    }).run(emptyRunArgs);
+
+    // The unresolvable COMPONENT bars — the clarification label is the
+    // component name, the actionLocation names the declared argument.
+    expect(result.ok).toBe(false);
+    const clarifications = (result.diagnostics![0]!.details?.['clarifications'] ?? []) as ResolveNounsOutput['clarifications'];
+    expect(clarifications).toHaveLength(1);
+    expect(clarifications[0]!.label).toBe('Equine Serum');
+    expect(clarifications[0]!.actionLocation).toEqual({
+      actionIndex: 0,
+      action: 'add_material',
+      argument: 'composition',
+    });
+
+    // The resolvable component bound through the SAME declared contract.
+    const output = result.output as ResolveNounsOutput;
+    expect(Object.keys(output.resolvedByLabel)).toContain('trypsin-EDTA');
+    expect(output.resolvedByLabel['trypsin-EDTA']).toMatchObject({
+      argument: 'composition',
+      recordId: 'MAT-trypsin',
+    });
+  });
+
+  it('fixture COPY with cardinality/itemNounField removed: the SAME intent behaves as scalar (no per-entry requests) — the iteration follows DECLARED data, not a TS table', async () => {
+    const shippedDir = join(process.cwd(), 'schema', 'scientist-intent');
+    const flipDir = join(process.cwd(), 'tmp', 'comp4-passseam-cardinality-flip');
+    mkdirSync(flipDir, { recursive: true });
+    for (const f of ['scientist-intent-vocabulary.schema.yaml', 'scientist-intent-vocabulary.lint.yaml']) {
+      copyFileSync(join(shippedDir, f), join(flipDir, f));
+    }
+    const shippedData = readFileSync(join(shippedDir, 'scientist-intent-vocabulary.yaml'), 'utf-8');
+    const flippedData = shippedData.replace(
+      /( {6}- name: composition\n(?: {8}[^\n]*\n){3}) {8}cardinality: many\n {8}itemNounField: material\n/g,
+      '$1',
+    );
+    expect(flippedData).not.toBe(shippedData); // the flip really differs
+    writeFileSync(join(flipDir, 'scientist-intent-vocabulary.yaml'), flippedData);
+
+    const fixtureVocabulary = loadScientistIntentVocabulary({ path: join(flipDir, 'scientist-intent-vocabulary.yaml') });
+    expect(shippedVocab().argContracts('add_material').find((a) => a.name === 'composition')?.cardinality).toBe('many');
+    expect(fixtureVocabulary.argContracts('add_material').find((a) => a.name === 'composition')?.cardinality).toBeUndefined();
+
+    const result = await createResolveNounsPass({
+      intent: intentOf([mixtureAction]),
+      vocabulary: fixtureVocabulary,
+      spine: spineReturning({ plate: [['local:LAB-plate', '96-well plate']] }),
+    }).run(emptyRunArgs);
+
+    // Without the declared multiplicity the array-valued arg is invisible to
+    // the door (the pre-Stage-B scalar behavior): no composition slot anywhere.
+    expect(result.ok).toBe(true);
+    const output = result.output as ResolveNounsOutput;
+    expect(Object.keys(output.resolvedByLabel)).not.toContain('Equine Serum');
+    expect(Object.keys(output.resolvedByLabel)).not.toContain('trypsin-EDTA');
+    expect(output.clarifications).toEqual([]);
+  });
+});

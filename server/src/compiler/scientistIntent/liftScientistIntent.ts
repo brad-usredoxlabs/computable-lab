@@ -146,6 +146,13 @@ export function liftAction(
   }
   const canonical = actionName ?? 'unknown';
   const out: Record<string, unknown> = { action: canonical };
+  // COMP-4 Stage B: the vocabulary's DECLARED arg names for the
+  // canonical verb are allowed through the lift too (data-driven union with
+  // the historical set — no new key literal). A declared arg that the lift
+  // silently dropped would never reach the resolve_nouns door.
+  const declaredArgNames = new Set<string>(
+    vocab.argContracts(canonical).map((contract) => contract.name),
+  );
 
   // Duration may arrive via a variety of aliases from the model.
   const durationAliases = [
@@ -168,7 +175,7 @@ export function liftAction(
       if (value && typeof value === 'object' && !Array.isArray(value)) out['params'] = value;
       continue;
     }
-    if (!ALLOWED_PARAM_KEYS.has(canonicalKey)) continue;
+    if (!ALLOWED_PARAM_KEYS.has(canonicalKey) && !declaredArgNames.has(canonicalKey)) continue;
     if (canonicalKey === 'action' || canonicalKey === 'verb') continue;
     let v: unknown = value;
     if (canonicalKey === 'duration' && durationAliases !== undefined) v = durationAliases;

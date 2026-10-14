@@ -133,6 +133,45 @@ rules:
   message:
     template: "pattern-class verbs must not require a resolvable argument"
 
+# P5 (SHORTHAND-COMP-4 Stage B): a resolvable argument declared cardinality:
+# many must declare itemNounField — the entry property the resolve_nouns door
+# reads per item. Mirrors P1's declaration-slot discipline: the multiplicity
+# CONDITION is here, the interpreter (resolutionEngine doc-door) stays generic.
+- id: vocab-many-args-declare-item-noun-field
+  title: "many-cardinality resolvable args declare itemNounField"
+  description: >-
+    An argument of kind resolvable whose cardinality is many must declare a
+    non-empty itemNounField naming the entry property carrying the symbolic
+    noun the resolver binds.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: everyItem
+    collectionPath: verbs
+    assert:
+      op: everyItem
+      collectionPath: args
+      assert:
+        op: any
+        predicates:
+        - op: not
+          not:
+            op: all
+            predicates:
+            - op: equals
+              path: kind
+              value: resolvable
+            - op: equals
+              path: cardinality
+              value: many
+        - op: nonEmpty
+          path: itemNounField
+  message:
+    template: "a resolvable vocabulary argument with cardinality many must declare itemNounField"
+
 # P4: strategy ids referenced by ambiguity/hintAuthority are members of
 # policies.strategyOrder (precedence is data, not code).
 - id: vocab-strategy-refs-declared

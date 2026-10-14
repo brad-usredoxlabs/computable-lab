@@ -128,7 +128,8 @@ Treat these as exact user-selected local references.
 A material that is a MIXTURE is never one material. When the scientist names a
 mixture — a ratio, a percent, a "in" clause, a medium plus additives, cells in a
 suspension — carry EVERY component separately in the action's `params.composition`
-array, one entry per component:
+array (or the declared action-level `composition:` key — both are accepted),
+one entry per component:
 
 ```yaml
 - action: add_material
