@@ -110,3 +110,22 @@ g2dfix6 releases); (4) trunk tip (merges move it); (5) AI-13 recount (n=237);
 #   TASK LIST: HARNESS-SEQ-1 -> done. Ready set after: EMPTY except blocked/BRAD-pending
 #   (W2-8/9/11 legs in-flight or capped; PROTO-AI-13 n=237 INSUFFICIENT-side). G2DFIX6
 #   still live (hermes 1262125); SEQ-2 coder queued 2nd.
+# G2DFIX6 DONE 12:22: coder chain exited "W2-9-G2DFIX6 DONE ed855ace" (worktree tip
+#   333974b5 docs). Claims: RED 5+4 -> GREEN 108/108 + 17/17, 126-arm sweep 0 mismatch,
+#   flip-check 137 rows 0 flips, timing <1ms, disclosed residuals R18-R21 pinned, c5
+#   over-claim corrected, DATA-only (interpreter frozen). Lock RELEASED.
+# ADVC c6 DISPATCHED 12:24 (proc_6d4bfa778676 pid 1391856, hermes 1391918, OpenRouter
+#   deepseek-v4.1-flash): prompt prompts/advc-W29g2dfix-c6-l2t1150.txt, log logs/
+#   advc-W29g2dfix-c6-l2t1150.log, report reviews/advc-W29g2dfix-c6-l2t1150.md. Mandate:
+#   c5 §B battery re-run + verbatim c5 leak reproductions + 6 fresh attacks, over-claim
+#   audit (residuals must be PINNED FREE rows), interpreter diff e1b62bd6..ed855ace EMPTY,
+#   data-only --stat, flip-check, timing probe, tsc baseline 33. Expected ~30-60 min;
+#   2x ~13:25. ACCEPT -> orch battery (both wall suites + honestRefusal + interpreter
+#   byte-check) -> merge --no-ff -> RESTART (YAML) -> G2e browser gate :5193 (/runs/:runId
+#   route). FIX -> cycle cap: NO cycle 7; architect packet reviews/advc-W29-g2dfix-c1..c6.
+# SEQ-2 CODER ACQUIRED the fleet lock ~12:16 (lock pid file "SEQ2 1361929" = hermes child;
+#   chain proc pid 1188852). Do NOT re-dispatch while alive. Expected 60-120 min ->
+#   2x ~14:15, 3x ~15:15 (rule 7b).
+# TICK BUDGET EXPIRED 12:33 (~43 min). Live at checkpoint: advc c6 (1391918, cloud),
+#   SEQ-2 coder (hermes 1361929, fleet lock). Nothing else live. Fleet coder rule kept
+#   (1 live coder). No merge this tick.
