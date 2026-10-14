@@ -98,3 +98,46 @@ describe('decodeAttachmentText — new arms (docx/rtf/markdown)', () => {
     expect(diagnostics[0]?.code).toBe('markdown_as_text');
   });
 });
+
+// DOCINGEST-B B1/B2 — the dispatcher gains the IMAGE arm. The extension set
+// is config data (config/ingestion/document-extraction.yaml `images.formats`),
+// so the arm is declared through the config-declared OCR adapter, never a
+// hardcoded extension literal (bait 10). Fake PNG bytes (not a decodable
+// image) must surface an honest IMAGE_OCR_* error diagnostic — never the utf8
+// fallback (which would return the raw bytes as "text") and never a blank
+// success.
+describe('decodeAttachmentText — image arm (DOCINGEST-B)', () => {
+  const FAKE_PNG = Buffer.from('\u0089PNG\r\n\u001a\n fake-png-bytes');
+
+  it('.png routes through the config-declared OCR adapter, not the utf8 fallback', async () => {
+    const { text, diagnostics } = await decodeAttachmentText('photographed-page.png', undefined, FAKE_PNG);
+    // The utf8 fallback would echo the raw bytes as text; the OCR adapter
+    // cannot read these bytes and must say so honestly.
+    expect(text, 'the image arm must never fall through to utf8').not.toContain('fake-png-bytes');
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics[0]?.severity).toBe('error');
+    expect(diagnostics[0]?.code).toMatch(/^IMAGE_OCR_/);
+  });
+
+  it('.jpg and .webp (config-declared image formats) take the same arm', async () => {
+    for (const name of ['page.jpg', 'page.webp']) {
+      const { text, diagnostics } = await decodeAttachmentText(name, undefined, FAKE_PNG);
+      expect(text).not.toContain('fake-png-bytes');
+      expect(diagnostics[0]?.code, `${name} must route to the OCR adapter`).toMatch(/^IMAGE_OCR_/);
+    }
+  });
+
+  it('image mime routes to the OCR adapter even without an image file name', async () => {
+    const { diagnostics } = await decodeAttachmentText('scan-1', 'image/png', FAKE_PNG);
+    expect(diagnostics[0]?.code).toMatch(/^IMAGE_OCR_/);
+  });
+
+  it('pdf/html/xlsx/docx arms stay byte-identical: an image diagnostic never leaks into them', async () => {
+    const pdf = await decodeAttachmentText('manual.pdf', undefined, PDF_BYTES);
+    expect(pdf.diagnostics.some((d) => d.code.startsWith('IMAGE_OCR_'))).toBe(false);
+    const docx = await decodeAttachmentText('sop.docx', undefined, DOCX_BYTES);
+    expect(docx.diagnostics[0]?.code).toMatch(/^DOCX_/);
+    const html = await decodeAttachmentText('page.html', 'text/html', Buffer.from(HTML));
+    expect(html.text).toContain('## Lysis protocol');
+  });
+});
