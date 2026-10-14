@@ -13,6 +13,15 @@ import type { ChatMessage } from '../types/ai'
 import { ChatFocusProvider } from './ChatFocusContext'
 import { HarnessChatPane } from './HarnessChatPane'
 
+// ChatLog reuses the exported clarificationAnswerPrompt from AiTabPanel, whose
+// import graph reaches pdfjs-dist; mock it so jsdom doesn't crash on DOMMatrix
+// (same proven pattern as AiTabPanel.test.tsx).
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined })),
+  GlobalWorkerOptions: { workerSrc: '' },
+  TextLayer: class { render() { return Promise.resolve() } },
+}))
+
 afterEach(cleanup)
 
 const message = (id: string, role: ChatMessage['role'], content = id): ChatMessage => ({ id, role, content, timestamp: 0 })
@@ -81,7 +90,7 @@ describe('HarnessChatPane', () => {
         </Registrant>
       </AiPanelProvider>,
     )
-    const composer = screen.getByLabel('Message', { exact: true })
+    const composer = screen.getByLabelText('Message', { exact: true })
     expect(composer).not.toBeDisabled()
     fireEvent.change(composer, { target: { value: 'Save this sequence' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -146,7 +155,7 @@ describe('HarnessChatPane', () => {
         <HarnessChatPane />
       </AiPanelProvider>,
     )
-    const composer = screen.getByLabel('Message', { exact: true })
+    const composer = screen.getByLabelText('Message', { exact: true })
     expect(composer).toBeDisabled()
     fireEvent.change(composer, { target: { value: 'anything' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -176,6 +185,7 @@ describe('HarnessChatPane', () => {
       'No surface has registered a chat with this panel.',
     )
     expect(screen.getByRole('log', { name: 'Conversation' })).toHaveTextContent('First real message')
+    fireEvent.change(screen.getByLabelText('Message', { exact: true }), { target: { value: 'ready' } })
     expect(screen.getByRole('button', { name: 'Send' })).not.toBeDisabled()
   })
 
@@ -184,12 +194,12 @@ describe('HarnessChatPane', () => {
     render(
       <AiPanelProvider>
         <Registrant chat={chat}>
-          <ChatFocusProvider>
+          <ChatFocusProvider focus={{ surface: 'sequences', label: 'Sequences — Editor' }}>
             <HarnessChatPane />
           </ChatFocusProvider>
         </Registrant>
       </AiPanelProvider>,
     )
-    expect(screen.getByTestId('surface-focus-header')).toBeInTheDocument()
+    expect(screen.getByTestId('surface-focus-header')).toHaveTextContent('Sequences — Editor')
   })
 })

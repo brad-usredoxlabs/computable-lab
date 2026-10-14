@@ -1,0 +1,22 @@
+/* ChatLog — the shared conversation log (HARNESS-SEQ-1). These are the
+   `.sequence-chat*` rules moved verbatim from SequencesPage.css; the
+   `sequence-chat` class name is pinned by e2e/sequence-chat-scroll.spec.ts. */
+.sequence-chat { display:flex; flex-direction:column; min-height:0; box-sizing:border-box; overflow:hidden; }
+.sequence-chat > :not(.sequence-chat-messages) { flex-shrink:0; }
+.sequence-chat-messages { flex:1; min-height:0; overflow:auto; overflow-wrap:anywhere; overscroll-behavior:contain; white-space:pre-wrap; }
+.sequence-chat-content { display:flex; flex-direction:column; justify-content:flex-end; min-height:100%; }
+.sequence-chat-content > div { flex-shrink:0; }
+.sequence-chat-latest { align-self:center; margin-top:.4rem; }
+
+/* Composer + hint styles the pane needs when hosted outside the sequences page. */
+.sequence-chat label { display:block; margin:.7rem 0; }
+.sequence-chat textarea { display:block; box-sizing:border-box; width:100%; padding:.5rem; margin-top:.25rem; border:1px solid var(--cl-border, #aaa); border-radius:.3rem; color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); }
+.sequence-chat button { color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); border:1px solid var(--cl-border, #aaa); border-radius:.3rem; padding:.4rem .6rem; cursor:pointer; }
+.sequence-chat button:disabled { opacity:.5; cursor:default; }
+.sequence-chat .sequence-hint { font-size:.8rem; color:var(--cl-text-dim, #555); }
+
+/* Clarification turn: the prompt plus its numbered options as buttons —
+   answering is the next chat turn, never a blocking card. */
+.chat-log-clarification { margin:.5rem 0; padding:.5rem; border:1px solid var(--cl-border, #aaa); border-radius:.4rem; }
+.chat-log-clarification p { margin:0; }
+.chat-log-clarification-options { list-style:none; margin:.4rem 0 0; padding:0; display:flex; flex-wrap:wrap; gap:.4rem; }
