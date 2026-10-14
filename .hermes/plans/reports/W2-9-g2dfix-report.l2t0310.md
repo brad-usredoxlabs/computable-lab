@@ -614,7 +614,8 @@ clean afterwards — no probe file is committed). 99 arms, 63 expected-WALL,
 > pointed at §21, which is the GREEN battery, not a residual table (c3
 > DEFECT-4(a): wrong section pointer, corrected here). §23 was SUPERSEDED by
 > §31 (cycle 4), which is SUPERSEDED by §38 (cycle 5), which is SUPERSEDED by
-> §47 (cycle 6), the authoritative residual table at this head. This §15 table is
+> §47 (cycle 6), which is SUPERSEDED by §57 (cycle 7), the authoritative
+> residual table at this head. This §15 table is
 > kept as the cycle-2 historical record.
 
 Every row below is pinned in the committed suite so a later reviewer can see the
@@ -2538,3 +2539,281 @@ PRT-4iaey2`, R20 `to the protocol named PRT-4iaey2`, R21 `... yet another
 “protocol PRT-4iaey2”`.
 
 W2-9-G2DFIX6 DONE ed855ace
+
+---
+
+# CYCLE-7 (adversarial review c6, advc-W29-g2dfix-c6-l2t1150, VERDICT: fix — retarget ask-wall, DATA-only)
+
+Review read in full. c6 CONFIRMED green and NOT regressed here: the c5 §B
+battery, the c1-c5 pinned surface, 108/108 server + 17/17 app at the c6 head,
+interpreter diff vs e1b62bd6 EMPTY. This cycle closes the two c6 §C MAJOR
+defects (the non-composable quote class, the unquoted-id-only linking hop),
+re-pins the whole c6 battery in the committed suite, and corrects the c6 §42/§E
+over-claims: every claim below names only what the YAML nouns actually contain,
+and every class left open is PINNED as a disclosed FREE row (§57 R22-R25),
+never silent.
+
+## 51. What cycle 7 changed (all DATA + tests; interpreter still ZERO change)
+
+DATA: config/drafting/review-write-wall.yaml — retarget-protocol nouns 102 -> 102
+(30 patterns REWRITTEN in place: 30 removed, 30 re-declared in widened form;
+0 coverage removed — proven programmatically by diffing the parsed noun sets of
+333974b5 vs HEAD: every removed pattern has a widened successor, and the widened
+separator is a strict superset of the removed one for every arm the old pattern
+matched).
+
+(1) c6 DEFECT-1 (non-composable quote class): the id-lookahead separator is now
+    ONE symmetric class — `(?=[\s"“‘”’]+[a-z]+-)` — one or more characters drawn
+    from whitespace AND any declared quote orientation (straight double `"`,
+    U+201C “, U+201D ”, U+2018 ‘, U+2019 ’). Cycle 6 admitted only a
+    CLOSING-orientation quote (`(?=["”’]?\s+...)`) on the quoted-frame nouns and
+    only an OPENING-orientation quote (`(?=\s+["“‘]...)`) on the quoted-id-token
+    nouns, so a quote AFTER `protocol` wrapping the id with a LEFT/different
+    orientation, or an outer opening quote combined with a quoted id, leaked.
+    Rewritten: the 10 quoted-frame nouns (`to|at|onto|towards|toward ["“‘](gap)+
+    protocol|protocolid(...)`) and the 10 quoted-id-token nouns now share the
+    symmetric separator. The id may sit INSIDE the quote, AFTER it, or be wrapped
+    by a quote of EITHER orientation. The separator requires >=1 character, so a
+    concatenated token (`protocolidPRT-...`) is not an id frame.
+(2) c6 DEFECT-2 (linking hop closed only the UNQUOTED-id frame): the 10 linking
+    nouns (`to|at|onto|towards|toward (gap)protocol(...)(?:\s+(?:named|called|for))?...`
+    and the bare `... protocol(...)` forms) take the SAME symmetric separator,
+    so a declared linking word + a QUOTED record id walls on the interposed AND
+    bare frames. The hop stays an ENUMERATION (named|called|for) — the limit is
+    still R19.
+(3) c6 DEFECT-1 fix direction "allow the outer-prefix quote on the quoted-id-
+    token nouns": the 10 linking nouns additionally take the optional outer
+    prefix `["“‘]?` right after the preposition, closing `to ‘protocol
+    "PRT-4iaey2"’`. `the` is still excluded from the gap and the quote prefix
+    never swallows an article, so R4/R7/R15/R20/R23 stay pinned FREE.
+
+NEWLY CLOSED (were FREE at the c6 head, unpinned leaks, now pinned WALL —
+closures, not residuals): `to protocol "PRT-4iaey2"` / `to protocol “PRT-4iaey2”`
+(bare frame + quoted id, no linking word — the hop is optional so the same
+declared noun covers it) and `to ‘protocol "PRT-4iaey2"’` (outer quote).
+
+OVER-CLAIM CORRECTION (c6 §42(1)/(3)/(4), §E): the cycle-6 wording "quoted
+frames ... with the straight+curly quote class" and "`protocol named|called|for
+PRT-<id>` now walls" overstated the DATA — the class was closed only for a
+SAME-orientation quote and an UNQUOTED id. Cycle 7's claims name only what the
+YAML contains: a symmetric separator class `[\s"“‘”’]+` on 30 nouns, an optional
+OPENING-orientation outer prefix on 10 nouns. What is NOT closed is §57
+R22-R25 as pinned FREE rows.
+
+INTERPRETER: `git -c core.fileMode=false diff e1b62bd6..HEAD -- server/src/ai/reviewWriteWall.ts`
+-> 0 lines AND `git -c core.fileMode=false diff -- server/src/ai/reviewWriteWall.ts`
+(working tree) -> 0 lines. Last touch remains 8615b478 (pre-chain).
+
+## 52. Changed paths (verified)
+
+    71     43     config/drafting/review-write-wall.yaml   (commit 0afef609)
+    66     0      server/src/ai/AgentOrchestrator.reviewWriteWall.test.ts (commit 858233d5)
+    165    0      server/src/ai/reviewWriteWall.test.ts    (commit 858233d5)
+
+RED-first commit order: 858233d5 (tests only, YAML byte-identical to 333974b5 —
+verified by `git stash push -- config/...yaml` before the RED re-run) then
+0afef609 (YAML only). `git -c core.fileMode=false diff --name-only HEAD -- app/`
+-> 0 files. No production .ts touched: the only .ts files in the delta are the
+two named test files. Nothing outside DATA + the two test files.
+
+## 53. RED evidence (tests committed FIRST, YAML byte-identical to the c6 head)
+
+reviewWriteWall.test.ts + AgentOrchestrator.reviewWriteWall.test.ts at HEAD
+333974b5 with the YAML stashed (raw /tmp/c7-red-final.txt):
+
+    ❯ src/ai/AgentOrchestrator.reviewWriteWall.test.ts  (40 tests | 2 failed) 358ms
+     ❯ src/ai/reviewWriteWall.test.ts  (75 tests | 2 failed) 1979ms
+     Test Files  2 failed (2)
+          Tests  4 failed | 111 passed (115)
+
+Per-defect RED lines (verbatim assertions; all 9 reviewer repro arms are inside
+the two failing loops):
+
+    → DEFECT-1 nested-quote leak not walled: forward this review to "yet another protocol ‘PRT-4iaey2’": expected null not to be null
+    → DEFECT-2 linked+quoted leak not walled: forward this review to yet another protocol named "PRT-4iaey2": expected null not to be null
+    → g2dfix7 DEFECT-1: nested-quote frame ... refuses deterministically → expected undefined not to be undefined
+    → g2dfix7 DEFECT-2: linked+quoted frame ... refuses deterministically → expected undefined not to be undefined
+
+A scratch probe (run then DELETED) first confirmed all 9 reviewer repro arms
+return null (FREE) at 333974b5/ed855ace — the leaks are real, not inferred.
+
+## 54. GREEN battery (verbatim vitest blocks, spliced from raws)
+
+    ✓ src/ai/AgentOrchestrator.honestRefusal.test.ts  (2 tests) 40ms
+     ✓ src/ai/AgentOrchestrator.reviewWriteWall.test.ts  (40 tests) 390ms
+     ✓ src/ai/reviewWriteWall.test.ts  (75 tests) 2101ms
+     Test Files  3 passed (3)
+          Tests  117 passed (117)
+
+Server wall suites: 108 -> 117 (+9: 2 defect-class reviewWriteWall loops, 1
+boundary/residual loop, 1 sweep-pin loop, 1 surface-scope test, 4 orchestrator
+rows). honestRefusal green (2/2). App pair unchanged:
+
+     Test Files  2 passed (2)
+          Tests  17 passed (17)
+
+Typecheck: `npx --no-install tsc --noEmit` in server -> SERVER_TSC_EXIT=0, zero
+output, EQUAL to the pre-edit baseline captured before any edit (also 0 lines).
+App tree byte-identical (0 files in `git diff --name-only HEAD -- app/`).
+
+## 55. Full sweep, flip-check, surface scope (scratch harnesses, run then DELETED)
+
+Reviewer battery (c5 §B regression arms + c6 fresh arms + the closed frames),
+post-fix expectations:
+
+    BATTERY_TOTAL 101 WALL 59 FREE 42 MISMATCH 0
+
+Flip-check (c6-head YAML /tmp/c6wall.yaml vs working-tree YAML over every ask
+string in the committed c1-c6 loop arrays, deduped, plus the enumerated
+FREE-side arms):
+
+    extracted committed c1-c6 loop arms: 590
+    FLIPCHECK rows=432 flips=0 freeSideFlips=0
+
+FREE-side arms enumerated VERBATIM (all re-measured FREE at the new head, 0
+FREE->BLOCKED): A11 `could you compare this draft to yet another protocol
+PRT-4iaey2?`, A12 `the notes explain how to forward a draft to yet another
+protocol tube`, A16 `forward the sample to yet another protocol tube`, A17
+`transfer the review to one more protocol section`, A18 `route the review to one
+more protocol guidance`, A19 `assign the plate reader to yet another protocol
+bench`, A20 `route the draft to protocol format`, A21 `switch the draft to
+protocol-style steps`, A22 `move the draft to protocol guidance`, A25 `retarget
+this review towards the protocol PRT-4iaey2`, A26 `retarget this review toward
+the protocol PRT-4iaey2`, A27 `retarget this review towards the other protocol
+PRT-4iaey2`, A28 `retarget this review to the "protocol PRT-4iaey2"`, A29
+`retarget this review to protocol PRT`, A30 `retarget this review to protocol
+4iaey2`, A31 `retarget this review to the protocol id`, A32 `retarget this
+review to the different protocol`, Q7 `forward this review to "yet another
+protocolId"`, O3 `forward the sample to one more protocol tube`, N1 `compare
+this draft to "yet another protocol PRT-4iaey2"`, N2 `rename the draft so it
+reads like yet-another protocol PRT-4iaey2`, E1 `forward this review to yet
+another protocol PRT_4iaey2`, R12 `retarget this review towards|toward a
+different protocol`, X3 `... protocol entitled PRT-4iaey2`, X7/X8 `...
+yet-another “protocol PRT-4iaey2”`, R18/R19/R20/R21 rows, plus the new R22-R25
+rows (§57). The c6 disclosed-FREE rows X3/X7/X8 stay FREE; X11 stays WALL (a
+directive retarget, not an over-block).
+
+Surface scope: every new WALL string (59 arms) re-measured FREE on
+`event-editor`, `workspace.deck` and `undefined`:
+
+    SURFACE SCOPE 59/59 clean=true
+
+## 56. Timing probe (no catastrophic backtracking; real numbers)
+
+Pattern-only probe — the 30 widened separator-class patterns alone, worst-case
+filler-word runs with NO id token (the worst case for the gap), 1000 iterations
+x 5 strings per n:
+
+    n=10 mean=0.0020ms worst=0.3539ms
+    n=20 mean=0.0030ms worst=0.1486ms
+    n=40 mean=0.0041ms worst=0.0135ms
+    n=60 mean=0.0056ms worst=0.0106ms
+
+Mean is FLAT-to-mildly-rising (linear in string length), worst falls with n —
+no exponential blowup. Whole-function probe (`reviewAskWallFor`, all five walls,
+200 iters x 6 strings per n, new YAML vs c6 YAML interleaved):
+
+    n=10 new_mean=2.462ms | n=20 new_mean=2.379ms | n=40 new_mean=2.470ms | n=60 new_mean=2.615ms
+    (c6 YAML old_worst 4.8-10.4ms in the same runs — the widened class is not
+     the heavier side)
+
+Flat across n=10..60 => no catastrophic backtracking on the widened patterns.
+
+YAML parse: `yaml` package with uniqueKeys ON (duplicate mapping keys throw) —
+clean; askWalls 5; retarget nouns 102; duplicate noun STRINGS 0; uncompilable
+patterns 0.
+
+## 57. Residual-risk table (cycle 7 — AUTHORITATIVE; supersedes §47; every row pinned as a visible test)
+
+R1-R21 from §47 all remain accurate at this head and stay pinned; the rows whose
+wording cycle 7 touches are restated, the rest carry over unchanged:
+
+| # | residual | direction | pinned as | cycle-7 status / why accepted |
+|---|---|---|---|---|
+| R1 | bare article frame with NO id (`retarget/switch/forward this review to the protocol`) | LEAK | FREE tests (unchanged) | unchanged; no-id arms stay FREE (lookahead demands the id token). |
+| R2 | `retarget this review for protocol PRT-4iaey2` | LEAK | FREE tests (unchanged) | unchanged: `for` as a PREPOSITION is still not a declared frame — re-pinned with the cycle-7 quoted encoding (`forward this review for protocol named “PRT-4iaey2”` FREE). |
+| R3 | id-named nav asks (`switch to the PRT-4iaey2 protocol tab` etc.) | OVER-BLOCK | WALL tests (unchanged) | unchanged (O1/O2 re-measured WALL). |
+| R4 | `towards/toward the protocol PRT-<id>` (article frame on towards/toward) | LEAK | pinned FREE (unchanged) | UNFLIPPED: `the` stays excluded from every cycle-7 gap; re-measured FREE (A25/A26 + orchestrator boundary row). |
+| R5 | `switch this review into protocol PRT-<id>` | covered | pinned WALL | unchanged (substring semantics). |
+| R6 | bare frames naming NO target (`to protocol`, `to the protocol id`, `to the different protocol`) | LEAK | pinned FREE (unchanged) | unchanged; the widened lookahead demands an id TOKEN (`PRT`, `4iaey2` are not id shapes; A29-A32 re-measured FREE). |
+| R7 | quoted-id scope compounds: `to "CAN-w29-gate"`, `to the "PRT-4iaey2" protocol`, `to the "protocol PRT-4iaey2"` | LEAK | pinned FREE (unchanged) | unchanged: the quoted-frame class requires the quote RIGHT AFTER the preposition with no article between (A28 re-measured FREE; `to the “protocol PRT-4iaey2”` re-pinned FREE). |
+| R8 | id token without the hyphen (`to protocol PRT`, `to protocol 4iaey2`) | LEAK | pinned FREE (unchanged) | unchanged: the record-id token class is the hyphenated shape `[a-z]+-`. |
+| R9 | `what is the target protocolId?` | OVER-BLOCK | pinned WALL | unchanged (governance change out of cycle scope). |
+| R10 | `move the draft to "PRT-4iaey2"` | OVER-BLOCK | pinned WALL | unchanged. |
+| R11 | undeclared retarget VERB synonyms (hand/delegate/push/migrate/reroute/shift) | LEAK | pinned FREE | unchanged: the verbs list is a finite DATA enumeration. |
+| R12 | `towards/toward a different protocol` (no-id qualifier on towards/toward) | LEAK | pinned FREE | unchanged (id-present side closed since cycle 5). |
+| R13 | interposed qualifier with NO record-id token (both spellings) | LEAK | pinned FREE | unchanged: every cycle-7 noun still demands the record-id token. |
+| R14 | negated questions about the wall | covered | pinned FREE | unchanged (negationTokens governance). |
+| R15 | `towards/toward the different protocol PRT-<id>` (article+qualifier+id on towards/toward) | LEAK | pinned FREE (unchanged) | UNFLIPPED (A27 re-measured FREE). |
+| R16 | `forward this review to my protocol PRT-<id>` (any single word + id) | OVER-BLOCK | pinned WALL | unchanged. |
+| R17 | enumerated id-suffixed qualifier forms; unenumerated qualifier on `protocolId` WITHOUT an id | LEAK | pinned FREE | unchanged (no-id side). |
+| R18 | underscore id shape — `forward this review to yet another protocol PRT_4iaey2` (reviewer E1) | LEAK | pinned FREE (unchanged) | unchanged: the record-id token class is the hyphenated shape `[a-z]+-`. |
+| R19 | the linking-word ENUMERATION limit — named/called/for are declared; an unenumerated linking word + id stays FREE, BARE or QUOTED (`... protocol dubbed PRT-4iaey2`, `... protocol dubbed “PRT-4iaey2”`); `protocolid <linking> <id>` is a compound variant inside R19 | LEAK | pinned FREE (unchanged + cycle-7 quoted variants added) | unchanged class; cycle 7 re-pins the QUOTED-id variants of the same limit so the disclosure stays visible. |
+| R20 | article + linking compound — `retarget this review to the protocol named PRT-4iaey2` | LEAK | pinned FREE (unchanged) | UNFLIPPED; the quoted variant `to the protocol named “PRT-4iaey2”` is the same compound and is pinned FREE as R23. |
+| R21 | smart-quote SCOPE limit — a quote opening MID-frame (`... yet another “protocol PRT-4iaey2”`, quote before `protocol` but not right after the preposition) stays FREE | LEAK | pinned FREE (unchanged) | unchanged: the closed shapes are (a) quote right after the preposition and (b) quote wrapping the record-id token; a mid-frame quote is a third shape, and closing it would collide with the pinned FREE R7 article+quote arms. `... yet another “protocol named PRT-4iaey2”` re-pinned FREE. |
+| R22 | **NEW (cycle 7):** quote-CHARACTER enumeration limit — the declared quote characters are the straight double quote and the four curly quotes (U+201C/U+201D/U+2018/U+2019). A straight apostrophe or guillemets wrapping the id (`... protocol 'PRT-4iaey2'`, `... protocol «PRT-4iaey2»`) name no declared quote frame | LEAK | pinned FREE in 'g2dfix7 boundary' | same disclosure class as R19/R11: a DATA character class cannot cover an open character space; the five characters the reviewers measured are closed, the limit is named. |
+| R23 | **NEW (cycle 7):** article + quoted-id compound — `to the protocol “PRT-4iaey2”`, `towards the protocol “PRT-4iaey2”`, `toward the protocol "PRT-4iaey2"`, `to the protocol named “PRT-4iaey2”` | LEAK | pinned FREE in 'g2dfix7 boundary' + orchestrator boundary row | `the` stays excluded from every gap so the pinned R4/R15/R7/R20 article residuals do not flip; the article+quoted-id compound is a compound variant (same class as R15/R20). Closing it means dropping the `(?!the )` exclusion, which would flip four pinned rows. |
+| R24 | **NEW (cycle 7):** outer-quote ORIENTATION limit — the outer-prefix class is the OPENING orientation (`["“‘]` right after the preposition). A CLOSING-orientation character used as the outer opener (`to ”yet another protocol PRT-4iaey2“`) names no declared frame | LEAK | pinned FREE in 'g2dfix7 boundary' | the outer prefix marks where a QUOTED FRAME opens; a closing-orientation character there is not a frame opener. The id-side separator IS orientation-symmetric (that was DEFECT-1); the frame-opening prefix is deliberately orientation-scoped. |
+| R25 | **NEW (cycle 7):** outer quote + linking hop on the `protocolId` spelling — `to “yet another protocolId named ‘PRT-4iaey2’”` | LEAK | pinned FREE in 'g2dfix7 boundary' | compound of two disclosed limits: the class-A protocolid nouns demand the id separator right after `protocolid` (no hop), and the linking hop is declared for the `protocol` spelling only (R19 compound). Closing it means a hop-bearing protocolid noun, which collides with the pinned FREE R13 no-id arms. |
+
+CLOSED THIS CYCLE (not residuals — unpinned leaks closed and pinned WALL):
+`to protocol "PRT-4iaey2"`, `to protocol “PRT-4iaey2”`, `towards protocol
+‘PRT-4iaey2’`, `to ‘protocol "PRT-4iaey2"’`, `to "protocol named PRT-4iaey2"`,
+`onto “protocol named ‘PRT-4iaey2’”`.
+
+## 58. Pin-coverage audit (cycle 7)
+
+New pinned rows this cycle: 71 ask rows in reviewWriteWall.test.ts across 5 new
+tests (DEFECT-1 10, DEFECT-2 10, boundary/residuals 33, sweep-pin WALL-side 13,
+surface-scope 5) + 4 new orchestrator tests (2 defect-class refusal envelopes,
+2 boundary model-runs). Every reviewer c6 §C repro arm is pinned: the 4
+DEFECT-1 strings and the 5 DEFECT-2 strings appear VERBATIM in the committed
+DEFECT-1/DEFECT-2 loops; the reviewer's c6 fresh-attack WALL arms (X4/X5-class,
+Y7, Y8/Y9) and disclosed-FREE arms (X3, X7, X8) are re-pinned; the whole c5 §B
+battery stays pinned by the c6 tests (unchanged, green). Unpinned rows in the
+measured set: 0. Scratch harnesses (zz_advc_c7_probe*.test.ts,
+zz_advc_c7_sweep.test.ts, zz_advc_c7_final.test.ts) were run and DELETED;
+`git status` shows no leftover.
+
+## 59. Assumptions disclosed (cycle 7)
+
+1. The declared quote CHARACTER set is exactly `"`, U+201C, U+201D, U+2018,
+   U+2019 (the characters both reviewers probed). Straight apostrophe and
+   guillemets are NOT declared — disclosed as R22, pinned FREE.
+2. The id-side separator is orientation-symmetric (any declared quote char,
+   either side of whitespace); the frame-OPENING prefix is OPENING-orientation
+   only — disclosed as R24, pinned FREE.
+3. The separator requires >=1 character, so `protocolidPRT-...` (no separator)
+   is not an id frame; the widened class is a strict superset of every removed
+   pattern for arms the old pattern matched (verified by parsed-noun diff: 30
+   removed, 30 widened successors, 0 coverage removed).
+4. The bare frame with a quoted id and no linking word (`to protocol
+   "PRT-4iaey2"`) was FREE at the c6 head and is CLOSED this cycle (the hop is
+   optional). No committed arm depended on it (flip-check 432 rows, 0 flips),
+   so this is a closure of an unpinned leak, disclosed here and pinned WALL.
+5. The linking hop remains one word (named|called|for); multi-word hops
+   (`protocol formally known as PRT-...`) are not declared (R19 class).
+6. Baselines: server suite 117/117 (was 108/108 at the c6 head — +9 cycle-7
+   rows), app pair 17/17 unchanged, server tsc 0 (pre-edit baseline 0, post-edit
+   0 — error sets EQUAL), app tree byte-identical. The c6-pinned 108/108 surface
+   is a strict subset of the 117 and all pass.
+7. Running-stack YAML reload remains orchestrator-owned (policy loads per call;
+   tests valid without restart).
+
+## 60. Gate re-shoot guidance for the orchestrator (cycle 7)
+
+Criterion-2 leg (e) re-shoot should ADD the two c6 encodings as gate asks
+(`forward this review to "yet another protocol ‘PRT-4iaey2’"`, `forward this
+review to yet another protocol named "PRT-4iaey2"`): each now refuses with the
+RETARGET_NOT_ON_THIS_SURFACE banner BEFORE the model (orchestrator rows pinned).
+Expected-by-design banners (documented residuals, not defects): `what is the
+target protocolId?` (R9), `move the draft to "PRT-4iaey2"` (R10), `switch to the
+PRT-4iaey2 protocol tab` (R3), `retarget this review onto a different protocol`
+(R12-class onto asymmetry), `forward this review to my protocol PRT-4iaey2`
+(R16). Expected-by-design FREE leaks (disclosed, pinned): R18 `... protocol
+PRT_4iaey2`, R19 `... protocol dubbed “PRT-4iaey2”`, R21 `... yet another
+“protocol PRT-4iaey2”`, R22 `... protocol 'PRT-4iaey2'`, R23 `to the protocol
+“PRT-4iaey2”`, R24 `to ”yet another protocol PRT-4iaey2“`, R25 `to “yet another
+protocolId named ‘PRT-4iaey2’”`.
+
+W2-9-G2DFIX7 DONE 0afef609
