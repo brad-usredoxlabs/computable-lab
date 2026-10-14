@@ -8,7 +8,8 @@ OQ rulings honored: OQ1 teach BOTH wire forms; OQ2 seed IN with one-line reuse; 
 Commits (contractual order: RED -> meta-schema -> data+interpreter+bless):
 - 4d580919 test(comp4): RED stage B — T1-T8 (13 failed / 1 passed)
 - 5e5bde44 feat(comp4): meta-schema cardinality/itemNounField + lint P5 (meta BEFORE data)
-- <final> feat(comp4): composition promoted to a declared vocabulary arg (+ data, interpreter, prompt, golden + MANIFEST re-bless, report)
+- 876c67ac feat(comp4): composition promoted to a declared vocabulary arg (+ data, interpreter, prompt, golden + MANIFEST re-bless)
+- e6924856 docs(comp4): this report (final tip)
 
 ---
 
@@ -186,4 +187,4 @@ promptBudget.test.ts 6/6 green. CORE_PROMPT_CEILING_CHARS untouched. contractBlo
 12. minItems 2 vs expander: wire rejects 1-entry action-level compositions; params slot unchanged; expander's
    >=2 drop untouched (existing pin green).
 
-SHORTHAND-COMP-4 DONE <see final commit sha below>
+SHORTHAND-COMP-4 DONE 876c67ac (implementation tip; report commits e6924856 + follow-up on branch cl/COMP-4-lane2-l2t0910)
