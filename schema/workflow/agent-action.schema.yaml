@@ -35,6 +35,24 @@ properties:
       additionalProperties: false
     # Any record or ontology ref (run, analysis-run, material, well, ...)
     - $ref: "../datatypes/ref.schema.yaml"
+    # Sequences workspace: switch the surface's in-page tab (validated against the
+    # DECLARED tab list at compile time; the schema enum is a fast fence kept in
+    # lockstep by a compatibility test — see surfaces.yaml `tabs`).
+    - type: object
+      required: [ kind, tab ]
+      properties:
+        kind: { const: sequence-tab }
+        tab: { enum: [ Editor, Assay, Analysis, Setup, Import, Knowledge ] }
+      additionalProperties: false
+    # Sequences workspace: focus/select a sequence-domain record by real id (the
+    # compiler store-verifies; label is overwritten authoritatively).
+    - type: object
+      required: [ kind, recordId ]
+      properties:
+        kind: { const: sequence-record }
+        recordId: { type: string }
+        label: { type: string }
+      additionalProperties: false
 
   surface:
     type: string

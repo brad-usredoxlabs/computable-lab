@@ -26,6 +26,13 @@ export interface SurfaceSpec {
   objectTypes: string[];
   selectableKinds: string[];
   aiRole?: string;
+  /**
+   * HARNESS-SEQ-2 (OQ1 ruling): the DECLARED in-page tab vocabulary
+   * (surfaces.yaml `tabs`). Pure data passthrough — the workspace-action
+   * compiler validates a sequence-tab target against THIS list; there is no
+   * tab policy in TypeScript (repo rule #1/#3). Absent when undeclared.
+   */
+  tabs?: string[];
 }
 
 export interface SurfacesDocument {
@@ -92,6 +99,9 @@ function normalizeSurface(raw: unknown, index: number): SurfaceSpec {
   }
   if (typeof aiRole === 'string' && aiRole.trim().length > 0) {
     spec.aiRole = aiRole.trim();
+  }
+  if (obj.tabs !== undefined) {
+    spec.tabs = stringArray(obj.tabs, `surfaces[${index}].tabs`);
   }
   return spec;
 }
