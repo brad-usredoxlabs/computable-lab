@@ -64,6 +64,9 @@ const ALLOWED_PARAM_KEYS = new Set<string>([
   'factor', 'points', 'replicates', 'ratio',
   'volume', 'volumeUl', 'cycles', 'duration', 'temperatureC', 'rpm',
   'mode', 'wavelength', 'instrument', 'assayId', 'readout', 'material',
+  // SPINE-1 expected-domain slots (declaration only — the wire schema accepts
+  // them; the lift must not silently drop what the schema allows).
+  'expectedSourceDomain', 'expectedTargetDomain', 'expectedLabwareDomain',
   'params',
 ]);
 
@@ -154,7 +157,17 @@ export function liftAction(
   for (const [key, value] of Object.entries(raw)) {
     if (value === undefined || value === null) continue;
     const canonicalKey = PARAM_ALIASES[key] ?? key;
-    if (canonicalKey === 'params' || canonicalKey === 'parameters') continue;
+    if (canonicalKey === 'parameters') continue;
+    if (canonicalKey === 'params') {
+      // The OPEN parameter slot rides through VERBATIM. It carries the declared
+      // composition components (material-system-rules.md) and any future
+      // extension; dropping it here silently erased a named mixture from both
+      // the compiled document AND the corpus training target (the corpus
+      // capture at server/src/corpus/ lifts before it stores). No key
+      // filtering inside params — that is Ajv's (and Stage B's) job.
+      if (value && typeof value === 'object' && !Array.isArray(value)) out['params'] = value;
+      continue;
+    }
     if (!ALLOWED_PARAM_KEYS.has(canonicalKey)) continue;
     if (canonicalKey === 'action' || canonicalKey === 'verb') continue;
     let v: unknown = value;

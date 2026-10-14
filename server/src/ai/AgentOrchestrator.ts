@@ -75,9 +75,11 @@ import {
   foldAnswersIntoShorthand,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
+  parseShorthandForChat,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
-import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -523,7 +525,8 @@ export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
-  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one.',
+  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one. The full menu with each verb\'s accepted args is the ACTIONS block below; write the verb as the VALUE of the `action` key.',
+  defaultScientistIntentVocabulary().contractBlock(),
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
@@ -2274,10 +2277,12 @@ export function createAgentOrchestrator(
                 return emptySh;
               }
 
-              // Ajv sole authority — validate-in-place, never a repaired re-parse.
+              // Ajv sole authority — lift model aliases first (the same door
+              // the corpus capture and the headless route use), then
+              // validate-in-place, never a repaired re-parse.
               let shorthandDoc: import('../compiler/scientistIntent/types.js').ScientistIntent;
               try {
-                shorthandDoc = parseScientistIntent(shorthandYaml);
+                shorthandDoc = parseShorthandForChat(shorthandYaml);
               } catch (err) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 if (err instanceof ScientistIntentValidationError && !shorthandRepairAsked) {

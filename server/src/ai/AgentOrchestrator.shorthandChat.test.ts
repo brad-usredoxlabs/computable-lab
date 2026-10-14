@@ -391,10 +391,15 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     const key = deriveContextCacheKey('workspace.deck' as never, RUN_CHAT_REQUEST.context as never);
     const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
     // A held document whose folded re-serialization CANNOT pass Ajv (a field
-    // the wire schema forbids): the fold's final parseScientistIntent must
-    // return null (the permitted extraction-only fallback), never escape as a
-    // ScientistIntentValidationError crashing the turn out of run().
-    (heldDoc.actions[0] as unknown as Record<string, unknown>).bogusField = 'not-a-schema-field';
+    // the wire schema forbids): the fold's final parse through
+    // parseShorthandForChat must return null (the permitted extraction-only
+    // fallback), never escape as a ScientistIntentValidationError crashing the
+    // turn out of run(). SHORTHAND-COMP-2 note: the defect rides an
+    // `unresolved[]` entry because the lift (Task 9) VERBATIM-copies unresolved
+    // and scrubs unknown action-level noise — an action-level bogusField is
+    // now normalized away (that is the lift's job), so the guard is pinned on
+    // a defect the lift deliberately preserves.
+    heldDoc.unresolved.push({ label: 'other thing', reason: 'x', bogusField: 'not-a-schema-field' } as never);
     holdShorthandIntent(key, {
       yaml: AMBIGUOUS_YAML,
       doc: heldDoc,
