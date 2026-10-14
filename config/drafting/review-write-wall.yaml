@@ -403,6 +403,38 @@ askWalls:
   #     no-id M15 leak, which the generic lookahead cannot reach. The
   #     towards|toward ARTICLE+qualifier+id frame stays the pinned R4 residual
   #     (cycle-5 (4) closes the article frame for to/at only).
+  #
+  # W2-9-G2DFIX CYCLE-6 (advc-W29-g2dfix-c5-l2t0955, VERDICT: fix). Four leak
+  # encodings of the SAME concrete-id retarget class, closed in DATA (the
+  # interpreter is still byte-unchanged — governance, maxGapWords and
+  # blockerWords are untouched):
+  #
+  # (1) MAJOR (c5 DEFECT-1) — the quoted-frame nouns existed for `to`/`at` and
+  #     the `protocol` spelling only: `towards`/`toward "…protocol <id>"` and
+  #     every quoted `protocolId` + concrete id reached the model. Closed: the
+  #     quoted-frame class now covers ALL FIVE prepositions on BOTH spellings.
+  # (2) MAJOR (c5 DEFECT-2) — the generic qualifier gap matched space-separated
+  #     `[a-z]+` tokens only, so a hyphenated qualifier token (`yet-another`)
+  #     leaked. Closed: the gap token is widened to `[a-z][a-z-]*` in every
+  #     generic/article/quoted gap noun.
+  # (3) MINOR (c5 DEFECT-3) — smart/curly quotes (U+201C/U+201D/U+2018/U+2019)
+  #     broke the straight-quote nouns. Closed IN THE PATTERNS (the interpreter
+  #     is frozen, so no normalisation step is added): the opening-quote class
+  #     `["“‘]` after the preposition, an optional closing quote `["”’]?`
+  #     before the record-id token, and a quoted-id-token lookahead
+  #     `(?=\s+["“‘][a-z]+-)` on the generic frames.
+  # (4) MINOR (c5 DEFECT-4) — a linking word between `protocol` and the record
+  #     id (`protocol named|called|for PRT-…`) broke the immediate-id lookahead
+  #     in the interposed frame AND in the bare frame; the pre-existing L4 gap
+  #     `to protocol named PRT-<id>` is CLOSED here, not pinned. The hop is an
+  #     ENUMERATION (named|called|for) — the limit is disclosed as residual R19.
+  # SCOPE DISCIPLINE (c5 §F over-claims): the cycle-5 commit's "GENERICALLY …
+  # (to/at/onto/towards/toward + quoted forms)" wording overstated the DATA;
+  # this cycle's claims name only what the nouns below actually contain. What
+  # stays open is PINNED, never silent: underscore id shape (R18), the
+  # linking-word enumeration (R19), the article+linking compound (R20), the
+  # mid-frame smart-quote scope limit (R21). `the` stays excluded from every
+  # gap so no pinned article residual (R4/R15/R7) flips.
   - id: retarget-protocol
     code: RETARGET_NOT_ON_THIS_SURFACE
     message: >-
@@ -538,8 +570,8 @@ askWalls:
       # <id>') and every existing article noun stay byte-identical, and the
       # article+id frames remain what they were (walled for to/at/onto via the
       # article nouns, leaked for towards/toward — R4 unchanged).
-      - to (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - at (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - to (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
       # CYCLE-5 (4): the ARTICLE + qualifier frame with a record id (`to the
       # other protocol PRT-<id>`) — the same class measured FREE in the cycle-5
       # sweep. The existing article nouns only cover `to|at the protocol <id>`
@@ -548,13 +580,46 @@ askWalls:
       # stay the pinned R4 residual, so no pinned FREE arm flips. The id
       # lookahead keeps every no-id article arm (`to the protocol`, `to the
       # protocol id`, `to the different protocol`, the nav asks) FREE.
-      - to the (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - at the (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - onto (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - towards (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - toward (?:(?!the )[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - to "(?:[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
-      - at "(?:[a-z]+ )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - to the (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at the (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      # CYCLE-6 (1)+(3): the quoted-frame class completed for ALL five
+      # prepositions and BOTH spellings (c5 DEFECT-1: quoted nouns existed for
+      # to/at and the `protocol` spelling only), and the quote characters are
+      # now a DATA class of their own (c5 DEFECT-3: smart/curly quotes broke
+      # the straight-quote nouns). The interpreter is frozen, so the unicode
+      # quotes live in the PATTERNS: `["“‘]` is the opening-quote class right
+      # after the preposition; `["”’]?` is the optional closing quote before
+      # the record-id token, so the id may sit INSIDE the quote (`to "one
+      # more protocolId PRT-..."`) or AFTER it (`to "one more protocolId"
+      # PRT-...`). The gap token is the cycle-6 widened shape (see below).
+      - to ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=["”’]?\s+[a-z]+-)
+      - at ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=["”’]?\s+[a-z]+-)
+      - onto ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=["”’]?\s+[a-z]+-)
+      - towards ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=["”’]?\s+[a-z]+-)
+      - toward ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=["”’]?\s+[a-z]+-)
+      - to ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=["”’]?\s+[a-z]+-)
+      - at ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=["”’]?\s+[a-z]+-)
+      - onto ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=["”’]?\s+[a-z]+-)
+      - towards ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=["”’]?\s+[a-z]+-)
+      - toward ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=["”’]?\s+[a-z]+-)
+      # CYCLE-6 (3): the QUOTED-ID-TOKEN shape — the quote wraps the record id
+      # itself (`protocol “PRT-4iaey2”`, reviewer U1/U3/A13). The generic gap
+      # demands a straight id token; these demand the id token wrapped in an
+      # opening quote (straight, U+201C, U+2018). Same `the` exclusion, same
+      # record-id lookahead, both spellings, all five prepositions.
+      - to (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+["“‘][a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+["“‘][a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+["“‘][a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+["“‘][a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+["“‘][a-z]+-)
+      - to (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+["“‘][a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+["“‘][a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+["“‘][a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+["“‘][a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+["“‘][a-z]+-)
       # CYCLE-5 (2): the `protocolId` spelling of the same frame takes the
       # ENUMERATED sibling qualifiers instead of the generic gap: the
       # id-suffixed class walls WITHOUT an id token (`to some other
@@ -581,11 +646,33 @@ askWalls:
       # the class for ANY qualifier word without flipping the pinned FREE R13
       # no-id arms ('to some other protocolid' has no id token, so the
       # lookahead fails). The no-id side stays the documented R13 residual.
-      - to (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
-      - at (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
-      - onto (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
-      - towards (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
-      - toward (?:(?!the )[a-z]+ )+protocolid(?=\s+[a-z]+-)
+      - to (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      # CYCLE-6 (4): the LINKING-WORD HOP (c5 DEFECT-4) — a linking word
+      # between `protocol` and the record id (`protocol named PRT-<id>`,
+      # `protocol called ...`, `protocol for ...`) broke the immediate-id
+      # lookahead in the interposed frame AND in the bare frame (the
+      # pre-existing L4 gap `to protocol named PRT-<id>` is CLOSED here rather
+      # than pinned). The hop is an ENUMERATION (named|called|for) — an
+      # unenumerated linking word stays the disclosed residual R19 (pinned
+      # FREE), the same disclosure class as the verb enumeration R11. The hop
+      # is declared for the `protocol` spelling only; `protocolid <linking>
+      # <id>` is a compound variant inside R19. `the` stays excluded from the
+      # gap, so the article+linking frame (`to the protocol named <id>`) is
+      # the disclosed residual R20 and no pinned article residual flips.
+      - to (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - to protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - at protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - onto protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - towards protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
+      - toward protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=\s+[a-z]+-)
       # CYCLE-3 (1): the quoted-id frames — the reviewer's leak
       # 'retarget this review to "PRT-4iaey2"' (the quote broke `to prt-`). Same
       # PRT-shape scope as `to prt-`/`at prt-` (a quoted non-PRT id stays the
