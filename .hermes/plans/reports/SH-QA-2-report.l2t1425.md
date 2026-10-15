@@ -3,7 +3,10 @@
 Branch: `cl/SH-QA-2-lane2-l2t1425` off trunk `cl/integration-2` @ `1b2b5ce9` (verified at
 dispatch time via `git -C /mnt/vast/home/brad/git/cl-integration-2 log --oneline -1` — the
 branch point is the CURRENT tip, not the draft-time `6dba17a5`).
-Commits: `dae185fc` (test RED) → `1fb96943` (fix GREEN).
+Commits: `dae185fc` (test RED) → `1fb96943` (fix GREEN) → report commit → harness-
+determinism test commit (DC3 two-question re-ask cycle with distinct re-pick; DC5
+fake-timer sequence without findBy deadlock). All verification runs above were executed
+against the committed tree.
 Spec: `/mnt/vast/home/brad/git/cl-integration-2/.hermes/plans/2026-10-15_1145-SH-QA-2-dead-chrome-spec.md`
 (all OQ rulings OQ1/OQ2/OQ3/OQ4 followed as written).
 

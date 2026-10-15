@@ -162,34 +162,40 @@ describe('QuestionsPanel — SH-QA-2 dead chrome: answered/prefilled cards carry
     // Change on the answered card REOPENS it: the picker leg is back and the
     // pending auto-submit timer is cleared (allAnswered flipped false).
     fireEvent.click(screen.getByText('Change'))
-    const reopened = (await screen.findByPlaceholderText(/Search materials/)) as HTMLInputElement
+    const reopened = screen.getByPlaceholderText(/Search materials/) as HTMLInputElement
     expect(reopened.value).toBe('clofibrate')
     expect(screen.queryByTestId('answered-q1')).toBeNull()
+
+    // The reopen cancelled the prefilled auto-submit: advancing past 300ms
+    // fires NOTHING while the card is open again.
     await act(async () => {
       vi.advanceTimersByTime(1000)
     })
     expect(onSubmit).not.toHaveBeenCalled()
 
-    // Re-pick through the SAME picker leg the first pick used.
+    // Re-pick through the SAME picker leg the first pick used (debounce 150ms,
+    // then the resolver's rows).
     await act(async () => {
-      vi.advanceTimersByTime(150) // the picker's resolver debounce
+      vi.advanceTimersByTime(150)
     })
     await act(async () => {
-      vi.advanceTimersByTime(0) // flush the resolver promise
+      vi.advanceTimersByTime(0)
     })
-    const row = await screen.findByText('Clofibrate (local)')
+    const row = screen.getByText('Clofibrate (local)')
     await act(async () => {
       fireEvent.mouseDown(row)
+      vi.advanceTimersByTime(0)
     })
 
-    // allAnswered re-trips → the auto-submit effect fires EXACTLY ONE submit.
+    // allAnswered re-trips ONCE → the auto-submit effect fires EXACTLY ONE
+    // submit; advancing further never re-fires it.
     await act(async () => {
       vi.advanceTimersByTime(300)
     })
     expect(onSubmit).toHaveBeenCalledTimes(1)
 
     await act(async () => {
-      vi.advanceTimersByTime(1000)
+      vi.advanceTimersByTime(2000)
     })
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })

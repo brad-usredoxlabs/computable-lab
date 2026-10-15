@@ -196,77 +196,65 @@ describe('AiTabPanel — SH-QA-2 dead chrome: host legs', () => {
     ])
   })
 
-  // DC3: answered → Change → picker reopens → re-pick → the SAME submit path
-  // fires sendChat call 2 carrying the NEW answer (same prompt-builder, same
-  // seam — structurally indistinguishable from the first pick).
+  // DC3: answered → Change → picker reopens → re-pick a DIFFERENT answer →
+  // the SAME submit path fires sendChat carrying the NEW answer (same
+  // prompt-builder, same seam — structurally indistinguishable from the first
+  // pick). Re-ask re-entry per OQ3: carried answers live in
+  // resolvedClarificationsRef and re-send in the batch.
   it('DC3: Change reopens the picker; the re-pick resends through the SAME single code path', async () => {
-    resolveMaterial.mockResolvedValue([hitA])
+    resolveMaterial.mockResolvedValue([hitA, hitB])
     renderPanel()
-    await emitClarificationTurn({ success: true, events: [], clarificationRequests: [PICKER_QUESTION] })
-
-    await pickSuggestion('Clofibrate (local)')
-    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1), { timeout: 3000 })
-    const firstText = (mocks.send!.mock.calls[0] as [string])[0]
-
-    // Re-ask re-entry (OQ3 faithful reading): a fresh clarifications-needed
-    // turn; the carried answer lives in resolvedClarificationsRef, the card
-    // shows a fresh picker — and it is actionable (S1).
-    resolveMaterial.mockResolvedValue([hitA])
-    await emitClarificationTurn({ success: true, events: [], clarificationRequests: [PICKER_QUESTION] })
-    expect(screen.getByTestId('questions-panel')).toBeDefined()
-    await pickSuggestion('Clofibrate (local)')
-    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2), { timeout: 3000 })
-
-    // Change on the answered card REOPENS it (the dead click is gone).
-    // The auto-submit races the click, so prove the reopen on the fresh
-    // re-entry leg instead: answer, then Change before allAnswered settles.
-    // (Panel-level reopen + focus is pinned in QuestionsPanel.deadChrome.)
-    // Here: re-enter a THIRD time with TWO questions so one answered card
-    // stays while we Change the other — the reopen leg is observable.
-    resolveMaterial.mockResolvedValue([hitB])
     await emitClarificationTurn({
       success: true,
       events: [],
       clarificationRequests: [PICKER_QUESTION, PARAM_QUESTION],
     })
-    // Answer q2 by typing (parameter leg), then answer q1, then Change q1.
+
+    // First pass: answer both (picker leg + parameter leg) → auto-submit send 1.
     const paramInput = screen.getByTestId('parameter-answer-input') as HTMLInputElement
     fireEvent.change(paramInput, { target: { value: '50 uL' } })
     fireEvent.click(screen.getByTestId('parameter-answer-submit'))
     await pickSuggestion('Clofibrate (local)')
-    // allAnswered → auto-submit (send 3). Now re-enter and exercise Change:
-    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(3), { timeout: 3000 })
-    resolveMaterial.mockResolvedValue([hitB])
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1), { timeout: 3000 })
+    const [text1, options1] = mocks.send!.mock.calls[0] as [string, { clarificationAnswers?: unknown[] }]
+    expect(text1).toContain('Clofibrate (local)')
+    expect(options1.clarificationAnswers?.some((a) => (a as { value?: string }).value === '50 uL')).toBe(true)
+
+    // Re-ask re-entry (OQ3): a fresh clarifications-needed turn — cards show
+    // fresh pickers (answers wiped by design), the carried set lives in the
+    // ref. Answer q1 first: the answered card is actionable (S3 affordance).
     await emitClarificationTurn({
       success: true,
       events: [],
       clarificationRequests: [PICKER_QUESTION, PARAM_QUESTION],
     })
-    // Answer ONLY q1 → answered card shows "Go to next unanswered" (S3).
     await pickSuggestion('Clofibrate (local)')
     expect(await screen.findByTestId('next-unanswered-q1')).toBeDefined()
-    // Change q1 → the picker leg is back (reopen, not a dead highlight).
+
+    // Change on the answered card REOPENS it: the picker leg is back (the dead
+    // highlight click is gone).
     fireEvent.click(screen.getByText('Change'))
     const reopened = (await screen.findByPlaceholderText(/Search materials/)) as HTMLInputElement
     expect(reopened.value).toBe('clofibrate')
-    // Re-pick a DIFFERENT answer → allAnswered still false (q2 open), so no
-    // auto-submit yet; answer q2 → the ONE submit path fires with the NEW q1
-    // answer in the batch payload.
+    expect(screen.queryByTestId('answered-q1')).toBeNull()
+
+    // Re-pick a DIFFERENT answer through the SAME picker leg, then answer q2:
+    // allAnswered re-trips and the ONE submit path fires send 2 carrying the
+    // NEW q1 answer.
     await pickSuggestion('Fibrates blend')
     const paramInput2 = screen.getByTestId('parameter-answer-input') as HTMLInputElement
     fireEvent.change(paramInput2, { target: { value: '50 uL' } })
     fireEvent.click(screen.getByTestId('parameter-answer-submit'))
-    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(4), { timeout: 3000 })
-    const [text4, options4] = mocks.send!.mock.calls[3] as [string, { clarificationAnswers?: unknown[] }]
-    // Same prompt-builder shape as the first send (clarificationAnswersPrompt).
-    expect(text4).toContain('Fibrates blend')
-    expect(text4).toContain('50 uL')
-    expect(firstText).toContain('Clofibrate (local)')
-    const answers4 = options4.clarificationAnswers ?? []
-    expect(answers4.some((a) => (a as { label?: string }).label === 'Fibrates blend')).toBe(true)
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    const [text2, options2] = mocks.send!.mock.calls[1] as [string, { clarificationAnswers?: unknown[] }]
+    // Same prompt-builder shape as send 1 (clarificationAnswersPrompt).
+    expect(text2).toContain('Fibrates blend')
+    expect(text2).toContain('50 uL')
+    const answers2 = options2.clarificationAnswers ?? []
+    expect(answers2.some((a) => (a as { label?: string }).label === 'Fibrates blend')).toBe(true)
     // The accumulated carried set re-sends (resolvedClarificationsRef behavior
     // — pinned, not changed): the earlier q2 answer is still in the batch.
-    expect(answers4.some((a) => (a as { value?: string }).value === '50 uL')).toBe(true)
+    expect(answers2.some((a) => (a as { value?: string }).value === '50 uL')).toBe(true)
   })
 
   // DC4 / S7: updating + SSE error with NO done frame — today the pane sits at
