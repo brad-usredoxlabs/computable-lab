@@ -361,6 +361,7 @@ describe('SH-QB-1 T10 — a non-empty recompile keeps today\'s draft-ready flow 
     mountDeckEditor()
     render(panelTree())
     await mountReviewingDraft()
+    const setPreviewCallsBefore = mocks.editorActions.setPreview.mock.calls.length
 
     mocks.api.intentCompile.mockResolvedValueOnce({
       outcome: 'gap',
@@ -381,7 +382,8 @@ describe('SH-QB-1 T10 — a non-empty recompile keeps today\'s draft-ready flow 
     expect(panel.textContent).toContain('ambiguous-noun')
     // No error surface on a non-empty compile.
     expect(screen.queryByTestId('shorthand-error')).toBeNull()
-    // The preview was rewritten with the new events.
-    expect(mocks.editorActions.setPreview).toHaveBeenCalledTimes(1)
+    // The preview was rewritten with the new events (exactly one rewrite
+    // beyond the draft mount's own preview).
+    expect(mocks.editorActions.setPreview.mock.calls.length).toBe(setPreviewCallsBefore + 1)
   })
 })

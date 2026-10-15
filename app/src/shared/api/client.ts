@@ -4081,18 +4081,30 @@ export const apiClient = {
    * the deterministic compiler (SHORTHAND-CHAT: the chat panel's shorthand
    * edit-recompile rides this EXISTING route; the server re-parses with Ajv as
    * sole authority and recompiles — the client is render + POST only).
+   *
+   * SH-QB-1 (OQ1, orchestrator-adopted): ONE additive optional second
+   * parameter — the editor's DECK plate summaries (the exact DeckLabwareSummary
+   * mirror of the chat request's context.labwares element). The body key rides
+   * ONLY when a non-empty array is provided (conditional spread — key ABSENT,
+   * never `undefined`; exactOptionalPropertyTypes). Absent ⇒ the request is
+   * byte-identical to the pre-change shape. The response type gains the
+   * forwarded loud-failure channel (`clarifications`) beside the loose `outcome`.
    */
-  async intentCompile(intentYaml: string): Promise<{
+  async intentCompile(intentYaml: string, deckLabwares?: Array<{ labwareId: string; labwareType?: string; name?: string }>): Promise<{
     outcome?: string
     terminalArtifacts?: {
       events?: unknown[]
       gaps?: Array<{ message?: string } & Record<string, unknown>>
       [key: string]: unknown
     }
+    clarifications?: Array<Record<string, unknown>>
   }> {
     return request('/intent/compile', {
       method: 'POST',
-      body: JSON.stringify({ intent: intentYaml }),
+      body: JSON.stringify({
+        intent: intentYaml,
+        ...(deckLabwares && deckLabwares.length > 0 ? { deckLabwares } : {}),
+      }),
     })
   },
 

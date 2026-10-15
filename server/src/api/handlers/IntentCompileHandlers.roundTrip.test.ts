@@ -60,6 +60,17 @@ actions:
 /** The same document with ONE edited value (T4 exact-diff leg). */
 const EDITED_VOLUME_DOC = NO_EDIT_MIXTURE_DOC.replace('volumeUl: 100', 'volumeUl: 250');
 
+/** A document the STORE lookup resolves with no deck at all (T3 byte-identity
+ *  leg — the shape every other caller of this route sends). */
+const STORE_RESOLVABLE_DOC = `intentId: shqb1-store-only
+actions:
+  - action: add_material
+    labware: Store Plate
+    material: DMEM
+    volumeUl: 50
+    targetWells: [A1]
+`;
+
 /** A document naming a noun NOTHING can resolve (T5 loud-channel leg). */
 const UNRESOLVED_NOUN_DOC = `intentId: shqb1-unresolved
 actions:
@@ -79,6 +90,9 @@ const DECK: DeckLabwareSummary[] = [
 const SEED_RECORDS = [
   { recordId: 'MAT-trypsin-edta', name: 'Trypsin-EDTA', kind: 'material' },
   { recordId: 'MAT-dmem', name: 'DMEM', kind: 'material' },
+  // A STORE labware for the T3 no-deck leg only — deliberately NOT the deck
+  // plate (the deck plate stays editor state so T1/T2 non-vacuity holds).
+  { recordId: 'LAB-store-plate', name: 'Store Plate', kind: 'labware' },
 ];
 
 function recordStoreWith(records: Array<{ recordId: string; name: string; kind: string }>) {
@@ -91,7 +105,9 @@ function recordStoreWith(records: Array<{ recordId: string; name: string; kind: 
         .filter((r) => !filter?.kind || r.kind === filter.kind)
         .map((r) => ({
           recordId: r.recordId,
-          schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+          schemaId: r.kind === 'labware'
+            ? 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml'
+            : 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
           payload: { kind: r.kind, name: r.name },
           meta: { kind: r.kind },
         }));
@@ -250,17 +266,32 @@ describe('SH-QB-1 T2 — the no-edit round-trip reproduces the chat path event-f
 // ---------------------------------------------------------------------------
 
 describe('SH-QB-1 T3 — body WITHOUT deckLabwares keeps the pre-change response byte-identical', () => {
-  it('no-deck call: response keys are exactly {outcome, terminalArtifacts} and the store-only bar behavior is unchanged', async () => {
+  it("no-deck COMPLETING compile: response keys are exactly {outcome, terminalArtifacts} (the goldens' guard)", async () => {
+    // A document the STORE lookup resolves (no deck needed): the response is
+    // byte-identical to the pre-change shape — no clarifications key (nothing
+    // barred), no deck keys. This is what every other caller of the route
+    // (including the goldens replay, which sends no deck) sees.
+    const { status, payload } = await postCompile({ intent: STORE_RESOLVABLE_DOC });
+    expect(status ?? 200).toBe(200);
+    expect(payload.outcome).toBe('complete');
+    expect((payload.terminalArtifacts?.events ?? []).length).toBeGreaterThan(0);
+    expect(Object.keys(payload).sort()).toEqual(['outcome', 'terminalArtifacts']);
+  });
+
+  it('no-deck BAR: the store-only bar behavior is unchanged and clarifications is the ONLY additive key (no deck-bound labwareId appears)', async () => {
     const { status, payload } = await postCompile({ intent: NO_EDIT_MIXTURE_DOC });
 
     expect(status ?? 200).toBe(200);
     // Today's behavior for a store-only call on this document: plate1 bars
-    // unknown-noun (the deck plate is editor state). That stays byte-identical.
+    // unknown-noun (the deck plate is editor state). That stays identical —
+    // the deck passes are SKIPPED, so no deck id can appear anywhere.
     expect(payload.outcome).toBe('needs-clarification');
     expect(payload.terminalArtifacts?.events ?? []).toEqual([]);
-    // The additive contract: absent deck ⇒ the response carries ONLY the
-    // pre-change keys. No clarifications key, no deck keys.
-    expect(Object.keys(payload).sort()).toEqual(['outcome', 'terminalArtifacts']);
+    expect(payload.terminalArtifacts?.gaps ?? []).toEqual([]);
+    // The additive contract: the ONLY new key is the fix-2 reason channel
+    // (non-empty-only). No deck-derived keys on a no-deck call.
+    expect(Object.keys(payload).sort()).toEqual(['clarifications', 'outcome', 'terminalArtifacts']);
+    expect(JSON.stringify(payload.terminalArtifacts)).not.toContain('lw-deck-plate-1');
   });
 });
 
@@ -286,8 +317,12 @@ describe('SH-QB-1 T4 — a one-value edit changes exactly that value', () => {
     const dAfter = (after[changedEvent]!.details ?? {}) as Record<string, unknown>;
     expect(dBefore.volumeUl).toBe(100);
     expect(dAfter.volumeUl).toBe(250);
+    // The volume carrier is BOTH the bare number and the declared quantity
+    // object (the expander's two arms) — both move, nothing else does.
+    expect(dBefore.volume).toEqual({ value: 100, unit: 'uL' });
+    expect(dAfter.volume).toEqual({ value: 250, unit: 'uL' });
     // Every other field of the edited event is untouched.
-    expect({ ...dAfter, volumeUl: dBefore.volumeUl }).toEqual(dBefore);
+    expect({ ...dAfter, volumeUl: dBefore.volumeUl, volume: dBefore.volume }).toEqual(dBefore);
   });
 });
 

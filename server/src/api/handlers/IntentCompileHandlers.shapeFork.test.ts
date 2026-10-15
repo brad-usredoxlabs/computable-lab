@@ -160,16 +160,23 @@ describe('SH-QB-1 T6 — both observed shorthand shapes normalize to the same ev
 // ---------------------------------------------------------------------------
 
 describe('SH-QB-1 T7 — explicit targetWells ghost exactly the pre-selected wells', () => {
-  it('the paste-#8 document with explicit targetWells carries exactly those well addresses on every event', async () => {
+  it('the paste-#8 document with explicit targetWells ghosts EXACTLY those wells (no more, no fewer)', async () => {
     const { outcome, events } = await compileThroughRoute(TOP_LEVEL_SHAPE_DOC);
     expect(outcome).toBe('complete');
     expect(events.length).toBeGreaterThan(0);
 
-    const expectedWells = ['A1', 'B1', 'C1'];
+    // The frozen expander lowers one event per addressed well (the scalar
+    // details.well carrier + the deck-readable details.wells carrier — the
+    // COMP-1 Task 22 geometry). The pin is the SET the deck ghosts: exactly
+    // the pre-selected wells, never a default plate-wide sweep.
+    const ghostedWells = new Set<string>();
     for (const ev of events) {
       const details = (ev.details ?? {}) as Record<string, unknown>;
-      const wells = details.wells ?? details.well;
-      expect(wells).toEqual(expectedWells);
+      if (Array.isArray(details.wells)) {
+        for (const w of details.wells) if (typeof w === 'string') ghostedWells.add(w);
+      }
+      if (typeof details.well === 'string') ghostedWells.add(details.well);
     }
+    expect([...ghostedWells].sort()).toEqual(['A1', 'B1', 'C1']);
   });
 });
