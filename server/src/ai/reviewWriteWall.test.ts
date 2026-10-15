@@ -1519,12 +1519,11 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
       'forward this review to yet another protocol dubbed PRT-4iaey2',
       'forward this review to "yet another protocol dubbed PRT-4iaey2"',
       'forward this review to yet another protocol dubbed “PRT-4iaey2”',
-      // R24 (NEW, disclosed): outer-quote ORIENTATION limit — the outer-prefix
-      // quote class is the OPENING orientation (`["“‘]` right after the
-      // preposition). A CLOSING-orientation character used as the outer opener
-      // (`to ”yet another protocol PRT-4iaey2“`) names no declared frame.
-      'forward this review to ”yet another protocol PRT-4iaey2“',
-      'forward this review to ”yet another protocol ‘PRT-4iaey2’“',
+      // R24 (c7, disclosed): outer-quote ORIENTATION limit — CLOSED by the
+      // final cycle's widened outer-prefix run (any run of the FIVE declared
+      // quote chars, either orientation, may precede the qualifier words).
+      // The two arms are repinned WALL in 'g2dfin closure: the c7 R24
+      // closing-orientation outer-quote arms now WALL (repinned)'.
       // R25 (NEW, disclosed): outer quote + linking hop on the `protocolId`
       // spelling — the class-A protocolid nouns demand the id separator right
       // after `protocolid`, and the linking hop is declared for the `protocol`
@@ -1557,6 +1556,68 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
       'switch the draft to protocol-style steps',
     ]) {
       expect(reviewAskWallFor('protocol-review', ask), `boundary arm unexpectedly walled: ${ask}`).toBeNull();
+    }
+  });
+
+  // ================= W2-9 g2d FINAL CYCLE (architect ruling
+  // W29-g2d-wall-mechanism-decision-l2t1040, PART 1) ========================
+  // c7 DEFECT-1 (MAJOR) CLOSED — the STACKED outer-prefix quote class. The
+  // bare linking nouns' outer prefix widens from the single-char optional
+  // class to a RUN over the five declared quote chars (" “ ‘ ” ’, either
+  // orientation), so a nested quote frame names a declared retarget frame.
+  it('g2dfin closure: stacked outer-prefix quote frames fire RETARGET_NOT_ON_THIS_SURFACE', () => {
+    for (const ask of [
+      // reviewer c7 §D verbatim (measured FREE(null) at the cycle-7 head)
+      'forward this review to "‘yet another protocol “PRT-4iaey2”’"',
+      'forward this review at "‘a further protocol “PRT-4iaey2”’"',
+      'forward this review to "‘yet another protocol named “PRT-4iaey2”’"',
+      'forward this review to ""yet another protocol PRT-4iaey2""',
+      'forward this review to ““yet another protocol “PRT-4iaey2””',
+      // siblings: the other prepositions, the bare linking frame, a deeper run
+      'retarget this review onto ‘‘one more protocol ‘PRT-4iaey2’‘',
+      'transfer this review towards ”“still another protocol “PRT-4iaey2””',
+      'assign this review to ‘’protocol “PRT-4iaey2”‘‘',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `stacked-prefix leak not closed: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // c7 R24 (outer-quote ORIENTATION limit) is CLOSED by the same widening: the
+  // five declared quote chars include the CLOSING orientation, so the two
+  // c7-pinned-FREE arms are REPINNED WALL here (the disclosure row retires).
+  it('g2dfin closure: the c7 R24 closing-orientation outer-quote arms now WALL (repinned)', () => {
+    for (const ask of [
+      'forward this review to ”yet another protocol PRT-4iaey2“',
+      'forward this review to ”yet another protocol ‘PRT-4iaey2’“',
+    ]) {
+      const refusal = reviewAskWallFor('protocol-review', ask);
+      expect(refusal, `R24 arm not repinned WALL: ${ask}`).not.toBeNull();
+      expect(refusal!.code, ask).toBe('RETARGET_NOT_ON_THIS_SURFACE');
+    }
+  });
+
+  // c7 DEFECT-2 (MINOR) DISCLOSED as named residual rows R26-R29 (the ruling
+  // forbids widening the separator class): a comma, a colon, the spaced
+  // `protocol id` spelling behind the blocker `to`, and the hyphenated
+  // `protocol-id` spelling each leak the declared-verb + concrete-id retarget
+  // at the prose layer. Pinned FREE — visible, never silent. The SAFETY
+  // property these leaks used to be judged against is carried by the
+  // structural retarget gate (attachedMismatchGate), not by this wall.
+  it('g2dfin disclosed residuals: c7 DEFECT-2 separator arms pinned FREE (R26-R29)', () => {
+    for (const ask of [
+      // R26: comma separator
+      'forward this review to yet another protocol, PRT-4iaey2',
+      // R27: colon separator
+      'forward this review to yet another protocol: PRT-4iaey2',
+      // R28: spaced `protocol id` spelling (the `protocol id` noun sits behind
+      // the blocker `to` for the leading verb and at gap 4 > maxGapWords)
+      'forward this review to yet another protocol id PRT-4iaey2',
+      // R29: hyphenated `protocol-id` spelling (no declared noun carries it)
+      'forward this review to yet another protocol-id PRT-4iaey2',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `disclosed residual unexpectedly closed: ${ask}`).toBeNull();
     }
   });
 

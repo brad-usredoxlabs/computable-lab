@@ -13,8 +13,11 @@
  * with one agent_intent call; mutation tripwires on the store.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { join } from 'node:path';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
+import { loadDefaultSurfacesRegistry } from '../surfaces/surfaces.js';
+import type { AiSurface } from './systemPrompt.js';
 import type { AgentEvent, CompletionRequest, InferenceClient } from './types.js';
 
 function mutationTripwire() {
@@ -819,5 +822,253 @@ describe('protocol-review write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(completeStream).toHaveBeenCalled();
     expect(result.protocolEdit).toBeDefined();
     expect(store.update).not.toHaveBeenCalled();
+  });
+
+  // ================= W2-9 g2d FINAL CYCLE (architect ruling
+  // W29-g2d-wall-mechanism-decision-l2t1040, PART 2) ========================
+  // THE STRUCTURAL RETARGET GATE: the enforced invariant is payload-side —
+  // a protocol-review turn must not end with a focus/open or a protocol-edit
+  // proposal bound to a protocol record OTHER than the attached one. The rule
+  // is DATA (opsWall.attachedMismatchRule: code/message/protocolIdPattern;
+  // absent = OFF); the interpreter compares an id against the attached
+  // context id and makes no policy decision. Refusal rides the EXISTING
+  // refusal channel (AgentResult.refusal), BEFORE envelope validation on the
+  // protocol_edit branch and BEFORE any `agent_action` emission on the
+  // workspace_action branch.
+  const ATTACHED_ID = 'PRT-attached-0001';
+  const FOREIGN_ID = 'PRT-foreign-9999';
+  const SCHEMA_DIR = join(process.cwd(), '..', 'schema');
+
+  /** Store whose `get` answers from a fixture map; every write is a tripwire. */
+  function fixtureStore(records: Record<string, { kind: string; payload: Record<string, unknown> }>) {
+    const base = mutationTripwire();
+    return {
+      ...base,
+      get: vi.fn(async (id: string) => {
+        const hit = records[id];
+        if (!hit) return null;
+        return { recordId: id, schemaId: `schema/${hit.kind}`, payload: hit.payload };
+      }),
+    };
+  }
+
+  const protocolRecord = (recordId: string, title: string) => ({
+    kind: 'protocol',
+    payload: {
+      recordId,
+      kind: 'protocol',
+      title,
+      steps: [{ stepId: 'step-wash', label: 'Wash beads', ordinal: 1, kind: 'wash' }],
+    },
+  });
+
+  /** A fake spine: only the real spine's always-appended tier-5 mint comes back. */
+  function mintOnlySpine() {
+    return {
+      resolve: vi.fn(async () => [
+        { curie: '', label: 'Create local term', namespace: 'local', tier: 5 as const, level: 'concept' as const, score: 0.05, source: 'mint' as const, mint: { label: 'x' } },
+      ]),
+    };
+  }
+
+  async function runReviewTurnWithAttached(
+    prompt: string,
+    args: unknown,
+    store: ReturnType<typeof fixtureStore>,
+    attachedRecordId: string | undefined,
+    surface: AiSurface = 'protocol-review',
+  ) {
+    const { client, completeStream } = intentClient(args);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      client,
+      { getToolDefinitions: () => [], executeTool: async () => { throw new Error('wall refusal must not execute tools'); } },
+      { baseUrl: 'http://mock:8899/v1', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      {
+        store: store as never,
+        resolveSpine: mintOnlySpine() as never,
+        surfaces: loadDefaultSurfacesRegistry(SCHEMA_DIR),
+      },
+    );
+    const result = await orchestrator.run({
+      prompt,
+      surface,
+      forceDraftTool: true,
+      onEvent: (event) => { events.push(event); },
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'general',
+        availableVerbs: [],
+        ...(attachedRecordId !== undefined
+          ? { attachedProtocol: { recordId: attachedRecordId, steps: [{ stepId: 'step-wash', ordinal: 1, label: 'Wash beads', kind: 'wash' }] } }
+          : {}),
+      },
+    });
+    return { result, events, completeStream };
+  }
+
+  it('g2dfin gate: a protocol_edit whose protocolId names a FOREIGN PRT is refused before the envelope (no protocolEdit, zero writes)', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'), [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result, completeStream } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', protocolId: FOREIGN_ID, ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      ATTACHED_ID,
+    );
+    // The model ran (the ask wall does not fire on this prose) and the gate
+    // refused at the dispatch branch BEFORE envelope validation.
+    expect(completeStream).toHaveBeenCalled();
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('ATTACHED_PROTOCOL_MISMATCH');
+    expect(result.refusal!.message).toContain('attached');
+    expect(result.refusal!.message).toContain('nothing was written');
+    // NO proposal payload reaches the client — the Apply card can never render.
+    expect(result.protocolEdit).toBeUndefined();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfin gate: a focus on a FOREIGN PRT record is refused with the envelope and ZERO agent_action emission', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'), [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result, events } = await runReviewTurnWithAttached(
+      'show me the other protocol',
+      { intent: 'workspace_action', action: { action: 'focus', target: { kind: 'record', id: FOREIGN_ID, type: 'protocol', label: 'the other protocol' } } },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('ATTACHED_PROTOCOL_MISMATCH');
+    expect(result.refusal!.message).toContain('nothing was written');
+    // THE invariant observable: no focus lands — zero agent_action events.
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(0);
+    expect(events.some((e) => e.type === 'pipeline_diagnostics')).toBe(false);
+    expect(result.protocolEdit).toBeUndefined();
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('g2dfin gate: a focus on a FOREIGN protocol-step target is refused with ZERO agent_action emission', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'), [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result, events } = await runReviewTurnWithAttached(
+      'show me the other protocol',
+      { intent: 'workspace_action', action: { action: 'focus', target: { kind: 'protocol-step', protocolId: FOREIGN_ID, stepId: 'step-wash', label: 'Wash beads' } } },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('ATTACHED_PROTOCOL_MISMATCH');
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(0);
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('g2dfin gate: an open-surface scoped to a FOREIGN PRT is refused with ZERO agent_action emission', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'), [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result, events } = await runReviewTurnWithAttached(
+      'show me the other protocol',
+      { intent: 'workspace_action', action: { action: 'open-surface', surface: 'protocol-review', target: { kind: 'record', id: FOREIGN_ID, type: 'protocol', label: 'the other protocol' } } },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeDefined();
+    expect(result.refusal!.code).toBe('ATTACHED_PROTOCOL_MISMATCH');
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(0);
+  });
+
+  // HONEST PINS (binding semantics UNCHANGED): the gate fires only on a
+  // PRT-shaped id that differs from the attached one.
+  it('g2dfin honest pin: protocolId == attached passes (the override stays legal)', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review') });
+    const { result } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', protocolId: ATTACHED_ID, ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(result.protocolEdit).toBeDefined();
+    expect(result.protocolEdit!.protocolId).toBe(ATTACHED_ID);
+  });
+
+  it('g2dfin honest pin: NO protocolId override passes (attached-scope binding unchanged)', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review') });
+    const { result } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(result.protocolEdit).toBeDefined();
+    expect(result.protocolEdit!.protocolId).toBeUndefined();
+  });
+
+  it('g2dfin honest pin: a non-PRT-shaped override (a draft id) passes (pattern-gated, not blanket)', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review') });
+    const { result } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', protocolId: 'DRAFT-lyse-a', ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(result.protocolEdit).toBeDefined();
+    expect(result.protocolEdit!.protocolId).toBe('DRAFT-lyse-a');
+  });
+
+  it('g2dfin honest pin: focus on a NON-PRT target (a material record) still emits agent_action', async () => {
+    const store = fixtureStore({
+      [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'),
+      'MAT-000001': { kind: 'material', payload: { recordId: 'MAT-000001', kind: 'material', name: 'HepG2 Cell' } },
+    });
+    const { result, events } = await runReviewTurnWithAttached(
+      'show me the cells',
+      { intent: 'workspace_action', action: { action: 'focus', target: { kind: 'record', id: 'MAT-000001', type: 'material', label: 'HepG2 cells' } } },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(1);
+  });
+
+  it('g2dfin honest pin: focus on the ATTACHED protocol\'s own step still emits agent_action', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review') });
+    const { result, events } = await runReviewTurnWithAttached(
+      'show me the wash step',
+      { intent: 'workspace_action', action: { action: 'focus', target: { kind: 'protocol-step', protocolId: ATTACHED_ID, stepId: 'step-wash', label: 'Wash beads' } } },
+      store,
+      ATTACHED_ID,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(1);
+  });
+
+  it('g2dfin honest pin: with NO attached protocol the gate is OFF (foreign override passes)', async () => {
+    const store = fixtureStore({ [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', protocolId: FOREIGN_ID, ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      undefined,
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(result.protocolEdit).toBeDefined();
+  });
+
+  it('g2dfin honest pin: surfaces outside `surfaces` are unaffected by the gate', async () => {
+    const store = fixtureStore({ [ATTACHED_ID]: protocolRecord(ATTACHED_ID, 'Under review'), [FOREIGN_ID]: protocolRecord(FOREIGN_ID, 'Foreign') });
+    const { result } = await runReviewTurnWithAttached(
+      'adjust the wash step wording',
+      { intent: 'protocol_edit', protocolId: FOREIGN_ID, ops: [{ op: 'step_update', stepId: 'step-wash', label: 'Wash beads (bench wording)' }] },
+      store,
+      ATTACHED_ID,
+      'event-editor',
+    );
+    expect(result.refusal).toBeUndefined();
+    expect(result.protocolEdit).toBeDefined();
+    expect(result.protocolEdit!.protocolId).toBe(FOREIGN_ID);
   });
 });
