@@ -51,6 +51,24 @@
 #   (provenance/source_artifact are record structure, never chat-editable).
 #   The schema envelope's unevaluatedProperties:false stays the structural half;
 #   this is the honest-wording half. The op vocabulary is NOT extended.
+#
+# WHAT "NEVER SILENT" MEANS (W2-9 g2d FINAL CYCLE, architect ruling
+# W29-g2d-wall-mechanism-decision-l2t1040 — re-scope, replaces the earlier
+# completeness framing of the ask walls):
+# - The ASK WALLS in this file are a FRICTION layer: they answer honest
+#   phrasings kindly, before the model, at zero inference cost, and they close
+#   leak classes cheaply when a fix is a one-character widening. They are NOT
+#   the completeness boundary and never were provable as one — every probe
+#   cycle shrank the leak set and none emptied it. "Never silent" is a claim
+#   about THIS layer only: every leak class an adversarial probe finds is
+#   either CLOSED with a test or carries a named R-row with a committed
+#   pinned-FREE test assertion. Pinned-FREE rows are SUFFICIENT — they do not
+#   block closure, because the safety property is not carried here.
+# - The ENFORCED invariant is the STRUCTURAL RETARGET GATE —
+#   `opsWall.attachedMismatchRule` below, interpreted at the dispatch branches
+#   (server/src/ai/attachedProtocolRetargetGate.ts). It is decidable on the
+#   payload, cannot be quoted around, and has NO disclosure tier: a payload-side
+#   leak (a focus/write landing on a foreign PRT) is a MAJOR fix-cycle defect.
 surfaces: [protocol-review]
 matching:
   # Words allowed between the wall verb and the START of the referent it
@@ -795,3 +813,34 @@ opsWall:
         The proposal targets a vendor-protocol-candidate (SAID) record — chat
         edits apply only to the semantic draft (MEANT). No proposal was offered
         and nothing was written.
+  # W2-9 g2d FINAL CYCLE (architect ruling
+  # W29-g2d-wall-mechanism-decision-l2t1040): the STRUCTURAL RETARGET GATE —
+  # the ENFORCED form of the invariant the prose retarget wall was asked to
+  # carry and structurally cannot (7 cycles, monotone shrink, never empty):
+  # a protocol-review turn must not end with a workspace focus/open or a
+  # protocol-edit proposal bound to a protocol record OTHER than the one under
+  # review. It is decidable on the PAYLOAD at the dispatch branches — no
+  # grammar, cannot be quoted around. The interpreter
+  # (server/src/ai/attachedProtocolRetargetGate.ts — the frozen reviewWriteWall.ts
+  # stays byte-frozen, so the new section rides its own load-per-call loader,
+  # the shorthandDrafting.ts pattern) compares the candidate id against the
+  # ATTACHED protocol id and makes no policy decision: a candidate that
+  # matches `protocolIdPattern` (the PRT- record shape already declared in
+  # schema/workflow/protocol.schema.yaml) and differs from the attached id is
+  # refused with this code/message — on the protocol_edit branch BEFORE the
+  # envelope is consulted, and on the workspace_action branch BEFORE any
+  # `agent_action` emission (a refused focus emits ZERO action events).
+  # Absent `attachedMismatchRule` => the gate is OFF (absent = OFF, the same
+  # contract as `targetIdRules` above). A candidate that does NOT match the
+  # pattern (a draft id, a material id, an ontology CURIE) is not a protocol
+  # retarget and passes; an override EQUAL to the attached id stays legal
+  # (binding semantics unchanged — the attached-scope default needs no
+  # override). The gate has NO disclosure tier: a payload-side leak (a
+  # focus/write landing on a foreign PRT) is a MAJOR fix-cycle defect.
+  attachedMismatchRule:
+    code: ATTACHED_PROTOCOL_MISMATCH
+    protocolIdPattern: "^PRT-"
+    message: >-
+      The review chat is scoped to the attached protocol — a focus or edit
+      bound to a different protocol record is refused. Nothing was focused,
+      no proposal was offered, and nothing was written.
