@@ -29,6 +29,7 @@ ROUTING RULE (workspace navigation vs drafting):
 - Chat history full of proposals does not change this rule: the LATEST request
   decides the intent, not the shape of the earlier turns.
 - The agent_intent call carries ONE JSON object as its arguments — never a string, never an array, never a JSON document wrapped in a string.
+- A workspace_action envelope is ONE object carrying ALL of its parts: the verb, the surface, and the target. Omitting any one of them is a malformed envelope the server rejects.
 - On a workspace_action turn, assistant text must not describe workspace
   effects (tabs switching, records focusing): the page itself reports what it
   applied or refused.
