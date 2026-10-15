@@ -157,6 +157,12 @@ function buildRegistry(
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
     ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
     ...(deps.resolveNounsEngine ? { resolve: deps.resolveNounsEngine } : {}),
+    // SH-QA-1 (OQ1 ruling): the gated producer facts (the mixture-blob bar)
+    // ride INTO the pass — the pass owns their fate now (drop on a bound
+    // slot, append survivors after engine+required+model facts).
+    ...(normalized.resolutionGatedClarifications
+      ? { resolutionGatedClarifications: normalized.resolutionGatedClarifications }
+      : {}),
   }));
 
   registry.register(createProtocolIntentStatePlanPass());
@@ -250,6 +256,11 @@ export async function compileScientistIntent(
   // the value cannot reach any compiled event; shipping it silently would be
   // silent data loss. Engine clarifications keep their verbatim precedence;
   // producer items append after them.
+  // SH-QA-1: the gated facts (normalized.resolutionGatedClarifications) are
+  // NO LONGER appended here — the resolve_nouns pass decided their fate and
+  // survivors already ride the bar diagnostic in the same end-of-list
+  // position this append used to produce. Only the ungated producer facts
+  // (unrealized-well-label / unrealized-declared-argument) still append.
   const producerClarifications = normalized.clarifications ?? [];
   const barDiagnostic = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
   if (barDiagnostic || producerClarifications.length > 0) {

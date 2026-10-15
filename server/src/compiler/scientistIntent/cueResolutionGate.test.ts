@@ -305,7 +305,7 @@ actions:
     targetWells: [A1]
     composition:
       - { material: "component one", role: solvent, fraction: "50%" }
-      - { material: "component two", role: diluent, fraction: "50%" }
+      - { material: "component two", role: buffer_component, fraction: "50%" }
 `);
     expect(compiled.outcome).toBe('needs-clarification');
     const compFacts = compiled.clarifications.filter(

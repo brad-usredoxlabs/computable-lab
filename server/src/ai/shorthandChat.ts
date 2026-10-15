@@ -25,6 +25,7 @@
  *  - malformed-payload repair prompt: quotes the contract (the 502 class's
  *    chat analogue — origin-based, never message-substring sniffing).
  */
+import { createHash } from 'node:crypto';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   parseScientistIntent,
@@ -301,6 +302,22 @@ export interface HeldShorthandIntent {
    * entries; the bars are minted by the pipeline's resolve_nouns gate.
    */
   clarifications: readonly ScientistIntentUnresolvedFact[];
+  /**
+   * SH-QA-1 auto-satisfy ledger: the slot identities (actionIndex+argument+
+   * chosen label) a folded answer closed on this held intent. A re-derived
+   * fact for a ledgered slot whose value is STILL the chosen label is moot
+   * (the answer already closed it) and is dropped by `dropSatisfiedFacts`;
+   * a slot that still bars is never ledgered (legitimate re-ask survives).
+   * Travels with the held intent; MAX_HELD eviction semantics unchanged.
+   */
+  answeredSlots?: readonly AnsweredSlot[];
+}
+
+/** One closed slot identity (SH-QA-1 ledger entry). */
+export interface AnsweredSlot {
+  actionIndex: number;
+  argument: string;
+  label: string;
 }
 
 const MAX_HELD_CONVERSATIONS = 64;
@@ -326,9 +343,29 @@ export function takeHeldShorthandIntent(key: string): HeldShorthandIntent | null
 // Pure structural clarification map (bait 8: verbatim facts, join id only)
 // ---------------------------------------------------------------------------
 
-/** The join id between a chat clarification card and an unresolved fact. */
-export function unresolvedFactRequestId(index: number): string {
-  return `unresolved-${index + 1}`;
+/**
+ * SH-QA-1 (the third hazard): the join id between a chat clarification card
+ * and an unresolved fact is keyed by the fact's CONTENT —
+ * `unresolved-c-<10-hex sha1 of [actionIndex, action, argument, reason,
+ * label]>` — not by array position. Deterministic across compiles (same fact
+ * → same id) and order-independent (a fact-order shift between compiles can
+ * no longer mis-fold). The `label` is IN the key because COMP-4 many-arg
+ * siblings share actionIndex+action+argument+reason and differ only by label
+ * — a key without it collides two component cards. The id stays a STRING on
+ * AgentClarificationRequest.id (the app echoes it verbatim; no wire SHAPE
+ * change). The legacy `unresolved-<n>` positional mint is retired here and
+ * kept ONLY as the fold's pinned back-compat fallback (OQ2 ruling).
+ */
+export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
+  const key = JSON.stringify([
+    fact.actionLocation?.actionIndex ?? null,
+    fact.actionLocation?.action ?? null,
+    fact.actionLocation?.argument ?? null,
+    fact.reason,
+    fact.label,
+  ]);
+  const digest = createHash('sha1').update(key).digest('hex').slice(0, 10);
+  return `unresolved-c-${digest}`;
 }
 
 /**
@@ -342,7 +379,7 @@ export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
-  return facts.map((fact, index) => {
+  return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
       ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.domain
@@ -350,7 +387,7 @@ export function clarificationsFromUnresolvedFacts(
     const kind = domain === 'labware' ? 'labware' : domain === 'material' ? 'material' : 'general';
     const menuProvider = domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
     return {
-      id: unresolvedFactRequestId(index),
+      id: factRequestId(fact),
       kind,
       prompt: `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`,
       origin: 'harness',
@@ -385,18 +422,29 @@ export function clarificationsFromUnresolvedFacts(
 export function foldAnswersIntoShorthand(
   held: HeldShorthandIntent,
   answers: readonly AgentClarificationAnswer[],
-): { yaml: string; doc: ScientistIntent } | null {
+): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
-  const answered = new Set<number>();
+  // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
+  // over the held bar's facts (exact match wins). A fact-order shift between
+  // compiles cannot mis-fold anymore (the live iteration-2 hazard).
+  const factByKey = new Map<string, ScientistIntentUnresolvedFact>();
+  for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
+  const answered = new Set<ScientistIntentUnresolvedFact>();
+  const answeredSlots: AnsweredSlot[] = [];
   for (const answer of answers) {
-    const match = /^unresolved-(\d+)$/.exec(answer.requestId ?? '');
-    if (!match) return null;
-    const factIndex = Number(match[1]) - 1;
-    // The join id indexes the BAR's facts (the compile's clarifications), in
-    // the same order the chat cards were minted — not the document's declared
-    // unresolved entries (a model document declares none).
-    const fact = held.clarifications[factIndex];
+    const requestId = answer.requestId ?? '';
+    let fact = factByKey.get(requestId);
+    if (!fact) {
+      // OQ2 ruling (pinned fallback-only): a legacy digits-only id from a
+      // mid-flight held card still folds POSITIONALLY onto the held array.
+      // A content id NEVER takes this arm (content ids never match the
+      // digits pattern), so the fallback cannot shadow the content join.
+      const legacy = /^unresolved-(\d+)$/.exec(requestId);
+      if (legacy) {
+        fact = held.clarifications[Number(legacy[1]) - 1];
+      }
+    }
     if (!fact) return null;
     const label = typeof answer.label === 'string' && answer.label.trim().length > 0
       ? answer.label.trim()
@@ -407,7 +455,8 @@ export function foldAnswersIntoShorthand(
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action || typeof action[loc.argument] !== 'string') return null;
     action[loc.argument] = label;
-    answered.add(factIndex);
+    answered.add(fact);
+    answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
   }
   if (answered.size === 0) return null;
   // Drop any document-declared unresolved entry that names the same noun slot
@@ -436,11 +485,39 @@ export function foldAnswersIntoShorthand(
     // unchanged: the lift makes strictly MORE documents parse, and a genuinely
     // invalid folded document still returns null (the caller's permitted
     // extraction-only fallback).
-    return { yaml: yamlText, doc: parseShorthandForChat(yamlText) };
+    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots };
   } catch (error) {
     if (error instanceof ScientistIntentValidationError) return null;
     throw error;
   }
+}
+
+/**
+ * SH-QA-1 auto-satisfy ledger (fix 2): drop a re-derived fact iff its slot
+ * identity is in the ledger AND the document's slot value is STILL the ledger
+ * label verbatim — a changed slot value re-opens the question (the scientist
+ * edited it; the re-ask is legitimate). A fact WITHOUT actionLocation is
+ * never dropped. This also implements the same-slot rule: answering the first
+ * fact of a slot closes ANY re-derived fact for the same action+argument,
+ * whatever reason it re-derives under (the ledger is reason-blind by design —
+ * it records the closed SLOT, not one card).
+ */
+export function dropSatisfiedFacts(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  ledger: readonly AnsweredSlot[],
+  doc: ScientistIntent,
+): ScientistIntentUnresolvedFact[] {
+  if (ledger.length === 0) return [...facts];
+  const bySlot = new Map<string, AnsweredSlot>();
+  for (const entry of ledger) bySlot.set(`slot:${entry.actionIndex}:${entry.argument}`, entry);
+  return facts.filter((fact) => {
+    const loc = fact.actionLocation;
+    if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return true;
+    const entry = bySlot.get(`slot:${loc.actionIndex}:${loc.argument}`);
+    if (!entry) return true;
+    const value = (doc.actions[entry.actionIndex] as Record<string, unknown> | undefined)?.[entry.argument];
+    return value !== entry.label;
+  });
 }
 
 /**

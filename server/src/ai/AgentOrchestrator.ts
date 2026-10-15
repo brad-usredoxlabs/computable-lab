@@ -75,6 +75,7 @@ import {
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
+  dropSatisfiedFacts,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
   parseShorthandForChat,
@@ -1254,11 +1255,47 @@ export function createAgentOrchestrator(
             });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
-              if (compiledFold.outcome === 'needs-clarification') {
-                holdShorthandIntent(conversationKey, { yaml: folded.yaml, doc: folded.doc, clarifications: compiledFold.clarifications });
+              // SH-QA-1 auto-satisfy ledger: the slots this fold closed. A
+              // re-derived fact for a ledgered slot whose value is STILL the
+              // chosen label is moot (the answer already closed it) — dropped
+              // BEFORE the requests are built and BEFORE the re-hold, so a
+              // closed slot never re-surfaces as a second card whatever reason
+              // it re-derives under. A slot that STILL bars (the answer did
+              // not resolve) is not ledgered — the legitimate re-ask survives
+              // (B6: the ledger must not swallow it).
+              // Spec §B: a slot is ledgered ONLY iff the re-derived bar
+              // carries NO fact for that slot identity — a slot that STILL
+              // bars (the answer did not resolve) is never ledgered, so the
+              // legitimate re-ask survives (B6).
+              const slotKey = (a: number, arg: string) => `slot:${a}:${arg}`;
+              const reDerivedSlotKeys = new Set(
+                compiledFold.clarifications
+                  .filter((f) => f.actionLocation?.actionIndex !== undefined
+                    && typeof f.actionLocation?.argument === 'string')
+                  .map((f) => slotKey(f.actionLocation!.actionIndex!, f.actionLocation!.argument!)),
+              );
+              const ledger = [
+                ...(held.answeredSlots ?? []),
+                ...folded.answeredSlots.filter((s) => !reDerivedSlotKeys.has(slotKey(s.actionIndex, s.argument))),
+              ];
+              const survivingFacts = dropSatisfiedFacts(
+                compiledFold.clarifications,
+                ledger,
+                folded.doc,
+              );
+              if (survivingFacts.length > 0) {
+                holdShorthandIntent(conversationKey, {
+                  yaml: folded.yaml,
+                  doc: folded.doc,
+                  clarifications: survivingFacts,
+                  ...(ledger.length > 0 ? { answeredSlots: ledger } : {}),
+                });
               }
+              // The result mapper sees the LEDGER-FILTERED facts: a closed
+              // slot emits no card. The compile itself is untouched (the
+              // frozen pipeline's output rides verbatim otherwise).
               const foldResult = shorthandResultFromCompile(
-                compiledFold,
+                { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,

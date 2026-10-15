@@ -426,6 +426,13 @@ export interface ScientistIntentNormalized {
    *  when a schema-valid value has no lowering consumer. The compile runner
    *  bars atomically on them (422 arm, never 500). */
   clarifications?: ProducerClarification[];
+  /** SH-QA-1 (OQ1 ruling: channel split): producer facts whose firing depends
+   *  on whether the resolution engine BINDS their slot — resolve-vs-mint is
+   *  NOT known at raise time (normalize runs before the pipeline). The blob
+   *  bar rides this gated channel; `createResolveNounsPass` decides its fate
+   *  with the engine's boundKeys join. Everything else stays on
+   *  `clarifications` byte-identically. Conditional spread only. */
+  resolutionGatedClarifications?: ProducerClarification[];
 }
 
 /** Actions covered by the geometric-macro pattern expanders — DERIVED from the
@@ -553,6 +560,10 @@ function toCandidateEvent(
   actionIndex: number,
   vocabulary: ScientistIntentVocabulary,
   unrealized: ProducerClarification[],
+  // SH-QA-1: the blob bar's gated channel — the cue MATCH stays here (the cue
+  // data is loaded here); only the firing DECISION moves to the resolve_nouns
+  // pass, where the engine's bindings are known.
+  gated: ProducerClarification[],
   mixtureCues: MixtureCueConfig | undefined,
 ): { verb: string; [key: string]: unknown } {
   const verb = (action.action as string) ?? 'unknown';
@@ -747,7 +758,12 @@ function toCandidateEvent(
       // or a bare "%" is NOT mixture evidence on its own.
       const cuesFound = mixtureCuesFound(materialValue, mixtureCues);
       if (cuesFound.length > 0) {
-        unrealized.push({
+        // SH-QA-1 (OQ1 ruling): the blob fact rides the GATED channel — the
+        // resolve_nouns pass drops it iff the engine BINDS this slot (a
+        // catalogued formulation label that merely carries a spaced cue is
+        // moot evidence; an unbound cue-bearing label still bars). The cue
+        // MATCH above stays 100% DATA; only the fate moved.
+        gated.push({
           label: materialValue.trim(),
           reason: MIXTURE_BLOB_MATERIAL_REASON,
           actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: 'material' },
@@ -773,6 +789,9 @@ export function normalizeScientistIntent(
   // silently dropped. COMP-1 Task 16/17 adds the declared-argument
   // and mixture-blob bars on the SAME channel.
   const unrealized: ProducerClarification[] = [];
+  // SH-QA-1: the blob bar's gated channel (see ScientistIntentNormalized
+  // .resolutionGatedClarifications — the resolve_nouns pass decides).
+  const gated: ProducerClarification[] = [];
   // Task 17 interim cue list: DATA from config/drafting/mixture-material-cues.yaml,
   // loaded PER call — the drafting-config precedent (never process-cached, so a
   // cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
@@ -808,7 +827,7 @@ export function normalizeScientistIntent(
       if (pattern.targetLabware) updateSymbol(symbolicLabels, pattern.targetLabware, 'target');
       patterns.push(pattern);
     } else {
-      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized, mixtureCues));
+      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized, gated, mixtureCues));
     }
   });
 
@@ -865,6 +884,9 @@ export function normalizeScientistIntent(
     candidateEvents,
     unresolvedRefs,
     ...(unrealized.length > 0 ? { clarifications: unrealized } : {}),
+    // SH-QA-1: the gated blob facts ride their own channel (conditional
+    // spread only — exactOptionalPropertyTypes: absent, never `undefined`).
+    ...(gated.length > 0 ? { resolutionGatedClarifications: gated } : {}),
   };
 }
 

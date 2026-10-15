@@ -44,6 +44,20 @@ import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 const UNREALIZED_DECLARED_ARGUMENT_REASON = 'unrealized-declared-argument';
 const MIXTURE_BLOB_MATERIAL_REASON = 'unrealized-mixture-blob-material';
 
+/** SH-QA-1 (channel split): the producer's blob bar now rides the GATED
+ *  channel (`resolutionGatedClarifications`) — the resolve_nouns pass decides
+ *  its fate (drop iff the engine binds the slot). These producer-arm pins
+ *  prove the bar RAISED the fact; read BOTH channels so the pin keeps
+ *  proving the producer arm regardless of which channel it rides. The
+ *  gate's fate itself is pinned in cueResolutionGate.test.ts. */
+const producerFacts = (normalized: {
+  clarifications?: readonly { reason: string }[];
+  resolutionGatedClarifications?: readonly { reason: string }[];
+}): Array<{ reason: string }> => [
+  ...(normalized.clarifications ?? []),
+  ...(normalized.resolutionGatedClarifications ?? []),
+];
+
 /** Test seeds ONLY. The blob seed makes the mixture label resolvable as a
  *  noun, so a bar on it is demonstrably the PRODUCER arm (Task 17), not the
  *  resolve_nouns unknown-noun arm. The plain-material seed is deliberately a
@@ -176,14 +190,27 @@ actions:
 
 describe('mixture-blob bar (Task 17 interim): a cue-shaped material with no components never compiles as one blob', () => {
   it('GUARD: the shipped blob label bars with a producer clarification naming the cues + citing the minting rule', async () => {
-    const compiled = await compileReal(`intentId: reach-mixture-blob
+    // SH-QA-1: the bar proven here is the UNRESOLVED blob (no seed binds the
+    // label). A SEEDED catalogued blob label is exactly the false-positive
+    // this item kills — the gate suppresses it (pinned in
+    // cueResolutionGate.test.ts T1); seeding it here would prove the gate,
+    // not the producer arm.
+    const unseeded = {
+      get: vi.fn(async () => null),
+      getRecord: vi.fn(async () => null),
+      list: vi.fn(async () => []),
+    };
+    const compiled = await compileScientistIntent(
+      parseScientistIntent(`intentId: reach-mixture-blob
 actions:
   - action: add_material
     labware: plate
     material: Trypsin-EDTA/DMEM (50:50)
     volume: { value: 50, unit: uL }
     targetWells: A1:H12
-`);
+`),
+      { spine: createResolveSpineFromContext({ store: unseeded as never }) as never },
+    );
     expect(compiled.outcome).toBe('needs-clarification');
     const bar = compiled.clarifications.find((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bar).toBeDefined();
@@ -254,7 +281,7 @@ actions:
     'Trypsin-EDTA (0.25%)',
   ])('GUARD-OFF: the real single reagent "%s" compiles through cleanly (no cue bar)', (material) => {
     const normalized = normalizeScientistIntent(parseScientistIntent(singleReagentDoc(material)));
-    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    const bars = producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bars).toEqual([]);
   });
 
@@ -271,7 +298,7 @@ actions:
     '50:50 Trypsin-EDTA/DMEM',
   ])('GUARD: the ratio-shaped blob "%s" still bars', (material) => {
     const normalized = normalizeScientistIntent(parseScientistIntent(blobDoc(material)));
-    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    const bars = producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bars).toHaveLength(1);
     expect(bars[0]!.label).toBe(material);
   });
@@ -293,7 +320,7 @@ actions:
     material: DNase/RNase Free Water
     volumeUl: 50
 `));
-    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    const bars = producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bars).toEqual([]);
     // Full pipeline: the seeded catalogued record (SEED_RECORDS) keeps the
     // resolve_nouns arm quiet, so a clean compile proves the PRODUCER arm
@@ -395,8 +422,8 @@ actions:
       const missing = new URL('./fixtures/__absent-mixture-cues-d3.yaml', import.meta.url);
       const normalized = normalizeScientistIntent(parseScientistIntent(BLOB_DOC), { mixtureCuesPath: missing });
       // Bar OFF: the blob that the shipped cue file bars compiles through untouched.
-      expect(normalized.clarifications ?? []).toEqual([]);
-      const blobBars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+      expect(producerFacts(normalized)).toEqual([]);
+      const blobBars = producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
       expect(blobBars).toHaveLength(0);
       // LOUD: the off-state names the data home it could not find.
       const offWarns = warnSpy.mock.calls.map((args) => args.map(String).join(' ')).filter((line) => line.includes('mixture-cue-bar-off'));
@@ -411,7 +438,7 @@ actions:
     // No injected path: the default home must load — a build that drops
     // config/drafting/ is caught by this pin, not only by the warn.
     const normalized = normalizeScientistIntent(parseScientistIntent(BLOB_DOC));
-    const bars = (normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
+    const bars = producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(bars).toHaveLength(1);
   });
 });
@@ -502,7 +529,7 @@ actions:
     volume: { value: 50, unit: uL }
     targetWells: [A1]
 `), { mixtureCuesPath: path });
-      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+      expect(producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
       const single = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-absent-single
 actions:
   - action: add_material
@@ -510,7 +537,7 @@ actions:
     material: DNase/RNase Free Water
     volumeUl: 50
 `), { mixtureCuesPath: path });
-      expect((single.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+      expect(producerFacts(single).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
     } finally {
       warnSpy.mockRestore();
     }
@@ -560,7 +587,7 @@ actions:
 `), { mixtureCuesPath: path });
     // "Alpha/Beta" sits inside the longer words Gamma…/…Delta — NOT a match:
     // the blob still bars.
-    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    expect(producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
     // Same entry at word boundaries (hyphen-joined) DOES exempt.
     const spaced = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-boundary-ok
 actions:
@@ -569,7 +596,7 @@ actions:
     material: Mix Alpha/Beta Buffer
     volumeUl: 50
 `), { mixtureCuesPath: path });
-    expect((spaced.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+    expect(producerFacts(spaced).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
   });
 
   it('the exemption does NOT weaken the bar for true blobs: the shipped exemption names nothing blob-like', () => {
@@ -599,7 +626,7 @@ actions:
     material: ${material}
     volumeUl: 50
 `));
-      expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+      expect(producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
     }
   });
 
@@ -611,7 +638,7 @@ actions:
     material: Mix DNase/RNase Free Water Buffer
     volumeUl: 50
 `));
-    expect((normalized.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+    expect(producerFacts(normalized).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
   });
 
   it('D2: the ratio guard is DATA-driven (synthetic exempt entry, config ratioPatterns)', () => {
@@ -623,7 +650,7 @@ actions:
     material: Mix Alpha/Beta 50:50
     volumeUl: 50
 `), { mixtureCuesPath: path });
-    expect((barred.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
+    expect(producerFacts(barred).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toHaveLength(1);
     const exempt = normalizeScientistIntent(parseScientistIntent(`intentId: exempt-guard-ok
 actions:
   - action: add_material
@@ -631,6 +658,6 @@ actions:
     material: Mix Alpha/Beta Buffer
     volumeUl: 50
 `), { mixtureCuesPath: path });
-    expect((exempt.clarifications ?? []).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
+    expect(producerFacts(exempt).filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON)).toEqual([]);
   });
 });

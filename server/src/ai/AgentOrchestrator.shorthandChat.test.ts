@@ -26,7 +26,7 @@ import { inferAgentIntent, coerceToAgentIntentArgs } from './coerceAgentIntent.j
 import { AGENT_INTENT_TOOL_DEF, AGENT_INTENT_TOOL_NAME, parseAgentIntentArgs } from './submitSuggestionTool.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import { createLabwareLookup } from './compiler/labwareLookup.js';
-import { bindShorthandEventsToDeck } from './shorthandChat.js';
+import { bindShorthandEventsToDeck, factRequestId, takeHeldShorthandIntent } from './shorthandChat.js';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
@@ -493,7 +493,8 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     const requests = result.clarificationRequests ?? [];
     expect(requests.length).toBeGreaterThan(0);
     const fact = requests[0]!;
-    expect(fact.id).toBe('unresolved-1');
+    // SH-QA-1: the join id is CONTENT-keyed (factRequestId), not positional.
+    expect(fact.id).toBe(factRequestId(fact.unresolvedFact!));
     expect(fact.query).toBe('mystery goop');
     expect(fact.options).toEqual([]);
     // The verbatim ScientistIntentUnresolvedFact rides along — the server minted
@@ -521,7 +522,10 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
       ...RUN_CHAT_REQUEST,
       prompt: 'the test reagent',
       clarificationAnswers: [{
-        requestId: 'unresolved-1',
+        // SH-QA-1: answer with the minted CONTENT join id (the sole mint form
+        // the server emits now; the legacy digits arm stays pinned as a
+        // fallback in shorthandChat.cueCascade.test.ts).
+        requestId: first.clarificationRequests![0].id,
         label: 'Test Reagent',
         ref: { id: 'MAT-test-material-1', kind: 'material' },
       }],
@@ -538,6 +542,54 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(foldedDetails.material).toBe('Test Reagent');
     // The folded shorthand is what compiled — carried verbatim for the panel.
     expect(second.shorthand).toMatch('Test Reagent');
+  });
+
+  it('SH-QA-1 fold-leg ledger: a re-hold after a partial fold carries answeredSlots for the closed slot', async () => {
+    // Two unbound slots: material + labware. Answer ONLY the material card
+    // with a seeded label: the material slot resolves (closed → ledgered),
+    // the labware slot still bars (legitimate re-ask, NOT ledgered). The
+    // re-hold must carry the ledger so a later re-derived material fact is
+    // dropped while the slot value stands.
+    const yaml = `intentId: chat-two-slots
+actions:
+  - action: add_material
+    labware: mystery plate
+    material: mystery goop
+    volumeUl: 50
+    targetWells: [A1]
+`;
+    const model = stubModel([{ toolCalls: [shorthandCall(yaml)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add mystery goop to mystery plate at A1' });
+    const requests = first.clarificationRequests ?? [];
+    expect(requests.length).toBeGreaterThanOrEqual(2);
+    const materialCard = requests.find((r) => r.unresolvedFact?.actionLocation?.argument === 'material')!;
+    expect(materialCard).toBeDefined();
+
+    const second = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{ requestId: materialCard.id, label: 'Test Reagent' }],
+    });
+    expect(model.callCount()).toBe(1);
+    // The labware slot still bars — the legitimate re-ask survives.
+    const reasked = second.clarificationRequests ?? [];
+    expect(reasked.some((r) => r.unresolvedFact?.actionLocation?.argument === 'labware')).toBe(true);
+    expect(reasked.some((r) => r.unresolvedFact?.actionLocation?.argument === 'material')).toBe(false);
+
+    // The re-hold carries the ledger for the CLOSED slot only.
+    const { deriveContextCacheKey } = await import('./systemPrompt.js');
+    const key = deriveContextCacheKey(RUN_CHAT_REQUEST.surface, RUN_CHAT_REQUEST.context);
+    const reHeld = takeHeldShorthandIntent(key);
+    expect(reHeld).not.toBeNull();
+    expect(reHeld!.answeredSlots).toEqual([{ actionIndex: 0, argument: 'material', label: 'Test Reagent' }]);
+    expect(reHeld!.clarifications.some((f) => f.actionLocation?.argument === 'material')).toBe(false);
   });
 
   it('the ONE forced tool grows exactly one new intent value with one shorthand arg', () => {
