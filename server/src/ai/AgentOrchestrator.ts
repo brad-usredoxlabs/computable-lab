@@ -1135,7 +1135,7 @@ export function createAgentOrchestrator(
       // (UNRESOLVED_TERM). Guidance text only (zero compiler/behavior change):
       // the tab-name-is-never-a-term rule is stated explicitly next to the
       // declared vocabulary the bullet already reads from the registry entry.
-      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).'] : []),
+      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"} — the envelope carries ALL THREE parts (verb + surface + target), e.g. {"intent":"workspace_action","action":{"action":"open-surface","surface":"sequences","target":{"kind":"sequence-tab","tab":"'+declaredTabs[0]+'"}}}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze). ROUTING RULE: requests naming a declared tab ('+declaredTabs.map((tab) => `"switch to the ${tab} tab"`).join(' ')+') or naming a real record id ("focus on record SEQ-…") are NEVER drafting requests — they are workspace_action, whatever the chat history before them was about.'] : []),
       'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
       'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
     );
@@ -1435,7 +1435,12 @@ export function createAgentOrchestrator(
       const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
       const skipCompilerPreflight = !runPreflight;
       if (skipCompilerPreflight) {
-        onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
+        // SEQ2FIX2 D5 (gate 2026-10-15_1420): on the sequences surface the
+        // forced tool is agent_intent (buildToolDefs returns the intent tool
+        // and tool_choice pins it) — the narration must name the ACTUAL tool,
+        // not the compile-draft tool other forced flows use. Other surfaces'
+        // narration is byte-unchanged (pinned by AgentOrchestrator.test.ts).
+        onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${surface === 'sequences' ? AGENT_INTENT_TOOL_NAME : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
         console.log(`[agent ${tid}] skipping compiler preflight for forced draft tool mode`);
       }
       if (!skipCompilerPreflight) {
@@ -1779,7 +1784,8 @@ export function createAgentOrchestrator(
           let lastToolProgressAt = 0;
           onEvent?.({
             type: 'status',
-            message: `AI request sent to ${endpointLabel}; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
+            // SEQ2FIX2 D5: the sequences forced tool is agent_intent — name it.
+            message: `AI request sent to ${endpointLabel}; waiting for ${forceDraftTool ? (surface === 'sequences' ? AGENT_INTENT_TOOL_NAME : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME) : 'model output'}…`,
           });
           const streamIterator = inferenceClient.completeStream(completionReq)[Symbol.asyncIterator]();
           while (true) {
@@ -2034,8 +2040,15 @@ export function createAgentOrchestrator(
           if(surface==='sequences') {
             if(sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
               sequenceRepairAttempts++;
-              messages.push({role:'user',content:'Return the requested proposal with agent_intent, intent=sequence_action and a schema-valid sequenceAction. Use create_oligo for new bases and modifications. Do not claim to have saved anything; no action has executed.'});
-              onEvent?.({type:'status',message:'Requesting the structured sequence proposal…'});
+              // SEQ2FIX2 D1a (gate 2026-10-15_1420, traces jbxrxc/8xk70f): this
+              // nudge demanded `intent=sequence_action` unconditionally — when
+              // the stalled turn was a TAB/RECORD request hijacked by
+              // proposal-heavy history, the nudge manufactured the spurious
+              // draft. The nudge now carries the SAME routing rule the guidance
+              // DATA declares: navigation requests (a declared tab, a real
+              // record id) ride workspace_action; only content changes draft.
+              messages.push({role:'user',content:'Return the requested emission with agent_intent. ROUTING RULE: if the latest request names one of this page\'s declared tabs or a real record id to show or focus, emit intent=workspace_action (a tab request targets {kind:"sequence-tab", tab:"<a declared tab>"}; a record request targets {kind:"sequence-record", recordId:"<the real id>"}). Only a request that changes sequence content uses intent=sequence_action with a schema-valid sequenceAction (create_oligo for new bases and modifications). Chat history full of proposals does not change this rule. Do not claim to have saved or changed anything; no action has executed.'});
+              onEvent?.({type:'status',message:'Requesting the structured sequence emission…'});
               continue;
             }
             return {success:false,error:'The model did not return a structured sequence proposal. Nothing was saved.'};
@@ -2771,7 +2784,18 @@ export function createAgentOrchestrator(
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
                 const resolvedLabel = (compiled.action.target && 'label' in compiled.action.target ? compiled.action.target.label : undefined) ?? ('tab' in (compiled.action.target ?? {}) ? (compiled.action.target as { tab: string }).tab : undefined) ?? compiled.action.surface ?? 'the workspace';
                 const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
-                const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
+                // SEQ2FIX2 D4 (gate 2026-10-15_1420 leg C2-neg, trace 4v654u):
+                // on the sequences surface the server must NOT narrate an
+                // effect (verb + target) the client has not yet confirmed
+                // applying — the frame may still be refused client-side (the
+                // selectableKinds gate renders the honest refusal right after).
+                // The neutral line names no verb and no target; the client's
+                // applied/refused line is the source of truth. Other surfaces
+                // keep the existing note (pinned by
+                // AgentOrchestrator.workspaceAction.test.ts).
+                const wsResult: AgentResult = surface === 'sequences'
+                  ? { success: true, notes: ['Action sent — see the workspace.'] }
+                  : { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
                 const summary: AgentSummary = {
                   traceId: tid,
                   surface: surfaceName,
