@@ -1,0 +1,2 @@
+src/ai/AgentOrchestrator.ts(344,18): error TS2339: Property 'id' does not exist on type 'ResolvedRecordTarget | ResolvedOntologyTarget | ResolvedSequenceTabTarget | ResolvedSequenceRecordTarget'.
+  Property 'id' does not exist on type 'ResolvedSequenceTabTarget'.

@@ -35,6 +35,7 @@ import { parseScientistIntent } from '../compiler/scientistIntent/parseScientist
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
+  factRequestId,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
 
@@ -110,6 +111,14 @@ async function extractStubFn(spec: string, name: string): Promise<() => Record<s
   return new Function(`${js}; return ${name};`)() as () => Record<string, unknown>;
 }
 
+/**
+ * SH-QA-1 (B3): the join id's STRING format changed (positional
+ * `unresolved-<n>` -> content-keyed `unresolved-c-<hash>`); the app echoes it
+ * verbatim and no consumer parses the format. This stub-vs-real pin proves the
+ * payload SHAPE the server emits, so ids are compared by POSITIONAL RANK
+ * (rank 1..n of clarificationRequests, and the legacy head's rank) — the id
+ * FORMAT itself is pinned by its own leg below, never silently.
+ */
 function comparable(payload: Record<string, unknown> | undefined) {
   const events = ((payload?.events ?? []) as Array<Record<string, unknown>>).map((ev) => ({
     event_type: ev.event_type,
@@ -123,12 +132,22 @@ function comparable(payload: Record<string, unknown> | undefined) {
       actionGroupId: (ev.provenance as Record<string, unknown>).actionGroupId,
     },
   }));
+  const rankId = (items: unknown): unknown => {
+    if (!Array.isArray(items)) return items ?? null;
+    return items.map((item, i) => {
+      if (!item || typeof item !== 'object') return item;
+      const rec = { ...(item as Record<string, unknown>) };
+      if ('id' in rec) rec.id = `unresolved-${i + 1}`;
+      return rec;
+    });
+  };
+  const head = payload?.clarification as Record<string, unknown> | undefined;
   return {
     success: payload?.success,
     events,
     labwareAdditions: payload?.labwareAdditions ?? null,
-    clarificationRequests: payload?.clarificationRequests ?? null,
-    clarification: payload?.clarification ?? null,
+    clarificationRequests: rankId(payload?.clarificationRequests),
+    clarification: head ? { ...head, ...( 'id' in head ? { id: 'unresolved-1' } : {} ) } : null,
     shorthand: payload?.shorthand,
     notes: payload?.notes ?? null,
   };
@@ -192,8 +211,10 @@ describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarificatio
       '50:50 Trypsin-EDTA/DMEM',
       '50:50 Trypsin-EDTA/DMEM',
     ]);
+    // SH-QA-1: the head id is the CONTENT join id of the first bar fact
+    // (the plate unknown-noun) — format pinned, order unchanged.
     expect(real.clarification).toEqual({
-      id: 'unresolved-1',
+      id: factRequestId((real.clarificationRequests as unknown as Array<{ unresolvedFact: any }>)[0]!.unresolvedFact),
       prompt: 'The draft names "plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.',
       entityType: 'labware',
       options: [],

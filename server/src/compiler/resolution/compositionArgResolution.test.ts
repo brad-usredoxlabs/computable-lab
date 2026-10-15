@@ -270,10 +270,13 @@ actions:
       - { material: "trypsin-EDTA", role: solvent, fraction: "50%" }
       - { material: "DMEM", role: buffer_component, fraction: "50%" }
 `);
+    // SH-QA-1 channel split: the blob bar rides the gated channel
+    // (`resolutionGatedClarifications`); the exemption proof reads both.
     const normalized = normalizeScientistIntent(doc);
-    const blobBars = (normalized.clarifications ?? []).filter(
-      (c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON,
-    );
+    const blobBars = [
+      ...(normalized.clarifications ?? []),
+      ...(normalized.resolutionGatedClarifications ?? []),
+    ].filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(blobBars).toHaveLength(0);
   });
 
@@ -287,9 +290,10 @@ actions:
     targetWells: [A1]
 `);
     const normalized = normalizeScientistIntent(doc);
-    const blobBars = (normalized.clarifications ?? []).filter(
-      (c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON,
-    );
+    const blobBars = [
+      ...(normalized.clarifications ?? []),
+      ...(normalized.resolutionGatedClarifications ?? []),
+    ].filter((c) => c.reason === MIXTURE_BLOB_MATERIAL_REASON);
     expect(blobBars).toHaveLength(1);
   });
 });

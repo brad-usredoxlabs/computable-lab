@@ -528,3 +528,86 @@ describe('comp4.many-cardinality at the pass seam', () => {
     expect(output.clarifications).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SH-QA-1 — the resolution-aware firing gate at the PASS level.
+// The gate is the §5.1 identity join: a gated producer fact is dropped iff
+// the engine bound its slot; survivors append AFTER engine+required+model
+// facts (the position the compile-side producer append used to produce).
+// The pass switches on engine output + identity keys only — this file pins
+// that by driving the gate with a stub engine (no label table involved).
+// ---------------------------------------------------------------------------
+describe('shqa1.gate — resolution-aware firing gate (channel owner)', () => {
+  // A gated fact riding the blob channel's frozen wire reason (the test pins
+  // the contract string; the pass never reads it — identity decides).
+  const gatedBlob = {
+    label: 'Gamma/Delta Mixture (50:50)',
+    reason: 'unrealized-mixture-blob-material',
+    actionLocation: { actionIndex: 0, action: 'add_material' as const, argument: 'material' },
+  };
+
+  it('a bound slot suppresses the gated fact: ok:true, clarifications [], blocked false', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(true);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.clarifications).toEqual([]);
+    expect(output.blocked).toBe(false);
+  });
+
+  it('an unbound slot keeps the gated fact: it counts toward blocked and rides the bar diagnostic', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: 'unbound goop', volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({}),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+    const diag = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
+    expect((diag!.details!['clarifications'] as ScientistIntentUnresolvedFact[]).some((c) => c.reason === gatedBlob.reason)).toBe(true);
+  });
+
+  it('bar ORDER: a gated survivor lands AFTER engine + required + model facts (golden order pinned)', async () => {
+    // Engine fact: the unbound labware noun. Required sweep: add_material
+    // declares no required non-scalar arg, so add a verb that does — use the
+    // model-unresolved arm for the third channel instead.
+    const modelFact: ScientistIntentUnresolvedFact = {
+      label: 'model hedge noun',
+      reason: 'model-hedge',
+      actionLocation: { actionIndex: 0, action: 'add_material', argument: 'source' },
+    };
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', labware: 'unbound plate', volumeUl: 10 }], [modelFact]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({}),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    const reasons = output.clarifications.map((c) => c.reason);
+    const gatedIndex = reasons.indexOf(gatedBlob.reason);
+    expect(gatedIndex).toBe(reasons.length - 1);
+    expect(reasons.indexOf('unknown-noun')).toBeLessThan(gatedIndex);
+    expect(reasons.indexOf('model-hedge')).toBeLessThan(gatedIndex);
+  });
+
+  it('a gated fact WITHOUT actionLocation is KEPT (never silently dropped) even when its label is bound', async () => {
+    const labelOnly = { label: 'Bound Label', reason: gatedBlob.reason };
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: 'Bound Label', volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ 'Bound Label': [['local:MAT-bound', 'Bound Label']] }),
+      resolutionGatedClarifications: [labelOnly],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+  });
+});

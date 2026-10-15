@@ -1,0 +1,171 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+stdout | src/ai/shorthandChat.cueCascade.test.ts > shqa1.t6-fold-loop-regression (the Brad trap) > T6: bar -> answer with the catalogued cue-bearing label -> recompile is COMPLETE (events > 0, no re-ask, model still 1)
+[agent gg14rk] start surface=workspace.deck model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent gg14rk] skipping compiler preflight for forced draft tool mode
+[agent gg14rk] tools=1 docDiscussion=false maxTurns=2
+[agent gg14rk] turn 1 starting, promptChars=38446, docDiscussion=false
+[agent gg14rk] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"gg14rk","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":85,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent gg14rk] done event_shorthand success=true events=0 clarifications=1 elapsedMs=85
+
+stdout | src/ai/shorthandChat.cueCascade.test.ts > shqa1.t7-answering-one-slot-never-re-asks-that-slot > T7: the re-bar carries the still-unbound plate card and ZERO cards for the answered material slot
+[agent p4cb69] start surface=workspace.deck model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent p4cb69] skipping compiler preflight for forced draft tool mode
+[agent p4cb69] tools=1 docDiscussion=false maxTurns=2
+[agent p4cb69] turn 1 starting, promptChars=38446, docDiscussion=false
+[agent p4cb69] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"p4cb69","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":16,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent p4cb69] done event_shorthand success=true events=0 clarifications=2 elapsedMs=16
+
+ ❯ src/ai/shorthandChat.cueCascade.test.ts  (12 tests | 10 failed) 116ms
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t6-fold-loop-regression (the Brad trap) > T6: bar -> answer with the catalogued cue-bearing label -> recompile is COMPLETE (events > 0, no re-ask, model still 1)
+     → expected [ 'unrealized-mixture-blob-material' ] to include 'unknown-noun'
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t7-answering-one-slot-never-re-asks-that-slot > T7: the re-bar carries the still-unbound plate card and ZERO cards for the answered material slot
+     → expected 2 to be greater than or equal to 3
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a fact re-derived for a ledgered slot with an UNCHANGED slot value is dropped
+     → dropSatisfiedFacts is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a scientist-EDITED slot value re-opens the question (fact KEPT)
+     → dropSatisfiedFacts is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a ledger label that does not match the slot value verbatim never drops (legitimate re-ask)
+     → dropSatisfiedFacts is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a fact WITHOUT actionLocation is never dropped
+     → dropSatisfiedFacts is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: an empty ledger is the identity (nothing is swallowed)
+     → dropSatisfiedFacts is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9: an answer keyed to a fact CONTENT id folds THAT fact even when the held array order is FLIPPED vs the mint order
+     → factRequestId is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9 (B5): COMP-4 same-slot siblings (same actionIndex/action/argument/reason, different labels) get DISTINCT ids
+     → factRequestId is not a function
+   ❯ src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9: the fold reports the slot identities it spliced (the ledger source)
+     → factRequestId is not a function
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t6-fold-loop-regression (the Brad trap) > T6: bar -> answer with the catalogued cue-bearing label -> recompile is COMPLETE (events > 0, no re-ask, model still 1)
+AssertionError: expected [ 'unrealized-mixture-blob-material' ] to include 'unknown-noun'
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:152:21
+    150|     // The pinned same-slot two-fact first bar: unknown-noun + blob (B…
+    151|     const reasons = requests.map((r) => (r.unresolvedFact as { reason:…
+    152|     expect(reasons).toContain('unknown-noun');
+       |                     ^
+    153|     expect(reasons).toContain('unrealized-mixture-blob-material');
+    154|     expect(model.callCount()).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t7-answering-one-slot-never-re-asks-that-slot > T7: the re-bar carries the still-unbound plate card and ZERO cards for the answered material slot
+AssertionError: expected 2 to be greater than or equal to 3
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:199:29
+    197|     const first = await orchestrator.run(RUN_CHAT_REQUEST);
+    198|     const requests = first.clarificationRequests ?? [];
+    199|     expect(requests.length).toBeGreaterThanOrEqual(3);
+       |                             ^
+    200|     const materialCard = requests.find(
+    201|       (r) => (r.unresolvedFact as { actionLocation?: { argument?: stri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a fact re-derived for a ledgered slot with an UNCHANGED slot value is dropped
+TypeError: dropSatisfiedFacts is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:242:12
+    240|   it('T8: a fact re-derived for a ledgered slot with an UNCHANGED slot…
+    241|     const doc = docOf('1 mM Clofibrate in DMSO');
+    242|     expect(dropSatisfiedFacts([reDerived], ledger, doc)).toEqual([]);
+       |            ^
+    243|   });
+    244| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a scientist-EDITED slot value re-opens the question (fact KEPT)
+TypeError: dropSatisfiedFacts is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:248:12
+    246|     const doc = docOf('1 mM Clofibrate in DMSO');
+    247|     (doc.actions[0] as unknown as Record<string, unknown>).material = …
+    248|     expect(dropSatisfiedFacts([reDerived], ledger, doc)).toHaveLength(…
+       |            ^
+    249|   });
+    250| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a ledger label that does not match the slot value verbatim never drops (legitimate re-ask)
+TypeError: dropSatisfiedFacts is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:253:12
+    251|   it('T8: a ledger label that does not match the slot value verbatim n…
+    252|     const doc = docOf('Some Other Thing');
+    253|     expect(dropSatisfiedFacts([reDerived], ledger, doc)).toHaveLength(…
+       |            ^
+    254|   });
+    255| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: a fact WITHOUT actionLocation is never dropped
+TypeError: dropSatisfiedFacts is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:259:12
+    257|     const doc = docOf('1 mM Clofibrate in DMSO');
+    258|     const labelOnly: ScientistIntentUnresolvedFact = { label: '1 mM Cl…
+    259|     expect(dropSatisfiedFacts([labelOnly], ledger, doc)).toHaveLength(…
+       |            ^
+    260|   });
+    261| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t8-dropSatisfiedFacts ledger semantics (B6) > T8: an empty ledger is the identity (nothing is swallowed)
+TypeError: dropSatisfiedFacts is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:264:12
+    262|   it('T8: an empty ledger is the identity (nothing is swallowed)', () …
+    263|     const doc = docOf('1 mM Clofibrate in DMSO');
+    264|     expect(dropSatisfiedFacts([reDerived], [], doc)).toHaveLength(1);
+       |            ^
+    265|   });
+    266| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9: an answer keyed to a fact CONTENT id folds THAT fact even when the held array order is FLIPPED vs the mint order
+TypeError: factRequestId is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:300:22
+    298|     // flipped to [labware, material] (the live iteration-2 fact-order…
+    299|     const held = heldOf([labwareFact, materialFact]);
+    300|     const answerId = factRequestId(materialFact);
+       |                      ^
+    301|     const folded = foldAnswersIntoShorthand(held, [{ requestId: answer…
+    302|     expect(folded).not.toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9 (B5): COMP-4 same-slot siblings (same actionIndex/action/argument/reason, different labels) get DISTINCT ids
+TypeError: factRequestId is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:321:12
+    319|       actionLocation: { actionIndex: 0, action: 'add_material', argume…
+    320|     };
+    321|     expect(factRequestId(siblingA)).not.toBe(factRequestId(siblingB));
+       |            ^
+    322|     expect(factRequestId(siblingA)).toBe(factRequestId(siblingA)); // …
+    323|     expect(factRequestId(siblingA)).toMatch(/^unresolved-c-[0-9a-f]{10…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  src/ai/shorthandChat.cueCascade.test.ts > shqa1.t9-content-keyed-join (B5) > T9: the fold reports the slot identities it spliced (the ledger source)
+TypeError: factRequestId is not a function
+ ❯ src/ai/shorthandChat.cueCascade.test.ts:344:65
+    342|   it('T9: the fold reports the slot identities it spliced (the ledger …
+    343|     const held = heldOf([materialFact, labwareFact]);
+    344|     const folded = foldAnswersIntoShorthand(held, [{ requestId: factRe…
+       |                                                                 ^
+    345|     expect(folded).not.toBeNull();
+    346|     expect(folded!.answeredSlots).toEqual([{ actionIndex: 0, argument:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 2 passed (12)
+   Start at  14:57:55
+   Duration  4.98s (transform 1.49s, setup 0ms, collect 3.24s, tests 116ms, environment 0ms, prepare 455ms)
+
+EXIT:1

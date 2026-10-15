@@ -171,12 +171,22 @@ actions:
     volumeUl: 50
     targetWells: [A1]
 `;
+    // SH-QA-1 channel split: the blob bar rides
+    // `resolutionGatedClarifications` (the resolve_nouns pass decides its
+    // fate); these pins prove the PRODUCER raised/withheld the fact, so they
+    // read both producer channels.
     const exempt = normalizeScientistIntent(parseScientistIntent(withComponents));
-    const exemptReasons = (exempt.clarifications ?? []).map((c) => c.reason);
+    const exemptReasons = [
+      ...(exempt.clarifications ?? []),
+      ...(exempt.resolutionGatedClarifications ?? []),
+    ].map((c) => c.reason);
     expect(exemptReasons).not.toContain(MIXTURE_BLOB_MATERIAL_REASON);
 
     const barred = normalizeScientistIntent(parseScientistIntent(withOut));
-    const barredReasons = (barred.clarifications ?? []).map((c) => c.reason);
+    const barredReasons = [
+      ...(barred.clarifications ?? []),
+      ...(barred.resolutionGatedClarifications ?? []),
+    ].map((c) => c.reason);
     expect(barredReasons).toContain(MIXTURE_BLOB_MATERIAL_REASON);
   });
 });

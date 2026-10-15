@@ -1,0 +1,21 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ✓ src/compiler/resolution/hintParity.test.ts  (8 tests) 40ms
+ ✓ src/compiler/resolution/nounResolution.test.ts  (15 tests) 2138ms
+ ✓ src/compiler/scientistIntent/clarificationContract.test.ts  (15 tests) 2147ms
+ ✓ src/compiler/scientistIntent/vocabulary.test.ts  (16 tests) 3370ms
+ ✓ src/compiler/resolution/spine4ProductionWiring.test.ts  (4 tests) 216ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (3 tests) 391ms
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 460ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (6 tests) 601ms
+ ✓ src/compiler/scientistIntent/promptShapeParity.test.ts  (9 tests) 231ms
+ ✓ src/compiler/resolution/spine4Registration.test.ts  (18 tests) 838ms
+ ✓ src/compiler/scientistIntent/vocabularyRipOut.test.ts  (8 tests) 1124ms
+
+ Test Files  11 passed (11)
+      Tests  109 passed (109)
+   Start at  16:17:44
+   Duration  10.40s (transform 12.87s, setup 4ms, collect 50.75s, tests 11.56s, environment 14ms, prepare 9.24s)
+
+EXIT:0
