@@ -620,7 +620,22 @@ export function AiTabPanel() {
       if (!editor) return
       setShorthandApply({ recompiling: true })
       try {
-        const compiled = await apiClient.intentCompile(yaml)
+        // SH-QB-1 (fix 1): the recompile must see the SAME resolution context
+        // the chat path saw — the editor's deck plates ride as the frozen
+        // DeckLabwareSummary mirror (a structural pick of labwareId/name/
+        // labwareType — a generic map, zero name literals). Deck plates are
+        // editor state, not store records; without them a document naming the
+        // plate the scientist is looking at false-bars unknown-noun on every
+        // recompile. No plates ⇒ the argument is not passed at all (key
+        // absent, never `undefined` — exactOptionalPropertyTypes).
+        const deckLabwares = Object.values(editor.state.labwares).map((lw) => ({
+          labwareId: lw.labwareId,
+          labwareType: lw.labwareType,
+          name: lw.name,
+        }))
+        const compiled = deckLabwares.length > 0
+          ? await apiClient.intentCompile(yaml, deckLabwares)
+          : await apiClient.intentCompile(yaml)
         const terminal = compiled.terminalArtifacts ?? {}
         const events = (terminal.events ?? []) as PlateEvent[]
         const gaps = (terminal.gaps ?? []).map((gap) => ({
@@ -628,6 +643,41 @@ export function AiTabPanel() {
           message: typeof gap.message === 'string' ? gap.message : 'compile gap',
           severity: 'warning' as const,
         }))
+        const clarifications = compiled.clarifications ?? []
+        // SH-QB-1 (fix 2, the loud-failure rule): ZERO events IS the
+        // zero-ghost condition — whatever the outcome says. The recompile
+        // takes the existing verbatim-error arm (the same visible surface a
+        // rejected edit already uses; OQ2: no clarification cards here) and
+        // the prior proposal stays. The message NAMES the reason: first
+        // clarification's label + reason, else the first gap message, else the
+        // outcome — never a silent empty preview, never a generic default
+        // when a structured reason exists.
+        if (events.length === 0) {
+          const firstClarification = clarifications[0] as
+            | { label?: unknown; reason?: unknown }
+            | undefined
+          const reason =
+            (typeof firstClarification?.label === 'string' && typeof firstClarification?.reason === 'string'
+              ? `${firstClarification.label}: ${firstClarification.reason}`
+              : undefined)
+            ?? gaps[0]?.message
+            ?? `The recompile produced no events (outcome: ${compiled.outcome ?? 'unknown'})`
+          setShorthandApply({ error: reason })
+          return
+        }
+        // Non-empty events keep today's draft-ready flow; the carried
+        // clarifications ride as warnings beside the gaps (non-blocking
+        // residue stays visible).
+        const warnings = [
+          ...gaps,
+          ...clarifications.map((fact) => ({
+            code: 'compile-clarification',
+            message: typeof fact.reason === 'string' && typeof fact.label === 'string'
+              ? `${fact.label}: ${fact.reason}`
+              : 'compile clarification',
+            severity: 'warning' as const,
+          })),
+        ]
         const prompt = lastShorthandDraftRef.current?.prompt ?? ''
         const platform = getPlatformManifest(editor.state.platforms, editor.state.platformId)
         const variant = getVariantManifest(editor.state.platforms, editor.state.platformId, editor.state.variantId)
@@ -655,7 +705,7 @@ export function AiTabPanel() {
           draftId: `draft-recompile-${Date.now()}`,
           interpretation: { operations: [] },
           changes: changesFromDraftEvents(events),
-          warnings: gaps,
+          warnings,
           terms: [],
           shorthand: yaml,
         })
