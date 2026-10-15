@@ -1,0 +1,37 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ✓ src/compiler/resolution/resolveNounsPass.test.ts  (20 tests) 623ms
+ ✓ src/compiler/scientistIntent/cueResolutionGate.test.ts  (13 tests) 82ms
+stdout | src/ai/shorthandChat.cueCascade.test.ts > shqa1.t6-fold-loop-regression (the Brad trap) > T6: bar -> answer with the catalogued cue-bearing label -> recompile is COMPLETE (events > 0, no re-ask, model still 1)
+[agent g3er1j] start surface=workspace.deck model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent g3er1j] skipping compiler preflight for forced draft tool mode
+[agent g3er1j] tools=1 docDiscussion=false maxTurns=2
+[agent g3er1j] turn 1 starting, promptChars=38446, docDiscussion=false
+[agent g3er1j] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"g3er1j","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":103,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent g3er1j] done event_shorthand success=true events=0 clarifications=2 elapsedMs=103
+[agent tez093] shorthand answer folded deterministically onto the held intent (event-editor:RUN-shqa1-cascade) — no model call
+[agent-summary] {"traceId":"tez093","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":13,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent tez093] done shorthand-fold success=true events=1 elapsedMs=13
+
+stdout | src/ai/shorthandChat.cueCascade.test.ts > shqa1.t7-answering-one-slot-never-re-asks-that-slot > T7: the re-bar carries the still-unbound plate card and ZERO cards for the answered material slot
+[agent zeikvx] start surface=workspace.deck model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent zeikvx] skipping compiler preflight for forced draft tool mode
+[agent zeikvx] tools=1 docDiscussion=false maxTurns=2
+[agent zeikvx] turn 1 starting, promptChars=38446, docDiscussion=false
+[agent zeikvx] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"zeikvx","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":13,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent zeikvx] done event_shorthand success=true events=0 clarifications=3 elapsedMs=13
+[agent glayqs] shorthand answer folded deterministically onto the held intent (event-editor:RUN-shqa1-cascade) — no model call
+[agent-summary] {"traceId":"glayqs","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":3,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent glayqs] done shorthand-fold success=true events=0 elapsedMs=3
+
+ ✓ src/ai/shorthandChat.cueCascade.test.ts  (12 tests) 143ms
+
+ Test Files  3 passed (3)
+      Tests  45 passed (45)
+   Start at  15:46:34
+   Duration  4.22s (transform 2.08s, setup 0ms, collect 6.36s, tests 848ms, environment 0ms, prepare 1.29s)
+
+EXIT:0

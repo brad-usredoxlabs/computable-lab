@@ -1,0 +1,197 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ✓ src/ai/forceMaterialClarifications.test.ts  (44 tests) 15ms
+ ✓ src/compiler/scientistIntent/clarificationContract.test.ts  (15 tests) 259ms
+ ✓ src/ai/shorthandChat.lift.test.ts  (5 tests) 49ms
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 116ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (3 tests) 144ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (6 tests) 90ms
+ ✓ src/compiler/scientistIntent/compositionDecomposition.test.ts  (12 tests) 96ms
+ ✓ src/ai/shorthandChat.e2eStubHonesty.test.ts  (6 tests) 153ms
+ ✓ src/compiler/scientistIntent/declaredArgumentReachability.test.ts  (41 tests) 127ms
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > compiles the stubbed shorthand-only turn into the SAME bound graph the deterministic compiler produces
+[agent p2dqx4] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent p2dqx4] skipping compiler preflight for forced draft tool mode
+[agent p2dqx4] tools=1 docDiscussion=false maxTurns=2
+[agent p2dqx4] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent p2dqx4] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"p2dqx4","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":68,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent p2dqx4] done event_shorthand success=true events=12 clarifications=0 elapsedMs=68
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > carries NO shorthand key at all when the turn carries none (exactOptionalPropertyTypes)
+[agent ujco0w] start surface=workspace.deck model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ujco0w] skipping compiler preflight for forced draft tool mode
+[agent ujco0w] tools=1 docDiscussion=false maxTurns=2
+[agent ujco0w] turn 1 starting, promptChars=38455, docDiscussion=false
+[agent ujco0w] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ujco0w","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":10,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ujco0w] done deck_layout success=true variant=manual_freeform elapsedMs=10
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent rotbaw] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent rotbaw] skipping compiler preflight for forced draft tool mode
+[agent rotbaw] tools=1 docDiscussion=false maxTurns=3
+[agent rotbaw] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent rotbaw] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent rotbaw] turn 2 starting, promptChars=39325, docDiscussion=false
+[agent rotbaw] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"rotbaw","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":19,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent rotbaw] done event_shorthand success=true events=12 clarifications=0 elapsedMs=19
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > REFUSES a raw event_graph call on the run-chat surface and re-asks demanding shorthand — the raw payload is never compiled
+[agent rotbaw] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent sbbtlt] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent sbbtlt] skipping compiler preflight for forced draft tool mode
+[agent sbbtlt] tools=1 docDiscussion=false maxTurns=3
+[agent sbbtlt] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent sbbtlt] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent sbbtlt] turn 2 starting, promptChars=39325, docDiscussion=false
+[agent sbbtlt] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"sbbtlt","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":12,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent sbbtlt] done event_graph_refusal success=false events=0 elapsedMs=12
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-1 (fix cycle 1): a REPEAT raw event_graph call is ALSO refused — the raw payload is never compiled, honest cannot-draft failure
+[agent sbbtlt] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent sbbtlt] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled
+[agent 3ur5df] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3ur5df] skipping compiler preflight for forced draft tool mode
+[agent 3ur5df] tools=1 docDiscussion=false maxTurns=3
+[agent 3ur5df] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent 3ur5df] turn 1 finish=stop contentLen=103 toolCalls=0
+[agent 3ur5df] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent 3ur5df] turn 2 starting, promptChars=39325, docDiscussion=false
+[agent 3ur5df] turn 2 finish=stop contentLen=103 toolCalls=0
+[agent 3ur5df] recovered draft args from content as agent_intent (intent inferred); skipped the second call
+[agent-summary] {"traceId":"3ur5df","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":7,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent 3ur5df] done event_graph_refusal success=false events=0 elapsedMs=7
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled
+[agent 3ur5df] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent 3ur5df] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)
+[agent 75u3b7] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 75u3b7] skipping compiler preflight for forced draft tool mode
+[agent 75u3b7] tools=1 docDiscussion=false maxTurns=3
+[agent 75u3b7] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent 75u3b7] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 75u3b7] turn 2 starting, promptChars=39325, docDiscussion=false
+[agent 75u3b7] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"75u3b7","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":9,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent 75u3b7] done event_graph_refusal success=false events=0 elapsedMs=9
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)
+[agent 75u3b7] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent 75u3b7] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash
+[agent esnony] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask
+[agent esnony] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=144 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent esnony] skipping compiler preflight for forced draft tool mode
+[agent esnony] tools=1 docDiscussion=false maxTurns=2
+[agent esnony] turn 1 starting, promptChars=39565, docDiscussion=false
+[agent esnony] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"esnony","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":16,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null}
+[agent esnony] done event_shorthand success=true events=12 clarifications=0 elapsedMs=16
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > re-asks ONCE on a schema-invalid shorthand (MALFORMED MODEL OUTPUT) and compiles the corrected document
+[agent ovl7pa] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ovl7pa] skipping compiler preflight for forced draft tool mode
+[agent ovl7pa] tools=1 docDiscussion=false maxTurns=3
+[agent ovl7pa] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent ovl7pa] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent ovl7pa] turn 2 starting, promptChars=45000, docDiscussion=false
+[agent ovl7pa] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ovl7pa","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":10,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ovl7pa] done event_shorthand success=true events=12 clarifications=0 elapsedMs=10
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent 78cysu] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 78cysu] skipping compiler preflight for forced draft tool mode
+[agent 78cysu] tools=1 docDiscussion=false maxTurns=3
+[agent 78cysu] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent 78cysu] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 78cysu] turn 2 starting, promptChars=45000, docDiscussion=false
+[agent 78cysu] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"78cysu","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":10,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)"}
+[agent 78cysu] done event_shorthand success=false events=0 clarifications=0 elapsedMs=10
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > reports an honest failure when the shorthand is invalid a second time — never a repaired compile
+[agent 78cysu] The shorthand document was rejected by the scientist-intent schema and could not be repaired: scientist-intent failed schema validation: 1 error(s)
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the 422-class round-trip: needs-clarification rides the chat clarification channel VERBATIM
+[agent hrk6ec] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent hrk6ec] skipping compiler preflight for forced draft tool mode
+[agent hrk6ec] tools=1 docDiscussion=false maxTurns=2
+[agent hrk6ec] turn 1 starting, promptChars=38458, docDiscussion=false
+[agent hrk6ec] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"hrk6ec","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":10,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent hrk6ec] done event_shorthand success=true events=0 clarifications=1 elapsedMs=10
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > a clarification answer folds deterministically: splice → Ajv re-parse → re-compile, ZERO model calls
+[agent lcyryr] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent lcyryr] skipping compiler preflight for forced draft tool mode
+[agent lcyryr] tools=1 docDiscussion=false maxTurns=2
+[agent lcyryr] turn 1 starting, promptChars=38458, docDiscussion=false
+[agent lcyryr] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"lcyryr","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":9,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent lcyryr] done event_shorthand success=true events=0 clarifications=1 elapsedMs=9
+[agent faic1y] shorthand answer folded deterministically onto the held intent (event-editor:RUN-shorthand-test) — no model call
+[agent-summary] {"traceId":"faic1y","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":2,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent faic1y] done shorthand-fold success=true events=1 elapsedMs=2
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > SH-QA-1 fold-leg ledger: a re-hold after a partial fold carries answeredSlots for the closed slot
+[agent iu27hj] start surface=workspace.deck model=test-model promptLen=39 effectivePromptLen=39 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent iu27hj] skipping compiler preflight for forced draft tool mode
+[agent iu27hj] tools=1 docDiscussion=false maxTurns=2
+[agent iu27hj] turn 1 starting, promptChars=38466, docDiscussion=false
+[agent iu27hj] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"iu27hj","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":7,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent iu27hj] done event_shorthand success=true events=0 clarifications=2 elapsedMs=7
+[agent ubxyj3] shorthand answer folded deterministically onto the held intent (event-editor:RUN-shorthand-test) — no model call
+[agent-summary] {"traceId":"ubxyj3","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":3,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ubxyj3] done shorthand-fold success=true events=0 elapsedMs=3
+
+stderr | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ3: a forced-draft shorthand turn with NO model configured says so LOUDLY and never silently event-compiles
+[agent sbr6p5] no model configured — cannot draft shorthand on workspace.deck
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > OQ1 fallback: an answer with no 1:1 mapping falls back to ONE extraction-only re-ask carrying the held shorthand + answers as grounded context
+[agent phj0xh] start surface=workspace.deck model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent phj0xh] skipping compiler preflight for forced draft tool mode
+[agent phj0xh] tools=1 docDiscussion=false maxTurns=2
+[agent phj0xh] turn 1 starting, promptChars=38458, docDiscussion=false
+[agent phj0xh] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"phj0xh","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":10,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent phj0xh] done event_shorthand success=true events=0 clarifications=1 elapsedMs=10
+[agent wig52x] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask
+[agent wig52x] start surface=workspace.deck model=test-model promptLen=16 effectivePromptLen=110 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent wig52x] skipping compiler preflight for forced draft tool mode
+[agent wig52x] tools=1 docDiscussion=false maxTurns=2
+[agent wig52x] turn 1 starting, promptChars=39181, docDiscussion=false
+[agent wig52x] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"wig52x","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":11,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent wig52x] done event_shorthand success=true events=12 clarifications=0 elapsedMs=11
+
+stdout | src/ai/AgentOrchestrator.shorthandChat.test.ts > SHORTHAND-CHAT — the run-chat shorthand path > the shorthand path omits termManifest explicitly (bait 9: no raw-draft classifier to disagree with; the client never re-derives)
+[agent 1br6cn] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 1br6cn] skipping compiler preflight for forced draft tool mode
+[agent 1br6cn] tools=1 docDiscussion=false maxTurns=2
+[agent 1br6cn] turn 1 starting, promptChars=38463, docDiscussion=false
+[agent 1br6cn] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"1br6cn","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":9,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 1br6cn] done event_shorthand success=true events=12 clarifications=0 elapsedMs=9
+
+ ✓ src/ai/AgentOrchestrator.shorthandChat.test.ts  (19 tests) 248ms
+ ✓ src/compiler/resolution/compositionArgResolution.test.ts  (14 tests) 1146ms
+
+ Test Files  11 passed (11)
+      Tests  172 passed (172)
+   Start at  16:16:24
+   Duration  4.13s (transform 3.37s, setup 1ms, collect 20.12s, tests 2.44s, environment 3ms, prepare 4.77s)
+
+EXIT:0

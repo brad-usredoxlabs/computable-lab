@@ -1,0 +1,245 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts  (13 tests | 9 failed) 70ms
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1: "1 mM Clofibrate in DMSO" against a seeded catalogued record compiles complete with ZERO clarifications
+     → expected [ { …(4) } ] to deeply equal []
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1b: sibling shape "5 mg/mL lysozyme in PBS" (seeded) compiles complete, no blob fact
+     → expected [ { …(4) } ] to deeply equal []
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1c: sibling shape "0.1% Triton X-100 in water" (seeded) compiles complete, no blob fact
+     → expected [ { …(4) } ] to deeply equal []
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t3-producer-channel-split > T3: the blob fact rides resolutionGatedClarifications and NOT clarifications
+     → expected [ { …(4) } ] to deeply equal []
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t3-producer-channel-split > T3: a blob AND another producer fact coexist on their own channels
+     → expected [ Array(2) ] to deeply equal [ 'unrealized-declared-argument' ]
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 counter-leg: NO binding ⇒ the gated fact survives in the bar diagnostic
+     → expected true to be false // Object.is equality
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 counter-leg: a binding on a DIFFERENT slot does not suppress the gated fact (identity, not label)
+     → expected true to be false // Object.is equality
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 (B4): a gated fact WITHOUT actionLocation is KEPT, never silently dropped
+     → expected true to be false // Object.is equality
+   ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t5-comp4-composition-entries-survive-the-gate > T5: unresolved composition entries each keep their clarification (slot 0:composition unbound)
+     → scientist-intent failed schema validation: 1 error(s)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1: "1 mM Clofibrate in DMSO" against a seeded catalogued record compiles complete with ZERO clarifications
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "add_material",
++       "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "1 mM Clofibrate in DMSO",
++     "message": "The material \"1 mM Clofibrate in DMSO\" names a recipe, not a component (mixture cues found: \" in \"). A bare concept in a well is never right — materialize it: declare the components (params.composition) or name a single material; a composition becomes a formulation (material-spec).",
++     "reason": "unrealized-mixture-blob-material",
++   },
++ ]
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:116:70
+    114|   it('T1: "1 mM Clofibrate in DMSO" against a seeded catalogued record…
+    115|     const { compiled } = await compileWith(SEED_RECORDS, clofibrateDoc…
+    116|     expect(compiled.clarifications.filter((c) => c.reason === BLOB)).t…
+       |                                                                      ^
+    117|     expect(compiled.clarifications).toEqual([]);
+    118|     expect(compiled.outcome).toBe('complete');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1b: sibling shape "5 mg/mL lysozyme in PBS" (seeded) compiles complete, no blob fact
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "add_material",
++       "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "5 mg/mL lysozyme in PBS",
++     "message": "The material \"5 mg/mL lysozyme in PBS\" names a recipe, not a component (mixture cues found: \" in \", \"/\"). A bare concept in a well is never right — materialize it: declare the components (params.composition) or name a single material; a composition becomes a formulation (material-spec).",
++     "reason": "unrealized-mixture-blob-material",
++   },
++ ]
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:124:70
+    122|   it('T1b: sibling shape "5 mg/mL lysozyme in PBS" (seeded) compiles c…
+    123|     const { compiled } = await compileWith(SEED_RECORDS, clofibrateDoc…
+    124|     expect(compiled.clarifications.filter((c) => c.reason === BLOB)).t…
+       |                                                                      ^
+    125|     expect(compiled.outcome).toBe('complete');
+    126|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t1-resolved-formulation-no-longer-blob-bars > T1c: sibling shape "0.1% Triton X-100 in water" (seeded) compiles complete, no blob fact
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "add_material",
++       "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "0.1% Triton X-100 in water",
++     "message": "The material \"0.1% Triton X-100 in water\" names a recipe, not a component (mixture cues found: \" in \", \"%\"). A bare concept in a well is never right — materialize it: declare the components (params.composition) or name a single material; a composition becomes a formulation (material-spec).",
++     "reason": "unrealized-mixture-blob-material",
++   },
++ ]
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:130:70
+    128|   it('T1c: sibling shape "0.1% Triton X-100 in water" (seeded) compile…
+    129|     const { compiled } = await compileWith(SEED_RECORDS, clofibrateDoc…
+    130|     expect(compiled.clarifications.filter((c) => c.reason === BLOB)).t…
+       |                                                                      ^
+    131|     expect(compiled.outcome).toBe('complete');
+    132|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t3-producer-channel-split > T3: the blob fact rides resolutionGatedClarifications and NOT clarifications
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "add_material",
++       "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "1 mM Clofibrate in DMSO",
++     "message": "The material \"1 mM Clofibrate in DMSO\" names a recipe, not a component (mixture cues found: \" in \"). A bare concept in a well is never right — materialize it: declare the components (params.composition) or name a single material; a composition becomes a formulation (material-spec).",
++     "reason": "unrealized-mixture-blob-material",
++   },
++ ]
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:174:80
+    172|       parseScientistIntent(clofibrateDoc('1 mM Clofibrate in DMSO', 's…
+    173|     );
+    174|     expect((normalized.clarifications ?? []).filter((c) => c.reason ==…
+       |                                                                                ^
+    175|     const gated = normalized.resolutionGatedClarifications ?? [];
+    176|     expect(gated.filter((c) => c.reason === BLOB)).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t3-producer-channel-split > T3: a blob AND another producer fact coexist on their own channels
+AssertionError: expected [ Array(2) ] to deeply equal [ 'unrealized-declared-argument' ]
+
+- Expected
++ Received
+
+  Array [
+    "unrealized-declared-argument",
++   "unrealized-mixture-blob-material",
+  ]
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:206:68
+    204| `),
+    205|     );
+    206|     expect((normalized.clarifications ?? []).map((c) => c.reason)).toE…
+       |                                                                    ^
+    207|     expect((normalized.resolutionGatedClarifications ?? []).map((c) =>…
+    208|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 counter-leg: NO binding ⇒ the gated fact survives in the bar diagnostic
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:271:23
+    269|   it('T4 counter-leg: NO binding ⇒ the gated fact survives in the bar …
+    270|     const result = await runGatedPass([], [gatedBlobFact]);
+    271|     expect(result.ok).toBe(false);
+       |                       ^
+    272|     const diag = result.diagnostics.find((d) => d.code === UNRESOLVED_…
+    273|     expect(diag).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 counter-leg: a binding on a DIFFERENT slot does not suppress the gated fact (identity, not label)
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:280:23
+    278|   it('T4 counter-leg: a binding on a DIFFERENT slot does not suppress …
+    279|     const result = await runGatedPass([binding({ actionIndex: 1, argum…
+    280|     expect(result.ok).toBe(false);
+       |                       ^
+    281|     const output = result.output as ResolveNounsOutput;
+    282|     expect(output.clarifications.filter((f) => f.reason === BLOB)).toH…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t4-gate-is-a-slot-identity-join (B4) > T4 (B4): a gated fact WITHOUT actionLocation is KEPT, never silently dropped
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:288:23
+    286|     const labelOnly = { label: gatedBlobFact.label, reason: BLOB };
+    287|     const result = await runGatedPass([binding({ label: gatedBlobFact.…
+    288|     expect(result.ok).toBe(false);
+       |                       ^
+    289|     const output = result.output as ResolveNounsOutput;
+    290|     expect(output.clarifications.filter((f) => f.reason === BLOB)).toH…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  src/compiler/scientistIntent/cueResolutionGate.test.ts > shqa1.t5-comp4-composition-entries-survive-the-gate > T5: unresolved composition entries each keep their clarification (slot 0:composition unbound)
+ScientistIntentValidationError: scientist-intent failed schema validation: 1 error(s)
+ ❯ Module.parseScientistIntent src/compiler/scientistIntent/parseScientistIntent.ts:201:11
+    199|   const result = getValidator(vocabulary).validate(parsed, SCIENTIST_I…
+    200|   if (!result.valid) {
+    201|     throw new ScientistIntentValidationError(
+       |           ^
+    202|       `scientist-intent failed schema validation: ${result.errors.leng…
+    203|       result.errors,
+ ❯ compileWith src/compiler/scientistIntent/cueResolutionGate.test.ts:92:44
+ ❯ src/compiler/scientistIntent/cueResolutionGate.test.ts:300:32
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errors: [ { path: '/actions/0/composition/1/role', message: 'Must be one of: solute, solvent, buffer_component, additive, activity_source, cells, other', keyword: 'enum', params: { allowedValues: [ 'solute', 'solvent', 'buffer_component', 'additive', 'activity_source', 'cells', 'other' ] }, suggestion: 'You wrote "diluent" — did you mean "solvent"?' } ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 4 passed (13)
+   Start at  14:55:04
+   Duration  4.06s (transform 703ms, setup 1ms, collect 2.01s, tests 70ms, environment 0ms, prepare 458ms)
+
+EXIT:1
