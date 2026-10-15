@@ -23,7 +23,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
-import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
+import { AGENT_INTENT_TOOL_NAME, COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } from './submitSuggestionTool.js';
 import { loadDefaultSurfacesRegistry } from '../surfaces/surfaces.js';
 import type { AgentEvent, CompletionRequest, InferenceClient } from './types.js';
 import type { RankedCandidate } from '../resolve/types.js';
@@ -96,6 +96,45 @@ function intentClient(args: unknown): { client: InferenceClient; requests: Compl
               name: AGENT_INTENT_TOOL_NAME,
               arguments: JSON.stringify(args),
             },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    };
+  });
+  return { client: { complete: vi.fn(), completeStream }, requests };
+}
+
+/** SEQ2FIX2 T5 — the gate's real failure shape (traces jbxrxc/8xk70f): turn 1
+ *  answers with PROSE and no tool call (history-hijacked), the server repair
+ *  nudge rides turn 2, and the model then emits whatever the nudge named.
+ *  Turn 1 = prose-only stop; turn 2 = one agent_intent tool call. Requests
+ *  are captured per turn so the nudge text the model actually receives is
+ *  readable. */
+function proseThenIntentClient(prose: string, args: unknown): { client: InferenceClient; requests: CompletionRequest[] } {
+  const requests: CompletionRequest[] = [];
+  let turn = 0;
+  const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+    requests.push(_request);
+    turn += 1;
+    if (turn === 1) {
+      yield {
+        id: 'resp-seq2-prose',
+        choices: [{ index: 0, delta: { role: 'assistant', content: prose }, finish_reason: 'stop' }],
+      };
+      return;
+    }
+    yield {
+      id: 'resp-seq2-intent',
+      choices: [{
+        index: 0,
+        delta: {
+          role: 'assistant',
+          tool_calls: [{
+            index: 0,
+            id: 'call-seq2-repair',
+            type: 'function',
+            function: { name: AGENT_INTENT_TOOL_NAME, arguments: JSON.stringify(args) },
           }],
         },
         finish_reason: 'tool_calls',
@@ -185,8 +224,12 @@ describe('AgentOrchestrator — sequences workspace_action turns (ONE emit path)
     expect(store.create).not.toHaveBeenCalled();
     expect(store.update).not.toHaveBeenCalled();
     expect(store.delete).not.toHaveBeenCalled();
-    // The honest line rides the notes channel (no new event type).
-    expect((result.notes ?? []).join(' ')).toMatch(/nothing was written/);
+    // SEQ2FIX2 D4 (gate 2026-10-15_1420 leg C2-neg, trace 4v654u): the server
+    // note must NOT assert the workspace effect before the client confirms
+    // application — the client's applied/refused line is the source of truth.
+    // The honest line is the neutral one; it names no verb and no target.
+    expect((result.notes ?? []).join(' ')).toBe('Action sent — see the workspace.');
+    expect((result.notes ?? []).join(' ')).not.toMatch(/Analysis|Opened|Focused/);
   });
 
   it('an UNDECLARED tab emits ZERO agent_action + pipeline_diagnostics naming why', async () => {
@@ -309,5 +352,144 @@ describe('AgentOrchestrator — sequences workspace_action turns (ONE emit path)
     expect(system).not.toContain('sequence-tab');
     // Drafting guidance stays regardless — the relaxation is additive only.
     expect(system).toContain('intent=sequence_action');
+  });
+});
+
+/**
+ * SEQ2FIX2 (gate 2026-10-15_1420, defects D1-D5) — RED-first pins.
+ *
+ * D1a/D2/D3 (HIGH): with proposal-heavy history the model answers a tab/record
+ * request with a sequence_action DRAFT. The gate traces (jbxrxc, 8xk70f, ...)
+ * show turn 1 = prose, turn 2 = sequence_action; the server's own sequences
+ * repair nudge (AgentOrchestrator.ts :2037) DEMANDS `intent=sequence_action`
+ * unconditionally — it manufactures the hijack the moment the model stalls.
+ * The routing rule (tab/record request → workspace_action, content change →
+ * sequence_action) must be carried by the guidance DATA with the gate's named
+ * negative examples, and the nudge must carry the SAME rule.
+ * D1b: the clean-history leg emitted a non-object envelope (MALFORMED_ENVELOPE
+ * `/: Expected type: object`, trace 9cqo0l) — the guidance pins the envelope
+ * shape. The compiler's rejection itself is correct (T1: the existing
+ * compileWorkspaceAction sequence-tab legs are green — no compiler change).
+ * D5 (LOW): the sequences status narration names compile_event_graph_draft
+ * although the forced tool is agent_intent.
+ * B-2 flip: the tab negative examples are GENERATED from the registry tabs
+ * list — swap the data, the guidance follows.
+ */
+const tabActionArgs = { intent: 'workspace_action', action: { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } } };
+
+async function runSequencesTurnWithClient(
+  client: InferenceClient,
+  opts: {
+    store: ReturnType<typeof mutationTripwire>;
+    surfaces?: { get(id: string): { tabs?: string[] } | null; list(): { id: string }[] } | undefined;
+  },
+) {
+  const executeTool = vi.fn(async () => {
+    throw new Error('the forced-tool dispatch must NOT execute a tool for agent_intent');
+  });
+  const events: AgentEvent[] = [];
+  const orchestrator = createAgentOrchestrator(
+    client,
+    { getToolDefinitions: () => [], executeTool },
+    { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+    { maxTurns: 2, draftFlowMode: 'forced-tool' },
+    {
+      store: opts.store as never,
+      resolveSpine: fakeSpine() as never,
+      surfaces: loadDefaultSurfacesRegistry(SCHEMA_DIR),
+      sequenceActionSchema: { oneOf: [] },
+      validateSequenceAction: () => ({ valid: true }),
+      ...(opts.surfaces !== undefined ? { surfaces: opts.surfaces as never } : {}),
+    },
+  );
+  const result = await orchestrator.run({
+    prompt: 'switch to the Analysis tab',
+    surface: 'sequences',
+    onEvent: (event) => events.push(event),
+    context: {
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+    },
+  });
+  return { result, events };
+}
+
+describe('SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5)', () => {
+  beforeEach(() => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'ok',
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('T2 (D1a/D1b): the composed sequences guidance carries the ROUTING RULE with the gate\'s named negative examples and the envelope-shape pin', async () => {
+    const { requests } = await runSequencesTurn(tabActionArgs, { store: mutationTripwire() });
+    const system = requests[0]?.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(system).toContain('ROUTING RULE');
+    // Negative example 1 (the gate's C1 failure) rides the DECLARED tab list —
+    // surfaces.yaml declares Analysis, so the example names it via the data.
+    expect(system).toContain('"switch to the Analysis tab"');
+    // Negative example 2 (the gate's C2-positive failure).
+    expect(system).toContain('focus on record SEQ-');
+    expect(system).toContain('NEVER drafting requests');
+    // D1b: the 9cqo0l rejection was a non-object envelope — pin the shape.
+    expect(system).toMatch(/ONE JSON object/);
+    expect(system).toMatch(/never a string, never an array/);
+  });
+
+  it('T2 flip (B-2): the negative examples ride the registry tabs list — swap the data, the guidance follows', async () => {
+    const { requests } = await runSequencesTurn(tabActionArgs, {
+      store: mutationTripwire(),
+      surfaces: { get: () => ({ tabs: ['Alpha', 'Beta'] }), list: () => [{ id: 'sequences' }] },
+    });
+    const system = requests[0]?.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(system).toContain('"switch to the Alpha tab"');
+    expect(system).toContain('"switch to the Beta tab"');
+    // The real page's tab names cannot appear once the registry declares others.
+    expect(system).not.toContain('"switch to the Analysis tab"');
+  });
+
+  it('T5 (D1a): the sequences repair nudge carries the routing rule — it must NOT demand intent=sequence_action for a navigation request', async () => {
+    // The gate's exact shape: turn 1 answers with prose and no tool call
+    // (history-hijacked), the server nudges, turn 2 emits whatever the nudge
+    // named. Today the nudge names ONLY the draft channel — pinning the nudge
+    // text the model actually receives is the bait-proof.
+    const { client, requests } = proseThenIntentClient(
+      'I can help with that sequence. What would you like me to change?',
+      tabActionArgs,
+    );
+    const { result, events } = await runSequencesTurnWithClient(client, { store: mutationTripwire() });
+    expect(requests.length).toBe(2);
+    const nudge = requests[1].messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+    expect(nudge).toContain('workspace_action');
+    expect(nudge).toMatch(/tab/);
+    // The navigation leg of the repair path still lands the action:
+    const actionFrames = events.filter((e) => e.type === 'agent_action');
+    expect(actionFrames).toHaveLength(1);
+    expect(result.sequenceProposal).toBeUndefined();
+  });
+
+  it('T3 (D5): sequences status narration names the ACTUAL forced tool (agent_intent), never compile_event_graph_draft', async () => {
+    const { events } = await runSequencesTurn(tabActionArgs, { store: mutationTripwire() });
+    const statuses = events.filter((e) => e.type === 'status').map((e) => String(e.message ?? ''));
+    const skip = statuses.find((m) => /Skipping compiler preflight/.test(m));
+    expect(skip, 'the sequences turn emits the skip-preflight status').toBeDefined();
+    expect(skip).toContain(AGENT_INTENT_TOOL_NAME);
+    expect(skip).not.toContain(COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME);
+    const sent = statuses.find((m) => /AI request sent/.test(m));
+    expect(sent, 'the sequences turn emits the request-sent status').toBeDefined();
+    expect(sent).toContain(AGENT_INTENT_TOOL_NAME);
+    expect(sent).not.toContain(COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME);
   });
 });
