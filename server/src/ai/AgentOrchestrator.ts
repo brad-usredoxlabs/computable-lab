@@ -1114,7 +1114,12 @@ export function createAgentOrchestrator(
       systemSections.push(
       sequenceAuthoringGuidance,
       'Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.',
-      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab, use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"}. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).'] : []),
+      // DEFECT-2 gate fix (2026-10-15_1255 leg2): the tab-ask target shape was
+      // missable — the model once emitted "Analysis" as a term target
+      // (UNRESOLVED_TERM). Guidance text only (zero compiler/behavior change):
+      // the tab-name-is-never-a-term rule is stated explicitly next to the
+      // declared vocabulary the bullet already reads from the registry entry.
+      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).'] : []),
       'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
       'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
     );
