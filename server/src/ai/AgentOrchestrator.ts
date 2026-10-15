@@ -59,6 +59,7 @@ import { validateProtocolEditPayload, formatProtocolEditErrors } from './protoco
 import {
   compileWorkspaceAction,
   type CompileResult,
+  type ResolvedActionTarget,
   type WorkspaceActionCompilerDeps,
 } from './compileWorkspaceAction.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
@@ -67,6 +68,7 @@ import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick 
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
 import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
+import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
@@ -329,6 +331,19 @@ function resolvedMentionsFromAnswers(
  * deterministic (no timestamps/ids — see buildSystemPrompt) so models copy
  * placeholder values; the server is the authority for when a draft was made.
  */
+/**
+ * W2-9 g2d FINAL CYCLE (ruling l2t1040): the candidate ids a COMPILED action
+ * target carries — the observable payload-side ids the retarget gate compares
+ * against the attached protocol. A record target carries `id`, a protocol-step
+ * target carries `protocolId`, an ontology target carries a CURIE `id`. No
+ * kind knowledge beyond the compiler's own discriminated union lives here.
+ */
+function compiledTargetCandidateIds(target: ResolvedActionTarget | undefined): string[] {
+  if (!target) return [];
+  if (target.kind === 'protocol-step') return [target.protocolId];
+  return [target.id];
+}
+
 /**
  * Rewrite loose labware references in drafted event details against the
  * editor's actual labware list. Models routinely echo a labware's type
@@ -2542,6 +2557,48 @@ export function createAgentOrchestrator(
                 shadowRoute('protocol_edit', wallElapsed);
                 return wallResult;
               }
+              // W2-9 g2d FINAL CYCLE (architect ruling
+              // W29-g2d-wall-mechanism-decision-l2t1040): the STRUCTURAL
+              // RETARGET GATE — the enforced payload-side invariant. When the
+              // DATA rule (`opsWall.attachedMismatchRule`, absent = OFF) is
+              // present, the conversation has an ATTACHED protocol, and the
+              // model's `protocolId` override is defined, matches the declared
+              // protocol-id pattern, and differs from the attached id, the
+              // turn ends with the honest refusal envelope through the
+              // EXISTING refusal channel — BEFORE the envelope is consulted.
+              // An override EQUAL to the attached id stays legal (binding
+              // semantics unchanged); no override passes (attached-scope
+              // binding); a non-PRT-shaped id is not a protocol retarget.
+              const editGate = attachedMismatchGateFor(
+                surfaceName,
+                context.attachedProtocol?.recordId,
+                agentIntent.protocolId,
+              );
+              if (editGate) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const gateElapsed = Date.now() - t0;
+                const gateResult: AgentResult = {
+                  success: true,
+                  notes: [],
+                  refusal: { code: editGate.code, message: editGate.message },
+                };
+                const gateSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: true, elapsedMs: gateElapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount, bypass: null,
+                };
+                logAgentSummary(tid, gateSummary);
+                console.log(`[agent ${tid}] done protocol_edit retarget-gate refusal code=${editGate.code} ops=${(payload.ops as unknown[]).length} elapsedMs=${gateElapsed}`);
+                shadowRoute('protocol_edit', gateElapsed);
+                return gateResult;
+              }
               const envelope = await validateProtocolEditPayload(payload);
               const editOk = envelope.valid;
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: editOk, durationMs: 0 });
@@ -2630,6 +2687,44 @@ export function createAgentOrchestrator(
                 };
               const elapsed = Date.now() - t0;
               if (compiled.ok) {
+                // W2-9 g2d FINAL CYCLE (architect ruling
+                // W29-g2d-wall-mechanism-decision-l2t1040): the SAME structural
+                // retarget gate applied to the COMPILED action. The compiled
+                // target id is observable here (the `done workspace_action`
+                // log line below already prints it): a record target carries
+                // `id`, a protocol-step target carries `protocolId`. A focus/
+                // open whose target id matches the declared protocol-id pattern
+                // and differs from the ATTACHED protocol id is refused with the
+                // same honest envelope through the existing refusal channel —
+                // and NO `agent_action` event is emitted, so no focus can land.
+                const compiledTargetIds = compiledTargetCandidateIds(compiled.action.target);
+                const attachedId = context.attachedProtocol?.recordId;
+                const actionGate = compiledTargetIds
+                  .map((candidateId) => attachedMismatchGateFor(surfaceName, attachedId, candidateId))
+                  .find((refusal) => refusal !== null);
+                if (actionGate) {
+                  onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                  const gateResult: AgentResult = {
+                    success: true,
+                    notes: [],
+                    refusal: { code: actionGate.code, message: actionGate.message },
+                  };
+                  const gateSummary: AgentSummary = {
+                    traceId: tid, surface: surfaceName, model, success: true, elapsedMs: elapsed,
+                    turns: turnStats,
+                    totals: {
+                      turns: turn + 1,
+                      toolCalls: totalToolCalls,
+                      promptTokens: totalUsage.promptTokens,
+                      completionTokens: totalUsage.completionTokens,
+                      totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                    },
+                    resolvedMentions: resolvedMentionsCount, bypass: null,
+                  };
+                  logAgentSummary(tid, gateSummary);
+                  console.log(`[agent ${tid}] done workspace_action retarget-gate refusal code=${actionGate.code} action=${compiled.action.action} target=${compiledTargetIds.join(',')} elapsedMs=${elapsed}`);
+                  return gateResult;
+                }
                 onEvent?.({ type: 'agent_action', action: compiled.action });
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
                 const resolvedLabel = (compiled.action.target && 'label' in compiled.action.target ? compiled.action.target.label : undefined) ?? ('tab' in (compiled.action.target ?? {}) ? (compiled.action.target as { tab: string }).tab : undefined) ?? compiled.action.surface ?? 'the workspace';

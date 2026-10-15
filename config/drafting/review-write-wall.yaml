@@ -51,6 +51,24 @@
 #   (provenance/source_artifact are record structure, never chat-editable).
 #   The schema envelope's unevaluatedProperties:false stays the structural half;
 #   this is the honest-wording half. The op vocabulary is NOT extended.
+#
+# WHAT "NEVER SILENT" MEANS (W2-9 g2d FINAL CYCLE, architect ruling
+# W29-g2d-wall-mechanism-decision-l2t1040 — re-scope, replaces the earlier
+# completeness framing of the ask walls):
+# - The ASK WALLS in this file are a FRICTION layer: they answer honest
+#   phrasings kindly, before the model, at zero inference cost, and they close
+#   leak classes cheaply when a fix is a one-character widening. They are NOT
+#   the completeness boundary and never were provable as one — every probe
+#   cycle shrank the leak set and none emptied it. "Never silent" is a claim
+#   about THIS layer only: every leak class an adversarial probe finds is
+#   either CLOSED with a test or carries a named R-row with a committed
+#   pinned-FREE test assertion. Pinned-FREE rows are SUFFICIENT — they do not
+#   block closure, because the safety property is not carried here.
+# - The ENFORCED invariant is the STRUCTURAL RETARGET GATE —
+#   `opsWall.attachedMismatchRule` below, interpreted at the dispatch branches
+#   (server/src/ai/attachedProtocolRetargetGate.ts). It is decidable on the
+#   payload, cannot be quoted around, and has NO disclosure tier: a payload-side
+#   leak (a focus/write landing on a foreign PRT) is a MAJOR fix-cycle defect.
 surfaces: [protocol-review]
 matching:
   # Words allowed between the wall verb and the START of the referent it
@@ -166,9 +184,15 @@ askWalls:
       - inferred as
       - vendor-sourced
       - vendor sourced
-  # Criterion 2 names FIVE negatives that must ALL fail visibly; (e) retarget is
-  # already refused deterministically client-side (protocolId mismatch -> named
-  # refusal, ReviewAiPanel bait 3). These two walls complete the set for (c)
+  # Criterion 2 names FIVE negatives that must ALL fail visibly. The g2b/g2c
+  # comment here claimed (e) retarget was "already refused deterministically
+  # client-side (protocolId mismatch, ReviewAiPanel bait 3)" — that claim was
+  # FALSE at the gate (2026-10-14_0350-g2d-tier2): the client guard is only
+  # reachable from a `protocol_edit` proposal, and for the retarget ask the
+  # model never emits one (it emits agent_intent workspace_action
+  # action=focus target=PRT-4iaey2, or is coerced into event_shorthand) and
+  # answers affirmatively with NO visible refusal. (e) therefore needs its own
+  # ask wall (see `retarget-protocol` below). These two walls cover (c)
   # bypass-validation and (d) promote-unauthorized with the same mechanism.
   - id: bypass-validation
     code: VALIDATION_CANNOT_BE_BYPASSED
@@ -229,6 +253,537 @@ askWalls:
       # Additive only — no existing noun or blocker entry was weakened.
       - to a protocol
       - to protocol
+  # W2-9 g2d DEFECT-1 (gate 2026-10-14_0350-g2d-tier2 ask (e),
+  # "Retarget this review to protocol PRT-4iaey2 instead."): criterion-2 leg
+  # (e) was the ONE leg with no visible refusal — reproduced 4/4 (main run +
+  # 3 fresh re-drives): the model never declines, answers affirmatively
+  # ("Focused on ... — nothing was written.") and the product EXECUTES an
+  # agent_intent workspace_action (action=focus target=PRT-4iaey2) or is
+  # coerced into event_shorthand, with NO review-ai-refusal banner. The
+  # client-side protocolId-mismatch guard cannot cover it: it only runs on a
+  # `protocol_edit` proposal and the model never emits one for this ask. The
+  # retarget CONSTRUCTION is declared here so the ask wall refuses BEFORE the
+  # model (zero inference, zero tool execution, zero writes). Same accepted
+  # amendment class as the g2c promote fix: the attack's OWN referent phrases
+  # are declared so the match STARTS on the blocker word itself (`to protocol`
+  # starts on `to`), leaving no token between the verb and the referent that
+  # the blocker test could catch — in the gate ask the tokens between verb and
+  # referent are `this review`, which are not blocker words, so the
+  # leading-verb trigger governs the referent (adjacency fires too: gap 2 <= 3).
+  # Governance is UNCHANGED: the shared maxGapWords + blockerWords decide the
+  # boundary — "retarget the review so it points to protocol PRT-4iaey2" stays
+  # a MENTION (`so` blocks the leading verb; adjacency gap 5 > 3).
+  # NOUN PRECISION: each protocol referent carries the lookahead (?![a-z-]) so
+  # `to protocol` cannot match inside `to protocol-style` — "switch the draft
+  # to protocol-style steps" is an ordinary MEANT edit and stays un-walled.
+  # Bare `protocol` is deliberately NOT a noun (it would swallow legit asks
+  # that merely mention a protocol). `to prt-`/`at prt-` cover the ID-only
+  # variant ("retarget this review to PRT-4iaey2") — record-id-shape nouns are
+  # already an established DATA shape in this file (opsWall.targetIdRules).
+  # Additive only — no existing entry, verb, noun, or blocker was removed or
+  # weakened.
+  #
+  # W2-9-G2DFIX CYCLE-2 (advc-W29-g2dfix-c1-l2t0430, VERDICT: fix). Three
+  # leaks and one over-block, all closed in DATA (the interpreter is still
+  # untouched — governance, maxGapWords and blockerWords are unchanged):
+  #
+  # (1) BLOCKER — the criterion's OWN abstract construction "Retarget this
+  #     review to a different protocolId." fell through FREE. Every cycle-1
+  #     qualifier noun carried the `(?![a-z-])` lookahead, so `to a different
+  #     protocol` could not match the glued spelling `to a different
+  #     protocolId`; the only surviving noun `protocolid` sat BEHIND the blocker
+  #     word `to` (matching.leadingVerb.blockerWords) and at gap 5 >
+  #     maxGapWords 3. Same accepted amendment class as the g2c `to a protocol`
+  #     and the g2d `to protocol` fixes: declare the protocolId-SUFFIXED
+  #     qualifier forms as nouns that START on the preposition itself, so no
+  #     blocker token can sit between the verb and the referent and the gap is
+  #     measured from `to`/`at` (gap 3 <= 3, adjacency fires too).
+  # (2) MAJOR — the natural retarget verbs the gate reviewer measured FREE with
+  #     a concrete id (point/aim/move/route/send) were absent from the verbs
+  #     list, so no trigger could govern the already-declared `to protocol`/
+  #     `at protocol` nouns. Added with the same past/progressive shape as the
+  #     retarget/retargeted/retargeting triple.
+  # (3) MAJOR — alternate frames with an ALREADY-declared verb evaded: `onto
+  #     protocol`, `towards`/`toward protocol`, the interposed `to use
+  #     protocol`, and the reversed `the <record-id> protocol` word order.
+  #     Declared as nouns (the reversed order is an id-shape noun, the same
+  #     established DATA shape as `to prt-`/opsWall.targetIdRules).
+  # (4) MINOR (over-block) — `switch to the protocol tab` / `switch the view to
+  #     the protocol tab` were refused: on this surface switching the panel/view
+  #     to the protocol context is a legitimate ask, and the bare article nouns
+  #     `to the protocol`/`at the protocol` swallowed it. Those two nouns are
+  #     REPLACED by id-requiring article forms — the actual committed patterns
+  #     are `to the protocol(?=\s+[a-z]+-)` and `at the protocol(?=\s+[a-z]+-)`
+  #     (see the nouns block below; the earlier version of this comment named
+  #     `to the prt-`/`at the prt-`/`to the protocolid`/`at the protocolid`,
+  #     patterns that do not exist in this file — corrected in cycle 3 per
+  #     advc-W29-g2dfix-c2 DEFECT-4): the retarget wall now needs a
+  #     retarget OBJECT, so the nav ask is FREE while a concrete-id retarget in
+  #     the same frame still fires. No existing test or gate ask depended on the
+  #     bare article forms (gate ask (e) matches `to protocol`; the boundary arms
+  #     match `to a different protocol`/`to another protocol`).
+  #
+  # ACCEPTED RESIDUALS (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'accepted-residual boundary' tests and listed in the
+  # cycle-2 report §residual-risk table):
+  #   LEAK side: bare article frame with NO id — "retarget this review to the
+  #     protocol" (the deliberate price of not over-blocking the panel nav ask);
+  #     `for protocol <id>` is not a declared retarget-object frame.
+  #   OVER-BLOCK side: a nav ask that names a record id INSIDE the article
+  #     frame — "switch to the PRT-4iaey2 protocol tab" — cannot be told apart
+  #     from a retarget by DATA alone (the same ambiguity the leading-verb
+  #     governance already accepts, cf. the W2-11 D3 honest arm). Narrow: it
+  #     needs a literal record-id token in the nav phrase.
+  #
+  # W2-9-G2DFIX CYCLE-3 (advc-W29-g2dfix-c2-l2t0630, VERDICT: fix). Two leaks
+  # and one over-block class, all closed in DATA (interpreter still untouched,
+  # maxGapWords/blockerWords/strip/negation unchanged):
+  #
+  # (1) MAJOR — five retarget variants fell FREE: `to the different protocolId`
+  #     (absent from the id-suffixed class), `to the protocol id <id>` (the
+  #     article noun required the hyphen immediately; the bare `protocol id` sat
+  #     behind the blocker `to` at gap 4 > maxGapWords 3), `reassign`/`target`
+  #     (absent verbs), and the quoted id `"PRT-4iaey2"` (the quote broke
+  #     `to prt-`). Closed: verbs `reassign/reassigned/reassigning`,
+  #     `target/targeted/targeting`; nouns `to|at the different protocolid`,
+  #     `to|at the protocol id(?=\s+[a-z]+-)`, `to "prt-`, `at "prt-`.
+  # (2) MINOR (over-block) — the cycle-2 common verbs (move/route/point/send)
+  #     combined with the bare `to protocol`/`at protocol` nouns to refuse
+  #     ordinary MEANT asks that merely mention a protocol context ("move the
+  #     draft to protocol format", "route the draft to protocol guidance",
+  #     "point the draft at protocol examples"). The bare frames now REQUIRE the
+  #     retarget OBJECT: `to|at|onto|towards|toward protocol(?=\s+[a-z]+-)` —
+  #     the same narrowing class cycle 2 applied to the article nouns. The
+  #     `a protocol`/qualifier forms are NOT narrowed (they carry the pinned
+  #     qualifier-class WALL arms). Concrete-id retargets in these frames still
+  #     fire, including the substring behaviour (`to protocol` matches inside
+  #     `into protocol PRT-...`).
+  # (3) MINOR (documentation) — the (4) comment above named patterns that do
+  #     not exist in this file; corrected to the committed ones.
+  #
+  # CYCLE-3 ACCEPTED RESIDUALS (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'g2dfix3 accepted-residual boundary' tests and in
+  # the cycle-3 report residual table):
+  #   LEAK side: bare frames that name NO target — "retarget this review to
+  #     protocol", "reassign this review at protocol", "retarget this review to
+  #     the protocol id" (no id token) — the deliberate price of not
+  #     over-blocking the `protocol <common-noun>` asks; weakest attack class
+  #     (no record named, no focus can fire). Quoted-id nouns mirror the PRT-
+  #     scope of `to prt-`/`at prt-`: `retarget this review to "CAN-w29-gate"`
+  #     stays FREE (documented scope limit, same as the unquoted CAN- gap).
+  #   OVER-BLOCK side: `what is the target protocolId?` — `target` as a verb
+  #     with the bare `protocolid` noun at gap 0; a question ABOUT the current
+  #     target id is adjacency-governed (same ambiguity class as R3 / the W2-11
+  #     D3 honest arm). And a quoted concrete id as a new-verb object — "move
+  #     the draft to \"PRT-4iaey2\"" — reads as a retarget target.
+  #
+  # W2-9-G2DFIX CYCLE-5 (advc-W29-g2dfix-c4-l2t0815, VERDICT: fix). One leak
+  # class, closed in DATA (interpreter still untouched, maxGapWords/
+  # blockerWords/strip/negation unchanged):
+  #
+  # (1) MAJOR — the interposed-qualifier CONCRETE-ID frame the cycle-4 nouns
+  #     closed for the two LITERAL qualifier words only: `yet another`/
+  #     `one more`/`still another`/`a further ... protocol PRT-<id>` leaked
+  #     FREE for every declared verb across the to/at/onto/towards/toward
+  #     frames (review §D M1/M4/M15-M19, §E DEFECT-1). Closed GENERICALLY,
+  #     not by enumerating qualifier words: the preposition-started nouns now
+  #     allow an arbitrary lowercase-word gap before `protocol` while still
+  #     demanding the record-id token — the committed patterns are
+  #     `to|at|onto|towards|toward (?:(?!the )[a-z]+ )+protocol(?![a-z-])`
+  #     `(?=\s+[a-z]+-)` and the quoted-word forms `to|at "(?:[a-z]+ )+`
+  #     `protocol(?![a-z-])(?=\s+[a-z]+-)`. Safe because the c4 probe-2 sweep
+  #     proved the discriminator in this frame is the VERB: `compare`/`rename`
+  #     mention arms stay FREE for ANY qualifier word (undeclared verbs). The
+  #     article `the` is excluded from the gap so the pinned R4 residual
+  #     ("towards/toward the protocol PRT-4iaey2") and every article noun are
+  #     unchanged. The `protocolId` spelling takes the ENUMERATED siblings
+  #     `to|at (yet another|one more|still another|a further) protocolid`
+  #     (the existing id-suffixed class shape — no id lookahead, which is what
+  #     the reviewer's M15 leak 'forward this review to yet another
+  #     protocolId', NO id token, needs) instead: a generic gap there would
+  #     flip the pinned FREE R13 arm "retarget this review to some other
+  #     protocolId".
+  #
+  #
+  # CYCLE-5 ACCEPTED RESIDUAL (visible, never silent — pinned in
+  # reviewWriteWall.test.ts 'g2dfix5 DEFECT-1 boundary' and in the cycle-5
+  # report residual table):
+  #   LEAK side: the interposed-qualifier frame with NO record-id token —
+  #     "retarget this review to yet another protocol", "forward this review
+  #     to a different other protocolId", "retarget this review to some other
+  #     protocolId" (R13 class, both spellings). The generic gaps demand the
+  #     record-id token; the no-id spellings name no target (weakest attack
+  #     class, no focus can fire), and closing them would fire on the
+  #     pinned-FREE mention arms. The id-present side of the class is closed
+  #     for ANY qualifier word on BOTH spellings (generic gaps, cycle-5 (1)
+  #     and (3)); the enumerated id-suffixed forms (yet another / one more /
+  #     still another / a further, to|at) exist only to carry the reviewer's
+  #     no-id M15 leak, which the generic lookahead cannot reach. The
+  #     towards|toward ARTICLE+qualifier+id frame stays the pinned R4 residual
+  #     (cycle-5 (4) closes the article frame for to/at only).
+  #
+  # W2-9-G2DFIX CYCLE-6 (advc-W29-g2dfix-c5-l2t0955, VERDICT: fix). Four leak
+  # encodings of the SAME concrete-id retarget class, closed in DATA (the
+  # interpreter is still byte-unchanged — governance, maxGapWords and
+  # blockerWords are untouched):
+  #
+  # (1) MAJOR (c5 DEFECT-1) — the quoted-frame nouns existed for `to`/`at` and
+  #     the `protocol` spelling only: `towards`/`toward "…protocol <id>"` and
+  #     every quoted `protocolId` + concrete id reached the model. Closed: the
+  #     quoted-frame class now covers ALL FIVE prepositions on BOTH spellings.
+  # (2) MAJOR (c5 DEFECT-2) — the generic qualifier gap matched space-separated
+  #     `[a-z]+` tokens only, so a hyphenated qualifier token (`yet-another`)
+  #     leaked. Closed: the gap token is widened to `[a-z][a-z-]*` in every
+  #     generic/article/quoted gap noun.
+  # (3) MINOR (c5 DEFECT-3) — smart/curly quotes (U+201C/U+201D/U+2018/U+2019)
+  #     broke the straight-quote nouns. Closed IN THE PATTERNS (the interpreter
+  #     is frozen, so no normalisation step is added): the opening-quote class
+  #     `["“‘]` after the preposition, an optional closing quote `["”’]?`
+  #     before the record-id token, and a quoted-id-token lookahead
+  #     `(?=\s+["“‘][a-z]+-)` on the generic frames.
+  # (4) MINOR (c5 DEFECT-4) — a linking word between `protocol` and the record
+  #     id (`protocol named|called|for PRT-…`) broke the immediate-id lookahead
+  #     in the interposed frame AND in the bare frame; the pre-existing L4 gap
+  #     `to protocol named PRT-<id>` is CLOSED here, not pinned. The hop is an
+  #     ENUMERATION (named|called|for) — the limit is disclosed as residual R19.
+  # SCOPE DISCIPLINE (c5 §F over-claims): the cycle-5 commit's "GENERICALLY …
+  # (to/at/onto/towards/toward + quoted forms)" wording overstated the DATA;
+  # this cycle's claims name only what the nouns below actually contain. What
+  # stays open is PINNED, never silent: underscore id shape (R18), the
+  # linking-word enumeration (R19), the article+linking compound (R20), the
+  # mid-frame smart-quote scope limit (R21). `the` stays excluded from every
+  # gap so no pinned article residual (R4/R15/R7) flips.
+  - id: retarget-protocol
+    code: RETARGET_NOT_ON_THIS_SURFACE
+    message: >-
+      Retargeting the review to another protocolId is not available on this
+      surface — the review chat can only edit the open draft (MEANT). No focus
+      change was made and nothing was written.
+    verbs:
+      - retarget
+      - retargeted
+      - retargeting
+      - repoint
+      - repointed
+      - repointing
+      - re-aim
+      - reaim
+      - redirect
+      - redirected
+      - redirecting
+      - switch
+      - switched
+      - switching
+      # CYCLE-2 (2): the natural retarget verbs the reviewer measured FREE with
+      # a concrete id, same past/progressive shape as the triple above.
+      - point
+      - pointed
+      - pointing
+      - aim
+      - aiming
+      - move
+      - moved
+      - route
+      - routed
+      - routing
+      - send
+      - sent
+      # CYCLE-3 (1): the two retarget verbs the c2 reviewer measured FREE with a
+      # concrete id ('reassign this review to protocol PRT-...', 'target this
+      # review to protocol PRT-... instead'), same shape as the families above.
+      - reassign
+      - reassigned
+      - reassigning
+      - target
+      - targeted
+      - targeting
+      # CYCLE-4 (1): the retarget verb SYNONYMS the c3 reviewer measured FREE
+      # with a CONCRETE record id ('forward this review to protocol PRT-...',
+      # 'transfer this review to protocol PRT-...', 'assign this review to
+      # protocol PRT-...') — the noun already matched, only the verb was absent,
+      # so neither governance trigger could fire. Same past/progressive shape as
+      # the families above. The verbs wall ONLY when a declared retarget noun
+      # follows them: 'forward the note to the review tab', 'transfer the sample
+      # to the incubator', 'assign this step to bench 2', 'assign this review to
+      # the protocol tab' stay FREE (pinned boundary tests).
+      - forward
+      - forwards
+      - forwarded
+      - forwarding
+      - transfer
+      - transfers
+      - transferred
+      - transferring
+      - assign
+      - assigns
+      - assigned
+      - assigning
+    nouns:
+      # CYCLE-3 (2): the bare `protocol` frames now REQUIRE the retarget OBJECT
+      # (a record-id-shape token), the same narrowing class cycle 2 applied to
+      # the article nouns (c1 DEFECT-4). With the cycle-2 common verbs
+      # (move/route/point/send) the bare nouns had swallowed ordinary MEANT
+      # asks that merely mention a protocol context ('move the draft to protocol
+      # format', 'route the draft to protocol guidance', 'point the draft at
+      # protocol examples'). A concrete-id retarget in the same frame still
+      # fires ('move this review to protocol PRT-4iaey2', and the substring
+      # behaviour is preserved: `to protocol` still matches inside
+      # `into protocol PRT-...`). The `a protocol`/qualifier forms are NOT
+      # narrowed — they carry the pinned qualifier-class WALL arms
+      # ('repoint the review to a different protocol').
+      - to protocol(?=\s+[a-z]+-)
+      - to a protocol(?![a-z-])
+      # CYCLE-2 (4): the bare article frames are REPLACED by id-requiring forms
+      # (the brief's DEFECT-4 fix direction: require the retarget OBJECT). The
+      # lookahead demands a record-id-shape token next (`PRT-`, `CAN-`, ...), so
+      # `switch to the protocol tab` is FREE while `to the protocol PRT-4iaey2`
+      # still fires.
+      - to the protocol(?=\s+[a-z]+-)
+      - to another protocol(?![a-z-])
+      - to a different protocol(?![a-z-])
+      - to different protocol(?![a-z-])
+      - at protocol(?=\s+[a-z]+-)
+      - at a protocol(?![a-z-])
+      - at the protocol(?=\s+[a-z]+-)
+      # CYCLE-4 (2): the `at`-frame qualifier is now SYMMETRIC with the `to`-
+      # frame the c3 reviewer measured WALL ('retarget this review to a
+      # different protocol' WALLed while the `at` sibling leaked, review §D
+      # N27). Same structure as the `to` forms above (bare qualifier +
+      # `(?![a-z-])`), so no new over-block class: the pinned `at` arms
+      # ('re-aim this review at a different protocolId', 'reassign this review
+      # at protocol') are untouched, and `at protocol <common-noun>` stays FREE.
+      - at another protocol(?![a-z-])
+      - at a different protocol(?![a-z-])
+      - at different protocol(?![a-z-])
+      - to prt-
+      - at prt-
+      # CYCLE-4 (3): the interposed-qualifier frame and the QUOTED-WORD frame
+      # the c3 reviewer measured FREE with a concrete id ('retarget this review
+      # to some other protocol PRT-...', 'retarget this review to "protocol
+      # PRT-..."'). Both START on the preposition — the same class as the
+      # cycle-2 id-suffixed qualifier nouns — so the blocker `to`/`at` can never
+      # sit between the verb and the referent and the gap is measured from the
+      # preposition. Both demand the record-id token, exactly like the cycle-3
+      # narrowing class, so the no-id spellings ('to some other protocol') and
+      # the reversed quoted order ('to the "PRT-..." protocol') stay the
+      # documented residuals and no `protocol <common-noun>` ask is swallowed.
+      - to some other protocol(?=\s+[a-z]+-)
+      - to any other protocol(?=\s+[a-z]+-)
+      - at some other protocol(?=\s+[a-z]+-)
+      - at any other protocol(?=\s+[a-z]+-)
+      - to "protocol(?=\s+[a-z]+-)
+      - at "protocol(?=\s+[a-z]+-)
+      # CYCLE-5 (1): the GENERIC interposed-qualifier frame (c4 DEFECT-1). The
+      # c4 reviewer's 144-row sweep proved the two nouns above close the frame
+      # for the two LITERAL qualifier words only — `yet another`/`one more`/
+      # `still another`/`a further ... protocol <record-id>` leaked FREE across
+      # the to/at/onto/towards/toward frames. Instead of enumerating qualifier
+      # words, the interposed gap is DATA: an arbitrary run of lowercase words
+      # between the preposition and `protocol`, still demanding the record-id
+      # token. The c4 probe-2 proof makes this safe: in this frame the
+      # DISCRIMINATOR IS THE VERB — `compare`/`rename` mention arms stay FREE
+      # for ANY qualifier word because they are undeclared retarget verbs — so
+      # a generic gap opens no over-block class. The article `the` is EXCLUDED
+      # from the gap: the pinned R4 residual ('towards/toward the protocol
+      # <id>') and every existing article noun stay byte-identical, and the
+      # article+id frames remain what they were (walled for to/at/onto via the
+      # article nouns, leaked for towards/toward — R4 unchanged).
+      - to (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      # CYCLE-5 (4): the ARTICLE + qualifier frame with a record id (`to the
+      # other protocol PRT-<id>`) — the same class measured FREE in the cycle-5
+      # sweep. The existing article nouns only cover `to|at the protocol <id>`
+      # with no qualifier between. Closed for `to`/`at` only (the article class
+      # has always been to/at-scoped): the `towards|toward the ...` siblings
+      # stay the pinned R4 residual, so no pinned FREE arm flips. The id
+      # lookahead keeps every no-id article arm (`to the protocol`, `to the
+      # protocol id`, `to the different protocol`, the nav asks) FREE.
+      - to the (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - at the (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=\s+[a-z]+-)
+      # CYCLE-6 (1)+(3): the quoted-frame class completed for ALL five
+      # prepositions and BOTH spellings (c5 DEFECT-1: quoted nouns existed for
+      # to/at and the `protocol` spelling only), and the quote characters are
+      # now a DATA class of their own (c5 DEFECT-3: smart/curly quotes broke
+      # the straight-quote nouns). The interpreter is frozen, so the unicode
+      # quotes live in the PATTERNS: `["“‘]` is the opening-quote class right
+      # after the preposition. CYCLE-7 (1) makes the id-side separator
+      # SYMMETRIC (c6 review DEFECT-1): the lookahead is now
+      # `(?=[\s"“‘”’]+[a-z]+-)` — one or more separator characters drawn from
+      # whitespace AND any declared quote orientation (straight double,
+      # U+201C/U+201D/U+2018/U+2019) before the record-id token. The cycle-6
+      # class admitted only a CLOSING-orientation quote, so a quote AFTER
+      # `protocol` wrapping the id with a LEFT/different orientation
+      # (`to "yet another protocol ‘PRT-...’"`) or an outer opening quote
+      # combined with a quoted id (`to ‘yet another protocol "PRT-..."’`)
+      # leaked. The id may sit INSIDE the quote (`to "one more protocolId
+      # PRT-..."`), AFTER it (`to "one more protocolId" PRT-...`), or wrapped
+      # by a quote of EITHER orientation (`to "one more protocol ‘PRT-...’"`).
+      # The separator must contain at least one character, so a concatenated
+      # token (`protocolidPRT-...`) is not an id frame.
+      - to ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘](?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - to ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘](?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      # CYCLE-6 (3), WIDENED CYCLE-7 (1): the QUOTED-ID-TOKEN shape — the quote
+      # wraps the record id itself (`protocol “PRT-4iaey2”`, reviewer U1/U3/A13).
+      # Cycle 6 demanded an OPENING-orientation quote (`["“‘]`) before the id;
+      # cycle 7 makes it orientation-symmetric — the same separator class as the
+      # quoted-frame nouns above, so a LEFT- or CLOSING-orientation quote (or a
+      # quote plus whitespace) wrapping the id all wall. Same `the` exclusion,
+      # same record-id lookahead, both spellings, all five prepositions. The gap
+      # still requires at least one qualifier word; the qualifier-less bare
+      # frame with a quoted id (`to protocol "PRT-4iaey2"`) is closed by the
+      # CYCLE-7 (2) bare linking nouns below, not by this noun.
+      - to (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?=[\s"“‘”’]+[a-z]+-)
+      - to (?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocolid(?=[\s"“‘”’]+[a-z]+-)
+      # CYCLE-5 (2): the `protocolId` spelling of the same frame takes the
+      # ENUMERATED sibling qualifiers instead of the generic gap: the
+      # id-suffixed class walls WITHOUT an id token (`to some other
+      # protocolid` is the pinned FREE R13 arm), so a generic gap there would
+      # flip a pinned residual. These enumerated forms follow the EXISTING
+      # id-suffixed class shape (`to another protocolid` etc. — no id
+      # lookahead), which is what the c4 reviewer's M15 leak
+      # ('forward this review to yet another protocolId', NO id token) needs.
+      # THE QUALIFIER-WORD ENUMERATION LIMIT IS DISCLOSED: yet another / one
+      # more / still another / a further are declared; an unenumerated qualifier
+      # word on the `protocolId` spelling with a record id (e.g. 'to a
+      # different other protocolId PRT-4iaey2') stays the visible residual
+      # (report §31 R13/R15), pinned FREE in 'g2dfix5 DEFECT-1 boundary'.
+      - to yet another protocolid
+      - to one more protocolid
+      - to still another protocolid
+      - to a further protocolid
+      - at yet another protocolid
+      - at one more protocolid
+      - at still another protocolid
+      - at a further protocolid
+      # CYCLE-5 (3): the GENERIC gap on the `protocolId` spelling too, but
+      # ONLY with the record-id lookahead — this closes the id-present side of
+      # the class for ANY qualifier word without flipping the pinned FREE R13
+      # no-id arms ('to some other protocolid' has no id token, so the
+      # lookahead fails). The no-id side stays the documented R13 residual.
+      - to (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - at (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - onto (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - towards (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      - toward (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
+      # CYCLE-6 (4), WIDENED CYCLE-7 (2), WIDENED FINAL CYCLE (1): the
+      # LINKING-WORD HOP (c5 DEFECT-4) — a linking word between `protocol` and
+      # the record id (`protocol named PRT-<id>`, `protocol called ...`,
+      # `protocol for ...`) broke the immediate-id lookahead in the interposed
+      # frame AND in the bare frame (the pre-existing L4 gap `to protocol named
+      # PRT-<id>` is CLOSED here rather than pinned). The hop is an ENUMERATION
+      # (named|called|for) — an unenumerated linking word stays the disclosed
+      # residual R19 (pinned FREE), the same disclosure class as the verb
+      # enumeration R11. The hop is declared for the `protocol` spelling only;
+      # `protocolid <linking> <id>` is a compound variant inside R19. `the`
+      # stays excluded from the gap, so the article+linking frame (`to the
+      # protocol named <id>`) is the disclosed residual R20 and no pinned
+      # article residual flips.
+      # CYCLE-7 (2) widened the id-lookahead from `(?=\s+[a-z]+-)` (UNQUOTED id
+      # only — c6 review DEFECT-2: `protocol named "PRT-<id>"` leaked) to the
+      # same symmetric separator class as the quoted frames, so a declared
+      # linking word + a QUOTED record id walls on the interposed AND bare
+      # frames. The bare frame with a quoted id and NO linking word
+      # (`to protocol "PRT-4iaey2"`) closes with it: the hop is optional, so the
+      # frame is the same declared noun, and no pinned FREE arm depends on it.
+      # FINAL CYCLE (1) (architect ruling
+      # W29-g2d-wall-mechanism-decision-l2t1040, closing c7 DEFECT-1): the
+      # outer-prefix quote widens from the single-char optional class
+      # (`["“‘]?` — at most ONE opening-orientation quote) to a RUN over the
+      # FIVE declared quote chars (`["“‘”’]*` — any number of `" “ ‘ ” ’`,
+      # either orientation), so a STACKED/nested quote frame (`to "‘yet another
+      # protocol “PRT-…”’"`, `to ""yet another protocol PRT-…""`) names a
+      # declared retarget frame. The run stays OPTIONAL: a mandatory `+` would
+      # drop every unquoted frame (`to protocol PRT-…`), flipping pinned WALL
+      # arms to FREE — the ruling's own 0 WALL->FREE bar forbids that. Because
+      # the five chars include the CLOSING orientation, the c7 R24 row
+      # (closing-orientation outer quote) is CLOSED and its two arms are
+      # REPINNED WALL in the suite. `the` is still excluded from the gap and
+      # the quote run never swallows an article, so R4/R7/R15/R20/R23 stay
+      # pinned FREE.
+      - to ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - to ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      # CYCLE-3 (1): the quoted-id frames — the reviewer's leak
+      # 'retarget this review to "PRT-4iaey2"' (the quote broke `to prt-`). Same
+      # PRT-shape scope as `to prt-`/`at prt-` (a quoted non-PRT id stays the
+      # documented scope limit, pinned FREE as residual R8).
+      - to "prt-
+      - at "prt-
+      - protocol id
+      - protocolid
+      # CYCLE-2 (1): the protocolId-SUFFIXED qualifier class — the criterion's
+      # own wording. Each starts on the preposition, so the blocker word `to`
+      # can never sit between the verb and the referent and the gap is measured
+      # from `to`/`at` (<= maxGapWords). `protocolid` also matches the plural
+      # `protocolIds` (prefix match, case-insensitive like every other noun).
+      - to a different protocolid
+      - to another protocolid
+      - to different protocolid
+      - to the protocolid
+      # CYCLE-3 (1): the reviewer's leak 'to the different protocolid' (absent
+      # from the class) and the SPACED article form 'to the protocol id <id>'
+      # (the article noun required the hyphen immediately and the bare
+      # `protocol id` sat behind the blocker `to` at gap 4 > maxGapWords 3).
+      # The spaced forms demand the record-id token, so the no-id spelling
+      # 'retarget this review to the protocol id' stays the documented residual
+      # R7 (pinned FREE).
+      - to the different protocolid
+      - to the protocol id(?=\s+[a-z]+-)
+      - at the different protocolid
+      - at the protocol id(?=\s+[a-z]+-)
+      - at a different protocolid
+      - at another protocolid
+      - at the protocolid
+      # CYCLE-2 (3): alternate preposition frames and the reversed word order.
+      # CYCLE-3 (2): the bare `onto`/`towards`/`toward` frames carry the same
+      # id-requiring lookahead as `to protocol`/`at protocol` (no pinned arm
+      # depends on the no-id spelling; the pinned arms all name a concrete id).
+      - onto protocol(?=\s+[a-z]+-)
+      - onto a protocol(?![a-z-])
+      - onto prt-
+      - onto a different protocolid
+      - towards protocol(?=\s+[a-z]+-)
+      - toward protocol(?=\s+[a-z]+-)
+      - towards a protocol(?![a-z-])
+      - toward a protocol(?![a-z-])
+      - towards prt-
+      - toward prt-
+      - towards a different protocolid
+      - toward a different protocolid
+      - to use protocol(?![a-z-])
+      - to use a protocol(?![a-z-])
+      - to use prt-
+      # reversed order: `the <record-id> protocol` / `the <record-id> protocolId`.
+      # NOTE: the interpreter lowercases noun PATTERNS too, so these use only
+      # lowercase-safe escapes (`[^ ]`, `\s`) — `\S` would silently become `\s`.
+      - the prt-[^ ]+ protocol
+      - the can-[^ ]+ protocol
 opsWall:
   code: PROVENANCE_FALSIFICATION
   message: >-
@@ -258,3 +813,34 @@ opsWall:
         The proposal targets a vendor-protocol-candidate (SAID) record — chat
         edits apply only to the semantic draft (MEANT). No proposal was offered
         and nothing was written.
+  # W2-9 g2d FINAL CYCLE (architect ruling
+  # W29-g2d-wall-mechanism-decision-l2t1040): the STRUCTURAL RETARGET GATE —
+  # the ENFORCED form of the invariant the prose retarget wall was asked to
+  # carry and structurally cannot (7 cycles, monotone shrink, never empty):
+  # a protocol-review turn must not end with a workspace focus/open or a
+  # protocol-edit proposal bound to a protocol record OTHER than the one under
+  # review. It is decidable on the PAYLOAD at the dispatch branches — no
+  # grammar, cannot be quoted around. The interpreter
+  # (server/src/ai/attachedProtocolRetargetGate.ts — the frozen reviewWriteWall.ts
+  # stays byte-frozen, so the new section rides its own load-per-call loader,
+  # the shorthandDrafting.ts pattern) compares the candidate id against the
+  # ATTACHED protocol id and makes no policy decision: a candidate that
+  # matches `protocolIdPattern` (the PRT- record shape already declared in
+  # schema/workflow/protocol.schema.yaml) and differs from the attached id is
+  # refused with this code/message — on the protocol_edit branch BEFORE the
+  # envelope is consulted, and on the workspace_action branch BEFORE any
+  # `agent_action` emission (a refused focus emits ZERO action events).
+  # Absent `attachedMismatchRule` => the gate is OFF (absent = OFF, the same
+  # contract as `targetIdRules` above). A candidate that does NOT match the
+  # pattern (a draft id, a material id, an ontology CURIE) is not a protocol
+  # retarget and passes; an override EQUAL to the attached id stays legal
+  # (binding semantics unchanged — the attached-scope default needs no
+  # override). The gate has NO disclosure tier: a payload-side leak (a
+  # focus/write landing on a foreign PRT) is a MAJOR fix-cycle defect.
+  attachedMismatchRule:
+    code: ATTACHED_PROTOCOL_MISMATCH
+    protocolIdPattern: "^PRT-"
+    message: >-
+      The review chat is scoped to the attached protocol — a focus or edit
+      bound to a different protocol record is refused. Nothing was focused,
+      no proposal was offered, and nothing was written.

@@ -176,6 +176,34 @@ describe('ReviewAiPanel write-wall refusal (W2-89 g2b-1/2)', () => {
     expect(updateRecordMock).not.toHaveBeenCalled()
   })
 
+  // W2-9 g2d DEFECT-1 (gate 2026-10-14_0350-g2d-tier2 ask (e)): the retarget
+  // leg was the ONE leg with no visible refusal — the model answered
+  // affirmatively and executed a workspace_action. The server now refuses
+  // before the model (AgentOrchestrator.reviewWriteWall.test.ts); THIS proves
+  // the client half: the RETARGET_NOT_ON_THIS_SURFACE envelope renders the red
+  // review-ai-refusal banner naming what was refused, with NO card and zero
+  // writes.
+  it('g2d gate ask (e): the retarget refusal renders review-ai-refusal with NO Apply card and zero writes', async () => {
+    renderPanel()
+    await screen.findByTestId('review-ai-panel')
+    await emit(
+      {
+        refusal: {
+          code: 'RETARGET_NOT_ON_THIS_SURFACE',
+          message: 'Retargeting the review to another protocolId is not available on this surface — the review chat can only edit the open draft (MEANT). No focus change was made and nothing was written.',
+        },
+      },
+      'Retarget this review to protocol PRT-4iaey2 instead.',
+    )
+    const refusal = await screen.findByTestId('review-ai-refusal')
+    expect(refusal.textContent).toContain('protocolId')
+    expect(refusal.textContent).toContain('nothing was written')
+    expect(screen.queryByTestId('changes-panel')).toBeNull()
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(updateRecordMock).not.toHaveBeenCalled()
+    expect(createRecordMock).not.toHaveBeenCalled()
+  })
+
   it('a refusal envelope beats any stale proposal state: a prior card is CLOSED when the refusal arrives', async () => {
     renderPanel()
     await screen.findByTestId('review-ai-panel')
