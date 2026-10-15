@@ -106,3 +106,20 @@ workers live at checkpoint:
 next checks (cheap gate): (1) advc-SHQA1 report VERDICT + EXITED; (2) SHQB1 coder motion
 (worktree files / log); (3) SEQ2FIX2-LOCK-ACQUIRED; (4) composer-SHQA3 draft path exists;
 (5) AI-13 recount; (6) stack 200s; (7) trunk tip vs 95d1c8bc.
+
+## POSTSCRIPT l2t1610 (same tick, budget expiry)
+- SH-QA-1 advc c1 RETURNED VERDICT: accept (0 defects) while the handoff was being written.
+  ORCH SELF-VERIFY completed: real diff opened (identity slot-join in resolveNounsPass.ts,
+  no name literals, gated facts without actionLocation kept), scope = owned server files,
+  ZERO yaml/MANIFEST paths in the diff (grep count 0). MERGED --no-ff trunk 936af24a ->
+  1bb147c7. Re-ran 5 targeted suites on merged trunk: 5 files / 74 tests PASS (16:55).
+  Server TS-only change; tsx --watch serves it; no restart.
+- CONSEQUENCE: the SH-QA-2 joint browser gate is now UNBLOCKED (clofibrate scenario needs
+  SH-QA-1 merged; trunk 1bb147c7 has both). NEXT TICK (1), highest priority: dispatch
+  cl-browser-reviewer tier-1 against :5193 for the SH-QA-2 (and SH-QA-1 cascade) acceptance
+  criteria; receipts /home/brad/.hermes/cl/receipts/SH-QA-2/<ts>/; cite trunk 1bb147c7 as the
+  served candidate (verify the served checkout first); SH-QA-2 browser-gate hooks:
+  continue-<id>, next-unanswered-<id>, updating-strand-reason, updating-cancel.
+- Live at exit: SH-QB-1 coder (chain 818740, started 16:33; 3x ~19:30), SEQ2FIX2 chain
+  (921489, waiting SHQB1-CHAIN-DONE), SH-QA-3 composer (951569, thunderbeast, 3x ~18:15).
+  Fleet lock HELD by SH-QB-1. Trunk 1bb147c7. Stack :3093/:5193 200. No Brad resources touched.
