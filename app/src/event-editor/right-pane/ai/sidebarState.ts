@@ -212,9 +212,21 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
         answers: { ...state.answers, [action.questionId]: action.answer },
       }
 
-    case 'change-question':
+    case 'change-question': {
       if (state.mode !== 'clarifying') return state
-      return { ...state, activeQuestionId: action.questionId }
+      // SH-QA-2 (b): this leg used to be a pure highlight move — an already-
+      // answered card re-rendered identically and the click did nothing
+      // visible (dead chrome). It is now a REOPEN: the answer KEY is removed
+      // (the map is recomputed with the key filtered out — never
+      // `answers[id] = undefined`, which would keep the answer truthy-typed
+      // and pin the card to its answered branch) so the card falls back to
+      // its existing picker/parameter leg and a re-pick rides the SAME
+      // answer-question → auto-submit → resend path as the first pick.
+      const reopenedAnswers = Object.fromEntries(
+        Object.entries(state.answers).filter(([questionId]) => questionId !== action.questionId),
+      )
+      return { ...state, answers: reopenedAnswers, activeQuestionId: action.questionId }
+    }
 
     case 'submit-answers':
       if (state.mode !== 'clarifying') return state
