@@ -1415,14 +1415,29 @@ export function AiTabPanel() {
             {...(previewActive ? { placeholder: 'Describe a revision to the proposed draft…' } : {})}
           />
         </section>
-      ) : sidebar.mode === 'clarifying' ? (
+      ) : sidebar.mode === 'clarifying' || sidebar.mode === 'updating' ? (
+        // SH-QA-2 (c) S6/S7: the updating strand (answer-resend in flight) used
+        // to render NOTHING here — if the resend turn died on an SSE `error`
+        // frame with no `done` frame, onDraftResult never fired, no reset leg
+        // ran, and the pane sat at "Updating draft…" with zero controls and
+        // zero surfaced reason. The block now covers `updating` too: the chat
+        // error rides as the REASON and the same cancel escape is offered
+        // (OQ4 ruling: CANCEL + REASON only — no retry-resend; the one-path
+        // rule keeps handleClarificationsSubmit the single resend affordance).
         <section className="ai-tab__section ai-tab__section--input-disabled">
-          <p className="ai-tab__input-disabled-text">
-            Answer the questions above to continue.
-          </p>
+          {sidebar.mode === 'clarifying' ? (
+            <p className="ai-tab__input-disabled-text">
+              Answer the questions above to continue.
+            </p>
+          ) : chat.state.error ? (
+            <p className="ai-tab__input-disabled-text" data-testid="updating-strand-reason">
+              {chat.state.error}
+            </p>
+          ) : null}
           <button
             type="button"
             className="ai-tab__input-cancel"
+            {...(sidebar.mode === 'updating' ? { 'data-testid': 'updating-cancel' } : {})}
             onClick={handleCancelDraft}
           >
             Cancel this draft and start a new prompt
