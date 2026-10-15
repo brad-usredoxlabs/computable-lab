@@ -65,6 +65,14 @@ properties:
         aiRole:
           type: string
           minLength: 1
+        tabs:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+          description: >-
+            In-page tab vocabulary a harness chat may drive via a sequence-tab style
+            target. DECLARED here; the agent-action schema fence and any page-side
+            constant must match this list (compatibility-tested, drift fails loud).
         aiEndpoint:
           type: object
           required: [route]

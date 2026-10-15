@@ -13,6 +13,9 @@ import { loadSchemasFromContent } from './SchemaLoader.js';
 import { createSchemaRegistry } from './SchemaRegistry.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
+import { loadDefaultSurfacesRegistry } from '../surfaces/surfaces.js';
 
 const SCHEMA_PATHS = [
   'core/common.schema.yaml',
@@ -29,6 +32,13 @@ async function loadActionSchemas() {
     contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
   }
   return loadSchemasFromContent(contents);
+}
+
+async function validatorFor() {
+  const result = await loadActionSchemas();
+  const validator = createValidator({ strict: false });
+  for (const entry of result.entries) validator.addSchema(entry.schema, entry.id);
+  return { validator };
 }
 
 describe('agent-action schema contract', () => {
@@ -76,5 +86,65 @@ describe('agent-action schema contract', () => {
       AGENT_ACTION_SCHEMA,
     );
     expect(out.valid).toBe(false);
+  });
+
+  // ==========================================================================
+  // HARNESS-SEQ-2 — the sequences target arms (RED-first)
+  // ==========================================================================
+
+  it('validates a sequence-tab target (switch the surface tab)', async () => {
+    const { validator } = await validatorFor();
+    const out = validator.validate(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } },
+      AGENT_ACTION_SCHEMA,
+    );
+    expect(out.valid).toBe(true);
+  });
+
+  it('rejects a sequence-tab target naming an UNDECLARED tab (the fence is the declared list)', async () => {
+    const { validator } = await validatorFor();
+    const out = validator.validate(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Settings' } },
+      AGENT_ACTION_SCHEMA,
+    );
+    expect(out.valid).toBe(false);
+  });
+
+  it('rejects a sequence-tab target with extra keys (additionalProperties:false per arm)', async () => {
+    const { validator } = await validatorFor();
+    const out = validator.validate(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Editor', label: 'extra' } },
+      AGENT_ACTION_SCHEMA,
+    );
+    expect(out.valid).toBe(false);
+  });
+
+  it('validates a sequence-record target (cite a real catalog id)', async () => {
+    const { validator } = await validatorFor();
+    const out = validator.validate(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-PUC19', label: 'pUC19' } },
+      AGENT_ACTION_SCHEMA,
+    );
+    expect(out.valid).toBe(true);
+  });
+
+  it('rejects a sequence-record target with no recordId (the id is required)', async () => {
+    const { validator } = await validatorFor();
+    const out = validator.validate(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', label: 'pUC19' } },
+      AGENT_ACTION_SCHEMA,
+    );
+    expect(out.valid).toBe(false);
+  });
+
+  it('the sequence-tab tab enum matches the DECLARED registry tabs (drift fence)', async () => {
+    type TargetArm = { properties?: { tab?: { enum?: string[] } } };
+    const raw = parse(readFileSync(join(process.cwd(), 'schema', 'workflow', 'agent-action.schema.yaml'), 'utf8')) as {
+      properties: { target: { oneOf: TargetArm[] } };
+    };
+    const arm = raw.properties.target.oneOf.find((candidate) => candidate.properties?.tab?.enum);
+    expect(arm, 'the agent-action schema must declare a sequence-tab arm with a tab enum').toBeDefined();
+    const registry = loadDefaultSurfacesRegistry(join(process.cwd(), 'schema'));
+    expect((arm?.properties?.tab?.enum ?? []).slice().sort()).toEqual((registry.get('sequences')?.tabs ?? []).slice().sort());
   });
 });

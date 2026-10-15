@@ -7,6 +7,8 @@ import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
 import { sequenceApi, requestId, recordRef } from './api'
+import { createSequencesAgentActionHandler } from './applyAgentAction'
+import type { AiAgentActionEnvelope } from '../types/ai'
 import { SequenceImport } from './SequenceImport'
 import { SequenceEditor, type SequenceEditorHandle } from './SequenceEditor'
 import { SequenceResults } from './SequenceResults'
@@ -31,6 +33,12 @@ export function SequencesPage() {
  const selectOptions=(list:RecordItem[])=>list.map(r=><option key={r.recordId} value={r.recordId}>{r.payload.label??r.payload.name??r.payload.title??r.recordId}</option>)
  const editorRef=useRef<SequenceEditorHandle>(null)
  const [editorContext,setEditorContext]=useState<Record<string,any>>({})
+ // HARNESS-SEQ-2: a compiled agent_action frame drives THIS page through the
+ // same paths a human click uses (setTab / selectRecord — the canLeave guard
+ // is inherited, never reimplemented). The decision lives in applyAgentAction
+ // (target-kind branches only); the tab list is the declared const above,
+ // kept in lockstep with the surfaces registry by the server compat test.
+ const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,records:()=>records,selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>setTab(t as typeof tabs[number]),selectRecord})(action),[records,selected])
  const onSequenceProposal=useCallback((p:Record<string,unknown>,userRequest?:string)=>{
   if(['save_sequence','create_oligo'].includes(String(p.operation))){
    setTab('Editor');setProposal('');editorRef.current?.propose(p,userRequest);sessionStorage.removeItem('cl-sequence-proposal')
@@ -38,7 +46,7 @@ export function SequencesPage() {
  },[])
  useEffect(()=>{try{const pending=JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null');if(pending)onSequenceProposal(pending)}catch{/* Keep malformed handoffs inspectable. */}},[onSequenceProposal])
  const aiContext=useMemo(()=>({surface:'sequences' as const,summary:`Sequence workspace — ${tab}`,surfaceContext:{...editorContext,selectedRecordId:selected,records:records.map(r=>({id:r.recordId,kind:r.payload.kind,label:r.payload.label??r.payload.name??r.payload.title,alphabet:r.payload.alphabet,length:r.payload.length,...(r.recordId===selected&&r.payload.residues?.length<=20000?{residues:r.payload.residues}:{}),...(r.payload.kind==='sequence-endpoint'?{configuration:r.payload}:{}),...(r.payload.oligos?{oligos:r.payload.oligos}:{}),...(r.payload.channel_label?{channel:r.payload.channel_label}:{}),...(r.payload.outputArtifactRefs?{outputArtifactRefs:r.payload.outputArtifactRefs}:{}),...(r.payload.statement?{statement:r.payload.statement}:{}),...(r.payload.kind==='measurement-context'?{measurementContext:r.payload}:{}),...(r.payload.kind==='sequence-interpretation-rule'?{rule:r.payload}:{})})),availableOperations:contract?.capabilities?.engines,selection:inputs,parameters,lastActionResult:result}}),[tab,selected,records,contract,inputs,parameters,result,editorContext])
- const chat=useAiChat({aiContext,onSequenceProposal,endpoint:'sequences',proposalScopeKey:`${selected}:${editorContext.proposalScopeKey}`});useRegisterAiChat(chat)
+ const chat=useAiChat({aiContext,onSequenceProposal,endpoint:'sequences',proposalScopeKey:`${selected}:${editorContext.proposalScopeKey}`,onAgentAction});useRegisterAiChat(chat)
  // Working focus is DERIVED from the resolved surface state only (tab/selected/
  // records) — zero model calls, zero AI prose (HARNESS-SEQ-1).
  const selectedRecord=records.find(r=>r.recordId===selected)

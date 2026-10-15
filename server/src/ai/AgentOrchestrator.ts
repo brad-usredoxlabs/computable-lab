@@ -935,6 +935,15 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    */
   surfaces?: import('../surfaces/surfaces.js').SurfacesRegistry;
   /**
+   * HARNESS-SEQ-2 (OQ2 ruling) — the lab's ONE authorization door
+   * (server/src/security/AuthorizationService.ts, the same canAccess the
+   * ordinary read/write routes use). When present, the workspace_action
+   * compiler gates navigation targets through it (deny = TARGET_NOT_VISIBLE,
+   * zero action). Optional — without it the compiler skips the visibility
+   * check (the PB-CH-1 stubbed callers stay honest).
+   */
+  authorizationService?: import('../security/AuthorizationService.js').AuthorizationService;
+  /**
    * PB-CH-8 — the ledger query host (workspace-session/ledgerQuery.ts
    * createLedgerQueryHost). The `query_workstate_history` intent runs through
    * it: spine resolution + server-known audit anchor + journal asOf + the
@@ -1094,12 +1103,22 @@ export function createAgentOrchestrator(
     // surface names here (repo rule #1). No store scan — pure policy text.
     const workstateRulesBlock = buildWorkstateRulesBlockForSurface(args.surface);
     const systemSections: string[] = [systemPrompt];
-    if(args.surface==='sequences' && deps.sequenceActionSchema)systemSections.push(
+    if(args.surface==='sequences' && deps.sequenceActionSchema){
+      // HARNESS-SEQ-2: the navigation bullet names the DECLARED tab vocabulary
+      // straight from the surfaces registry entry (data, not literals — repo
+      // rule #1) so the model emits the exact target shape the compiler and
+      // the page executor understand. forceDraftTool STAYS true: every turn
+      // remains a structured emission; the relaxation is that a navigation
+      // turn may satisfy itself with workspace_action instead of drafting.
+      const declaredTabs = deps.surfaces?.get(args.surface)?.tabs ?? []
+      systemSections.push(
       sequenceAuthoringGuidance,
       'Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.',
+      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab, use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"}. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).'] : []),
       'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
       'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
     );
+    }
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
@@ -2578,7 +2597,27 @@ export function createAgentOrchestrator(
             if (agentIntent.intent === 'workspace_action') {
               const compileDeps: WorkspaceActionCompilerDeps | null =
                 deps.resolveSpine && deps.surfaces && deps.store
-                  ? { resolveSpine: deps.resolveSpine, surfaces: deps.surfaces, store: deps.store }
+                  ? {
+                    resolveSpine: deps.resolveSpine,
+                    surfaces: deps.surfaces,
+                    store: deps.store,
+                    // HARNESS-SEQ-2 (OQ2 ruling): the visibility door for
+                    // navigation targets — the SAME door the ordinary read
+                    // routes use (AuthorizationService.canAccess(actor,'read',
+                    // record), sequenceRoutes.ts:17), never a parallel policy.
+                    // Wired from the RESOLVED request actor (request.
+                    // ledgerActor, PB-CH-8). Door ABSENT (no service wired)
+                    // ⇒ the compiler skips the check, exactly as before.
+                    ...(deps.authorizationService
+                      ? {
+                        visibility: async ({ recordId }: { recordId: string }): Promise<boolean> => {
+                          const record = await deps.store!.get(recordId);
+                          if (!record) return false;
+                          return deps.authorizationService!.canAccess(request.ledgerActor, 'read', record);
+                        },
+                      }
+                      : {}),
+                  }
                   : null;
               const compiled: CompileResult = compileDeps
                 ? await compileWorkspaceAction(agentIntent.action, compileDeps)
@@ -2593,7 +2632,7 @@ export function createAgentOrchestrator(
               if (compiled.ok) {
                 onEvent?.({ type: 'agent_action', action: compiled.action });
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
-                const resolvedLabel = compiled.action.target?.label ?? compiled.action.surface ?? 'the workspace';
+                const resolvedLabel = (compiled.action.target && 'label' in compiled.action.target ? compiled.action.target.label : undefined) ?? ('tab' in (compiled.action.target ?? {}) ? (compiled.action.target as { tab: string }).tab : undefined) ?? compiled.action.surface ?? 'the workspace';
                 const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
                 const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
                 const summary: AgentSummary = {
@@ -2614,7 +2653,7 @@ export function createAgentOrchestrator(
                   bypass: null,
                 };
                 logAgentSummary(tid, summary);
-                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : compiled.action.target.stepId) : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
+                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : 'kind' in compiled.action.target && compiled.action.target.kind === 'protocol-step' ? compiled.action.target.stepId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-record' ? compiled.action.target.recordId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-tab' ? compiled.action.target.tab : '-') : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
                 return wsResult;
               }
               const diagnostics = compiled.diagnostics.map((d) => ({

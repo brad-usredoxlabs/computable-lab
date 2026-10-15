@@ -33,4 +33,18 @@ describe('SurfacesRegistry', () => {
     expect(find.selectableKinds).toContain('well');
     expect(find.aiRole).toBe('search selection → AI context');
   });
+
+  // HARNESS-SEQ-2 (OQ1 ruling): the sequences tab vocabulary is DECLARED in
+  // the registry and the interpreter passes it through — data, zero policy.
+  it('the sequences surface DECLARES its tabs and the interpreter passes them through', () => {
+    const registry = loadDefaultSurfacesRegistry(SCHEMA_DIR);
+    const sequences = registry.get('sequences')!;
+    expect(sequences.tabs).toEqual(['Editor', 'Assay', 'Analysis', 'Setup', 'Import', 'Knowledge']);
+  });
+
+  it('a surface without a declared tabs key carries NO tabs property (absent, never empty)', () => {
+    const registry = loadDefaultSurfacesRegistry(SCHEMA_DIR);
+    const analysis = registry.get('analysis')!;
+    expect('tabs' in analysis).toBe(false);
+  });
 });
