@@ -1103,13 +1103,22 @@ export function createAgentOrchestrator(
     // surface names here (repo rule #1). No store scan — pure policy text.
     const workstateRulesBlock = buildWorkstateRulesBlockForSurface(args.surface);
     const systemSections: string[] = [systemPrompt];
-    if(args.surface==='sequences' && deps.sequenceActionSchema)systemSections.push(
+    if(args.surface==='sequences' && deps.sequenceActionSchema){
+      // HARNESS-SEQ-2: the navigation bullet names the DECLARED tab vocabulary
+      // straight from the surfaces registry entry (data, not literals — repo
+      // rule #1) so the model emits the exact target shape the compiler and
+      // the page executor understand. forceDraftTool STAYS true: every turn
+      // remains a structured emission; the relaxation is that a navigation
+      // turn may satisfy itself with workspace_action instead of drafting.
+      const declaredTabs = deps.surfaces?.get(args.surface)?.tabs ?? []
+      systemSections.push(
       sequenceAuthoringGuidance,
       'Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.',
-      'To switch this page\'s tab or show an existing record, use intent=workspace_action with the matching sequence-tab or sequence-record target — it drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).',
+      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab, use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"}. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).'] : []),
       'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
       'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
     );
+    }
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
     if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);

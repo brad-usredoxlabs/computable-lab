@@ -75,9 +75,13 @@ function fakeSpine(candidates: RankedCandidate[] = []) {
   };
 }
 
-/** A fake model that answers with exactly one agent_intent tool call. */
-function intentClient(args: unknown): { client: InferenceClient } {
+/** A fake model that answers with exactly one agent_intent tool call.
+ *  The request it receives is CAPTURED so a test can read the system prompt
+ *  the orchestrator actually built (guidance-text provenance, bait B4). */
+function intentClient(args: unknown): { client: InferenceClient; requests: CompletionRequest[] } {
+  const requests: CompletionRequest[] = [];
   const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+    requests.push(_request);
     yield {
       id: 'resp-seq2',
       choices: [{
@@ -98,7 +102,7 @@ function intentClient(args: unknown): { client: InferenceClient } {
       }],
     };
   });
-  return { client: { complete: vi.fn(), completeStream } };
+  return { client: { complete: vi.fn(), completeStream }, requests };
 }
 
 const sequenceRecord = {
@@ -110,8 +114,9 @@ async function runSequencesTurn(args: unknown, opts: {
   store: ReturnType<typeof mutationTripwire>;
   authorizationService?: { canAccess: ReturnType<typeof vi.fn> };
   ledgerActor?: string | null;
+  surfaces?: { get(id: string): { tabs?: string[] } | null; list(): { id: string }[] } | undefined;
 }) {
-  const { client } = intentClient(args);
+  const { client, requests } = intentClient(args);
   const executeTool = vi.fn(async () => {
     throw new Error('the forced-tool dispatch must NOT execute a tool for agent_intent');
   });
@@ -127,6 +132,7 @@ async function runSequencesTurn(args: unknown, opts: {
       surfaces: loadDefaultSurfacesRegistry(SCHEMA_DIR),
       sequenceActionSchema: { oneOf: [] },
       validateSequenceAction: () => ({ valid: true }),
+      ...(opts.surfaces !== undefined ? { surfaces: opts.surfaces as never } : {}),
       ...(opts.authorizationService ? { authorizationService: opts.authorizationService as never } : {}),
     },
   );
@@ -142,7 +148,7 @@ async function runSequencesTurn(args: unknown, opts: {
       availableVerbs: ['transfer'],
     },
   });
-  return { result, events, executeTool };
+  return { result, events, executeTool, requests };
 }
 
 describe('AgentOrchestrator — sequences workspace_action turns (ONE emit path)', () => {
@@ -267,5 +273,35 @@ describe('AgentOrchestrator — sequences workspace_action turns (ONE emit path)
     expect(result.success).toBe(true);
     expect(result.sequenceProposal).toMatchObject({ operation: 'save_sequence' });
     expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('GUIDANCE (B4): the navigation bullet names the DECLARED registry tabs — data, not literals', async () => {
+    // The bullet the model sees must carry the tab vocabulary read from the
+    // surfaces registry entry (deps.surfaces.get(surface).tabs). Proof: swap
+    // in a registry whose sequences entry declares a DIFFERENT list — the
+    // bullet follows the data. A hardcoded bullet could not do this.
+    const declared = ['Alpha', 'Beta'];
+    const { requests } = await runSequencesTurn(
+      { intent: 'workspace_action', action: { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } } },
+      { store: mutationTripwire(), surfaces: { get: () => ({ tabs: [...declared] }), list: () => [{ id: 'sequences' }] } },
+    );
+    const system = requests[0]?.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(system).toContain('intent=workspace_action');
+    expect(system).toContain('sequence-tab');
+    expect(system).toContain(declared.join(', '));
+    // The bullet does NOT leak the real page's tab names when the registry
+    // declares something else — the list is the registry's, not a literal.
+    expect(system).not.toContain('one of: Editor, Assay');
+  });
+
+  it('GUIDANCE (B4): with NO declared tabs the navigation bullet is absent (no invented vocabulary)', async () => {
+    const { requests } = await runSequencesTurn(
+      { intent: 'workspace_action', action: { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } } },
+      { store: mutationTripwire(), surfaces: { get: () => null, list: () => [{ id: 'sequences' }] } },
+    );
+    const system = requests[0]?.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(system).not.toContain('sequence-tab');
+    // Drafting guidance stays regardless — the relaxation is additive only.
+    expect(system).toContain('intent=sequence_action');
   });
 });
