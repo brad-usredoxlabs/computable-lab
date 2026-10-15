@@ -104,3 +104,15 @@ next checks (cheap gate): (1) g2d log "W29-G2D-FINAL DONE" + EXITED + lock relea
 (2) seq2fix log "lock acquired" then hermes motion; (3) lock pid file holder transitions;
 (4) AI-13 recount (n=252); (5) stack :3093/:5193 200 + active profile still thunderbeast;
 (6) trunk tip (g2d merge moves it).
+
+## POSTSCRIPT (same tick, 13:37 EDT) — g2d finished mid-tick
+- g2d final cycle EXITED code=0 13:26 "W29-G2D-FINAL DONE 7b8fb85f", tree clean; fleet lock
+  passed to SEQ-2 fix1 automatically (pid file SEQ2FIX1-LOCK-ACQUIRED 13:26:34; coder live).
+- ADVC c1 for g2d dispatched 13:36 (OpenRouter, no slot contention): bash 445337
+  (proc_06289db1b3a9), log logs/advc-W29-g2dfinal-c1-l2t1335.log, unique report
+  reviews/advc-W29-g2dfinal-c1-l2t1335.md. Queue item (1) above is now: read THAT verdict ->
+  orch self-verify (three-dot diff vs 2dd35c65, byte-freeze re-proof, battery re-run, tsc
+  0=0) -> merge --no-ff -> RESTART (YAML changed) -> g2e gate re-shoot per the ruling.
+- Live at exit of this tick: SEQ-2 fix1 coder (fleet lock, started 13:26, expect ~40-60 min
+  -> 2x ~14:30), advc reviewer (~20-30 min -> 2x ~14:30). No other workers. Budget: stopped
+  launching at ~13:37 (~66 min, over soft 45 — checkpoint only, nothing killed).
