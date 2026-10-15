@@ -21,6 +21,10 @@ const catalog = {
   records: [
     { recordId: 'SEQ-PUC19', payload: { kind: 'sequence', label: 'pUC19', length: 2686, alphabet: 'iupac_dna' } },
     { recordId: 'SEQ-LAMBDA', payload: { kind: 'sequence', label: 'Lambda control', length: 48502, alphabet: 'iupac_dna' } },
+    // DEFECT-1 (gate 2026-10-15_1255 leg5): a catalog record the Library never
+    // shows and the surface does not declare selectable (surfaces.yaml
+    // selectableKinds). The agent path must refuse it with zero state change.
+    { recordId: 'ANR-000001', payload: { kind: 'analysis-run', label: 'PB-CH-5 review revision', title: 'PB-CH-5 review revision', status: 'queued' } },
   ],
 }
 
@@ -158,6 +162,10 @@ test('sequences right pane is the harness chat pane with a derived focus header'
 test('agent_action frames drive the tab, the selection, and refuse honestly', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
+  // Spy on the authoring fetch the editor fires when a record is selected —
+  // the gate's DEFECT-1 symptom was GET /api/sequences/authoring/ANR-000001
+  // -> 422. A refused focus must fire ZERO of these.
+  const authoringRequests: string[] = []
 
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -174,6 +182,7 @@ test('agent_action frames drive the tab, the selection, and refuse honestly', as
     const authoring = path.match(/^\/api\/sequences\/authoring\/(.+)$/)
     if (authoring) {
       const recordId = decodeURIComponent(authoring[1]!)
+      authoringRequests.push(recordId)
       const record = catalog.records.find(r => r.recordId === recordId)
       await route.fulfill({ json: { sourceId: `REV-${recordId}`, sourceHash: 'hash', form: { sequence: { label: record?.payload.label ?? recordId, residues: 'GATC'.repeat(16), alphabet: 'dna', topology: 'linear' }, modifications: [], vendor: '', oligo: false }, author: 'USR-test' } }); return
     }
@@ -226,6 +235,14 @@ test('agent_action frames drive the tab, the selection, and refuse honestly', as
             emit({ type: 'done', result: { success: true, notes: ['Opened Analysis — nothing was written.'] } })
             close(); return
           }
+          if (prompt === 'focus on record ANR-000001') {
+            // The gate leg5 frame verbatim: the SERVER compiles it fine (the
+            // record exists and is readable) — the DEFECT was the CLIENT
+            // selecting an analysis-run the surface does not declare selectable.
+            emit({ type: 'agent_action', action: { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'ANR-000001', label: 'PB-CH-5 review revision' } } })
+            emit({ type: 'done', result: { success: true, notes: [] } })
+            close(); return
+          }
           emit({ type: 'done', result: { success: true, notes: [] } })
           close()
         } })
@@ -254,6 +271,21 @@ test('agent_action frames drive the tab, the selection, and refuse honestly', as
   await page.getByRole('button', { name: 'Send', exact: true }).click()
   await expect(tabButton('Editor')).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 })
   await expect(header).toContainText('Sequences — Editor · Lambda control')
+
+  // Leg 2b (DEFECT-1, gate 2026-10-15_1255 leg5): a focus frame for a catalog
+  // record whose KIND the surface does not declare selectable (analysis-run,
+  // absent from surfaces.yaml sequences.selectableKinds) changes NOTHING and
+  // names why — no selection, no tab move, no editor fetch (the gate's 422),
+  // and the Library never shows it.
+  const authoringBefore = authoringRequests.length
+  await composer.fill('focus on record ANR-000001')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(log).toContainText('ANR-000001', { timeout: 10_000 })
+  await expect(log).toContainText('analysis-run')
+  await expect(header).toContainText('Sequences — Editor · Lambda control')
+  await expect(tabButton('Editor')).toHaveAttribute('aria-pressed', 'true')
+  expect(authoringRequests.slice(authoringBefore)).toEqual([])
+  await expect(page.getByRole('alert')).toHaveCount(0)
 
   // Leg 3 (negative): an undeclared tab changes NOTHING and says why.
   const pressedBefore = await tabButton('Editor').getAttribute('aria-pressed')
