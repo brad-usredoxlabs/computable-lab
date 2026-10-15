@@ -666,41 +666,51 @@ askWalls:
       - onto (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
       - towards (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
       - toward (?:(?!the )[a-z][a-z-]* )+protocolid(?=\s+[a-z]+-)
-      # CYCLE-6 (4), WIDENED CYCLE-7 (2): the LINKING-WORD HOP (c5 DEFECT-4) —
-      # a linking word between `protocol` and the record id (`protocol named
-      # PRT-<id>`, `protocol called ...`, `protocol for ...`) broke the
-      # immediate-id lookahead in the interposed frame AND in the bare frame (the
-      # pre-existing L4 gap `to protocol named PRT-<id>` is CLOSED here rather
-      # than pinned). The hop is an ENUMERATION (named|called|for) — an
-      # unenumerated linking word stays the disclosed residual R19 (pinned
-      # FREE), the same disclosure class as the verb enumeration R11. The hop
-      # is declared for the `protocol` spelling only; `protocolid <linking>
-      # <id>` is a compound variant inside R19. `the` stays excluded from the
-      # gap, so the article+linking frame (`to the protocol named <id>`) is
-      # the disclosed residual R20 and no pinned article residual flips.
-      # CYCLE-7 (2) widens the id-lookahead from `(?=\s+[a-z]+-)` (UNQUOTED id
+      # CYCLE-6 (4), WIDENED CYCLE-7 (2), WIDENED FINAL CYCLE (1): the
+      # LINKING-WORD HOP (c5 DEFECT-4) — a linking word between `protocol` and
+      # the record id (`protocol named PRT-<id>`, `protocol called ...`,
+      # `protocol for ...`) broke the immediate-id lookahead in the interposed
+      # frame AND in the bare frame (the pre-existing L4 gap `to protocol named
+      # PRT-<id>` is CLOSED here rather than pinned). The hop is an ENUMERATION
+      # (named|called|for) — an unenumerated linking word stays the disclosed
+      # residual R19 (pinned FREE), the same disclosure class as the verb
+      # enumeration R11. The hop is declared for the `protocol` spelling only;
+      # `protocolid <linking> <id>` is a compound variant inside R19. `the`
+      # stays excluded from the gap, so the article+linking frame (`to the
+      # protocol named <id>`) is the disclosed residual R20 and no pinned
+      # article residual flips.
+      # CYCLE-7 (2) widened the id-lookahead from `(?=\s+[a-z]+-)` (UNQUOTED id
       # only — c6 review DEFECT-2: `protocol named "PRT-<id>"` leaked) to the
       # same symmetric separator class as the quoted frames, so a declared
       # linking word + a QUOTED record id walls on the interposed AND bare
       # frames. The bare frame with a quoted id and NO linking word
       # (`to protocol "PRT-4iaey2"`) closes with it: the hop is optional, so the
       # frame is the same declared noun, and no pinned FREE arm depends on it.
-      # The optional `["“‘]?` prefix (c6 review fix direction: "allow the
-      # outer-prefix quote on the quoted-id-token nouns") closes the same frame
-      # when an outer quote opens right after the preposition
-      # (`to ‘protocol "PRT-4iaey2"’`). `the` is still excluded from the gap and
-      # the quote prefix never swallows an article, so R4/R7/R15/R20/R23 stay
+      # FINAL CYCLE (1) (architect ruling
+      # W29-g2d-wall-mechanism-decision-l2t1040, closing c7 DEFECT-1): the
+      # outer-prefix quote widens from the single-char optional class
+      # (`["“‘]?` — at most ONE opening-orientation quote) to a RUN over the
+      # FIVE declared quote chars (`["“‘”’]*` — any number of `" “ ‘ ” ’`,
+      # either orientation), so a STACKED/nested quote frame (`to "‘yet another
+      # protocol “PRT-…”’"`, `to ""yet another protocol PRT-…""`) names a
+      # declared retarget frame. The run stays OPTIONAL: a mandatory `+` would
+      # drop every unquoted frame (`to protocol PRT-…`), flipping pinned WALL
+      # arms to FREE — the ruling's own 0 WALL->FREE bar forbids that. Because
+      # the five chars include the CLOSING orientation, the c7 R24 row
+      # (closing-orientation outer quote) is CLOSED and its two arms are
+      # REPINNED WALL in the suite. `the` is still excluded from the gap and
+      # the quote run never swallows an article, so R4/R7/R15/R20/R23 stay
       # pinned FREE.
-      - to ["“‘]?(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - at ["“‘]?(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - onto ["“‘]?(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - towards ["“‘]?(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - toward ["“‘]?(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - to ["“‘]?protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - at ["“‘]?protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - onto ["“‘]?protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - towards ["“‘]?protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
-      - toward ["“‘]?protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - to ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘”’]*(?:(?!the )[a-z][a-z-]* )+protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - to ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - at ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - onto ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - towards ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
+      - toward ["“‘”’]*protocol(?![a-z-])(?:\s+(?:named|called|for))?(?=[\s"“‘”’]+[a-z]+-)
       # CYCLE-3 (1): the quoted-id frames — the reviewer's leak
       # 'retarget this review to "PRT-4iaey2"' (the quote broke `to prt-`). Same
       # PRT-shape scope as `to prt-`/`at prt-` (a quoted non-PRT id stays the
