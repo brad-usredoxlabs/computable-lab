@@ -480,6 +480,24 @@ describe('SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5)'
     expect(result.sequenceProposal).toBeUndefined();
   });
 
+  it('T5b (B-3 preserved): the SAME repair path still drafts a content-change request — the draft channel is not suppressed', async () => {
+    // Same prose-stall shape, but the latest request changes sequence content:
+    // the nudged turn emits intent=sequence_action and the proposal lands.
+    const { client } = proseThenIntentClient(
+      'I can help with that sequence. What would you like me to change?',
+      {
+        intent: 'sequence_action',
+        sequenceAction: {
+          operation: 'save_sequence',
+          sequence: { label: 'nudge probe', residues: 'GGATGCCATAG', alphabet: 'iupac_dna', topology: 'linear' },
+        },
+      },
+    );
+    const { result, events } = await runSequencesTurnWithClient(client, { store: mutationTripwire() });
+    expect(events.filter((e) => e.type === 'agent_action')).toHaveLength(0);
+    expect(result.sequenceProposal).toMatchObject({ operation: 'save_sequence' });
+  });
+
   it('T3 (D5): sequences status narration names the ACTUAL forced tool (agent_intent), never compile_event_graph_draft', async () => {
     const { events } = await runSequencesTurn(tabActionArgs, { store: mutationTripwire() });
     const statuses = events.filter((e) => e.type === 'status').map((e) => String(e.message ?? ''));
