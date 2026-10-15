@@ -7,6 +7,10 @@
  *    ZERO effects (an invalid action changes nothing and says why);
  *  - a `sequence-record` / resolved `record` target whose id the page's
  *    library shows -> the selectRecord effect;
+ *  - DEFECT-1 (gate 2026-10-15_1255): a catalog record whose KIND the
+ *    surface does not declare selectable (surfaces.yaml `selectableKinds`,
+ *    plumbed as data) is a NAMED refusal with ZERO effects — the agent can
+ *    never drive the surface into a selection a human cannot make;
  *  - the mount adapter calls the page's OWN selectRecord — the canLeave()
  *    guard is INHERITED, never reimplemented — and the agent path SPEAKS
  *    (returns the honest line) when the guard blocked the navigation, where
@@ -30,11 +34,21 @@ import type { AiAgentActionEnvelope } from '../types/ai'
 
 const TABS = ['Editor', 'Assay', 'Analysis', 'Setup', 'Import', 'Knowledge'] as const
 
+// The kinds fixture MIRRORS the surfaces registry declaration
+// (schema/registry/surfaces/surfaces.yaml sequences.selectableKinds) — the
+// handler reads them as data; the provenance test below swaps the list to
+// prove no kind set is baked into the TypeScript.
+const SELECTABLE_KINDS = ['sequence', 'sequence_interval', 'oligo-spec'] as const
+
 function state(overrides: Partial<SequencesAgentActionState> = {}): SequencesAgentActionState {
   return {
     tabs: TABS,
+    selectableKinds: SELECTABLE_KINDS,
     selected: '',
-    visible: [{ recordId: 'SEQ-PUC19' }, { recordId: 'SEQ-LAMBDA' }],
+    visible: [
+      { recordId: 'SEQ-PUC19', kind: 'sequence' },
+      { recordId: 'SEQ-LAMBDA', kind: 'sequence' },
+    ],
     ...overrides,
   }
 }
@@ -104,6 +118,71 @@ describe('applyAgentAction — the pure decision (it decides, it never navigates
     expect(result.reason).toContain('SEQ-NOPE')
   })
 
+  it('DEFECT-1: a catalog record whose KIND the surface does not declare selectable is a NAMED refusal with ZERO effects', () => {
+    // The gate defect (2026-10-15_1255, leg5): "focus on record ANR-000001"
+    // selected an analysis-run the Library never shows and the editor cannot
+    // open (GET /api/sequences/authoring/ANR-000001 -> 422). The surface's
+    // selectableKinds (surfaces.yaml data) must gate the selection.
+    const action = {
+      action: 'focus',
+      surface: 'sequences',
+      target: { kind: 'sequence-record', recordId: 'ANR-000001', label: 'PB-CH-5 review revision' },
+    } as unknown as AiAgentActionEnvelope
+    const result = applyAgentAction(action, state({
+      visible: [
+        { recordId: 'SEQ-PUC19', kind: 'sequence' },
+        { recordId: 'ANR-000001', kind: 'analysis-run' },
+      ],
+    }))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.effects).toEqual({})
+    expect(result.reason).toContain('ANR-000001')
+    expect(result.reason).toContain('analysis-run')
+    // The refusal names the DECLARED kinds it checked against (data, not a guess).
+    expect(result.reason).toContain('sequence')
+    expect(result.reason).toContain('oligo-spec')
+  })
+
+  it('DEFECT-1 provenance: the kind gate follows the DECLARED list — swap the data and the decision follows', () => {
+    // No kind set is baked into the TypeScript: with a registry that declares
+    // ONLY analysis-run selectable, the analysis-run selects and the sequence
+    // is refused. A hardcoded kind list could not flip both ways.
+    const focusAnalysis = {
+      action: 'focus',
+      target: { kind: 'record', id: 'ANR-000001', type: 'analysis-run' },
+    } as unknown as AiAgentActionEnvelope
+    const focusSequence = {
+      action: 'focus',
+      target: { kind: 'sequence-record', recordId: 'SEQ-PUC19' },
+    } as unknown as AiAgentActionEnvelope
+    const swapped = state({
+      selectableKinds: ['analysis-run'],
+      visible: [
+        { recordId: 'SEQ-PUC19', kind: 'sequence' },
+        { recordId: 'ANR-000001', kind: 'analysis-run' },
+      ],
+    })
+    const analysisResult = applyAgentAction(focusAnalysis, swapped)
+    expect(analysisResult.ok).toBe(true)
+    if (!analysisResult.ok) return
+    expect(analysisResult.effects).toEqual({ selectRecordId: 'ANR-000001' })
+    const sequenceResult = applyAgentAction(focusSequence, swapped)
+    expect(sequenceResult.ok).toBe(false)
+  })
+
+  it('DEFECT-1: a surface that declares NO selectable kinds refuses every record focus (fail-closed, named)', () => {
+    const action = {
+      action: 'focus',
+      target: { kind: 'sequence-record', recordId: 'SEQ-PUC19' },
+    } as unknown as AiAgentActionEnvelope
+    const result = applyAgentAction(action, state({ selectableKinds: [] }))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.effects).toEqual({})
+    expect(result.reason).toContain('SEQ-PUC19')
+  })
+
   it('selecting the already-selected record changes nothing (idempotent, with an honest note)', () => {
     const action: AiAgentActionEnvelope = {
       action: 'focus',
@@ -153,7 +232,8 @@ describe('createSequencesAgentActionHandler — the mount adapter (guard INHERIT
     const editorCanLeave = vi.fn(() => overrides.canLeave as boolean | undefined)
     const handler = createSequencesAgentActionHandler({
       tabs: TABS,
-      records: () => [{ recordId: 'SEQ-PUC19' }],
+      selectableKinds: SELECTABLE_KINDS,
+      records: () => [{ recordId: 'SEQ-PUC19', kind: 'sequence' }],
       selected: () => '',
       editorCanLeave,
       setTab,
@@ -208,6 +288,60 @@ describe('createSequencesAgentActionHandler — the mount adapter (guard INHERIT
       target: { kind: 'sequence-tab', tab: 'Assay' },
     } as unknown as AiAgentActionEnvelope)
     expect(setTab).toHaveBeenCalledWith('Assay')
+    expect(diagnostic).toBeUndefined()
+  })
+
+  it('DEFECT-1 mount level: an out-of-kind catalog record calls NEITHER setTab NOR selectRecord and returns the named reason', () => {
+    // The gate leg5 shape: the page hands the handler the FULL catalog (the
+    // Library filter is a rendering concern); the declared selectableKinds are
+    // what gate the agent path. Zero state change + an honest line.
+    const setTab = vi.fn()
+    const selectRecord = vi.fn()
+    const handler = createSequencesAgentActionHandler({
+      tabs: TABS,
+      selectableKinds: SELECTABLE_KINDS,
+      records: () => [
+        { recordId: 'SEQ-PUC19', kind: 'sequence' },
+        { recordId: 'ANR-000001', kind: 'analysis-run' },
+      ],
+      selected: () => '',
+      editorCanLeave: () => true,
+      setTab,
+      selectRecord,
+    })
+    const diagnostic = handler({
+      action: 'focus',
+      surface: 'sequences',
+      target: { kind: 'sequence-record', recordId: 'ANR-000001', label: 'PB-CH-5 review revision' },
+    } as unknown as AiAgentActionEnvelope)
+    expect(setTab).not.toHaveBeenCalled()
+    expect(selectRecord).not.toHaveBeenCalled()
+    expect(typeof diagnostic).toBe('string')
+    expect(diagnostic).toContain('ANR-000001')
+    expect(diagnostic).toMatch(/nothing was changed/i)
+  })
+
+  it('DEFECT-1 mount level: a selectable-kind record still selects (no regression)', () => {
+    const setTab = vi.fn()
+    const selectRecord = vi.fn()
+    const handler = createSequencesAgentActionHandler({
+      tabs: TABS,
+      selectableKinds: SELECTABLE_KINDS,
+      records: () => [
+        { recordId: 'SEQ-PUC19', kind: 'sequence' },
+        { recordId: 'ANR-000001', kind: 'analysis-run' },
+      ],
+      selected: () => '',
+      editorCanLeave: () => true,
+      setTab,
+      selectRecord,
+    })
+    const diagnostic = handler({
+      action: 'focus',
+      surface: 'sequences',
+      target: { kind: 'sequence-record', recordId: 'SEQ-PUC19', label: 'pUC19' },
+    } as unknown as AiAgentActionEnvelope)
+    expect(selectRecord).toHaveBeenCalledWith('SEQ-PUC19')
     expect(diagnostic).toBeUndefined()
   })
 

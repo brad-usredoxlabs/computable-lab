@@ -292,6 +292,12 @@ describe('AgentOrchestrator — sequences workspace_action turns (ONE emit path)
     // The bullet does NOT leak the real page's tab names when the registry
     // declares something else — the list is the registry's, not a literal.
     expect(system).not.toContain('one of: Editor, Assay');
+    // DEFECT-2 gate fix (2026-10-15_1255 leg2): the strengthened bullet pins
+    // the tab-name-is-never-a-term rule (the missable shape that produced the
+    // one UNRESOLVED_TERM emission). Guidance text only — the compiler is
+    // unchanged; this pin proves the strengthened text actually rides the
+    // request the model receives.
+    expect(system).toContain('NEVER a term, record label, or ontology target');
   });
 
   it('GUIDANCE (B4): with NO declared tabs the navigation bullet is absent (no invented vocabulary)', async () => {

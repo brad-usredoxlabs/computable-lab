@@ -6,6 +6,7 @@ import { useAiChat } from '../shared/hooks/useAiChat'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
+import { loadSurfaceRegistry } from '../shared/surfaces/registry'
 import { sequenceApi, requestId, recordRef } from './api'
 import { createSequencesAgentActionHandler } from './applyAgentAction'
 import type { AiAgentActionEnvelope } from '../types/ai'
@@ -38,7 +39,14 @@ export function SequencesPage() {
  // is inherited, never reimplemented). The decision lives in applyAgentAction
  // (target-kind branches only); the tab list is the declared const above,
  // kept in lockstep with the surfaces registry by the server compat test.
- const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,records:()=>records,selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>setTab(t as typeof tabs[number]),selectRecord})(action),[records,selected])
+ // DEFECT-1 gate fix (2026-10-15_1255 leg5): the handler receives the FULL
+ // catalog (the Library filter is a rendering concern), so the surface's
+ // DECLARED selectableKinds — registry data from GET /api/surfaces via the
+ // shared loadSurfaceRegistry cache — gate which records the agent path may
+ // select. No kind literals here; an unloaded/undeclared list is fail-closed.
+ const [selectableKinds,setSelectableKinds]=useState<readonly string[]>([])
+ useEffect(()=>{let cancelled=false;void loadSurfaceRegistry().then(surfaces=>{if(cancelled)return;const entry=surfaces.find(s=>s.id==='sequences');setSelectableKinds(entry?.selectableKinds??[])});return()=>{cancelled=true}},[])
+ const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,selectableKinds,records:()=>records.map(r=>({recordId:r.recordId,kind:r.payload.kind})),selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>setTab(t as typeof tabs[number]),selectRecord})(action),[records,selected,selectableKinds])
  const onSequenceProposal=useCallback((p:Record<string,unknown>,userRequest?:string)=>{
   if(['save_sequence','create_oligo'].includes(String(p.operation))){
    setTab('Editor');setProposal('');editorRef.current?.propose(p,userRequest);sessionStorage.removeItem('cl-sequence-proposal')
