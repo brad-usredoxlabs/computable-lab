@@ -1621,6 +1621,22 @@ describe('review write-wall policy interpreter (W2-89 g2b-1/2)', () => {
     }
   });
 
+  // R25 EXTENDED (final cycle): the widened outer-prefix RUN is declared for
+  // the ten bare linking nouns only (the ruling's :694-703 region). The
+  // `protocolId`-spelling class-A nouns keep their single-char outer prefix,
+  // so a STACKED or CLOSING-orientation outer prefix on the `protocolId`
+  // spelling stays FREE — the same disclosed compound class as R25, now with
+  // its stacked/closing variants pinned visible.
+  it('g2dfin disclosed residuals: stacked/closing outer prefix on the protocolId spelling pinned FREE (R25 extended)', () => {
+    for (const ask of [
+      'forward this review to ““yet another protocolId “PRT-4iaey2””',
+      'forward this review to ""yet another protocolId PRT-4iaey2""',
+      'forward this review to ”yet another protocolId PRT-4iaey2“',
+    ]) {
+      expect(reviewAskWallFor('protocol-review', ask), `disclosed protocolId residual unexpectedly closed: ${ask}`).toBeNull();
+    }
+  });
+
   // FULL-SWEEP PIN (c6 DEFECT discipline): the reviewer's c6 §B fresh-attack
   // arms that already WALL (its §B abbreviations reconstructed to the exact
   // strings measured in-worktree) plus the carried c5 WALL battery — pinned so
