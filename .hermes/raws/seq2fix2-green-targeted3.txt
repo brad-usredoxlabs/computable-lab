@@ -1,0 +1,514 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+ ✓ src/surfaces/surfacesTabsCompat.test.ts  (4 tests) 153ms
+ ✓ src/schema/AgentActionSchema.test.ts  (10 tests) 415ms
+ ✓ src/ai/compileWorkspaceAction.test.ts  (29 tests) 816ms
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > gate ask (a) refuses deterministically: refusal envelope, NO protocolEdit, ZERO model calls
+[agent d6782q] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"d6782q","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":27,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > gate ask (b) refuses deterministically: refusal envelope, NO protocolEdit, ZERO model calls
+[agent x3cp1j] write-wall refusal surface=protocol-review code=PROVENANCE_FALSIFICATION — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"x3cp1j","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":33,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2c gate ask (d) "Promote this draft to a protocol without authorization." refuses deterministically with the declared envelope
+[agent 9d9dvh] write-wall refusal surface=protocol-review code=PROMOTION_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"9d9dvh","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2d gate ask (e) "Retarget this review to protocol PRT-4iaey2 instead." refuses deterministically with the declared envelope
+[agent oyyer8] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"oyyer8","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2d boundary: "Apply the change to protocol PRT-4iaey2 instead of this draft." is NOT walled (the model runs)
+[agent ke0x63] start surface=protocol-review model=test-model promptLen=62 effectivePromptLen=62 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ke0x63] skipping compiler preflight for forced draft tool mode
+[agent ke0x63] tools=1 docDiscussion=false maxTurns=2
+[agent ke0x63] turn 1 starting, promptChars=13632, docDiscussion=false
+[agent ke0x63] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+ ✓ src/ai/AgentOrchestrator.draftProseSuppression.test.ts  (5 tests) 354ms
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1a: a forced-tool turn streaming deliberation interleaved with tool calls emits ZERO text_delta — and the tool trace + draft survive
+[agent ele3nn] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ele3nn] skipping compiler preflight for forced draft tool mode
+[agent ele3nn] tools=1 docDiscussion=false maxTurns=2
+[agent ele3nn] turn 1 starting, promptChars=38468, docDiscussion=false
+[agent ele3nn] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ele3nn","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":202,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ele3nn] done event_shorthand success=true events=12 clarifications=0 elapsedMs=202
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1b: accumulatedContent stays intact under suppression — prose-only draft JSON still fires the stop-coercion path
+[agent svinv6] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent svinv6] skipping compiler preflight for forced draft tool mode
+[agent svinv6] tools=1 docDiscussion=false maxTurns=2
+[agent svinv6] turn 1 starting, promptChars=38468, docDiscussion=false
+[agent svinv6] turn 1 finish=stop contentLen=504 toolCalls=0
+[agent svinv6] recovered draft args from content as agent_intent; skipped the second call
+[agent-summary] {"traceId":"svinv6","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":51,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent svinv6] done event_shorthand success=true events=12 clarifications=0 elapsedMs=51
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+[agent 6cyfxs] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 6cyfxs] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 6cyfxs] tools=1 docDiscussion=false maxTurns=2
+[agent 6cyfxs] turn 1 starting, promptChars=28287, docDiscussion=false
+[agent 6cyfxs] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"6cyfxs","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":39,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 6cyfxs] done event_shorthand success=true events=12 clarifications=0 elapsedMs=39
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3a: the forced-tool success turn still returns the terminal result payload carrying the A5 product copy
+[agent 0njrx6] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 0njrx6] skipping compiler preflight for forced draft tool mode
+[agent 0njrx6] tools=1 docDiscussion=false maxTurns=2
+[agent 0njrx6] turn 1 starting, promptChars=38468, docDiscussion=false
+[agent 0njrx6] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"0njrx6","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":21,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 0njrx6] done event_shorthand success=true events=12 clarifications=0 elapsedMs=21
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+[agent dz43p4] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent dz43p4] skipping compiler preflight for forced draft tool mode
+[agent dz43p4] tools=1 docDiscussion=false maxTurns=3
+[agent dz43p4] turn 1 starting, promptChars=38468, docDiscussion=false
+[agent dz43p4] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent dz43p4] turn 2 starting, promptChars=39396, docDiscussion=false
+[agent dz43p4] turn 2 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"dz43p4","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":16,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent dz43p4] done event_graph_refusal success=false events=0 elapsedMs=16
+
+stderr | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+[agent dz43p4] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent dz43p4] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+ ✓ src/ai/AgentOrchestrator.test.ts  (11 tests) 385ms
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > includes prior user and assistant turns before the current prompt
+[agent aanfj8] start surface=default model=test-model promptLen=18 effectivePromptLen=18 historyLen=2 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent aanfj8] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent aanfj8] tools=1 docDiscussion=false maxTurns=2
+[agent aanfj8] turn 1 starting, promptChars=28277, docDiscussion=false
+[agent aanfj8] turn 1 finish=stop contentLen=24 toolCalls=0
+[agent-summary] {"traceId":"aanfj8","surface":"default","model":"test-model","success":true,"elapsedMs":167,"turns":[{"turn":1,"durationMs":2,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent aanfj8] done success=true elapsedMs=167 turns=1 toolCalls=0 events=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > forces the event-editor fallback LLM call to use compile_event_graph_draft
+[agent 3z3bme] start surface=default model=test-model promptLen=20 effectivePromptLen=20 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3z3bme] skipping compiler preflight for forced draft tool mode
+[agent 3z3bme] tools=1 docDiscussion=false maxTurns=2
+[agent 3z3bme] turn 1 starting, promptChars=38387, docDiscussion=false
+[agent 3z3bme] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [compile_event_graph_draft]
+[agent-summary] {"traceId":"3z3bme","surface":"default","model":"test-model","success":true,"elapsedMs":27,"turns":[{"turn":1,"durationMs":4,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 3z3bme] done success=true via compile_event_graph_draft turns=1 events=0 elapsedMs=27
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > coerces compiler draft JSON when the model ignores forced tool_choice
+[agent oog4gb] start surface=default model=test-model promptLen=32 effectivePromptLen=32 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent oog4gb] skipping compiler preflight for forced draft tool mode
+[agent oog4gb] tools=1 docDiscussion=false maxTurns=2
+[agent oog4gb] turn 1 starting, promptChars=38399, docDiscussion=false
+[agent oog4gb] turn 1 finish=stop contentLen=0 toolCalls=0
+[agent-summary] {"traceId":"oog4gb","surface":"default","model":"test-model","success":true,"elapsedMs":26,"turns":[{"turn":1,"durationMs":3,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":10,"completionTokens":5,"totalTokens":15},"resolvedMentions":0,"bypass":null,"error":"no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly."}
+[agent oog4gb] done success=true via agent_intent turns=1 events=0 elapsedMs=26
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > coerces compiler draft JSON when the model ignores forced tool_choice
+[agent oog4gb] model ignored forced tool call; coerced JSON args after stop as agent_intent (intent inferred) contentPreview="<empty>"
+[agent oog4gb] no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > keeps structured material refs when compiler preflight strips grounded materials
+[agent vzz3jb] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent vzz3jb] skipping compiler preflight for forced draft tool mode
+[agent vzz3jb] tools=1 docDiscussion=false maxTurns=2
+[agent vzz3jb] turn 1 starting, promptChars=38390, docDiscussion=false
+[agent vzz3jb] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [compile_event_graph_draft]
+[agent-summary] {"traceId":"vzz3jb","surface":"default","model":"test-model","success":true,"elapsedMs":31,"turns":[{"turn":1,"durationMs":9,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent vzz3jb] done success=true via compile_event_graph_draft turns=1 events=2 elapsedMs=31
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > keeps structured material refs when compiler preflight strips grounded materials
+[agent vzz3jb] I read the material data from the `materials` field the model invented (material mesh:D056945, concentration {"value":90,"unit":"percent"}) and applied it to the event’s own details.
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics exactly once on fall-through with at most 6 diagnostics
+[agent rp19vg] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent rp19vg] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent rp19vg] tools=1 docDiscussion=false maxTurns=2
+[agent rp19vg] turn 1 starting, promptChars=28201, docDiscussion=false
+[agent-summary] {"traceId":"rp19vg","surface":"default","model":"test-model","success":false,"elapsedMs":16,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics exactly once on fall-through with at most 6 diagnostics
+[agent rp19vg] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics with empty array when all diagnostics are info
+[agent 3283dl] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 3283dl] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 3283dl] tools=1 docDiscussion=false maxTurns=2
+[agent 3283dl] turn 1 starting, promptChars=28201, docDiscussion=false
+[agent-summary] {"traceId":"3283dl","surface":"default","model":"test-model","success":false,"elapsedMs":16,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > emits pipeline_diagnostics with empty array when all diagnostics are info
+[agent 3283dl] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > does NOT emit pipeline_diagnostics when pipeline succeeds
+[agent otbyj8] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"otbyj8","surface":"default","model":"test-model","success":true,"elapsedMs":15,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent otbyj8] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > does not short-circuit a complete compiler result with no artifacts
+[agent 935uqr] start surface=default model=test-model promptLen=29 effectivePromptLen=29 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 935uqr] outcome=complete, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 935uqr] tools=1 docDiscussion=false maxTurns=2
+[agent 935uqr] turn 1 starting, promptChars=28215, docDiscussion=false
+[agent 935uqr] turn 1 finish=stop contentLen=34 toolCalls=0
+[agent-summary] {"traceId":"935uqr","surface":"default","model":"test-model","success":true,"elapsedMs":14,"turns":[{"turn":1,"durationMs":1,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 935uqr] done success=true elapsedMs=14 turns=1 toolCalls=0 events=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > handles undefined diagnostics gracefully
+[agent 5yepvx] start surface=default model=test-model promptLen=15 effectivePromptLen=15 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 5yepvx] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent 5yepvx] tools=1 docDiscussion=false maxTurns=2
+[agent 5yepvx] turn 1 starting, promptChars=28201, docDiscussion=false
+[agent-summary] {"traceId":"5yepvx","surface":"default","model":"test-model","success":false,"elapsedMs":19,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Inference error on turn 1: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')"}
+
+stderr | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > pipeline_diagnostics emit (spec-020) > handles undefined diagnostics gracefully
+[agent 5yepvx] turn 1 inference error: Cannot read properties of undefined (reading 'Symbol(Symbol.asyncIterator)')
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > assurance CONFIRM routing (resolve-95%-or-ask) > holds events and surfaces a structured material clarification when assurance is CONFIRM
+[agent dmj84e] start surface=default model=test-model promptLen=25 effectivePromptLen=25 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"dmj84e","surface":"default","model":"test-model","success":true,"elapsedMs":11,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent dmj84e] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+stdout | src/ai/AgentOrchestrator.test.ts > createAgentOrchestrator > assurance CONFIRM routing (resolve-95%-or-ask) > still returns events when assurance is RESOLVE
+[agent smsg2r] start surface=default model=test-model promptLen=31 effectivePromptLen=31 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent-summary] {"traceId":"smsg2r","surface":"default","model":"test-model","success":true,"elapsedMs":11,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":"compiler"}
+[agent smsg2r] chatbot-compile pipeline bypass: success, events=1, gaps=0
+
+ ✓ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts  (13 tests) 720ms
+ ✓ src/ai/AgentOrchestrator.workspaceAction.test.ts  (10 tests) 924ms
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2d boundary: "Apply the change to protocol PRT-4iaey2 instead of this draft." is NOT walled (the model runs)
+[agent-summary] {"traceId":"ke0x63","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":410,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ke0x63] done protocol_edit success=true ops=1 elapsedMs=410
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix2 DEFECT-1: "Retarget this review to a different protocolId." refuses deterministically with the declared envelope
+[agent vt0eg3] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"vt0eg3","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":39,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix2 DEFECT-2: "point this review at PRT-4iaey2" refuses deterministically with the declared envelope
+[agent qdsryb] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"qdsryb","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":12,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix3 DEFECT-1: "reassign this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent psmgit] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"psmgit","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix3 DEFECT-1: "target this review to protocol PRT-4iaey2 instead" refuses deterministically with the declared envelope
+[agent 30m4re] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"30m4re","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":7,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix3 DEFECT-2 boundary: "move the draft to protocol format" is NOT walled (the model runs)
+[agent t4wjwg] start surface=protocol-review model=test-model promptLen=33 effectivePromptLen=33 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent t4wjwg] skipping compiler preflight for forced draft tool mode
+[agent t4wjwg] tools=1 docDiscussion=false maxTurns=2
+[agent t4wjwg] turn 1 starting, promptChars=13603, docDiscussion=false
+[agent t4wjwg] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"t4wjwg","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":31,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent t4wjwg] done protocol_edit success=true ops=1 elapsedMs=31
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix2 DEFECT-4 boundary: "switch the view to the protocol tab" is NOT walled (the model runs)
+[agent zg1zap] start surface=protocol-review model=test-model promptLen=35 effectivePromptLen=35 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent zg1zap] skipping compiler preflight for forced draft tool mode
+[agent zg1zap] tools=1 docDiscussion=false maxTurns=2
+[agent zg1zap] turn 1 starting, promptChars=13605, docDiscussion=false
+[agent zg1zap] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"zg1zap","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent zg1zap] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1: "forward this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent 7e9f7i] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"7e9f7i","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":7,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1: "transfer this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent o9o6r7] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"o9o6r7","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":9,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1: "assign this review to protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent 2aapsw] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"2aapsw","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1 boundary: "transfer the sample to the incubator" is NOT walled (the model runs)
+[agent t2it2m] start surface=protocol-review model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent t2it2m] skipping compiler preflight for forced draft tool mode
+[agent t2it2m] tools=1 docDiscussion=false maxTurns=2
+[agent t2it2m] turn 1 starting, promptChars=13606, docDiscussion=false
+[agent t2it2m] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"t2it2m","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":20,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent t2it2m] done protocol_edit success=true ops=1 elapsedMs=20
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1 boundary: "assign this step to bench 2" is NOT walled (the model runs)
+[agent 54tzx1] start surface=protocol-review model=test-model promptLen=27 effectivePromptLen=27 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 54tzx1] skipping compiler preflight for forced draft tool mode
+[agent 54tzx1] tools=1 docDiscussion=false maxTurns=2
+[agent 54tzx1] turn 1 starting, promptChars=13597, docDiscussion=false
+[agent 54tzx1] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"54tzx1","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":25,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 54tzx1] done protocol_edit success=true ops=1 elapsedMs=25
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix4 DEFECT-1 boundary: "forward the note to the review tab" is NOT walled (the model runs)
+[agent 2qehs8] start surface=protocol-review model=test-model promptLen=34 effectivePromptLen=34 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 2qehs8] skipping compiler preflight for forced draft tool mode
+[agent 2qehs8] tools=1 docDiscussion=false maxTurns=2
+[agent 2qehs8] turn 1 starting, promptChars=13604, docDiscussion=false
+[agent 2qehs8] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"2qehs8","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 2qehs8] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix5 DEFECT-1: "forward this review to yet another protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent ap61vt] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"ap61vt","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix5 DEFECT-1: "transfer this review to one more protocol PRT-4iaey2" refuses deterministically with the declared envelope
+[agent 3i454c] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"3i454c","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":5,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 DEFECT-1: quoted towards frame "forward this review towards \"yet another protocol PRT-4iaey2\"" refuses deterministically
+[agent xgfns6] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"xgfns6","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 DEFECT-2: hyphenated qualifier "forward this review to yet-another protocol PRT-4iaey2" refuses deterministically
+[agent j8ybz4] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"j8ybz4","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 DEFECT-3: smart-quote frame "forward this review to yet another protocol \u201cPRT-4iaey2\u201d" refuses deterministically
+[agent 8l26mw] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"8l26mw","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":26,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 DEFECT-4: linking-word frame "forward this review to yet another protocol named PRT-4iaey2" refuses deterministically
+[agent jmzaqs] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"jmzaqs","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":7,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 boundary: "compare this draft to \"yet another protocol PRT-4iaey2\"" is NOT walled (the model runs)
+[agent j7hmin] start surface=protocol-review model=test-model promptLen=55 effectivePromptLen=55 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent j7hmin] skipping compiler preflight for forced draft tool mode
+[agent j7hmin] tools=1 docDiscussion=false maxTurns=2
+[agent j7hmin] turn 1 starting, promptChars=13625, docDiscussion=false
+[agent j7hmin] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"j7hmin","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":19,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent j7hmin] done protocol_edit success=true ops=1 elapsedMs=19
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix6 boundary: "retarget this review towards the protocol PRT-4iaey2" (R4) is NOT walled (the model runs)
+[agent nprf1v] start surface=protocol-review model=test-model promptLen=52 effectivePromptLen=52 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent nprf1v] skipping compiler preflight for forced draft tool mode
+[agent nprf1v] tools=1 docDiscussion=false maxTurns=2
+[agent nprf1v] turn 1 starting, promptChars=13622, docDiscussion=false
+[agent nprf1v] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"nprf1v","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":65,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent nprf1v] done protocol_edit success=true ops=1 elapsedMs=65
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix7 DEFECT-1: nested-quote frame "forward this review to \\"yet another protocol \u2018PRT-4iaey2\u2019\\"" refuses deterministically
+[agent g1lhqp] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"g1lhqp","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix7 DEFECT-2: linked+quoted frame "forward this review to yet another protocol named \\"PRT-4iaey2\\"" refuses deterministically
+[agent dnzm69] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"dnzm69","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":6,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix7 boundary: "compare this draft to \\"yet another protocol \u2018PRT-4iaey2\u2019\\"" is NOT walled (the model runs)
+[agent jstckh] start surface=protocol-review model=test-model promptLen=57 effectivePromptLen=57 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent jstckh] skipping compiler preflight for forced draft tool mode
+[agent jstckh] tools=1 docDiscussion=false maxTurns=2
+[agent jstckh] turn 1 starting, promptChars=13627, docDiscussion=false
+[agent jstckh] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"jstckh","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent jstckh] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix7 boundary: "forward this review to the protocol \u201cPRT-4iaey2\u201d" (R23) is NOT walled (the model runs)
+[agent tk4bzj] start surface=protocol-review model=test-model promptLen=48 effectivePromptLen=48 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent tk4bzj] skipping compiler preflight for forced draft tool mode
+[agent tk4bzj] tools=1 docDiscussion=false maxTurns=2
+[agent tk4bzj] turn 1 starting, promptChars=13618, docDiscussion=false
+[agent tk4bzj] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"tk4bzj","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":27,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent tk4bzj] done protocol_edit success=true ops=1 elapsedMs=27
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix5 DEFECT-1: "forward this review to yet another protocolId" refuses deterministically with the declared envelope
+[agent rwjvoj] write-wall refusal surface=protocol-review code=RETARGET_NOT_ON_THIS_SURFACE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"rwjvoj","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":5,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix5 DEFECT-1 boundary: "compare this draft to yet another protocol PRT-4iaey2" is NOT walled (the model runs)
+[agent ipi09e] start surface=protocol-review model=test-model promptLen=53 effectivePromptLen=53 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ipi09e] skipping compiler preflight for forced draft tool mode
+[agent ipi09e] tools=1 docDiscussion=false maxTurns=2
+[agent ipi09e] turn 1 starting, promptChars=13623, docDiscussion=false
+[agent ipi09e] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ipi09e","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":16,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ipi09e] done protocol_edit success=true ops=1 elapsedMs=16
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfix5 DEFECT-1 boundary: "forward the sample to yet another bench" is NOT walled (the model runs)
+[agent dx2spt] start surface=protocol-review model=test-model promptLen=39 effectivePromptLen=39 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent dx2spt] skipping compiler preflight for forced draft tool mode
+[agent dx2spt] tools=1 docDiscussion=false maxTurns=2
+[agent dx2spt] turn 1 starting, promptChars=13609, docDiscussion=false
+[agent dx2spt] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"dx2spt","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":20,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent dx2spt] done protocol_edit success=true ops=1 elapsedMs=20
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > a legitimate MEANT-only ask is NOT walled — the model runs and the proposal rides as today
+[agent 240hbo] start surface=protocol-review model=test-model promptLen=35 effectivePromptLen=35 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 240hbo] skipping compiler preflight for forced draft tool mode
+[agent 240hbo] tools=1 docDiscussion=false maxTurns=2
+[agent 240hbo] turn 1 starting, promptChars=13605, docDiscussion=false
+[agent 240hbo] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"240hbo","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":21,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 240hbo] done protocol_edit success=true ops=1 elapsedMs=21
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > ops wall (defense-in-depth): a protocol_edit op carrying provenance is refused with the honest wording, no protocolEdit emitted
+[agent ey69wv] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ey69wv] skipping compiler preflight for forced draft tool mode
+[agent ey69wv] tools=1 docDiscussion=false maxTurns=2
+[agent ey69wv] turn 1 starting, promptChars=13598, docDiscussion=false
+[agent ey69wv] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"ey69wv","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":28,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ey69wv] done protocol_edit write-wall refusal code=PROVENANCE_FALSIFICATION ops=1 elapsedMs=28
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > the refusal turn is user-facing: the refusal envelope rides the done result with honest wording (no raw reasoning, no "(no response)")
+[agent w5a1qd] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"w5a1qd","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":16,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > DEFECT-2: an honest clarifying question about the wall is NOT refused (the model runs)
+[agent 62owek] start surface=protocol-review model=test-model promptLen=50 effectivePromptLen=50 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 62owek] skipping compiler preflight for forced draft tool mode
+[agent 62owek] tools=1 docDiscussion=false maxTurns=2
+[agent 62owek] turn 1 starting, promptChars=13620, docDiscussion=false
+[agent 62owek] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"62owek","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":21,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 62owek] done protocol_edit success=true ops=1 elapsedMs=21
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > DEFECT-3(c2): a wall-crossing clarification answer is refused before the model
+[agent 6pxcbp] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"6pxcbp","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":10,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > a benign clarification answer is NOT walled (option labels pass through)
+[agent za611p] start surface=protocol-review model=test-model promptLen=23 effectivePromptLen=149 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent za611p] skipping compiler preflight for forced draft tool mode
+[agent za611p] tools=1 docDiscussion=false maxTurns=2
+[agent za611p] turn 1 starting, promptChars=13593, docDiscussion=false
+[agent za611p] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"za611p","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent za611p] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > DEFECT-2(c3): a gap>3 leading-verb answer smuggled via clarificationAnswers is refused before the model
+[agent p83k0v] write-wall refusal surface=protocol-review code=SAID_IMMUTABLE — turn refused before the model (zero inference, zero writes)
+[agent-summary] {"traceId":"p83k0v","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":25,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > DEFECT-2(c3) boundary: honest multi-field clarification answers stay unwalled
+[agent hni22x] start surface=protocol-review model=test-model promptLen=23 effectivePromptLen=129 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=1
+[agent hni22x] skipping compiler preflight for forced draft tool mode
+[agent hni22x] tools=1 docDiscussion=false maxTurns=2
+[agent hni22x] turn 1 starting, promptChars=14005, docDiscussion=false
+[agent hni22x] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"hni22x","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":1,"bypass":null}
+[agent hni22x] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin gate: a protocol_edit whose protocolId names a FOREIGN PRT is refused before the envelope (no protocolEdit, zero writes)
+[agent 7z9llb] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 7z9llb] skipping compiler preflight for forced draft tool mode
+[agent 7z9llb] tools=1 docDiscussion=false maxTurns=2
+[agent 7z9llb] turn 1 starting, promptChars=43605, docDiscussion=false
+[agent 7z9llb] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"7z9llb","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":29,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 7z9llb] done protocol_edit retarget-gate refusal code=ATTACHED_PROTOCOL_MISMATCH ops=1 elapsedMs=29
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin gate: a focus on a FOREIGN PRT record is refused with the envelope and ZERO agent_action emission
+[agent zs3pi6] start surface=protocol-review model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent zs3pi6] skipping compiler preflight for forced draft tool mode
+[agent zs3pi6] tools=1 docDiscussion=false maxTurns=2
+[agent zs3pi6] turn 1 starting, promptChars=43603, docDiscussion=false
+[agent zs3pi6] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin gate: a focus on a FOREIGN PRT record is refused with the envelope and ZERO agent_action emission
+[agent-summary] {"traceId":"zs3pi6","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":46,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent zs3pi6] done workspace_action retarget-gate refusal code=ATTACHED_PROTOCOL_MISMATCH action=focus target=PRT-foreign-9999 elapsedMs=46
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin gate: a focus on a FOREIGN protocol-step target is refused with ZERO agent_action emission
+[agent i4vaf7] start surface=protocol-review model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent i4vaf7] skipping compiler preflight for forced draft tool mode
+[agent i4vaf7] tools=1 docDiscussion=false maxTurns=2
+[agent i4vaf7] turn 1 starting, promptChars=43603, docDiscussion=false
+[agent i4vaf7] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"i4vaf7","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":20,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent i4vaf7] done workspace_action retarget-gate refusal code=ATTACHED_PROTOCOL_MISMATCH action=focus target=PRT-foreign-9999 elapsedMs=20
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin gate: an open-surface scoped to a FOREIGN PRT is refused with ZERO agent_action emission
+[agent 35m3pf] start surface=protocol-review model=test-model promptLen=26 effectivePromptLen=26 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 35m3pf] skipping compiler preflight for forced draft tool mode
+[agent 35m3pf] tools=1 docDiscussion=false maxTurns=2
+[agent 35m3pf] turn 1 starting, promptChars=43603, docDiscussion=false
+[agent 35m3pf] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"35m3pf","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":14,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 35m3pf] done workspace_action retarget-gate refusal code=ATTACHED_PROTOCOL_MISMATCH action=open-surface target=PRT-foreign-9999 elapsedMs=14
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: protocolId == attached passes (the override stays legal)
+[agent r6fjpo] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent r6fjpo] skipping compiler preflight for forced draft tool mode
+[agent r6fjpo] tools=1 docDiscussion=false maxTurns=2
+[agent r6fjpo] turn 1 starting, promptChars=43605, docDiscussion=false
+[agent r6fjpo] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"r6fjpo","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":22,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent r6fjpo] done protocol_edit success=true ops=1 elapsedMs=22
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: NO protocolId override passes (attached-scope binding unchanged)
+[agent oztsp9] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent oztsp9] skipping compiler preflight for forced draft tool mode
+[agent oztsp9] tools=1 docDiscussion=false maxTurns=2
+[agent oztsp9] turn 1 starting, promptChars=43605, docDiscussion=false
+[agent oztsp9] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"oztsp9","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":19,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent oztsp9] done protocol_edit success=true ops=1 elapsedMs=19
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: a non-PRT-shaped override (a draft id) passes (pattern-gated, not blanket)
+[agent isetd3] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent isetd3] skipping compiler preflight for forced draft tool mode
+[agent isetd3] tools=1 docDiscussion=false maxTurns=2
+[agent isetd3] turn 1 starting, promptChars=43605, docDiscussion=false
+[agent isetd3] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"isetd3","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":23,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent isetd3] done protocol_edit success=true ops=1 elapsedMs=23
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: focus on a NON-PRT target (a material record) still emits agent_action
+[agent 42h72c] start surface=protocol-review model=test-model promptLen=17 effectivePromptLen=17 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 42h72c] skipping compiler preflight for forced draft tool mode
+[agent 42h72c] tools=1 docDiscussion=false maxTurns=2
+[agent 42h72c] turn 1 starting, promptChars=43594, docDiscussion=false
+[agent 42h72c] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"42h72c","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":14,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 42h72c] done workspace_action compiled ok action=focus target=MAT-000001 elapsedMs=14
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: focus on the ATTACHED protocol's own step still emits agent_action
+[agent s2twrt] start surface=protocol-review model=test-model promptLen=21 effectivePromptLen=21 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent s2twrt] skipping compiler preflight for forced draft tool mode
+[agent s2twrt] tools=1 docDiscussion=false maxTurns=2
+[agent s2twrt] turn 1 starting, promptChars=43598, docDiscussion=false
+[agent s2twrt] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"s2twrt","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":13,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent s2twrt] done workspace_action compiled ok action=focus target=step-wash elapsedMs=13
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: with NO attached protocol the gate is OFF (foreign override passes)
+[agent i8b8yx] start surface=protocol-review model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent i8b8yx] skipping compiler preflight for forced draft tool mode
+[agent i8b8yx] tools=1 docDiscussion=false maxTurns=2
+[agent i8b8yx] turn 1 starting, promptChars=13598, docDiscussion=false
+[agent i8b8yx] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"i8b8yx","surface":"protocol-review","model":"test-model","success":true,"elapsedMs":18,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent i8b8yx] done protocol_edit success=true ops=1 elapsedMs=18
+
+stdout | src/ai/AgentOrchestrator.reviewWriteWall.test.ts > protocol-review write-wall refusal (W2-89 g2b-1/2) > g2dfin honest pin: surfaces outside `surfaces` are unaffected by the gate
+[agent 6d0vvi] start surface=event-editor model=test-model promptLen=28 effectivePromptLen=28 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 6d0vvi] skipping compiler preflight for forced draft tool mode
+[agent 6d0vvi] tools=1 docDiscussion=false maxTurns=2
+[agent 6d0vvi] turn 1 starting, promptChars=43605, docDiscussion=false
+[agent 6d0vvi] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"6d0vvi","surface":"event-editor","model":"test-model","success":true,"elapsedMs":21,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 6d0vvi] done protocol_edit success=true ops=1 elapsedMs=21
+
+ ✓ src/ai/AgentOrchestrator.reviewWriteWall.test.ts  (51 tests) 1678ms
+
+ Test Files  8 passed (8)
+      Tests  133 passed (133)
+   Start at  18:14:51
+   Duration  5.56s (transform 2.16s, setup 1ms, collect 12.07s, tests 5.45s, environment 3ms, prepare 1.13s)
+

@@ -1,0 +1,178 @@
+SHA BEFORE: {
+ "SEQ-827c4175a52a4ef65916eca5": {
+  "status": 200,
+  "contentSha": "2e2eedba582b0e11eeec066bc9d792255a041c52",
+  "raw": "{\"record\":{\"recordId\":\"SEQ-827c4175a52a4ef65916eca5\",\"schemaId\":\"https://computable-lab.com/schema/bio/sequence.schema.y"
+ },
+ "ANR-000001": {
+  "status": 200,
+  "contentSha": "23f80fa59fef876c510f34c443dc46be72e2cb4c",
+  "raw": "{\"record\":{\"recordId\":\"ANR-000001\",\"schemaId\":\"https://computable-lab.com/schema/computable-lab/analysis-run.schema.yaml"
+ }
+}
+
+=== LEG A: empty history, tab request (http 200, 188759ms, 77 events) ===
+event types: status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,tool_call,tool_result,status,status,status,status,status,status,status,status,status,tool_call,agent_action,tool_result,done
+statuses:
+  - Processing sequences request...
+  - Skipping compiler preflight; asking AI to call agent_intent directly…
+  - Turn 1...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - AI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 24s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 27s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 30s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 33s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 36s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 39s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 42s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 45s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 48s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 51s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 54s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 57s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 60s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 63s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 66s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 69s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 72s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 75s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 78s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 81s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 84s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 87s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 90s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 93s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 96s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 99s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 102s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 105s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 108s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 111s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 114s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 117s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 120s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 123s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 126s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 129s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 132s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 135s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 138s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 141s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 144s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 147s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 150s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 153s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 156s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 159s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 162s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 165s elapsed, waiting for first model chunk.
+  - AI stream resumed from thunderbeast.
+  - Drafting on thunderbeast…
+  - Drafting on thunderbeast…
+  - Turn 2...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - AI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.
+  - AI stream resumed from thunderbeast.
+  - Drafting on thunderbeast…
+  - Drafting on thunderbeast…
+agent_action frames: [{"action":"open-surface","target":{"kind":"sequence-tab","tab":"Analysis"},"surface":"sequences"}]
+diagnostics: []
+done result: {"success":true,"notes":["Action sent — see the workspace."],"sequenceProposal":null,"error":null}
+
+=== LEG B: proposal-heavy history, same tab request (http 200, 170587ms, 71 events) ===
+event types: status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,tool_call,agent_action,tool_result,done
+statuses:
+  - Processing sequences request...
+  - Skipping compiler preflight; asking AI to call agent_intent directly…
+  - Turn 1...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - AI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 24s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 27s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 30s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 33s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 36s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 39s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 42s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 45s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 48s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 51s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 54s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 57s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 60s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 63s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 66s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 69s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 72s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 75s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 78s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 81s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 84s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 87s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 90s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 93s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 96s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 99s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 102s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 105s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 108s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 111s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 114s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 117s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 120s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 123s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 126s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 129s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 132s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 135s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 138s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 141s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 144s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 147s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 150s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 153s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 156s elapsed, waiting for first model chunk.
+  - AI stream resumed from thunderbeast.
+  - Requesting the structured sequence emission…
+  - Turn 2...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - Requesting the structured sequence emission…
+  - Turn 3...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - Drafting on thunderbeast…
+  - AI drafting on thunderbeast… 6s elapsed, waiting for next model chunk.
+  - AI stream resumed from thunderbeast.
+  - Drafting on thunderbeast…
+agent_action frames: [{"action":"open-surface","target":{"kind":"sequence-tab","tab":"Analysis"},"surface":"sequences"}]
+diagnostics: []
+done result: {"success":true,"notes":["Action sent — see the workspace."],"sequenceProposal":null,"error":null}
+
+SHA AFTER: {
+ "SEQ-827c4175a52a4ef65916eca5": {
+  "status": 200,
+  "contentSha": "2e2eedba582b0e11eeec066bc9d792255a041c52",
+  "raw": "{\"record\":{\"recordId\":\"SEQ-827c4175a52a4ef65916eca5\",\"schemaId\":\"https://computable-lab.com/schema/bio/sequence.schema.y"
+ },
+ "ANR-000001": {
+  "status": 200,
+  "contentSha": "23f80fa59fef876c510f34c443dc46be72e2cb4c",
+  "raw": "{\"record\":{\"recordId\":\"ANR-000001\",\"schemaId\":\"https://computable-lab.com/schema/computable-lab/analysis-run.schema.yaml"
+ }
+}
+PROBE EXIT 0

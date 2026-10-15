@@ -1,0 +1,337 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+ ✓ src/foundry/FoundryCoderPatch.test.ts  (13 tests) 13ms
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 195 schemas
+Added 195 schemas to validator
+Loaded 28 predicates from registry
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 195 schemas
+Added 195 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 29 lint specs, 84 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w25-t1-promotion-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w25-t1-promotion-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 29 lint specs, 84 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w26-t4-e2e-data-swap
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w26-t4-e2e-data-swap
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w25-t1-promotion-data/worktrees/main bare=/tmp/cl-w25-t1-promotion-data/repos/main.git
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w26-t4-e2e-data-swap/worktrees/main bare=/tmp/cl-w26-t4-e2e-data-swap/repos/main.git
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 127 records
+Index built with 127 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 127 records
+Index built with 127 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 150 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 150 records
+
+(node:1179819) [FSTDEP022] FastifyWarning: The router options for maxParamLength property access is deprecated. Please use "options.routerOptions" instead for accessing router options. The router options will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1179819) [FSTDEP022] FastifyWarning: The router options for maxParamLength property access is deprecated. Please use "options.routerOptions" instead for accessing router options. The router options will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+AI inference endpoint probe failed; initializing AI runtime anyway so request-time calls can retry: fetch failed (http://127.0.0.1:1/v1/models) — cause: bad port
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+AI agent initialized (model: profile-model, tools: 184)
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Library index built
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Library index built
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 195 schemas
+Added 195 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 29 lint specs, 84 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w26-t4-e2e-data-fallback
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w26-t4-e2e-data-fallback
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w26-t4-e2e-data-fallback/worktrees/main bare=/tmp/cl-w26-t4-e2e-data-fallback/repos/main.git
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 127 records
+Index built with 127 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+JSON-LD index seeded with 0 records
+
+ ✓ src/integration/W25DraftLifecyclePromotion.test.ts  (5 tests) 29607ms
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 150 records
+
+(node:1179819) [FSTDEP022] FastifyWarning: The router options for maxParamLength property access is deprecated. Please use "options.routerOptions" instead for accessing router options. The router options will be removed in `fastify@6`.
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+AI agent initialized (model: profile-model-b, tools: 184)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Library index built
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts > W2-6 T4: config-only model swap + store-level E2E (A4/A5/A2) > health lintRules count is recorded (boot A)
+W26_HEALTH_LINTRULES 84
+
+ ✓ src/integration/Wave2SemanticPassE2E.test.ts  (7 tests) 45024ms
+
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+   Start at  17:55:43
+   Duration  55.32s (transform 6.98s, setup 0ms, collect 20.52s, tests 74.64s, environment 1ms, prepare 556ms)
+
