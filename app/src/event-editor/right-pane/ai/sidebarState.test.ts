@@ -165,7 +165,11 @@ describe('sidebarState', () => {
     }
   })
 
-  it('change-question updates activeQuestionId', () => {
+  // SH-QA-2: the old leg was a pure highlight move — an already-answered card
+  // re-rendered identically and the click did nothing visible (dead chrome).
+  // The leg now REOPENS the question: activeQuestionId moves AND the answer
+  // key is removed so the card falls back to its picker/parameter branch.
+  it('change-question updates activeQuestionId (unanswered question: answers untouched)', () => {
     const q2 = { ...mockQuestion, id: 'q2' }
     const clarifying = {
       mode: 'clarifying' as const,
@@ -178,6 +182,55 @@ describe('sidebarState', () => {
     if (state.mode === 'clarifying') {
       expect(state.activeQuestionId).toBe('q2')
     }
+  })
+
+  // DC2 (SH-QA-2 requirement (2)): Change on an ANSWERED question is a reopen —
+  // the answer KEY is gone (not undefined) so the card re-renders editable.
+  it('DC2: change-question on an answered question REOPENS it — the answer key is removed, activeQuestionId set', () => {
+    const q2 = { ...mockQuestion, id: 'q2' }
+    const clarifying = {
+      mode: 'clarifying' as const,
+      draftId: 'draft-1',
+      questions: [mockQuestion, q2],
+      answers: { q1: { requestId: 'q1', label: 'Clofibrate', mentionToken: '[[material:MAT-1|Clofibrate]]' } },
+      activeQuestionId: 'q2',
+    }
+    const state = sidebarReducer(clarifying, { type: 'change-question', questionId: 'q1' })
+    expect(state.mode).toBe('clarifying')
+    if (state.mode === 'clarifying') {
+      expect(state.activeQuestionId).toBe('q1')
+      // The KEY is gone — never `answers.q1 = undefined` (that would keep the
+      // answer truthy-typed and keep the card in its answered branch).
+      expect('q1' in state.answers).toBe(false)
+      expect(state.answers.q2).toBeUndefined()
+    }
+  })
+
+  it('DC2: change-question reopen keeps the other answers and the carried shorthand', () => {
+    const q2 = { ...mockQuestion, id: 'q2' }
+    const clarifying = {
+      mode: 'clarifying' as const,
+      draftId: 'draft-1',
+      questions: [mockQuestion, q2],
+      answers: {
+        q1: { requestId: 'q1', label: 'Clofibrate' },
+        q2: { requestId: 'q2', label: 'DMEM' },
+      },
+      activeQuestionId: 'q1',
+      shorthand: 'intentId: x\nactions: []\n',
+    }
+    const state = sidebarReducer(clarifying, { type: 'change-question', questionId: 'q1' })
+    expect(state.mode).toBe('clarifying')
+    if (state.mode === 'clarifying') {
+      expect('q1' in state.answers).toBe(false)
+      expect(state.answers.q2?.label).toBe('DMEM')
+      expect(state.shorthand).toBe('intentId: x\nactions: []\n')
+    }
+  })
+
+  it('DC2: change-question stays clarifying-guarded (other modes byte-unchanged)', () => {
+    const updating = { mode: 'updating' as const, draftId: 'draft-1' }
+    expect(sidebarReducer(updating, { type: 'change-question', questionId: 'q1' })).toBe(updating)
   })
 
   it('isChatEnabled returns true for ready and reviewing', () => {
