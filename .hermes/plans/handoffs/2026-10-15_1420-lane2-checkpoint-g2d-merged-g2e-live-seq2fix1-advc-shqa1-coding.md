@@ -106,3 +106,23 @@ next checks (cheap gate): (1) advc fix1 log EXITED + report VERDICT line; (2) g2
   trail.json/md5s.txt + REPORT.md VERDICT; (3) SH-QA-1 log hermes motion + worktree commits;
   (4) composer marker SPEC-DRAFT-SHQB1 DONE; (5) AI-13 recount; (6) lock pid-file transitions;
   (7) stack 200s.
+
+## POSTSCRIPT (same tick, 14:32 EDT) — SEQ-2 fix1 merged mid-tick; SH-QA-2 queued
+- advc fix1 c1 EXITED ACCEPT (14:14; surfaces-stub mutation proof, B4 stash-proof, 6-file
+  zero-YAML scope). Orch self-verify first-hand (scope name-only, app 25/25, server 42).
+  MERGED --no-ff -> trunk 1b2b5ce9. No YAML -> no restart; served module carries the gate
+  (grep selectableKinds = 3 at :5193).
+- SEQ-2 FIX GATE LIVE tier-2: bash 578640 (proc_ddcf6b7a2397), log logs/review-HARNESSSEQ2-
+  fixgate-l2t1420-tier2.log, prompt prompts/review-HARNESSSEQ2-fixgate-l2t1350-tier2.txt,
+  receipts receipts/HARNESS-SEQ-2/2026-10-15_1420-fix-gate-tier2/. 2x ~15:15, 3x ~16:10.
+- SH-QA-2 CLAIMED + CODER QUEUED on fleet lock behind SH-QA-1: bash 590344
+  (proc_1a4bb5352a74), log logs/coder-SHQA2-l2t1425.log, worktree wt/SH-QA-2-lane2-l2t1425
+  off CURRENT trunk at its own start, marker SH-QA-2 DONE <sha>. Queue item (4) above is
+  DONE. THREE lock consumers now chained: SH-QA-1 (holder) -> SH-QA-2 (waiter). Reconcile
+  next tick via pid file + both logs (SHQA2-LOCK-ACQUIRED marks the flip).
+- NEXT TICK queue renumber: (1) g2e verdict, (2) SEQ-2 fix-gate verdict -> W2-9 and SEQ-2
+  closings, (3) SH-QA-1 exit -> advc -> verify -> merge, (4) SH-QA-2 start watch, (5) SH-QB-1
+  draft review, (6) AI-13, (7) F1, (8) Brad-pending unchanged.
+- Live at checkpoint end: SH-QA-1 coder (lock, since 14:04), SH-QA-2 queued waiter 590344,
+  g2e gate 532820, SEQ-2 fix-gate 578640, SH-QB-1 composer 550827. Budget ~42 min: stopped
+  launching; nothing killed.
