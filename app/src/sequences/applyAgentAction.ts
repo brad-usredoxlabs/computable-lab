@@ -16,9 +16,11 @@
  * contract's own discriminated union) — never on surface names, tab names,
  * or labels. The tab list it validates against is the page's declared const,
  * kept in lockstep with the surfaces registry by the compatibility test
- * (server/src/surfaces/surfacesTabsCompat.test.ts). No fetches, no model
- * calls, no policy, no writes: an unroutable frame is a NAMED diagnostic,
- * never a guess.
+ * (server/src/surfaces/surfacesTabsCompat.test.ts). Record selectability is
+ * validated against the surface's DECLARED `selectableKinds` (surfaces.yaml
+ * via GET /api/surfaces — registry data, no kind literals here). No fetches,
+ * no model calls, no policy, no writes: an unroutable frame is a NAMED
+ * diagnostic, never a guess.
  *
  * exactOptionalPropertyTypes discipline: absent keys are OMITTED (never
  * `undefined`), and "nothing to say" is `undefined`, never `''`.
@@ -27,13 +29,29 @@ import type { AiAgentActionEnvelope } from '../types/ai'
 
 export interface SequencesAgentActionRecord {
   recordId: string
+  /**
+   * The record's own kind (catalog reality, from the page's catalog payload).
+   * Checked against the surface's DECLARED `selectableKinds` — never against
+   * a kind list baked into this module.
+   */
+  kind?: string
 }
 
 export interface SequencesAgentActionState {
   /** The page's declared tab list (compat-tested against the registry). */
   tabs: readonly string[]
+  /**
+   * The kinds the SURFACE declares selectable — registry data
+   * (schema/registry/surfaces/surfaces.yaml `selectableKinds`, served by
+   * GET /api/surfaces). The gate defect (2026-10-15_1255 leg5) was an agent
+   * focus selecting a catalog record the surface cannot select (an
+   * analysis-run → editor 422); the declared kinds are what gate it.
+   * An empty list is fail-closed: no record kind is selectable.
+   */
+  selectableKinds: readonly string[]
   selected: string
-  /** The records the page's library currently shows. */
+  /** The records the page's catalog currently shows (all kinds — the kind
+   *  gate above is what narrows the AGENT path to the selectable ones). */
   visible: readonly SequencesAgentActionRecord[]
 }
 
@@ -89,11 +107,24 @@ export function applyAgentAction(
     if (recordId === undefined) {
       return { ok: false, effects: {}, reason: 'The record action carried no record id. Nothing was changed.' }
     }
-    if (!state.visible.some((record) => record.recordId === recordId)) {
+    const visibleRecord = state.visible.find((record) => record.recordId === recordId)
+    if (!visibleRecord) {
       return {
         ok: false,
         effects: {},
         reason: `Record "${recordId}" is not in this page's library. Nothing was changed.`,
+      }
+    }
+    // DEFECT-1 gate fix: membership in the catalog is NOT selectability. The
+    // surface's DECLARED selectableKinds (registry data) decide, so an agent
+    // can never drive the page into a selection a human cannot make.
+    if (visibleRecord.kind === undefined || !state.selectableKinds.includes(visibleRecord.kind)) {
+      return {
+        ok: false,
+        effects: {},
+        reason:
+          `Record "${recordId}" (kind ${visibleRecord.kind ?? 'unknown'}) is not a kind this page can select ` +
+          `(${state.selectableKinds.length > 0 ? `it declares ${state.selectableKinds.join(', ')}` : 'it declares no selectable kinds'}). Nothing was changed.`,
       }
     }
     if (state.selected === recordId) {
@@ -123,6 +154,9 @@ export function applyAgentAction(
  */
 export interface SequencesAgentActionMount {
   tabs: readonly string[]
+  /** The surface's DECLARED selectableKinds (registry data through
+   *  GET /api/surfaces — see app/src/shared/surfaces/registry.ts). */
+  selectableKinds: readonly string[]
   records: () => readonly SequencesAgentActionRecord[]
   selected: () => string
   editorCanLeave: () => boolean | undefined
@@ -136,6 +170,7 @@ export function createSequencesAgentActionHandler(
   return (action) => {
     const result = applyAgentAction(action, {
       tabs: mount.tabs,
+      selectableKinds: mount.selectableKinds,
       selected: mount.selected(),
       visible: mount.records(),
     })
