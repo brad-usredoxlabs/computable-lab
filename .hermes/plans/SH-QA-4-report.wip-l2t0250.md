@@ -134,3 +134,66 @@ REPAIRED baselines (branch point 95f73755) == spec's promotion-time numbers:
 The earlier 27/26 numbers in this report are the unrepaired-worktree artifacts;
 the repaired 23/1 pair is authoritative and matches the orchestrator's
 promotion-time measurement at 27ef008f.
+
+## FIX c1 (adversarial review c1: VERDICT fix, DEFECT 1 only)
+
+Review: /home/brad/.hermes/cl/lanes/2/reviews/advc-SHQA4-c1-l2t0455.md. Single defect:
+`noEventConcentrationFallback: true` was passed UNCONDITIONALLY in the snapshot arm
+(eventGraph.ts:532), killing the event-level concentration fallback for a
+single-entry composition_snapshot — a spec-named single-material add whose
+concentration display flipped 1 mM -> no concentration vs base.
+
+### 1. RED-FIRST (commit e96e6898, test file only)
+
+Added the T3 pin FIRST to app/src/event-editor/focus/wellStateProjection.test.ts:
+single-entry composition_snapshot WITH event-level details.concentration {1,mM},
+entry WITHOUT concentration -> row must keep {value:1, unit:'mM', basis:'molar'}
+exactly as base produces (reviewer's §6 probe event). Run against UNFIXED head:
+
+    npx vitest run src/event-editor/focus/wellStateProjection.test.ts
+    FAIL ... > pin: single-entry composition_snapshot with event-level concentration keeps its concentration display
+    AssertionError: ... expected undefined to deeply equal { Object (value, unit, ...) }
+    - Expected: Object { "basis": "molar", "unit": "mM", "value": 1 }
+    + Received: undefined
+     Test Files  1 failed (1)
+          Tests  1 failed | 5 passed (6)
+
+RED confirmed: concentration absent (matches reviewer's base-vs-head probe).
+
+### 2. THE FIX (commit 30864e1b, eventGraph.ts only)
+
+eventGraph.ts snapshot arm, was `noEventConcentrationFallback: true,` at :532:
+
+    ...(isCarrierComposition ? { noEventConcentrationFallback: true } : {}),
+
+Same predicate as the volumeIsCarrier/fractionOfMixture gate (:515
+`isCarrierComposition = snapshot.length > 1`). Multi-entry carrier compositions
+keep the requirement-4 misattribution guard; single-entry snapshots (non-carrier)
+restore the base event-level concentration fallback. No test patched to accept the drop.
+
+### 3. GREEN + targeted suites (post-fix)
+
+    cd app && npx vitest run src/event-editor/focus src/graph/lib src/graph/labware src/shared/lib src/graph/wellcontext src/graph/context-panel
+     Test Files  20 passed (20)
+          Tests  94 passed (94)
+
+20 files / 94 tests (93 review baseline + 1 new pin), zero fail-files. T2
+(misattribution guard on multi-entry snapshots) still green — the gate only
+relaxes the single-entry case.
+
+### 4. Typecheck bars
+
+- app `npx tsc --noEmit`: 23 error lines; sorted diff vs baseline
+  /tmp/shqa4-base-app-tsc-repaired.txt -> EMPTY (raw /tmp/shqa4-fixc1-app-tsc.txt).
+- server `npx tsc --noEmit`: 1 error, md5 745876ef4a13beb3ab5c10b636cd255e —
+  BYTE-IDENTICAL to baseline (raw /tmp/shqa4-fixc1-server-tsc.txt). server/ untouched.
+
+### 5. Diff discipline
+
+`git diff --name-only 287189fd..HEAD` (before this docs commit):
+  app/src/event-editor/focus/wellStateProjection.test.ts
+  app/src/graph/lib/eventGraph.ts
+Exactly the two allowed files. No YAML, no schema, no config, no server/.
+git status clean. No pushes, no merges.
+
+FIX c1 tip: 30864e1b (RED e96e6898 + fix 30864e1b).
