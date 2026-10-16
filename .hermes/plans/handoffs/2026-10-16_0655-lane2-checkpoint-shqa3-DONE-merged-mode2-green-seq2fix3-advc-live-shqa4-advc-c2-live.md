@@ -64,3 +64,29 @@ a real verdict), AS-LANE2-SEQ2-FIX3-REPAIR-SHAPE, AS-LANE2-SHQC1-CAMT-CITES):
 next checks: (1) logs/advc-SEQ2FIX3-c1-l2t0635.log + logs/advc-SHQA4-c2-l2t0635.log ADVC DONE
 markers; (2) trunk tip + stack status; (3) AI-13 recount; (4) fleet lock holder before any
 SH-QC-1 dispatch.
+
+## ADDENDUM (same tick, ~08:20 — budget overrun logged)
+10. SH-QA-4 ADVC C2 (reviews/advc-SHQA4-c2-l2t0635.md) VERDICT: ACCEPT cycle 2/2. ORCH
+    self-verify: fix hunk eventGraph.ts +5/-1 matches the c1 defect exactly (conditional spread
+    on isCarrierComposition, comment cites requirement 3); worktree targeted 30/30, app tsc
+    23=baseline. MERGE COLLISION: untracked trunk copy of SH-QA-4-report.wip-l2t0250.md blocked
+    the merge; branch copy differs by commit-append only -> trunk copy moved to
+    /tmp/SH-QA-4-report.trunk-copy.md, branch copy won. MERGED --no-ff -> 509ca293
+    (11 files +818/-36 incl. the full c0 branch); merged trunk targeted 34/34 green, app tsc 23,
+    NO YAML in merge diff (no restart). OPEN OBLIGATION (6b, written into the task block):
+    SH-QA-4 stays in-progress until the served-UI browser gate at rev 509ca293 renders a real
+    verdict (WellTooltip/concentration display surfaces; the "fold into SH-QC-1 T-C" shortcut is
+    void — pin THIS rev; tier ladder 6c applies).
+11. SEQ2FIX3 ADVC C1 STILL LIVE at 08:15 (bash 3494474, hermes 3494599/3523043; log buffered
+    0 B — known behavior until exit). ~90 min vs 45-60 expected = within 2x; per 7b NOT
+    re-dispatched, NOT killed. 3x ~24:45 from 06:45 start.
+12. BUDGET: tick began 06:30; the SH-QA-4 merge+verify pushed past the 45-min soft budget.
+    No new launches after this checkpoint. LIVE AT CHECKPOINT: advc SEQ2FIX3 c1 (3494474).
+    Fleet lock: lane-1 (QMS71FIX1 3292213 at 06:41).
+
+next checks (next tick): (1) logs/advc-SEQ2FIX3-c1-l2t0635.log ADVC DONE marker + report
+reviews/advc-SEQ2FIX3-c1-l2t0635.md -> on ACCEPT self-verify + merge + TIER gate: BOTH browser
+gates due — SEQ-2 re-gate at the fix3 rev AND SH-QA-4 gate at 509ca293 (single slot: run
+SEQ-2 first, it unblocks its own done; SH-QA-4 gate second); (2) SH-QC-1 claim + coder dispatch
+when the fleet lock frees (spec .hermes/plans/2026-10-16_0558-SH-QC-1-ghost-cancel-resend-spec.md);
+(3) AI-13 recount (base 278).
