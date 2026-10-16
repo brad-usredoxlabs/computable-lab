@@ -67,6 +67,7 @@ import type { SubmitCallLike } from './selectSubmitCall.js';
 import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
+import { loadForcedToolCompliancePolicy, forcedToolComplianceEntry, defaultForcedToolCompliancePolicyPath } from './forcedToolCompliance.js';
 import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
 import { sequencesFocusGuard } from './sequencesFocusGuard.js';
 import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
@@ -812,7 +813,7 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
   return null;
 }
 
-function buildForcedDraftJsonPrompt(originalPrompt: string): string {
+function buildForcedDraftJsonPrompt(originalPrompt: string, antiEchoClause?: string): string {
   return [
     `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
     'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
@@ -824,6 +825,13 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
     // PROTO-AI-9: the retry prompt must know the protocol_edit envelope too, or
     // a protocol-edit turn can never be recovered by the slow path.
     'For edits to the ATTACHED PROTOCOL (add/delete/reorder/modify its steps), use intent "protocol_edit" with ops:[...] — cite ONLY stepIds/roleIds from the ATTACHED PROTOCOL block; this proposes an edit and writes nothing.',
+    // SH-QC-1S R1 (architect D2): the repeat-prompt echo rode the coerce slow
+    // path because the retry re-sent the polluted history with NO anti-echo
+    // clause and the model pattern-completed on its own prior summary. The
+    // clause (DATA: config/drafting/forced-tool-compliance.yaml
+    // `coerceAntiEcho:`) rides INSIDE this prompt so the second call
+    // challenges the echo instead of re-sending the history unchallenged.
+    ...(antiEchoClause ? [antiEchoClause] : []),
     `Original user prompt: ${originalPrompt}`,
   ].join('\n');
 }
@@ -1008,6 +1016,7 @@ export function createAgentOrchestrator(
     historyTurns = 4,
     draftFlowMode = 'forced-tool',
     systemPromptPath,
+    forcedToolCompliancePolicyPath,
   } = agentConfig;
 
   /**
@@ -1205,6 +1214,10 @@ export function createAgentOrchestrator(
        * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
        */
       const shorthandSurface = surfaceDraftsShorthand(surfaceName);
+      // SH-QC-1S R1: the forced-tool compliance policy DATA is loaded PER
+      // call (the shorthand-drafting.yaml convention, never process-cached) —
+      // the compliance arm and the coerce anti-echo clause both read it.
+      const compliancePolicy = loadForcedToolCompliancePolicy(forcedToolCompliancePolicyPath ?? defaultForcedToolCompliancePolicyPath);
       let eventGraphRefusalAsked = false;
       let shorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
@@ -1768,7 +1781,9 @@ export function createAgentOrchestrator(
 
       const endpointLabel = inferenceEndpointLabel(inferenceConfig);
 
-      let sequenceRepairAttempts = 0;
+      // SH-QC-1S R1: renamed from `sequenceRepairAttempts` — the counter now
+      // serves every DATA-listed forced-tool surface, not one surface.
+      let forcedToolComplianceAttempts = 0;
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -2072,30 +2087,45 @@ export function createAgentOrchestrator(
               `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
             );
           } else {
-          if(surface==='sequences') {
-            // HARNESS-SEQ-2 FIX3 (D2, gate 2026-10-16_0445, traces mgcnh6 vs
-            // dh649w): a forced-tool turn that completes with ZERO tool calls
-            // retries the turn ONCE — bounded and logged — then fails HONESTLY.
-            // The old budget allowed two nudges (three turns) and the failure
-            // line blamed a "structured sequence proposal" the user never asked
-            // for (a navigation request got a drafting-flavored generic error).
-            // The honest line names the actual failure: the model did not emit
-            // the forced agent_intent tool call.
-            if(sequenceRepairAttempts<1 && turn+1<effectiveMaxTurns) {
-              sequenceRepairAttempts++;
-              // SEQ2FIX2 D1a (gate 2026-10-15_1420, traces jbxrxc/8xk70f): this
-              // nudge demanded `intent=sequence_action` unconditionally — when
-              // the stalled turn was a TAB/RECORD request hijacked by
-              // proposal-heavy history, the nudge manufactured the spurious
-              // draft. The nudge now carries the SAME routing rule the guidance
-              // DATA declares: navigation requests (a declared tab, a real
-              // record id) ride workspace_action; only content changes draft.
-              messages.push({role:'user',content:'Return the requested emission with agent_intent. ROUTING RULE: if the latest request names one of this page\'s declared tabs or a real record id to show or focus, emit intent=workspace_action (a tab request targets {kind:"sequence-tab", tab:"<a declared tab>"}; a record request targets {kind:"sequence-record", recordId:"<the real id>"}). Only a request that changes sequence content uses intent=sequence_action with a schema-valid sequenceAction (create_oligo for new bases and modifications). Chat history full of proposals does not change this rule. Do not claim to have saved or changed anything; no action has executed.'});
-              onEvent?.({type:'status',message:'Requesting the structured sequence emission…'});
+          // SH-QC-1S R1 (architect D2): the bounded zero-tool-call compliance
+          // arm is DATA (config/drafting/forced-tool-compliance.yaml — loaded
+          // PER call, the drafting-config convention), NOT a surface literal.
+          // The old gate was `if(surface==='sequences')`, which left the
+          // shorthand surface (workspace.deck) without the retry or the honest
+          // compliance-failure return — the repeat-prompt echo (backend.log
+          // :1462/:1691 `finish=stop contentLen=86 toolCalls=0`) fell through
+          // to the prose-routing exemption and laundered into notes.
+          // HARNESS-SEQ-2 FIX3 (D2, gate 2026-10-16_0445, traces mgcnh6 vs
+          // dh649w): a forced-tool turn that completes with ZERO tool calls
+          // retries the turn bounded by the DATA (keep 1) — logged — then
+          // fails HONESTLY. The honest line names the actual failure: the
+          // model did not emit the forced agent_intent tool call.
+          const complianceEntry = forcedToolComplianceEntry(compliancePolicy, surfaceName);
+          if (complianceEntry) {
+            // SEQ2FIX2 D1a (gate 2026-10-15_1420, traces jbxrxc/8xk70f): the
+            // sequences nudge demanded `intent=sequence_action`
+            // unconditionally — when the stalled turn was a TAB/RECORD request
+            // hijacked by proposal-heavy history, the nudge manufactured the
+            // spurious draft. The nudge now carries the SAME routing rule the
+            // guidance DATA declares: navigation requests (a declared tab, a
+            // real record id) ride workspace_action; only content changes
+            // draft. The wording rides the YAML VERBATIM (byte-identical to
+            // the old pinned literal — moved to data, never reworded). The
+            // deck nudge (SH-QC-1S) carries the anti-claim clause and the
+            // fresh-request rule: a repeat prompt with no clarification
+            // answers is a NEW drafting request; answering with your prior
+            // summary is not a drafting action.
+            if(forcedToolComplianceAttempts<complianceEntry.maxRetries && turn+1<effectiveMaxTurns) {
+              forcedToolComplianceAttempts++;
+              messages.push({role:'user',content:complianceEntry.nudge});
+              onEvent?.({type:'status',message:complianceEntry.retryStatus});
               continue;
             }
-            const complianceFailure = `The model (${model}) did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call after ${sequenceRepairAttempts + 1} attempt${sequenceRepairAttempts > 0 ? 's' : ''} (the retry was requested once). Nothing was saved.`;
-            console.warn(`[agent ${tid}] sequences forced-tool compliance failure model=${model} attempts=${sequenceRepairAttempts + 1} tool=${AGENT_INTENT_TOOL_NAME}`);
+            // Surface-neutral honest line (no "sequence" wording on other
+            // surfaces): the tool name and the attempt count come from the
+            // DATA + the shared tool constant, not a per-surface branch.
+            const complianceFailure = `The model (${model}) did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call after ${forcedToolComplianceAttempts + 1} attempt${forcedToolComplianceAttempts > 0 ? 's' : ''} (${complianceEntry.maxRetries} retry${complianceEntry.maxRetries > 1 ? 's' : ''} requested). Nothing was saved.`;
+            console.warn(`[agent ${tid}] forced-tool compliance failure surface=${surfaceName} model=${model} attempts=${forcedToolComplianceAttempts + 1} tool=${AGENT_INTENT_TOOL_NAME}`);
             return {success:false,error:complianceFailure};
           }
           onEvent?.({
@@ -2109,7 +2139,7 @@ export function createAgentOrchestrator(
                 model: inferenceConfig.model,
                 messages: [
                   ...messages.slice(0, -1),
-                  { role: 'user', content: buildForcedDraftJsonPrompt(prompt) },
+                  { role: 'user', content: buildForcedDraftJsonPrompt(prompt, compliancePolicy?.coerceAntiEcho) },
                 ],
                 temperature: 0,
                 // No silent ceiling: a draft JSON for a whole selected plate is
@@ -2192,7 +2222,33 @@ export function createAgentOrchestrator(
           // cannot open an Apply/Accept card on this path. Empty/absent prose
           // keeps the current honest error shape (still no card).
           const finalProse = typeof assistantMsg.content === 'string' ? assistantMsg.content.trim() : '';
-          const proseRouted = finalProse.length > 0;
+          // SH-QC-1S R2 (architect D2, structural guard — a deterministic
+          // equality check, not a policy string): the DEFECT-2 exemption above
+          // launders an ECHO into a plausible notes turn. On the verbatim
+          // repeat prompt the model pattern-completes and re-emits the prior
+          // assistant history turn (the cycle-1 draft summary riding back as
+          // raw history) with finish=stop and ZERO tool calls — that is a
+          // compliance failure, not a refusal. Route finalProse to the notes
+          // channel ONLY when it is NOT a normalized-verbatim copy of the
+          // immediately preceding assistant turn in historyMessages
+          // (whitespace-collapsed compare against the last assistant content).
+          // An echo goes to the error channel instead — the user sees an
+          // honest failure, never a dead-deck sidebar card. Tradeoff accepted
+          // by the architect: a refusal that word-for-word repeats the prior
+          // assistant turn is routed as error — acceptable, it still never
+          // carries a proposal payload. A GENUINE distinct refusal prose still
+          // routes to notes (the honestRefusal pins stay green).
+          let lastAssistantTurn: ChatMessage | undefined;
+          for (const message of historyMessages) {
+            if (message.role === 'assistant' && typeof message.content === 'string') lastAssistantTurn = message;
+          }
+          const proseEchoesHistory = finalProse.length > 0
+            && lastAssistantTurn !== undefined
+            && finalProse.replace(/\s+/g, ' ') === String(lastAssistantTurn.content).replace(/\s+/g, ' ');
+          const proseRouted = finalProse.length > 0 && !proseEchoesHistory;
+          if (proseEchoesHistory) {
+            console.warn(`[agent ${tid}] prose echo guard: final text is a normalized-verbatim copy of the prior assistant history turn — routed to the error channel, never notes (SH-QC-1S R2)`);
+          }
           if (!proseRouted) onEvent?.({ type: 'error', message: error });
           const elapsed = Date.now() - t0;
           turnStats.push({
@@ -2360,8 +2416,8 @@ export function createAgentOrchestrator(
               const fidelity = validation?.valid ? sequenceRequestDiagnostics(sequenceAction, prompt) : [];
               if (!validation?.valid || fidelity.length) {
                 const errors=fidelity.length?fidelity.map(e=>`${e.path}: ${e.message}`):validation?.errors?.map(e=>`${e.path}: ${e.message}`)??['Sequence actions are not configured.'];
-                if(validation && sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
-                  sequenceRepairAttempts++;
+                if(validation && forcedToolComplianceAttempts<2 && turn+1<effectiveMaxTurns) {
+                  forcedToolComplianceAttempts++;
                   onEvent?.({type:'status',message:'Correcting the proposed sequence action…'});
                   onEvent?.({type:'tool_result',toolName:submitCall.function.name,success:false,durationMs:0});
                   for(const call of assistantMsg.tool_calls??[])messages.push({role:'tool',tool_call_id:call.id,content:call===submitCall?JSON.stringify({valid:false,errors,instruction:'Correct this proposal using the supplied action schema and the original user request. For new oligo bases with modifications use create_oligo; each modification needs position, label and role. Do not invent existing record references. Nothing has been saved.'}):'Ignored extra proposal; no action executed.'});

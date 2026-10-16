@@ -1,0 +1,12 @@
+# SH-QC-1S TEST FIXTURE — the compliance policy with a SWAPPED nudge: proves the
+# nudge text the model receives rides the DATA (a data edit changes the prompt
+# with zero TypeScript edits).
+surfaces:
+  - surface: workspace.deck
+    maxRetries: 1
+    nudge: >-
+      SWAPPED-NUDGE-MARKER: your last reply did not emit the required
+      agent_intent tool call and only restated your prior summary. Emit the
+      requested agent_intent now. Do not claim to have saved or changed
+      anything; no action has executed.
+    retryStatus: Requesting the draft emission…

@@ -352,6 +352,14 @@ export interface AgentConfig {
   draftFlowMode?: DraftFlowMode;
   /** Path to system prompt template (default "prompts/event-graph-agent.md") */
   systemPromptPath?: string;
+  /**
+   * SH-QC-1S R1 — override path for the forced-tool compliance policy DATA
+   * (default "config/drafting/forced-tool-compliance.yaml"). The policy is
+   * loaded PER call (the drafting-config convention, never process-cached);
+   * this seam exists so tests can point at fixture copies and prove the
+   * compliance arm is DATA, not a surface literal.
+   */
+  forcedToolCompliancePolicyPath?: string | URL;
 }
 
 /**
