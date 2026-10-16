@@ -927,6 +927,18 @@ export type AgentEvent =
    */
   | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
   /**
+   * QMS7-7 (OQ1 ruling A) — the model's record-drafting INTENT, retained
+   * verbatim (compose_record_draft). This is NOT a compiled draft and is NOT
+   * actionable alone: the drafts compile endpoint (POST /api/drafts/compile —
+   * the 'record-drafting' adapter: kind resolved through the schema corpus,
+   * id derived from the schema's declared pattern, fields through the REAL
+   * validate + lint, canAccept), NOT this stream, is the trust boundary.
+   * Accepting the compiled draft stages at most ONE record create — a governed
+   * DRAFT envelope; nothing here writes a record (thin-event design — same
+   * shape as workstate_proposal / analysis_proposal).
+   */
+  | { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }
+  /**
    * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
    * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors
    * ledgerQuery.ts LedgerAnswerEnvelope field-for-field (status, asOf,

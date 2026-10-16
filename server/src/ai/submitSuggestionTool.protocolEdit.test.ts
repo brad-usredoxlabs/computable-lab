@@ -43,6 +43,8 @@ describe('agent_intent — protocol_edit intent (PROTO-AI-7)', () => {
       'compose_analysis',
       'query_workstate_history',
       'event_shorthand',
+      // QMS7-7 (DELIBERATE golden diff): compose_record_draft on the ONE forced tool.
+      'compose_record_draft',
     ]);
   });
 
