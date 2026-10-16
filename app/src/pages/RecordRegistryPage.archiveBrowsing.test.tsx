@@ -416,4 +416,76 @@ describe('RecordRegistryPage — archived browsing (QMS7-6)', () => {
     })
     expectNoDeleteFetches()
   })
+
+  // QMS7-6 FIX1 (adversarial review DEFECT 1, MAJOR): the in-flight race.
+  // A `records` identity change while the terminalStates GET is in flight
+  // (effect cleanup fires — e.g. a tab switch triggers refreshRecords) must
+  // NOT consume the lifecycle: a discarded result may not leave the lifecycle
+  // flagged fetched, or the terminal filter is permanently disabled for the
+  // rest of the page session and AC-5 silently degrades to "no filtering".
+  // RED at 95f52fd1: the lifecycle was added to terminalFetchedRef BEFORE
+  // the await and the cancelled run drops the entries -> never refetched,
+  // the archived row never hides.
+  it('a records change while the terminalStates fetch is in flight does not permanently suppress the facts (FIX1 defect 1)', async () => {
+    let resolveFirst: ((states: string[]) => void) | undefined
+    mocked.getLifecycleTerminalStates.mockImplementationOnce(
+      () => new Promise<string[]>((resolve) => { resolveFirst = resolve }),
+    )
+
+    render(<RecordRegistryPage />)
+    await openEquipmentTab()
+    // The registry-ops facts GET is now in flight (deferred above).
+    await waitFor(() => expect(mocked.getLifecycleTerminalStates).toHaveBeenCalledTimes(1))
+
+    // Interleave a `records` identity change while it is in flight:
+    // Equipment -> People -> Equipment (each refresh replaces the records array).
+    fireEvent.click(screen.getByText('People'))
+    await screen.findByText('PER-PLAIN-1')
+    fireEvent.click(screen.getByText('Equipment'))
+    await screen.findByText('EQP-QUANTSTUDIO5')
+
+    // Let the superseded GET resolve — its result must NOT be consumed.
+    resolveFirst!(['archived'])
+
+    // The lifecycle must be refetched (the superseded run did not consume it)
+    // and the facts must take effect: the archived row hides (AC-5).
+    await waitFor(() =>
+      expect(mocked.getLifecycleTerminalStates.mock.calls.length).toBeGreaterThanOrEqual(2),
+    )
+    await waitFor(() => expect(screen.queryByText('EQC-QUANTSTUDIO5')).toBeNull())
+    expect(screen.getByText('EQP-QUANTSTUDIO5')).toBeTruthy()
+  })
+
+  // QMS7-6 FIX1 (adversarial review DEFECT 2, MINOR): a transient failure
+  // (network blip / 5xx — apiClient.getLifecycleTerminalStates already
+  // normalises 404 to [] and never throws for a missing lifecycle, so any
+  // error reaching the page catch is transient/server-failure) must fail open
+  // for the current render but must NOT be cached as fetched: a later
+  // records change retries the lifecycle.
+  // RED at 95f52fd1: the catch maps ANY error to [] while the lifecycle was
+  // already marked fetched before the await -> permanent non-retry.
+  it('a transient terminalStates failure fails open for the render but retries on the next records change (FIX1 defect 2)', async () => {
+    mocked.getLifecycleTerminalStates.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('simulated transient blip'), { status: 503 })),
+    )
+
+    render(<RecordRegistryPage />)
+    await openEquipmentTab()
+    await waitFor(() => expect(mocked.getLifecycleTerminalStates).toHaveBeenCalledTimes(1))
+    // Let the rejection settle through the page's catch.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // Fail open: nothing is hidden on a guess — the archived row stays visible.
+    expect(screen.getByText('EQC-QUANTSTUDIO5')).toBeTruthy()
+
+    // A later records change must RETRY the transiently-failed lifecycle.
+    fireEvent.click(screen.getByText('People'))
+    await screen.findByText('PER-PLAIN-1')
+    fireEvent.click(screen.getByText('Equipment'))
+    await screen.findByText('EQP-QUANTSTUDIO5')
+
+    await waitFor(() =>
+      expect(mocked.getLifecycleTerminalStates.mock.calls.length).toBeGreaterThanOrEqual(2),
+    )
+    await waitFor(() => expect(screen.queryByText('EQC-QUANTSTUDIO5')).toBeNull())
+  })
 })

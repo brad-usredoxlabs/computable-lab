@@ -146,7 +146,6 @@ export default function RecordRegistryPage() {
       if (lifecycleId && !terminalFetchedRef.current.has(lifecycleId)) pending.add(lifecycleId);
     }
     if (pending.size === 0) return;
-    for (const lifecycleId of pending) terminalFetchedRef.current.add(lifecycleId);
     let cancelled = false;
     void Promise.all(
       [...pending].map(async (lifecycleId) => {
@@ -154,13 +153,26 @@ export default function RecordRegistryPage() {
           const states = await apiClient.getLifecycleTerminalStates(lifecycleId);
           return [lifecycleId, states] as const;
         } catch (err) {
-          // Fail open: no facts -> nothing is hidden (no invented policy).
+          // Fail open for this render: no facts -> nothing is hidden (no
+          // invented policy). The failure is NOT committed and the lifecycle
+          // is NOT marked fetched (FIX1 defect 2): the accessor already
+          // normalises a definitive 404 to a SUCCESSFUL [], so anything
+          // reaching this catch is a transient/server failure and must stay
+          // retryable on the next `records` change.
           console.warn(`Lifecycle terminal facts unavailable for ${lifecycleId}; terminal filtering skipped.`, err);
-          return [lifecycleId, [] as string[]] as const;
+          return null;
         }
       }),
-    ).then((entries) => {
+    ).then((results) => {
+      // FIX1 defect 1: a superseded run (cleanup fired because `records`
+      // changed identity mid-flight) discards its entries AND leaves the
+      // lifecycles un-fetched, so the next effect run retries instead of
+      // permanently skipping them. Marking fetched happens ONLY where the
+      // result is actually committed.
       if (cancelled) return;
+      const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+      if (entries.length === 0) return;
+      for (const [lifecycleId] of entries) terminalFetchedRef.current.add(lifecycleId);
       setTerminalStatesByLifecycle((prev) => {
         const next = { ...prev };
         for (const [lifecycleId, states] of entries) next[lifecycleId] = states;
