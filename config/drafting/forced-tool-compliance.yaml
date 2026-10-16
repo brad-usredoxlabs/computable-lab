@@ -1,0 +1,37 @@
+# SH-QC-1S — the forced-tool compliance policy DATA (architect D2 R1).
+#
+# Which forced-tool surfaces get the bounded zero-tool-call retry, the retry
+# budget, and the nudge text is DECLARED here (the shorthand-drafting.yaml /
+# review-write-wall.yaml precedent — loaded PER call, never process-cached).
+# The orchestrator gates the compliance arm on policy MEMBERSHIP read from this
+# file — zero surface-name literals in TypeScript (repo rule #1).
+#
+# ABSENT file/section/entry => NO retry and NO compliance-failure return
+# (silent-off, disclosed — the pre-fix behavior for unlisted surfaces).
+# Present-but-malformed throws honestly, naming the path (cue-loader parity).
+#
+# `nudge` strings ride here VERBATIM — the model receives exactly this text.
+# The sequences nudge moved byte-identically from the old TS literal (pinned by
+# the HARNESS-SEQ-2 tests — moved to data, never reworded). The workspace.deck
+# nudge carries (a) the agent_intent demand, (b) the anti-claim clause
+# verbatim, and (c) the fresh-request rule: a repeat prompt with no
+# clarification answers is a NEW drafting request; answering with your prior
+# summary is not a drafting action (SH-QC-1S: the repeat-prompt echo defect).
+surfaces:
+  - surface: sequences
+    maxRetries: 1
+    retryStatus: Requesting the structured sequence emission…
+    nudge: >-
+      Return the requested emission with agent_intent. ROUTING RULE: if the latest request names one of this page's declared tabs or a real record id to show or focus, emit intent=workspace_action (a tab request targets {kind:"sequence-tab", tab:"<a declared tab>"}; a record request targets {kind:"sequence-record", recordId:"<the real id>"}). Only a request that changes sequence content uses intent=sequence_action with a schema-valid sequenceAction (create_oligo for new bases and modifications). Chat history full of proposals does not change this rule. Do not claim to have saved or changed anything; no action has executed.
+  - surface: workspace.deck
+    maxRetries: 1
+    retryStatus: Requesting the draft emission…
+    nudge: >-
+      Your last reply did not emit the required agent_intent tool call — it only restated your prior summary. A repeated request with no clarification answers is a NEW drafting request; answering with your prior summary is not a drafting action. Emit the requested emission with agent_intent now: for event drafting use intent "event_shorthand" with the scientist-intent YAML document in `shorthand`. Do not claim to have saved or changed anything; no action has executed.
+
+# SH-QC-1S R1 (architect D2): the anti-echo/anti-claim clause carried INSIDE
+# the coerce slow-path prompt (buildForcedDraftJsonPrompt) so the second call
+# stops pattern-completing on the echo of the prior assistant turn. Absent =>
+# no clause (silent-off parity with the rest of this file).
+coerceAntiEcho: >-
+  Do not repeat your prior summary — a repeated request is a NEW drafting request, not an answer to your own earlier reply. Do not claim to have saved or changed anything; no action has executed.
