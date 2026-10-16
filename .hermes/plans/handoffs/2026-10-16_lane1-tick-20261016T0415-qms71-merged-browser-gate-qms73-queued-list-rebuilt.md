@@ -146,3 +146,23 @@ generic wording; training-material still document-control. NO browser gate (no U
   browser gate re-pins the full surface.
 - Fleet assumption: QMS7-9's worktree base a584770c already contains QMS7-2; no rebase
   needed; zero overlap with the pending QMS7-3 server surface.
+
+## APPENDED at ~04:32 EDT — budget checkpoint (all three tracks live, none killed)
+
+- QMS7-9 CODER DONE: end-line "QMS7-9 DONE qms7-9-report-l1t0310.md", rc=0 at 04:14:51
+  (~31 min — small app-only task). Fleet lock released; lane 2's SHQA4 took it at 04:14:51
+  (pid-file SHQA4 2872401) — lane-2's business. My queue-qms7-3.sh (bash pid 2838825) still
+  correctly blocked on flock, will fire when SHQA4 releases.
+- ADVERSARIAL GATE QMS7-9 DISPATCHED (cloud OpenRouter, zero local contention): wrapper
+  pid 2902534, log logs/advreview-QMS79-l1t0430.log, unique review path
+  reviews/qms7-9-advreview-l1t0430.md, END-line "REVIEW-QMS79 DONE ...", prompt
+  prompts/advreview-QMS79-l1t0430.txt (bars: scope==ownership, single accept const,
+  STANDALONE-only, payload shape fileName+contentBase64-no-url, onIngested-only-on-success,
+  415 honest refusal no-onIngested, tsc pin 723a7fb8 exact, targeted suites re-run, RED
+  non-vacuity, no loop/double-submit bait).
+- NEXT TICK: (1) QMS7-1 browser verdict; (2) QMS7-9 verdict -> my verify (diff opened, tsc
+  pin, targeted vitest mine) -> merge --no-ff -> BROWSER GATE :5192/ingestion/vendor-pdf
+  (upload .md end-to-end, .exe/unsupported honest refusal, search + bring-back unchanged) —
+  done ONLY on accept receipts; (3) QMS7-3 coder lifecycle; (4) on QMS7-3 merge: author
+  GRANT-QMS7-REGOPS + ACL via :3092 record API (NOT hand-YAML), lane RESTART (YAML lands),
+  live gate verbatim.
