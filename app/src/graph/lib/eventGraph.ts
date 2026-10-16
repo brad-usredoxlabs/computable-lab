@@ -529,7 +529,11 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
         // Density is event-level: attach it generically to the row that carries
         // the count (same predicate as the count grant), never by name lookup.
         ...(count !== undefined && details.counter_density ? { counterDensity: details.counter_density } : {}),
-        noEventConcentrationFallback: true,
+        // The event-level concentration fallback is dead ONLY on multi-entry
+        // carrier compositions (same predicate as the marker). A single-entry
+        // snapshot is a single-material add (requirement 3): it keeps today's
+        // event-level concentration display byte-unchanged.
+        ...(isCarrierComposition ? { noEventConcentrationFallback: true } : {}),
       }))
     })
   } else if (materialLabel) {
