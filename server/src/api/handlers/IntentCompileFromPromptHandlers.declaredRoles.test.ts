@@ -303,6 +303,12 @@ describe('intent-compile-from-prompt.declared-roles-injection (W2-8 A5f)', () =>
   });
 
   it('anti-hardcoding: arbitrary roleIds/descriptions/hint-ids from the RECORD ride the prompt verbatim (rendered FROM data, not vocabulary)', async () => {
+    // Fix cycle 1 (advc defect 1): every role kind carries its OWN populated
+    // id-hint array under a DIFFERENT field name (LabwareRole
+    // expectedLabwareKinds / MaterialRole allowedMaterialIds / InstrumentRole
+    // allowedInstrumentIds per protocol.schema.yaml) and every id is asserted.
+    // A regression that hardcodes hint detection to ANY single field name turns
+    // this test RED (the other kinds' ids vanish from the prompt).
     const alien: ProtocolFixture = {
       recordId: SOURCE_ID,
       payload: {
@@ -310,7 +316,8 @@ describe('intent-compile-from-prompt.declared-roles-injection (W2-8 A5f)', () =>
         title: 'ZZZ',
         roles: {
           labwareRoles: [{ roleId: 'zzz-role', description: 'q9 widget', expectedLabwareKinds: ['LAB-zzz-9'] }],
-          materialRoles: [{ roleId: 'qqq-mat', description: 'w7 fluid' }],
+          materialRoles: [{ roleId: 'qqq-mat', description: 'w7 fluid', allowedMaterialIds: ['MAT-qqq-7'] }],
+          instrumentRoles: [{ roleId: 'rrr-inst', description: 'e5 machine', allowedInstrumentIds: ['INS-rrr-5'] }],
         },
       },
     };
@@ -325,6 +332,12 @@ describe('intent-compile-from-prompt.declared-roles-injection (W2-8 A5f)', () =>
     expect(intentPrompt!).toContain('LAB-zzz-9');
     expect(intentPrompt!).toContain('qqq-mat');
     expect(intentPrompt!).toContain('w7 fluid');
+    // The material/instrument hint IDS ride the prompt too: detection is by
+    // shape (string-array fields), NOT by the literal name 'expectedLabwareKinds'.
+    expect(intentPrompt!).toContain('MAT-qqq-7');
+    expect(intentPrompt!).toContain('rrr-inst');
+    expect(intentPrompt!).toContain('e5 machine');
+    expect(intentPrompt!).toContain('INS-rrr-5');
     zeroWrites(store);
   });
 });
