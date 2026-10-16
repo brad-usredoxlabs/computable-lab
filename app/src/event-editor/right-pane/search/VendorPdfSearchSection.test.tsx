@@ -152,14 +152,12 @@ describe('VendorPdfSearchSection', () => {
 
   it('brings the downloaded file back by uploading it', async () => {
     searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
-    const uploadMock = vi.fn().mockResolvedValue({
+    uploadMock.mockResolvedValue({
       sourcePdf: {},
       sourceProtocolCandidate: {},
       extraction: { diagnostics: [] },
       recordedArtifact: { recordId: 'VPDF-UPLOADED' },
     })
-    const { apiClient } = await import('../../../shared/api/client')
-    ;(apiClient as unknown as { uploadGraphLemurVendorPdf: typeof uploadMock }).uploadGraphLemurVendorPdf = uploadMock
 
     renderSection()
     fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })
@@ -325,14 +323,12 @@ describe('VendorPdfSearchSection', () => {
 describe('document picker accepts lab documents', () => {
   it('the bring-back input accepts lab document types AND the config-declared page images (Stage B arm landed)', async () => {
     searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
-    const uploadMock = vi.fn().mockResolvedValue({
+    uploadMock.mockResolvedValue({
       sourcePdf: {},
       sourceProtocolCandidate: {},
       extraction: { diagnostics: [] },
       recordedArtifact: { recordId: 'VPDF-UPLOADED' },
     })
-    const { apiClient } = await import('../../../shared/api/client')
-    ;(apiClient as unknown as { uploadGraphLemurVendorPdf: typeof uploadMock }).uploadGraphLemurVendorPdf = uploadMock
 
     renderSection()
     fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), { target: { value: 'ultra' } })

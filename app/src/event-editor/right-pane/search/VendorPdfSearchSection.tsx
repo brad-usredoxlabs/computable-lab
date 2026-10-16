@@ -10,14 +10,33 @@
  * the new row without a manual reload.
  *
  * Errors are surfaced inline; ingest is best-effort.
+ *
+ * QMS7-9: in the STANDALONE form (the studyId-free render used by the
+ * Ingestion workflow /ingestion/vendor-pdf) the section also offers a
+ * first-class "Upload a document" control — a peer of search. It rides the
+ * already-generalized upload arm (fileName + contentBase64, no url); the
+ * server's config gate (document-extraction.yaml `formats:`) refuses
+ * unsupported types with 415 UNSUPPORTED_DOCUMENT before any write, and the
+ * honest refusal text surfaces inline. The in-study "+ Add source" context
+ * (studyId supplied) stays search-only.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { apiClient } from '../../../shared/api/client'
 import type { GraphLemurPdfSearchResult } from '../../../shared/api/client'
 import './search.css'
 
 type VendorPdfResult = GraphLemurPdfSearchResult
+
+/**
+ * The ONE accept list for every document picker in this section (upload +
+ * bring-back). It mirrors config/ingestion/document-extraction.yaml
+ * `formats:` + `images.formats` exactly — a UI accepting an extension the
+ * server gate 415s on (or vice versa) is split-brain (bait 18). Do not
+ * author a second literal.
+ */
+const DOCUMENT_ACCEPT =
+  '.pdf,.docx,.doc,.rtf,.md,.markdown,.txt,.html,.htm,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.tif,.tiff,.webp,application/pdf'
 
 export interface VendorPdfSearchSectionProps {
   /**
@@ -68,6 +87,10 @@ export function VendorPdfSearchSection({
   // the vendor blocked our server-side download.
   const [bringingBack, setBringingBack] = useState(false)
   const [bringBackError, setBringBackError] = useState<string | null>(null)
+  // QMS7-9: the standalone "Upload a document" affordance (peer of search).
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   const runSearch = useCallback(async () => {
     const trimmed = query.trim()
@@ -184,6 +207,51 @@ export function VendorPdfSearchSection({
     [studyId, query, onIngested],
   )
 
+  // QMS7-9: "Upload a document" — the standalone surface's first-class upload,
+  // a peer of search. Rides the already-generalized upload arm: fileName +
+  // contentBase64, NO url. The server's config gate (document-extraction.yaml
+  // `formats:`) refuses unsupported types with 415 UNSUPPORTED_DOCUMENT
+  // BEFORE any write; that honest text surfaces inline and no record fires.
+  const runUpload = useCallback(
+    async (file: File) => {
+      setUploading(true)
+      setUploadError(null)
+      setIngestError(null)
+      setIngestNotice(null)
+      try {
+        const contentBase64 = await fileToBase64(file)
+        const response = await apiClient.uploadGraphLemurVendorPdf({
+          ...(studyId ? { studyId } : {}),
+          ...(query.trim() ? { query } : {}),
+          fileName: file.name,
+          contentBase64,
+        })
+        if (response.recordedArtifact) {
+          setLastIngested(response.recordedArtifact.recordId)
+          // Same info shape the ingest-success paths supply (:125/:168). An
+          // upload has no source URL — the server stamps sourcePdf.url as ''
+          // and titles the artifact from the file name.
+          onIngested(response.recordedArtifact.recordId, {
+            title: response.sourcePdf.title ?? file.name,
+            sourceUrl: response.sourcePdf.url ?? '',
+            ...(response.sourcePdf.vendor ? { vendor: response.sourcePdf.vendor } : {}),
+          })
+        } else {
+          // Server didn't write a record — most likely the workspace root
+          // isn't configured (no store). Surface so the user knows.
+          setUploadError(
+            'Uploaded but no durable record was written — check that the server workspace is configured.',
+          )
+        }
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setUploading(false)
+      }
+    },
+    [studyId, query, onIngested],
+  )
+
   return (
     <section className="vendor-pdf-search" data-testid="vendor-pdf-search">
       <h4 className="right-panel__heading">Vendor PDF search (Exa)</h4>
@@ -214,6 +282,42 @@ export function VendorPdfSearchSection({
           {searching ? '…' : 'Search'}
         </button>
       </form>
+      {studyId ? null : (
+        // STANDALONE ingestion surface: upload is a PEER of search, not a
+        // buried fallback. The button opens the file picker; the picker is
+        // the control of record (same accept const as bring-back).
+        <div className="vendor-pdf-search__upload" data-testid="vendor-pdf-upload">
+          <button
+            type="button"
+            className="vendor-pdf-search__submit"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploading}
+            data-testid="vendor-pdf-upload-button"
+            title="Pick a document from your machine and ingest it as a vendor-pdf record"
+          >
+            {uploading ? 'Uploading…' : 'Upload a document'}
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept={DOCUMENT_ACCEPT}
+            data-testid="vendor-pdf-upload-input"
+            disabled={uploading}
+            aria-label="Upload a document"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void runUpload(file)
+              e.currentTarget.value = ''
+            }}
+          />
+        </div>
+      )}
+      {uploadError ? (
+        <p className="right-panel__error" data-testid="vendor-pdf-upload-error">
+          {uploadError}
+        </p>
+      ) : null}
       {searchError ? (
         <p className="right-panel__error" data-testid="vendor-pdf-search-error">
           {searchError}
@@ -307,7 +411,7 @@ export function VendorPdfSearchSection({
                       {bringingBack ? 'Uploading…' : 'Step 2 — Bring the file back'}
                       <input
                         type="file"
-                        accept=".pdf,.docx,.doc,.rtf,.md,.markdown,.txt,.html,.htm,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.tif,.tiff,.webp,application/pdf"
+                        accept={DOCUMENT_ACCEPT}
                         data-testid="vendor-pdf-bring-back"
                         disabled={bringingBack}
                         onChange={(e) => {
