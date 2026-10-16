@@ -14,7 +14,10 @@ import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
 
-const REGISTRY_TABS = [
+// Exported for the test suites: the tab/kinds DATA is the single source for
+// the tab strip, the combobox kinds, and the Create picker (no test-side
+// kind maps — the tests read the same data the page renders).
+export const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
   { id: 'equipment', label: 'Equipment', kinds: ['equipment', 'equipment-class'] },
   { id: 'training', label: 'Training', kinds: ['training-material', 'training-record'] },
@@ -36,11 +39,12 @@ type TabId = (typeof REGISTRY_TABS)[number]['id'];
  * declaration. GET /schemas/:id returns the full schema document and every
  * registry kind declares properties.id.pattern `^PREFIX-[A-Z0-9][A-Z0-9_-]*$`
  * (verified live on :3092 for all 13 registry kinds). The seed id is
- * PREFIX + '-NEW' + an uppercase alphanumeric suffix — compliant by
- * construction against the declared pattern. A schema whose id pattern is
- * missing or has no parseable ^PREFIX- anchor returns null: the caller shows
- * an actionable error and does NOT open the editor. No prefix is ever
- * fabricated.
+ * PREFIX + '-NEW-' + an uppercase alphanumeric suffix (spec Design §id
+ * seeding, literal shape; FIX1 DEFECT 3) — compliant by construction against
+ * the declared pattern because the random suffix starts with an [A-Z0-9]
+ * char. A schema whose id pattern is missing or has no parseable ^PREFIX-
+ * anchor returns null: the caller shows an actionable error and does NOT open
+ * the editor. No prefix is ever fabricated.
  */
 function seedIdFromDeclaredPattern(schema: JsonSchema | undefined): string | null {
   const pattern = schema?.properties?.id?.pattern;
@@ -49,8 +53,11 @@ function seedIdFromDeclaredPattern(schema: JsonSchema | undefined): string | nul
   // Consume the literal ^ anchor, then capture the PREFIX- segment.
   const anchor = /^\^([A-Z]+)-/.exec(pattern);
   if (!anchor) return null;
-  const suffix = `NEW${Math.floor(Math.random() * 1e6).toString(36).toUpperCase().padStart(4, '0')}`;
-  return `${anchor[1]}-${suffix}`;
+  // Spec Design §id seeding: PREFIX + '-NEW-' + <uppercase alphanumeric
+  // suffix>. base36 uppercase is [0-9A-Z]+ — the suffix starts with an
+  // [A-Z0-9] char, so the whole id satisfies the declared pattern.
+  const suffix = Math.floor(Math.random() * 1e6).toString(36).toUpperCase().padStart(4, '0');
+  return `${anchor[1]}-NEW-${suffix}`;
 }
 
 interface RecordData {
@@ -123,8 +130,10 @@ export default function RecordRegistryPage() {
   const refreshSeqRef = useRef(0);
 
   // Single implementation of the record-list refresh — the tab-switch effect
-  // and every manual refresh (save, draft-copy, transitions, CSV import) share
-  // it. Previously the effect carried a private copy with no staleness guard.
+  // and every manual refresh (save, draft-copy, transitions) share it.
+  // Previously the effect carried a private copy with no staleness guard.
+  // (QMS7-5 FIX1 DEFECT 5a: "CSV import" dropped — that affordance's dead
+  // chrome was deleted, it is no longer a refresh trigger.)
   const refreshRecords = useCallback(async () => {
     const tab = REGISTRY_TABS.find(t => t.id === activeTab);
     if (!tab) return;
@@ -152,6 +161,19 @@ export default function RecordRegistryPage() {
     setProjection(null);
     setDirty(false);
   }, [activeTab, refreshRecords]);
+
+  // QMS7-5 FIX1 (adv-review DEFECT 1, MAJOR + DEFECT 5b): the Create affordance
+  // state belongs to the tab it was opened on. Without this reset the picker
+  // stayed rendered after a tab switch while pendingCreateKind still named a
+  // kind of the PREVIOUS tab — Confirm then opened a create for a kind outside
+  // the active tab, contradicting the per-tab kind-source contract (kinds come
+  // only from the ACTIVE tab's kinds DATA). The actionable createError is
+  // cleared here too (DEFECT 5b): an error about the old tab must not linger.
+  useEffect(() => {
+    setCreateKindPickerOpen(false);
+    setPendingCreateKind(null);
+    setCreateError(null);
+  }, [activeTab]);
 
   // QMS7-1 (OQ2 ruling): the AI panel's live target is the WorkspaceProvider's
   // own active tab — AiTabPanel's context memo reads it (its deps include the
@@ -233,6 +255,18 @@ export default function RecordRegistryPage() {
   const openCreateForKind = async (kind: string) => {
     setCreateKindPickerOpen(false);
     setCreateError(null);
+    // QMS7-5 FIX1 (adv-review DEFECT 1): belt-and-braces validation at the
+    // create path itself — the confirmed kind must belong to the ACTIVE tab's
+    // kinds DATA. The activeTab effect above already resets the picker; this
+    // guard makes an off-tab create impossible even if a future refactor
+    // re-introduces a stale selection.
+    const activeKinds = REGISTRY_TABS.find((t) => t.id === activeTab)?.kinds ?? []
+    if (!(activeKinds as readonly string[]).includes(kind)) {
+      setCreateError(
+        `Kind "${kind}" does not belong to the active tab — the create selection was stale and has been cleared.`,
+      );
+      return;
+    }
     const schemaId = schemaNodes.find((node) => node.kind === kind)?.schemaId;
     if (!schemaId) {
       setCreateError(
@@ -346,6 +380,12 @@ export default function RecordRegistryPage() {
     setDirty(false);
     setError(null);
     setDraftRevisionNote(null);
+    // QMS7-5 FIX1 (adv-review DEFECT 5b): Cancel exits the whole Create
+    // affordance state — a stale picker or Create error banner must not
+    // persist until the next Create attempt.
+    setCreateKindPickerOpen(false);
+    setPendingCreateKind(null);
+    setCreateError(null);
   };
 
   // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
