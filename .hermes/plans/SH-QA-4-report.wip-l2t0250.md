@@ -108,3 +108,29 @@ T1/T2/T4 + sibling mixture legs flipped RED->GREEN; T3/T5 pins stayed GREEN thro
 - Browser leg folded into SH-QB-1/SH-QC-1 gate per spec; reviewer criteria: (a) exactly one volume string on the mixture ghost tooltip (header), (b) no row shows 100.0 µL, (c) cells row shows 50,000 count + 500 cells/uL and no volume, (d) single-material hover (clofibrate-style) still shows its per-row volume; sibling surfaces (graph/labware tooltip, WellContextPanelV2, ContextPanel) show fraction instead of carrier volume.
 - e2e pin app/e2e/deck-ghost-shorthand.spec.ts:329 `/50/` untouched; its single-material 50 µL leg keeps its row + header (requirement 3).
 - app tsc baseline at MY branch point is 27 (not the spec's 23 — trunk drift), zero-new proven by sorted-diff against my own base raw.
+
+## BASELINE REPAIR (lane-exclude symlinks) — supersedes the §Baselines numbers above
+
+Fresh worktree initially lacked the 60 lane-exclude symlinks the trunk worktree
+carries (find server app -type l in cl-integration-2; all 60 are UNTRACKED at
+tip per git ls-files, targets under /mnt/vast/home/brad/git/computable-lab/...).
+Without them, baselines read WRONG: app tsc 27 (6 phantom TS2307: registry.ts,
+protocolStepText.ts, draftChanges.ts, ParameterAnswerInput.tsx) and server tsc
+26 (TS2307 on materialRefFields.ts etc.).
+
+Repair: recreated all 60 links in the worktree pointing at the trunk worktree's
+resolved targets (server/schema -> worktree's own schema dir). git status stays
+clean (lane-excluded paths).
+
+REPAIRED baselines (branch point 95f73755) == spec's promotion-time numbers:
+- app `npx tsc --noEmit`: **23** error lines. Head: **23**. Sorted diff EMPTY.
+  (raws /tmp/shqa4-base-app-tsc-repaired.txt /tmp/shqa4-head-app-tsc-repaired.txt)
+- server `npx tsc --noEmit`: **1** error (AgentOrchestrator.ts(345,18) TS2339 —
+  the spec's exact pre-existing error). Head byte-identical, md5
+  745876ef4a13beb3ab5c10b636cd255e both sides.
+- Targeted vitest (focus + graph/lib + graph/labware + shared/lib + the two
+  sibling panel dirs): **20 files / 93 tests passed**, zero fail-files.
+
+The earlier 27/26 numbers in this report are the unrepaired-worktree artifacts;
+the repaired 23/1 pair is authoritative and matches the orchestrator's
+promotion-time measurement at 27ef008f.
