@@ -38,8 +38,9 @@
  * Classification is ORIGIN-based (thrown-from-driver vs compile RESULT object),
  * never message-substring based. The ask/answer round-trip stays on its own
  * 200 channel: needsAnswers is NOT needs-clarification.
- * The route is WRITE-FREE: its only store use is loadLabInventory's read-only
- * store.list; it never executes a run and never accepts a proposal.
+ * The route is WRITE-FREE: its store uses are read-only — loadLabInventory's
+ * store.list and (W2-8 A5f) the answers-branch source-protocol load via
+ * store.get; it never executes a run and never accepts a proposal.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
@@ -47,7 +48,7 @@ import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { resolveAiProfile } from '../../config/types.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import type { AppContext } from '../../server.js';
-import type { RecordStore } from '../../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 import { ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
 import type { EngineSpineLike } from '../../compiler/resolution/adapters.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../../compiler/scientistIntent/types.js';
@@ -154,6 +155,50 @@ function composeAnsweredPrompt(protocolText: string, answers: Record<string, str
   ].join('\n');
 }
 
+/**
+ * W2-8 A5f (spec §D1): the source protocol's DECLARED ROLES ride the answered
+ * prompt as DATA. Same composition pattern as composeAnsweredPrompt above and
+ * composeIntentPrompt (compiler/scientistIntent/intentCompile.ts:128-141, the
+ * LAB INVENTORY block): a framing line + one line per entry, every value read
+ * verbatim from the record payload. Nothing here knows any vocabulary, protocol
+ * title, or role name: the groups are the payload.roles object's own keys, and
+ * each line renders the role's declared fields (roleId, description, and the
+ * record's own id-hint arrays — schema/workflow/protocol.schema.yaml LabwareRole
+ * expectedLabwareKinds / MaterialRole allowedMaterialIds / InstrumentRole
+ * allowedInstrumentIds, detected generically as the role object's string-array
+ * fields). Absent roles / irregular shape -> null: EXACTLY today's prompt
+ * (stop boundary 1 — treat as absent, never an error).
+ */
+function renderDeclaredRolesBlock(envelope: RecordEnvelope): string | null {
+  const payload = typeof envelope.payload === 'object' && envelope.payload !== null && !Array.isArray(envelope.payload)
+    ? envelope.payload as Record<string, unknown>
+    : {};
+  const roles = payload['roles'];
+  if (typeof roles !== 'object' || roles === null || Array.isArray(roles)) return null;
+  const lines: string[] = [];
+  for (const [group, rawGroup] of Object.entries(roles as Record<string, unknown>)) {
+    if (!Array.isArray(rawGroup)) continue;
+    for (const rawRole of rawGroup) {
+      if (typeof rawRole !== 'object' || rawRole === null || Array.isArray(rawRole)) continue;
+      const role = rawRole as Record<string, unknown>;
+      const roleId = typeof role['roleId'] === 'string' ? role['roleId'].trim() : '';
+      if (!roleId) continue;
+      const description = typeof role['description'] === 'string' ? role['description'].trim() : '';
+      const hints = Object.entries(role)
+        .filter(([field, value]) =>
+          field !== 'roleId' && field !== 'description' && Array.isArray(value)
+          && (value as unknown[]).every((v) => typeof v === 'string' && v.trim()))
+        .flatMap(([, value]) => (value as string[]).map((v) => v.trim()));
+      lines.push(`- ${group}: ${roleId}${description ? ` — ${description}` : ''}${hints.length ? ` (declared ids: ${hints.join(', ')})` : ''}`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return [
+    'DECLARED ROLES (declared by the scientist for this protocol — bind matching protocol nouns to these roles; use the role description as the labware/material name when it matches):',
+    ...lines,
+  ].join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // SPINE-5 response contract (exported from THIS handler file — the payload
 // type IS ScientistIntentUnresolvedFact, consumed verbatim; no second schema
@@ -255,6 +300,24 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
     };
   }
 
+  // W2-8 A5f (spec §D1): load the source protocol record on the ANSWERS branch
+  // ONLY (the ask branch never reads it). store.get(id) is the repo pattern
+  // (UIHandlers.ts:160). Absent id / null record / non-protocol kind / roles
+  // absent or irregular -> null: today's byte-identical prompt, no block, no
+  // error (stop boundary 1). A GENUINE store fault is NOT swallowed here — it
+  // propagates to the handler's existing 500 INTENT_COMPILE_PROMPT_FAILED
+  // convention (R4: loud only for real faults, no new error path).
+  async function loadDeclaredRolesBlock(sourceProtocolId: string | undefined): Promise<string | null> {
+    if (!sourceProtocolId) return null;
+    const envelope = await store.get(sourceProtocolId);
+    if (!envelope) return null;
+    const payload = typeof envelope.payload === 'object' && envelope.payload !== null && !Array.isArray(envelope.payload)
+      ? envelope.payload as Record<string, unknown>
+      : {};
+    if (payload['kind'] !== 'protocol') return null;
+    return renderDeclaredRolesBlock(envelope);
+  }
+
   return {
     async compileFromPrompt(
       request: FastifyRequest<{ Body: unknown }>,
@@ -302,11 +365,20 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       let emitted: { intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileFromSmallLlm>>['compile'] };
       try {
         const labInventory = await loadLabInventory();
+        // W2-8 A5 (S leg): the scientist's answers ride the prompt as data
+        // (see composeAnsweredPrompt) — the compile sees the settled choices
+        // instead of re-deriving the same macro and re-barring.
+        // W2-8 A5f (spec §D1): the source protocol's DECLARED ROLES ride the
+        // SAME answered prompt (appended at this call site — no second channel).
+        // No sourceProtocolId / unreadable record / no roles -> declaredRoles is
+        // null and `prompt` keeps composeAnsweredPrompt's exact output — the
+        // byte-identical today's-prompt guarantee (R2). A store fault stays
+        // loud via this existing catch (R4).
+        let prompt = composeAnsweredPrompt(protocolText, answers);
+        const declaredRoles = await loadDeclaredRolesBlock(body?.sourceProtocolId);
+        if (declaredRoles) prompt = `${prompt}\n\n${declaredRoles}`;
         emitted = await compileFromSmallLlm({
-          // W2-8 A5 (S leg): the scientist's answers ride the prompt as data
-          // (see composeAnsweredPrompt) — the compile sees the settled choices
-          // instead of re-deriving the same macro and re-barring.
-          prompt: composeAnsweredPrompt(protocolText, answers),
+          prompt,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
           deps: { searchLabwareByHint, spine },
