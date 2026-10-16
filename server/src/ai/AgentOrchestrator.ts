@@ -526,14 +526,29 @@ function stampDraftProvenance<T>(events: T[]): T[] {
   });
 }
 
-/** Exported for the guard test that pins the equipment bullet (Phase 4.3). */
-export const FORCED_DRAFT_TOOL_INSTRUCTION = [
+/**
+ * SH-PROMPT-HYGIENE-1: the forced-draft instruction bullets are factored into shared
+ * arrays so the legacy const and the shorthand variant are composed from the SAME
+ * verbatim bullet strings. `FORCED_DRAFT_TOOL_INSTRUCTION` (exported, pinned by the
+ * equipment/instruction tests) stays BYTE-IDENTICAL for every non-migrated surface.
+ * `FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND` drops the legacy field menu and the raw-
+ * events placement clause the AS-4 refusal arm makes unusable on shorthand-drafting
+ * surfaces (membership is DATA — config/drafting/shorthand-drafting.yaml, read via
+ * surfaceDraftsShorthand at the ONE push site in buildPrefixRequest; zero surface-name
+ * literals here, repo rule #1). The instrument bullet and the bench-equipment bullet
+ * stay in BOTH variants (OQ-1 owns the migrated-surface equipment routing gap — the
+ * prompt fix must not silently invent an answer).
+ */
+const FORCED_DRAFT_HEAD_BULLETS = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${AGENT_INTENT_TOOL_NAME} tool exactly once, choosing ONE intent from its menu.`,
   '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.',
   '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.',
+];
+
+const FORCED_DRAFT_LEGACY_MIDDLE_BULLETS = [
   '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
@@ -544,8 +559,46 @@ export const FORCED_DRAFT_TOOL_INSTRUCTION = [
   '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
+];
+
+const FORCED_DRAFT_SHORTHAND_MIDDLE_BULLETS = [
+  '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — on this surface the action rides the `shorthand` document (or `deck_layout` / `create_record`) — not just the intent.',
+  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
+  '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
+  '- ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.',
+  '- A MIXTURE is never one material: when the scientist names a ratio, a percent, a medium plus additives, or cells in a suspension, carry every component in the action\'s `params.composition` array (one entry per component: material + role, plus fraction/count as stated). Never put a mixture sentence in `material`.',
+  '- When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.',
+  '- Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist\'s words) — never a hand-built legacy payload.',
+  '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something the lab already owns on the bench goes through the shorthand document / deck context — NEVER a raw events payload on this surface; never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
+  '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT a labware request, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
+  '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
+];
+
+const FORCED_DRAFT_TAIL_BULLETS = [
   '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one. The full menu with each verb\'s accepted args is the ACTIONS block below; write the verb as the VALUE of the `action` key.',
   defaultScientistIntentVocabulary().contractBlock(),
+];
+
+/** Exported for the guard test that pins the equipment bullet (Phase 4.3). */
+export const FORCED_DRAFT_TOOL_INSTRUCTION = [
+  ...FORCED_DRAFT_HEAD_BULLETS,
+  ...FORCED_DRAFT_LEGACY_MIDDLE_BULLETS,
+  ...FORCED_DRAFT_TAIL_BULLETS,
+].join('\n');
+
+/**
+ * SH-PROMPT-HYGIENE-1: the shorthand-drafting variant of the forced instruction.
+ * Same head (incl. the instrument bullet), same tail (closed-verb rule + the generated
+ * contract block exactly once), same bench-equipment bullet with its equipment
+ * vocabulary intact; the middle drops the legacy field menu and the raw-events
+ * placement clause (the AS-4 refusal makes a raw events emission unusable on these
+ * surfaces — the refusal arm itself stays untouched). Selected at the ONE push site
+ * in buildPrefixRequest via surfaceDraftsShorthand (DATA membership).
+ */
+export const FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND = [
+  ...FORCED_DRAFT_HEAD_BULLETS,
+  ...FORCED_DRAFT_SHORTHAND_MIDDLE_BULLETS,
+  ...FORCED_DRAFT_TAIL_BULLETS,
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
@@ -1152,7 +1205,7 @@ export function createAgentOrchestrator(
     }
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
-    if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+    if (forceDraftTool) systemSections.push(surfaceDraftsShorthand(args.surface) ? FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND : FORCED_DRAFT_TOOL_INSTRUCTION);
     // Pushed LAST so they sit adjacent to the forced-tool instruction (OQ1
     // ruling: the grounding block carries the compose_analysis routing rule;
     // the rules block carries the compose_workstate tab/target rule — pinned
