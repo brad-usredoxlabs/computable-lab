@@ -36,6 +36,15 @@ export interface MaterialEntry {
   materialInstanceRef?: string
   vendorProductRef?: string
   volume_uL: number
+  /** SH-QA-4: true when volume_uL is the MIXTURE's carrier volume stamped on a
+   * multi-entry composition_snapshot row — NOT this material's own volume.
+   * Presentation must not publish it as a per-component volume. */
+  volumeIsCarrier?: boolean
+  /** SH-QA-4: proportion share generically parsed from the snapshot entry's
+   * `source` string (e.g. "50%"); absent when the source does not parse. */
+  fractionOfMixture?: string
+  /** SH-QA-4: event-level counter density attached to the row carrying the count. */
+  counterDensity?: ConcentrationValue
   concentration?: ConcentrationValue
   concentrationUnknown?: boolean
   count?: number
@@ -53,6 +62,13 @@ export interface WellComponentLedgerEntry {
   materialInstanceRef?: string
   vendorProductRef?: string
   carrierVolume_uL: number
+  /** SH-QA-4 ledger marker: this row came from a multi-entry composition_snapshot;
+   * carrierVolume_uL is the mixture's carrier, not the component's own volume.
+   * The ledger keeps the carrier (transfer/dilution bookkeeping scales it) — only
+   * the per-row PUBLICATION changes. */
+  volumeIsCarrier?: boolean
+  fractionOfMixture?: string
+  counterDensity?: ConcentrationValue
   concentrationUnit?: string
   concentrationBasis?: ConcentrationBasis
   canonicalAmountKind?: CanonicalAmountKind
@@ -295,6 +311,18 @@ function createComponentKey(details: AddMaterialDetails, materialLabel: string, 
   return componentId ? `${sourceKey}::${componentId}` : sourceKey
 }
 
+// SH-QA-4: generic proportion-share parser for composition_snapshot `source`
+// strings. The compiler emits "<fraction> of the mixture" (simpleVerbs.ts
+// expander); this matches the SHAPE only — never keyed to any material name.
+// Unparseable sources yield no fraction (display shows nothing, never a guess).
+const MIXTURE_FRACTION_RE = /^\s*([\d.]+\s*%)\s+of\s+the\s+mixture\s*$/i
+
+export function parseMixtureFraction(source: string | undefined): string | undefined {
+  if (typeof source !== 'string') return undefined
+  const match = MIXTURE_FRACTION_RE.exec(source)
+  return match ? match[1].replace(/\s+/g, '') : undefined
+}
+
 function createLedgerEntry(
   event: PlateEvent,
   details: AddMaterialDetails,
@@ -304,9 +332,20 @@ function createLedgerEntry(
     concentration?: ConcentrationValue
     role?: string
     count?: number
+    /** SH-QA-4: composition-row marker (see MaterialEntry.volumeIsCarrier). */
+    volumeIsCarrier?: boolean
+    fractionOfMixture?: string
+    counterDensity?: ConcentrationValue
+    /** SH-QA-4 requirement 4: snapshot arms pass ONLY the entry's own
+     * concentration — never fall through to the event-level (mixture's). */
+    noEventConcentrationFallback?: boolean
   },
 ): WellComponentLedgerEntry {
-  const normalizedConcentration = normalizeConcentration(options?.concentration ?? details.concentration)
+  const normalizedConcentration = normalizeConcentration(
+    options?.noEventConcentrationFallback
+      ? options?.concentration
+      : options?.concentration ?? details.concentration,
+  )
   const descriptor = getDescriptor(normalizedConcentration)
   const volume_uL = details.volume?.value || 0
   const canComputeAmount = Boolean(normalizedConcentration && descriptor && volume_uL > 0)
@@ -323,6 +362,9 @@ function createLedgerEntry(
     ...(getRecordId(details.material_instance_ref) ? { materialInstanceRef: getRecordId(details.material_instance_ref) } : {}),
     ...(getRecordId(details.vendor_product_ref) ? { vendorProductRef: getRecordId(details.vendor_product_ref) } : {}),
     carrierVolume_uL: volume_uL,
+    ...(options?.volumeIsCarrier ? { volumeIsCarrier: true } : {}),
+    ...(options?.fractionOfMixture ? { fractionOfMixture: options.fractionOfMixture } : {}),
+    ...(options?.counterDensity ? { counterDensity: options.counterDensity } : {}),
     ...(normalizedConcentration?.unit ? { concentrationUnit: normalizedConcentration.unit } : {}),
     ...(normalizedConcentration?.basis || descriptor?.basis
       ? { concentrationBasis: normalizedConcentration?.basis || descriptor?.basis }
@@ -426,6 +468,9 @@ function deriveMaterialEntry(component: WellComponentLedgerEntry, totalVolume_uL
     ...(component.materialInstanceRef ? { materialInstanceRef: component.materialInstanceRef } : {}),
     ...(component.vendorProductRef ? { vendorProductRef: component.vendorProductRef } : {}),
     volume_uL: component.carrierVolume_uL,
+    ...(component.volumeIsCarrier ? { volumeIsCarrier: true } : {}),
+    ...(component.fractionOfMixture ? { fractionOfMixture: component.fractionOfMixture } : {}),
+    ...(component.counterDensity ? { counterDensity: component.counterDensity } : {}),
     ...(concentration ? { concentration } : {}),
     ...(component.concentrationUnknown ? { concentrationUnknown: true } : {}),
     ...(typeof component.count === 'number' ? { count: component.count } : {}),
@@ -463,6 +508,11 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
   const materialLabel = getRefLabel(getAddMaterialRef(details) as string | { label?: string; id?: string } | undefined)
   const snapshot = Array.isArray(details.composition_snapshot) ? details.composition_snapshot : []
   if (snapshot.length > 0) {
+    // SH-QA-4: a multi-entry snapshot means the event volume is the MIXTURE's
+    // carrier stamped on every component (duplicated, not divided). Mark those
+    // rows so presentation states the volume once at well level. A single-entry
+    // snapshot keeps today's display: the volume IS that material's own volume.
+    const isCarrierComposition = snapshot.length > 1
     snapshot.forEach((entry, index) => {
       const componentRef = entry.componentRef || (entry as unknown as { component_ref?: typeof entry.componentRef }).component_ref
       const componentLabel = componentRef?.label || componentRef?.id || materialLabel || `component_${index + 1}`
@@ -472,6 +522,14 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
         concentration: entry.concentration,
         role: entry.role,
         count,
+        ...(isCarrierComposition ? { volumeIsCarrier: true } : {}),
+        // The share is only meaningful on carrier rows; a single-entry snapshot
+        // keeps today's display byte-identical (requirement 3).
+        ...(isCarrierComposition && parseMixtureFraction(entry.source) ? { fractionOfMixture: parseMixtureFraction(entry.source) } : {}),
+        // Density is event-level: attach it generically to the row that carries
+        // the count (same predicate as the count grant), never by name lookup.
+        ...(count !== undefined && details.counter_density ? { counterDensity: details.counter_density } : {}),
+        noEventConcentrationFallback: true,
       }))
     })
   } else if (materialLabel) {
