@@ -387,7 +387,7 @@ export function clarificationsFromUnresolvedFacts(
   // wire SHAPE change) and the ", or create a local term" prompt clause drop
   // together by conditional arm. The QUESTION itself is never removed — the
   // scientist can still search /m or pick a near-miss. A cue hit alone never
-  // refuses mint (the clofibrate/lysozyme/Triton survivors stay mintable).
+  // refuses mint (the sibling canon formulations stay mintable).
   const nounShape = loadNounShape();
   return facts.map((fact) => {
     const loc = fact.actionLocation;

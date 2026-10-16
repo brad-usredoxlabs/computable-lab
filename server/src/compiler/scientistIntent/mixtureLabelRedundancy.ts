@@ -167,8 +167,8 @@ function isRedundantAgainstComponents(
   };
   for (const pattern of cues.shape.ratioPatterns) deletePattern(pattern);
   // Delete every word the label shares with a component (the label enumerates
-  // the components' own words — including catalogue-shaped ones like "hepg2"
-  // that the flanking componentPattern would not call a component).
+  // the components' own words — including catalogue-shaped ones the flanking
+  // componentPattern would not call a component).
   for (const word of [...componentWords].sort((a, b) => b.length - a.length)) {
     deletePattern(new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'u'));
   }
