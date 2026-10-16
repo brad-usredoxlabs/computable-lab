@@ -85,7 +85,11 @@ it.each(['json','encoded_action','prose_then_tool','prose_only'])('requires a va
  const bridge={getToolDefinitions:()=>[],executeTool:vi.fn()} as unknown as ToolBridge;const store={create:vi.fn(),update:vi.fn(),get:vi.fn()} as any;const validate=vi.fn().mockReturnValue({valid:true});
  const agent=createAgentOrchestrator(inference,bridge,{baseUrl:'http://test',model:'test'},{draftFlowMode:'forced-tool'},{store,sequenceActionSchema:schema,validateSequenceAction:validate});
  const result=await agent.run({prompt:'Create a FAM-QSY probe',surface:'sequences',context:{labwares:[],eventSummary:'',vocabPackId:'general',availableVerbs:[]}});
- if(mode==='prose_only'){expect(calls).toBe(3);expect(result.success).toBe(false);expect(result.error).toContain('Nothing was saved');expect(validate).not.toHaveBeenCalled();}
+ if(mode==='prose_only'){// HARNESS-SEQ-2 FIX3 (gate 2026-10-16_0445 D2): the zero-toolcall
+ // sequences turn now retries ONCE (bounded), so the honest failure lands after
+ // 2 calls, not the old 3. Spec-driven re-pin of the retry budget (the approved
+ // fix direction names "retry the turn ONCE"); the honest-failure assertions stay.
+ expect(calls).toBe(2);expect(result.success).toBe(false);expect(result.error).toContain('Nothing was saved');expect(result.error).toContain('agent_intent');expect(validate).not.toHaveBeenCalled();}
  else{expect(result).toMatchObject({success:true,sequenceProposal:proposal});expect(validate).toHaveBeenCalledWith(proposal);expect(calls).toBe(mode==='prose_then_tool'?2:1);}
  expect(store.create).not.toHaveBeenCalled();expect(store.update).not.toHaveBeenCalled();expect(bridge.executeTool).not.toHaveBeenCalled();
 });
