@@ -4,9 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   parseRecord,
@@ -480,7 +481,307 @@ title: Generic 96 Well Plate, Flat Bottom (seed)
       expect(result.error).toContain('not found');
     });
   });
-  
+
+  // ==========================================================================
+  // QMS7-2 — seed copy-on-write promotion (RED-first).
+  //
+  // Reads (get/list/search) resolve seed records; writes must agree. The
+  // first AUTHORIZED, VALID update of a seed-resolved record promotes the
+  // seed content into the working data dir via the normal write path,
+  // applies the update there, and surfaces a typed provenance marker.
+  // Validation/walls run BEFORE any durable promotion; refused writes leave
+  // zero residue. The seed dir is NEVER written.
+  //
+  // Harness mirrors the existing seed-get tests (:352-390): LocalRepoAdapter
+  // + tmpdir seedDir + labware-shaped fixture. No production kind names or
+  // record ids appear here beyond test fixtures.
+  // ==========================================================================
+  describe('seed copy-on-write promotion (QMS7-2)', () => {
+    const SEED_ID = 'lbw-cow-plate-96';
+    const SEED_TITLE = 'Seed Plate 96';
+
+    const seedFileContent = `
+recordId: ${SEED_ID}
+$schema: https://test.com/test.schema.yaml
+kind: labware
+title: ${SEED_TITLE}
+`;
+
+    /** Adapter fingerprint convention: sha256 hex, first 40 chars. */
+    const sha40 = (content: string): string =>
+      createHash('sha256').update(content).digest('hex').slice(0, 40);
+
+    async function makeSeedStore(
+      seedDirName: string,
+      seedFileName: string,
+      content: string,
+      extraConfig: { appendOnlyKinds?: string[] } = {},
+    ): Promise<{ seedStore: RecordStoreImpl; seedDir: string; seedFilePath: string }> {
+      const seedDir = join(testDir, seedDirName);
+      const kindDir = join(seedDir, 'labware');
+      await mkdir(kindDir, { recursive: true });
+      const seedFilePath = join(kindDir, seedFileName);
+      await writeFile(seedFilePath, content);
+      const seedStore = createRecordStore(repo, validator, lintEngine, {
+        seedDir,
+        ...(extraConfig.appendOnlyKinds !== undefined ? { appendOnlyKinds: extraConfig.appendOnlyKinds } : {}),
+      });
+      return { seedStore, seedDir, seedFilePath };
+    }
+
+    const updatedEnvelope = (title: string) => ({
+      recordId: SEED_ID,
+      schemaId: 'https://test.com/test.schema.yaml',
+      payload: {
+        recordId: SEED_ID,
+        $schema: 'https://test.com/test.schema.yaml',
+        kind: 'labware',
+        title,
+      },
+    });
+
+    const dataDirFiles = () =>
+      repo.listFiles({ directory: 'records', pattern: '*.yaml', recursive: true });
+
+    // R1 — the core bug: get() resolves the seed record, update() must too.
+    it('R1: first valid update of a seed-resolved record promotes it into the data dir with a provenance marker', async () => {
+      const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-r1', 'lbw-cow-plate-96.yaml', seedFileContent);
+
+      // Read path already sees the seed (existing behavior, pinned).
+      const seedRead = await seedStore.get(SEED_ID);
+      expect(seedRead).not.toBeNull();
+      expect(seedRead?.meta?.commitSha).toBe('seed');
+
+      const result = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (edited)`) });
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+
+      // Typed promotion marker with seed provenance.
+      expect(result.promotion).toBeDefined();
+      expect(result.promotion?.seedPath).toBe(seedFilePath);
+      expect(result.promotion?.seedContentSha).toBe(sha40(seedFileContent));
+
+      // Working copy lands at the {recordId}__{slug}.yaml convention so the
+      // fast path-scan resolves it.
+      const promotedPath = result.envelope?.meta?.path;
+      expect(promotedPath).toBeDefined();
+      expect(promotedPath!.startsWith('records/labware/')).toBe(true);
+      expect(promotedPath!.includes(`${SEED_ID}__`)).toBe(true);
+      expect(await repo.fileExists(promotedPath!)).toBe(true);
+
+      // The working copy carries the EDITED content and real repo meta.
+      const fetched = await seedStore.get(SEED_ID);
+      expect((fetched?.payload as Record<string, unknown>).title).toBe(`${SEED_TITLE} (edited)`);
+      expect(fetched?.meta?.path).toBe(promotedPath);
+      expect(fetched?.meta?.commitSha).not.toBe('seed');
+      expect(fetched?.meta?.contentSha).toBeDefined();
+
+      // Seed file untouched.
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(seedFileContent);
+    });
+
+    // OQ3 ruling: the seed read path stamps commitSha 'seed' (no contentSha),
+    // so a handler-echoed token arrives as the literal 'seed' — accept it.
+    it('OQ3: expectedSha === "seed" matches the seed fingerprint; a foreign sha is refused', async () => {
+      const { seedStore } = await makeSeedStore('seed-cow-oq3', 'lbw-cow-plate-96.yaml', seedFileContent);
+
+      // Foreign sha first: the seed fingerprint is the stored content here.
+      const foreign = await seedStore.update({
+        envelope: updatedEnvelope(`${SEED_TITLE} (foreign)`),
+        expectedSha: 'f'.repeat(40),
+      });
+      expect(foreign.success).toBe(false);
+      expect(foreign.error).toBe(
+        `SHA mismatch: expected ${'f'.repeat(40)}, got ${sha40(seedFileContent)}`,
+      );
+
+      // The literal 'seed' token the read path stamps is accepted.
+      const ok = await seedStore.update({
+        envelope: updatedEnvelope(`${SEED_TITLE} (token)`),
+        expectedSha: 'seed',
+      });
+      expect(ok.success).toBe(true);
+      expect(ok.promotion?.seedContentSha).toBe(sha40(seedFileContent));
+    });
+
+    // R3 — exactly once after promotion: list suppression (:349) and get
+    // preferring the working copy (:247) already exist; pin them.
+    it('R3: after promotion, list({kind}) returns the record exactly once and get() returns the working copy', async () => {
+      const { seedStore } = await makeSeedStore('seed-cow-r3', 'lbw-cow-plate-96.yaml', seedFileContent);
+
+      const promoted = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (edited)`) });
+      expect(promoted.success).toBe(true);
+
+      const labware = await seedStore.list({ kind: 'labware' });
+      const matches = labware.filter((e) => e.recordId === SEED_ID);
+      expect(matches.length).toBe(1);
+      expect(matches[0]?.meta?.path).toBe(promoted.envelope?.meta?.path);
+      expect(matches[0]?.meta?.commitSha).not.toBe('seed');
+
+      const byId = await seedStore.get(SEED_ID);
+      expect(byId?.meta?.path).toBe(promoted.envelope?.meta?.path);
+      expect(byId?.meta?.path?.startsWith('records/')).toBe(true);
+    });
+
+    // R4 — residue freedom: every refused promotion leaves the data dir
+    // byte-identical and the seed file untouched.
+    it('R4a: invalid payload (validation fails) refuses with zero residue', async () => {
+      const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-r4a', 'lbw-cow-plate-96.yaml', seedFileContent);
+      const before = await dataDirFiles();
+
+      const result = await seedStore.update({
+        envelope: {
+          recordId: SEED_ID,
+          schemaId: 'https://test.com/test.schema.yaml',
+          // Missing required 'kind' → Ajv validation failure.
+          payload: { recordId: SEED_ID, $schema: 'https://test.com/test.schema.yaml' },
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Validation failed');
+      expect(result.validation?.valid).toBe(false);
+      expect(await dataDirFiles()).toEqual(before);
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(seedFileContent);
+    });
+
+    it('R4b: append-only-kind seed (config-injected kind) is refused with zero residue', async () => {
+      const appendOnlyKind = 'test-immutable-kind';
+      const content = `
+recordId: ${SEED_ID}
+$schema: https://test.com/test.schema.yaml
+kind: ${appendOnlyKind}
+title: ${SEED_TITLE}
+`;
+      const { seedStore, seedFilePath } = await makeSeedStore(
+        'seed-cow-r4b',
+        'lbw-cow-plate-96.yaml',
+        content,
+        { appendOnlyKinds: [appendOnlyKind] },
+      );
+      const before = await dataDirFiles();
+
+      const result = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (edited)`) });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('APPEND_ONLY: immutable records cannot be updated');
+      expect(await dataDirFiles()).toEqual(before);
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(content);
+    });
+
+    it('R4c: content-locked seed (approved lifecycle state + controlled content change) is refused with zero residue', async () => {
+      const content = `
+recordId: ${SEED_ID}
+$schema: https://test.com/test.schema.yaml
+kind: labware
+title: ${SEED_TITLE}
+lifecycleId: test-controlled-lifecycle
+state: approved
+`;
+      const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-r4c', 'lbw-cow-plate-96.yaml', content);
+      const before = await dataDirFiles();
+
+      const result = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (tampered)`) });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('CONTROLLED_RECORD_LOCKED');
+      expect(await dataDirFiles()).toEqual(before);
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(content);
+    });
+
+    it('R4d: wrong expectedSha refuses with SHA mismatch and zero residue', async () => {
+      const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-r4d', 'lbw-cow-plate-96.yaml', seedFileContent);
+      const before = await dataDirFiles();
+
+      const result = await seedStore.update({
+        envelope: updatedEnvelope(`${SEED_TITLE} (edited)`),
+        expectedSha: 'a'.repeat(40),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('SHA mismatch');
+      expect(await dataDirFiles()).toEqual(before);
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(seedFileContent);
+    });
+
+    // R5 — promotion happens inside the per-record write lock
+    // (withRecordLock, 'write:' + recordId): two concurrent updates
+    // serialize; exactly one working file results.
+    it('R5: two concurrent updates of the same seed id serialize to exactly one working file', async () => {
+      const { seedStore } = await makeSeedStore('seed-cow-r5', 'lbw-cow-plate-96.yaml', seedFileContent);
+
+      const first = seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (writer A)`) });
+      const second = seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (writer B)`) });
+      const [r1, r2] = await Promise.all([first, second]);
+
+      expect(r1.success).toBe(true);
+      expect(r2.success).toBe(true);
+      // Exactly one promotion happened; the other applied normally on top.
+      const promotions = [r1, r2].filter((r) => r.promotion !== undefined);
+      expect(promotions.length).toBe(1);
+
+      const files = await dataDirFiles();
+      expect(files.filter((f) => f.includes(SEED_ID)).length).toBe(1);
+
+      const final = await seedStore.get(SEED_ID);
+      const finalTitle = (final?.payload as Record<string, unknown>).title;
+      expect([`${SEED_TITLE} (writer A)`, `${SEED_TITLE} (writer B)`]).toContain(finalTitle);
+    });
+
+    // R6 — genuinely nonexistent ids keep refusing (no create-on-update).
+    it('R6: update for an id in neither dir still fails with Record not found', async () => {
+      const { seedStore } = await makeSeedStore('seed-cow-r6', 'lbw-cow-plate-96.yaml', seedFileContent);
+      const before = await dataDirFiles();
+
+      const result = await seedStore.update({
+        envelope: {
+          recordId: 'NOPE-COW-001',
+          schemaId: 'https://test.com/test.schema.yaml',
+          payload: { recordId: 'NOPE-COW-001', $schema: 'https://test.com/test.schema.yaml', kind: 'labware' },
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Record not found: NOPE-COW-001');
+      expect(result.promotion).toBeUndefined();
+      expect(await dataDirFiles()).toEqual(before);
+    });
+
+    // OQ1 ruling: delete() stays seed-refused; message-only clarification.
+    it('OQ1: delete on a seed-resolved record refuses with the seed-specific message and zero residue', async () => {
+      const { seedStore, seedFilePath } = await makeSeedStore('seed-cow-oq1', 'lbw-cow-plate-96.yaml', seedFileContent);
+      const before = await dataDirFiles();
+
+      const result = await seedStore.delete({ recordId: SEED_ID });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe(
+        `Record ${SEED_ID} resolves from seed; seed records cannot be deleted`,
+      );
+      expect(await dataDirFiles()).toEqual(before);
+      expect(readFileSync(seedFilePath, 'utf-8')).toBe(seedFileContent);
+      // The seed record still reads back.
+      expect(await seedStore.get(SEED_ID)).not.toBeNull();
+    });
+
+    // Promotion must not leak into unrelated stores: no seedDir configured →
+    // update() keeps the plain 'Record not found' refusal (already covered
+    // by the existing 'fails for non-existent record' test; pinned here for
+    // the seedDir-configured store too via R6).
+    it('promotion marker is absent on ordinary working-copy updates', async () => {
+      const { seedStore } = await makeSeedStore('seed-cow-plain', 'lbw-cow-plate-96.yaml', seedFileContent);
+
+      const promoted = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (edited)`) });
+      expect(promoted.success).toBe(true);
+      expect(promoted.promotion).toBeDefined();
+
+      const again = await seedStore.update({ envelope: updatedEnvelope(`${SEED_TITLE} (second edit)`) });
+      expect(again.success).toBe(true);
+      expect(again.promotion).toBeUndefined();
+    });
+  });
+
   describe('list', () => {
     it('lists all records', async () => {
       // Create some records
