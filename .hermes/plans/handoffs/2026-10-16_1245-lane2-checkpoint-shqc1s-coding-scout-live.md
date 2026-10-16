@@ -56,6 +56,19 @@ SH-QC-1S coder (pid file: "SHQC1S 4157794 ... dispatch-pid:4157794").
     (tier ladder; last valid tier-2 run: receipts 2026-10-12_2015-a5d-tier2, fix-candidate
     was the zero-labware A5.3 leg). AS-LANE2-W28-GATE1-INVALID-ACCEPT stays open until
     A5d renders VERDICT: accept.
+    >> CORRECTION SAME TICK (l2t1210 addendum, orch firsthand): the scout's cite is REAL
+    (server/src/ai/compiler/labwareLookup.ts:62-95 opened — resolver does
+    store.list({kind:'labware'}) + LABWARE_ALIAS_MAP fast path + name/aliases scoring) and
+    the DB has TOTAL=27 kind=labware records (curl :3093 measured). So the A5d 21:00
+    adjudication's blocker ("0 labware-design records -> empty fixture") used the WRONG kind
+    string — labware-design is not what the lookup queries. A5.3's zero-resolved is NOT
+    explained by record absence. NEXT TICK: re-diagnose the A5.3 accept-leg failure directly
+    — trace WHICH hint string the held-bundle fold feeds searchLabwareByHint
+    (IntentCompileFromPromptHandlers.ts:198 injection point), whether it even reaches the
+    lookup, and what the deck resolver in the answeredPrompt path actually demands
+    (resolvedLabwares vs labwareAdditions, runChatbotCompile.ts:416). Do NOT seed anything
+    until the hint path is understood. AS-LANE2-W28-A5E-KIND-NOT-ENUMERATED REPLACED by
+    AS-LANE2-W28-A53-NOT-A-SEED-DEFECT (below).
 (3) AI-13 recount each tick (base 306; wave at >=500).
 (4) BRAD-PENDING (recorded, never re-asked unattended): D1 run-page-Accept-422 / D2
     clarification loop / D3 path-fork routing; W2-11 naming-stability; THREAD mint-floor OQ;
