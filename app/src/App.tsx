@@ -60,6 +60,9 @@ const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then
 // Phase 2a: standalone artifact viewer routes
 const ArtifactHostPage = lazy(async () => import('./shared/shell/ArtifactHostPage').then((m) => ({ default: m.ArtifactHostPage })))
 const RecordHostPage = lazy(async () => import('./shared/shell/RecordHostPage').then((m) => ({ default: m.RecordHostPage })))
+// QMS7-1: /registry hosted in the unified workspace shell (shell + tab strip +
+// right pane around the registry list+editor).
+const RegistryHostPage = lazy(async () => import('./shared/shell/RegistryHostPage').then((m) => ({ default: m.RegistryHostPage })))
 // Phase 4.1: standalone deck (event-graph) route
 const DeckHostPage = lazy(async () => import('./shared/shell/DeckHostPage').then((m) => ({ default: m.DeckHostPage })))
 // Ingestion/extraction draft routes (VendorPdfWorkflowTab navigates to these)
@@ -69,8 +72,8 @@ const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage'
 const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(m => ({ default: m.SequencesPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
-// QMS-5: record registry (multi-kind QMS browser). Default export.
-const RecordRegistryPage = lazy(async () => import('./pages/RecordRegistryPage').then((m) => ({ default: m.default })))
+// QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
+// now imported by RegistryHostPage (the shell host), not routed directly.
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -211,8 +214,9 @@ export function App() {
               <Route path="/analysis" element={<DeferredRoute><AnalysisPage /></DeferredRoute>} />
               {/* Standalone ChatGPT-style chat against the local AI model. */}
               <Route path="/chat" element={<DeferredRoute><ChatPage /></DeferredRoute>} />
-              {/* QMS-5: multi-kind record registry (people/equipment/training/…). */}
-              <Route path="/registry" element={<DeferredRoute><RecordRegistryPage /></DeferredRoute>} />
+              {/* QMS-5: multi-kind record registry (people/equipment/training/…).
+                  QMS7-1: hosted in the unified workspace shell. */}
+              <Route path="/registry" element={<DeferredRoute><RegistryHostPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />

@@ -206,6 +206,8 @@ export function tabPath(tab: WorkspaceTab): string | null {
       return `/record/${tab.recordId}`
     case 'collection':
       return `/${tab.collection}`
+    case 'registry':
+      return '/registry'
     case 'splash':
       return '/splash'
     default: {
