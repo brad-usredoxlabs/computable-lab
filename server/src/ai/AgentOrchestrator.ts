@@ -68,6 +68,7 @@ import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick 
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
 import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
+import { sequencesFocusGuard } from './sequencesFocusGuard.js';
 import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
 import {
   compileShorthandDeterministically,
@@ -1392,6 +1393,40 @@ export function createAgentOrchestrator(
         };
       }
 
+      /**
+       * HARNESS-SEQ-2 FIX3 (D1, gate 2026-10-16_0445, traces zyyrls/1ta7ju) —
+       * the deterministic sequences focus-guard, BEFORE the model. The gate
+       * proved the negative leg cannot ride model cooperation: the served
+       * model emitted zero agent_intent calls for "focus on record
+       * ANR-000001" (kind analysis-run, outside the surface's declared
+       * selectableKinds), so the client-side selectableKinds gate had nothing
+       * to refuse and the chat showed only the generic model-failure line.
+       * The guard reads the SAME registry DATA (surfaces.yaml selectableKinds
+       * through the injected SurfacesRegistry) plus the store's answer for the
+       * record's kind — zero kind policy in TS — and ends the turn with the
+       * NAMED refusal: zero inference, zero agent_action frames, zero writes.
+       * Swap the registry and the refusal text flips (unit-pinned).
+       */
+      if (surface === 'sequences') {
+        const focusRefusal = await sequencesFocusGuard(
+          { prompt, surface: surfaceName },
+          deps.store && deps.surfaces ? { store: deps.store, surfaces: deps.surfaces } : {},
+        );
+        if (focusRefusal) {
+          console.log(`[agent ${tid}] sequences focus-guard refusal surface=${surfaceName} code=${focusRefusal.code} — named refusal before the model (zero inference, zero writes): ${focusRefusal.message}`);
+          const guardElapsed = Date.now() - t0;
+          const guardSummary: AgentSummary = {
+            traceId: tid, surface: surfaceName, model, success: false, elapsedMs: guardElapsed,
+            turns: [],
+            totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            resolvedMentions: 0, bypass: null,
+          };
+          guardSummary.error = focusRefusal.message;
+          logAgentSummary(tid, guardSummary);
+          return { success: false, error: focusRefusal.message };
+        }
+      }
+
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -2038,7 +2073,15 @@ export function createAgentOrchestrator(
             );
           } else {
           if(surface==='sequences') {
-            if(sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
+            // HARNESS-SEQ-2 FIX3 (D2, gate 2026-10-16_0445, traces mgcnh6 vs
+            // dh649w): a forced-tool turn that completes with ZERO tool calls
+            // retries the turn ONCE — bounded and logged — then fails HONESTLY.
+            // The old budget allowed two nudges (three turns) and the failure
+            // line blamed a "structured sequence proposal" the user never asked
+            // for (a navigation request got a drafting-flavored generic error).
+            // The honest line names the actual failure: the model did not emit
+            // the forced agent_intent tool call.
+            if(sequenceRepairAttempts<1 && turn+1<effectiveMaxTurns) {
               sequenceRepairAttempts++;
               // SEQ2FIX2 D1a (gate 2026-10-15_1420, traces jbxrxc/8xk70f): this
               // nudge demanded `intent=sequence_action` unconditionally — when
@@ -2051,7 +2094,9 @@ export function createAgentOrchestrator(
               onEvent?.({type:'status',message:'Requesting the structured sequence emission…'});
               continue;
             }
-            return {success:false,error:'The model did not return a structured sequence proposal. Nothing was saved.'};
+            const complianceFailure = `The model (${model}) did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call after ${sequenceRepairAttempts + 1} attempt${sequenceRepairAttempts > 0 ? 's' : ''} (the retry was requested once). Nothing was saved.`;
+            console.warn(`[agent ${tid}] sequences forced-tool compliance failure model=${model} attempts=${sequenceRepairAttempts + 1} tool=${AGENT_INTENT_TOOL_NAME}`);
+            return {success:false,error:complianceFailure};
           }
           onEvent?.({
             type: 'status',
