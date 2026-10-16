@@ -104,3 +104,21 @@ assume it active). OWN-14 blocked on Brad (unchanged). OWN-12 in-progress (uncha
   read-only by design). Where: prompt browergate-QMS75-t5-l1t1345.txt. Reversible: true. Evidence-debt:
   false (environment precondition, first-hand verified: curl 200 post-restart).
 - No new coder/spec assumptions this tick (no coder output accepted).
+
+## AMEND 14:00 (same tick) — QMS7-6 coder EXITED COMPLETE; adversarial gate dispatched
+
+- QMS7-6 coder exited clean 13:54: end-line 'QMS7-6 DONE 95f52fd1f6922f08946db2c2fe4bb025898cebb2',
+  EXITED code=0. Fleet coder slot RELEASED (pid file stale — no live coder fleet-wide at checkpoint).
+  Branch wt/QMS7-6-lane1-l1t1230: dd0d7cc5 (RED-only) + 95f52fd1 (impl). 6 files, ZERO YAML, server
+  surface strictly LifecycleHandlers+test+client accessor per OQ-1(A) ruling. Report:
+  /home/brad/.hermes/cl/lanes/1/qms7-6-report-l1t1230.md (claims: app 80/80 touched suites, server
+  52/52 + zero-new full-handlers comm proof, app tsc 23==baseline, server tsc 0==measured-at-base;
+  live probes left EQP-QUANTSTUDIO5 ACTIVE for the gate; coder archived nothing).
+- ADVERSARIAL REVIEW dispatched 13:57: cl-adversarial-reviewer (profile-default deepseek-v4.1-flash,
+  no CLI override needed — see pitfall), pid 205760, log logs/advreview-QMS76-l1t1400.log, report
+  reviews/qms7-6-advreview-l1t1400.md, prompt prompts/advreview-QMS76-l1t1400.txt (bait 1-9 + OQ
+  rulings + re-run authority). Expected 20-40 min; next tick: on accept -> orch self-verify (open diff,
+  re-run touched suites, tsc) -> MERGE -> stack RESTART (server diff) -> confirm EQP-QUANTSTUDIO5
+  still active on :3092 -> browser gate. On fix -> fix run SAME worktree via fleet-lock queue.
+- Worker assumptions AS-QMS76-W1/W2/W3 recorded in assumptions.md (fail-open on 404, toggle scope,
+  worktree bootstrap repairs) — none evidence-debt.
