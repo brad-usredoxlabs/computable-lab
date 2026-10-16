@@ -202,6 +202,23 @@ async function openTab(label: string) {
   })
 }
 
+// QMS7-5 FIX2 (adv-review cycle-2 DEFECT 2): harness model of a user edit.
+// The REAL editor does two things on typing: it mutates the doc its getJSON
+// returns AND fires onUpdate(payload, dirty). Calling onUpdate alone (as
+// FIX1 did) left mocked.editorDoc stale, so any assertion reading the doc
+// was invariant under page behavior. enterDraftEdits does both, so the doc
+// the serializer reads on retry actually carries the entered values.
+function enterDraftEdits(values: Record<string, unknown>) {
+  const doc = mocked.editorDoc as {
+    content: { type: string; attrs: { path: string; value: unknown } }[]
+  }
+  for (const [key, value] of Object.entries(values)) {
+    const row = doc.content.find((r) => r.attrs.path === `$.${key}`)
+    if (row) row.attrs.value = value
+  }
+  mocked.editorOnUpdate!(values, true)
+}
+
 describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -453,16 +470,28 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
 
   it('a rejected save keeps the editor and the entered content, shows the server message verbatim, and Cancel exits cleanly', async () => {
     const { apiClient } = await import('../shared/api/client')
-    ;(apiClient.createRecord as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error('422 Unprocessable Entity: Missing required property: displayName'),
-    )
+    ;(apiClient.createRecord as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(
+        new Error('422 Unprocessable Entity: Missing required property: displayName'),
+      )
+      // The retry also fails (a server-side problem the client cannot fix by
+      // re-serializing) so the draft stays open for the Cancel pin below.
+      .mockRejectedValueOnce(
+        new Error('409 Conflict: id collides with an existing record'),
+      )
     render(<RecordRegistryPage />)
     await openTab('People')
     await clickCreate()
     await waitFor(() => {
       expect(mocked.editorDataProp).not.toBeNull()
     })
-    mocked.editorOnUpdate!({ displayName: 'QMS75 REJECTED PERSON', status: 'active' }, true)
+    // QMS7-5 FIX2 (adv-review cycle-2 DEFECT 2): the edit mutates the doc
+    // AND fires onUpdate — exactly what the real editor does — so the doc
+    // handleSave serializes actually carries the ENTERED value. FIX1 called
+    // onUpdate alone; the doc stayed at its beforeEach fixture, making the
+    // doc-value assertion invariant (non-discriminating).
+    const enteredDisplayName = 'QMS75 REJECTED PERSON'
+    enterDraftEdits({ displayName: enteredDisplayName, status: 'active' })
     fireEvent.click(await screen.findByRole('button', { name: /^save/i }))
 
     // The server message renders verbatim and the draft survives (pin:
@@ -471,14 +500,10 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
       expect(screen.getByText(/Missing required property: displayName/)).toBeTruthy()
     })
     expect(screen.getByTestId('projection-taptab-editor')).toBeTruthy()
-    // QMS7-5 FIX1 (adv-review DEFECT 4): real "entered content survives"
-    // assertions instead of the old tautology. The entered values live in the
-    // editor's doc (harness-captured); the failed save must not clear the
-    // editing subject nor the doc the serializer reads on retry.
-    expect(mocked.editorDoc).toBeTruthy()
-    const docRows = (mocked.editorDoc as { content: { attrs: { path: string; value: unknown } }[] }).content
-    const enteredDisplayName = docRows.find((r) => r.attrs.path === '$.displayName')?.attrs.value
-    expect(enteredDisplayName).toBe('QMS75 CREATED PERSON')
+    // QMS7-5 FIX2: the falsifiable "entered content survives" pin is the
+    // RETRY PAYLOAD below (cycle-2 DEFECT 2). The doc-value line FIX1 added
+    // is removed: mocked.editorDoc is harness-owned and the page cannot
+    // mutate it, so it could not fail — it pinned nothing.
     // The create base (kind + seeded id) the retry serializes over is intact.
     expect(mocked.editorDataProp!['kind']).toBe('person')
     const seededId = mocked.editorDataProp!['id']
@@ -487,6 +512,20 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     // The draft is still dirty: Save remains actionable for a corrected retry.
     const saveButton = screen.getByRole('button', { name: /^save/i }) as HTMLButtonElement
     expect(saveButton.disabled).toBe(false)
+
+    // Retry: Save a SECOND time. The rejected first attempt must not have
+    // dropped the entered content — the retry payload carries the ENTERED
+    // displayName (not the pre-fill) over the intact kind + seeded id.
+    await act(async () => {
+      fireEvent.click(saveButton)
+    })
+    await waitFor(() => {
+      expect(apiClient.createRecord).toHaveBeenCalledTimes(2)
+    })
+    const [, retryBody] = (apiClient.createRecord as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(retryBody['displayName']).toBe(enteredDisplayName)
+    expect(retryBody['kind']).toBe('person')
+    expect(new RegExp(mocked.patterns[SCHEMA_ID('person')]!).test(retryBody['id'] as string)).toBe(true)
 
     fireEvent.click(await screen.findByRole('button', { name: /cancel/i }))
     await waitFor(() => {
