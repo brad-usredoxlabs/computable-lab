@@ -44,7 +44,7 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
-import { loadNounShape, isMintableLabel } from '../compiler/scientistIntent/nounShape.js';
+import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {

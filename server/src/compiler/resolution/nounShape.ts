@@ -2,10 +2,10 @@
  * SH-QA-3 — the noun-shape DATA (OQ1 ruling): what counts as a CURIE-worthy
  * lab term vs a prose sentence is DECLARED policy, not a TypeScript branch.
  *
- * The policy lives in the drafting-config home
- * `config/drafting/shorthand-drafting.yaml` under a `nounShape:` section (the
- * per-call drafting-config precedent — never process-cached, so a data edit
- * needs no stack restart; the cue loader is the sibling idiom). It declares:
+ * The policy lives in the drafting-config home named by NOUN_SHAPE_POLICY_PATH
+ * below under a `nounShape:` section (the per-call drafting-config precedent —
+ * never process-cached, so a data edit needs no stack restart; the cue loader
+ * is the sibling idiom). It declares:
  *   • `mintRefusePatterns:` — sentence-shape DATA patterns seeded ONLY by what
  *     the RED plan pins (a ratio blob naming a word after it, a spaced
  *     percentage naming a word after it, a prose connective flanked by words);
@@ -13,10 +13,10 @@
  *     Redundancy) may delete as glue.
  *
  * A label is MINT-REFUSED when it matches a DATA pattern. A cue hit alone must
- * NOT refuse mint ("1 mM Clofibrate in DMSO" hits the " in " cue and is a
- * legitimately mintable formulation when unbound — the refusal is keyed on
- * sentence SHAPE, never on " in " or "%" alone). The refusal never removes the
- * QUESTION — only the mint affordance.
+ * NOT refuse mint — the sibling canon formulations hit the " in " cue and are
+ * legitimately mintable when unbound; the refusal is keyed on sentence SHAPE,
+ * never on " in " or "%" alone. The refusal never removes the QUESTION — only
+ * the mint affordance.
  *
  * Loader contract (cue-loader parity): malformed DATA THROWS naming the path;
  * an absent `nounShape:` section ⇒ null ⇒ NO refusals (disclosed, silent-off).
@@ -26,7 +26,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 
-const NOUN_SHAPE_PATH = new URL('../../../../config/drafting/shorthand-drafting.yaml', import.meta.url);
+const NOUN_SHAPE_POLICY_PATH = new URL('../../../../config/drafting/shorthand-drafting.yaml', import.meta.url);
 
 export interface NounShapePolicy {
   /** Compiled sentence-shape patterns (DATA regexes from the YAML). */
@@ -41,7 +41,7 @@ export interface NounShapePolicy {
 /** Load + validate the `nounShape:` section PER call. Absent file or absent
  *  section ⇒ null (NO refusals). A present-but-malformed section throws,
  *  naming the path (malformed DATA is not an off-state). */
-export function loadNounShape(path: URL | string = NOUN_SHAPE_PATH): NounShapePolicy | null {
+export function loadNounShape(path: URL | string = NOUN_SHAPE_POLICY_PATH): NounShapePolicy | null {
   const displayPath = String(path);
   if (!existsSync(path)) return null;
   let raw: unknown;
@@ -95,7 +95,7 @@ export function loadNounShape(path: URL | string = NOUN_SHAPE_PATH): NounShapePo
  *  the chat card map): a label is mintable unless a DATA sentence-shape
  *  pattern refuses it. An absent policy (null) ⇒ everything mintable (NO
  *  refusals). Cue membership is NOT consulted here — a cue hit never refuses
- *  mint (the clofibrate/lysozyme/Triton canon). */
+ *  mint (the sibling canon formulations stay mintable). */
 export function isMintableLabel(label: string, shape: NounShapePolicy | null): boolean {
   if (!shape) return true;
   const normalized = label.trim().replace(/\s+/gu, ' ').toLowerCase();

@@ -32,7 +32,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
-import { loadNounShape, isMintableLabel } from '../compiler/scientistIntent/nounShape.js';
+import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,

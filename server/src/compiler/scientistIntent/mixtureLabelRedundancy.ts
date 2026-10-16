@@ -37,7 +37,7 @@
 import type { ScientistIntent } from './types.js';
 import type { ScientistIntentVocabulary } from './vocabulary.js';
 import { loadMixtureCues } from './normalizeScientistIntent.js';
-import { loadNounShape } from './nounShape.js';
+import { loadNounShape } from '../resolution/nounShape.js';
 
 type CueConfig = NonNullable<ReturnType<typeof loadMixtureCues>>;
 

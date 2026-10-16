@@ -18,7 +18,7 @@
 import type { RankedCandidate } from '../../resolve/types.js';
 import { materialLayerOf, isWellReadyLayer } from '../../ai/materialRefFields.js';
 import { nearMissSuggestions } from './adapters.js';
-import { loadNounShape, isMintableLabel } from '../scientistIntent/nounShape.js';
+import { loadNounShape, isMintableLabel } from './nounShape.js';
 import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
 import type {

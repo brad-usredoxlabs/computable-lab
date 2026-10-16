@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { clarificationsFromUnresolvedFacts } from './shorthandChat.js';
-import { loadNounShape, isMintableLabel } from '../compiler/scientistIntent/nounShape.js';
+import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { createResolveSpine } from '../resolve/ResolveSpine.js';
