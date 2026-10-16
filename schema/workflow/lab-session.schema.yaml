@@ -50,6 +50,7 @@ properties:
           - record-create
           - pdf
           - document
+          - registry
           - protocol-review
           - collection
           - splash
