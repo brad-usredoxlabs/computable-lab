@@ -95,17 +95,22 @@ export function WellTooltip({
         <div className="well-tooltip__section">
           <div className="well-tooltip__section-title">Scientific State</div>
           <ul className="well-tooltip__materials">
-            {displayedMaterials.map((m, idx) => (
-              <li key={idx}>
-                <span className="well-tooltip__material-name">{m.materialRef}</span>
-                <span className="well-tooltip__material-meta">
-                  {formatComputedConcentration(m.concentration, m.concentrationUnknown) || 'no concentration'}
-                  {' · '}
-                  {formatVolume(m.volume_uL)}
-                  {typeof m.count === 'number' ? ` · ${formatComputedCount(m.count)}` : ''}
-                </span>
-              </li>
-            ))}
+            {displayedMaterials.map((m, idx) => {
+              // SH-QA-4: a carrier-marked row (multi-entry composition_snapshot)
+              // must not repeat the mixture's volume — the header/summary above
+              // is the single volume assertion. The row states its share of the
+              // mixture plus count/density. Non-carrier rows render as before.
+              const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown) || 'no concentration'
+              const metaParts = m.volumeIsCarrier
+                ? [conc, m.fractionOfMixture, formatComputedCount(m.count), formatComputedConcentration(m.counterDensity)].filter(Boolean)
+                : [conc, formatVolume(m.volume_uL), typeof m.count === 'number' ? formatComputedCount(m.count) : null].filter(Boolean)
+              return (
+                <li key={idx}>
+                  <span className="well-tooltip__material-name">{m.materialRef}</span>
+                  <span className="well-tooltip__material-meta">{metaParts.join(' · ')}</span>
+                </li>
+              )
+            })}
             {state.materials.length > displayedMaterials.length && (
               <li className="well-tooltip__more">+{state.materials.length - displayedMaterials.length} more</li>
             )}
