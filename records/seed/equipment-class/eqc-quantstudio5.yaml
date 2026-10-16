@@ -2,8 +2,10 @@ $schema: https://computable-lab.com/schema/computable-lab/equipment-class.schema
 kind: equipment-class
 id: EQC-QUANTSTUDIO5
 name: QuantStudio 5
+lifecycleId: registry-ops
+state: active
 manufacturer: Thermo Fisher Scientific
-model: QuantStudio 5
+modelFamily: QuantStudio 5
 settingsDefinition:
   - key: anneal_temperature_c
     label: Anneal temperature

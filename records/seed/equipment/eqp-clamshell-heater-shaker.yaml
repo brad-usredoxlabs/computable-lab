@@ -2,6 +2,8 @@ $schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
 kind: equipment
 id: EQP-CLAMSHELL-HEATER-SHAKER
 name: Clamshell Heater-Shaker
+lifecycleId: registry-ops
+state: active
 status: active
 # Generic physical kind (a CURIE): the lab's clamshell closes like a clamshell and
 # heats from top and bottom, but its manufacturer/model has not been recorded, so

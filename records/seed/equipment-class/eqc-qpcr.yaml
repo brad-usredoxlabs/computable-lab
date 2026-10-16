@@ -2,6 +2,8 @@ $schema: https://computable-lab.com/schema/computable-lab/equipment-class.schema
 kind: equipment-class
 id: EQC-QPCR
 name: qPCR Machine
+lifecycleId: registry-ops
+state: active
 settingsDefinition:
   - key: anneal_temperature_c
     label: Anneal temperature
