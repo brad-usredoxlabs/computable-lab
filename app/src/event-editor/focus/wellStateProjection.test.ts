@@ -170,4 +170,37 @@ describe('wellStateProjection', () => {
     expect(a1?.materials[0]?.volumeIsCarrier).toBeUndefined()
     expect(a1?.materials[0]?.fractionOfMixture).toBeUndefined()
   })
+
+  // SH-QA-4 T3 (FIX c1, DEFECT 1 pin): a single-entry composition_snapshot is a
+  // spec-named single-material add (requirement 3), so the event-level
+  // concentration fallback must stay ALIVE for it — the row keeps exactly the
+  // concentration base produces (reviewer's probe: {1, mM} -> {value:1,
+  // unit:'mM', basis:'molar'}). The noEventConcentrationFallback guard belongs
+  // ONLY on multi-entry carrier compositions (same predicate as the marker).
+  it('pin: single-entry composition_snapshot with event-level concentration keeps its concentration display', () => {
+    const plate = createLabware('plate_96', 'onesnapconc')
+    const event: PlateEvent = {
+      eventId: 'evt-onesnap-conc',
+      event_type: 'add_material',
+      details: {
+        labwareId: plate.labwareId,
+        wells: ['A1'],
+        volume: { value: 50, unit: 'uL' },
+        concentration: { value: 1, unit: 'mM' },
+        composition_snapshot: [
+          { componentRef: { kind: 'ontology', id: 'CHEBI:3750', namespace: 'CHEBI', label: 'clofibrate' }, role: 'solute', source: '100% of the mixture' },
+        ],
+      },
+    }
+    const a1 = statesFor([event], plate.labwareId).get(plate.labwareId)?.get('A1')
+
+    // Volume display unchanged (bait B2 leg of the same requirement).
+    expect(a1?.volume_uL).toBe(50)
+    expect(a1?.materials[0]?.volume_uL).toBe(50)
+    expect(a1?.materials[0]?.volumeIsCarrier).toBeUndefined()
+    expect(a1?.materials[0]?.fractionOfMixture).toBeUndefined()
+
+    // DEFECT 1: concentration display must NOT flip to "no concentration".
+    expect(a1?.materials[0]?.concentration, 'single-entry snapshot must keep the event-level concentration display').toEqual({ value: 1, unit: 'mM', basis: 'molar' })
+  })
 })
