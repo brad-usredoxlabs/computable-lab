@@ -84,10 +84,6 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
   },
 }))
 
-vi.mock('../components/registry/CsvImportModal', () => ({
-  CsvImportModal: () => null,
-}))
-
 vi.mock('../components/registry/RelatedRecordsCard', () => ({
   RelatedRecordsCard: () => null,
 }))

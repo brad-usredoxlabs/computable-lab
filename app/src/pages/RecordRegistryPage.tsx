@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobox';
-import { CsvImportModal } from '../components/registry/CsvImportModal';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
 import { serializeDocument } from '../editor/taptab/recordSerializer';
@@ -11,10 +10,14 @@ import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
 import { deriveSchemaNode } from '../browser/SchemaTree';
 import type { SchemaNode } from '../browser/SchemaTree';
+import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
 
-const REGISTRY_TABS = [
+// Exported for the test suites: the tab/kinds DATA is the single source for
+// the tab strip, the combobox kinds, and the Create picker (no test-side
+// kind maps — the tests read the same data the page renders).
+export const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
   { id: 'equipment', label: 'Equipment', kinds: ['equipment', 'equipment-class'] },
   { id: 'training', label: 'Training', kinds: ['training-material', 'training-record'] },
@@ -28,6 +31,35 @@ const REGISTRY_TABS = [
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
 
+/**
+ * QMS7-5 (OQ-3 ruling): the per-tab Create button has no precompile step, so
+ * the create base must seed its own schema-compliant id. The prefix is NOT a
+ * client-side table (RecordCreatePanel's ID_PREFIXES is the anti-pattern —
+ * CLAUDE.md "The Hard Boundary"): it is parsed from the schema's OWN
+ * declaration. GET /schemas/:id returns the full schema document and every
+ * registry kind declares properties.id.pattern `^PREFIX-[A-Z0-9][A-Z0-9_-]*$`
+ * (verified live on :3092 for all 13 registry kinds). The seed id is
+ * PREFIX + '-NEW-' + an uppercase alphanumeric suffix (spec Design §id
+ * seeding, literal shape; FIX1 DEFECT 3) — compliant by construction against
+ * the declared pattern because the random suffix starts with an [A-Z0-9]
+ * char. A schema whose id pattern is missing or has no parseable ^PREFIX-
+ * anchor returns null: the caller shows an actionable error and does NOT open
+ * the editor. No prefix is ever fabricated.
+ */
+function seedIdFromDeclaredPattern(schema: JsonSchema | undefined): string | null {
+  const pattern = schema?.properties?.id?.pattern;
+  if (typeof pattern !== 'string') return null;
+  // The declared pattern is itself anchored: `^PER-[A-Z0-9][A-Z0-9_-]*$`.
+  // Consume the literal ^ anchor, then capture the PREFIX- segment.
+  const anchor = /^\^([A-Z]+)-/.exec(pattern);
+  if (!anchor) return null;
+  // Spec Design §id seeding: PREFIX + '-NEW-' + <uppercase alphanumeric
+  // suffix>. base36 uppercase is [0-9A-Z]+ — the suffix starts with an
+  // [A-Z0-9] char, so the whole id satisfies the declared pattern.
+  const suffix = Math.floor(Math.random() * 1e6).toString(36).toUpperCase().padStart(4, '0');
+  return `${anchor[1]}-NEW-${suffix}`;
+}
+
 interface RecordData {
   recordId: string;
   schemaId: string;
@@ -40,7 +72,12 @@ export default function RecordRegistryPage() {
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<RecordData | null>(null);
   const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
-  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  // QMS7-5: per-tab Create affordance state. Multi-kind tabs open a small
+  // picker listing the tab's `kinds` DATA (REGISTRY_TABS) — no kind→schema
+  // map. pendingCreateKind is the picker's selection (default: the tab's
+  // primary kind, mirroring activeTabSchemaId's kinds[0] rule).
+  const [createKindPickerOpen, setCreateKindPickerOpen] = useState(false);
+  const [pendingCreateKind, setPendingCreateKind] = useState<string | null>(null);
 
   // Editor state for inline ProjectionTapTabEditor
   const taptabRef = useRef<TapTabEditorHandle>(null);
@@ -50,6 +87,9 @@ export default function RecordRegistryPage() {
   // QMS-6A (delta D6 messaging): after a draft-copy the editing subject has
   // silently changed — one honest clarifying line, no design decision.
   const [draftRevisionNote, setDraftRevisionNote] = useState<string | null>(null);
+  // QMS7-5: actionable error for the Create affordance (e.g. a schema whose
+  // declared id pattern cannot be parsed). Distinct from the save `error`.
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Projection state for the selected record
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
@@ -90,8 +130,10 @@ export default function RecordRegistryPage() {
   const refreshSeqRef = useRef(0);
 
   // Single implementation of the record-list refresh — the tab-switch effect
-  // and every manual refresh (save, draft-copy, transitions, CSV import) share
-  // it. Previously the effect carried a private copy with no staleness guard.
+  // and every manual refresh (save, draft-copy, transitions) share it.
+  // Previously the effect carried a private copy with no staleness guard.
+  // (QMS7-5 FIX1 DEFECT 5a: "CSV import" dropped — that affordance's dead
+  // chrome was deleted, it is no longer a refresh trigger.)
   const refreshRecords = useCallback(async () => {
     const tab = REGISTRY_TABS.find(t => t.id === activeTab);
     if (!tab) return;
@@ -119,6 +161,19 @@ export default function RecordRegistryPage() {
     setProjection(null);
     setDirty(false);
   }, [activeTab, refreshRecords]);
+
+  // QMS7-5 FIX1 (adv-review DEFECT 1, MAJOR + DEFECT 5b): the Create affordance
+  // state belongs to the tab it was opened on. Without this reset the picker
+  // stayed rendered after a tab switch while pendingCreateKind still named a
+  // kind of the PREVIOUS tab — Confirm then opened a create for a kind outside
+  // the active tab, contradicting the per-tab kind-source contract (kinds come
+  // only from the ACTIVE tab's kinds DATA). The actionable createError is
+  // cleared here too (DEFECT 5b): an error about the old tab must not linger.
+  useEffect(() => {
+    setCreateKindPickerOpen(false);
+    setPendingCreateKind(null);
+    setCreateError(null);
+  }, [activeTab]);
 
   // QMS7-1 (OQ2 ruling): the AI panel's live target is the WorkspaceProvider's
   // own active tab — AiTabPanel's context memo reads it (its deps include the
@@ -183,6 +238,74 @@ export default function RecordRegistryPage() {
 
     // Load draft editor projection for create mode
     loadDraftProjection(schemaId);
+  };
+
+  // QMS7-5: the per-tab Create affordance. It reuses handleCreateRecord —
+  // the identical governed path create-from-search uses (editor-draft
+  // projection + serializeDocument base seed). Nothing persists until Save:
+  // POST /ui/schema/:schemaId/editor-draft is read-only by construction
+  // (UIHandlers.ts), and Cancel leaves no record.
+  //
+  // The kind source is the ACTIVE tab's `kinds` DATA (REGISTRY_TABS) only:
+  // single-kind tabs create kinds[0] directly; multi-kind tabs open a picker
+  // listing the tab's kinds (default = kinds[0], mirroring the primary-kind
+  // rule that drives activeTabSchemaId). The kind -> schema $id resolution is
+  // the EDITOR-9 fix-1 wiring (schemaNodes from GET /schemas +
+  // deriveSchemaNode) — no kind->schema map, no literals.
+  const openCreateForKind = async (kind: string) => {
+    setCreateKindPickerOpen(false);
+    setCreateError(null);
+    // QMS7-5 FIX1 (adv-review DEFECT 1): belt-and-braces validation at the
+    // create path itself — the confirmed kind must belong to the ACTIVE tab's
+    // kinds DATA. The activeTab effect above already resets the picker; this
+    // guard makes an off-tab create impossible even if a future refactor
+    // re-introduces a stale selection.
+    const activeKinds = REGISTRY_TABS.find((t) => t.id === activeTab)?.kinds ?? []
+    if (!(activeKinds as readonly string[]).includes(kind)) {
+      setCreateError(
+        `Kind "${kind}" does not belong to the active tab — the create selection was stale and has been cleared.`,
+      );
+      return;
+    }
+    const schemaId = schemaNodes.find((node) => node.kind === kind)?.schemaId;
+    if (!schemaId) {
+      setCreateError(
+        `No registered schema found for kind "${kind}" — the schema registry may still be loading.`,
+      );
+      return;
+    }
+    // The create base MUST carry kind + id (EDITOR-9 fix-2: serializeDocument
+    // clones the base; the draft projection has no `kind` slot and the server
+    // rejects a payload without an id — RecordHandlers.ts). The id is seeded
+    // from the schema's DECLARED properties.id.pattern (OQ-3 ruling); an
+    // unparseable pattern is an actionable error, NOT a fabricated prefix.
+    let seed: string | null = null;
+    try {
+      const info = await apiClient.getSchema(schemaId);
+      seed = seedIdFromDeclaredPattern(info.schema);
+    } catch {
+      setCreateError(`Could not load the schema for kind "${kind}" to derive its id pattern.`);
+      return;
+    }
+    if (!seed) {
+      setCreateError(
+        `No id pattern declared for this schema (${kind}) — a schema-compliant id cannot be derived.`,
+      );
+      return;
+    }
+    handleCreateRecord(schemaId, { kind, id: seed });
+  };
+
+  const handleCreateFromTab = () => {
+    const kinds = REGISTRY_TABS.find((t) => t.id === activeTab)?.kinds ?? [];
+    if (kinds.length === 0) return;
+    if (kinds.length === 1) {
+      void openCreateForKind(kinds[0]);
+      return;
+    }
+    // Multi-kind tab: picker over the tab's kinds data, default = primary kind.
+    setPendingCreateKind(kinds[0]);
+    setCreateKindPickerOpen(true);
   };
 
   const handleSaved = async () => {
@@ -257,6 +380,12 @@ export default function RecordRegistryPage() {
     setDirty(false);
     setError(null);
     setDraftRevisionNote(null);
+    // QMS7-5 FIX1 (adv-review DEFECT 5b): Cancel exits the whole Create
+    // affordance state — a stale picker or Create error banner must not
+    // persist until the next Create attempt.
+    setCreateKindPickerOpen(false);
+    setPendingCreateKind(null);
+    setCreateError(null);
   };
 
   // QMS-6 (delta D6): approved/effective content is locked at HTTP and storage.
@@ -349,6 +478,61 @@ export default function RecordRegistryPage() {
             </button>
           ))}
         </div>
+        {/* QMS7-5: per-tab Create — the affordance beside the per-tab
+            combobox. Single-kind tabs create directly; multi-kind tabs open
+            a picker listing the tab's kinds data (ontology kind strings
+            verbatim — no invented display vocab). */}
+        <div className="p-2 border-b border-gray-100 flex items-center gap-2">
+          <button
+            data-testid="registry-create-button"
+            onClick={handleCreateFromTab}
+            // Create resolves kind -> schema $id from the schema registry;
+            // until GET /schemas resolves there is nothing to create against
+            // (same degradation as the combobox's activeTabSchemaId='').
+            disabled={schemaNodes.length === 0}
+            className="bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-blue-600 disabled:opacity-50"
+          >
+            Create
+          </button>
+          {createKindPickerOpen && (
+            <div data-testid="registry-create-kind-picker" className="flex items-center gap-1">
+              {activeTabConfig.kinds.map((kind) => (
+                <button
+                  key={kind}
+                  onClick={() => setPendingCreateKind(kind)}
+                  className={`px-2 py-1 text-xs rounded border ${
+                    pendingCreateKind === kind
+                      ? 'bg-blue-100 text-blue-700 font-medium border-blue-300'
+                      : 'text-gray-600 hover:bg-gray-100 border-gray-200'
+                  }`}
+                >
+                  {kind}
+                </button>
+              ))}
+              <button
+                onClick={() => void openCreateForKind(pendingCreateKind ?? activeTabConfig.kinds[0])}
+                className="px-2 py-1 text-xs rounded bg-blue-500 text-white font-medium hover:bg-blue-600"
+              >
+                Confirm
+              </button>
+              <button
+                data-testid="registry-create-kind-cancel"
+                onClick={() => {
+                  setCreateKindPickerOpen(false);
+                  setPendingCreateKind(null);
+                }}
+                className="px-2 py-1 text-xs rounded text-gray-600 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+        {createError && (
+          <div data-testid="registry-create-error" className="p-2 text-xs text-red-600 border-b border-gray-100">
+            {createError}
+          </div>
+        )}
         {/* RecordSearchCombobox */}
         <div className="p-2 border-b border-gray-100">
           <RecordSearchCombobox
@@ -493,17 +677,6 @@ export default function RecordRegistryPage() {
           </div>
         </div>
       )}
-
-      <CsvImportModal
-        open={csvModalOpen}
-        onClose={() => setCsvModalOpen(false)}
-        schemaId=""
-        fields={[]}
-        onComplete={() => {
-          setCsvModalOpen(false);
-          refreshRecords();
-        }}
-      />
     </div>
   );
 }

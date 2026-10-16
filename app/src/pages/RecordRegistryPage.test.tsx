@@ -111,11 +111,6 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
   },
 }))
 
-vi.mock('../components/registry/CsvImportModal', () => ({
-  CsvImportModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="csv-import-modal">CSV Import</div> : null,
-}))
-
 vi.mock('../components/registry/RelatedRecordsCard', () => ({
   RelatedRecordsCard: ({ recordId }: { recordId: string }) => (
     <div data-testid="related-records-card">
