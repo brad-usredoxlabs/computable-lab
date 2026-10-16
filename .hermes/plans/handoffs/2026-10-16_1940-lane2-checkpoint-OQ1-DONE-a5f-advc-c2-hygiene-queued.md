@@ -88,3 +88,20 @@ SHPROMPTHYGIENE lock-acquire stamp in chain log + report marker; 7b 2x/3x from s
 (3) trunk tip == 680643a1 + this tick's docs commits; (4) stack 200s; (5) AI-13 recount
 (base 317); (6) hygiene -> advc c1 on exit (unique path reviews/advc-SHPROMPTHYGIENE-c1-
 l2t<next>.md).
+
+## ADDENDUM 2026-10-16T19:40 EDT (same tick, budget overrun)
+- ADVC c2 W28A5F returned ACCEPT 0 defects (reviews/advc-W28A5F-c2-l2t1830.md; c1 Defect 1
+  resolved with PROBE A+B RED discrimination; all inherited criteria unchanged VERIFIED).
+- ORCH SELF-VERIFIED: diff 04f87ba6..HEAD = 2 files +422/-7 (only owned files); targeted suite
+  31/31 green (5 files); server tsc exactly 1 pre-existing error. MERGED --no-ff trunk ->
+  4e3428a3. Report promoted .hermes/plans/W2-8-a5f-report.md (DONE2 f3f98147) + committed.
+- W2-8 REMAINING OBLIGATION (open, next tick FIRST launch): served-code proof that :5193/:3093
+  serve 4e3428a3 content (grep IntentCompileFromPromptHandlers for declaredRoles block after
+  tsx reload — no YAML, no restart expected needed, but verify), then orch repro-A re-run
+  (answers branch with sourceProtocolId fixture), then A5d BROWSER GATE RE-SHOOT TIER-2
+  (cl-browser-reviewer -m deepseek/deepseek-v4.1-flash --provider openrouter, NEW receipts
+  dir receipts/W2-8-SAID-MEANT-SURFACE/2026-10-16T<ts>-a5d-tier2/). Item stays in-progress
+  until real receipts VERDICT: accept (rule 6b — the code track merged ahead of the async
+  browser gate; this addendum IS the written open obligation, revision pinned 4e3428a3).
+- Hygiene coder acquired the fleet lock 19:32:21 (pid 1029573). 7b: 2x ~21:30, 3x ~23:00.
+- Tick exits: budget overrun (~68 min), no further launches; live workers checkpointed.
