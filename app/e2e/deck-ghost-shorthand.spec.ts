@@ -202,6 +202,39 @@ function stubAssistStream(page: Page, result: unknown) {
   }, sse)
 }
 
+/**
+ * SH-QC-1 (F-5): the existing stub returns the SAME payload to every stream
+ * call, so the file structurally cannot express a two-cycle test. This helper
+ * queues one canned `done` result per stream call (cycle 1, cycle 2, …) and
+ * pops them in order. New infrastructure for the cancel/re-prompt legs; the
+ * two pinned builders above are byte-untouched.
+ */
+function stubAssistStreamSequence(page: Page, results: unknown[]) {
+  return page.addInitScript((bodies: string[]) => {
+    const orig = window.fetch
+    let callIndex = 0
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/ai/assist/stream')) {
+        const body = bodies[Math.min(callIndex, bodies.length - 1)]
+        callIndex += 1
+        const frames = [
+          { type: 'status', message: 'compiling the shorthand draft…' },
+          { type: 'done', result: JSON.parse(body) },
+        ]
+        const sse = frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('')
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(sse))
+            controller.close()
+          },
+        })
+        return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
+      }
+      return orig(input, init)
+    }
+  }, results.map((r) => JSON.stringify(r)))
+}
+
 function deckPayload(labwares: unknown[], placements: unknown[]) {
   return {
     data: {
@@ -261,15 +294,7 @@ async function resetDeckWithPlate(request: APIRequestContext) {
   expect(res.ok(), `deck seed PUT failed: ${res.status()}`).toBe(true)
 }
 
-async function openFreeformDeckAndAsk(page: Page, prompt: string) {
-  await page.goto(`/deck/${EVG}`)
-
-  // Freeform bench so the lawn renders the seeded placement.
-  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
-  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
-  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
-  await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
-
+async function askInChat(page: Page, prompt: string) {
   // Ask the question — the stub answers.
   await page.locator('[data-testid="right-pane-tab-ai"]').click()
   const input = page.locator('[data-testid="chat-input"] .chat-input__editor')
@@ -279,6 +304,18 @@ async function openFreeformDeckAndAsk(page: Page, prompt: string) {
   const sendBtn = page.locator('[data-testid="chat-input-send"]')
   await expect(sendBtn).toBeEnabled()
   await sendBtn.click()
+}
+
+async function openFreeformDeckAndAsk(page: Page, prompt: string) {
+  await page.goto(`/deck/${EVG}`)
+
+  // Freeform bench so the lawn renders the seeded placement.
+  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
+  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
+  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
+
+  await askInChat(page, prompt)
 }
 
 test('CANONICAL leg: the blob prompt yields the mixture clarification and ghosts NOTHING (interim bar, no blob record)', async ({ page, request }) => {
@@ -327,4 +364,118 @@ test('GHOST leg: the plain-material proposal ghosts A1:H12 on the deck with volu
   const tooltip = page.locator('.well-tooltip').first()
   await expect(tooltip).toBeVisible({ timeout: 10_000 })
   await expect(tooltip).toContainText(/50/, { timeout: 10_000 })
+})
+
+/**
+ * SH-QC-1 T-A (prompt-cancel-reprompt, stubbed, deterministic): the §6 first
+ * targeted check / §2-P6 discriminator. BOTH cycles receive the SAME honest
+ * bound payload (fixedShorthandResult verbatim — the two pinned builders are
+ * byte-untouched). The leg asserts the full acceptance sequence:
+ *   cycle 1 ghosts -> Discard -> post-Cancel EVERYTHING is cleared (the hard
+ *   requirement: cancel must still clear) -> re-prompt the IDENTICAL text ->
+ *   cycle 2 re-arms: committed tile affected, 96 preview wells, populated
+ *   tooltip.
+ * If this leg is GREEN, the client preview lifecycle (set_preview ->
+ * clear_preview -> set_preview + the ghost consumers) is EXONERATED and the
+ * F4 symptom is a wire-payload defect (see the CYCLE-B characterization leg
+ * and the report's §2 captures).
+ */
+test('CYCLE leg: prompt -> Discard -> re-prompt re-arms the ghost on cycle 2 and Cancel leaves nothing behind (no model)', async ({ page, request }) => {
+  await stubAssistStreamSequence(page, [fixedShorthandResult(), fixedShorthandResult()])
+  await resetDeckWithPlate(request)
+
+  await page.goto(`/deck/${EVG}`)
+  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
+  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
+  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
+
+  const plateTile = page.locator('.tile[data-ghost="false"]').filter({ hasText: GHOST_PLATE_NAME })
+  await expect(plateTile.first()).toBeVisible({ timeout: 20_000 })
+
+  // ---- CYCLE 1 ----
+  await askInChat(page, GHOST_PROMPT)
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
+
+  // ---- CANCEL via the Discard affordance. SH-QC-1 F-6 adds
+  // data-testid="changes-discard" to ChangesPanel's Discard button (in-scope
+  // cancel-leg chrome); the lane stack :5193 serves the TRUNK checkout, so the
+  // locator accepts either the new testid or the existing BEM class — identical
+  // element, works pre- and post-merge. ----
+  const discard = page.locator('[data-testid="changes-discard"], .changes-panel__btn--discard')
+  await expect(discard.first()).toBeVisible({ timeout: 20_000 })
+  await discard.first().click()
+
+  // HARD REQUIREMENT (verbatim task block): "no leaked ghosts from the
+  // CANCELLED proposal (cancel must still clear)" — asserted in the SAME leg.
+  await expect(page.locator('.tile[data-ghost="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-preview="true"]')).toHaveCount(0)
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'false', { timeout: 10_000 })
+
+  // ---- CYCLE 2: re-prompt the IDENTICAL text ----
+  await askInChat(page, GHOST_PROMPT)
+
+  // The committed tile re-arms: the second proposal's events bucket onto it.
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
+
+  // Drill in: cycle 2 ghosts all 96 wells with a populated tooltip.
+  await plateTile.first().click()
+  await expect(page.locator('[data-preview="true"]')).toHaveCount(96, { timeout: 20_000 })
+  const wellA1 = page.locator('[data-well-id="A1"]')
+  await expect(wellA1).toHaveAttribute('data-preview', 'true', { timeout: 10_000 })
+  await wellA1.hover()
+  const tooltip = page.locator('.well-tooltip').first()
+  await expect(tooltip).toBeVisible({ timeout: 10_000 })
+  // Content-agnostic volume pin (SH-QA-4 owns tooltip CONTENT — bait B9).
+  await expect(tooltip).toContainText(/50/, { timeout: 10_000 })
+})
+
+/**
+ * SH-QC-1 CYCLE-B characterization leg (mirrors shorthandPreviewGhosting.test.ts:
+ * pins the FAILURE MODE, not a fix): the cycle-2 `done` frame VERBATIM as
+ * captured live from :3093 after a Cancel + identical re-prompt (report §2b,
+ * run 11) — `{"success":false,"notes":["Drafted 1 event.\\nDraft compiled
+ * deterministically from the scientist-intent shorthand."],"usage":{...}}`:
+ * NO events, NO shorthand, NO error text, toolCalls 0. The client does
+ * everything right with it: the review card re-opens (draft-ready fires) and
+ * the deck stays clean (nothing to bucket). This is the F4 signature proven to
+ * live on the WIRE: the same client code ghosts 96 wells when the payload
+ * carries the bound carriers (CYCLE leg above). Payload defect -> architect
+ * (stop_boundary); this leg is a regression pin, not a workaround.
+ */
+test('CYCLE-B characterization leg: the captured live cycle-2 payload (success:false, no events) re-opens the card but ghosts NOTHING — defect is on the wire (no model)', async ({ page, request }) => {
+  const capturedCycle2Payload = {
+    success: false,
+    notes: ['Drafted 1 event.\nDraft compiled deterministically from the scientist-intent shorthand.'],
+    usage: { promptTokens: 14809, completionTokens: 19, totalTokens: 14828, turns: 1, toolCalls: 0 },
+  }
+  await stubAssistStreamSequence(page, [fixedShorthandResult(), capturedCycle2Payload])
+  await resetDeckWithPlate(request)
+
+  await page.goto(`/deck/${EVG}`)
+  const variantSelect = page.locator('select').filter({ has: page.locator('option[value="manual_freeform"]') })
+  await expect(variantSelect).toHaveCount(1, { timeout: 20_000 })
+  await variantSelect.selectOption({ label: 'Manual Bench (freeform)' })
+  await expect(page.locator('.lawn__surface').first()).toBeVisible({ timeout: 10_000 })
+
+  const plateTile = page.locator('.tile[data-ghost="false"]').filter({ hasText: GHOST_PLATE_NAME })
+  await expect(plateTile.first()).toBeVisible({ timeout: 20_000 })
+
+  // Cycle 1 ghosts (the bound payload), then Discard clears everything.
+  await askInChat(page, GHOST_PROMPT)
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'true', { timeout: 20_000 })
+  await page.locator('[data-testid="changes-discard"], .changes-panel__btn--discard').first().click()
+  await expect(page.locator('.tile[data-ghost="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-preview="true"]')).toHaveCount(0)
+
+  // Cycle 2 with the CAPTURED dead payload: the sidebar card re-opens...
+  await askInChat(page, GHOST_PROMPT)
+  await expect(page.locator('[data-testid="changes-panel"]')).toBeVisible({ timeout: 20_000 })
+
+  // ...but the deck stays dead — exactly the live F4 DOM (report §2b run 11:
+  // affectedCommitted 0, previewWells 0, changesPanel true). The client
+  // cannot ghost events that are not on the wire.
+  await expect(plateTile.first()).toHaveAttribute('data-affected', 'false', { timeout: 10_000 })
+  await expect(page.locator('.tile[data-ghost="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-preview="true"]')).toHaveCount(0)
 })
