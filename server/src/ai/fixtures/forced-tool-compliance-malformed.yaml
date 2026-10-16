@@ -1,0 +1,5 @@
+# SH-QC-1S TEST FIXTURE — a PRESENT-BUT-MALFORMED compliance policy: an entry
+# with no `nudge`. The loader must throw naming the path (cue-loader parity).
+surfaces:
+  - surface: workspace.deck
+    maxRetries: 1
