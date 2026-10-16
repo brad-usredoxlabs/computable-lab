@@ -35,7 +35,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import React from 'react'
 import { render, screen, waitFor, fireEvent, cleanup, within, act } from '@testing-library/react'
-import RecordRegistryPage from './RecordRegistryPage'
+import RecordRegistryPage, { REGISTRY_TABS } from './RecordRegistryPage'
 
 // ---------------------------------------------------------------------------
 // Mock data — mirrors the REAL registry shape measured live on :3092
@@ -281,6 +281,9 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     // client-side map.
     const prefix = /^\^([A-Z]+)-/.exec(pattern)![1]
     expect((seededId as string).startsWith(`${prefix}-`)).toBe(true)
+    // QMS7-5 FIX1 (adv-review DEFECT 3): the spec's literal seed shape
+    // PREFIX + '-NEW-' + <suffix> (suffix starts [A-Z0-9], pattern-compliant).
+    expect(seededId).toMatch(new RegExp(`^${prefix}-NEW-[A-Z0-9][A-Z0-9_-]*$`))
   })
 
   it('Equipment tab Create offers exactly the tab kinds (from kinds data), default first, and resolves the chosen kind to its $id', async () => {
@@ -309,6 +312,40 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     expect(mocked.draftProjectionCalls).not.toContain('')
     await waitFor(() => {
       expect(mocked.editorDataProp!['kind']).toBe('equipment-class')
+    })
+  })
+
+  // QMS7-5 FIX1 (adv-review DEFECT 1, MAJOR): the multi-kind picker state
+  // must not survive a tab switch. RED at HEAD 0e26293d: the tab button only
+  // calls setActiveTab, so the picker stays rendered on the new tab while
+  // pendingCreateKind still names a kind of the PREVIOUS tab — Confirm would
+  // then open a create for a kind outside the active tab.
+  it('switching tabs while the kind picker is open closes the picker and cannot confirm an off-tab kind', async () => {
+    render(<RecordRegistryPage />)
+    await openTab('Equipment')
+    await clickCreate()
+    const picker = await screen.findByTestId('registry-create-kind-picker')
+    // Make the stale selection observable: pick the tab's SECOND kind.
+    fireEvent.click(within(picker).getByRole('button', { name: 'equipment-class' }))
+
+    // Switch to a single-kind tab while the picker is still open.
+    fireEvent.click(screen.getByText('People'))
+
+    // The picker must be gone: its kinds belong to the previous tab.
+    expect(screen.queryByTestId('registry-create-kind-picker')).toBeNull()
+    // And nothing was created for an off-tab kind.
+    expect(mocked.draftProjectionCalls).not.toContain(SCHEMA_ID('equipment'))
+    expect(mocked.draftProjectionCalls).not.toContain(SCHEMA_ID('equipment-class'))
+
+    // Create on the new tab resolves to the NEW tab's kind only.
+    await clickCreate()
+    await waitFor(() => {
+      expect(mocked.draftProjectionCalls).toContain(SCHEMA_ID('person'))
+    })
+    expect(mocked.draftProjectionCalls).not.toContain(SCHEMA_ID('equipment'))
+    expect(mocked.draftProjectionCalls).not.toContain(SCHEMA_ID('equipment-class'))
+    await waitFor(() => {
+      expect(mocked.editorDataProp!['kind']).toBe('person')
     })
   })
 
@@ -373,6 +410,47 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     expect('notes' in body).toBe(false)
   })
 
+  // QMS7-5 FIX1 (adv-review DEFECT 2, AC-2 1:1 coverage): every tab's Create
+  // must open the draft projection for ITS OWN kind's schema $id (never '').
+  // Iterates the page's own REGISTRY_TABS data (no test-side kind map);
+  // multi-kind tabs confirm the picker default (the tab's primary kind).
+  it('per-tab Create resolves to the active tab kind: projection $id per tab, never empty', async () => {
+    render(<RecordRegistryPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('registry-create-button')).toBeTruthy()
+    })
+    for (const tab of REGISTRY_TABS) {
+      const kind = tab.kinds[0]
+      await openTab(tab.label)
+      await clickCreate()
+      const picker = screen.queryByTestId('registry-create-kind-picker')
+      if (picker) {
+        // Multi-kind tab: confirm the default selection (kinds[0]).
+        await act(async () => {
+          fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
+        })
+      }
+      await waitFor(() => {
+        expect(mocked.draftProjectionCalls).toContain(SCHEMA_ID(kind))
+      })
+      await waitFor(() => {
+        expect(mocked.editorDataProp!['kind']).toBe(kind)
+      })
+      expect(mocked.draftProjectionCalls).not.toContain('')
+      // The seeded id satisfies the kind's DECLARED pattern (never empty).
+      const seededId = mocked.editorDataProp!['id']
+      expect(typeof seededId).toBe('string')
+      expect(new RegExp(mocked.patterns[SCHEMA_ID(kind)]!).test(seededId as string)).toBe(true)
+      // Leave the draft so the next tab starts from a clean selection
+      // (Cancel also exits the Create affordance state — DEFECT 5b pin).
+      fireEvent.click(await screen.findByRole('button', { name: /cancel/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Select a record to edit')).toBeTruthy()
+      })
+    }
+    expect(mocked.draftProjectionCalls).not.toContain('')
+  })
+
   it('a rejected save keeps the editor and the entered content, shows the server message verbatim, and Cancel exits cleanly', async () => {
     const { apiClient } = await import('../shared/api/client')
     ;(apiClient.createRecord as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -388,13 +466,27 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^save/i }))
 
     // The server message renders verbatim and the draft survives (pin:
-    // RecordRegistryPage.tsx:247-251 sets error WITHOUT clearing selection).
+    // RecordRegistryPage.tsx sets error WITHOUT clearing selection).
     await waitFor(() => {
       expect(screen.getByText(/Missing required property: displayName/)).toBeTruthy()
     })
     expect(screen.getByTestId('projection-taptab-editor')).toBeTruthy()
-    expect(mocked.editorDataProp!['displayName']).toBeUndefined // base untouched by the failure
+    // QMS7-5 FIX1 (adv-review DEFECT 4): real "entered content survives"
+    // assertions instead of the old tautology. The entered values live in the
+    // editor's doc (harness-captured); the failed save must not clear the
+    // editing subject nor the doc the serializer reads on retry.
+    expect(mocked.editorDoc).toBeTruthy()
+    const docRows = (mocked.editorDoc as { content: { attrs: { path: string; value: unknown } }[] }).content
+    const enteredDisplayName = docRows.find((r) => r.attrs.path === '$.displayName')?.attrs.value
+    expect(enteredDisplayName).toBe('QMS75 CREATED PERSON')
+    // The create base (kind + seeded id) the retry serializes over is intact.
     expect(mocked.editorDataProp!['kind']).toBe('person')
+    const seededId = mocked.editorDataProp!['id']
+    expect(typeof seededId).toBe('string')
+    expect(new RegExp(mocked.patterns[SCHEMA_ID('person')]!).test(seededId as string)).toBe(true)
+    // The draft is still dirty: Save remains actionable for a corrected retry.
+    const saveButton = screen.getByRole('button', { name: /^save/i }) as HTMLButtonElement
+    expect(saveButton.disabled).toBe(false)
 
     fireEvent.click(await screen.findByRole('button', { name: /cancel/i }))
     await waitFor(() => {
