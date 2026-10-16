@@ -31,9 +31,11 @@ OQ3 as ruled: SurfaceIndicator fallback accepted; zero label-map/surfaces.yaml c
    **723a7fb86ab0ec242d9185ef683abb4f8d9130740b45f9e7e0a1dbc9cbeaeecb**
    per-file counts identical to the spec's 16-file table; base↔tip normalized error-list diff = IDENTICAL.
 2. app vitest full run: **Test Files 61 failed | 285 passed (346) · Tests 65 failed | 2258 passed
-   (2323) · Errors 5** — comm of FAIL-file lists vs the repaired base run (61 | 284 (345),
-   65 | 2252 (2317)): NEW = [], GONE = [] (the +1 file / +6 tests is the new RegistryHostPage
-   suite). Named-test-level comm also empty.
+   (2323) · Errors 6** — comm of FAIL-file lists vs the repaired base run (61 | 284 (345),
+   65 | 2252 (2317), Errors 5): NEW = [], GONE = [] (the +1 file / +6 tests is the new
+   RegistryHostPage suite). Named-test-level comm also empty. The Errors 5↔6 drift is the
+   pre-existing unhandled-exception debt (pdfjs DOMMatrix via usePdfDocument.ts, RawRecordEditor,
+   ClarificationPicker) — proven identical at base with App.tsx/App.test.tsx reverted.
 3. touched dirs fully green: `npx vitest run src/pages src/shared/shell src/shared/session
    src/event-editor/workspace` → **29 files / 219 tests passed**.
 4. first targeted check: `npx vitest run src/shared/shell/RegistryHostPage.test.tsx` → **6/6 green**
