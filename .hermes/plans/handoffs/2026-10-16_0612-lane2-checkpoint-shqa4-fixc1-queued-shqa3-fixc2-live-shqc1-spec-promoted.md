@@ -76,3 +76,19 @@ next checks: (1) logs/coder-SHQA3-fix2-l2t0335.log SHQA3FIX2 DONE / EXITED; (2) 
 logs/coder-HARNESSSEQ2-fix3-l2t0510.log and logs/coder-SHQA4-fix1-l2t0555.log; (3) trunk tip +
 stack status; (4) AI-13 recount; (5) if fix-c2 merged, restart stack BEFORE any YAML-dependent
 verify.
+
+## ADDENDUM (same tick, ~06:20)
+7. SH-QA-3 FIX-C2 EXITED code=0 05:59:50 (marker SHQA3FIX2 DONE e05ea367; ran ~19 min on lock).
+   Diff vs prior tip 7e7bc9e0: 9 files +294/-65 — D1 DATA mintRefusePatterns + independent
+   blobDetectPatterns replay bar (nounShape.ts + shorthand-drafting.yaml), D2 unicode lookaround
+   tokenization, D3 stripDomains DATA confinement, D4 debug .mts pruned. ORCH opened the diff
+   stat first-hand; FULL verification rides advc c2.
+8. ADVC C2 DISPATCHED (cycle 2/2 max) 06:18: bash 3210078 (proc_dc99d9517a36), OpenRouter
+   deepseek-v4.1-flash, log logs/advc-SHQA3-c2-l2t0555.log, report path reviews/
+   advc-SHQA3-c2-l2t0555.md; prompt carries verbatim c1 defect list + coder-UNWRITTEN regression
+   probes (legitimate-noun over-refusal, second unicode case, labware-survives). Expected 45-60
+   min; 2x ~07:20, 3x ~08:20 (rule 7b). ACCEPT -> orch self-verify (5 suites + vocabularyRipOut
+   + goldens, tsc set-diff, hashes, 52-grep, mode-1 replay) -> MERGE -> STACK RESTART (drafting
+   YAML) -> mode-2 as-served replay. FIX again -> architect (2 cycles exhausted).
+9. FLEET LOCK passed to SEQ2FIX3 at 05:59:50 (hermes child 3181911 LIVE); SH-QA4 fix-c1
+   (bash 3171532) still QUEUED behind. Queue order after this: fix-c1 next.
