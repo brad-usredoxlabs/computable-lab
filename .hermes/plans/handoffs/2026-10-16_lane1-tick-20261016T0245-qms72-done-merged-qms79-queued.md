@@ -127,3 +127,23 @@ My verification (first-hand, not the reviewer's word):
   merged + browser-gated work, not re-probed live; the browser gate re-pins it end-to-end.
 - Fleet assumption: QMS7-1's RED commit + owned-file edits prove it is executing its own
   contract; no worktree interference with QMS7-9 (zero overlap by construction).
+
+## APPENDED at ~03:25 EDT — QMS7-1 coder EXITED during handoff write
+
+- QMS7-1 CODER DONE: rc=0 at 03:03:24 (end-line QMS7-1 DONE in
+  logs/coder-QMS71-l1t0140.log), ~58 min. Report qms7-1-report-l1t0140.md: 2 commits,
+  §11 file list == ownership, no stop-boundary hit. Claims tsc 23-pin + vitest pin — NOT
+  verified by me yet.
+- ADVERSARIAL GATE DISPATCHED (cloud OpenRouter — no fleet/local contention): wrapper
+  pid 2698546, log logs/advreview-QMS71-l1t0320.log, unique review path
+  reviews/qms7-1-advreview-l1t0320.md, end-line REVIEW-QMS71 DONE.
+- FLEET LOCK after QMS7-1's release was taken by LANE 2's SHQA3RESUME (pid 2621593, pid-
+  file stamp 03:03:24) — lane-2's business, not mine; my queue-qms7-9.sh (bash pid
+  2656715) is still correctly blocked on flock and will fire when lane 2 releases.
+  Queue pid-file staleness is EXPECTED; trust flock + live pids only.
+- NEXT TICK: read the QMS7-1 verdict. accept -> MY verification (diff opened; tsc 23
+  multiset-pin re-measured myself; vitest fail-file-set vs fresh trunk app baseline;
+  scope-guard file list; RED non-vacuity) -> merge --no-ff -> BROWSER GATE (mandatory,
+  async, receipts QMS7-1/<ts>) — done ONLY on VERDICT: accept; code-track merge allowed
+  with the browser obligation written explicitly. fix -> defect list verbatim to a new
+  coder run on the SAME worktree/branch (fleet-queued), re-review.
