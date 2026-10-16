@@ -47,6 +47,33 @@ describe('GET/PUT /api/session', () => {
     expect(back.json().session.activeTabId).toBe('run:RUN-1');
   });
 
+  // QMS7-1 fix1 (browser-gate DEFECT 1): the client creates kind:'registry' tabs
+  // (app/src/shared/shell/RegistryHostPage.tsx) and App.tsx's useSessionSync PUTs
+  // the whole tab store, so the session document must accept the kind the app
+  // itself creates. Payload shape is the captured PUT body from the gate probe
+  // (receipts/QMS7-1/20261016T060112/probe3/trail.json): kind/title/
+  // activeRightPaneMode, no slot id (tabId.ts re-derives it).
+  it('accepts the client-created registry tab kind and round-trips it (QMS7-1 fix1)', async () => {
+    const app = await makeApp();
+    const tabs = [
+      { kind: 'run', runId: 'RUN-2026-09-19-run-vwr8', title: '2026-09-19 Run', activeRightPaneMode: 'ai' },
+      { kind: 'registry', title: 'Registry', activeRightPaneMode: 'ai' },
+      { kind: 'splash', title: 'New Tab', activeRightPaneMode: 'ai' },
+    ];
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/session',
+      headers: { 'x-user-id': 'USR-BRAD' },
+      payload: { tabs, activeTabId: 'splash:1792145761310' },
+    });
+    expect(put.statusCode).toBe(200);
+
+    const back = await app.inject({ method: 'GET', url: '/session', headers: { 'x-user-id': 'USR-BRAD' } });
+    expect(back.statusCode).toBe(200);
+    expect(back.json().session.tabs).toEqual(tabs);
+    expect(back.json().session.activeTabId).toBe('splash:1792145761310');
+  });
+
   it('rejects a tab kind that is not in the schema enum', async () => {
     const app = await makeApp();
     const res = await app.inject({
