@@ -73,3 +73,23 @@ coder pins cites; AS-LANE2-MODE2-REPLAY-EMULATION and AS-LANE2-TASKLIST-SED-HAZA
 next checks: (1) fleet lock holder (fuser /home/brad/.hermes/cl/appliance2-coder.lock + pid
 file) before SH-QC-1 dispatch; (2) SH-QA-4 gate run; (3) trunk tip 625e085e+; (4) AI-13
 recount (base 288); (5) stack :3093/:5193 200.
+
+## ADDENDUM (same tick, ~09:50 — checkpoint)
+5. FLEET LOCK FREET at ~09:05 (lane-1 QMS74 coder exited, marker QMS7-4 DONE bad13b16).
+   SH-QC-1 CLAIMED under task-list.lock + CODER DISPATCHED 09:45 (bash 3755211 wrapper,
+   flock holder 3755272, log logs/coder-SHQC1-l2t0830.log, worktree
+   wt/SH-QC-1-lane2-l2t0830 off trunk d668920f — SH-QA-3/QA-4/SEQ2fix3 all ancestors; 61
+   lane-exclude symlinks repaired; app tsc re-measured 23 at branch point; report wip path
+   .hermes/plans/SH-QC-1-report.wip-l2t0830.md; marker 'SH-QC-1 DONE <sha>'; P2-server =
+   structured stop SHQC1-BLOCKED-P2). Expected duration ~2-3h (diagnosis-heavy; prior
+   coders 90-150 min lean). 2x ~12:45, 3x ~14:45 (rule 7b). DO NOT re-dispatch while
+   3755211 alive. Next tick: on EXITED -> advc c1 (unique report path
+   reviews/advc-SHQC1-c1-l2t<tick>.md) with spec+report+worktree; on marker BLOCKED-P2 ->
+   architect packet with the two request bodies from the report.
+6. QUEUE after this addendum: (a) SH-QA-4 gate at 509ca293 (harness brief above; runs in
+   parallel with the coder — vision slot free); (b) SH-QC-1 advc on exit; (c) AI-13 recount
+   (base 288); (d) spec-composer for next ready item: the ONLY todo line left in the wave is
+   PROTO-AI-13 (corpus-gated, n=288<500 — NOT composable yet). If SH-QA-4 gate accepts and
+   SH-QC-1 lands, the lane-2 wave is DONE -> next composition = S5 DECK-FOLD-1 finding fold
+   per wave notes (draft, not retrofitted) or Brad's next test round.
+LIVE AT CHECKPOINT: SH-QC-1 coder (fleet lock holder 3755272). No other lane-2 workers.
