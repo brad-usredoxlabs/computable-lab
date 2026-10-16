@@ -240,8 +240,10 @@ describe('AiTabPanel — record-drafting card (shared flow, adapter is the only 
     const source = readFileSync('src/event-editor/right-pane/ai/AiTabPanel.tsx', 'utf8')
     expect(source).toContain("handleWorkstateProposal(intent, 'record-drafting')")
     // Still ONE flow hook and ONE card component — no second proposal system.
+    // (The JSX render site only: the file's prose mentions of the component
+    // name are not render sites, so the pattern anchors on the JSX open tag.)
     expect(source.match(/useWorkstateProposalFlow\(\)/g)?.length).toBe(1)
-    expect(source.match(/<WorkstateProposalCard/g)?.length).toBe(1)
+    expect(source.match(/<WorkstateProposalCard\n/g)?.length).toBe(1)
   })
 
   it('a record_draft_proposal event alone renders the compiling slot — NO accept control until the compile answers', async () => {

@@ -268,6 +268,15 @@ const COMPILED_RECORD = {
 }
 
 describe('useWorkstateProposalFlow — the record-drafting adapter (QMS7-7)', () => {
+  // The record-drafting fixture (the server-built recordFields ride in the
+  // compile result). Same mocks/setup as the workstate/analysis block above —
+  // only the fixture differs, because the record adapter's compile result is
+  // a record envelope, not a tab document.
+  beforeEach(() => {
+    vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValue(COMPILED_RECORD)
+    vi.mocked(apiClient.acceptWorkstateDraft).mockResolvedValue(COMPILED_RECORD.result)
+  })
+
   it('record-drafting rides the SAME flow: compile called with the adapter constant + intent verbatim', async () => {
     const result = setup()
     act(() => {

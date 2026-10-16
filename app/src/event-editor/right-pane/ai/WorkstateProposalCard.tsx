@@ -31,12 +31,25 @@ export interface WorkstateCardDiagnostic {
   message: string
 }
 
+/**
+ * QMS7-7 — one compiled record field for the record-drafting card block.
+ * The label/value pair is BUILT SERVER-SIDE from the target schema's ui-v1
+ * projection (labels from the ui spec, values rendered with the schema's own
+ * vocabulary) — the card renders them verbatim and maps nothing by kind name.
+ */
+export interface WorkstateCardRecordField {
+  label: string
+  value: string
+}
+
 export interface WorkstateProposalCardProps {
   phase: WorkstateCardPhase
   summary?: string
   tabs?: WorkstateCardTab[]
   resolvedTerms?: WorkstateCardTerm[]
   diagnostics?: WorkstateCardDiagnostic[]
+  /** QMS7-7: the compiled record proposal's field list (presentational only). */
+  recordFields?: WorkstateCardRecordField[]
   draftId?: string
   revision?: number
   onAccept: () => void
@@ -49,6 +62,7 @@ export function WorkstateProposalCard({
   tabs,
   resolvedTerms,
   diagnostics,
+  recordFields,
   draftId,
   revision,
   onAccept,
@@ -103,6 +117,22 @@ export function WorkstateProposalCard({
           {': '}
           {resolvedTerms.map((t) => t.label ?? t.term).join(', ')}
         </p>
+      ) : null}
+
+      {recordFields && recordFields.length > 0 ? (
+        // QMS7-7: the compiled record proposal's fields (the ONE optional
+        // presentational block). Labels/values arrive VERBATIM from the
+        // server's ui-v1 projection — this component maps nothing by kind
+        // name and adds no controls here (the phase below still gates
+        // accept/reject exactly as before).
+        <dl className="workstate-card__record-fields" data-testid="workstate-card-record-fields">
+          {recordFields.map((f, i) => (
+            <div key={`${f.label}-${i}`} className="workstate-card__record-field">
+              <dt className="workstate-card__record-field-label">{f.label}</dt>
+              <dd className="workstate-card__record-field-value">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
       ) : null}
 
       {diagnostics && diagnostics.length > 0 ? (

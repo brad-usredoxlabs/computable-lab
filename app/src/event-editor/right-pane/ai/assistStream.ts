@@ -266,6 +266,15 @@ export type AssistStreamEvent =
   // stream. Field name `analysis` mirrors the server frame (AgentOrchestrator
   // emits {type:'analysis_proposal', analysis}).
   | { type: 'analysis_proposal'; analysis: Record<string, unknown> }
+  // QMS7-7 tier-2 (record-drafting, OQ1 ruling A): the model's record PROPOSAL
+  // — verbs and fields only, relayed verbatim. NOT a compiled draft and NOT
+  // actionable alone: POST /api/drafts/compile (adapter 'record-drafting' —
+  // kind resolved through the schema corpus, id derived from the schema's
+  // declared pattern, fields through the REAL validate + lint, canAccept) is
+  // the trust boundary, not this stream. Field name `recordDraft` mirrors the
+  // server frame (AgentOrchestrator emits
+  // {type:'record_draft_proposal', recordDraft}).
+  | { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }
   // PB-CH-8: the ledger ANSWER — SERVER-BUILT fetched evidence (never model
   // narration). The client relays the envelope verbatim; `answerText` is the
   // server's single wording authority. Deliberately assistStream-only: the
@@ -405,7 +414,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; recordDraft?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -462,6 +471,15 @@ function dispatchFrame(
       // 'analysis'), which is the Ajv/canAccept trust boundary.
       if (parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)) {
         onEvent({ type: 'analysis_proposal', analysis: parsed.analysis })
+      }
+      return
+    case 'record_draft_proposal':
+      // QMS7-7 tier-2 (record-drafting): same discipline — relay the model's
+      // record PROPOSAL verbatim; the mount relays it to POST /api/drafts/compile
+      // (adapter 'record-drafting'), which is the Ajv/canAccept trust boundary.
+      // A frame without an object payload is DROPPED, never guessed into an event.
+      if (parsed.recordDraft && typeof parsed.recordDraft === 'object' && !Array.isArray(parsed.recordDraft)) {
+        onEvent({ type: 'record_draft_proposal', recordDraft: parsed.recordDraft })
       }
       return
     case 'ledger_answer':

@@ -24,6 +24,7 @@ import { useWorkstateExecutor } from '../session/useWorkstateExecutor'
 import type {
   WorkstateCardDiagnostic,
   WorkstateCardPhase,
+  WorkstateCardRecordField,
   WorkstateCardTab,
   WorkstateCardTerm,
 } from '../../event-editor/right-pane/ai/WorkstateProposalCard'
@@ -31,8 +32,11 @@ import type { AiAgentActionEnvelope } from '../../types/ai'
 
 /** Registered compiled-composition adapters (config/drafting/adapters.yaml).
  *  The adapter is a PARAMETER of the flow — a second adapter is one constant
- *  at the call site, never a second flow. */
-export type WorkstateAdapter = 'workstate' | 'analysis'
+ *  at the call site, never a second flow.
+ *  QMS7-7 (OQ-1 ruling A): 'record-drafting' joins the union — the ONLY
+ *  acceptable diff in this file; the flow body is untouched (shared machinery,
+ *  not a fork). */
+export type WorkstateAdapter = 'workstate' | 'analysis' | 'record-drafting'
 
 /**
  * The mount-side card state. Mirrors WorkstateProposalCard's props so a mount
@@ -45,6 +49,9 @@ export interface WorkstateProposalCardState {
   tabs?: WorkstateCardTab[]
   resolvedTerms?: WorkstateCardTerm[]
   diagnostics?: WorkstateCardDiagnostic[]
+  /** QMS7-7: the compiled record proposal's field list (presentational mirror
+   *  of the card prop; absent unless the compile result carries recordFields). */
+  recordFields?: WorkstateCardRecordField[]
   draftId?: string
   revision?: number
 }
@@ -100,9 +107,14 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
           sessionDocument?: { tabs?: Array<{ kind?: unknown; title?: unknown }> }
           summary?: unknown
           resolvedTerms?: unknown
+          recordFields?: unknown
         }
         const docTabs = Array.isArray(result.sessionDocument?.tabs) ? result.sessionDocument?.tabs : undefined
         const terms = Array.isArray(result.resolvedTerms) ? (result.resolvedTerms as WorkstateCardTerm[]) : undefined
+        // QMS7-7: the compiled record field list (server-built from the ui-v1
+        // projection) rides into the card state verbatim — absent unless the
+        // compile result actually carries it (exactOptionalPropertyTypes).
+        const recordFields = Array.isArray(result.recordFields) ? (result.recordFields as WorkstateCardRecordField[]) : undefined
         setCard({
           phase: res.canAccept ? 'review' : 'blocked',
           ...(typeof result.summary === 'string' ? { summary: result.summary } : {}),
@@ -115,6 +127,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
               }
             : {}),
           ...(terms ? { resolvedTerms: terms } : {}),
+          ...(recordFields ? { recordFields } : {}),
           ...(res.diagnostics.length > 0 ? { diagnostics: res.diagnostics } : {}),
           draftId: res.draftId,
           revision: res.revision,

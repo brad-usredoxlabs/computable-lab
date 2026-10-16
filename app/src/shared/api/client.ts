@@ -2303,8 +2303,10 @@ export const apiClient = {
   async compileWorkstateDraft(req: {
     /** Registered draft adapters (config/drafting/adapters.yaml). PB-CH-5
      * widens this to the registered set — 'analysis' is the second compiled
-     * composition target on the SAME seam; the endpoint is adapter-blind. */
-    adapter: 'workstate' | 'analysis'
+     * composition target on the SAME seam; the endpoint is adapter-blind.
+     * QMS7-7 (OQ-1 ruling A) adds 'record-drafting' — the third registered
+     * adapter on the SAME seam; this transport stays adapter-blind. */
+    adapter: 'workstate' | 'analysis' | 'record-drafting'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
@@ -2314,7 +2316,12 @@ export const apiClient = {
     reviewHash: string
     canAccept: boolean
     diagnostics: Array<{ code?: string; severity?: string; outcome?: string; message: string }>
-    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }
+    /** The compiled composition result. Adapter-shaped: workstate/analysis
+     * carry sessionDocument/summary/resolvedTerms; QMS7-7's 'record-drafting'
+     * additionally carries `recordFields` (the server-built ui-v1 field list).
+     * The transport stays adapter-blind — it forwards whatever the server
+     * compiled, it does not interpret it. */
+    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown; recordFields?: unknown }
   }> {
     return request(`/drafts/compile`, {
       method: 'POST',

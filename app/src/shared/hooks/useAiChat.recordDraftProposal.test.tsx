@@ -30,8 +30,11 @@ vi.mock('../api/client', () => ({
   },
 }))
 
+// The generic stack is surface-agnostic for frame handling; 'analysis' is the
+// union member this harness rides (the /registry mount itself goes through
+// useChatThread, not useAiChat — see AiTabPanel.recordDraft.test.tsx).
 const aiContext: AiContext = {
-  surface: 'registry',
+  surface: 'analysis',
   summary: 'test surface',
   surfaceContext: {},
 }
