@@ -71,3 +71,14 @@ acquiring, that is an infrastructure defect to fix, not a reason to hand-dispatc
 lane-1's orchestrator's problem — fleet-lock holder note only; lane 2 keeps waiting).
 (7) When the coder slot frees: dispatch A5f first (queue position), THEN consider
 SH-CORPUS-COERCE-PINS (smallest, server-only, deps none) if the tick budget allows.
+
+## ADDENDUM 17:16 EDT (same tick)
+Fleet lock RELEASED by lane-1 (QMS7-7 exited ~17:12); A5f chain AUTO-ACQUIRED per
+handoff prediction: log line "W28A5F lock acquired 2026-10-16T17:12:41-0400"; coder
+hermes 662269 LIVE on appliance-2 (lock fuser: 382755/662265/662269). Fleet cap=1
+now held by LANE 2 — dispatch no other coder fleet-wide. Worktree
+wt/W2-8-A5f-lane2-l2t1430 at 04f87ba6. Next tick: poll for EXITED code= in
+coder-W28A5f-l2t1430.log -> advc gate (reviews/advc-W28A5F-c1-l2t<tick>.md) ->
+self-verify -> merge --no-ff -> restart stack background=true -> orch repro-A ->
+A5d gate re-shoot tier-2. Expected coder duration ~90-120 min (AI-8/9 precedent);
+2x ~19:45, 3x ~21:15 (rule 7b).
