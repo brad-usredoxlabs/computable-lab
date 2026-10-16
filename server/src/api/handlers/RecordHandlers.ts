@@ -216,6 +216,85 @@ function accessDeniedError(message: string): ApiError {
   return { error: 'FORBIDDEN', message };
 }
 
+/**
+ * QMS7-4 (ruling B) — generic record-ref walk: collect the target ids of every
+ * record-ref object in a payload (the declared ref shape: an object carrying a
+ * string `type` and a string `id`, cf. schema/lab/datatypes/ref.schema.yaml —
+ * the same generic shape extractRoleAssignments demonstrates). NO kind names:
+ * the walk is structural, and only the coverage data decides what is covered.
+ */
+function collectRecordRefIds(payload: unknown): Set<string> {
+  const ids = new Set<string>();
+  const visit = (node: unknown, depth: number): void => {
+    if (depth > 6) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.id === 'string' && obj.id.length > 0 && typeof obj.type === 'string' && obj.type.length > 0) {
+      ids.add(obj.id);
+    }
+    for (const value of Object.values(obj)) visit(value, depth + 1);
+  };
+  visit(payload, 0);
+  return ids;
+}
+
+/**
+ * QMS7-4 archive guard (ruling B, API-level): a NEW operational assignment to
+ * a record whose kind is COVERED (per the coverage data) and whose lifecycle
+ * state is TERMINAL (per the lifecycle YAML, via the engine's read-only
+ * terminalStates getter) is refused before anything durable.
+ *
+ * - exemptKinds come from the coverage file's archiveGuard block (evidence
+ *   kinds are not operational assignments);
+ * - the guard is scoped to COVERED kinds only — governed kinds' lifecycles are
+ *   untouched (V7 coverage scope);
+ * - reads are never guarded (ruling B: archived stays readable/referenceable);
+ * - on update, refs already present in the previous payload are historical and
+ *   stay legal — only refs NEWLY pointing at a terminal covered target fire;
+ * - absent guard data / absent engine → the caller skips this entirely.
+ *
+ * Returns the denial message, or null when the write may proceed.
+ */
+async function archivedTargetAssignmentDenial(
+  store: RecordStore,
+  coverage: KindLifecycleRegistry,
+  engine: LifecycleEngine,
+  sourcePayload: Record<string, unknown>,
+  proposedRefIds: Set<string>,
+  previousRefIds?: Set<string>,
+): Promise<string | null> {
+  const guard = coverage.archiveGuard;
+  if (!guard) return null;
+  const sourceKind = payloadKind(sourcePayload);
+  if (sourceKind && guard.exemptKinds.includes(sourceKind)) return null;
+
+  for (const targetId of proposedRefIds) {
+    // Historical referenceability: a ref that already pointed here is not new.
+    if (previousRefIds?.has(targetId)) continue;
+    const target = await store.get(targetId);
+    if (!target) continue;
+    const targetPayload = payloadObject(target.payload);
+    const targetKind = payloadKind(targetPayload);
+    if (!targetKind) continue;
+    const entry = coverage.entryFor(targetKind);
+    if (!entry) continue; // not a covered kind — out of the guard's scope
+    const targetLifecycleId = typeof targetPayload.lifecycleId === 'string' ? targetPayload.lifecycleId : undefined;
+    if (!targetLifecycleId) continue;
+    const terminal = engine.terminalStates(targetLifecycleId);
+    if (!terminal) continue;
+    // Lifecycle state only — never the DOMAIN status (the `state ?? status`
+    // conflation is bait #5; covered records always carry an explicit state).
+    const targetState = typeof targetPayload.state === 'string' ? targetPayload.state : undefined;
+    if (targetState === undefined || !terminal.has(targetState)) continue;
+    return `${targetId} is archived under the ${targetLifecycleId} lifecycle and cannot receive new assignments.`;
+  }
+  return null;
+}
+
 function unauthenticatedError(message: string): ApiError {
   return { error: 'UNAUTHENTICATED', message };
 }
@@ -593,6 +672,29 @@ export function createRecordHandlers(
             // fallback would otherwise read the DOMAIN status as the lifecycle state.
             stamped.lifecycleId = coverageEntry.lifecycleId;
             stamped.state = coverageEntry.defaultState;
+          }
+        }
+
+        // QMS7-4 archive guard (ruling B) — CREATE leg: a NEW assignment whose
+        // payload references a terminal-state COVERED record is refused 422
+        // before anything durable. Terminal-ness comes from the lifecycle YAML
+        // via the engine; exemptKinds come from the coverage file's
+        // archiveGuard block. Absent coverage/guard data → skip entirely
+        // (existing paths byte-identical). NO kind or state literals here.
+        {
+          const guardCoverage = security?.getKindLifecycleCoverage?.();
+          if (guardCoverage?.archiveGuard && lifecycleEngine) {
+            const denial = await archivedTargetAssignmentDenial(
+              store,
+              guardCoverage,
+              lifecycleEngine,
+              payloadObject(payload),
+              collectRecordRefIds(payload),
+            );
+            if (denial) {
+              reply.status(422);
+              return { error: 'ARCHIVED_TARGET_ASSIGNMENT', message: denial };
+            }
           }
         }
         
@@ -993,6 +1095,29 @@ export function createRecordHandlers(
           if (draftGate) {
             reply.status(draftGate.status);
             return { error: draftGate.code, message: draftGate.message };
+          }
+        }
+        // QMS7-4 archive guard (ruling B) — UPDATE leg. Same placement
+        // discipline as the gates above: AFTER the content lock, BEFORE the
+        // store write. Refs are diffed previous -> proposed: a ref that ALREADY
+        // pointed at the terminal covered record is historical and stays legal
+        // (ruling B's "historically referenceable"); only refs NEWLY pointing at
+        // a terminal covered target are refused. Absent guard data → skip.
+        {
+          const guardCoverage = security?.getKindLifecycleCoverage?.();
+          if (guardCoverage?.archiveGuard && lifecycleEngine) {
+            const denial = await archivedTargetAssignmentDenial(
+              store,
+              guardCoverage,
+              lifecycleEngine,
+              proposed,
+              collectRecordRefIds(proposed),
+              collectRecordRefIds(previous),
+            );
+            if (denial) {
+              reply.status(422);
+              return { error: 'ARCHIVED_TARGET_ASSIGNMENT', message: denial };
+            }
           }
         }
         if (previous.kind === 'protocol' && !previous.lifecycleId) {
