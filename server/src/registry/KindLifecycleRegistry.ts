@@ -67,7 +67,7 @@ export class KindLifecycleRegistry {
 
   constructor(data: KindLifecycleRegistryData, deps: KindLifecycleRegistryDeps) {
     if (!data || typeof data.lifecycleId !== 'string' || data.lifecycleId.length === 0 || !Array.isArray(data.kinds)) {
-      throw new Error('Invalid registry-kind coverage file: registryVersion/lifecycleId/kinds missing');
+      throw new Error('Invalid registry-kind coverage file: lifecycleId/kinds missing');
     }
 
     // The referenced lifecycle must actually be loaded (lifecycleId not on disk → fail the load).
@@ -80,6 +80,9 @@ export class KindLifecycleRegistry {
     }
 
     // defaultState must be a declared state of that lifecycle AND its initial state.
+    // A coverage-target lifecycle with NO declared initial state is malformed data:
+    // the equality check is NOT conditional on an initial state existing (QMS7-3
+    // adversarial review DEFECT 1 — the silent arm is closed).
     const stateIds = spec.states.map(s => s.id);
     if (typeof data.defaultState !== 'string' || !stateIds.includes(data.defaultState)) {
       throw new Error(
@@ -87,7 +90,12 @@ export class KindLifecycleRegistry {
       );
     }
     const initial = spec.states.find(s => s.initial === true);
-    if (initial && initial.id !== data.defaultState) {
+    if (!initial) {
+      throw new Error(
+        `Registry-kind coverage lifecycle ${data.lifecycleId} declares no initial state; defaultState "${data.defaultState}" must be the initial state`,
+      );
+    }
+    if (initial.id !== data.defaultState) {
       throw new Error(
         `Registry-kind coverage defaultState "${data.defaultState}" must be the initial state "${initial.id}" of the ${data.lifecycleId} lifecycle`,
       );

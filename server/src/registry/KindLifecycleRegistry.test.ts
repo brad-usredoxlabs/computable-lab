@@ -152,4 +152,65 @@ describe('KindLifecycleRegistry (QMS7-3 loader)', () => {
     ].join('\n'))
     expect(() => loadKindLifecycleRegistry(path, deps(engine))).toThrow(/defaultState/)
   })
+
+  // QMS7-3 FIX 1 / DEFECT 1 (adversarial review): the initial-state arm must not be
+  // conditional on an initial state existing. A coverage-target lifecycle with NO
+  // declared `initial: true` state is malformed data — the load must fail, not
+  // silently stamp records with a defaultState nothing declares as initial.
+  it('FIX1: throws when the coverage lifecycle declares NO initial state at all (defaultState is a declared non-initial state)', () => {
+    const engine = new LifecycleEngine()
+    const synthetic: LifecycleSpec = {
+      lifecycleVersion: 1,
+      id: 'synthetic-no-initial',
+      states: [{ id: 'open' }, { id: 'closed' }],
+      transitions: [{ from: 'open', to: 'closed', role: 'author' }],
+    }
+    engine.loadLifecycle(synthetic)
+    const path = fixture('synthetic-no-initial.yaml', [
+      'registryVersion: 1',
+      'lifecycleId: synthetic-no-initial',
+      'defaultState: closed',
+      'kinds:',
+      '  - kind: person',
+      '',
+    ].join('\n'))
+    expect(() => loadKindLifecycleRegistry(path, deps(engine))).toThrow(/initial state/)
+  })
+
+  // DEFECT 1 second arm: defaultState is a declared state of a lifecycle that DOES
+  // declare an initial state, but defaultState is a different (non-initial) state.
+  it('FIX1: throws when defaultState is a declared non-initial state of a synthetic lifecycle that declares an initial state', () => {
+    const engine = new LifecycleEngine()
+    const synthetic: LifecycleSpec = {
+      lifecycleVersion: 1,
+      id: 'synthetic-with-initial',
+      states: [{ id: 'open', initial: true }, { id: 'closed' }],
+      transitions: [{ from: 'open', to: 'closed', role: 'author' }],
+    }
+    engine.loadLifecycle(synthetic)
+    const path = fixture('synthetic-non-initial-default.yaml', [
+      'registryVersion: 1',
+      'lifecycleId: synthetic-with-initial',
+      'defaultState: closed',
+      'kinds:',
+      '  - kind: person',
+      '',
+    ].join('\n'))
+    expect(() => loadKindLifecycleRegistry(path, deps(engine))).toThrow(/initial state/)
+  })
+
+  // QMS7-3 FIX 1 / DEFECT 2: the malformed-file message must name only the fields
+  // actually enforced (lifecycleId/kinds). registryVersion is not inspected — the
+  // message may not claim a guarantee the loader does not provide.
+  it('FIX1: malformed-file message names only the enforced fields (no registryVersion claim)', () => {
+    const path = fixture('malformed-msg.yaml', 'registryVersion: 1\n')
+    try {
+      loadKindLifecycleRegistry(path, deps())
+      throw new Error('expected load to throw')
+    } catch (err) {
+      const message = (err as Error).message
+      expect(message).toMatch(/Invalid registry-kind coverage/)
+      expect(message).not.toMatch(/registryVersion/)
+    }
+  })
 })
