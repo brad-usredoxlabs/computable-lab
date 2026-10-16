@@ -36,6 +36,14 @@ export interface NounShapePolicy {
   /** Compiled quantity/unit residue patterns (DATA): glue the residue step
    *  may also delete (bare counts, unit abbreviations). */
   residueIgnorePatterns: readonly RegExp[];
+  /** FIX c2/D3 (DATA): the vocabulary `domain:` values whose scalar args the
+   *  redundancy strip may touch. Absent section ⇒ no confinement (silent-off
+   *  parity). The TS never names a domain — it reads this set. */
+  stripDomains: ReadonlySet<string> | null;
+  /** FIX c2/D1 (DATA): the replay bar's prose-blob DETECTOR patterns —
+   *  deliberately INDEPENDENT of mintRefusePatterns so an evidence bar can
+   *  fail a blob the mint gate happens to miss. */
+  blobDetectPatterns: readonly RegExp[];
 }
 
 /** Load + validate the `nounShape:` section PER call. Absent file or absent
@@ -59,6 +67,8 @@ export function loadNounShape(path: URL | string = NOUN_SHAPE_POLICY_PATH): Noun
   const patterns = (section as Record<string, unknown>).mintRefusePatterns;
   const connectives = (section as Record<string, unknown>).connectives;
   const residueIgnore = (section as Record<string, unknown>).residueIgnorePatterns;
+  const stripDomainsRaw = (section as Record<string, unknown>).stripDomains;
+  const blobDetectRaw = (section as Record<string, unknown>).blobDetectPatterns;
   if (patterns === undefined && connectives === undefined) return null;
   if (!Array.isArray(patterns) || patterns.length === 0 || !patterns.every((p) => typeof p === 'string' && p.trim().length > 0)) {
     throw new Error(`noun-shape data (${displayPath}): \`nounShape.mintRefusePatterns\` must be a non-empty string list`);
@@ -81,6 +91,14 @@ export function loadNounShape(path: URL | string = NOUN_SHAPE_POLICY_PATH): Noun
   };
   const compiled = compileList(patterns, 'mintRefusePatterns');
   const residueIgnorePatterns = compileList(residueIgnore, 'residueIgnorePatterns');
+  const blobDetectPatterns = compileList(blobDetectRaw, 'blobDetectPatterns');
+  let stripDomains: ReadonlySet<string> | null = null;
+  if (stripDomainsRaw !== undefined) {
+    if (!Array.isArray(stripDomainsRaw) || !stripDomainsRaw.every((d) => typeof d === 'string' && d.trim().length > 0)) {
+      throw new Error(`noun-shape data (${displayPath}): \`nounShape.stripDomains\` must be a string list`);
+    }
+    stripDomains = new Set(stripDomainsRaw.map((d) => String(d).trim().toLowerCase()));
+  }
   const words = new Set<string>();
   if (connectives !== undefined) {
     if (!Array.isArray(connectives) || !connectives.every((w) => typeof w === 'string' && w.trim().length > 0)) {
@@ -88,7 +106,19 @@ export function loadNounShape(path: URL | string = NOUN_SHAPE_POLICY_PATH): Noun
     }
     for (const word of connectives) words.add(word.trim().toLowerCase());
   }
-  return { mintRefusePatterns: compiled, connectives: words, residueIgnorePatterns };
+  return { mintRefusePatterns: compiled, connectives: words, residueIgnorePatterns, stripDomains, blobDetectPatterns };
+}
+
+/** FIX c2/D1: the replay bar's prose-blob DETECTOR — keyed on the DATA
+ *  `blobDetectPatterns`, deliberately INDEPENDENT of `isMintableLabel` (the
+ *  mint gate). A label matching ANY blob pattern is blob-shaped evidence, so
+ *  an evidence bar can fail a blob even when the mint gate happens to allow
+ *  it. Absent patterns ⇒ nothing detected (silent-off parity). */
+export function isBlobShapedLabel(label: string, shape: NounShapePolicy | null): boolean {
+  if (!shape || shape.blobDetectPatterns.length === 0) return false;
+  const normalized = label.trim().replace(/\s+/gu, ' ').toLowerCase();
+  if (!normalized) return false;
+  return shape.blobDetectPatterns.some((pattern) => pattern.test(normalized));
 }
 
 /** The shared mint gate BOTH offer surfaces call (engine unknown-noun arm +

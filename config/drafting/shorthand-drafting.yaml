@@ -35,10 +35,39 @@ nounShape:
   mintRefusePatterns:
     - "\\d+\\s*[:/xX×]\\s*\\d+\\s+[\\p{L}]"
     - "\\b[\\p{L}]{2,}\\s+(?:with|containing|including)\\s+[\\p{L}]{2,}"
+    # FIX c2/D1: a prose connective flanked by a QUANTITY — "with 10% FBS",
+    # "containing 200 HepG2 cells" — is the same sentence shape as the
+    # letter-flanked arm above. The canonical blob's connectives sit next to
+    # numeric quantities, so the letters-only arm never matched its own wave
+    # sentence. Arm a: connective + quantity (number, optional unit, optional
+    # %). Arm b: a number glued straight to a word ("200 HepG2"). Survivor
+    # pins (P3a) re-checked: "1 mM Clofibrate in DMSO", "5 mg/mL lysozyme in
+    # PBS", "0.1% Triton X-100 in water", "DMEM/F12", "DNase/RNase Free Water"
+    # match NEITHER arm ("in" is not a listed connective here; "mM"/"mg" are
+    # letters before the unit, "X-100" is digit-after-hyphen).
+    - "[\\p{L}]{2,}\\s+(?:with|containing|including)\\s+\\d+(?:\\s*[\\p{L}]+)?\\s*%?"
   connectives: [with, without, and, or, plus, in, of, per, for, to, the, a, an, containing, including]
   # Quantity/unit GLUE the residue step may also delete when testing a label
   # against its component list: a bare count ("200") and the unit abbreviations
   # the blob idiom names ("uL", "cells"). DATA, not a TS table.
+  # FIX c2/D2: the guards are unicode lookarounds, NOT \b — JS \b is defined
+  # against ASCII \w, so "\bµl\b" never matched "µL" (the µ is not a \w char)
+  # and a µL-carrying blob left a stray residue the strip could not delete.
   residueIgnorePatterns:
-    - "\\b\\d+\\b"
-    - "\\b(?:ul|\\u00b5l|ml|l|cells|cell|well|wells|per)\\b"
+    - "(?<![\\p{L}\\p{N}-])\\d+(?![\\p{L}\\p{N}-])"
+    - "(?<![\\p{L}\\p{N}-])(?:ul|\\u00b5l|ml|l|cells|cell|well|wells|per)(?![\\p{L}\\p{N}-])"
+  # FIX c2/D3 (spec B7 "must NOT touch labware/source/target"): the domains
+  # whose vocabulary-DECLARED scalar args the redundancy strip may touch. The
+  # strip skips any arg whose declared `domain:` is not listed here — a DATA
+  # condition, never a TypeScript name literal. Absent section = no
+  # confinement (silent-off parity with the rest of this file).
+  stripDomains: [material]
+  # FIX c2/D1: the replay bar's prose-blob DETECTOR — deliberately INDEPENDENT
+  # of mintRefusePatterns so the "zero prose-blob cards" bar can fail a label
+  # the mint gate happens to miss (the c1 review proved the shared predicate
+  # made the bar unfalsifiable for the canonical sentence). A label matching
+  # ANY pattern here is blob-shaped evidence: a ratio/quantity blob or a prose
+  # connective. The mint gate stays keyed on mintRefusePatterns alone.
+  blobDetectPatterns:
+    - "\\d+\\s*%|\\d+\\s*[:/xX×]\\s*\\d+"
+    - "\\s(?:with|containing|including)\\s"

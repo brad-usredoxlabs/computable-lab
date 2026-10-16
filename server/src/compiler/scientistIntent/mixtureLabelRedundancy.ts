@@ -67,8 +67,12 @@ function normalizeLabel(value: string): string {
 }
 
 /** The cue loader's own component-word alphabet (normalizeScientistIntent
- *  flankingComponentCount :286): whole words of letters/digits/hyphens. */
-const WORD_RE = /\b[\p{L}\p{N}][\p{L}\p{N}-]*\b/gu;
+ *  flankingComponentCount :286): whole words of letters/digits/hyphens.
+ *  FIX c2/D2: the boundaries are UNICODE lookarounds, NOT \b — JS \b is
+ *  defined against ASCII \w, so the leading \b failed before a non-ASCII
+ *  glyph ("α-MEM" tokenized to just "MEM", the stray "α" survived as residue
+ *  and the strip silently no-oped on a ubiquitous real reagent). */
+const WORD_RE = /(?<![\p{L}\p{N}-])[\p{L}\p{N}][\p{L}\p{N}-]*(?![\p{L}\p{N}-])/gu;
 
 function wordsOf(value: string): string[] {
   return [...value.matchAll(WORD_RE)].map((m) => m[0].toLowerCase());
@@ -82,10 +86,14 @@ function isContentWord(
   connectives: ReadonlySet<string>,
 ): boolean {
   if (word.length < cues.shape.flanking.minComponentLength) return false;
-  if (!cues.shape.flanking.componentPattern.test(word)) return false;
   if (cues.shape.flanking.stopWords.has(word)) return false;
   if (connectives.has(word)) return false;
-  return true;
+  if (cues.shape.flanking.componentPattern.test(word)) return true;
+  // FIX c2/D2: a unicode-prefixed token ("α-mem") never matches the ASCII cue
+  // componentPattern as a whole. A token is still a content word when one of
+  // its hyphen-separated parts is (the "mem" in "α-mem"); catalogue suffixes
+  // ("f12") keep failing — no part starts with a letter.
+  return word.split('-').some((part) => part.length >= cues.shape.flanking.minComponentLength && cues.shape.flanking.componentPattern.test(part));
 }
 
 /** The component list riding the action, in EITHER declared form. The params
@@ -169,8 +177,11 @@ function isRedundantAgainstComponents(
   // Delete every word the label shares with a component (the label enumerates
   // the components' own words — including catalogue-shaped ones the flanking
   // componentPattern would not call a component).
+  // FIX c2/D2: the deletion guards are unicode lookarounds, NOT \b (ASCII-only
+  // — \bmem\b cannot match inside "α-mem", so a covered component word would
+  // survive its own deletion and leave a false residue).
   for (const word of [...componentWords].sort((a, b) => b.length - a.length)) {
-    deletePattern(new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'u'));
+    deletePattern(new RegExp(`(?<![\\p{L}\\p{N}-])${word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![\\p{L}\\p{N}-])`, 'u'));
   }
   for (const cue of cues.cues) {
     deletePattern(new RegExp(cue.token.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
@@ -178,7 +189,7 @@ function isRedundantAgainstComponents(
   for (const pattern of (nounShape?.residueIgnorePatterns ?? [])) deletePattern(pattern);
   for (const word of wordsOf(residue)) {
     if (cues.shape.flanking.stopWords.has(word) || connectives.has(word)) {
-      deletePattern(new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'u'));
+      deletePattern(new RegExp(`(?<![\\p{L}\\p{N}-])${word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![\\p{L}\\p{N}-])`, 'u'));
     }
   }
   return residue.trim().length === 0;
@@ -215,6 +226,12 @@ export function stripRedundantMixtureLabels(
     for (const contract of contracts) {
       if (contract.kind !== 'resolvable') continue;
       if (contract.cardinality === 'many') continue; // the component list itself
+      // FIX c2/D3 (spec B7 "must NOT touch labware/source/target"): strip
+      // candidates are confined to the domains DECLARED in the nounShape DATA
+      // (`stripDomains`) — a contract whose vocabulary `domain:` is not listed
+      // is never a strip candidate. A DATA/contract condition, zero name
+      // literals. Absent `stripDomains:` ⇒ no confinement (silent-off parity).
+      if (nounShape?.stripDomains && !nounShape.stripDomains.has((contract.domain ?? '').toLowerCase())) continue;
       const value = action[contract.name];
       if (typeof value !== 'string' || value.trim().length === 0) continue;
       if (!isRedundantAgainstComponents(value, componentLabels, cues, nounShape)) continue;

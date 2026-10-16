@@ -44,7 +44,7 @@ import { createInferenceClient } from '../src/ai/InferenceClient.js';
 import { createAgentOrchestrator } from '../src/ai/AgentOrchestrator.js';
 import { createResolveSpineFromContext } from '../src/resolve/index.js';
 import { createLabwareLookup } from '../src/ai/compiler/labwareLookup.js';
-import { loadNounShape, isMintableLabel } from '../src/compiler/resolution/nounShape.js';
+import { loadNounShape, isMintableLabel, isBlobShapedLabel } from '../src/compiler/resolution/nounShape.js';
 import { resolveAiProfile } from '../src/config/types.js';
 import type { AgentResult } from '../src/ai/types.js';
 
@@ -162,11 +162,16 @@ async function main(): Promise<number> {
     });
 
     const requests = result.clarificationRequests ?? [];
-    // Bar (i): prose-blob card = a clarification whose label FAILS the DATA
-    // shape (or a mint affordance on such a label).
+    // Bar (i): prose-blob card = a clarification whose label is BLOB-SHAPED
+    // per the DATA `blobDetectPatterns` — FIX c2/D1: deliberately INDEPENDENT
+    // of the mint gate (isMintableLabel). The c1 review proved the old shared
+    // predicate made this bar unfalsifiable for the canonical sentence; the
+    // detector now flags ratio/quantity/connective blobs even when the mint
+    // gate happens to allow them. The mint-affordance check is kept as a
+    // second, mint-gate-keyed arm.
     const blobCards = requests.filter((r) => {
-      const label = r.unresolvedFact?.label ?? r.prompt;
-      return !isMintableLabel(String(label), nounShape) || (r.allowCreateLocal === true && !isMintableLabel(String(label), nounShape));
+      const label = String(r.unresolvedFact?.label ?? r.prompt);
+      return isBlobShapedLabel(label, nounShape) || (r.allowCreateLocal === true && !isMintableLabel(label, nounShape));
     });
     // Bar (ii): empty graph = success-shaped with ZERO events AND zero named
     // clarification reasons.

@@ -293,4 +293,53 @@ describe('SH-QA-3 T6 length-is-NOT-policy: the rule is component-list coverage',
     const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
     expect(result.stripped).toEqual([]);
   });
+
+  // FIX c2 / adversarial review c1 DEFECT 2 (RED-first): JS \b is ASCII-only,
+  // so a non-ASCII-leading component name ("α-MEM") tokenized to just "MEM",
+  // the stray "α" survived as residue, and the strip silently no-oped — the
+  // mixture concatenation reached the noun door as a mintable card. The strip
+  // must tokenize on unicode-safe boundaries.
+  it('T6d: unicode-prefixed components strip (α-MEM + FBS vs composition α-MEM + FBS)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'shqa3-t6d',
+      actions: [{
+        action: 'add_material',
+        material: 'α-MEM + FBS',
+        params: { composition: [{ material: 'α-MEM', role: 'buffer_component' }, { material: 'FBS', role: 'additive' }] },
+      }],
+      unresolved: [],
+    } as never;
+    const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
+    expect(result.stripped.map((s) => s.argument), 'unicode-leading component must not defeat the strip').toEqual(['material']);
+  });
+
+  // FIX c2 / adversarial review c1 DEFECT 3 (RED-first): the generic strip
+  // iterated EVERY kind:resolvable scalar arg, so a NON-material scalar
+  // (labware) whose value spelled the components was stripped — violating
+  // spec B7 "must NOT touch labware/source/target". Strip candidates are
+  // confined to the domains DECLARED in the nounShape DATA (stripDomains),
+  // never a TypeScript name literal.
+  it('T6e: the strip NEVER touches a non-material-domain scalar (labware keeps its value, B7)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'shqa3-t6e',
+      actions: [{
+        action: 'add_material',
+        labware: 'DMEM FBS',
+        material: 'DMEM FBS',
+        params: { composition: [{ material: 'DMEM', role: 'buffer_component' }, { material: 'FBS', role: 'additive' }] },
+      }],
+      unresolved: [],
+    } as never;
+    const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
+    expect(result.stripped.map((s) => s.argument), 'only the material-domain scalar strips').toEqual(['material']);
+    expect((result.intent.actions[0] as unknown as Record<string, unknown>).labware, 'labware value survives verbatim').toBe('DMEM FBS');
+  });
 });

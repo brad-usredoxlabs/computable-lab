@@ -279,3 +279,122 @@ reconciles it in-test and the disclosure names the delta).
   new worktrees — known lane pitfall; copied read-only from the computable-lab
   checkout, NOT committed: schema/** is OUT of ownership and the file is
   untracked at trunk).
+
+## 7. FIX c2 (adversarial review c1, VERDICT: fix — all four defects)
+
+Run c2 on the same worktree/branch (base tip 7e7bc9e0). RED-first: each defect
+got a NEW failing pin BEFORE the fix; the pins are in TEST files and DATA only
+(scope grep stays 52 — verified below).
+
+### 7.1 DEFECT 1 (blocker) — mint DATA blind to quantity-flanked connectives + replay bar shared predicate
+
+RED pins (shorthandChat.nounShape.test.ts): P1c (payload level: the CANONICAL
+wave sentence "50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200
+HepG2 cells per uL" must yield allowCreateLocal=false, prompt clause dropped,
+question survives) and P1d (engine arm: same sentence, NO composition, NO
+Create-local-term candidate). RED run (before fix):
+  Test Files 1 failed (1); Tests 2 failed | 7 passed (9)
+  — P1c "expected true to be false" (isMintableLabel true on the canonical
+  sentence), P1d "canonical blob mint refused: expected true to be false".
+
+FIX (DATA, config/drafting/shorthand-drafting.yaml):
+- mintRefusePatterns gained arm 3: "[\\p{L}]{2,}\\s+(?:with|containing|including)\\s+\\d+(?:\\s*[\\p{L}]+)?\\s*%?"
+  — a connective flanked by a QUANTITY ("with 10% FBS", "containing 200 HepG2
+  cells"). A probe matrix over ALL P1/P3 labels + derived labels confirmed:
+  canonical + the three P1 sentences REFUSED; all seven P3 survivors
+  (Clofibrate/lysozyme/Triton/DMEM-F12/DNase-RNase/mystery flask/Equine Serum)
+  + Enigma Broth + derived component join stay MINTABLE. (An arm "\\d+\\s+[\\p{L}]"
+  was tried and REJECTED — it refused "1 mM Clofibrate in DMSO"; dropped.)
+- NEW DATA section `blobDetectPatterns:` (ratio/quantity blob OR spaced prose
+  connective) + loader field + `isBlobShapedLabel()` in nounShape.ts — the
+  replay bar's prose-blob predicate, deliberately INDEPENDENT of the mint gate.
+- Replay bar (i) (shqa3-mixture-replay.mts) now keys on isBlobShapedLabel OR
+  the mint-affordance arm — the bar CAN now fail a mintable blob.
+
+### 7.2 DEFECT 2 (major) — ASCII-only \\b silently no-ops the strip on unicode-leading names
+
+RED pin: mixtureRedundancy.test.ts T6d (α-MEM + FBS vs composition [α-MEM,
+FBS] must strip). RED run: "unicode-leading component must not defeat the
+strip: expected [] to deeply equal ['material']".
+FIX (mixtureLabelRedundancy.ts): WORD_RE boundaries are unicode lookarounds
+(?<![\\p{L}\\p{N}-]) ... (?![\\p{L}\\p{N}-]) instead of \\b; the component-word and
+connective DELETION patterns use the same guards (\\bmem\\b cannot match inside
+"α-mem"); isContentWord accepts a token when a hyphen-part matches the cue
+componentPattern ("mem" in "α-mem"; "f12" still fails — no letter-start part);
+the nounShape residueIgnorePatterns DATA switched from \\b to the same
+lookaround guards (\\bµl\\b never matched "µL" — same ASCII-\\b class).
+
+### 7.3 DEFECT 3 (minor) — generic strip touched labware (spec B7)
+
+RED pin: mixtureRedundancy.test.ts T6e (add_material with labware:"DMEM FBS" +
+material:"DMEM FBS" + composition [DMEM,FBS]: ONLY 'material' strips, labware
+value survives verbatim). RED run: "expected [ 'labware', 'material' ] to
+deeply equal [ 'material' ]" — reproduces the reviewer's probe exactly.
+FIX: NEW DATA section `stripDomains: [material]` (nounShape loader →
+`stripDomains` set); the strip loop skips any contract whose vocabulary-
+DECLARED `domain:` is not in the set (contract.domain read generically — zero
+name literals; absent section = no confinement, silent-off parity).
+
+### 7.4 DEFECT 4 (minor) — throwaway harness code committed
+
+git rm server/.artifacts/shqa3-replay/redprobe.mts + stripdebug.mts (the unused
+`vi` import left with them); untracked probe-tmp.ts / probe2.ts deleted from
+the worktree. summary.json + raw run-1..10.json evidence kept.
+
+### 7.5 Replay-bar independence proof (mandated verification 3)
+
+One-off probe (scripts/shqa3-blobdetector-probe.mts, run then DELETED — not
+committed, per D4 discipline) re-scored the EXISTING recorded artifacts
+(2026-10-16T07-21-03-884Z/run-1..10.json) under the NEW bar (i), zero new
+model calls. Verbatim output:
+
+  canonical isMintableLabel (old bar predicate): false
+  canonical isBlobShapedLabel (new bar predicate): true
+  component-noun "Thermo trypsin-EDTA" blob? false
+  component-noun "HepG2 cells" blob? false
+  component-noun "DMEM" blob? false
+  run-1.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-2.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-3.json: events=1 clarifications=0 newBarBlobCards=0 strip=no
+  run-4.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-5.json: events=1 clarifications=0 newBarBlobCards=0 strip=no
+  run-6.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-7.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-8.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  run-9.json: events=0 clarifications=4 newBarBlobCards=0 strip=YES
+  run-10.json: events=0 clarifications=4 newBarBlobCards=0 strip=no
+  REPLAYED BARS over recorded artifacts: blobCardRuns=0 zeroProseBlobCards=true
+
+The detector flags the canonical sentence label DIRECTLY (true) while the
+legitimate component nouns stay clean (false) — bar (i) is now falsifiable for
+the exact sentence it names, and the recorded 10 runs still pass it.
+
+### 7.6 GREEN verification battery (all run for real)
+
+RED-first evidence (pre-fix): nounShape suite "Tests 2 failed | 7 passed (9)"
+(P1c/P1d); mixtureRedundancy "Tests 2 failed | 8 passed (10)" (T6d/T6e).
+
+Post-fix targeted suites (vitest cwd=server):
+  ✓ shorthandChat.nounShape.test.ts (9)  ✓ shorthandChat.e2eStubHonesty.test.ts (7)
+  ✓ mixtureRedundancy.test.ts (10)       ✓ goldens/goldenProseBlobStrip.test.ts (3)
+  ✓ vocabularyRipOut.test.ts (8)         ✓ goldens/ (4 files, 19 tests)
+  Test Files 8 passed (8); Tests 53 passed (53)
+
+server tsc --noEmit: exactly 1 error — src/ai/AgentOrchestrator.ts(345,18)
+TS2339 — the known pre-existing one; set-diff empty.
+
+Full-suite comm (vitest --reporter=json, baseline /tmp/shqa3-base-failfiles.txt,
+109 files, the c1-verified trunk-side list): c2 fail files 92; NEW failing
+files (comm set-difference c2-base) = 0; base-only = 17 (the known
+load-timeout flap class). Tests 101 failed / 6193 passed.
+
+Hash + scope bars: MANIFEST.yaml fbf743ab1384778de43eeb113da0f0857eef9fce
+(unchanged); mixture-material-cues.yaml 8ab1eb70a299c1d35acfa473beb37715e32dd47e
+(unchanged); scope grep Trypsin|trypsin|Clofibrate|HepG2|DMEM|FBS over
+server/src non-test .ts = 52 (unchanged — the new sentence-literal pins live
+only in test files and DATA). shorthand-drafting.yaml is an OWNED, edited DATA
+file (new hash 8136f0d6...; the pinned hash was never on this file).
+
+D4: redprobe.mts + stripdebug.mts git rm'd; probe-tmp.ts + probe2.ts deleted
+from the worktree; the c2 blob-detector probe was deleted after its run.
+summary.json + run-1..10.json retained.

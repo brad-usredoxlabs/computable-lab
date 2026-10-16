@@ -67,6 +67,37 @@ describe('SH-QA-3 P1 PAYLOAD BAR: no card offers a prose sentence as a mintable 
     expect(requests[0]!.allowCreateLocal).toBe(true);
     expect(requests[0]!.prompt).toContain('or create a local term');
   });
+
+  // FIX c2 / adversarial review c1 DEFECT 1 (RED-first): the item's OWN
+  // canonical blob — the wave-header mixture sentence verbatim, minus the
+  // "Add 50uL of … to each well" frame — has its connectives flanked by
+  // NUMERIC quantities ("with 10% FBS", "containing 200 HepG2 cells"), which
+  // the shipped mintRefusePatterns[1] (letters-only flanking) never matched.
+  // The payload bar must refuse mint on THIS sentence, not just on the
+  // RED-plan's letter-flanked twin.
+  it('P1c: the CANONICAL quantity-flanked blob sentence yields NO mint candidate (payload level)', () => {
+    const canonical = '50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL';
+    expect(isMintableLabel(canonical, SHAPE), 'quantity-flanked connective must be DATA-refused').toBe(false);
+    const [request] = clarificationsFromUnresolvedFacts([fact(canonical)]);
+    expect(request.allowCreateLocal, 'canonical sentence card must refuse mint').toBe(false);
+    expect(request.prompt).not.toContain('or create a local term');
+    // The QUESTION survives — refusal is the affordance, never the ask.
+    expect(request.prompt).toContain(canonical);
+    expect(request.unresolvedFact!.reason).toBe('unknown-noun');
+  });
+
+  it('P1d: the canonical blob with NO composition yields NO Create-local-term candidate through the engine arm', async () => {
+    const compiled = await compileWithEmptySpine(`intentId: shqa3-p1d
+actions:
+  - action: add_material
+    material: "50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL"
+    volumeUl: 50
+    targetWells: [A1]
+`);
+    const asked = compiled.clarifications.find((c) => c.reason === 'unknown-noun' && c.label.includes('containing 200 HepG2'));
+    expect(asked, `the question survives: ${JSON.stringify(compiled.clarifications.map((c) => [c.reason, c.label]))}`).toBeDefined();
+    expect((asked!.candidates ?? []).some((c) => c.label.includes('Create local term')), 'canonical blob mint refused').toBe(false);
+  });
 });
 
 describe('SH-QA-3 P2 ENGINE ARM: unknown-noun survives, the mint candidate is absent', () => {
