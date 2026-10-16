@@ -55,8 +55,6 @@ const COVERED_KINDS = [
   'training-record',
 ]
 
-const REG_OPS_SCHEMA_IDS = COVERED_KINDS.map(k => SID(`${k}.schema.yaml`))
-
 // ---------------------------------------------------------------------------
 // Real schema pipeline (same pattern as ControlledDocumentSchemas.test.ts):
 // the fake store validates through this, so schema landmines bite for real.
@@ -263,7 +261,7 @@ async function callCreate(world: World, schemaId: string, payload: Record<string
   } as unknown as FastifyRequest<{ Body: { schemaId: string; payload: Record<string, unknown> } }>
   const reply = makeReply()
   const result = await world.handlers.createRecord(request, reply)
-  return { result: result as Record<string, unknown>, status: reply.statusValue }
+  return { result: result as unknown as Record<string, unknown>, status: reply.statusValue }
 }
 
 async function callUpdate(world: World, id: string, payload: Record<string, unknown>, userId: string) {
@@ -274,7 +272,7 @@ async function callUpdate(world: World, id: string, payload: Record<string, unkn
   } as unknown as FastifyRequest<{ Params: { id: string }; Body: { payload: Record<string, unknown> } }>
   const reply = makeReply()
   const result = await world.handlers.updateRecord(request, reply)
-  return { result: result as Record<string, unknown>, status: reply.statusValue }
+  return { result: result as unknown as Record<string, unknown>, status: reply.statusValue }
 }
 
 function storedPayload(world: World, id: string): Record<string, unknown> {
@@ -645,7 +643,10 @@ describe('QMS7-3 schema-shape guards', () => {
   it('registry-ops.lifecycle.yaml validates against lifecycle.meta.schema.yaml via the real Ajv validator', () => {
     const meta = parseYaml(readFileSync(join(SCHEMA_DIR, 'core/lifecycle.meta.schema.yaml'), 'utf-8'))
     const lifecycle = parseYaml(readFileSync(join(LIFECYCLES_DIR, 'registry-ops.lifecycle.yaml'), 'utf-8'))
-    const result = validator.validateWithSchema(lifecycle, meta)
+    // Fresh AjvValidator instance: the meta-schema is already registered in the
+    // shared pipeline validator under its $id (validateWithSchema would collide).
+    const metaValidator = createValidator()
+    const result = metaValidator.validateWithSchema(lifecycle, meta)
     expect(result.errors.map(e => `${e.path} ${e.message}`)).toEqual([])
     expect(result.valid).toBe(true)
   })

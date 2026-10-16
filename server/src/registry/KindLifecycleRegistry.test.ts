@@ -13,7 +13,6 @@ import { describe, it, expect } from 'vitest'
 import { LifecycleEngine } from '../lifecycle/LifecycleEngine.js'
 import { loadLifecyclesFromDir } from '../lifecycle/LifecycleLoader.js'
 import {
-  KindLifecycleRegistry,
   loadKindLifecycleRegistry,
   collectKnownKinds,
   type KindLifecycleRegistryDeps,
