@@ -5,6 +5,7 @@ import { SequenceService } from '../sequences/SequenceService.js';
 import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity.js';
 import { compileWorkstateIntent, workstateDepsFromContext } from './workstateCompile.js';
 import { compileAnalysisIntent, analysisDepsFromContext } from './analysisCompile.js';
+import { compileRecordDraftIntent, recordDraftDepsFromContext } from './recordDraftCompile.js';
 
 export interface DraftAdapter {
   checkRequest?(intent: Record<string,unknown>, userRequest?: string): Array<{path:string; message:string}>;
@@ -64,6 +65,32 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
     project(projection) {
       // The projection is the intent echo; the session document rides in
       // `result`, and the single staged analysis-run rides in `writes`.
+      return projection;
+    },
+  },
+  // QMS7-7 (OQ-1 ruling A): record-drafting proposals compile a model intent
+  // into a full record envelope and stage AT MOST ONE create through the
+  // staging store — the real schema validate + lint run at compile time
+  // (StagingStore.ts:22-30), nothing durable before the reviewHash-verified
+  // accept. stage() resolves kind→schema through the schema corpus
+  // (properties.kind.const), derives the id from the schema's DECLARED
+  // properties.id.pattern (no kind→schema map, no prefix table), embeds the
+  // handler-identical provenance fields (OQ-2), and projects the card field
+  // list from the schema's ui-v1 projection. The staged write folds through
+  // the EXISTING accept loop (:176-184, ensureOwnerPolicy at :183).
+  // Diagnostics become a stage failure, which the pipeline records as
+  // needs-missing-fact with canAccept:false — the generic gate, not an
+  // adapter-name branch. NO state/status field is ever written: the
+  // draft-ness is the read-side lifecycle fallback (recordDraftCompile.ts).
+  'record-drafting': {
+    async stage(context,actor,intent,_targetId,now) {
+      const compiled = await compileRecordDraftIntent(intent, recordDraftDepsFromContext(context), actor, now);
+      if(!compiled.ok)throw new Error(compiled.diagnostics.map(d=>`${d.code} ${d.path}: ${d.message}`).join('; '));
+      return {...compiled.result};
+    },
+    project(projection) {
+      // The projection is the intent echo; the card document rides in `result`
+      // and the single staged record create rides in `writes`.
       return projection;
     },
   },

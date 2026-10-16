@@ -24,3 +24,17 @@ adapters:
     domain: analysis
     operations: [compose-analysis]
     projection: {}
+  # QMS7-7 (OQ-1 ruling A, the ONE sanctioned block of this item): record-drafting
+  # proposals compile a model intent into a full record envelope and stage AT MOST
+  # ONE create through the staging store (real schema validate + lint run at
+  # compile time; nothing durable before the reviewHash-verified accept). The
+  # compiled card document (recordFields + landing sessionDocument) rides in the
+  # compile/accept `result` like the workstate/analysis adapters; the accept write
+  # rides the EXISTING accept loop. Field vocabulary: the target schema + its
+  # *.ui.yaml projection (never TS literals). Kind→schema resolution reads each
+  # schema's properties.kind.const; the staged id derives from the schema's
+  # declared properties.id.pattern.
+  record-drafting:
+    domain: registry-records
+    operations: [compose-record]
+    projection: {}
