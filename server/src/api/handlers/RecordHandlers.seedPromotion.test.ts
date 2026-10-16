@@ -25,7 +25,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
 import { createRecordStore, RecordStoreImpl } from '../../store/RecordStoreImpl.js';
-import { createLocalRepoAdapter, LocalRepoAdapter } from '../../repo/LocalRepoAdapter.js';
+import { createLocalRepoAdapter } from '../../repo/LocalRepoAdapter.js';
 import { AjvValidator } from '../../validation/AjvValidator.js';
 import { LintEngine } from '../../lint/LintEngine.js';
 import { IndexManager } from '../../index/IndexManager.js';
