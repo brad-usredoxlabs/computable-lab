@@ -4320,6 +4320,29 @@ export const apiClient = {
   },
 
   /**
+   * QMS7-6 (OQ-1 ruling A): the lifecycle-scoped terminal-state facts.
+   * Calls GET /lifecycle/:lifecycleId/transitions WITHOUT recordId and reads
+   * the `terminalStates` field — the server's read-only echo of
+   * engine.terminalStates(), i.e. the ids the lifecycle YAML declares
+   * `terminal: true`. The client NEVER invents a terminal-state list: an
+   * unavailable lifecycle (404) resolves to [] and consumers fail open (rows
+   * stay visible). Typed accessor only — no policy lives here.
+   */
+  async getLifecycleTerminalStates(lifecycleId: string): Promise<string[]> {
+    try {
+      const response = await request<{ terminalStates?: string[] }>(
+        `/lifecycle/${encodeURIComponent(lifecycleId)}/transitions`,
+      )
+      return response.terminalStates ?? []
+    } catch (error) {
+      if (ApiError.isApiError(error) && error.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
+  /**
    * Search records by query and kinds.
    * Calls POST /ai/search-records with { query, kinds }.
    * Returns combined local and web (Exa) search results.

@@ -340,6 +340,11 @@ describe('RecordRegistryPage — archived browsing (QMS7-6)', () => {
   it('archived record opens read-only: no Save, draft-copy offered, editor disabled, related card mounts (AC-6, OQ-2A/OQ-3)', async () => {
     render(<RecordRegistryPage />)
     await openEquipmentTab()
+    // Prove the terminal facts resolved (row hidden by the data-driven rule)
+    // BEFORE toggling — the read-only wiring depends on the same facts map.
+    await waitFor(() => {
+      expect(screen.queryByText('EQC-QUANTSTUDIO5')).toBeNull()
+    })
     toggleShowArchived()
     const row = await screen.findByText('EQC-QUANTSTUDIO5')
     fireEvent.click(row)
