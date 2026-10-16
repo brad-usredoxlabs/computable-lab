@@ -103,6 +103,13 @@ export class LifecycleEngine {
     return this.machines.has(lifecycleId)
   }
 
+  /** Plain spec getter: the loaded lifecycle spec exactly as declared in YAML.
+   *  No policy is decided here (coverage loaders validate data against these
+   *  declared facts; the interpretation stays declarative). */
+  specFor(lifecycleId: string): LifecycleSpec | undefined {
+    return this.specs.get(lifecycleId)
+  }
+
   canTransition(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
     const machine = this.machines.get(lifecycleId)
     if (!machine) throw new Error(`Lifecycle not loaded: ${lifecycleId}`)
