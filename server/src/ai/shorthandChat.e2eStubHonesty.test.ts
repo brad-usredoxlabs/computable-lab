@@ -32,6 +32,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { loadNounShape, isMintableLabel } from '../compiler/scientistIntent/nounShape.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
@@ -153,6 +154,42 @@ function comparable(payload: Record<string, unknown> | undefined) {
   };
 }
 
+/**
+ * SH-QA-3 (OQ3 ruling): apply the SHIPPED noun-shape DATA gate to the
+ * extracted app/e2e stub — the same loader the server card map uses
+ * (config/drafting/shorthand-drafting.yaml `nounShape:`). A card whose label
+ * fails the shape flips `allowCreateLocal` true→false, drops the ", or create
+ * a local term" prompt clause, and loses its `Create local term` candidates
+ * (the engine withholds the mint candidate on a shape-refused label). Returns
+ * the gated copy + the labels it flipped (the disclosed re-pin delta).
+ */
+function applyMintGate(stub: Record<string, unknown>): {
+  stub: Record<string, unknown>;
+  flipped: Array<{ label: string; reason: string }>;
+} {
+  const shape = loadNounShape();
+  const flipped: Array<{ label: string; reason: string }> = [];
+  const gateCard = (card: Record<string, unknown> | undefined): void => {
+    if (!card) return;
+    const fact = card.unresolvedFact as Record<string, unknown> | undefined;
+    const label = String(fact?.label ?? card.query ?? '');
+    if (isMintableLabel(label, shape)) return;
+    flipped.push({ label, reason: String(fact?.reason ?? '') });
+    card.allowCreateLocal = false;
+    card.prompt = String(card.prompt).replace(', or create a local term', '');
+    if (fact?.candidates !== undefined) {
+      const kept = (fact.candidates as Array<Record<string, unknown>>)
+        .filter((c) => !String(c.label).includes('Create local term'));
+      if (kept.length === 0) delete fact.candidates;
+      else fact.candidates = kept;
+    }
+  };
+  const copy = structuredClone(stub);
+  for (const card of (copy.clarificationRequests ?? []) as Array<Record<string, unknown>>) gateCard(card);
+  gateCard(copy.clarification as Record<string, unknown> | undefined);
+  return { stub: copy, flipped };
+}
+
 describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for its deck state', () => {
   it('deck-match state (fix2 option (b)): stub === shorthandResultFromCompile(ghost doc, deck[plate named ghost plate])', async () => {
     const stub = (await extractStubFn(specText(), 'fixedShorthandResult'))();
@@ -185,14 +222,44 @@ describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for it
 });
 
 describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarification payload (three bars, labware head)', () => {
-  it('stub === shorthandResultFromCompile(canonical doc, no deck)', async () => {
+  it('stub === shorthandResultFromCompile(canonical doc, no deck) — SH-QA-3 re-pin (OQ3): the stub predates the mint gate; the shipped noun-shape DATA reconciles it EXACTLY on the two blob cards', async () => {
     const stub = (await extractStubFn(specText(), 'blobClarificationResult'))();
     const real = await realResult(CANONICAL_DOC, undefined);
     // RED against the fix1 stub: it carries TWO requests (both material) and
     // the material bar as the legacy head. The real compile emits THREE:
     // unknown-noun(plate), unknown-noun(blob), unrealized-mixture-blob-material
     // (blob) — and the legacy head is the FIRST request (labware bar, '/l').
-    expect(comparable(stub)).toEqual(comparable(real as unknown as Record<string, unknown>));
+    // SH-QA-3 (OQ3 ruling ADOPTED): the server now REFUSES the mint affordance
+    // on a blob-label card (nounShape DATA — allowCreateLocal false, prompt
+    // clause dropped, mint candidates withheld). The app/e2e stub lives in
+    // app/ (NOT this item's file ownership — "No app/ edits" is the task
+    // block's hard line), so the honesty pin survives by applying the SAME
+    // shipped DATA gate to the extracted stub and pinning that the delta is
+    // EXACTLY the two blob cards' mint affordance — nothing else moved. The
+    // app-side stub update is handed back to the orchestrator.
+    const gated = applyMintGate(stub);
+    expect(gated.flipped.map((f) => f.label).sort()).toEqual([
+      '50:50 Trypsin-EDTA/DMEM',
+      '50:50 Trypsin-EDTA/DMEM',
+    ]);
+    expect(comparable(gated.stub)).toEqual(comparable(real as unknown as Record<string, unknown>));
+  });
+
+  it('SH-QA-3 disclosed re-pin delta: the RAW app/e2e stub still claims the mint affordance on both blob cards (the defect being corrected — app-side stub update handed back, not papered over)', async () => {
+    const stub = (await extractStubFn(specText(), 'blobClarificationResult'))();
+    const requests = (stub.clarificationRequests as Array<Record<string, unknown>>);
+    const blobCards = requests.filter(
+      (r) => (r.unresolvedFact as Record<string, unknown>).label === '50:50 Trypsin-EDTA/DMEM',
+    );
+    expect(blobCards).toHaveLength(2);
+    for (const card of blobCards) {
+      expect(card.allowCreateLocal, 'the raw stub pre-dates the mint gate').toBe(true);
+      expect(String(card.prompt)).toContain('or create a local term');
+    }
+    // The plate card is mintable and stays untouched by the gate.
+    const plateCard = requests.find((r) => (r.unresolvedFact as Record<string, unknown>).label === 'plate')!;
+    expect(plateCard.allowCreateLocal).toBe(true);
+    expect(applyMintGate(stub).flipped.some((f) => f.label === 'plate')).toBe(false);
   });
 
   it('the real canonical compile bars the unseeded plate noun too: reasons [unknown-noun(plate), unknown-noun(blob), unrealized-mixture-blob-material(blob)], events []', async () => {
