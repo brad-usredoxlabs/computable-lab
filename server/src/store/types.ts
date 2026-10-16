@@ -17,6 +17,20 @@ import type { RecordEnvelope, RecordMeta } from '../types/RecordEnvelope.js';
 export type { RecordEnvelope, RecordMeta };
 
 /**
+ * Provenance marker surfaced on a StoreResult when a seed-resolved record is
+ * promoted into the working data dir by a first authorized, valid write
+ * (QMS7-2 copy-on-write). The seed dir itself is never written; the marker
+ * records WHERE the promoted content came from and the fingerprint of the
+ * seed content at read time (the adapter sha256-40 derivation).
+ */
+export interface SeedPromotion {
+  /** Absolute path of the seed file the content was copied from. */
+  seedPath: string;
+  /** sha256 hex (first 40 chars) of the seed file content at read time. */
+  seedContentSha: string;
+}
+
+/**
  * Result of a store operation.
  */
 export interface StoreResult {
@@ -36,6 +50,12 @@ export interface StoreResult {
     message: string;
     timestamp: string;
   };
+  /**
+   * Present ONLY when this write promoted a seed-resolved record into the
+   * data dir (QMS7-2). Optional-and-absent: constructed with conditional
+   * spreads, never assigned undefined (exactOptionalPropertyTypes).
+   */
+  promotion?: SeedPromotion;
 }
 
 /**

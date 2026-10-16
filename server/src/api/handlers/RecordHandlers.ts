@@ -1095,6 +1095,34 @@ export function createRecordHandlers(
           }
         }
 
+        // QMS7-2 (OQ2 ruling): a promoted seed write records its provenance.
+        // Handler-side so the actor is the REAL acting user (store.update is
+        // called without an actor on this path). Same discipline as the
+        // lifecycle_transition audit below and the record_revised audit
+        // above: AFTER durability, best-effort, never fails the business
+        // write. 'seed_record_promoted' is DATA flowing into the free-form
+        // audit-event `action` string (schema/governance/audit-event.schema
+        // .yaml enforces only ^[a-z][a-z0-9_]*$ — no enum), so this rides
+        // existing machinery rather than adding vocabulary.
+        if (result.promotion && security?.auditService) {
+          try {
+            await security.auditService.append({
+              actor: user.userId ?? 'anonymous',
+              action: 'seed_record_promoted',
+              subjectType: payloadKind(existing.payload) ?? 'record',
+              subjectId: id,
+              data: {
+                seed_path: result.promotion.seedPath,
+                seed_content_sha: result.promotion.seedContentSha,
+                ...(result.envelope?.meta?.path !== undefined ? { promoted_path: result.envelope.meta.path } : {}),
+                ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
+              },
+            });
+          } catch (promotionAuditErr) {
+            console.error(`Failed to append promotion audit event for ${id}:`, promotionAuditErr);
+          }
+        }
+
         // Record what the transition MEANT (append-only audit trail).
         // AuditEventService.append swallows its own failures — this never
         // fails the business operation.

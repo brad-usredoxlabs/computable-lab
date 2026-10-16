@@ -586,13 +586,7 @@ title: ${SEED_TITLE}
     it('OQ3: expectedSha === "seed" matches the seed fingerprint; a foreign sha is refused', async () => {
       const { seedStore } = await makeSeedStore('seed-cow-oq3', 'lbw-cow-plate-96.yaml', seedFileContent);
 
-      const ok = await seedStore.update({
-        envelope: updatedEnvelope(`${SEED_TITLE} (token)`),
-        expectedSha: 'seed',
-      });
-      expect(ok.success).toBe(true);
-      expect(ok.promotion?.seedContentSha).toBe(sha40(seedFileContent));
-
+      // Foreign sha first: the seed fingerprint is the stored content here.
       const foreign = await seedStore.update({
         envelope: updatedEnvelope(`${SEED_TITLE} (foreign)`),
         expectedSha: 'f'.repeat(40),
@@ -601,6 +595,14 @@ title: ${SEED_TITLE}
       expect(foreign.error).toBe(
         `SHA mismatch: expected ${'f'.repeat(40)}, got ${sha40(seedFileContent)}`,
       );
+
+      // The literal 'seed' token the read path stamps is accepted.
+      const ok = await seedStore.update({
+        envelope: updatedEnvelope(`${SEED_TITLE} (token)`),
+        expectedSha: 'seed',
+      });
+      expect(ok.success).toBe(true);
+      expect(ok.promotion?.seedContentSha).toBe(sha40(seedFileContent));
     });
 
     // R3 — exactly once after promotion: list suppression (:349) and get

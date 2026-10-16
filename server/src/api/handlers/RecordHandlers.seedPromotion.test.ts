@@ -28,6 +28,7 @@ import { createRecordStore, RecordStoreImpl } from '../../store/RecordStoreImpl.
 import { createLocalRepoAdapter, LocalRepoAdapter } from '../../repo/LocalRepoAdapter.js';
 import { AjvValidator } from '../../validation/AjvValidator.js';
 import { LintEngine } from '../../lint/LintEngine.js';
+import { IndexManager } from '../../index/IndexManager.js';
 import { createRecordHandlers } from './RecordHandlers.js';
 
 // ---------------------------------------------------------------------------
@@ -82,10 +83,16 @@ function makeRequest(id: string, body: Record<string, unknown>) {
 }
 
 async function makeWorld() {
-  const testDir = join(tmpdir(), `seed-cow-handler-${randomUUID()}`);
+  // Two separate roots: the DATA repo (LocalRepoAdapter basePath) and the
+  // seed dir (code-repo stand-in). The seed dir must NOT live under the
+  // data repo's base — the data-dir scan must see only working copies.
+  const rootDir = join(tmpdir(), `seed-cow-handler-${randomUUID()}`);
+  const repoDir = join(rootDir, 'lab');
+  const testDir = join(rootDir, 'scratch');
+  await mkdir(repoDir, { recursive: true });
   await mkdir(testDir, { recursive: true });
 
-  const repo = createLocalRepoAdapter({ basePath: testDir });
+  const repo = createLocalRepoAdapter({ basePath: repoDir });
   const validator = new AjvValidator();
   validator.addSchema(testSchema);
   const lintEngine = new LintEngine();
@@ -115,7 +122,7 @@ async function makeWorld() {
 
   const dataDirFiles = () => repo.listFiles({ directory: 'records', pattern: '*.yaml', recursive: true });
 
-  return { testDir, repo, store, seedFilePath, handlers, put, auditService, dataDirFiles };
+  return { testDir, repoDir, repo, store, seedDir, seedFilePath: seedFilePath, seedDirOverride: seedDir, handlers, put, auditService, dataDirFiles };
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +133,7 @@ describe('PUT /records/:id — seed copy-on-write promotion (QMS7-2)', () => {
   let world: Awaited<ReturnType<typeof makeWorld>>;
 
   beforeEach(async () => { world = await makeWorld(); });
-  afterEach(async () => { await rm(world.testDir, { recursive: true, force: true }); });
+  afterEach(async () => { await rm(join(world.testDir, '..'), { recursive: true, force: true }); });
 
   it('R2: authorized PUT on a seed-resolved record succeeds once and promotes the working copy', async () => {
     // Read path already resolves the seed (existing behavior, pinned).
@@ -134,7 +141,7 @@ describe('PUT /records/:id — seed copy-on-write promotion (QMS7-2)', () => {
     expect(seedRead).not.toBeNull();
     expect(seedRead?.meta?.commitSha).toBe('seed');
 
-    const payload = { ...(seedRead!.payload as Record<string, unknown>), title: `${SEED_TITLE} (edited)` };
+    const payload = { ...(seedRead!.payload as Record<string, unknown>), $schema: 'https://test.com/test.schema.yaml', title: `${SEED_TITLE} (edited)` };
     const { status, body } = await world.put(SEED_ID, payload);
 
     // At base this is 400 { success:false, error:'Record not found: <id>' }.
@@ -195,7 +202,7 @@ describe('PUT /records/:id — seed copy-on-write promotion (QMS7-2)', () => {
 
   it('R7: promoted PUT appends a seed_record_promoted audit event with provenance and the real actor', async () => {
     const seedRead = await world.store.get(SEED_ID);
-    const payload = { ...(seedRead!.payload as Record<string, unknown>), title: `${SEED_TITLE} (audited)` };
+    const payload = { ...(seedRead!.payload as Record<string, unknown>), $schema: 'https://test.com/test.schema.yaml', title: `${SEED_TITLE} (audited)` };
     const { status } = await world.put(SEED_ID, payload);
     expect(status).toBe(200);
 
@@ -225,14 +232,30 @@ describe('PUT /records/:id — seed copy-on-write promotion (QMS7-2)', () => {
     expect(world.auditService.append).not.toHaveBeenCalled();
   });
 
+  it('R3: after promotion, IndexManager.rebuild indexes the record exactly once (working copy wins)', async () => {
+    const seedRead = await world.store.get(SEED_ID);
+    const payload = { ...(seedRead!.payload as Record<string, unknown>), $schema: 'https://test.com/test.schema.yaml', title: `${SEED_TITLE} (indexed)` };
+    const { status } = await world.put(SEED_ID, payload);
+    expect(status).toBe(200);
+
+    // IndexManager seed-merge suppression (IndexManager.ts:244-247): the
+    // working copy is indexed and the seed copy is skipped by recordId.
+    const manager = new IndexManager(world.repo as never, { baseDir: 'records' });
+    const index = await manager.rebuild(world.seedDirOverride);
+    const matches = index.entries.filter((e) => e.recordId === SEED_ID);
+    expect(matches.length).toBe(1);
+    expect(matches[0]!.path.startsWith('records/labware/')).toBe(true);
+    expect(matches[0]!.title).toBe(`${SEED_TITLE} (indexed)`);
+  });
+
   it('ordinary working-copy PUT after promotion appends NO promotion audit (marker is one-shot)', async () => {
     const seedRead = await world.store.get(SEED_ID);
-    const first = await world.put(SEED_ID, { ...(seedRead!.payload as Record<string, unknown>), title: `${SEED_TITLE} (first)` });
+    const first = await world.put(SEED_ID, { ...(seedRead!.payload as Record<string, unknown>), $schema: 'https://test.com/test.schema.yaml', title: `${SEED_TITLE} (first)` });
     expect(first.status).toBe(200);
     expect(world.auditService.append).toHaveBeenCalledTimes(1);
 
     const after = await world.store.get(SEED_ID);
-    const second = await world.put(SEED_ID, { ...(after!.payload as Record<string, unknown>), title: `${SEED_TITLE} (second)` });
+    const second = await world.put(SEED_ID, { ...(after!.payload as Record<string, unknown>), $schema: 'https://test.com/test.schema.yaml', title: `${SEED_TITLE} (second)` });
     expect(second.status).toBe(200);
     // Still exactly one promotion event — the second edit is an ordinary update.
     expect(world.auditService.append).toHaveBeenCalledTimes(1);

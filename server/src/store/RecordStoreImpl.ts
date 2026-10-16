@@ -26,6 +26,7 @@ import type {
   UpdateRecordOptions,
   DeleteRecordOptions,
   GetRecordOptions,
+  SeedPromotion,
 } from './types.js';
 import {
   detectLifecycleBypass,
@@ -41,6 +42,7 @@ import {
   isNestedKind,
   parseRecordPath,
 } from '../repo/PathConvention.js';
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -219,6 +221,89 @@ export class RecordStoreImpl implements RecordStore {
       }
     }
     return null;
+  }
+
+  /**
+   * Adapter fingerprint convention (EmbeddedGitRepoAdapter.ts:39,
+   * GitRepoAdapter.ts:199, LocalRepoAdapter.ts:28): sha256 hex, first 40
+   * chars. Reused EXACTLY for the seed content fingerprint — no second hash
+   * format.
+   */
+  private static contentFingerprint(content: string): string {
+    return createHash('sha256').update(content).digest('hex').slice(0, 40);
+  }
+
+  /**
+   * Merge hierarchical refs from `payload.links` and top-level studyId/
+   * experimentId/runId into the single links object PathConvention expects
+   * (shared by createUnlocked and the seed promotion path so both land at
+   * the same `{recordId}__{slug}.yaml` convention).
+   */
+  private linksFromPayload(payload: Record<string, unknown>):
+    | { studyId?: string; experimentId?: string; runId?: string }
+    | undefined {
+    const nestedLinks = (payload.links ?? {}) as {
+      studyId?: string;
+      experimentId?: string;
+      runId?: string;
+    };
+    const mergedLinks: {
+      studyId?: string;
+      experimentId?: string;
+      runId?: string;
+    } = {
+      ...nestedLinks,
+      ...(typeof payload.studyId === 'string'
+        ? { studyId: payload.studyId }
+        : {}),
+      ...(typeof payload.experimentId === 'string'
+        ? { experimentId: payload.experimentId }
+        : {}),
+      ...(typeof payload.runId === 'string' ? { runId: payload.runId } : {}),
+    };
+    return Object.keys(mergedLinks).length > 0 ? mergedLinks : undefined;
+  }
+
+  /**
+   * The append-only wall (governance triple + config-injected kinds, §3.2).
+   * Shared verbatim between the working-copy path and the seed-candidate
+   * path so a seed payload hits the IDENTICAL wall before promotion.
+   * Generic evaluation — no domain kinds.
+   */
+  private appendOnlyWallError(storedPayload: Record<string, unknown> | undefined): StoreResult | null {
+    if (['record-revision', 'signature', 'audit-event', ...(this.config.appendOnlyKinds ?? [])].includes(String(storedPayload?.kind))) {
+      return { success: false, error: 'APPEND_ONLY: immutable records cannot be updated' };
+    }
+    return null;
+  }
+
+  /**
+   * The content lock (lifecycleId + controlled state + changed controlled
+   * content). Shared verbatim between the working-copy path and the
+   * seed-candidate path.
+   */
+  private contentLockError(storedPayload: Record<string, unknown> | undefined, incomingPayload: unknown): StoreResult | null {
+    if (storedPayload?.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(storedPayload.state)) && controlledContent(storedPayload) !== controlledContent(incomingPayload)) {
+      return { success: false, error: 'CONTROLLED_RECORD_LOCKED: create a new draft before editing controlled content' };
+    }
+    return null;
+  }
+
+  /**
+   * QMS7-2: read a seed candidate for the promotion path. Returns the seed
+   * file's content and its adapter-convention fingerprint, or null when no
+   * seed file resolves the id. READ-ONLY: the seed file is only ever read
+   * here — no code path may open records/seed/** for writing.
+   */
+  private readSeedCandidate(recordId: string): { path: string; content: string; fingerprint: string } | null {
+    const seedPath = this.findSeedRecordPath(recordId);
+    if (!seedPath) return null;
+    try {
+      const content = readFileSync(seedPath, 'utf-8');
+      return { path: seedPath, content, fingerprint: RecordStoreImpl.contentFingerprint(content) };
+    } catch {
+      return null;
+    }
   }
 
   private getSeedRecord(recordId: string): RecordEnvelope | null {
@@ -513,27 +598,7 @@ export class RecordStoreImpl implements RecordStore {
     // schemas put `studyId` at the top; artifact does the same). Merge both
     // shapes so PathConvention sees a single `links` object regardless of
     // schema style.
-    const nestedLinks = (payload.links ?? {}) as {
-      studyId?: string;
-      experimentId?: string;
-      runId?: string;
-    };
-    const mergedLinks: {
-      studyId?: string;
-      experimentId?: string;
-      runId?: string;
-    } = {
-      ...nestedLinks,
-      ...(typeof payload.studyId === 'string'
-        ? { studyId: payload.studyId }
-        : {}),
-      ...(typeof payload.experimentId === 'string'
-        ? { experimentId: payload.experimentId }
-        : {}),
-      ...(typeof payload.runId === 'string' ? { runId: payload.runId } : {}),
-    };
-    const links =
-      Object.keys(mergedLinks).length > 0 ? mergedLinks : undefined;
+    const links = this.linksFromPayload(payload);
     
     // Generate path
     const path = generatePath({
@@ -635,50 +700,68 @@ export class RecordStoreImpl implements RecordStore {
   private async updateUnlocked(options: UpdateRecordOptions): Promise<StoreResult> {
     const { envelope, expectedSha, message, skipValidation, skipLint } = options;
     
-    // Find existing record
+    // Find existing record in the working data dir.
     const existing = await this.findRecordPath(envelope.recordId);
-    if (!existing) {
-      return {
-        success: false,
-        error: `Record not found: ${envelope.recordId}`,
-      };
+
+    // QMS7-2 copy-on-write: when the working scan misses, consult the seed
+    // dir. The read paths (get()'s seed fallback, list()'s seed merge) DO
+    // resolve seed records — the write path must agree about which records
+    // exist. A seed hit is a CANDIDATE promotion: the SAME walls run against
+    // the seed payload before anything durable, and only a fully authorized,
+    // valid write copies the seed content into the data dir. The seed file
+    // is only ever read.
+    let target:
+      | { mode: 'working'; path: string; content: string; sha: string }
+      | { mode: 'seed'; path: string; content: string; fingerprint: string };
+    if (existing) {
+      const file = await this.repo.getFile(existing.path);
+      if (!file) {
+        return {
+          success: false,
+          error: `File not found: ${existing.path}`,
+        };
+      }
+      target = { mode: 'working', path: existing.path, content: file.content, sha: file.sha };
+    } else {
+      const candidate = this.readSeedCandidate(envelope.recordId);
+      if (!candidate) {
+        return {
+          success: false,
+          error: `Record not found: ${envelope.recordId}`,
+        };
+      }
+      target = { mode: 'seed', ...candidate };
     }
     
-    // Get current file to verify SHA
-    const file = await this.repo.getFile(existing.path);
-    if (!file) {
-      return {
-        success: false,
-        error: `File not found: ${existing.path}`,
-      };
-    }
-
-    const storedPayload = parseRecord(file.content, existing.path).envelope?.payload as Record<string, unknown> | undefined;
+    const storedPayload = parseRecord(target.content, target.path).envelope?.payload as Record<string, unknown> | undefined;
     // Governance triple hardcoded here + config-injected kinds (§3.2): the
     // SAME list the record API walls read, so an API-bypassing service hits
     // the identical store-level wall. Generic evaluation, no domain kinds.
-    if (['record-revision', 'signature', 'audit-event', ...(this.config.appendOnlyKinds ?? [])].includes(String(storedPayload?.kind))) {
-      return { success: false, error: 'APPEND_ONLY: immutable records cannot be updated' };
-    }
+    // QMS7-2: evaluated against the seed payload too, BEFORE any promotion.
+    const appendOnly = this.appendOnlyWallError(storedPayload);
+    if (appendOnly) return appendOnly;
 
-    if (storedPayload?.lifecycleId && ['approved', 'effective', 'superseded', 'archived'].includes(String(storedPayload.state)) && controlledContent(storedPayload) !== controlledContent(envelope.payload)) {
-      return { success: false, error: 'CONTROLLED_RECORD_LOCKED: create a new draft before editing controlled content' };
-    }
+    const contentLock = this.contentLockError(storedPayload, envelope.payload);
+    if (contentLock) return contentLock;
 
     // Snapshot the previous payload for the lifecycle-bypass detector
     // (only parsed when the detector is wired — otherwise zero cost).
     let previousPayload: unknown;
     if (this.lifecycleBypassAudit) {
-      const prev = parseRecord(file.content, existing.path);
+      const prev = parseRecord(target.content, target.path);
       if (prev.success) previousPayload = prev.envelope?.payload;
     }
     
-    // Check expected SHA if provided
-    const sha = expectedSha || file.sha;
-    if (expectedSha && file.sha !== expectedSha) {
+    // Check expected SHA if provided. For a seed candidate the stored
+    // fingerprint is the seed content's fingerprint, and the seed read path
+    // stamps commitSha 'seed' (getSeedRecord sets no contentSha), so the
+    // literal 'seed' token the handler echoes counts as matching (OQ3).
+    const storedSha = target.mode === 'working' ? target.sha : target.fingerprint;
+    const sha = expectedSha || storedSha;
+    if (expectedSha && expectedSha !== storedSha && !(target.mode === 'seed' && expectedSha === 'seed')) {
       return {
         success: false,
-        error: `SHA mismatch: expected ${expectedSha}, got ${file.sha}`,
+        error: `SHA mismatch: expected ${expectedSha}, got ${storedSha}`,
       };
     }
     
@@ -711,27 +794,56 @@ export class RecordStoreImpl implements RecordStore {
     // Serialize to YAML
     const content = serializeRecord(envelope);
     
-    // Update file
-    const commitMessage = message || `Update ${envelope.recordId}`;
-    const result = await this.repo.updateFile({
-      path: existing.path,
-      content,
-      message: commitMessage,
-      sha,
-      author: this.config.author,
-      email: this.config.email,
-    });
+    // Update file — or, for a seed candidate, PROMOTE: a single createFile
+    // at the generatePath convention (same as createUnlocked, so the fast
+    // path-scan resolves it afterwards). create-or-fail is the durability
+    // wall: nothing before this point touched the repo, and a failed
+    // createFile commits nothing — no half-written window, zero residue on
+    // refusal. The commit message carries the provenance in human-visible
+    // form.
+    const commitMessage = message
+      || (target.mode === 'seed'
+        ? `Promote seed record ${envelope.recordId} from ${target.path} (seed content ${target.fingerprint})`
+        : `Update ${envelope.recordId}`);
+    const promotionPath = target.mode === 'seed'
+      ? generatePath({
+          recordId: envelope.recordId,
+          kind: String((envelope.payload as Record<string, unknown>).kind ?? envelope.meta?.kind ?? 'unknown'),
+          slug: String((envelope.payload as Record<string, unknown>).title ?? (envelope.payload as Record<string, unknown>).name ?? ''),
+          baseDir: this.config.baseDir,
+          ...(this.linksFromPayload(envelope.payload as Record<string, unknown>) !== undefined
+            ? { links: this.linksFromPayload(envelope.payload as Record<string, unknown>)! }
+            : {}),
+        })
+      : target.path;
+
+    const result = target.mode === 'seed'
+      ? await this.repo.createFile({
+          path: promotionPath,
+          content,
+          message: commitMessage,
+          author: this.config.author,
+          email: this.config.email,
+        })
+      : await this.repo.updateFile({
+          path: promotionPath,
+          content,
+          message: commitMessage,
+          sha,
+          author: this.config.author,
+          email: this.config.email,
+        });
     
     if (!result.success) {
       return {
         success: false,
-        error: result.error || 'Failed to update file',
+        error: result.error || (target.mode === 'seed' ? 'Failed to promote seed record' : 'Failed to update file'),
       };
     }
     
     // Update cache
     if (result.commit) {
-      this.pathCache.set(envelope.recordId, { path: existing.path, sha: result.commit.sha });
+      this.pathCache.set(envelope.recordId, { path: promotionPath, sha: result.commit.sha });
     }
 
     // Lifecycle-bypass self-report (spec §10 gap): the write committed, the
@@ -770,12 +882,19 @@ export class RecordStoreImpl implements RecordStore {
     // Build meta without undefined values
     const updatedMeta: RecordMeta = {
       ...envelope.meta,
-      path: existing.path,
-      ...(await this.repo.getFile(existing.path).then(file => file ? { commitSha: file.sha, contentSha: file.sha, ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}) } : {})),
+      path: promotionPath,
+      ...(await this.repo.getFile(promotionPath).then(file => file ? { commitSha: file.sha, contentSha: file.sha, ...(file.gitCommit ? { gitCommit: file.gitCommit } : {}) } : {})),
     };
 
     const finalEnvelope = { ...envelope, meta: updatedMeta };
     await this.fireUpsertHook(finalEnvelope);
+
+    // Typed provenance marker (OQ2 handler consumes it for the audit
+    // append): seed path + seed content fingerprint at read time.
+    const promotion: SeedPromotion | undefined =
+      target.mode === 'seed'
+        ? { seedPath: target.path, seedContentSha: target.fingerprint }
+        : undefined;
 
     return {
       success: true,
@@ -789,6 +908,7 @@ export class RecordStoreImpl implements RecordStore {
           timestamp: result.commit.timestamp,
         },
       } : {}),
+      ...(promotion !== undefined ? { promotion } : {}),
     };
   }
 
@@ -805,6 +925,18 @@ export class RecordStoreImpl implements RecordStore {
     // Find existing record
     const existing = await this.findRecordPath(recordId);
     if (!existing) {
+      // OQ1 ruling: delete() stays seed-refused — factory defaults must not
+      // be erasable through a data-dir delete a re-seed would resurrect
+      // anyway (archive semantics belong to the lifecycle layer). The store
+      // error is message-only clearer than the generic 'Record not found'
+      // so the read/write disagreement stops being mysterious. No behavior
+      // change, no kind names.
+      if (this.findSeedRecordPath(recordId)) {
+        return {
+          success: false,
+          error: `Record ${recordId} resolves from seed; seed records cannot be deleted`,
+        };
+      }
       return {
         success: false,
         error: `Record not found: ${recordId}`,
