@@ -18,6 +18,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from './useTheme'
 import { OpenTabsProvider } from './OpenTabsContext'
@@ -203,18 +204,37 @@ vi.mock('../../editor/taptab/TapTabEditor', () => ({
   },
 }))
 
-import { RegistryHostPage } from './RegistryHostPage'
+// Mounted through a lazy boundary exactly like App.tsx's DeferredRoute does:
+// the OpenTabsProvider mounts in the first commit and its mount-time session
+// re-read ('replace') lands BEFORE the host page's registration effect. A
+// statically-mounted host would register first and then be wiped by that
+// re-read — a test-only artifact that never occurs on a real route load.
+const Host = lazy(async () => import('./RegistryHostPage').then((m) => ({ default: m.RegistryHostPage })))
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Mount gate: the host appears one commit AFTER the OpenTabsProvider. That is
+// the production order (the provider commits with the router shell; the lazy
+// host lands later, after the provider's mount-time session re-read). Without
+// the gate, a warm module cache lets the host mount in the SAME commit as the
+// provider, where child effects run first and the provider's re-read then
+// discards the registration — a harness artifact, not app behaviour.
+function DeferredMount({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    setReady(true)
+  }, [])
+  return ready ? <>{children}</> : <div data-testid="host-loading">Loading...</div>
+}
 
 function renderHost() {
   return render(
     <MemoryRouter initialEntries={['/registry']}>
       <ThemeProvider>
         <OpenTabsProvider>
-          <RegistryHostPage />
+          <DeferredMount>
+            <Suspense fallback={<div data-testid="host-loading">Loading...</div>}>
+              <Host />
+            </Suspense>
+          </DeferredMount>
         </OpenTabsProvider>
       </ThemeProvider>
     </MemoryRouter>,
@@ -232,8 +252,10 @@ function activeTabOf(state: WorkspaceState | null): { id: string; kind: string; 
   }
 }
 
+// The lazy boundary's first import has to transform AppShell + RightPane +
+// the AI-panel graph, which is slower than waitFor's default 1s window.
 async function waitForRegistryLoaded() {
-  await waitFor(() => expect(screen.getByText('Test Record')).toBeTruthy())
+  await waitFor(() => expect(screen.getByText('Test Record')).toBeTruthy(), { timeout: 20_000 })
 }
 
 const surfaceAiRequests: Event[] = []
@@ -253,7 +275,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     window.localStorage.clear()
   })
 
-  it('renders the workspace shell around the registry: navbar + tab strip + right pane', async () => {
+  it('renders the workspace shell around the registry: navbar + tab strip + right pane', { timeout: 30_000 }, async () => {
     renderHost()
     await waitForRegistryLoaded()
     expect(screen.getByTestId('global-navbar')).toBeTruthy()
@@ -263,7 +285,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     expect(screen.getByTestId('record-search-combobox')).toBeTruthy()
   })
 
-  it('registers exactly ONE registry tab in the strip on mount', async () => {
+  it('registers exactly ONE registry tab in the strip on mount', { timeout: 30_000 }, async () => {
     renderHost()
     await waitForRegistryLoaded()
     const tabs = screen.getAllByTestId(/^workspace-tab-registry/)
@@ -271,7 +293,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     expect(tabs[0]!.textContent).toContain('Registry')
   })
 
-  it('remount (refresh simulation) keeps exactly one registry tab — no duplicate', async () => {
+  it('remount (refresh simulation) keeps exactly one registry tab — no duplicate', { timeout: 30_000 }, async () => {
     const first = renderHost()
     await waitForRegistryLoaded()
     expect(screen.getAllByTestId(/^workspace-tab-registry/).length).toBe(1)
@@ -284,7 +306,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     expect(screen.getAllByTestId(/^workspace-tab-registry/).length).toBe(1)
   })
 
-  it('selection re-targets the AI context live: record-edit on select, project-details on cancel', async () => {
+  it('selection re-targets the AI context live: record-edit on select, project-details on cancel', { timeout: 30_000 }, async () => {
     renderHost()
     await waitForRegistryLoaded()
 
@@ -316,7 +338,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     expect(surfaceAiRequests.length).toBe(0)
   })
 
-  it('create mode does NOT mint a record tab (record-create stays out)', async () => {
+  it('create mode does NOT mint a record tab (record-create stays out)', { timeout: 30_000 }, async () => {
     renderHost()
     await waitForRegistryLoaded()
     fireEvent.click(screen.getByTestId('search-new-btn'))
@@ -325,7 +347,7 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     expect(screen.queryByTestId('workspace-tab-create:person')).toBeNull()
   })
 
-  it('drops the hand-rolled viewport-height root for a pane-filling height', async () => {
+  it('drops the hand-rolled viewport-height root for a pane-filling height', { timeout: 30_000 }, async () => {
     const { container } = renderHost()
     await waitForRegistryLoaded()
     const divs = Array.from(container.querySelectorAll('div'))

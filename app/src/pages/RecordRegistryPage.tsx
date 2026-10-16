@@ -11,6 +11,8 @@ import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
 import { deriveSchemaNode } from '../browser/SchemaTree';
 import type { SchemaNode } from '../browser/SchemaTree';
+import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
+import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
 
 const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
@@ -117,6 +119,37 @@ export default function RecordRegistryPage() {
     setProjection(null);
     setDirty(false);
   }, [activeTab, refreshRecords]);
+
+  // QMS7-1 (OQ2 ruling): the AI panel's live target is the WorkspaceProvider's
+  // own active tab — AiTabPanel's context memo reads it (its deps include the
+  // active tab). Selecting a record re-targets it to a record-edit tab for
+  // that record (ws.openTab is idempotent on id, workspace/reducer.ts);
+  // clearing the selection (cancel / tab switch / save-close) returns it to
+  // the study's project-details tab so the target never goes stale. NO
+  // SURFACE_AI_REQUEST_EVENT here — that channel SENDS a chat turn per click.
+  // Guarded by useOptionalWorkspace: the page still mounts bare (no provider)
+  // in the standalone suites. Deps carry only the selection id: the context
+  // VALUE identity changes on every provider state change, so depending on
+  // ws.openTab directly would re-dispatch forever (the "Maximum update depth
+  // exceeded" trap — cf. RecordHostPage.tsx's stable-callback comment).
+  const ws = useOptionalWorkspace();
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
+  const selectedRecordId = selectedRecord?.recordId ?? null;
+  useEffect(() => {
+    const ctx = wsRef.current;
+    if (!ctx) return;
+    if (selectedRecordId) {
+      ctx.openTab({
+        id: recordEditTabId(selectedRecordId),
+        kind: 'record-edit',
+        recordId: selectedRecordId,
+        title: selectedRecordId,
+      });
+    } else {
+      ctx.activateTab(projectDetailsTabId(ctx.state.studyId));
+    }
+  }, [selectedRecordId]);
 
   const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
     const recordData: RecordData = {
@@ -297,7 +330,7 @@ export default function RecordRegistryPage() {
   const hasProjection = projection !== null && projection.blocks && projection.slots;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-full min-h-0">
       {/* Left Panel - Record List */}
       <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white">
         {/* Tabs */}

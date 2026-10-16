@@ -117,6 +117,16 @@ export type WorkspaceTab =
     }
   | {
       id: string
+      kind: 'registry'
+      /** QMS7-1: the multi-kind record registry hosted in the workspace
+       *  shell (/registry). Client-side-only kind — like collection/splash/
+       *  record-edit it has no server workspace arm (parseWorkspaceState
+       *  silently drops unknown kinds) and round-trips through the session
+       *  store, which keeps `kind` as a plain string. */
+      title: string
+    }
+  | {
+      id: string
       kind: 'splash'
       title: string
     }
@@ -185,6 +195,12 @@ export function collectionTabId(collection: string): string {
   return `collection:${collection}`
 }
 
+/** Stable id for the registry tab — one per workspace. Re-opening /registry
+ *  focuses the open tab instead of stacking duplicates. */
+export function registryTabId(): string {
+  return 'registry'
+}
+
 /** Stable id for the splash (new-tab launcher) tab. One per open splash. */
 export function splashTabId(): string {
   return `splash:${Date.now()}`
@@ -216,6 +232,7 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
       return null
     case 'collection':
     case 'splash':
+    case 'registry':
       return null
     default: {
       const _exhaustive: never = tab

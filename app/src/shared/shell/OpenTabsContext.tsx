@@ -369,6 +369,7 @@ export function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode 
       return 'ai'
     case 'collection':
     case 'splash':
+    case 'registry':
       return 'ai'
     default: {
       const _exhaustive: never = tab
