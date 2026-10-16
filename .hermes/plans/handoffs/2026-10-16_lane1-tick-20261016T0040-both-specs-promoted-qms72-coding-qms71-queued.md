@@ -101,3 +101,25 @@ to QMS7-7; OQ3 SurfaceIndicator cosmetic fallback accepted.
 - resolution: the QMS7-2 verification step runs `cd server && npx tsc --noEmit` myself pre-merge —
   that check clears or replaces this assumption.
 - owner: orchestrator. reversible: true.
+
+## APPENDED at tick end ~02:05 EDT (major movement during this tick)
+
+- QMS7-2 CODER FINISHED CLEAN: exit rc=0 01:59:31, ~40 min run. Report
+  /home/brad/.hermes/cl/lanes/1/qms7-2-report-l1t0050.md: 3 commits (4a599829 RED pins
+  [16 failed | 40 passed at base, all with the bug signature], d436b250 impl, 71a6d31d cleanup).
+  All four rulings implemented per report; claims suite tails + tsc 0 — NOT yet verified by me.
+- ADVERSARIAL GATE DISPATCHED: cl-adversarial-reviewer (OpenRouter, cloud — no local contention),
+  pid 2415967 wrapper, log logs/advreview-QMS72-l1t0200.log, unique review path
+  reviews/qms7-2-advreview-l1t0200.md, END-line REVIEW-QMS72 DONE. Focus pinned: wall order +
+  zero-residue on refusal, exactly-once pins without new suppression logic, ruling compliance,
+  file-ownership diff audit, its own vitest + tsc + seed-hash run.
+- QMS7-1 CODER STARTED: queue took the lock the second QMS7-2 released (01:59:32), pid-file
+  QMS7-1(l1t0140) dispatch-pid:2313615. Worktree wt/QMS7-1-lane1-l1t0140 being built off tip.
+  NO third coder queued (fleet-single holds).
+- NEXT TICK: read the advreview verdict. accept -> MY verification (diff opened, targeted suites,
+  full server suite, tsc vs 0-baseline [clears AS-ORCH-L1-098], seed hash, code-repo status),
+  merge --no-ff into cl/integration-1, then LIVE probe bars 7-11 (PUT EQC-QUANTSTUDIO5 once via
+  x-user-id USR-QMS-ADMIN on :3092, exactly-once list/search, provenance commit in lane data-repo
+  git log, seed file untouched). NO YAML touched -> no stack restart needed (tsx reloads TS).
+  Then mark done + handoff. fix -> new coder run on the SAME worktree with the defect list verbatim
+  (fleet-queued), re-review after.
