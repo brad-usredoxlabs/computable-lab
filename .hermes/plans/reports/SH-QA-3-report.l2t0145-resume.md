@@ -88,24 +88,44 @@ Base fail-file capture EXISTS: /tmp/shqa3-base-failfiles.txt (predecessor captur
   NO MANIFEST entry, NO bless): 3/3 GREEN incl. manifestHashMismatches == [].
 - e2eStubHonesty (re-pinned canon): GREEN.
 - Regression canon: cueResolutionGate 13/13, cueCascade 12/12,
-  resolveNounsPass 24/24 — GREEN (74/74 in the 7-file run).
-- Targeted cluster `npx vitest run src/compiler/scientistIntent/
-  src/compiler/resolution/ src/ai/`: fail-file set is a SUBSET of the base
-  capture (/tmp/shqa3-base-failfiles.txt) — `comm -23 head base` EMPTY (no new
-  fail files). Fail files are the known load-timeout flap class + the
-  pre-existing unhandled-rejection debt (AgentOrchestrator.golden*/bypass/
-  tubeGate "Should not be called" rejections present at base). Flap proof:
-  vocabularyRipOut + realizationGolden failed in the cluster run but pass in
-  isolation; the 12-file fail set in run 1 vs 46-file set in run 2 with an
-  IDENTICAL 10-assertion-fail core = load flapping, not behavior.
-  [re-run numbers appended below when the final verification run completes]
+  resolveNounsPass 24/24, compositionDecomposition, compositionArgResolution,
+  declaredArgumentReachability, clarificationContract,
+  AgentOrchestrator.shorthandChat, forceMaterialClarifications,
+  nounResolution (mint-offer pins), vocabularyRipOut — ALL GREEN in the final
+  full-suite run (none appear in the HEAD fail-file set).
+- FINAL TARGETED RUN (`npx vitest run src/compiler/scientistIntent/
+  src/compiler/resolution/ src/ai/`): 18 failed | 1254 passed (1272 tests);
+  fail-file set (10 files: AgentOrchestrator.bypass/Forwarding/golden/
+  goldenWithSeeds/tubeGate, attachedProtocol, ChatbotCompileDeckSlot,
+  chatbotCompile.e2e, createRecordIntent, submitSuggestionTool.tubeSchema) is a
+  strict SUBSET of the base capture — `comm -23 head base` EMPTY (zero new fail
+  files). These 10 are the pre-existing unhandled-rejection debt (the
+  "Should not be called" stub rejections present at base; `Errors 2` line is
+  the known debt class, count drifts run to run with an identical fail-file
+  set).
+- FULL SUITE (`npx vitest run`, cwd server): 100 failed | 5934 passed |
+  70 skipped (6290); HEAD fail-file set 93 files, `comm -23 head base` EMPTY
+  (zero new fail files vs the base capture's 109). The 16 base-only entries
+  (realizationGolden, AnalysisDraftAdapter, WorkstateDraftAdapter,
+  FoundryCoderPatch, Wave2SemanticFamilyPass, ZymoCampaignGoldenE2E,
+  Wave2SemanticPassE2E, ProtocolExtractionDraftSchemaGate, RevisionStorage,
+  7x schema/*) each PROVEN GREEN IN ISOLATION (83/83 and 66/66 in two
+  isolation runs) — the known load-timeout flap class, never quoted as a raw
+  count without the comm proof.
+- realizationGolden.test.ts needed schema/core/datatypes/revision-ref.schema.yaml
+  materialized in the worktree (trunk-UNTRACKED file that never materializes in
+  fresh worktrees — known lane pitfall; copied read-only from the computable-lab
+  checkout, NOT committed: schema/** is OUT of ownership and the file is
+  untracked at trunk).
 
 ## 4. Typecheck + hash bars
 
-- server tsc: 1 error — src/ai/AgentOrchestrator.ts(345,18) TS2339 (the base
-  baseline error; set-diff vs base EMPTY — same single error, line moved 344->345
-  because this item's +11-line strip block sits above it in the file... [verify
-  line-shift attribution in final run]).
+- server tsc: 1 error — src/ai/AgentOrchestrator.ts(345,18) TS2339 (`Property
+  'id' does not exist on type ... ResolvedSequenceTabTarget`). BYTE-IDENTICAL to
+  the dispatch base: `git -c core.fileMode=false show 302b9258:...AgentOrchestrator.ts`
+  has the same `return [target.id];` at line 345, and HEAD has it at 345 — the
+  spec's ":344" cite was anchored at b200a669, before SH-QB-1's +1 line. Sorted
+  error-set diff vs base: EMPTY (1 == 1, same error). NOT fixed, NOT re-baselined.
 - app tsc: 23 (baseline; server-side item, zero app errors introduced).
 - MANIFEST hash: fbf743ab1384778de43eeb113da0f0857eef9fce (UNCHANGED).
 - cues hash: 8ab1eb70a299c1d35acfa473beb37715e32dd47e (UNCHANGED).
@@ -113,16 +133,141 @@ Base fail-file capture EXISTS: /tmp/shqa3-base-failfiles.txt (predecessor captur
   NO app/, NO mixture-material-cues.yaml (goldens/ delta is ONLY the new
   in-test sibling test file goldenProseBlobStrip.test.ts — allowed by §File 3).
 
-## 5. Replay (mode 1, 10 runs) — IN PROGRESS
+## 5. Replay (mode 1, 10 runs) — COMPLETE, BARS PASS
 
-server/scripts/shqa3-mixture-replay.mts written (real initializeApp over the
-lane data repo store via CONFIG_PATH=/mnt/vast/home/brad/git/cl-integration-2/
-config.yaml, active-profile inference client resolved at run time — no model
-name literal, live-smoke discipline; orchestrator.run on surface
-workspace.deck with the exact wave-header prompt; per-run raw emissions +
-strip-log captured). Running now; bars + artifact paths appended below.
+server/scripts/shqa3-mixture-replay.mts (committed): real initializeApp over
+the lane data repo store (CONFIG_PATH=/mnt/vast/home/brad/git/cl-integration-2/
+config.yaml -> dataDir /home/brad/.computable-lab-lane2, embedded-git repo,
+1053 records indexed), active-profile inference client resolved AT RUN TIME
+(profile DS-v4.1-OR, model ~deepseek/deepseek-flash-latest, host openrouter.ai
+— no model/profile literal in the script, live-smoke discipline), real
+orchestrator.run on surface workspace.deck with the exact wave-header prompt,
+ONE chain per run, N=10.
 
-## 6. Assumptions / disclosures
+ARTIFACTS: server/.artifacts/shqa3-replay/2026-10-16T07-21-03-884Z/
+  summary.json (COMMITTED at e35aeb55), run-1..run-10.json (raws, untracked).
+
+BARS (all 10 runs):
+- zeroProseBlobCards: TRUE (blobCardRuns=0). No clarification request in any
+  run carries a sentence-shaped label; every label is a component noun
+  ("Thermo trypsin-EDTA", "Thermo DMEM", "Thermo FBS", "HepG2 cells") or empty.
+- zeroEmptyGraphs: TRUE (emptyGraphRuns=0). eventCounts [0,0,1,0,1,0,0,0,0,0];
+  every zero-event run carries 4 clarification requests naming specific
+  blocking reasons (ambiguous-noun on unseeded components — a NAMED reason per
+  the precise bar, not a prose-blob card, not an empty graph).
+- rawEmissionsRetained: TRUE (per-run raw model emissions verbatim in run-N.json).
+- Raw-emission shape per run (measured, not asserted): 10/10 emissions carry
+  the composition; 9/10 have top-level `material: "Thermo trypsin-EDTA"` (the
+  model itself decomposed the mixture — a component noun, not a sentence, so
+  the strip correctly does NOT fire); 1/10 (run 9) has the FULL SENTENCE as
+  top-level material — and there the strip fired LOUD:
+  "SH-QA-3 redundancy strip: removed the redundant top-level noun \"50% Thermo
+  trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL\" at
+  actions[0].material — the composition riding the same action carries its
+  components; the mixture label is derived from them." Run 9 then asked only
+  the four component nouns. This is the live-inference proof of §A on the real
+  model output, not just in tests.
+- Non-determinism measured, not asserted away: 2/10 runs compiled straight to
+  1 event (all components resolved against the lane store), 8/10 asked the
+  four component nouns (the lane store seeds "Thermo DMEM"-shaped records
+  imprecisely; ambiguous-noun on unseeded components is the spec's explicitly
+  permitted named-reason outcome).
+- Replay-script defect found + fixed (fda05208): my recording wrapper emitted
+  tool_calls in a flat shape; the orchestrator reads t.function.name and threw
+  "Cannot read properties of undefined (reading 'name')" on every run of the
+  FIRST replay attempt (artifacts 2026-10-16T07-15-51-952Z retained as the
+  failed-attempt evidence). Fixed to the assistant-message shape; the second
+  attempt is the one above. NOT a product defect — the shipped client path was
+  proven healthy by a direct probe (probe2: success=true events=1).
+
+## 6. Scope grep + diff file-set proofs
+
+- Scope grep (`Trypsin|trypsin|Clofibrate|HepG2|DMEM|FBS` in server/src
+  non-test .ts): base 302b9258 = 52 hits, HEAD = 52 hits; per-file hit counts
+  IDENTICAL (diff of per-file counts EMPTY). The only comm -3 delta is the
+  line-number shift of the PRE-EXISTING prompt-example literal
+  `material: "DMEM"` in shorthandChat.ts (569 -> 583, moved by this item's
+  +14-line card-map block above it) — zero NEW literal, zero literal in any
+  file this item owns beyond tests + the two YAML data files.
+- `git -c core.fileMode=false diff --name-only 302b9258..HEAD` = 15 files:
+  the report, config/drafting/shorthand-drafting.yaml (nounShape block only),
+  the replay summary artifact + script + two predecessor debug scripts under
+  server/.artifacts/, and the 10 owned server/src files (compileScientistIntent,
+  mixtureLabelRedundancy, resolution/nounShape, resolutionEngine,
+  shorthandChat + the 4 new/re-pinned test files). NO schema/, NO goldens
+  fixture/MANIFEST (the goldens/ delta is ONLY the new in-test sibling
+  goldenProseBlobStrip.test.ts), NO app/, NO mixture-material-cues.yaml.
+
+## 7. OQ3 re-pin disclosure (landed at 8ed7d452, preserved)
+
+shorthandChat.e2eStubHonesty.test.ts: the blob-label card's pinned
+`allowCreateLocal: true` -> false and the ", or create a local term" clause
+dropped, reconciled by applying the SHIPPED noun-shape DATA loader to the
+extracted app/e2e stub (applyMintGate: gateCard flips allowCreateLocal, strips
+the clause, drops `Create local term` candidates); the plate card's true stays;
+the disclosed flipped labels are asserted explicitly. The raw app/e2e stub
+itself is NOT edited (app/** OUT of scope) — the app-side update is handed
+back to the orchestrator (the stub still carries the pre-gate shape; the server
+reconciles it in-test and the disclosure names the delta).
+
+## 8. Fix-(3) T-map (coordinate by reference, per §D)
+
+- The paste-#6 empty-graph sink: T3 asserts the mixture-doc compile outcome is
+  NEVER (zero events AND zero clarificationRequests AND success-shaped) at the
+  payload level; the replay bar (ii) proves it live 10/10 (every zero-event run
+  carried 4 named ambiguous-noun reasons). No empty-success found on any arm
+  this item owns -> no fix needed inside §A/§B reach; nothing to hand back on
+  this leg.
+- SH-QB-1's merged loud-failure recompile channel (IntentCompileHandlers +66,
+  roundTrip/shapeFork tests, 1caefbba) covers the recompile route — CITED, not
+  rebuilt. T5 (idempotence: compile(strippedDoc) == compile(doc), second strip
+  empty) is this item's round-trip compatibility proof by reference: the strip
+  is stable under SH-QB-1's recompile of the held doc.
+- The held-422 wire / app render legs: untouched (out of scope); no divergence
+  evidence surfaced (the chat path's clarificationRequests carry the named
+  reasons verbatim in all 10 replay raws).
+
+## 9. Bait defense (B1-B8)
+
+- B1: no label-length or word-count threshold decides anything. The only
+  numeric gates in the new code are (a) `labels.length >= 2` — the COMPONENT
+  entry floor the spec itself names (§A(i), the expander's own floor at
+  simpleVerbs :368/:396), and (b) `word.length < cues.shape.flanking.minComponentLength`
+  — a threshold read from the CUE DATA, the same value normalize already uses.
+  T6a (short redundant strips) / T6b (long non-redundant does NOT) /
+  T6c (<2 component entries never strips) pin the mutation.
+- B2: cues hash byte-identical (8ab1eb70...); exempt.names NOT grown; zero
+  sentence/reagent literals in src (section 6).
+- B3: P3a/P3b survivor pins green (mystery flask, Equine Serum, the sibling
+  canon formulations, DNase/RNase Free Water, DMEM/F12 keep mint affordance);
+  refusal keyed on DATA sentence SHAPE, never " in "/"%" alone; P4 proves the
+  QUESTION survives a refusal.
+- B4: MANIFEST hash unchanged (fbf743ab...); manifestHashMismatches [] asserted
+  in goldenProseBlobStrip; no bless, no vocab edit, no fixture moved.
+- B5: gated channel untouched (normalizeScientistIntent.ts NOT in the diff at
+  all); cueResolutionGate 13/13 + cueCascade 12/12 green; strip fires only
+  alongside a component list (T6c); factRequestId untouched.
+- B6: zero new reason codes (unknown-noun unchanged in P2), no
+  ScientistIntentUnresolvedFact field, allowCreateLocal value-only flip; no
+  wire change was needed -> no stop_boundary.
+- B7: strip is in-memory only (held YAML untouched — AgentOrchestrator not in
+  the diff), one console.log per strip, idempotent (T5), fires only on scalar
+  args redundant against THIS action's own component list (labware/source/
+  target scalars not stripped — residue test; <2 entries never fires — T6c).
+- B8: nounShape loads PER call (loadNounShape() called inside
+  resolveNoun/clarificationsFromUnresolvedFacts, no module-level cache);
+  vocabulary cache untouched; NO stack restart was done or needed for any claim.
+
+## 10. Commits (this resume run, on top of the preserved 63f75a7b + 8ed7d452 + 39ec85e8)
+
+- a88343d3 fix(shqa3): relocate nounShape loader to compiler/resolution/ (bait-11 collision)
+- 4adfacc9 docs(shqa3): reword comment literals in touched files
+- 78b6f476 docs(shqa3): resume report skeleton + mode-1 replay script
+- fda05208 fix(shqa3): replay recording wrapper tool_calls shape
+- e35aeb55 test(shqa3): mode-1 10-run replay summary (bars pass)
+- <report commit> docs(shqa3): final report (verification evidence)
+
+## 11. Assumptions / disclosures
 
 - nounShape DATA present (shipped in the drafting config) — refusals ACTIVE,
   not silent-off.
