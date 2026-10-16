@@ -274,7 +274,9 @@ describe('archive guard: create gate (V4)', () => {
     seedActivePair(world)
     archiveClass(world)
     // audit-event is exempt per the YAML block: an evidence event about the
-    // archived record is not an operational assignment.
+    // archived record is not an operational assignment. The payload carries a
+    // REAL ref object at the archived target so the exemption is genuinely
+    // exercised (without it the guard would pass for the wrong reason).
     const created = await callCreate(world, SID('audit-event.schema.yaml'), {
       kind: 'audit-event',
       recordId: 'EVT-QMS74',
@@ -283,6 +285,7 @@ describe('archive guard: create gate (V4)', () => {
       subjectType: 'equipment-class',
       subjectId: 'EQC-QMS74',
       occurredAt: '2026-01-01T00:00:00.000Z',
+      data: { targetRef: { kind: 'record', type: 'equipment-class', id: 'EQC-QMS74' } },
     }, 'USR-REGOPS')
     expect(created.status).toBe(201)
   })
