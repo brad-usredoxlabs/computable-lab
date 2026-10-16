@@ -106,7 +106,7 @@ async function main(): Promise<number> {
         }
         yield chunk;
       }
-      record({ tool_calls: [...toolArgs.values()], content: content || null });
+      record({ tool_calls: [...toolArgs.values()].map((slot) => ({ function: slot })), content: content || null });
     },
   } as typeof realClient;
 
