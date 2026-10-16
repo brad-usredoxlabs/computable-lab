@@ -1,0 +1,15 @@
+# Registry-kind lifecycle coverage — which plain kinds get the minimal operational
+# lifecycle and what creates are stamped with. Consumed by KindLifecycleRegistry.ts
+# at create time and by the QMS7-4 migration runner. Governed kinds are NOT listed:
+# their lifecycleId stays declared per-schema (const in *.schema.yaml).
+registryVersion: 1
+lifecycleId: registry-ops
+defaultState: draft
+kinds:
+  - kind: person
+  - kind: equipment
+  - kind: equipment-class
+  - kind: training-record
+  - kind: competency-authorization
+  - kind: instrument
+  - kind: calibration-record

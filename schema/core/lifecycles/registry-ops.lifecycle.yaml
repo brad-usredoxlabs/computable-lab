@@ -1,0 +1,33 @@
+lifecycleVersion: 1
+id: registry-ops
+description: >-
+  Minimal operational lifecycle for plain registry kinds (ruling B): draft -> active ->
+  archived. Archived means not-newly-usable, never erasure.
+roles:
+- id: author
+  label: "Author"
+  description: "The person who creates and activates the record."
+- id: approver
+  label: "Approver"
+  description: "A person authorized to retire the record from active use."
+states:
+- id: draft
+  label: "Draft"
+  initial: true
+  description: "Created, not yet usable operationally."
+- id: active
+  label: "Active"
+  description: "In operational use."
+- id: archived
+  label: "Archived"
+  terminal: true
+  description: "Retired from operational use; kept, readable, historically referenceable."
+transitions:
+- from: draft
+  to: active
+  role: author
+  label: "Activate"
+- from: [draft, active]
+  to: archived
+  role: approver
+  label: "Archive"
