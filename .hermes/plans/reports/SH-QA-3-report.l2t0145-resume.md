@@ -6,8 +6,8 @@ test commits 63f75a7b (T1 RED) + 8ed7d452 (OQ3 re-pin) are PRESERVED, never reba
 Spec: /mnt/vast/home/brad/git/cl-integration-2/.hermes/plans/2026-10-15_2255-SH-QA-3-prose-blob-spec.md
 (ORCHESTRATOR RULINGS OQ1/OQ2/OQ3 followed as binding.)
 
-STATUS: GREEN phase verified; replay + final verification in progress (this file is
-written incrementally — a mid-run death never loses state).
+STATUS: COMPLETE. All acceptance bars verified (sections 3-9); replay bars pass
+10/10; this file is the delivery report.
 
 ## 0. Resume audit (what the wip 39ec85e8 already held)
 
@@ -265,7 +265,7 @@ reconciles it in-test and the disclosure names the delta).
 - 78b6f476 docs(shqa3): resume report skeleton + mode-1 replay script
 - fda05208 fix(shqa3): replay recording wrapper tool_calls shape
 - e35aeb55 test(shqa3): mode-1 10-run replay summary (bars pass)
-- <report commit> docs(shqa3): final report (verification evidence)
+- b2c21445 docs(shqa3): final report (verification evidence)
 
 ## 11. Assumptions / disclosures
 
