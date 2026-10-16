@@ -1,0 +1,236 @@
+
+Running 1 test using 1 worker
+
+=== CYCLE 1 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 1,
+  "changesPanel": true,
+  "questionsPanel": false
+}
+=== POST-CANCEL DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": false
+}
+=== CYCLE 2 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": true,
+  "questionsPanel": false
+}
+=== DONE FRAME 1 ===
+{
+  "present": true,
+  "success": true,
+  "error": null,
+  "eventsLength": 1,
+  "eventsWithDetailsLabwareId": 1,
+  "eventsWithDetailsWellsArray": 1,
+  "distinctTopLevelLabwareIds": [
+    "LBW-96-1"
+  ],
+  "distinctDetailsLabwareIds": [
+    "LBW-96-1"
+  ],
+  "sampleEventFull": {
+    "eventId": "evt-add_material-bzlcyjg9",
+    "event_type": "add_material",
+    "verb": "add_material",
+    "vocabPackId": "general",
+    "details": {
+      "volumeUl": 50,
+      "volume": {
+        "value": 50,
+        "unit": "uL"
+      },
+      "composition_snapshot": [
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:Thermo trypsin-EDTA",
+            "label": "Thermo trypsin-EDTA"
+          },
+          "role": "solvent",
+          "source": "50% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:Thermo DMEM",
+            "label": "Thermo DMEM"
+          },
+          "role": "buffer_component",
+          "source": "50% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:Thermo FBS",
+            "label": "Thermo FBS"
+          },
+          "role": "additive",
+          "source": "10% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:HepG2 cells",
+            "label": "HepG2 cells"
+          },
+          "role": "cells"
+        }
+      ],
+      "formulation_kind": "complex_composition",
+      "material_ref": {
+        "kind": "draft",
+        "id": "mint:Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+        "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells"
+      },
+      "count": 10000,
+      "counter_density": {
+        "value": 200,
+        "unit": "cells/uL"
+      },
+      "labwareId": "LBW-96-1",
+      "wells": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6",
+        "B7",
+        "B8",
+        "B9",
+        "B10",
+        "B11",
+        "B12",
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7",
+        "C8",
+        "C9",
+        "C10",
+        "C11",
+        "C12",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10",
+        "D11",
+        "D12",
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7",
+        "E8",
+        "E9",
+        "E10",
+        "E11",
+        "E12",
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F10",
+        "F11",
+        "F12",
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8",
+        "G9",
+        "G10",
+        "G11",
+        "G12",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7",
+        "H8",
+        "H9",
+        "H10",
+        "H11",
+        "H12"
+      ]
+    },
+    "labwareId": "LBW-96-1",
+    "provenance": {
+      "actor": "ai-agent",
+      "timestamp": "2026-10-16T14:26:32.959Z",
+      "method": "compiler",
+      "actionGroupId": "compiler-draft"
+    }
+  },
+  "labwareAdditions": null,
+  "clarificationRequests": null,
+  "shorthand": "intentId: add-trypsin-dmem-fbs-hepg2-50ul\nactions:\n  - action: add_material\n    labware: \"96 well plate\"\n    volumeUl: 50\n    targetWells: [\"A1:H12\"]\n    params:\n      composition:\n        - { material: \"Thermo trypsin-EDTA\", role: solvent, fraction: \"50%\" }\n        - { material: \"Thermo DMEM\", role: buffer_component, fraction: \"50%\" }\n        - { material: \"Thermo FBS\", role: additive, fraction: \"10%\" }\n        - { material: \"HepG2 cells\", role: cells, count: 10000, counterDensity: { value: 200, unit: \"cells/uL\" } }\n"
+}
+=== DONE FRAME 2 ===
+{
+  "present": true,
+  "success": false,
+  "error": null,
+  "eventsLength": 0,
+  "eventsWithDetailsLabwareId": 0,
+  "eventsWithDetailsWellsArray": 0,
+  "distinctTopLevelLabwareIds": [],
+  "distinctDetailsLabwareIds": [],
+  "sampleEventFull": null,
+  "labwareAdditions": null,
+  "clarificationRequests": null,
+  "shorthand": null
+}
+=== FULL REQ BODY 1 ===
+{"prompt":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"]},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"96 well plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[],"enableThinking":false}
+=== FULL REQ BODY 2 ===
+{"prompt":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"]},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"96 well plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[{"role":"user","content":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well."},{"role":"assistant","content":"Drafted 1 event.\nDraft compiled deterministically from the scientist-intent shorthand."}],"enableThinking":false}
+=== CONSOLE ERRORS ===
+(none)
+  ✓  1 [chromium] › e2e/zz-shqc1-f4-probe3.spec.ts:113:1 › LIVE F4 PROBE #3: plate named 96 well plate; cycle1 ghost -> Discard -> cycle2 capture (1.3m)
+
+  1 passed (1.3m)

@@ -1,0 +1,200 @@
+
+Running 1 test using 1 worker
+
+=== CYCLE 1 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": true
+}
+=== POST-CANCEL DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": false
+}
+=== CYCLE 2 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": true,
+  "questionsPanel": false
+}
+=== DONE FRAME 1 ===
+{
+  "present": true,
+  "success": true,
+  "error": null,
+  "eventsLength": 0,
+  "eventsWithDetailsLabwareId": 0,
+  "eventsWithDetailsWellsArray": 0,
+  "distinctDetailsLabwareIds": [],
+  "sampleEventDetails": null,
+  "sampleEventFull": null,
+  "labwareAdditions": null,
+  "clarificationRequests": [
+    {
+      "id": "unresolved-c-faa51e0f03",
+      "kind": "labware",
+      "prompt": "The draft names \"LBW-96-1\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "reason": "unknown-noun"
+    },
+    {
+      "id": "unresolved-c-e6c65fa379",
+      "kind": "material",
+      "prompt": "The draft names \"trypsin-EDTA / DMEM + 10% FBS HepG2 cell suspension\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "reason": "unknown-noun"
+    }
+  ],
+  "shorthand": "intentId: add-hepg2-suspension-50ul\nactions:\n  - action: add_material\n    labware: \"LBW-96-1\"\n    volumeUl: 50\n    targetWells: [\"A1:H12\"]\n    material: \"trypsin-EDTA / DMEM + 10% FBS HepG2 cell suspension\"\n    params:\n      composition:\n        - material: \"Thermo trypsin-EDTA\"\n          role: solvent\n          fraction: \"50%\"\n        - material: \"Thermo DMEM\"\n          role: buffer_component\n          fraction: \"50%\"\n        - material: \"FBS\"\n          role: additive\n          fraction: \"10%\"\n        - material: \"HepG2 cells\"\n          role: cells\n          count: 10000\n          counterDensity: { value: 200, unit: \"cells/uL\" }\n"
+}
+=== DONE FRAME 2 ===
+{
+  "present": true,
+  "success": true,
+  "error": null,
+  "eventsLength": 1,
+  "eventsWithDetailsLabwareId": 0,
+  "eventsWithDetailsWellsArray": 0,
+  "distinctDetailsLabwareIds": [],
+  "sampleEventDetails": {
+    "volumeUl": 50,
+    "volume": {
+      "value": 50,
+      "unit": "uL"
+    },
+    "composition_snapshot": [
+      {
+        "component_ref": {
+          "kind": "draft",
+          "id": "mint:Thermo trypsin-EDTA",
+          "label": "Thermo trypsin-EDTA"
+        },
+        "role": "solvent",
+        "source": "50% of the mixture"
+      },
+      {
+        "component_ref": {
+          "kind": "draft",
+          "id": "mint:Thermo DMEM",
+          "label": "Thermo DMEM"
+        },
+        "role": "buffer_component",
+        "source": "50% of the mixture"
+      },
+      {
+        "component_ref": {
+          "kind": "draft",
+          "id": "mint:FBS",
+          "label": "FBS"
+        },
+        "role": "additive",
+        "source": "10% of the mixture"
+      },
+      {
+        "component_ref": {
+          "kind": "draft",
+          "id": "mint:HepG2 cells",
+          "label": "HepG2 cells"
+        },
+        "role": "cells"
+      }
+    ],
+    "formulation_kind": "complex_composition",
+    "material_ref": {
+      "kind": "draft",
+      "id": "mint:Thermo trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+    },
+    "count": 10000,
+    "counter_density": {
+      "value": 200,
+      "unit": "cells/uL"
+    }
+  },
+  "sampleEventFull": {
+    "eventId": "evt-add_material-1yurdcae",
+    "event_type": "add_material",
+    "verb": "add_material",
+    "vocabPackId": "general",
+    "details": {
+      "volumeUl": 50,
+      "volume": {
+        "value": 50,
+        "unit": "uL"
+      },
+      "composition_snapshot": [
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:Thermo trypsin-EDTA",
+            "label": "Thermo trypsin-EDTA"
+          },
+          "role": "solvent",
+          "source": "50% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:Thermo DMEM",
+            "label": "Thermo DMEM"
+          },
+          "role": "buffer_component",
+          "source": "50% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:FBS",
+            "label": "FBS"
+          },
+          "role": "additive",
+          "source": "10% of the mixture"
+        },
+        {
+          "component_ref": {
+            "kind": "draft",
+            "id": "mint:HepG2 cells",
+            "label": "HepG2 cells"
+          },
+          "role": "cells"
+        }
+      ],
+      "formulation_kind": "complex_composition",
+      "material_ref": {
+        "kind": "draft",
+        "id": "mint:Thermo trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+        "label": "Thermo trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+      },
+      "count": 10000,
+      "counter_density": {
+        "value": 200,
+        "unit": "cells/uL"
+      }
+    },
+    "labwareId": "96-well plate",
+    "provenance": {
+      "actor": "ai-agent",
+      "timestamp": "2026-10-16T14:19:00.613Z",
+      "method": "compiler",
+      "actionGroupId": "compiler-draft"
+    }
+  },
+  "labwareAdditions": null,
+  "clarificationRequests": null,
+  "shorthand": "intentId: seed-each-well-50ul\nactions:\n  - action: add_material\n    labware: \"96-well plate\"\n    volumeUl: 50\n    params:\n      composition:\n        - { material: \"Thermo trypsin-EDTA\", role: solvent, fraction: \"50%\" }\n        - { material: \"Thermo DMEM\", role: buffer_component, fraction: \"50%\" }\n        - { material: \"FBS\", role: additive, fraction: \"10%\" }\n        - { material: \"HepG2 cells\", role: cells, count: 10000, counterDensity: { value: 200, unit: \"cells/uL\" } }\n"
+}
+=== FULL REQ BODY 1 ===
+{"prompt":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"]},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"ghost plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[],"enableThinking":false}
+=== FULL REQ BODY 2 ===
+{"prompt":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"]},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"ghost plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[{"role":"user","content":"Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well."},{"role":"assistant","content":"2 clarifications needed."}],"enableThinking":false}
+=== CONSOLE ERRORS ===
+(none)
+  ✓  1 [chromium] › e2e/zz-shqc1-f4-probe.spec.ts:113:1 › LIVE F4 PROBE: trypsin prompt -> cancel -> re-prompt; capture both done frames (45.3s)
+
+  1 passed (45.9s)
