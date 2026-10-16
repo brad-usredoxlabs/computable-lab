@@ -16,6 +16,7 @@ import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-
 import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
 import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
+import { clearHeldShorthandIntent } from '../../ai/shorthandChat.js';
 import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
 
 export interface DraftEventsBody {
@@ -90,6 +91,19 @@ export interface WarmContextBody {
   surface?: AiSurface;
 }
 
+/**
+ * SH-QC-1-OQ1 — body for POST /ai/shorthand/cancel. It carries the SAME
+ * conversation identity the held shorthand intent is keyed by: the surface +
+ * context the assist request sent. The handler re-derives the key with the
+ * orchestrator's own `deriveContextCacheKey` — there is no second key scheme
+ * and no client-supplied raw key.
+ */
+export interface ShorthandCancelBody {
+  context: Record<string, unknown>;
+  /** The surface the held conversation ran on (same value the assist sent). */
+  surface?: AiSurface;
+}
+
 export interface AIHandlers {
   draftEvents(
     request: FastifyRequest<{ Body: DraftEventsBody }>,
@@ -109,6 +123,20 @@ export interface AIHandlers {
   ): Promise<unknown>;
   warmContextStatus(
     request: FastifyRequest<{ Querystring: { key?: string } }>,
+    reply: FastifyReply,
+  ): Promise<unknown>;
+  /**
+   * SH-QC-1-OQ1. Optional on the interface (exactOptionalPropertyTypes:
+   * absent OR value, never undefined) because the server.ts facade object
+   * implements AIHandlers and is outside this item's owned files — a
+   * REQUIRED member would add a new typecheck error there. Both SHIPPED
+   * factories (createAIHandlers, createDeterministicOnlyAIHandlers) always
+   * provide it, and routes.ts registers the route only when present, so a
+   * handler-less facade simply has no cancel route (never a bind of
+   * undefined).
+   */
+  shorthandCancel?(
+    request: FastifyRequest<{ Body: ShorthandCancelBody }>,
     reply: FastifyReply,
   ): Promise<unknown>;
 }
@@ -161,6 +189,51 @@ function buildProtocolExtractedEvent(
       sha256,
     },
   };
+}
+
+/**
+ * SH-QC-1-OQ1 — POST /ai/shorthand/cancel handler. EXPORTED module-level and
+ * SHARED by both handler families AND by routes.ts: `heldIntents` is
+ * module-level in shorthandChat.ts, so the clear is correct whether or not a
+ * model is configured, and the route must exist even when server.ts wires the
+ * delegating AIHandlers facade (which implements the optional member by
+ * absence — the facade file is outside this item's ownership).
+ *
+ * The conversation key is RE-DERIVED with the orchestrator's own
+ * `deriveContextCacheKey` (systemPrompt.ts — the single derivation the
+ * take/fold sites use at AgentOrchestrator.ts:1267/:1751), from the same
+ * surface + context identity the assist request sent, built through
+ * assistStream's editorContext defaults (the warmContext mirror precedent).
+ * No second key scheme, no raw-key passthrough.
+ *
+ * Idempotent: an already-clear conversation answers 200 {cleared:false}.
+ * Scope: clears ONLY this conversation's hold — never a broadcast clear.
+ * Touches nothing else: no stream abort, no state beyond heldIntents (the
+ * smallest honest fix). Auth: none beyond what the sibling /ai/*
+ * registrations already require (they carry no route-level hook) — matched
+ * exactly, no new policy.
+ */
+export async function shorthandCancel(
+  request: FastifyRequest<{ Body: ShorthandCancelBody }>,
+  reply: FastifyReply,
+): Promise<unknown> {
+  const { context, surface } = request.body ?? {};
+  if (!context || typeof context !== 'object') {
+    reply.status(400);
+    return { error: 'INVALID_REQUEST', message: 'context is required' };
+  }
+  // Mirror assistStream's editorContext defaults byte-for-byte: the held key
+  // was derived from the context the orchestrator received, so the cancel
+  // must derive from the same shape or it clears the wrong (or no) entry.
+  const editorContext: EditorContext = {
+    labwares: [],
+    eventSummary: '',
+    vocabPackId: 'general',
+    availableVerbs: [],
+    ...context,
+  };
+  const key = deriveContextCacheKey(surface, editorContext);
+  return { cleared: clearHeldShorthandIntent(key) };
 }
 
 /**
@@ -539,6 +612,8 @@ export function createAIHandlers(
       if (!warmup) return { key, status: { state: 'disabled' } };
       return { key, status: warmup.status(key) };
     },
+
+    shorthandCancel,
   };
 }
 
@@ -686,5 +761,9 @@ export function createDeterministicOnlyAIHandlers(deps: {
     async warmContextStatus(request, _reply) {
       return { key: request.query?.key ?? '', status: { state: 'disabled' } };
     },
+
+    // SH-QC-1-OQ1: heldIntents is module-level in shorthandChat.ts — the
+    // cancel clear is correct even with no model configured (shared impl).
+    shorthandCancel,
   };
 }

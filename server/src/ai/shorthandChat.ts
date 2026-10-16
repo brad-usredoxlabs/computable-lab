@@ -340,6 +340,23 @@ export function takeHeldShorthandIntent(key: string): HeldShorthandIntent | null
   return held;
 }
 
+/**
+ * SH-QC-1-OQ1: drop the held intent for ONE conversation without consuming
+ * it — the server-side clear the UI Cancel leg needs. The leak this closes:
+ * the ONLY removal primitive was the destructive take on the answer-path
+ * fold (AgentOrchestrator.ts take sites), so a CANCELLED proposal stayed
+ * held and a LATER clarification answer folded it in — the scientist lost
+ * authority over what the AI keeps.
+ *
+ * Returns whether an entry existed. Idempotent: clearing an already-clear
+ * conversation is a success (`false`), never an error. Touches ONLY `key` —
+ * every other conversation's hold is untouched. The take/fold semantics on
+ * the answer path are byte-unchanged (repeatEcho P8/D4 guards stay green).
+ */
+export function clearHeldShorthandIntent(key: string): boolean {
+  return heldIntents.delete(key);
+}
+
 // ---------------------------------------------------------------------------
 // Pure structural clarification map (bait 8: verbatim facts, join id only)
 // ---------------------------------------------------------------------------
