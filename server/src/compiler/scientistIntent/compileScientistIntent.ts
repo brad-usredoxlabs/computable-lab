@@ -60,6 +60,7 @@ import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.j
 import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js';
 import { emptyLabState, type LabStateSnapshot } from '../state/LabState.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
+import { stripRedundantMixtureLabels } from './mixtureLabelRedundancy.js';
 import { capResolvedLabwares } from './deckReviewFold.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
@@ -227,8 +228,30 @@ export async function compileScientistIntent(
   // resolve_nouns registration below threads (deps.vocabulary ?? shipped
   // singleton) — never the default singleton behind an injected vocab.
   const vocabulary = deps.vocabulary ?? defaultScientistIntentVocabulary();
-  const normalized = normalizeScientistIntent(intent, { vocabulary });
-  const registry = buildRegistry(intent, normalized, deps);
+  // SH-QA-3 (spec §A): the redundancy strip runs BEFORE both normalize AND the
+  // resolve_nouns registration — the door reads the RAW intent doc
+  // (buildRegistry passes `intent` to createResolveNounsPass; normalize is a
+  // separate call), so a normalize-only strip would leave the prose-blob
+  // sentence card fully alive. A top-level scalar noun that is a description
+  // OF a composition riding the same action is stripped from the compile
+  // input; the expander already derives the mixture label from the components
+  // (simpleVerbs compositionSnapshotFromParams). Nothing fired (the
+  // overwhelming case) ⇒ identity passthrough ⇒ the compile is byte-identical
+  // to before. A strip is LOUD (one console.log per stripped slot, the
+  // loud-normalize precedent — never silent data loss: the composition itself
+  // remains the scientist's declared truth). The held chat YAML is untouched
+  // (this is an in-memory compile-input transform, idempotent by T5).
+  const { intent: compileIntent, stripped } = stripRedundantMixtureLabels(intent, vocabulary);
+  for (const slot of stripped) {
+    const carried = (intent.actions[slot.actionIndex] as unknown as Record<string, unknown>)[slot.argument];
+    console.log(
+      `SH-QA-3 redundancy strip: removed the redundant top-level noun "${String(carried)}" `
+      + `at actions[${slot.actionIndex}].${slot.argument} — the composition riding the same action `
+      + 'carries its components; the mixture label is derived from them.',
+    );
+  }
+  const normalized = normalizeScientistIntent(compileIntent, { vocabulary });
+  const registry = buildRegistry(compileIntent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);
 
   const input: Record<string, unknown> = {
