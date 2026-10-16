@@ -31,8 +31,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import React from 'react'
-import { render, screen, waitFor, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup, within, act } from '@testing-library/react'
 import RecordRegistryPage from './RecordRegistryPage'
 
 // ---------------------------------------------------------------------------
@@ -182,11 +184,21 @@ vi.mock('../editor/taptab/TapTabEditor', () => ({
   ),
 }))
 
+// The Create handler is async (GET /schemas/:id before opening the editor);
+// wrap the click in act so the awaited continuation settles inside act.
+async function clickCreate() {
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('registry-create-button'))
+  })
+}
+
 async function openTab(label: string) {
   fireEvent.click(screen.getByText(label))
-  // schemaNodes must be loaded before Create can resolve a kind -> $id.
+  // The Create button is offered disabled until the schema registry resolves
+  // (kind -> $id needs GET /schemas); wait for it to be actionable.
   await waitFor(() => {
-    expect(screen.getByTestId('registry-create-button')).toBeTruthy()
+    const button = screen.getByTestId('registry-create-button') as HTMLButtonElement
+    expect(button.disabled).toBe(false)
   })
 }
 
@@ -246,7 +258,7 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
   it('People tab Create opens the draft projection for the person schema $id with a kind+id base', async () => {
     render(<RecordRegistryPage />)
     await openTab('People')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
 
     await waitFor(() => {
       expect(screen.getByTestId('projection-taptab-editor')).toBeTruthy()
@@ -265,15 +277,16 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     const seededId = mocked.editorDataProp!['id']
     expect(typeof seededId).toBe('string')
     expect(new RegExp(pattern).test(seededId as string)).toBe(true)
-    // The prefix comes from the pattern's ^PREFIX- anchor, not a literal map.
-    const prefix = /^([A-Z]+)-/.exec(pattern)![1]
+    // The prefix comes from the pattern's literal ^PREFIX- anchor, not a
+    // client-side map.
+    const prefix = /^\^([A-Z]+)-/.exec(pattern)![1]
     expect((seededId as string).startsWith(`${prefix}-`)).toBe(true)
   })
 
   it('Equipment tab Create offers exactly the tab kinds (from kinds data), default first, and resolves the chosen kind to its $id', async () => {
     render(<RecordRegistryPage />)
     await openTab('Equipment')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
 
     // Multi-kind tab: a picker listing the tab's kinds — no third kind,
     // no invented display vocab (ontology kind strings verbatim).
@@ -281,11 +294,13 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     const optionNames = within(picker)
       .getAllByRole('button')
       .map((b) => b.textContent)
-      .filter((t) => t !== 'Confirm')
+      .filter((t) => t !== 'Confirm' && t !== 'Cancel')
     expect(optionNames).toEqual(['equipment', 'equipment-class'])
 
     fireEvent.click(within(picker).getByRole('button', { name: 'equipment-class' }))
-    fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
+    await act(async () => {
+      fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
+    })
 
     await waitFor(() => {
       expect(mocked.draftProjectionCalls).toContain(SCHEMA_ID('equipment-class'))
@@ -300,9 +315,11 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
   it('Equipment tab Create defaults to the tab primary kind when confirmed without choosing', async () => {
     render(<RecordRegistryPage />)
     await openTab('Equipment')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
     const picker = await screen.findByTestId('registry-create-kind-picker')
-    fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
+    await act(async () => {
+      fireEvent.click(within(picker).getByRole('button', { name: 'Confirm' }))
+    })
     await waitFor(() => {
       expect(mocked.draftProjectionCalls).toContain(SCHEMA_ID('equipment'))
     })
@@ -313,7 +330,7 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     mocked.patterns[SCHEMA_ID('verb-definition')] = undefined
     render(<RecordRegistryPage />)
     await openTab('Verbs')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
 
     await waitFor(() => {
       expect(screen.getByTestId('registry-create-error')).toBeTruthy()
@@ -331,7 +348,7 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     const { apiClient } = await import('../shared/api/client')
     render(<RecordRegistryPage />)
     await openTab('People')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
     await waitFor(() => {
       expect(mocked.editorDataProp).not.toBeNull()
     })
@@ -363,7 +380,7 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
     )
     render(<RecordRegistryPage />)
     await openTab('People')
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
     await waitFor(() => {
       expect(mocked.editorDataProp).not.toBeNull()
     })
@@ -392,9 +409,11 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
       expect(screen.getByTestId('registry-create-button')).toBeTruthy()
     })
     expect(screen.queryByTestId('csv-import-modal')).toBeNull()
-    fireEvent.click(screen.getByTestId('registry-create-button'))
+    await clickCreate()
     expect(screen.queryByTestId('csv-import-modal')).toBeNull()
-    // The module itself is deleted — vitest can no longer resolve it.
-    await expect(import('../components/registry/CsvImportModal')).rejects.toBeTruthy()
+    // The module itself is deleted (dead chrome is a defect — OQ-1 ruling).
+    // Checked on disk: a static import() of the deleted path would itself
+    // fail vite's transform, so the pin is the file's absence.
+    expect(existsSync(path.resolve(__dirname, '../components/registry/CsvImportModal.tsx'))).toBe(false)
   })
 })
