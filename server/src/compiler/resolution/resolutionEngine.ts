@@ -18,6 +18,7 @@
 import type { RankedCandidate } from '../../resolve/types.js';
 import { materialLayerOf, isWellReadyLayer } from '../../ai/materialRefFields.js';
 import { nearMissSuggestions } from './adapters.js';
+import { loadNounShape, isMintableLabel } from '../scientistIntent/nounShape.js';
 import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
 import type {
@@ -202,7 +203,17 @@ export async function resolveNoun(
 
   // Nothing bound. The mint affordance is OFFERED only on the unknown-noun arm
   // (never on a lookup-failure arm — lookup error != unknown noun, §5.6).
-  const mints = mintAffordances(allCandidates);
+  // SH-QA-3 (fix 2): the mint affordance is filtered by the noun-shape DATA
+  // (config/drafting/shorthand-drafting.yaml `nounShape:` — loaded PER call,
+  // never process-cached). A label whose SHAPE fails the DATA patterns is
+  // never offered as a CURIE-worthy local term. The reason code is UNCHANGED
+  // (`unknown-noun`), the QUESTION survives, and the near-miss suggestions leg
+  // below stays intact — only the mint candidates are withheld. A cue hit
+  // alone never refuses mint: the check is sentence SHAPE, never " in "/"%".
+  const nounShape = loadNounShape();
+  const mints = mintAffordances(allCandidates).filter(
+    (candidate) => isMintableLabel(candidate.mint?.label ?? candidate.label, nounShape),
+  );
   if (sawFailure) {
     clarifications.push(clarificationFor(req, 'resolution-lookup-failed', []));
   } else if (req.declared.kind === 'wells') {

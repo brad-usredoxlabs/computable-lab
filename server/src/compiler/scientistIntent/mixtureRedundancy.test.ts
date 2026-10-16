@@ -103,3 +103,194 @@ describe('SH-QA-3 T1: redundant top-level material + composition compiles CLEAN 
     expect(compiled.terminalArtifacts.events.length).toBeGreaterThan(0);
   });
 });
+
+/** The paste-#3 GOOD path: the same doc with the redundant top-level material
+ *  absent — the composition-only shape the expander already handles. */
+const PASTE3_DOC = `intentId: shqa3-t2-paste3
+actions:
+  - action: add_material
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`;
+
+/** eventId + provenance are per-compile random (the e2eStubHonesty comparable
+ *  idiom): compare event_type + details only. */
+function comparableEvents(events: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(events)) return [];
+  return events.map((ev) => {
+    const rec = ev as Record<string, unknown>;
+    return { event_type: rec.event_type, details: rec.details };
+  });
+}
+
+describe('SH-QA-3 T2 EQUIVALENCE: the stripped compile deep-equals the composition-only good path', () => {
+  it('T2: same event count + details; the mixture material_ref is the DERIVED componentLabels.join, NOT the sentence', async () => {
+    const withBlob = await compileWith(PASTE5_DOC);
+    const good = await compileWith(PASTE3_DOC);
+    expect(withBlob.compiled.outcome, JSON.stringify(withBlob.compiled.clarifications)).toBe('complete');
+    expect(good.compiled.outcome).toBe('complete');
+    expect(comparableEvents(withBlob.compiled.terminalArtifacts.events))
+      .toEqual(comparableEvents(good.compiled.terminalArtifacts.events));
+
+    const events = comparableEvents(withBlob.compiled.terminalArtifacts.events);
+    expect(events.length).toBeGreaterThan(0);
+    const details = events[0]!.details as Record<string, unknown>;
+    const snapshot = details.composition_snapshot as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(4);
+    // Finding 4 (the grounding-door-poison leg): with the material stripped,
+    // compositionSnapshotFromParams derives the mixture label from the
+    // components (simpleVerbs :397-400) — the sentence never becomes the
+    // formulation name.
+    const materialRef = details.material_ref as Record<string, unknown>;
+    expect(materialRef.label).toBe('Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells');
+    expect(materialRef.label).not.toBe('50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells');
+  });
+});
+
+describe('SH-QA-3 T3 declared-form twin: the action-level many-arg strips identically', () => {
+  it('T3: action-level composition (vocabulary many-arg) + the sentence -> same strip, same events', async () => {
+    const declaredDoc = `intentId: shqa3-t3-declared
+actions:
+  - action: add_material
+    material: "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells"
+    volumeUl: 50
+    targetWells: [A1]
+    composition:
+      - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+      - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+      - { material: "Thermo FBS", role: additive, fraction: "10%" }
+      - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`;
+    const declared = await compileWith(declaredDoc);
+    const good = await compileWith(PASTE3_DOC);
+    expect(declared.compiled.outcome, JSON.stringify(declared.compiled.clarifications)).toBe('complete');
+    expect(declared.compiled.clarifications).toEqual([]);
+    expect(comparableEvents(declared.compiled.terminalArtifacts.events))
+      .toEqual(comparableEvents(good.compiled.terminalArtifacts.events));
+  });
+});
+
+describe('SH-QA-3 T4 NON-REDUNDANT keeps asking (the negative control)', () => {
+  it('T4: composition present + a material that is NOT a concatenation -> the noun question is unchanged', async () => {
+    const doc = `intentId: shqa3-t4-enigma
+actions:
+  - action: add_material
+    material: "Enigma Broth"
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000 }
+`;
+    const { compiled } = await compileWith(doc);
+    // 'Enigma Broth' is not a description of the component list (residue
+    // non-empty) — the strip does NOT fire and the unknown-noun question rides.
+    const asked = compiled.clarifications.filter((c) => c.reason === 'unknown-noun');
+    expect(asked.map((c) => c.label)).toEqual(['Enigma Broth']);
+    expect(compiled.outcome).toBe('needs-clarification');
+  });
+});
+
+describe('SH-QA-3 T5 idempotence / round-trip: recompiling the stripped doc strips nothing further', () => {
+  it('T5: compile(strippedDoc) events == compile(doc) events; a second strip is empty', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const doc = parseScientistIntent(PASTE5_DOC);
+    const vocabulary = defaultScientistIntentVocabulary();
+    const first = stripRedundantMixtureLabels(doc, vocabulary);
+    expect(first.stripped).toHaveLength(1);
+    expect(first.stripped[0]).toMatchObject({ actionIndex: 0, action: 'add_material', argument: 'material' });
+
+    const second = stripRedundantMixtureLabels(first.intent, vocabulary);
+    expect(second.stripped, 'the strip is idempotent').toEqual([]);
+    expect(second.intent).toBe(first.intent, 'no-strip ⇒ identity passthrough (byte-identical compile)');
+
+    const a = await compileWith(PASTE5_DOC);
+    const b = await compileWith(`intentId: shqa3-t2-paste3
+actions:
+  - action: add_material
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
+        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`);
+    expect(comparableEvents(a.compiled.terminalArtifacts.events))
+      .toEqual(comparableEvents(b.compiled.terminalArtifacts.events));
+  });
+});
+
+describe('SH-QA-3 T6 length-is-NOT-policy: the rule is component-list coverage', () => {
+  it('T6a: a SHORT redundant label strips (DMEM/FBS vs composition DMEM + FBS)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'shqa3-t6a',
+      actions: [{
+        action: 'add_material',
+        material: 'DMEM/FBS',
+        params: { composition: [{ material: 'DMEM', role: 'buffer_component' }, { material: 'FBS', role: 'additive' }] },
+      }],
+      unresolved: [],
+    } as never;
+    const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
+    expect(result.stripped.map((s) => s.argument)).toEqual(['material']);
+  });
+
+  it('T6b: a LONG non-redundant label does NOT strip (composition carries a 5th component the sentence omits)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'shqa3-t6b',
+      actions: [{
+        action: 'add_material',
+        material: '50:50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells',
+        params: { composition: [
+          { material: 'Thermo trypsin-EDTA', role: 'solvent' },
+          { material: 'Thermo DMEM', role: 'buffer_component' },
+          { material: 'Thermo FBS', role: 'additive' },
+          { material: 'HepG2 cells', role: 'cells' },
+          { material: 'Equine Glutamax', role: 'supplement' },
+        ] },
+      }],
+      unresolved: [],
+    } as never;
+    const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
+    expect(result.stripped, 'coverage fails: the sentence does not enumerate every component').toEqual([]);
+    expect(result.intent).toBe(intent);
+  });
+
+  it('T6c: a composition with fewer than two valid entries never strips (B7)', async () => {
+    const { stripRedundantMixtureLabels } = await import('./mixtureLabelRedundancy.js');
+    const { defaultScientistIntentVocabulary } = await import('./vocabulary.js');
+    const intent = {
+      kind: 'scientist-intent' as const,
+      version: '0.1.0' as const,
+      intentId: 'shqa3-t6c',
+      actions: [{
+        action: 'add_material',
+        material: 'DMEM/FBS',
+        params: { composition: [{ material: 'DMEM', role: 'buffer_component' }] },
+      }],
+      unresolved: [],
+    } as never;
+    const result = stripRedundantMixtureLabels(intent, defaultScientistIntentVocabulary());
+    expect(result.stripped).toEqual([]);
+  });
+});

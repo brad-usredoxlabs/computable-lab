@@ -10,3 +10,35 @@
 # cached); the orchestrator never branches on a surface-name literal (repo
 # rule #1).
 surfaces: [workspace.deck]
+
+# SH-QA-3 (OQ1 ruling): the NOUN-SHAPE policy — what counts as a CURIE-worthy
+# lab term vs a prose sentence is DECLARED DATA, never a TypeScript branch and
+# never a magic character count (bait B1). Loaded PER call (the drafting-config
+# precedent — never process-cached, so a data edit needs no stack restart).
+# An absent `nounShape:` section ⇒ NO refusals (disclosed, silent-off); a
+# present-but-malformed section throws naming the path (cue-loader parity).
+#
+# `mintRefusePatterns` are sentence-shape DATA regexes seeded ONLY by what the
+# RED plan pins: (1) a ratio blob that names a word right after its ratio
+# ("50/50 Trypsin-EDTA/DMEM", "50:50 Trypsin-EDTA/DMEM + 10% FBS …"); (2) a
+# prose connective flanked by multi-letter words ("… FBS with HepG2 …",
+# "… containing the …"). A CUE HIT ALONE NEVER REFUSES MINT (bait B3):
+# "1 mM Clofibrate in DMSO", "0.1% Triton X-100 in water", "DMEM/F12",
+# "DNase/RNase Free Water" match NO pattern here and keep their mint
+# affordance — the refusal is keyed on sentence SHAPE, never on " in " or "%"
+# alone. The refusal never removes the QUESTION — only the mint affordance.
+#
+# `connectives` are the glue words the redundancy residue step
+# (mixtureLabelRedundancy) may delete when testing a top-level label against
+# its action's own component list.
+nounShape:
+  mintRefusePatterns:
+    - "\\d+\\s*[:/xX×]\\s*\\d+\\s+[\\p{L}]"
+    - "\\b[\\p{L}]{2,}\\s+(?:with|containing|including)\\s+[\\p{L}]{2,}"
+  connectives: [with, without, and, or, plus, in, of, per, for, to, the, a, an, containing, including]
+  # Quantity/unit GLUE the residue step may also delete when testing a label
+  # against its component list: a bare count ("200") and the unit abbreviations
+  # the blob idiom names ("uL", "cells"). DATA, not a TS table.
+  residueIgnorePatterns:
+    - "\\b\\d+\\b"
+    - "\\b(?:ul|\\u00b5l|ml|l|cells|cell|well|wells|per)\\b"

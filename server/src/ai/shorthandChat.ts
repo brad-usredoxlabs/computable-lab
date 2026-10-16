@@ -44,6 +44,7 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import { loadNounShape, isMintableLabel } from '../compiler/scientistIntent/nounShape.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {
@@ -379,6 +380,15 @@ export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
+  // SH-QA-3 (fix 2, OQ3 ruling): the mint affordance is gated by the
+  // noun-shape DATA (config/drafting/shorthand-drafting.yaml `nounShape:`,
+  // loaded PER call). A card whose label is a prose sentence REFUSES the
+  // mint: `allowCreateLocal` (a value-only flip on an existing field — no
+  // wire SHAPE change) and the ", or create a local term" prompt clause drop
+  // together by conditional arm. The QUESTION itself is never removed — the
+  // scientist can still search /m or pick a near-miss. A cue hit alone never
+  // refuses mint (the clofibrate/lysozyme/Triton survivors stay mintable).
+  const nounShape = loadNounShape();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
@@ -386,10 +396,14 @@ export function clarificationsFromUnresolvedFacts(
       : undefined;
     const kind = domain === 'labware' ? 'labware' : domain === 'material' ? 'material' : 'general';
     const menuProvider = domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
+    const mintable = isMintableLabel(fact.label, nounShape);
+    const allowCreateLocal = menuProvider !== 'choice' && mintable;
     return {
       id: factRequestId(fact),
       kind,
-      prompt: `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`,
+      prompt: mintable
+        ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+        : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`,
       origin: 'harness',
       entityType: kind,
       menuProvider,
@@ -398,7 +412,7 @@ export function clarificationsFromUnresolvedFacts(
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched.
       options: [],
-      allowCreateLocal: menuProvider !== 'choice',
+      allowCreateLocal,
       unresolvedFact: fact,
     };
   });
