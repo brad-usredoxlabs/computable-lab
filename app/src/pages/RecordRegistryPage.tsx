@@ -129,6 +129,84 @@ export default function RecordRegistryPage() {
   // instead of rendering the wrong tab's rows.
   const refreshSeqRef = useRef(0);
 
+  // QMS7-6 (OQ-1 ruling A): lifecycle terminal facts, read from the server's
+  // read-only echo of the lifecycle YAML `terminal: true` declarations
+  // (GET /lifecycle/:lifecycleId/transitions -> terminalStates). ONE call per
+  // DISTINCT lifecycleId among the loaded rows, WITHOUT recordId (the fact is
+  // lifecycle-scoped, not record-scoped). NO terminal-state list is invented
+  // in TS (bait 3): when a lifecycle's facts are unavailable the map stays
+  // empty and browsing FAILS OPEN (rows remain visible).
+  const [terminalStatesByLifecycle, setTerminalStatesByLifecycle] = useState<Record<string, string[]>>({});
+  const terminalFetchedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const pending = new Set<string>();
+    for (const record of records) {
+      const lifecycleId = (record.payload as { lifecycleId?: string }).lifecycleId;
+      if (lifecycleId && !terminalFetchedRef.current.has(lifecycleId)) pending.add(lifecycleId);
+    }
+    if (pending.size === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      [...pending].map(async (lifecycleId) => {
+        try {
+          const states = await apiClient.getLifecycleTerminalStates(lifecycleId);
+          return [lifecycleId, states] as const;
+        } catch (err) {
+          // Fail open for this render: no facts -> nothing is hidden (no
+          // invented policy). The failure is NOT committed and the lifecycle
+          // is NOT marked fetched (FIX1 defect 2): the accessor already
+          // normalises a definitive 404 to a SUCCESSFUL [], so anything
+          // reaching this catch is a transient/server failure and must stay
+          // retryable on the next `records` change.
+          console.warn(`Lifecycle terminal facts unavailable for ${lifecycleId}; terminal filtering skipped.`, err);
+          return null;
+        }
+      }),
+    ).then((results) => {
+      // FIX1 defect 1: a superseded run (cleanup fired because `records`
+      // changed identity mid-flight) discards its entries AND leaves the
+      // lifecycles un-fetched, so the next effect run retries instead of
+      // permanently skipping them. Marking fetched happens ONLY where the
+      // result is actually committed.
+      if (cancelled) return;
+      const entries = results.filter((r): r is readonly [string, string[]] => r !== null);
+      if (entries.length === 0) return;
+      for (const [lifecycleId] of entries) terminalFetchedRef.current.add(lifecycleId);
+      setTerminalStatesByLifecycle((prev) => {
+        const next = { ...prev };
+        for (const [lifecycleId, states] of entries) next[lifecycleId] = states;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [records]);
+
+  // QMS7-6 (AC-5): archived browsing is RENDER-LEVEL state over whatever
+  // `records` currently holds — toggling never refetches (bait 6: the
+  // refresh seq-token stays untouched). "Show archived" below is label COPY;
+  // the branch condition is the data-driven rule, never the label text.
+  const [showArchived, setShowArchived] = useState(false);
+
+  // THE single data-driven terminal rule (OQ-1(A) + OQ-2(A) — one mechanism,
+  // zero new state strings, bait 1): a row is terminal iff its lifecycle's
+  // DECLARED terminal set contains its payload.state. Rows with no
+  // lifecycleId are never terminal. Reads `state`, NEVER `status` (bait 2 —
+  // equipment payloads carry both; cf. RecordHandlers.ts:289-291).
+  const isTerminalRow = useCallback(
+    (row: { payload: Record<string, unknown> }): boolean => {
+      const lifecycleId = (row.payload as { lifecycleId?: string }).lifecycleId;
+      if (!lifecycleId) return false;
+      const declared = terminalStatesByLifecycle[lifecycleId];
+      if (!declared) return false;
+      const state = (row.payload as { state?: string }).state;
+      return typeof state === 'string' && declared.includes(state);
+    },
+    [terminalStatesByLifecycle],
+  );
+
   // Single implementation of the record-list refresh — the tab-switch effect
   // and every manual refresh (save, draft-copy, transitions) share it.
   // Previously the effect carried a private copy with no staleness guard.
@@ -396,6 +474,17 @@ export default function RecordRegistryPage() {
     ((selectedRecord?.payload as { state?: string } | undefined)?.state === 'approved' ||
       (selectedRecord?.payload as { state?: string } | undefined)?.state === 'effective');
 
+  // QMS7-6 (OQ-2 ruling A): an archived/terminal record opens READ-ONLY via
+  // the SAME single data-driven predicate the list filter uses — the row is
+  // lifecycle-bearing AND its lifecycle's DECLARED terminal set contains its
+  // payload.state. One mechanism, zero new state strings (bait 1). This
+  // intentionally does NOT extend to approved/effective: those stay with the
+  // existing reviewed contentLocked branch above (ruling: do not touch it).
+  // Server-side the same content edit already fails 409 CONTROLLED_RECORD_LOCKED
+  // (RecordHandlers.ts, QMS7-4) — the UI simply does not offer a doomed Save.
+  const terminalLocked =
+    editorMode === 'edit' && selectedRecord !== null && isTerminalRow(selectedRecord);
+
   const handleCreateDraftRevision = async () => {
     if (!selectedRecord?.recordId) return;
     setSaving(true);
@@ -454,6 +543,12 @@ export default function RecordRegistryPage() {
     schemaNodes.find((node) => node.kind === activeTabConfig.kinds[0])?.schemaId ?? '';
 
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
+
+  // QMS7-6 (AC-5): the archived-browsing filter is applied AT RENDER TIME over
+  // whatever `records` state holds (bait 6: no refetch on toggle, the
+  // refreshRecords seq-token is untouched). Terminal rows are hidden unless
+  // the toggle is on; ungoverned rows are never hidden.
+  const visibleRecords = showArchived ? records : records.filter((row) => !isTerminalRow(row));
 
   // Determine if we have projection data to render
   const hasProjection = projection !== null && projection.blocks && projection.slots;
@@ -533,6 +628,21 @@ export default function RecordRegistryPage() {
             {createError}
           </div>
         )}
+        {/* QMS7-6 (AC-5): archived browsing. The checkbox is the ONLY affordance;
+            the hide rule itself is the data-driven isTerminalRow predicate
+            (declared terminal facts + payload.state) — "Show archived" here is
+            label COPY only and is never read as a branch condition (bait 1). */}
+        <div className="p-2 border-b border-gray-100 flex items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              data-testid="registry-show-archived"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Show archived
+          </label>
+        </div>
         {/* RecordSearchCombobox */}
         <div className="p-2 border-b border-gray-100">
           <RecordSearchCombobox
@@ -551,15 +661,16 @@ export default function RecordRegistryPage() {
             }}
           />
         </div>
-        {/* Record List - Compact */}
+        {/* Record List - Compact (QMS7-6: renders visibleRecords — the
+            render-time archived filter, see above) */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="text-sm text-center py-8 text-gray-500">Loading...</div>
-          ) : records.length === 0 ? (
+          ) : visibleRecords.length === 0 ? (
             <div className="text-sm text-center py-8 text-gray-500">No records found</div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {records.map((record) => {
+              {visibleRecords.map((record) => {
                 const isSelected = record.recordId === selectedRecord?.recordId;
                 const displayName = (record.payload as { name?: string; title?: string; id?: string }).name ||
                                    (record.payload as { name?: string; title?: string; id?: string }).title ||
@@ -595,7 +706,11 @@ export default function RecordRegistryPage() {
               title={title}
               actions={
                 <>
-                  {contentLocked ? (
+                  {contentLocked || terminalLocked ? (
+                    // QMS-6 (delta D6) + QMS7-6 (OQ-3 ruling: KEPT): locked or
+                    // terminal content offers the DECLARED draft-copy route
+                    // (routes.ts draft-copy) — it mints a NEW record id, never
+                    // an unarchive of the terminal record.
                     <button
                       onClick={handleCreateDraftRevision}
                       disabled={saving}
@@ -658,7 +773,7 @@ export default function RecordRegistryPage() {
                 blocks={projection.blocks}
                 slots={projection.slots}
                 data={selectedRecord.payload}
-                disabled={saving || contentLocked}
+                disabled={saving || contentLocked || terminalLocked}
                 onUpdate={handleSerializedChange}
               />
             ) : (

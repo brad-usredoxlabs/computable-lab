@@ -441,3 +441,161 @@ describe('DocumentControlBar — rendering contract', () => {
     expect(within(receipt).getByText(/SIG-OLD-APPLIED/).closest('li')).toHaveTextContent(/applied/i)
   })
 })
+
+// ---------------------------------------------------------------------------
+// QMS7-6 pins (AC-1/AC-2/AC-3/AC-9) — the archive affordance is PURE DATA.
+// The transition fixtures below are the EXACT payload measured live on :3092
+// for the registry-ops lifecycle (curl @ c892847d, re-verified @ 5082ac9b):
+//   {"event":"ARCHIVE","targetState":"archived","label":"Archive",
+//    "role":"approver","allowed":true}   — NO `requires` key (no signature
+//   guard), so the fixture OMITS `requires` entirely (exactOptionalProperty-
+//   Types: `requires: undefined` would be a tsc error; conditional-spread
+//   idiom per client.ts). The bar's visibility rule
+//   (t.allowed || t.requires?.signatureRequired === true) renders the button
+//   from the payload alone — zero TS policy. These are PINS: the affordance
+//   already ships data-driven, so they may land GREEN at base — that is the
+//   point (label them pin-green in the report, not RED).
+// ---------------------------------------------------------------------------
+
+const registryOpsRecord = {
+  recordId: 'EQP-QUANTSTUDIO5',
+  payload: {
+    kind: 'equipment',
+    id: 'EQP-QUANTSTUDIO5',
+    displayName: 'EQP-QUANTSTUDIO5',
+    lifecycleId: 'registry-ops',
+    state: 'active',
+    status: 'active',
+  },
+}
+
+const measuredArchiveTransition = {
+  event: 'ARCHIVE',
+  targetState: 'archived',
+  label: 'Archive',
+  role: 'approver',
+  allowed: true,
+  // NO requires key — the measured payload has none (no signature guard for
+  // registry-ops Archive; the modal machinery fires only from requires).
+}
+
+function renderRegistryBar(record: { recordId: string; payload: Record<string, unknown> } = registryOpsRecord) {
+  return render(
+    <DocumentControlBar record={record} dirty={false} onStateChanged={vi.fn()} />,
+  )
+}
+
+describe('DocumentControlBar — QMS7-6 archive affordance is pure data (AC-1/AC-2)', () => {
+  it('measured registry-ops payload (no requires) → button labeled "Archive" from DATA alone', async () => {
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [measuredArchiveTransition] })
+    renderRegistryBar()
+
+    // The label is the YAML-declared transition label, not a TS string.
+    const btn = await screen.findByRole('button', { name: 'Archive' })
+    expect(btn).toBeEnabled()
+  })
+
+  it('clicking Archive issues exactly ONE updateRecord PUT with state:archived and NO signatureRefs (AC-2 PUT-only)', async () => {
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [measuredArchiveTransition] })
+    renderRegistryBar()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive' }))
+
+    await waitFor(() => expect(mocked.updateRecord).toHaveBeenCalledTimes(1))
+    expect(mocked.updateRecord).toHaveBeenCalledWith(
+      'EQP-QUANTSTUDIO5',
+      expect.objectContaining({ state: 'archived', lifecycleId: 'registry-ops' }),
+    )
+    // Third argument (signatureRefs carrier) absent entirely — unguarded.
+    expect(mocked.updateRecord.mock.calls[0][2]).toBeUndefined()
+    // No signature machinery fires for an unguarded transition.
+    expect(mocked.createSignature).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('signature-password-modal')).toBeNull()
+  })
+
+  it('NO signature modal for the registry-ops Archive transition (AC-3: vacuously satisfied — no requires declared)', async () => {
+    // The verified-by clause "single password modal WHEN required" is vacuous
+    // for registry-ops: registry-ops.lifecycle.yaml declares no guards on
+    // Archive and the transitions payload carries no `requires` (measured).
+    // Pin the vacuous fact: unguarded click → direct PUT, zero modal mounts.
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [measuredArchiveTransition] })
+    renderRegistryBar()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive' }))
+    await waitFor(() => expect(mocked.updateRecord).toHaveBeenCalledTimes(1))
+    expect(screen.queryByTestId('signature-password-modal')).toBeNull()
+  })
+
+  it('machinery pin: a transition WITH requires.signatureRequired mounts exactly ONE modal (the modal exists, gated by data)', async () => {
+    // Second half of AC-3: the modal machinery is NOT removed — it fires only
+    // from the declarative guard fact. doc-control-style fixture (existing
+    // pattern above), asserted here for the archive-surface context.
+    mocked.getValidTransitions.mockResolvedValue({
+      transitions: [{ ...measuredArchiveTransition, requires: { signatureRequired: true, signatureAction: 'archived' } }],
+    })
+    renderRegistryBar()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive' }))
+    await screen.findByTestId('signature-password-modal')
+    // Nothing sent before signing; exactly one modal mount.
+    expect(mocked.updateRecord).not.toHaveBeenCalled()
+    expect(screen.getAllByTestId('signature-password-modal').length).toBe(1)
+  })
+
+  it('role denial on Archive (measured 422 body) → server message, displayed state unchanged, transitions refetched (AC-3/AC-4)', async () => {
+    // Measured live @ c892847d: PUT as a non-grant user → 422
+    // LIFECYCLE_TRANSITION_DENIED "You do not have the required role for this
+    // transition." and the record STAYS active (denial persists nothing).
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [measuredArchiveTransition] })
+    mocked.updateRecord.mockRejectedValueOnce(
+      new ApiError({
+        status: 422,
+        code: 'HTTP_422',
+        message: 'LIFECYCLE_TRANSITION_DENIED: You do not have the required role for this transition.',
+      }),
+    )
+    renderRegistryBar()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive' }))
+
+    const err = await screen.findByTestId('transition-error')
+    expect(err.textContent).toMatch(/You do not have the required role for this transition/)
+    expect(err.textContent).toMatch(/did not change/)
+    // No optimistic flip: the chip still shows the server's state. The chip
+    // renders currentState lowercased ('active'), not a capitalized literal.
+    expect(screen.getByText('active')).toBeTruthy()
+    expect(screen.queryByText('archived')).toBeNull()
+    // Refetch after failure (bait 7): initial fetch + post-failure refetch.
+    await waitFor(() => expect(mocked.getValidTransitions.mock.calls.length).toBeGreaterThanOrEqual(2))
+  })
+})
+
+describe('DocumentControlBar — QMS7-6 terminal archived record (AC-9)', () => {
+  it('archived record with transitions=[] renders NO action buttons — only "No transitions" + terminal caption', async () => {
+    // Measured: GET transitions for archived EQC-QUANTSTUDIO5 → transitions:[]
+    // (registry-ops declares archived terminal:true with NO declared exits —
+    // there is no unarchive transition and there must never be one).
+    mocked.getValidTransitions.mockResolvedValue({ transitions: [] })
+    renderRegistryBar({
+      recordId: 'EQC-QUANTSTUDIO5',
+      payload: {
+        kind: 'equipment-class',
+        id: 'EQC-QUANTSTUDIO5',
+        displayName: 'EQC-QUANTSTUDIO5',
+        lifecycleId: 'registry-ops',
+        state: 'archived',
+      },
+    })
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).toBeNull())
+    expect(screen.getByText('No transitions')).toBeTruthy()
+    // Terminal caption (existing reviewed behavior at DocumentControlBar.tsx
+    // isTerminal — NOT widened here).
+    expect(screen.getByText(/this document is archived/i)).toBeTruthy()
+    // Zero actionable buttons: no unarchive, no delete, nothing.
+    const bar = screen.getByTestId('document-control-bar')
+    expect(within(bar).queryAllByRole('button')).toHaveLength(0)
+    expect(within(bar).queryAllByRole('button').filter((b) => /delete/i.test(b.textContent ?? ''))).toHaveLength(0)
+  })
+})
+
