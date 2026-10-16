@@ -18,6 +18,7 @@ import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { ResolveHandlers } from './handlers/ResolveHandlers.js';
 import type { VocabHandlers } from './handlers/VocabHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
+import { shorthandCancel } from './handlers/AIHandlers.js';
 import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
 import type { ChatHandlers } from './handlers/ChatHandlers.js';
@@ -657,6 +658,12 @@ export function registerRoutes(
     fastify.post('/ai/draft-events', aiHandlers.draftEvents.bind(aiHandlers));
     fastify.post('/ai/draft-events/stream', aiHandlers.draftEventsStream.bind(aiHandlers));
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
+    // SH-QC-1-OQ1: the server-side clear the UI Cancel leg needs — same
+    // aiHandlers block, same bind pattern. The facade's own handler wins if
+    // it provides one; the exported shared impl is the fallback so the route
+    // exists on the shipped server regardless of facade composition (the
+    // facade in server.ts implements the optional member by absence).
+    fastify.post('/ai/shorthand/cancel', (aiHandlers.shorthandCancel ?? shorthandCancel).bind(aiHandlers));
     fastify.post('/ai/context/warm', aiHandlers.warmContext.bind(aiHandlers));
     fastify.get('/ai/context/warm/status', aiHandlers.warmContextStatus.bind(aiHandlers));
   }
