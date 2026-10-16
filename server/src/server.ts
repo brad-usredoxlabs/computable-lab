@@ -25,6 +25,7 @@ import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
 import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
 import { PredicateRegistry, loadPredicateRegistry } from './registry/PredicateRegistry.js';
+import { KindLifecycleRegistry, loadKindLifecycleRegistry, collectKnownKinds } from './registry/KindLifecycleRegistry.js';
 import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
@@ -260,6 +261,8 @@ export interface AppContext {
   appConfig?: AppConfig | undefined;
   configPath?: string | undefined;
   predicateRegistry?: PredicateRegistry | undefined;
+  /** QMS7-3: registry-kind lifecycle coverage (undefined when the load failed). */
+  kindLifecycleRegistry?: KindLifecycleRegistry | undefined;
   identity?: ResolvedIdentity | undefined;
   localIdentityService: LocalIdentityService;
   credentialStore: CredentialStore;
@@ -450,6 +453,22 @@ export async function initializeApp(
   const lifecycleDir = resolve(schemaDir, 'core/lifecycles')
   const loadedCount = loadLifecyclesFromDir(lifecycleDir, lifecycleEngine)
   console.log(`Loaded ${loadedCount} lifecycle specs`)
+
+  // Load registry-kind lifecycle coverage (QMS7-3). Same try/catch + loud
+  // console pattern as the predicate registry above: the LOADER throws on
+  // malformed coverage (unknown lifecycle, bad defaultState, unknown/duplicate
+  // kind), a bad deploy degrades loudly to the no-stamp behavior.
+  let kindLifecycleRegistry: KindLifecycleRegistry | undefined;
+  const coveragePath = resolve(schemaDir, 'registry/registry-kinds.registry.yaml');
+  try {
+    kindLifecycleRegistry = loadKindLifecycleRegistry(coveragePath, {
+      lifecycle: lifecycleEngine,
+      knownKinds: collectKnownKinds(schemaRegistry.getAll()),
+    });
+    console.log(`Loaded ${kindLifecycleRegistry.size} registry-kind lifecycle coverage entries (${kindLifecycleRegistry.lifecycle})`);
+  } catch (err) {
+    console.warn('Failed to load registry-kind lifecycle coverage:', err instanceof Error ? err.message : err);
+  }
 
   // Initialize policy bundle service and load bundles
   const policyBundleService = new PolicyBundleService()
@@ -658,6 +677,7 @@ export async function initializeApp(
     appConfig,
     configPath,
     predicateRegistry,
+    ...(kindLifecycleRegistry !== undefined ? { kindLifecycleRegistry } : {}),
     identity,
     localIdentityService,
     credentialStore,
@@ -764,6 +784,9 @@ export async function createServer(
       // Live accessor, same pattern: revision+audit on ordinary review edits
       // for kinds listed in the revisionOnEditKinds data knob (W2-5 OQ1).
       getRevisionOnEditKinds: () => ctx.appConfig?.server?.revisionOnEditKinds ?? DEFAULT_APP_CONFIG.server?.revisionOnEditKinds ?? [],
+      // QMS7-3: registry-kind lifecycle coverage (loaded in initializeApp;
+      // absent when the load failed → no stamp-at-create, degraded loudly).
+      getKindLifecycleCoverage: () => ctx.kindLifecycleRegistry,
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);

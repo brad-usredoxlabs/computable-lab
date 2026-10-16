@@ -37,6 +37,7 @@ import type { AuthoringPolicy } from '../../lint/types.js';
 import { authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
+import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
@@ -60,6 +61,14 @@ interface RecordHandlerSecurityOptions {
    * no authoring gates (system works with the wiring ripped out).
    */
   getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
+  /**
+   * QMS7-3: registry-kind lifecycle coverage, loaded from
+   * schema/registry/registry-kinds.registry.yaml via KindLifecycleRegistry.
+   * Absent accessor → no stamp-at-create (every existing path is unchanged;
+   * the system works with the wiring ripped out). NO kind names in TS — the
+   * coverage data decides which creates are stamped as governed drafts.
+   */
+  getKindLifecycleCoverage?: () => KindLifecycleRegistry | undefined;
 }
 
 /** Body of an update request extended with optional presented signature refs. */
@@ -553,6 +562,37 @@ export function createRecordHandlers(
               reply.status(403);
               return accessDeniedError(`User ${user.userId} cannot add child records under ${parentId}`);
             }
+          }
+        }
+
+        // QMS7-3 generic stamp-at-create: covered kinds (declared in
+        // schema/registry/registry-kinds.registry.yaml) arrive as governed
+        // drafts. NO kind names here — the coverage data decides. Undeclared
+        // kinds (every governed kind included) are UNCHANGED, full stop.
+        // Absent accessor → skip entirely (existing paths byte-identical).
+        {
+          const coverage = security?.getKindLifecycleCoverage?.();
+          const coverageEntry = coverage?.entryFor(String(kind));
+          if (coverageEntry) {
+            const stamped = payloadObject(payload);
+            if (stamped.lifecycleId !== undefined && stamped.lifecycleId !== coverageEntry.lifecycleId) {
+              reply.status(422);
+              return {
+                error: 'LIFECYCLE_COVERAGE_MISMATCH',
+                message: `A ${kind} record is governed by the ${coverageEntry.lifecycleId} lifecycle; it cannot declare ${String(stamped.lifecycleId)}.`,
+              };
+            }
+            if (stamped.state !== undefined && stamped.state !== coverageEntry.defaultState) {
+              reply.status(422);
+              return {
+                error: 'INITIAL_STATE_REQUIRED',
+                message: `Create ${kind} as ${coverageEntry.defaultState}, then use lifecycle transitions.`,
+              };
+            }
+            // Always stamp BOTH: the lifecycle middleware's `state ?? status`
+            // fallback would otherwise read the DOMAIN status as the lifecycle state.
+            stamped.lifecycleId = coverageEntry.lifecycleId;
+            stamped.state = coverageEntry.defaultState;
           }
         }
         
