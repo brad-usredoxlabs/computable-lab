@@ -123,3 +123,21 @@ to QMS7-7; OQ3 SurfaceIndicator cosmetic fallback accepted.
   git log, seed file untouched). NO YAML touched -> no stack restart needed (tsx reloads TS).
   Then mark done + handoff. fix -> new coder run on the SAME worktree with the defect list verbatim
   (fleet-queued), re-review after.
+
+## FINAL STATE at tick exit ~02:12 EDT
+
+- QMS7-1 CODER LIVE: pid 2415538 (hermes, started 02:05:28), parented by queue wrapper
+  2313615 which VERIFIABLY holds the fleet lock (fd 9 -> appliance2-coder.lock; pid-file
+  QMS7-1(l1t0140) dispatch-pid:2313615). Worktree wt/QMS7-1-lane1-l1t0140, log
+  logs/coder-QMS71-l1t0140.log, report qms7-1-report-l1t0140.md. Expected ~2-3h (app task
+  + full vitest); idle-past-6h = SOUL-7b.
+- FLEET ANOMALY OBSERVED (lane 2's side, recorded for their orchestrator, NOT acted on by me):
+  lane 2's SHQA3RESUME coder pid 2419139 started 02:06:38 WHILE lane 1 held the fleet lock —
+  two live cl-coders fleet-wide, violating the single-slot rule. I did not kill theirs (not my
+  lane, not my worker). Next lane-1 tick: if BOTH lanes' coders are still live, appliance-2 slot
+  contention may slow both — expect longer coder durations, do not treat slow motion as death.
+- ADVERSARIAL GATE (QMS7-2) still running at exit: pid 2415967 wrapper, review path
+  reviews/qms7-2-advreview-l1t0200.md. QMS7-3 composer still running (log motion last check).
+- Trunk 1529a61d (docs only since c41131ac). :3092/:5192 200. OWN-14 unchanged, not re-asked.
+  Assumption AS-ORCH-L1-098 OPEN (cleared by pre-merge server tsc). Evidence-debt carry-forward
+  unchanged from the handoff body.
