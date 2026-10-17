@@ -294,7 +294,9 @@ describe('agent_intent — the constrained emission menu', () => {
     // `ledgerQuery`; the SERVER supplies the time anchor from its own audit
     // clock and answers honestly (found with capturedAt disclosure, or "no
     // workstate history exists for that time"). It reads; it writes nothing.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand']);
+    // QMS7-7 (DELIBERATE golden diff): compose_record_draft — the record proposal
+    // rides the ONE forced tool; POST /api/drafts/compile remains the trust boundary.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

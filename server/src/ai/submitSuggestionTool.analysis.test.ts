@@ -40,6 +40,10 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
       'compose_analysis',
       'query_workstate_history',
       'event_shorthand',
+      // QMS7-7 (DELIBERATE golden diff): compose_record_draft — the record
+      // proposal rides the ONE forced tool; the drafts compile endpoint is
+      // still the trust boundary (this tool relays, never compiles).
+      'compose_record_draft',
     ]);
   });
 

@@ -42,6 +42,8 @@ describe('agent_intent — compose_workstate intent (PB-CH-4)', () => {
       'compose_analysis',
       'query_workstate_history',
       'event_shorthand',
+      // QMS7-7 (DELIBERATE golden diff): compose_record_draft on the ONE forced tool.
+      'compose_record_draft',
     ]);
   });
 

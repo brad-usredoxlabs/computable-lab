@@ -239,3 +239,133 @@ describe('useWorkstateProposalFlow — compile→card lifecycle', () => {
     expect(failed).toContain('window hacks')
   })
 })
+
+// QMS7-7 — the record-drafting adapter rides the SAME flow (one union
+// constant, not a fork). Same mocks, same setup(): the ONLY flow delta is the
+// adapter constant; card state, pending identity, supersede, accept and reject
+// are the identical code paths (shared, not forked).
+const RECORD_INTENT = {
+  operation: 'compose-record',
+  kind: 'training-material',
+  fields: { title: 'Pipetting safety basics', materialType: 'slide_deck' },
+}
+const COMPILED_RECORD = {
+  draftId: 'DRAFT-77',
+  revision: 1,
+  reviewHash: 'd'.repeat(64),
+  canAccept: true,
+  diagnostics: [],
+  result: {
+    recordId: 'TRM-NEW-TEST1',
+    summary: 'Proposed training-material draft — nothing is written until you accept.',
+    recordFields: [
+      { label: 'ID', value: 'TRM-NEW-TEST1' },
+      { label: 'Title', value: 'Pipetting safety basics' },
+      { label: 'Material Type', value: 'Slide Deck' },
+    ],
+    sessionDocument: { version: 1, tabs: [{ kind: 'record-edit', recordId: 'TRM-NEW-TEST1' }], activeTabId: 'record:TRM-NEW-TEST1' },
+  },
+}
+
+describe('useWorkstateProposalFlow — the record-drafting adapter (QMS7-7)', () => {
+  // The record-drafting fixture (the server-built recordFields ride in the
+  // compile result). Same mocks/setup as the workstate/analysis block above —
+  // only the fixture differs, because the record adapter's compile result is
+  // a record envelope, not a tab document.
+  beforeEach(() => {
+    vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValue(COMPILED_RECORD)
+    vi.mocked(apiClient.acceptWorkstateDraft).mockResolvedValue(COMPILED_RECORD.result)
+  })
+
+  it('record-drafting rides the SAME flow: compile called with the adapter constant + intent verbatim', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    expect(result.current.card?.phase).toBe('compiling')
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    expect(apiClient.compileWorkstateDraft).toHaveBeenCalledTimes(1)
+    expect(apiClient.compileWorkstateDraft).toHaveBeenCalledWith({ adapter: 'record-drafting', intent: RECORD_INTENT })
+    expect(result.current.card?.draftId).toBe('DRAFT-77')
+    expect(result.current.card?.revision).toBe(1)
+  })
+
+  it('the compiled recordFields ride into the card state (presentational mirror)', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    expect(result.current.card?.recordFields).toEqual([
+      { label: 'ID', value: 'TRM-NEW-TEST1' },
+      { label: 'Title', value: 'Pipetting safety basics' },
+      { label: 'Material Type', value: 'Slide Deck' },
+    ])
+  })
+
+  it('a compile result WITHOUT recordFields leaves the field list ABSENT (exactOptionalPropertyTypes: never undefined-valued)', async () => {
+    vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValueOnce({
+      ...COMPILED_RECORD,
+      result: { ...COMPILED_RECORD.result, recordFields: undefined, sessionDocument: COMPILED_RECORD.result.sessionDocument },
+    })
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    const card = result.current.card
+    expect(card && 'recordFields' in card ? card.recordFields : undefined).toBeUndefined()
+  })
+
+  it('silent-retarget guard: a server target-change 409 surfaces as a blocked card naming the error — the card never re-targets silently, and a blocked card has no accept path', async () => {
+    vi.mocked(apiClient.compileWorkstateDraft).mockRejectedValueOnce(
+      new Error('Draft target changed. Start a new draft.'),
+    )
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('blocked'))
+    expect(result.current.card?.diagnostics?.[0]?.message).toContain('Draft target changed')
+    await act(async () => {
+      await result.current.acceptWorkstate()
+    })
+    expect(apiClient.acceptWorkstateDraft).not.toHaveBeenCalled()
+  })
+
+  it('accept of a record-drafting draft: ONE accept fetch with the identity triple only, executor applied with the FLAT body, spent card', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    await act(async () => {
+      await result.current.acceptWorkstate()
+    })
+    expect(apiClient.acceptWorkstateDraft).toHaveBeenCalledTimes(1)
+    expect(apiClient.acceptWorkstateDraft).toHaveBeenCalledWith({
+      draftId: 'DRAFT-77',
+      revision: 1,
+      reviewHash: 'd'.repeat(64),
+    })
+    expect(executorCalls.applyAcceptedWorkstate).toHaveBeenCalledTimes(1)
+    expect(executorCalls.applyAcceptedWorkstate.mock.calls[0]?.[0]).toEqual(COMPILED_RECORD.result)
+    expect(result.current.card?.phase).toBe('applied')
+  })
+
+  it('reject of a record-drafting card: zero fetches, identity cleared, a later accept is a no-op', async () => {
+    const result = setup()
+    act(() => {
+      void result.current.proposeWorkstate('record-drafting', RECORD_INTENT)
+    })
+    await waitFor(() => expect(result.current.card?.phase).toBe('review'))
+    act(() => {
+      result.current.rejectWorkstate()
+    })
+    expect(result.current.card).toBeNull()
+    await act(async () => {
+      await result.current.acceptWorkstate()
+    })
+    expect(apiClient.acceptWorkstateDraft).not.toHaveBeenCalled()
+  })
+})

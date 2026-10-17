@@ -2668,6 +2668,86 @@ export function createAgentOrchestrator(
               return analysisProposalResult;
             }
 
+            // intent=compose_record_draft (QMS7-7, OQ1 ruling A): propose a NEW
+            // record for human review. THE SAME thin-event design as the two
+            // arms above: this branch emits the model's record-drafting INTENT
+            // VERBATIM as ONE `record_draft_proposal` event and runs NOTHING
+            // else — no compile, no store write, no FormDraftService call, no
+            // execute. The drafts compile endpoint (POST /api/drafts/compile —
+            // the 'record-drafting' adapter: kind resolved through the schema
+            // corpus, id derived from the schema's declared pattern, fields
+            // through the REAL validate + lint, canAccept), NOT this stream, is
+            // the trust boundary. Accept stages at most ONE governed DRAFT
+            // record create — nothing here writes a record and nothing here
+            // approves, signs, or advances state. An invalid envelope is NOT
+            // rejected or rewritten here — the compile endpoint owns the
+            // diagnostic (canAccept:false + path-named diagnostics); a
+            // server-side "helpful" rewrite of model output is dishonest
+            // relaying.
+            if (agentIntent.intent === 'compose_record_draft') {
+              const recordDraft = agentIntent.recordDraft;
+              const elapsed = Date.now() - t0;
+              if (!recordDraft) {
+                // The existing error channel (compose_analysis's no-envelope
+                // precedent): success:false with a corrective `error` string,
+                // and NO record_draft_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const recordDraftEnvelopeError = 'compose_record_draft requires a `recordDraft` envelope: {operation:"compose-record", kind, fields:{<target schema declared fields only>}} — the server compiles it into a review card via POST /api/drafts/compile, derives the id from the schema\'s declared pattern, and writes nothing until you accept.';
+                const emptyRecordDraftResult: AgentResult = {
+                  success: false,
+                  error: recordDraftEnvelopeError,
+                };
+                const emptyRecordDraftSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: recordDraftEnvelopeError,
+                };
+                logAgentSummary(tid, emptyRecordDraftSummary);
+                console.log(`[agent ${tid}] done compose_record_draft no-envelope elapsedMs=${elapsed}`);
+                return emptyRecordDraftResult;
+              }
+              onEvent?.({ type: 'record_draft_proposal', recordDraft });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const recordDraftProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed a record draft — review the card; nothing was written.'],
+              };
+              const recordDraftProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, recordDraftProposalSummary);
+              console.log(`[agent ${tid}] done compose_record_draft emitted elapsedMs=${elapsed}`);
+              return recordDraftProposalResult;
+            }
+
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding
             // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
             // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the

@@ -24,3 +24,27 @@ adapters:
     domain: analysis
     operations: [compose-analysis]
     projection: {}
+  # QMS7-7 (OQ-1 ruling A, the ONE sanctioned block of this item): record-drafting
+  # proposals compile a model intent into a full record envelope and stage AT MOST
+  # ONE create through the staging store (real schema validate + lint run at
+  # compile time; nothing durable before the reviewHash-verified accept). The
+  # compiled card document (recordFields + landing sessionDocument) rides in the
+  # compile/accept `result` like the workstate/analysis adapters; the accept write
+  # rides the EXISTING accept loop. Field vocabulary: the target schema + its
+  # *.ui.yaml projection (never TS literals). Kind→schema resolution reads each
+  # schema's properties.kind.const; the staged id derives from the schema's
+  # declared properties.id.pattern.
+  record-drafting:
+    domain: registry-records
+    operations: [compose-record]
+    projection: {}
+    # QMS7-7 FIX1 (adv-review D2): the landing tab kind is DATA, not a TS
+    # literal. The compiled landing document (the surface the accepted record
+    # proposal re-focuses) reads landing.tabKind from this block — the same
+    # per-call adapters.yaml load the adapter itself uses. tabKind must be a
+    # lab-session tab kind (schema/workflow/lab-session.schema.yaml enum).
+    # An absent landing key fails the compile honestly with a
+    # LANDING_TAB_KIND_UNDECLARED diagnostic — the compiler never defaults a
+    # surface.
+    landing:
+      tabKind: registry
