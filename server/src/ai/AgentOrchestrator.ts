@@ -343,8 +343,12 @@ function resolvedMentionsFromAnswers(
  */
 function compiledTargetCandidateIds(target: ResolvedActionTarget | undefined): string[] {
   if (!target) return [];
-  if (target.kind === 'protocol-step') return [target.protocolId];
-  return [target.id];
+  switch (target.kind) {
+    case 'protocol-step': return [target.protocolId];
+    case 'sequence-tab': return []; // a declared tab is not a record — nothing to gate on
+    case 'sequence-record': return [target.recordId];
+    default: return [target.id]; // record | ontology
+  }
 }
 
 /**
