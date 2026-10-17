@@ -18,7 +18,7 @@ export class DraftError extends Error {constructor(message:string,public status=
 
 const schemaId = 'https://computable-lab.com/schema/computable-lab/form-draft.schema.yaml';
 const pipelinePath = fileURLToPath(new URL('../../../schema/registry/compile-pipelines/form-draft-compile.yaml', import.meta.url));
-interface AdapterSpec { domain: string; operations: string[]; projection: Record<string,string> }
+interface AdapterSpec { domain: string; operations: string[]; projection: Record<string,string>; humanReviewedCreate?: boolean }
 interface DraftInput { adapter: string; intent: Record<string,unknown>; userRequest?: string; target?: { recordId: string; contentHash?: string } }
 interface DraftRecord {
   kind: 'form-draft'; id: string; actor: string; revision: number; createdAt: string;
@@ -99,6 +99,19 @@ export class FormDraftService {
       },
     })}:{})};
     const authoring = draftAdapters[draft.input.adapter]!;
+    // QMS7-7 FIX-2 (architect RULING OPTION A): the staged-create
+    // classification is DECLARED DATA, read from the adapter's own block in
+    // config/drafting/adapters.yaml — the same per-call `adapters()` load that
+    // supplies domain/operations/projection (the landing.tabKind precedent,
+    // FIX1). A block declaring humanReviewedCreate:true binds its staged
+    // creates as human-reviewed: the kernel's new-record -> auto-create
+    // default (the machine-deposition class allowAutoCreate:deny exists to
+    // stop) is withheld ONLY for that adapter's staged writes, because nothing
+    // is durable until a human clicks Accept and the accept loop re-runs the
+    // full policy evaluation. Unflagged adapters keep 'new-record' ->
+    // auto-create exactly as before; no spec name and no adapter-name branch
+    // participates in the decision.
+    const stagedResolution = adapter.humanReviewedCreate === true ? 'human-reviewed-create' as const : 'new-record' as const;
     const diagnostics: CompilerDiagnostic[] = [];
     let result: Record<string,unknown> = {};
     const intent = structuredClone(draft.input.intent);
@@ -127,7 +140,7 @@ export class FormDraftService {
       const scope = {organizationId:bundleId};
       compilation = new CompilerKernel().evaluateRequest({
         normalizedIntent:{domain:adapter.domain,intentId:draft.id,version:'1',summary:'Review native form authoring',payload:intent,requiredFacts:[]},
-        candidateBindings:[...stage.writes.values()].map(w=>({bindingId:w.recordId,slot:w.recordId,candidateType:String(object(w.payload).kind),candidateId:w.recordId,resolution:'new-record',payload:w.payload,provenance:[{kind:'user-input',id:draft.id}]})),
+        candidateBindings:[...stage.writes.values()].map(w=>({bindingId:w.recordId,slot:w.recordId,candidateType:String(object(w.payload).kind),candidateId:w.recordId,resolution:stagedResolution,payload:w.payload,provenance:[{kind:'user-input',id:draft.id}]})),
         plan:{planId:`${draft.id}-${draft.revision}`,steps:[...stage.writes.values()],requiresOperator:true},
         policyProfiles:bundle?[{id:bundle.id,scope:'organization',scopeId:bundleId,settings:bundle.settings}]:[],activeScope:scope,diagnostics,
         provenance:{actor:this.actor,sources:[...stage.reads.keys()].map(id=>({kind:'record',id}))},
