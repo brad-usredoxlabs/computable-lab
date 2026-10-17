@@ -19,7 +19,8 @@ import { RecordCreatePanel, type CreateNodeType } from '../../event-editor/creat
 import { RecordEditPanel } from '../../event-editor/create/RecordEditPanel'
 import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { recordCreateTabId, recordEditTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, type AccessPolicyResponse } from '../../shared/api/client'
+import { ShareRecordDialog } from '../sharing/ShareRecordDialog'
 
 export function RecordHostPage() {
   const { recordId, nodeType, parentId } = useParams<{
@@ -104,6 +105,35 @@ export function RecordHostPage() {
 
   const isCreate = !!nodeType
 
+  // OWN-14: the Share control's visibility is the ONE server-declared fact —
+  // the (isPolicyRoot, canAdmin) pair from getAccessPolicy(recordId). No
+  // client-side kind list, no payload.kind scan. Nothing renders while the
+  // policy is loading, when the pair says no, on a failed read, or in create
+  // mode (where no fetch happens at all).
+  const [sharePolicy, setSharePolicy] = useState<AccessPolicyResponse | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  useEffect(() => {
+    setSharePolicy(null)
+    setShareOpen(false)
+    if (nodeType || !recordId) return
+    let cancelled = false
+    void apiClient
+      .getAccessPolicy(recordId)
+      .then((policy) => {
+        if (!cancelled) setSharePolicy(policy)
+      })
+      .catch(() => {
+        // A record whose policy cannot be read shows NO share control — the
+        // server fact is unavailable, so nothing is declared shareable.
+        if (!cancelled) setSharePolicy(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [recordId, nodeType])
+  const canShare =
+    !isCreate && Boolean(recordId) && Boolean(sharePolicy?.isPolicyRoot && sharePolicy.canAdmin)
+
   const handleClose = () => navigate('/projects')
 
   const leftPane = isCreate ? (
@@ -130,9 +160,30 @@ export function RecordHostPage() {
         brand={isCreate ? 'New record' : 'Record'}
         layout="workspace"
         topbarTabs={<WorkspaceTabStrip />}
+        viewerToolbar={
+          canShare ? (
+            // AppShell's `.cl-workspace__toolbar` slot supplies the row layout;
+            // the button reuses the record panel's existing button styling
+            // (RecordCreatePanel.css is loaded by the panel in this pane).
+            <button
+              type="button"
+              className="record-create-panel__btn record-share-button"
+              data-testid="record-share-trigger"
+              aria-label={`Share record ${recordId}`}
+              onClick={() => setShareOpen(true)}
+            >
+              Share
+            </button>
+          ) : undefined
+        }
         leftPane={leftPane}
         rightPane={<RightPane />}
       />
+      {/* The dialog is a fixed-position overlay; it belongs at page level,
+          not inside the toolbar row. */}
+      {shareOpen && recordId ? (
+        <ShareRecordDialog recordId={recordId} onClose={() => setShareOpen(false)} />
+      ) : null}
     </WorkspaceProvider>
   )
 }
