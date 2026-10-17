@@ -45,7 +45,7 @@
 import type { AppContext } from '../server.js';
 import type { JSONSchema } from '../schema/json-schema.js';
 import type { SchemaEntry } from '../schema/types.js';
-import type { RecordEnvelope, RecordStore } from '../store/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { UISpec } from '../ui/types.js';
 import type { ValidationResult } from '../types/common.js';
 import { canonicalReadStore, LAB_SESSION_SCHEMA_ID } from './workstateCompile.js';
@@ -340,9 +340,4 @@ export async function compileRecordDraftIntent(
 
   const summary = `Proposed ${kind} draft "${title}" (${recordId}) — review the fields; nothing is written until you accept.`;
   return { ok: true, result: { recordId, summary, recordFields, sessionDocument } };
-}
-
-/** Source-pin helper for tests: the envelope's staged envelope shape. */
-export function recordDraftEnvelopeShape(envelope: RecordEnvelope): { recordId: string; schemaId: string } {
-  return { recordId: envelope.recordId, schemaId: envelope.schemaId };
 }
