@@ -13,8 +13,6 @@ import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 
 export const ACCESS_POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml';
 
-export const POLICY_ROOT_KINDS = new Set(['study', 'experiment', 'run', 'planned-run']);
-
 function payloadOf(envelope: RecordEnvelope | null | undefined): Record<string, unknown> {
   return (envelope?.payload && typeof envelope.payload === 'object')
     ? envelope.payload as Record<string, unknown>
