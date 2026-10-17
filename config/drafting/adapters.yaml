@@ -48,3 +48,15 @@ adapters:
     # surface.
     landing:
       tabKind: registry
+    # QMS7-7 FIX-2 (architect RULING OPTION A): this adapter's single staged
+    # create is HUMAN-REVIEWED, not a machine auto-create. Nothing is durable
+    # until a human reads the card and clicks Accept, and the write rides the
+    # accept loop's full policy re-evaluation (reviewHash re-check, kernel
+    # re-run, owner-policy, audit). The flag tells the staged-authoring
+    # compile pass to bind that staged create as a human-reviewed create, so
+    # the kernel's new-record -> auto-create default (the machine-deposition
+    # class that allowAutoCreate:deny exists to stop) is NOT requested for it.
+    # Absent this flag every adapter keeps the auto-create classification
+    # exactly as before; the material/protocol auto-deposition paths are
+    # untouched.
+    humanReviewedCreate: true
