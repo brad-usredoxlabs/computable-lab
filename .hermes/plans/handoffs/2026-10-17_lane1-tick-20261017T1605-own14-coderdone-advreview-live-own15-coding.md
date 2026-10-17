@@ -113,3 +113,40 @@ measured PRE unified-main merge; branch-base raw measurements drift (OWN-14 code
 24/25 at 87e8e04e). Re-anchor baselines at the next verification and update this line.
 ENV NOTE (carried): restart-stale index.lock hazard in lane data repo — not checked
 this tick; check next tick.
+
+## ADDENDUM (same tick, 16:20) — OWN-14 advanced to the browser gate
+
+- ADVREVIEW RETURNED ACCEPT 15:48 (proc exited; reviews/own14-advreview-l1t1545.md):
+  zero BLOCKER/MAJOR, three MINOR (F1 house-style conditional-spread nit — verified
+  non-issue, app tsconfig has no exactOptionalPropertyTypes; F2 report-accuracy note —
+  the spec's "33" server-tsc headline is stale post-merge, reviewer measured 25 raw
+  both ways, material zero-new claim independently verified; F3 negative-pin timing —
+  judged a real pin).
+- ORCH-VERIFIED MYSELF: scoped vitest `src/shared/shell/RecordHostPage.share.test.tsx
+  + src/shared/sharing` on the worktree = 3 files / 16 tests PASSED (own run, not the
+  coder's word). Survivor + deletion greps re-run first-hand (this tick, pre-review):
+  zero refs to deleted chain, SchemaTree intact, gate = pure server pair.
+- MERGED: `git -c core.fileMode=false merge --no-ff wt/OWN-14-lane1-l1t1230` ->
+  trunk a221a7b0 (trunk was clean; merge commit 20 files applied as expected).
+- STACK RESTARTED (client bundle + server export changed; no YAML in the diff):
+  :3092 backend READY 200; SERVED-CANDIDATE CONFIRMED — :5192 RecordHostPage.tsx
+  bundle contains `record-share-trigger` (curl count=1); :3092 access-policy of
+  LPR-2026-09-06-run-template-d69ed684 as USR-BRAD = isPolicyRoot:true canAdmin:true
+  direct:null (fixture pristine for S6/S7).
+- BROWSER GATE S1-S7 LIVE at TIER 2 (OpenRouter deepseek-v4.1-flash per the ladder;
+  OWN-12 precedent): proc_802e417ed838 pid 3945592, log
+  logs/browergate-OWN14-l1t1615.log, receipts dir pinned
+  /home/brad/.hermes/cl/receipts/OWN-14/20261017T1615/, prompt
+  prompts/browergate-OWN14-l1t1615.txt. Dispatched 16:15; expected ~30-45 min;
+  due-check ~17:00, stale-by ~17:45 (tier-2 first shot per 6c — no blind tier-1
+  retry; if this shot dies/hangs with no trail, next tier per ladder).
+- OWN-14 stays in-progress until the gate renders VERDICT: accept WITH receipts
+  (track-two rule: merge does not close; the tick's own merge-before-gate is the
+  written open obligation, revision a221a7b0 pinned above). On accept -> OWN-14 DONE
+  + OWN-12 DONE (gate-owner close per architect ruling). On fix -> defect list +
+  absolute screenshot paths back to a new coder run on a FRESH worktree off trunk
+  (OWN-14's branch is already merged — fixes go as a follow-up commit, not a re-merge).
+- NEXT TICK: (1) read OWN-14 receipts trail.json + report verdict; (2) reconcile
+  OWN-15 coder (3920866) vs log/report/end-marker, due-check ~17:15; (3) index.lock
+  residue check; (4) if OWN-14 accepted, mark both tasks done + close evidence-debt
+  AS-ORCH-L1-068.
