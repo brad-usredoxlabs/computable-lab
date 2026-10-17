@@ -12,7 +12,7 @@ import type {
   UpdateRecordOptions,
 } from '../store/types.js';
 import { createRecordHandlers } from '../api/handlers/RecordHandlers.js';
-import { AuthorizationService, ACCESS_POLICY_SCHEMA_ID } from './AuthorizationService.js';
+import { AuthorizationService, ACCESS_POLICY_SCHEMA_ID, type MintPrincipalRefusal } from './AuthorizationService.js';
 import { LOCAL_ADMIN_USER_ID, LocalIdentityService, USER_SCHEMA_ID } from './LocalIdentityService.js';
 import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 
@@ -697,14 +697,25 @@ describe('local identity and authorization substrate', () => {
     const authorization = new AuthorizationService(store, new OwnershipPolicyService(store));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const stamped = await authorization.ensureOwnerPolicy(material('MAT-OWN15-3'), 'USR-BRAD');
+      const mintOut: MintPrincipalRefusal[] = [];
+      const stamped = await authorization.ensureOwnerPolicy(material('MAT-OWN15-3'), 'USR-BRAD', mintOut);
 
       // The record is never left ownerless or open: creator-owner ACL is minted.
       expect(stamped).toBeTruthy();
       expect((stamped?.payload as Record<string, unknown>).ownerUserId).toBe('USR-BRAD');
       // The unresolvable grant is REFUSED at the grant level — stripped, and the
-      // refusal is observable (typed warning surfaced in the result + logged).
+      // refusal is observable in the TYPED CHANNEL (the MintPrincipalRefusal
+      // out-param threaded out of ensureOwnerPolicy and surfaced as
+      // `mintRefusals` in the API response — see the OWN-15 FIX-2 response
+      // tests below) and logged. It is never smuggled into the minted record.
       expect((stamped?.payload as Record<string, unknown>).grants).toEqual([]);
+      expect(mintOut).toEqual([{
+        kind: 'unresolvable-principal',
+        resourceRecordId: 'MAT-OWN15-3',
+        principalType: 'group',
+        principalId: 'GRP-LAB-ADMINS',
+        reason: expect.stringContaining('GRP-LAB-ADMINS') as unknown as string,
+      } satisfies MintPrincipalRefusal]);
       expect(warnSpy.mock.calls.some((args) => args.some((a) => String(a).includes('GRP-LAB-ADMINS')))).toBe(true);
       expect(warnSpy.mock.calls.some((args) => String(args[0]).includes('acl-mint-refusal'))).toBe(true);
     } finally {
@@ -733,5 +744,211 @@ describe('local identity and authorization substrate', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  // ===================== OWN-15 FIX-1 (advreview l1t1720) =====================
+  // FIX-1 [privilege escalation]: the delegation's owner resolution for the
+  // referenced record must be the DECLARED policy-chain owner only. meta.createdBy
+  // is NOT ownership: a non-owner whose id is the referenced record's
+  // meta.createdBy must NOT pass `admin` on an ACL row that declares a different
+  // ownerUserId. RED against HEAD 99eb201d (the createdBy fallback short-circuits
+  // canAccess true); GREEN once the fallback is removed.
+
+  it('OWN-15 FIX-1: meta.createdBy is NOT ownership — a non-owner creator fails admin on an ACL row declaring a different owner (revocation-bypass pin)', async () => {
+    // Reproduces the reviewer's probe B exactly: MAT-B was created by USR-BRAD
+    // (meta.createdBy = USR-BRAD) but its ACL row ACL-MAT-B has been re-pointed
+    // at a different declared owner (USR-VICTIM) with NO grants for USR-BRAD.
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-VICTIM'),
+      user('USR-STRANGER'),
+      { ...material('MAT-B'), meta: { createdBy: 'USR-BRAD' } },
+      policy('ACL-MAT-B', 'MAT-B', 'material', 'USR-VICTIM'),
+    ]);
+    const authorization = new AuthorizationService(store);
+    const aclRow = (await store.get('ACL-MAT-B'))!;
+
+    // The escalation the reviewer proved: the original creator keeps admin on an
+    // ACL explicitly re-pointed away from them. Must be FALSE.
+    expect(await authorization.canAccess('USR-BRAD', 'admin', aclRow)).toBe(false);
+    // The declared owner still administers.
+    expect(await authorization.canAccess('USR-VICTIM', 'admin', aclRow)).toBe(true);
+    // A stranger never opens.
+    expect(await authorization.canAccess('USR-STRANGER', 'admin', aclRow)).toBe(false);
+
+    // The escalation path itself (RecordHandlers.ts:943 authorizes a PUT of the
+    // access-policy row via canAccess(user,'admin', aclRow) and writes the body
+    // payload through): the creator's PUT of the re-pointed ACL row must 403.
+    const handlers = own15Handlers(store);
+    const putReply = reply();
+    await handlers.updateRecord(
+      request<{ Params: { id: string }; Body: { payload: unknown } }>({
+        params: { id: 'ACL-MAT-B' },
+        body: { payload: {
+          kind: 'access-policy',
+          recordId: 'ACL-MAT-B',
+          resourceRef: { kind: 'record', id: 'MAT-B', type: 'material' },
+          visibility: 'private',
+          ownerUserId: 'USR-BRAD',
+          grants: [{ principalType: 'user', principalId: 'USR-BRAD', role: 'admin' }],
+        } },
+        headers: { 'x-user-id': 'USR-BRAD' },
+      }),
+      putReply,
+    );
+    expect(putReply.statusCode).toBe(403);
+    // The row was NOT rewritten: the declared owner survives the attempted
+    // revocation-bypass.
+    expect(((await store.get('ACL-MAT-B'))?.payload as Record<string, unknown>).ownerUserId).toBe('USR-VICTIM');
+  });
+
+  it('OWN-15 FIX-1: the legitimate owner-of-referenced-record delegation still passes via the DECLARED policy chain (excludeAclRecordId intact)', async () => {
+    // The delegation must keep working for the honest case: the referenced
+    // record's DECLARED policy-chain owner (a sibling ACL row, excluding the ACL
+    // row under test) satisfies admin on the ACL row under test.
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-STRANGER'),
+      material('MAT-C'),
+      // Sibling ACL declares USR-BRAD as the owner of MAT-C.
+      policy('ACL-MAT-C-SIBLING', 'MAT-C', 'material', 'USR-BRAD'),
+      // The ACL row under test declares a different owner and no grants — the
+      // delegation (declared chain owner) is the ONLY thing that can open it.
+      policy('ACL-MAT-C', 'MAT-C', 'material', 'USR-VICTIM'),
+    ]);
+    const authorization = new AuthorizationService(store);
+    const aclRow = (await store.get('ACL-MAT-C'))!;
+
+    // TRUE only via the delegation (no grants, ownerUserId ≠ USR-BRAD).
+    expect(await authorization.canAccess('USR-BRAD', 'admin', aclRow)).toBe(true);
+    // The ACL row under test never vouches for its own declared owner through
+    // the referenced-record chain: excludeAclRecordId keeps it excluded, so the
+    // sibling's declaration (USR-BRAD) is what resolves.
+    expect(await authorization.canAccess('USR-STRANGER', 'admin', aclRow)).toBe(false);
+    // The delegation is admin-on-ACL only — it does not grant write on the ACL
+    // row to a non-owner/non-grantee through the normal path... (USR-BRAD passes
+    // admin via delegation; a stranger still fails).
+    expect(await authorization.canAccess('USR-STRANGER', 'write', aclRow)).toBe(false);
+  });
+
+  // ===================== OWN-15 FIX-2 (advreview l1t1720) =====================
+  // FIX-2 [refusal observability]: the typed MintPrincipalRefusal list must be
+  // threaded out of ensureOwnerPolicy and surfaced RESPONSE-LEVEL as a top-level
+  // `mintRefusals` array in the create response envelope (NOT stored on the
+  // record). The create still succeeds (adjudicated semantics: strip + report).
+
+  it('OWN-15 FIX-2: POST /records surfaces the mint refusal in the response envelope (mintRefusals) — 201 still, record still minted creator-owned', async () => {
+    // No GRP-LAB-ADMINS record: the declared group grant is stripped at mint.
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-LOCAL-ADMIN'),
+      labPolicyDocEnv(),
+    ]);
+    const handlers = own15Handlers(store);
+
+    const createReply = reply();
+    const created = await handlers.createRecord(
+      request<{ Body: { schemaId: string; payload: unknown } }>({
+        body: {
+          schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+          payload: { kind: 'material', id: 'MAT-OWN15-F2', name: 'Fix2 reagent', domain: 'reagent' },
+        },
+        headers: { 'x-user-id': 'USR-BRAD' },
+      }),
+      createReply,
+    );
+
+    // The create is NOT failed: strip + report, record still minted creator-owned.
+    expect(createReply.statusCode).toBe(201);
+    expect('success' in created ? created.success : false).toBe(true);
+
+    // Response-level observability: the typed refusal is in the response
+    // envelope alongside the record.
+    const refusals = (created as { mintRefusals?: MintPrincipalRefusal[] }).mintRefusals;
+    expect(Array.isArray(refusals), 'response envelope must carry a mintRefusals array').toBe(true);
+    expect(refusals).toEqual([{
+      kind: 'unresolvable-principal',
+      resourceRecordId: 'MAT-OWN15-F2',
+      principalType: 'group',
+      principalId: 'GRP-LAB-ADMINS',
+      reason: expect.stringContaining('REFUSED') as unknown as string,
+    } satisfies MintPrincipalRefusal]);
+
+    // The refusal is NOT smuggled into the minted record or the created record.
+    const acl = await store.get('ACL-MAT-OWN15-F2');
+    expect(acl).toBeTruthy();
+    expect((acl?.payload as Record<string, unknown>).ownerUserId).toBe('USR-BRAD');
+    expect((acl?.payload as Record<string, unknown>).grants).toEqual([]);
+    expect('mintRefusals' in (acl?.payload as Record<string, unknown>)).toBe(false);
+    const createdRecord = (created as { record?: Record<string, unknown> }).record ?? {};
+    expect('mintRefusals' in createdRecord).toBe(false);
+  });
+
+  it('OWN-15 FIX-2: a clean mint (all declared principals resolve) surfaces NO mintRefusals noise', async () => {
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-LOCAL-ADMIN'),
+      labAdminsGroup(['USR-LOCAL-ADMIN']),
+      labPolicyDocEnv(),
+    ]);
+    const handlers = own15Handlers(store);
+
+    const createReply = reply();
+    const created = await handlers.createRecord(
+      request<{ Body: { schemaId: string; payload: unknown } }>({
+        body: {
+          schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+          payload: { kind: 'material', id: 'MAT-OWN15-F2B', name: 'Clean reagent', domain: 'reagent' },
+        },
+        headers: { 'x-user-id': 'USR-BRAD' },
+      }),
+      createReply,
+    );
+    expect(createReply.statusCode).toBe(201);
+    // exactOptionalPropertyTypes posture: nothing declared unresolvable → the
+    // field is absent (or empty), never fabricated.
+    const refusals = (created as { mintRefusals?: MintPrincipalRefusal[] }).mintRefusals;
+    expect(refusals === undefined || refusals.length === 0).toBe(true);
+    expect(((await store.get('ACL-MAT-OWN15-F2B'))?.payload as Record<string, unknown>).grants).toEqual([
+      { principalType: 'group', principalId: 'GRP-LAB-ADMINS', role: 'admin' },
+    ]);
+  });
+
+  it('OWN-15 FIX-2: PUT /records/:id/access-policy surfaces the mint refusal in its response (typed mintRefusals), PUT still 200', async () => {
+    // No ACL yet on the record and no GRP-LAB-ADMINS group record: the PUT
+    // mints the base ACL (IdentityHandlers.ts:372), the declared grant is
+    // stripped, and the caller must SEE the refusal in the response.
+    const store = new MemoryRecordStore([
+      user('USR-BRAD'),
+      user('USR-LOCAL-ADMIN'),
+      labPolicyDocEnv(),
+      material('MAT-OWN15-F2C'),
+    ]);
+    const identity = new LocalIdentityService(store);
+    const authorization = new AuthorizationService(store, new OwnershipPolicyService(store));
+    const identityHandlers = createIdentityHandlers({ store, identityService: identity, authorizationService: authorization });
+
+    const putReply = reply();
+    const body = await identityHandlers.putAccessPolicy(
+      request<{ Params: { id: string }; Body: { visibility?: string; grants?: unknown } }>({
+        params: { id: 'MAT-OWN15-F2C' },
+        body: { visibility: 'shared', grants: [] },
+        headers: { 'x-user-id': 'USR-BRAD' },
+      }),
+      putReply,
+    );
+    expect(putReply.statusCode).toBe(200);
+
+    const refusals = (body as { mintRefusals?: MintPrincipalRefusal[] }).mintRefusals;
+    expect(Array.isArray(refusals), 'PUT response must carry the typed mintRefusals').toBe(true);
+    expect(refusals).toEqual([{
+      kind: 'unresolvable-principal',
+      resourceRecordId: 'MAT-OWN15-F2C',
+      principalType: 'group',
+      principalId: 'GRP-LAB-ADMINS',
+      reason: expect.stringContaining('REFUSED') as unknown as string,
+    } satisfies MintPrincipalRefusal]);
+    // Response-level only: the refusal is not stored on the ACL record.
+    expect('mintRefusals' in ((await store.get('ACL-MAT-OWN15-F2C'))?.payload as Record<string, unknown>)).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
-import type { AuthorizationService } from '../../security/AuthorizationService.js';
+import type { AuthorizationService, MintPrincipalRefusal } from '../../security/AuthorizationService.js';
 import type { OwnershipPolicyService } from '../../security/OwnershipPolicyService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
@@ -372,6 +372,7 @@ export function createRecordHandlers(
     },
     async draftCopy(request: FastifyRequest<{ Params: { id: string }; Body: { recordId?: string; payload?: Record<string, unknown>; expectedSha?: string } }>, reply: FastifyReply) {
       try {
+        const draftMintRefusals: MintPrincipalRefusal[] = [];
         const user = await resolveRequestUser(request, reply);
         if (!user) return unauthenticatedError('A valid local user is required');
         const source = await store.get(request.params.id);
@@ -392,8 +393,16 @@ export function createRecordHandlers(
         }
         const result = await store.create({ envelope: { recordId, schemaId: source.schemaId, payload }, message: `Draft from ${source.recordId}` });
         if (!result.success) return reply.code(422).send({ error: result.error, validation: result.validation });
-        if (result.envelope && user.userId) await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
-        return { success: true, record: result.envelope ?? await store.get(recordId) };
+        if (result.envelope && user.userId) {
+          // OWN-15 FIX-2: mint refusals surface response-level here too (this
+          // call site previously dropped them).
+          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId, draftMintRefusals);
+        }
+        return {
+          success: true,
+          record: result.envelope ?? await store.get(recordId),
+          ...(draftMintRefusals.length > 0 ? { mintRefusals: draftMintRefusals } : {}),
+        };
       } catch (error) { return reply.code(error instanceof RevisionError ? error.status : 500).send({ error: error instanceof RevisionError ? error.code : 'DRAFT_COPY_FAILED', message: String(error) }); }
     },
     async acceptGraph(request: FastifyRequest<{ Params: { id: string }; Body: { expectedSha: string } }>, reply: FastifyReply) {
@@ -560,6 +569,9 @@ export function createRecordHandlers(
     ): Promise<RecordMutationResponse | ApiError> {
       try {
         const { schemaId, message } = request.body;
+        // OWN-15 FIX-2: typed out-channel for honest mint refusals; surfaced in
+        // the response envelope below when the mint stripped a declared grant.
+        const mintRefusals: MintPrincipalRefusal[] = [];
         
         // Validate request
         if (!schemaId) {
@@ -857,7 +869,10 @@ export function createRecordHandlers(
         }
 
         if (result.envelope && user.userId) {
-          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
+          // OWN-15 FIX-2: honest mint refusals (unresolvable declared principals
+          // stripped at mint) surface response-level via `mintRefusals`, never
+          // on the record and never as a silent drop.
+          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId, mintRefusals);
         }
 
         // Update index after successful create
@@ -877,6 +892,9 @@ export function createRecordHandlers(
           ...(result.validation !== undefined ? { validation: result.validation } : {}),
           ...(result.lint !== undefined ? { lint: result.lint } : {}),
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
+          // OWN-15 FIX-2: response-level honest mint refusals (typed channel,
+          // never smuggled onto the record). Create still succeeded.
+          ...(mintRefusals.length > 0 ? { mintRefusals } : {}),
         };
         return response;
       } catch (err) {

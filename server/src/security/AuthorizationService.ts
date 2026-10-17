@@ -17,8 +17,10 @@ export const ACCESS_POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/comput
  * OWN-15 (OQ2 adjudication (c)): the typed, observable refusal emitted at mint
  * when a declared principal (a defaultGrants entry or the stamped owner) does
  * not resolve against the users/groups surfaces. The grant is stripped and the
- * refusal is recorded here + logged — never silently dropped, never a payload
- * field smuggled into the minted ACL.
+ * refusal is threaded out of ensureOwnerPolicy through the typed
+ * `mintRefusalsOut` channel and surfaced response-level as the top-level
+ * `mintRefusals` array of the create/PUT response envelope (OWN-15 FIX-2) —
+ * never silently dropped, never a payload field smuggled into the minted ACL.
  */
 export interface MintPrincipalRefusal {
   kind: 'unresolvable-principal';
@@ -129,12 +131,10 @@ export class AuthorizationService {
   /**
    * OWN-15 delegation (narrow rule only): `record` is `kind: access-policy` with
    * a resolvable `resourceRef.id`, and `userId` is the owner of the REFERENCED
-   * record — its policy-chain owner (resolved WITHOUT the ACL row under test, so
-   * a bad ACL never vouches for its own owner) or, when the referenced record
-   * resolves no policy chain, its `meta.createdBy` when that is a USR-* id.
-   * admin-on-ACL is NOT same-as-owning-the-record: this never feeds
-   * resolveEffectivePolicy, and a non-owner still falls through to the normal
-   * evaluation (and still 403s).
+   * record — its DECLARED policy-chain owner (resolved WITHOUT the ACL row under
+   * test, so a bad ACL never vouches for its own owner). admin-on-ACL is NOT
+   * same-as-owning-the-record: this never feeds resolveEffectivePolicy, and a
+   * non-owner still falls through to the normal evaluation (and still 403s).
    */
   private async referencedRecordOwnerSatisfiesAdmin(
     userId: string | null | undefined,
@@ -150,11 +150,15 @@ export class AuthorizationService {
   }
 
   /**
-   * The owner of the record an ACL row references, resolved WITHOUT the ACL row
-   * under test (a bad ACL must never vouch for its own owner — that is the
-   * self-lock this rule breaks). Order: another ACL row on the same resource →
-   * the parent inheritance chain → the record's own `meta.createdBy` when it is
-   * a real USR-* id. Null when no owner resolves (never guessed).
+   * The owner of the record an ACL row references, resolved ONLY through the
+   * DECLARED policy chain and WITHOUT the ACL row under test (a bad ACL must
+   * never vouch for its own owner — that is the self-lock this rule breaks).
+   * Order: another ACL row on the same resource → the parent inheritance chain.
+   * `meta.createdBy` is NOT ownership (OWN-15 FIX-1, advreview l1t1720): a
+   * creator whose id is not declared as owner by the policy chain must NOT pass
+   * `admin` on an ACL row re-pointed at a different owner — honoring createdBy
+   * here was a revocation-bypass. Null when no declared owner resolves (never
+   * guessed).
    */
   private async ownerOfReferencedRecord(resourceId: string, excludeAclRecordId: string): Promise<string | null> {
     const referenced = await this.store.get(resourceId);
@@ -175,12 +179,26 @@ export class AuthorizationService {
       if (inherited) return inherited.ownerUserId;
     }
 
-    const createdBy = referenced.meta?.createdBy;
-    if (typeof createdBy === 'string' && createdBy.startsWith('USR-')) return createdBy;
     return null;
   }
 
-  async ensureOwnerPolicy(resource: RecordEnvelope, ownerUserId: string): Promise<RecordEnvelope | null> {
+  /**
+   * Mints the owner policy for `resource`.
+   *
+   * OWN-15 FIX-2 (advreview l1t1720): `mintRefusalsOut` is the TYPED CHANNEL
+   * for honest refusals. When a declared principal (a defaultGrants entry or
+   * the stamped owner) does not resolve, the grant is stripped and a
+   * MintPrincipalRefusal is pushed into this array AND logged. Callers surface
+   * it response-level (the create/PUT response envelope's top-level
+   * `mintRefusals` array) — the refusal is never smuggled into the minted
+   * record's payload, and the create is never failed (adjudicated semantics:
+   * strip + report, record still minted creator-owned).
+   */
+  async ensureOwnerPolicy(
+    resource: RecordEnvelope,
+    ownerUserId: string,
+    mintRefusalsOut?: MintPrincipalRefusal[],
+  ): Promise<RecordEnvelope | null> {
     const resourceKind = kindOf(resource);
     // Stamp an owner policy for EVERY record kind except the identity/admin
     // kinds that are self-referential (users/groups/access-policies manage
@@ -208,17 +226,19 @@ export class AuthorizationService {
     // principal is REFUSED HONESTLY — stripped from the minted ACL with a typed,
     // observable refusal (never a silent inert grant like today's coerceGrant
     // drops / groupContainsUser false). The record is never left ownerless/open.
-    const grants: AccessGrant[] = await this.validateDeclaredGrants(resource.recordId, defaults?.grants ?? []);
+    const grants: AccessGrant[] = await this.validateDeclaredGrants(resource.recordId, defaults?.grants ?? [], mintRefusalsOut);
     // Owner resolvability: the creator is always stamped (never ownerless), but
     // an owner with no active user record is reported loudly, never silently.
     if (!(await this.userPrincipalResolves(resolvedOwnerUserId))) {
-      console.warn('[acl-mint-refusal]', JSON.stringify({
+      const refusal: MintPrincipalRefusal = {
         kind: 'unresolvable-principal',
         resourceRecordId: resource.recordId,
         principalType: 'user',
         principalId: resolvedOwnerUserId,
         reason: 'the stamped owner has no active user record on the users surface; the ACL is still minted creator-owned (never ownerless)',
-      } satisfies MintPrincipalRefusal));
+      };
+      mintRefusalsOut?.push(refusal);
+      console.warn('[acl-mint-refusal]', JSON.stringify(refusal));
     }
     // Fallback when no ownership-policy document is installed mirrors the
     // pre-existing behaviour (creator-private, no grants) so a bare repo never
@@ -340,7 +360,11 @@ export class AuthorizationService {
    * unresolvable principal is REFUSED HONESTLY: the grant is stripped and a
    * typed MintPrincipalRefusal is logged. Never a silent inert grant.
    */
-  private async validateDeclaredGrants(resourceRecordId: string, declared: AccessGrant[]): Promise<AccessGrant[]> {
+  private async validateDeclaredGrants(
+    resourceRecordId: string,
+    declared: AccessGrant[],
+    mintRefusalsOut?: MintPrincipalRefusal[],
+  ): Promise<AccessGrant[]> {
     if (declared.length === 0) return declared;
     const kept: AccessGrant[] = [];
     for (const grant of declared) {
@@ -359,6 +383,7 @@ export class AuthorizationService {
         principalId: grant.principalId,
         reason: `declared default grant '${grant.principalType}:${grant.principalId}' does not resolve on the ${grant.principalType} surface — the grant is REFUSED (stripped at mint), not stamped inert`,
       };
+      mintRefusalsOut?.push(refusal);
       console.warn('[acl-mint-refusal]', JSON.stringify(refusal));
     }
     return kept;
