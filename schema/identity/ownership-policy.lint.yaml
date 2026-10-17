@@ -23,3 +23,54 @@ rules:
     message:
       template: "Fallback owner for '{{$.recordId}}' must be 'creator'"
       paths: ["$.recordId"]
+  # OWN-15 (criterion 3, declaration-side): every declared defaultGrant must name
+  # its principal with the prefix its principalType declares (USR-/GRP-/STU-), so a
+  # mistyped principal can never reach the mint. Existence of the named principal
+  # is enforced at MINT in TS (AuthorizationService.validateDeclaredGrants — the
+  # mint persists with skipLint: true, so the lint alone cannot carry criterion 3).
+  - id: "ownership-policy-default-grants-carry-typed-principal-ids"
+    title: "Default grants must name principals with their declared id prefix"
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "everyItem"
+      collectionPath: "kindRules"
+      assert:
+        op: "any"
+        predicates:
+          - op: "not"
+            not:
+              op: "exists"
+              path: "defaultGrants"
+          - op: "everyItem"
+            collectionPath: "defaultGrants"
+            assert:
+              op: "any"
+              predicates:
+                - op: "all"
+                  predicates:
+                    - op: "equals"
+                      path: "principalType"
+                      value: "user"
+                    - op: "regex"
+                      path: "principalId"
+                      pattern: "^USR-"
+                - op: "all"
+                  predicates:
+                    - op: "equals"
+                      path: "principalType"
+                      value: "group"
+                    - op: "regex"
+                      path: "principalId"
+                      pattern: "^GRP-"
+                - op: "all"
+                  predicates:
+                    - op: "equals"
+                      path: "principalType"
+                      value: "project"
+                    - op: "regex"
+                      path: "principalId"
+                      pattern: "^STU-"
+    message:
+      template: "A defaultGrant on '{{$.recordId}}' names a principalId that does not match its principalType prefix (USR-/GRP-/STU-)"
+      paths: ["$.recordId"]
