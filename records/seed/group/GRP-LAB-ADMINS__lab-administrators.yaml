@@ -1,0 +1,22 @@
+$schema: https://computable-lab.com/schema/computable-lab/group.schema.yaml
+kind: group
+recordId: GRP-LAB-ADMINS
+name: lab-administrators
+displayName: Lab Administrators
+status: active
+# OWN-15 (OQ1 adjudication): the admin GROUP named by the five lab-owned kinds'
+# defaultGrants in OWN-LAB-DEFAULT. Seeded as a REAL group record so the declared
+# grants RESOLVE — an unseeded group was silently inert at enforcement (and is
+# now refused loudly at mint). Members are data-declared: the bootstrap lab admin
+# (the identity every stack guarantees via ensureLocalAdminUser). Add real lab
+# admin users here, or via POST /api/groups/GRP-LAB-ADMINS/members, as the lab
+# gains users. Lives under records/seed/group/ because the groups surface
+# (store.list({kind:'group'}) -> seedDir/<kind> merge, RecordStoreImpl.ts:527)
+# only merges seed records from the kind-named directory.
+memberUserIds:
+  - USR-LOCAL-ADMIN
+notes: >
+  Lab-wide administrators for shared physical resources (materials,
+  material-specs, instruments, equipment, labware). Membership grants 'admin'
+  on every record whose minted access-policy carries the declared
+  {principalType: group, principalId: GRP-LAB-ADMINS, role: admin} grant.

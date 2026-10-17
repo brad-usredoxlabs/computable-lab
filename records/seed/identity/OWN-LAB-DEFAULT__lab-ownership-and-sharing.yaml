@@ -48,8 +48,13 @@ kindRules:
     shareTargets: [lab, project, user, group]
   # ---- lab-shared physical resources: readable lab-wide, written by owner/admin.
   # `defaultGrants` stamps the lab admin GROUP as admin on every lab-owned record,
-  # so a multi-user lab is not bottlenecked on the single labOwnerUserId above.
-  # Create GRP-LAB-ADMINS (with its members) first; an unresolved group is inert.
+  # so a multi-user lab is not bottlenecked on a single owner. OWN-15 (OQ1): the
+  # group is SEEDED as a real record (records/seed/group/GRP-LAB-ADMINS__lab-administrators.yaml)
+  # so these grants RESOLVE; an unresolvable declared grant is now REFUSED at mint
+  # (typed [acl-mint-refusal], grant stripped) — never silently inert.
+  # OWN-15 (ruling R2): `owner: lab` here means lab-VISIBLE + lab-grants only —
+  # the CREATING user is stamped as owner of every new record; labOwnerUserId is
+  # no longer consumed by the create path (bulk repair only, applyOwnershipDefaults).
   - kind: material
     owner: lab
     visibility: public
