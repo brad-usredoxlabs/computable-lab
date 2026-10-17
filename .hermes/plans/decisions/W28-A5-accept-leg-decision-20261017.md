@@ -203,3 +203,24 @@ CRUCIAL NEW FACT the ruling did not have: the SHIPPED vocab also completes on ~4
 the mix-fold workaround, so the A5d held-422 was itself a draw, not a deterministic bar. Either
 answer, the green-gate re-shoot rides the bounded MAX_REDRAW precedent; bead_beat makes the
 honest (non-workaround) completion path exist, which is what the ruling's (b) argued.
+
+## A5d TIER-2 GATE RESULT (orch l2t1530, 2026-10-17T15:51 EDT — receipts 2026-10-17_1125-a5d-tier2)
+VERDICT: fix, integrity-audited first-hand (trail.json 31 steps, 4 distinct-md5 shots, zero-write
+LPR check honest). Both BLOCKING defects are the held-422 CONSEQUENCE, exactly this ruling's
+subject: answered compile drew a held bundle -> terminalArtifacts.events empty -> deck review
+empty -> Accept & Save disabled -> no LPR minted. family-questions PASS, answer PASS, honest
+fold PASS (info message names the missing bead-beating verb verbatim). NO new defect class; no
+coder fix dispatched (scope choice = this decision). Note for Brad: on this fixture the fold
+offers NO answerable cards for the blocking facts (free-form reasons are uncarded by the
+adapter) — the only route to a realizable deck on the bead-beater branch is this decision.
+
+## CONTROL SERIES 2 (orch l2t1530, 2026-10-17T15:4x EDT — pays AS-LANE2-A5D-HELD422-WAS-A-DRAW)
+Same gate-exact protocolText + the two axis answers, 5 headless draws vs shipped 31-verb
+vocab (:3093, profile qwen3.8-thunderbeast): 0/5 COMPLETE. Residual fact sets vary per draw
+(bead-duration/intensity x4 draws, sample identity/source x4, unknown-noun lysis-reagent x3,
+ambiguous-noun microcentrifuge-tube x1 — FIRES despite the protocol DECLARING that role).
+ACROSS-SERIES VARIANCE PROVEN: this series 0/5 vs the step-0 control arm 2/5 completes under
+identical inputs => the shipped-vocab compile is NON-DETERMINISTIC complete/422; a single
+held-422 draw is NOT a deterministic bar. Evidence debt CLEARED. Any gate re-shoot (either
+answer of this decision) MUST ride the MAX_REDRAW bounded re-draw precedent. Log:
+~/.hermes/cl/lanes/2/logs/a5d-control-series2-l2t1530.log.
