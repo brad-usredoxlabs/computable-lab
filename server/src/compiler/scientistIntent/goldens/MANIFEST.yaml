@@ -6,13 +6,17 @@
 suite: spine6-scientist-intent-goldens
 baseCommit: c74c5214
 treeState:
-  # COMP4-REBLESS (this item): vocabulary pin re-hashed once on this item's tip
-  # (composition declared cardinality: many on add_material + seed) and the
+  # COMP4-REBLESS (SHORTHAND-COMP4): vocabulary pin re-hashed once on that item's
+  # tip (composition declared cardinality: many on add_material + seed) and the
   # wire-schema pin re-hashed once (action-level composition property declared
   # with strict items). Pipeline pin unchanged from the SPINE-7 bless.
   # Before/after diff per blessed entry in SHORTHAND-COMP4-report.l2t0910.md.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 14d779ce050ee5fd306f2d3772efcaae6386b09cb9fef4e5c9ed8ed7b475f9b4}
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: cb54cbeded8c6cab7b31b89b68e9476b62d04c737dab4fb2a30a2a14167f09d5}
+  # W2-8-A5g REBLESS (this item): bead_beat appended LAST to the vocabulary
+  # verbs and the wire enum (Brad ruling 2026-10-17); both pins re-hashed once.
+  # Before/after diff recorded in W2-8-A5g-report.wip-l2t1710.md. Golden
+  # fixtures/records unchanged — only the two treeState rule files moved.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: aa57f2e3627ab828d2b7b3180ac04b303cc0989520c6ef087ba3a151ea25a73c}
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: a670a50c021037c8e146f4a6c1a27677680d51f6d5dfee72c13f1b35093b1409}
   - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}

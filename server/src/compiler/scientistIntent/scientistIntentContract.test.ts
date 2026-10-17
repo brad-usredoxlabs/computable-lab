@@ -157,14 +157,14 @@ describe('verb-inventory', () => {
   const schemaDoc = loadSchemaDocument();
   const schemaEnum = actionEnumFromSchema(schemaDoc);
 
-  it('fixture == types.ts union == schema enum == shipped vocabulary == INTENT_ACTIONS, length 31, declaration order', () => {
+  it('fixture == types.ts union == schema enum == shipped vocabulary == INTENT_ACTIONS, length 32, declaration order', () => {
     // Set equality AND declaration-order equality (bait §8.7: sorted-alphabetical
     // would silently pass a set test yet lose the migration-baseline order).
-    expect(fixtureVerbs).toHaveLength(31);
-    expect(unionVerbs).toHaveLength(31);
-    expect(vocabularyVerbs).toHaveLength(31);
-    expect(schemaEnum).toHaveLength(31);
-    expect([...INTENT_ACTIONS]).toHaveLength(31);
+    expect(fixtureVerbs).toHaveLength(32);
+    expect(unionVerbs).toHaveLength(32);
+    expect(vocabularyVerbs).toHaveLength(32);
+    expect(schemaEnum).toHaveLength(32);
+    expect([...INTENT_ACTIONS]).toHaveLength(32);
 
     expect(fixtureVerbs).toEqual(unionVerbs);
     expect(vocabularyVerbs).toEqual(unionVerbs);

@@ -6,9 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { getVerbActionMap, type VerbMapping } from './VerbActionMapRegistry.js';
 
 describe('VerbActionMapRegistry', () => {
-  it('loads and size matches the file (26 verbs)', () => {
+  it('loads and size matches the file (27 verbs)', () => {
     const registry = getVerbActionMap();
-    expect(registry.size()).toBe(26);
+    expect(registry.size()).toBe(27);
   });
 
   it('lookup("incubate") returns a mapping with at least one of exact_id or obi_id', () => {
@@ -218,10 +218,10 @@ describe('VerbActionMapRegistry', () => {
     expect(mapping).toBeUndefined();
   });
 
-  it('list() returns all 26 mappings', () => {
+  it('list() returns all 27 mappings', () => {
     const registry = getVerbActionMap();
     const all = registry.list();
-    expect(all.length).toBe(26);
+    expect(all.length).toBe(27);
     // Verify all verbs are present — matches the registered verb expanders
     const verbs = all.map((m) => m.verb);
     const expectedVerbs = [

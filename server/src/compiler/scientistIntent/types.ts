@@ -52,7 +52,8 @@ export type ScientistIntentActionKind =
   | 'serial_dilution'
   | 'media_swap_duplicate_columns'
   | 'source_wells_to_duplicate_target_columns'
-  | 'repeat_rows';
+  | 'repeat_rows'
+  | 'bead_beat';
 
 export interface ScientistIntentActionValue {
   schema?: unknown;
