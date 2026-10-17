@@ -2,6 +2,8 @@ $schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
 kind: equipment
 id: EQP-WATER-BATH
 name: Water Bath
+lifecycleId: registry-ops
+state: active
 status: active
 equipmentClassRef:
   kind: record

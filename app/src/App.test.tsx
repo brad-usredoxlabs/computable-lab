@@ -39,8 +39,11 @@ vi.mock('./settings/SettingsRoute', () => ({
   SettingsRoute: () => <div data-testid="settings-route">settings</div>,
 }))
 
-vi.mock('./pages/RecordRegistryPage', () => ({
-  default: () => <div data-testid="record-registry-page">registry</div>,
+// QMS7-1: /registry now routes through the shell host (RegistryHostPage),
+// which renders RecordRegistryPage in its left pane. Mock the host so the
+// record-registry-page testid stays findable without mounting the shell.
+vi.mock('./shared/shell/RegistryHostPage', () => ({
+  RegistryHostPage: () => <div data-testid="record-registry-page">registry</div>,
 }))
 
 vi.mock('./shell/ErrorBoundary', () => ({

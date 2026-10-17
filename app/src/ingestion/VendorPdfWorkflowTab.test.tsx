@@ -75,6 +75,9 @@ describe('VendorPdfWorkflowTab', () => {
     renderTab()
     expect(screen.getByTestId('vendor-pdf-workflow')).toBeDefined()
     expect(screen.getByTestId('vendor-pdf-search-input')).toBeDefined()
+    // QMS7-9: the standalone surface shows the first-class upload control as
+    // a peer of search (mount-level proof it reaches /ingestion/vendor-pdf).
+    expect(screen.getByTestId('vendor-pdf-upload-button').textContent).toBe('Upload a document')
     await waitFor(() =>
       expect(screen.getByTestId('recent-vendor-pdf-VPDF-ABC123')).toBeDefined(),
     )

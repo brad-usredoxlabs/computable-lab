@@ -66,7 +66,15 @@ export function createLifecycleHandlers(options: LifecycleHandlerOptions) {
         fields: payload,
         presentedSignatures: [],
       });
-      return reply.send({ lifecycleId, state, transitions });
+      // QMS7-6 (OQ-1 ruling A): lifecycle-scoped read-only echo of
+      // engine.terminalStates() — the ids the lifecycle YAML declares
+      // `terminal: true` (LifecycleEngine.ts:119-127, same precedent class as
+      // specFor). NO terminal-state list is invented in TS (bait 3/#1): the
+      // client's archived-browsing filter reads this field instead of
+      // hardcoding state strings. Additive field; recordId-less calls work
+      // (the fact is lifecycle-scoped, not record-scoped).
+      const terminalStates = [...(engine.terminalStates(lifecycleId) ?? [])];
+      return reply.send({ lifecycleId, state, transitions, terminalStates });
     },
   };
 }

@@ -25,6 +25,11 @@ export function SequencesPage() {
  const [collectionName,setCollectionName]=useState('');const [members,setMembers]=useState<string[]>([]);const [start,setStart]=useState(1);const [end,setEnd]=useState(1);const [regionName,setRegionName]=useState('')
  const refresh=useCallback(async()=>{const data=await sequenceApi('/catalog');setRecords(data.records)},[])
  useEffect(()=>{Promise.all([refresh(),sequenceApi('/contract').then(setContract)]).catch(e=>setError(e.message))},[refresh])
+ // ISEQ-2 §4b deep-link consumer: /lab/sequences?record=<id> selects that record once
+ // after the first catalog load. deepLinkRef makes it fire exactly once so it never
+ // fights a later Library pick; ?source= → Import routing (:16) is untouched.
+ const deepLinkRef=useRef(false)
+ useEffect(()=>{if(deepLinkRef.current||!records.length)return;const target=search.get('record');if(target&&records.some(r=>r.recordId===target)){deepLinkRef.current=true;setSelected(target)}},[records,search])
  const byKind=(kind:string)=>records.filter(r=>r.payload.kind===kind)
  const choices=records.filter(r=>['sequence','oligo-spec','sequence-collection'].includes(r.payload.kind))
  const selectOptions=(list:RecordItem[])=>list.map(r=><option key={r.recordId} value={r.recordId}>{r.payload.label??r.payload.name??r.payload.title??r.recordId}</option>)

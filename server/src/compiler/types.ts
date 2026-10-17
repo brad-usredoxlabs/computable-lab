@@ -18,7 +18,7 @@ export type CompilerDiagnosticOutcome =
 
 export type CompilerDiagnosticSeverity = 'info' | 'warning' | 'error';
 
-export type BindingResolutionKind = 'exact' | 'substitution' | 'placeholder' | 'new-record';
+export type BindingResolutionKind = 'exact' | 'substitution' | 'placeholder' | 'new-record' | 'human-reviewed-create';
 
 export type ProvenanceSourceKind =
   | 'record'

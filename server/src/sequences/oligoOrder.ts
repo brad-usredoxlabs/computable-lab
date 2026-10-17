@@ -8,15 +8,39 @@ import type { AppContext } from '../server.js';
 import { extractPdfLayoutText } from '../extract/PdfTextAdapter.js';
 import { ArtifactBlobStore } from '../ingestion/ArtifactBlobStore.js';
 import { buildIngestionJobEnvelope, buildIngestionArtifactEnvelope, buildIngestionBundleEnvelope, buildIngestionCandidateEnvelope, createRecordRef, createSourceRef } from '../ingestion/records.js';
-import { SequenceService } from './SequenceService.js';
+import { SequenceService, SequenceError } from './SequenceService.js';
 import { normalizeSequence, type AlphabetSpec } from './sequenceEngine.js';
 import { sequenceConfig, SEQUENCE_SCHEMA } from './sequenceRuntime.js';
-export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:Array<{label:string;role:string;position:string}>; issues:string[]; metadata:Record<string,string> }
+import { aiReadTriggered, readAiFallbackPolicy, readOligoOrderWithAi, type OligoAiReadClient } from './oligoOrderAiRead.js';
+import { object } from '../revisions/RecordRevisionService.js';
+import type { IngestionBundlePayload, IngestionJobPayload } from '../ingestion/types.js';
+export interface OligoRow { label:string; residues:string; raw:string; page:number; modifications:OligoModification[]; issues:string[]; metadata:Record<string,string> }
+export interface OligoModification { label:string; role:string; position:string }
+/**
+ * THE single normalization stage (oligoOrder.ts:38-45 as of the pre-extraction
+ * revision): declared sequenceNoise -> 5'/3' wrappers -> declared modification
+ * pattern table -> normalizeSequence with the honest leftover-symbol fallback.
+ * ONE compiler, two producers: the regex extractor AND the draft lowerer
+ * (oligoOrderDraft.ts) call this same function, so both producers are
+ * structurally identical, not merely equal today.
+ */
+export function normalizeOligoRawBases(rawBases: string, config: Record<string, unknown>, alphabets: Record<string, unknown>): { residues: string; modifications: OligoModification[]; issues: string[] } {
+  const noise=(config.sequenceNoise as string[]|undefined)??[];
+  const modifications:OligoModification[]=[];const issues:string[]=[];
+  let bases=rawBases;for(const pattern of noise) bases=bases.replace(new RegExp(pattern,'i'),'');
+  bases=bases.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
+  for(const mod of config.modifications as Array<{pattern:string;label:string;role:string;position:string}>) {
+    const regex=new RegExp(mod.pattern,'gi');
+    if(regex.test(bases)) {modifications.push({label:mod.label,role:mod.role,position:mod.position});bases=bases.replace(new RegExp(mod.pattern,'gi'),'');}
+  }
+  let residues:string;
+  try {residues=normalizeSequence(bases,alphabets.iupac_dna as AlphabetSpec);}catch(err){residues=bases.replace(/\s+/g,'');issues.push((err as Error).message);}
+  return {residues,modifications,issues};
+}
 export async function extractOligoRows(text: string): Promise<OligoRow[]> {
   const config=await sequenceConfig('oligo-order'); const alphabets=await sequenceConfig('alphabets');
   const formats:Array<{namePattern:string;sequencePattern:string}>=(config.formats as Array<{namePattern:string;sequencePattern:string}>|undefined)??[{namePattern:config.namePattern,sequencePattern:config.sequencePattern}];
   const nameMatchers=formats.map(f=>new RegExp(f.namePattern,'i'));const sequenceMatchers=formats.map(f=>new RegExp(f.sequencePattern,'i'));
-  const noise=(config.sequenceNoise as string[]|undefined)??[];
   const rows:OligoRow[]=[];const metadata:Record<string,string>={};
   for(const line of text.split(/\r?\n/))for(const [key,pattern] of Object.entries(config.metadata??{})){const match=new RegExp(String(pattern),'i').exec(line.trim());if(match)metadata[key]=match[1]!.trim();}
   for(const [pageIndex,page] of text.split('\f').entries()) {
@@ -36,13 +60,8 @@ export async function extractOligoRows(text: string): Promise<OligoRow[]> {
     }
   }
   for(const row of rows) {
-    let bases=row.raw;for(const pattern of noise) bases=bases.replace(new RegExp(pattern,'i'),'');
-    bases=bases.replace(/^\s*5\s*['′’]?\s*[-–]?/,'').replace(/[-–]?\s*3\s*['′’]?\s*$/,'');
-    for(const mod of config.modifications) {
-      const regex=new RegExp(mod.pattern,'gi');
-      if(regex.test(bases)) {row.modifications.push({label:mod.label,role:mod.role,position:mod.position});bases=bases.replace(new RegExp(mod.pattern,'gi'),'');}
-    }
-    try {row.residues=normalizeSequence(bases,alphabets.iupac_dna as AlphabetSpec);}catch(err){row.residues=bases.replace(/\s+/g,'');row.issues.push((err as Error).message);}
+    const normalized=normalizeOligoRawBases(row.raw,config,alphabets);
+    row.residues=normalized.residues;row.modifications=normalized.modifications;row.issues.push(...normalized.issues);
     if(!row.label) row.issues.push('No oligo name found. Enter a name before saving.');
   }
   return rows;
@@ -67,6 +86,15 @@ export async function ingestOligoOrder(ctx: AppContext, actor:string, fileName:s
     }
   }
   const rows=await extractOligoRows(extraction.text);
+  // The WHEN of the AI read is DATA (config aiFallback + metadata.declaredItemCount):
+  // this block only consumes the generic evaluator — zero trigger semantics here
+  // (mirrors the config.ocr?.enabled precedent above). A PARTIAL read — the
+  // document declares more items than were recognized — must stop being silent.
+  const fallbackPolicy=readAiFallbackPolicy(await sequenceConfig('oligo-order'));
+  const declaredRaw=Number(rows[0]?.metadata?.declaredItemCount);
+  const fired=aiReadTriggered(fallbackPolicy,{rowCount:rows.length,issueRowCount:rows.filter(row=>row.issues.length>0).length,declaredCount:Number.isFinite(declaredRaw)?declaredRaw:null});
+  if(fired.includes('declared-count-mismatch'))extraction.diagnostics.push({severity:'warning',code:'OLIGO_PARTIAL_READ',message:`The document declares ${declaredRaw} items but only ${rows.length} were recognized. Review the pages before importing, or use the AI read.`});
+  if(fallbackPolicy.enabled && fallbackPolicy.mode==='manual' && fired.length)extraction.diagnostics.push({severity:'warning',code:'OLIGO_AI_READ_OFFERED',message:`The deterministic read could not account for the document (${fired.join(', ')}). An AI read can be offered.`});
   const job=buildIngestionJobEnvelope({sourceKind:'other',adapterKind:'oligo-order',name:fileName,submittedBy:actor});
   const artifact=buildIngestionArtifactEnvelope(job.payload,{fileName,mediaType:fileName.endsWith('.pdf')?'application/pdf':'text/plain',sha256});
   const blob=await new ArtifactBlobStore(ctx.workspaceRoot,join(ctx.recordsDir,'.ingestion-artifacts')).save({artifactId:artifact.recordId,fileName,contentBase64:bytes.toString('base64')});
@@ -77,4 +105,64 @@ export async function ingestOligoOrder(ctx: AppContext, actor:string, fileName:s
   job.payload={...job.payload,status:'waiting_for_review',stage:'review',artifact_refs:[createRecordRef(artifact.recordId,'ingestion-artifact')],bundle_refs:[createRecordRef(bundle.recordId,'ingestion-candidate-bundle')]};
   for(const env of [job,artifact,bundle,...candidates]) await service.save(env.payload as unknown as Record<string,unknown>,env.schemaId);
   return {jobId:job.recordId,artifactId:artifact.recordId,sha256,candidates:candidates.map(c=>({recordId:c.recordId,...c.payload.payload})),text:extraction.text,diagnostics:extraction.diagnostics,...(!rows.length?{message:'No oligo rows were recognized. Review the extracted text and enter the sequences manually; scanned PDFs need local OCR.'}:{})};
+}
+/** The single provenance constant for AI-produced candidates (mirrors the
+ *  artifact's text_extract.method vocabulary; the app mirrors the literal). */
+export const OLIGO_AI_READ_PRODUCER = 'ai-draft';
+/**
+ * Task 6: run the AI read against the job's STORED extracted text and attach
+ * its rows to the SAME job/bundle as honestly-marked ai-draft candidates.
+ * No new envelope machinery, no schema change (candidate payload
+ * additionalProperties:true), no second rows compiler: rows arrive via
+ * readOligoOrderWithAi -> oligoRowsFromDraft, the same lowering the regex
+ * extractor uses. Deterministic candidates are never touched (no substitution).
+ * No readAt timestamp: a repeated identical read is content-identical, so
+ * SequenceService.save returns the prior record (idempotent); a read that
+ * genuinely disagrees hits the honest 409 instead of silently coexisting.
+ */
+export async function aiReadOligoOrder(ctx: AppContext, actor: string, jobId: string, deps: { llmClient: OligoAiReadClient; model?: string }) {
+  const service = new SequenceService(ctx, actor);
+  // Honest-unset precedent (sequenceSources.ts:38, server.ts:1361): the model
+  // comes from the settings-filled holder ONLY — never a default, never a
+  // literal. A holder without a model is an actionable Settings gap, not a
+  // reason to invent one.
+  if (!deps.model) throw new SequenceError('No AI model is configured. Set an AI model in Settings and try again.', 503);
+  const jobPayload = object((await service.read(jobId)).payload);
+  if (jobPayload.kind !== 'ingestion-job') throw new SequenceError('Select an ingestion job.');
+  const artifactRef = ((jobPayload.artifact_refs as Array<{ id: string }> | undefined) ?? [])[0];
+  let excerpt = ''; let sha256 = '';
+  if (artifactRef) { const artifactPayload = object((await service.read(artifactRef.id)).payload); excerpt = String(object(artifactPayload.text_extract).excerpt ?? ''); sha256 = String(artifactPayload.sha256 ?? ''); }
+  if (!excerpt.trim()) throw new SequenceError('No extracted text is stored for this document — scanned PDFs need the local OCR pass first.');
+  // The job's EXISTING bundle (bundle_refs[0]) — never a fabricated stand-in:
+  // buildIngestionCandidateEnvelope derives bundle_ref from the real payload.
+  const bundleRef = ((jobPayload.bundle_refs as Array<{ id: string }> | undefined) ?? [])[0];
+  if (!bundleRef) throw new SequenceError('This job has no candidate bundle to attach the AI read to.');
+  const bundlePayload = object((await service.read(bundleRef.id)).payload) as unknown as IngestionBundlePayload;
+  // Budgets are DATA: readAiFallbackPolicy over the shipped config, never literals.
+  const policy = readAiFallbackPolicy(await sequenceConfig('oligo-order'));
+  const read = await readOligoOrderWithAi(excerpt, { llmClient: deps.llmClient, model: deps.model, maxContextChars: policy.maxContextChars, maxTokens: policy.maxTokens, ...(policy.responseFormat ? { responseFormat: policy.responseFormat } : {}) });
+  if (read.error) throw new SequenceError(read.error);
+  // OQ2: the draft is the quote carrier and rows are one-per-draft-row in
+  // order; zip index-wise ONLY while that invariant holds — a broken invariant
+  // degrades to no quotes rather than fabricated pairings. OligoRow is not
+  // widened (AI-1's envelope-identity surface stays closed).
+  const draftRows = read.draft?.rows ?? [];
+  const quotes = read.rows.length === draftRows.length ? draftRows.map(r => r.sourceQuote) : [];
+  const candidates = read.rows.map((row, index) => buildIngestionCandidateEnvelope({
+    job: jobPayload as unknown as IngestionJobPayload,
+    bundle: bundlePayload,
+    candidateType: 'oligo',
+    title: `${jobId} AI row ${index + 1}: ${row.label}`,
+    payload: { ...row, sha256, extractedBy: OLIGO_AI_READ_PRODUCER, ...(deps.model ? { model: deps.model } : {}), ...(quotes[index] ? { sourceQuote: quotes[index] } : {}) },
+    sourceRefs: [createSourceRef(artifactRef!.id)],
+    proposedRecordKind: 'oligo-spec',
+    proposedSchemaId: SEQUENCE_SCHEMA + 'oligo-spec.schema.yaml',
+  }));
+  for (const env of candidates) await service.save(env.payload as unknown as Record<string, unknown>, env.schemaId);
+  const diagnostics: Array<{ severity: 'warning'; code: string; message: string }> = [
+    { severity: 'warning', code: 'AI_READ_REVIEW', message: `The AI read produced ${read.rows.length} candidate row(s) using model ${deps.model}. AI rows are a second producer's draft: verify every base, name and modification against the document before importing.` },
+  ];
+  const declared = read.draft?.declaredRowCount;
+  if (typeof declared === 'number' && declared > read.rows.length) diagnostics.push({ severity: 'warning', code: 'AI_READ_PARTIAL', message: `The AI read claims ${declared} rows but produced ${read.rows.length}. Review the pages before importing.` });
+  return { jobId, candidates: candidates.map(c => ({ recordId: c.recordId, ...c.payload.payload })), diagnostics };
 }

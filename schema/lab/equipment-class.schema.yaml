@@ -110,3 +110,13 @@ properties:
 
   notes:
     type: string
+
+  lifecycleId:
+    type: string
+    enum: [registry-ops]
+    description: "Lifecycle governing this record's state transitions (declared per kind in schema/registry/registry-kinds.registry.yaml)."
+
+  state:
+    type: string
+    enum: [draft, active, archived]
+    description: "Lifecycle state (operational). DISTINCT from domain status/result fields."

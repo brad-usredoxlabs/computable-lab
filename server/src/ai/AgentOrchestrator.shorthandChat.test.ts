@@ -445,6 +445,8 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
       'event_graph', 'deck_layout', 'create_record', 'protocol_edit',
       'workspace_action', 'compose_workstate', 'compose_analysis',
       'query_workstate_history', 'event_shorthand',
+      // QMS7-7 (DELIBERATE golden diff): compose_record_draft on the ONE forced tool.
+      'compose_record_draft',
     ]);
     expect(params.properties.shorthand?.type).toBe('string');
     const parsed = parseAgentIntentArgs({ intent: 'event_shorthand', shorthand: ADD_DMEM_YAML });

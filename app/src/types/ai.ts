@@ -148,6 +148,23 @@ export interface AiAnalysisProposalEvent {
   analysis: Record<string, unknown>
 }
 
+/**
+ * QMS7-7 (OQ1 ruling A) — the record-drafting INTENT frame, mirrored into the
+ * generic stack's union the same way as the members above. The SAME server
+ * handler emits it (POST /ai/assist/stream — AgentOrchestrator emits
+ * {type:'record_draft_proposal', recordDraft}); the shape matches
+ * `event-editor/right-pane/ai/assistStream.ts` (the wire-shape authority,
+ * `| { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }`)
+ * member-for-member, and aiStreamTypes.pin.test.ts keeps the unions from
+ * drifting. exactOptionalPropertyTypes convention: the payload is forwarded
+ * verbatim — the trust boundary is POST /api/drafts/compile (adapter
+ * 'record-drafting': Ajv + canAccept), not this stream.
+ */
+export interface AiRecordDraftProposalEvent {
+  type: 'record_draft_proposal'
+  recordDraft: Record<string, unknown>
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -162,6 +179,7 @@ export type AiStreamEvent =
   | AiAgentActionEvent
   | AiWorkstateProposalEvent
   | AiAnalysisProposalEvent
+  | AiRecordDraftProposalEvent
 
 // =============================================================================
 // Agent Result (final output from AI)

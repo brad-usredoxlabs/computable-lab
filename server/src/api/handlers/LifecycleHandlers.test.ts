@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import { fileURLToPath } from 'node:url'
 import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js'
+import { loadLifecyclesFromDir } from '../../lifecycle/LifecycleLoader.js'
 import type { LifecycleSpec } from '../../lifecycle/types.js'
 import { createLifecycleHandlers } from './LifecycleHandlers.js'
+
+// Real lifecycles dir (W25RegulatedLifecycle.test.ts pattern): the terminal
+// fact is read from the YAML on disk, never duplicated in TS.
+const LIFECYCLES_DIR = fileURLToPath(new URL('../../../schema/core/lifecycles', import.meta.url))
 
 // Inline spec (not loaded from disk): draft -> in_review -> approved.
 // Mirrors the style of server/src/lifecycle/LifecycleEngine.test.ts.
@@ -130,3 +136,60 @@ describe('LifecycleHandlers.getTransitions', () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// QMS7-6 OQ-1(A): the transitions response carries a lifecycle-scoped
+// `terminalStates: string[]` — the read-only echo of engine.terminalStates()
+// (the YAML `terminal: true` facts). The client's archived-browsing filter
+// reads this field; NO terminal-state list may be invented in TS anywhere.
+// Asserted against the REAL loaded registry-ops lifecycle (W25RegulatedLifecycle
+// pattern: loadLifecyclesFromDir over schema/core/lifecycles — the fact comes
+// from the YAML on disk, never a duplicated TS list).
+// ---------------------------------------------------------------------------
+
+describe('LifecycleHandlers.getTransitions — terminalStates echo (QMS7-6)', () => {
+  function realEngine() {
+    const engine = new LifecycleEngine()
+    const count = loadLifecyclesFromDir(LIFECYCLES_DIR, engine)
+    expect(count).toBeGreaterThanOrEqual(1)
+    expect(engine.isLoaded('registry-ops')).toBe(true)
+    return engine
+  }
+
+  it('echoes the YAML-declared terminal set for the REAL registry-ops lifecycle', async () => {
+    const { handlers } = makeHandlers({ engine: realEngine(), userId: 'USR-X' })
+    const reply = makeReply()
+
+    const body = await handlers.getTransitions(makeRequest('registry-ops'), reply as never)
+
+    // registry-ops.lifecycle.yaml declares exactly one terminal state
+    // (archived, terminal: true). The field is the engine's read-only report.
+    expect(body).toMatchObject({ lifecycleId: 'registry-ops' })
+    expect((body as { terminalStates: string[] }).terminalStates).toEqual(['archived'])
+  })
+
+  it('works WITHOUT recordId (lifecycle-scoped fact, recordId-less preview) and stays consistent with engine.terminalStates', async () => {
+    const engine = realEngine()
+    const { handlers } = makeHandlers({ engine, userId: 'USR-X' })
+    const reply = makeReply()
+
+    const body = await handlers.getTransitions(makeRequest('registry-ops'), reply as never)
+
+    // recordId-less call: preview runs from state 'draft' (existing behavior)
+    // and the terminalStates field is lifecycle-scoped, not record-scoped.
+    expect(body).toMatchObject({ lifecycleId: 'registry-ops', state: 'draft' })
+    const declared = engine.terminalStates('registry-ops')
+    expect((body as { terminalStates: string[] }).terminalStates).toEqual([...(declared ?? [])])
+  })
+
+  it('a lifecycle with NO terminal declarations echoes an empty array (no invented states)', async () => {
+    // doc-review (the inline spec above) declares no terminal: true states.
+    const { handlers } = makeHandlers({ userId: 'USR-X' })
+    const reply = makeReply()
+
+    const body = await handlers.getTransitions(makeRequest('doc-review'), reply as never)
+
+    expect((body as { terminalStates: string[] }).terminalStates).toEqual([])
+  })
+})
+

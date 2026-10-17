@@ -120,4 +120,133 @@ describe('VendorPdf source schema contract (D2)', () => {
     const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
     expect(result.valid, 'a file block without content truth and no url must be refused').toBe(false)
   })
+
+  // DOCINGEST-A A4 — the source stops assuming exa+pdf. An uploaded lab
+  // document has no Exa provenance: engine 'upload' + no url + file.sha256
+  // (the D2 conditional already waives url) must validate, and the new
+  // source fields (mediaKind, originalFileName) must be DECLARED — `source`
+  // is additionalProperties:false, so an undeclared field fails the real
+  // envelope at runtime even when unit tests skip createEnvelope.
+  it('accepts engine:"upload" with no url (truth is file.sha256) + mediaKind + originalFileName', () => {
+    const payload = {
+      ...basePayload(),
+      source: {
+        engine: 'upload',
+        ingestedAt: '2026-10-13T12:00:00.000Z',
+        pageCount: 1,
+        mediaKind: 'text',
+        originalFileName: 'lysis.md',
+      },
+      file: {
+        file_name: 'lysis.md',
+        media_type: 'text/markdown',
+        size_bytes: 42,
+        sha256: '5256f3288e3c0000000000000000000000000000000000000000000000000000',
+        stored_path: 'artifacts/foundry/pdfs/5256f3288e3c.md',
+      },
+      extractedText: [{ pageNumber: 1, text: '# Lysis protocol' }],
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, JSON.stringify(result.errors)).toBe(true)
+  })
+
+  it('rejects an unknown engine (the enum is the contract, not a free string)', () => {
+    const payload = {
+      ...basePayload(),
+      source: { engine: 'nonsense', ingestedAt: '2026-10-13T12:00:00.000Z' },
+      file: {
+        file_name: 'x.md',
+        media_type: 'text/markdown',
+        sha256: '5256f3288e3c0000000000000000000000000000000000000000000000000000',
+        stored_path: 'artifacts/foundry/pdfs/5256f3288e3c.md',
+      },
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, 'engine must be one of the declared enum values').toBe(false)
+    expect(JSON.stringify(result.errors)).toContain('engine')
+  })
+
+  it('rejects an unknown source.mediaKind (the enum reserves image for Stage B)', () => {
+    const payload = {
+      ...basePayload(),
+      source: {
+        engine: 'upload',
+        ingestedAt: '2026-10-13T12:00:00.000Z',
+        mediaKind: 'hologram',
+      },
+      file: {
+        file_name: 'x.md',
+        media_type: 'text/markdown',
+        sha256: '5256f3288e3c0000000000000000000000000000000000000000000000000000',
+        stored_path: 'artifacts/foundry/pdfs/5256f3288e3c.md',
+      },
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, 'mediaKind must be one of pdf|text|spreadsheet|image').toBe(false)
+  })
+
+  it('D2 still bites an upload: removing file.sha256 from an engine:upload payload makes it un-storable', () => {
+    // Mutation probe (spec bait 6): the upload path has no url, so dropping
+    // the content hash drops ALL traceable provenance.
+    const payload = {
+      ...basePayload(),
+      source: {
+        engine: 'upload',
+        ingestedAt: '2026-10-13T12:00:00.000Z',
+        mediaKind: 'text',
+        originalFileName: 'lysis.md',
+      },
+      file: {
+        file_name: 'lysis.md',
+        media_type: 'text/markdown',
+        stored_path: 'artifacts/foundry/pdfs/lysis.md',
+      },
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, 'an upload without file.sha256 and without url has no truth').toBe(false)
+  })
+
+  it('accepts extractionDiagnostics on an upload payload (the honest DOCX state must be STORABLE)', () => {
+    // S5 honesty: a .docx stored without a reader must carry its diagnostic
+    // ON THE RECORD — the review page shows it. If the schema could not hold
+    // it, the honest state would be un-storable and the record would render
+    // as a blank success.
+    const payload = {
+      ...basePayload(),
+      source: {
+        engine: 'upload',
+        ingestedAt: '2026-10-13T12:00:00.000Z',
+        mediaKind: 'text',
+        originalFileName: 'demo-sop.docx',
+      },
+      file: {
+        file_name: 'demo-sop.docx',
+        media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        sha256: '5256f3288e3c0000000000000000000000000000000000000000000000000000',
+        stored_path: 'artifacts/foundry/pdfs/5256f3288e3c.docx',
+      },
+      extractedText: [{ pageNumber: 1, text: '' }],
+      extractionDiagnostics: [
+        { severity: 'error', code: 'DOCX_TOOL_MISSING', message: 'The configured DOCX reader "pandoc" is not installed on this host.' },
+      ],
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, JSON.stringify(result.errors)).toBe(true)
+  })
+
+  it('rejects a malformed extractionDiagnostics entry (severity is a declared enum)', () => {
+    const payload = {
+      ...basePayload(),
+      source: { engine: 'upload', ingestedAt: '2026-10-13T12:00:00.000Z', mediaKind: 'text' },
+      file: {
+        file_name: 'x.md',
+        media_type: 'text/markdown',
+        sha256: '5256f3288e3c0000000000000000000000000000000000000000000000000000',
+        stored_path: 'artifacts/foundry/pdfs/5256f3288e3c.md',
+      },
+      extractionDiagnostics: [{ severity: 'fatal', code: 'X', message: 'not a declared severity' }],
+    }
+    const result = validator.validate(payload, VENDOR_PDF_SCHEMA_ID)
+    expect(result.valid, 'severity must be info|warning|error').toBe(false)
+  })
 })

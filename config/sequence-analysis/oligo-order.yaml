@@ -36,6 +36,25 @@ metadata:
   orderId: '^(?:Order\s*(?:Number|No\.?|ID)|Order\s*#)\s*[:#]?\s*(.+)$'
   purification: '^Purification\s*:\s*(.+)$'
   synthesisScale: '^(?:Scale|Synthesis\s+Scale)\s*:\s*(.+)$'
+  # How many line items the document itself claims ("ITEMS: 4", "QTY 4", "Total Items: 4").
+  # Anchored (\d+)\s*$ so price lines ("Total Amount: $12.34") never match;
+  # case-insensitivity comes from the loader's new RegExp(pattern,'i').
+  declaredItemCount: '^(?:ITEMS?|QTY|Total(?:\s+Items)?)\s*[:#]?\s*(\d+)\s*$'
+
+# When the deterministic read cannot account for the document, offer the AI read.
+# The trigger is DATA — the predicate lives here, not in TypeScript.
+aiFallback:
+  enabled: true
+  # offer the AI read when: no rows at all | any row carries an issue (the lowerer's
+  # unreadable-row arm always produces one) | fewer rows than the document declares
+  offerWhen: [ no-rows, any-issue, declared-count-mismatch ]
+  # manual = a later item's UI offers the action; auto reserved (not implemented here)
+  mode: manual
+  maxContextChars: 12000
+  maxTokens: 4000
+  # json_object = the repo's proven call form (8 call sites); json_schema reserved for
+  # endpoints proven to honor it (zero call sites today) — Ajv is the authority either way
+  responseFormat: json_object
 ocr:
   enabled: true
   rasterizer: pdftoppm

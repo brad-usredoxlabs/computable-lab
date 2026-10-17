@@ -15,6 +15,7 @@ import {
   protocolReviewTabId,
   recordCreateTabId,
   recordEditTabId,
+  registryTabId,
   runTabId,
   type WorkspaceTab,
 } from '../../event-editor/workspace/types'
@@ -51,6 +52,8 @@ export function stableTabId(tab: WorkspaceTab): string {
       )
     case 'collection':
       return collectionTabId(tab.collection)
+    case 'registry':
+      return registryTabId()
     case 'pdf':
     case 'document':
       return `${tab.kind}:${tab.artifactId}`

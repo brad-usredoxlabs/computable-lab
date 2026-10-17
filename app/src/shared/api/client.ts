@@ -850,6 +850,31 @@ export interface LabSettings {
   }>
 }
 
+export interface OwnershipPolicyKindRule {
+  owner: 'creator' | 'lab'
+  visibility: 'private' | 'shared' | 'public'
+  filedTo: 'none' | 'active-project'
+  editRoles: string[]
+  shareTargets: string[]
+  defaultGrants?: Array<{ principalType: 'user' | 'group' | 'project'; principalId: string; role: string }>
+  publishRole?: string
+}
+
+export interface OwnershipPolicyDocView {
+  recordId: string
+  scope: { type: 'lab' | 'project'; id: string }
+  labOwnerUserId: string
+  fallback: OwnershipPolicyKindRule
+  /** KEYED MAP keyed by kind (server coerces the payload array — OwnershipPolicyService.ts:46). */
+  kindRules: Record<string, OwnershipPolicyKindRule>
+}
+
+export interface OwnershipPolicyResponse {
+  record: RecordEnvelope | null
+  resolved: OwnershipPolicyDocView | null
+  defaults?: null   // present-null only on the handler's not-found branch (:78-79)
+}
+
 export interface FormulationSummary {
   recipeId: string
   recipeName: string
@@ -2278,8 +2303,10 @@ export const apiClient = {
   async compileWorkstateDraft(req: {
     /** Registered draft adapters (config/drafting/adapters.yaml). PB-CH-5
      * widens this to the registered set — 'analysis' is the second compiled
-     * composition target on the SAME seam; the endpoint is adapter-blind. */
-    adapter: 'workstate' | 'analysis'
+     * composition target on the SAME seam; the endpoint is adapter-blind.
+     * QMS7-7 (OQ-1 ruling A) adds 'record-drafting' — the third registered
+     * adapter on the SAME seam; this transport stays adapter-blind. */
+    adapter: 'workstate' | 'analysis' | 'record-drafting'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
@@ -2289,7 +2316,12 @@ export const apiClient = {
     reviewHash: string
     canAccept: boolean
     diagnostics: Array<{ code?: string; severity?: string; outcome?: string; message: string }>
-    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }
+    /** The compiled composition result. Adapter-shaped: workstate/analysis
+     * carry sessionDocument/summary/resolvedTerms; QMS7-7's 'record-drafting'
+     * additionally carries `recordFields` (the server-built ui-v1 field list).
+     * The transport stays adapter-blind — it forwards whatever the server
+     * compiled, it does not interpret it. */
+    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown; recordFields?: unknown }
   }> {
     return request(`/drafts/compile`, {
       method: 'POST',
@@ -2928,6 +2960,27 @@ export const apiClient = {
     return request<LabSettings>('/settings/lab', {
       method: 'PATCH',
       body: JSON.stringify({ policyBundleId: patch.policyBundleId }),
+    })
+  },
+
+  async getOwnershipPolicy(): Promise<OwnershipPolicyResponse> {
+    return request<OwnershipPolicyResponse>('/settings/ownership-policy')
+  },
+
+  /**
+   * Replace the lab ownership policy (OWN-11 / §T11). PUT is a WHOLESALE
+   * payload replace — the body is the full record payload (kindRules ARRAY,
+   * exactly what the settings YAML editor shows). The server validates it
+   * against the ownership-policy schema (422 INVALID_POLICY + validation
+   * errors), gates it on the admin role (403 ACCESS_DENIED), and answers
+   * with {success:true, record} (OwnershipPolicyHandlers.ts:133 — NOT a
+   * WriteResponse). Server rejections surface as ApiError with
+   * status/code/validation.
+   */
+  async putOwnershipPolicy(payload: Record<string, unknown>): Promise<{ success: true; record: RecordEnvelope }> {
+    return request<{ success: true; record: RecordEnvelope }>('/settings/ownership-policy', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     })
   },
 
@@ -4274,6 +4327,29 @@ export const apiClient = {
   },
 
   /**
+   * QMS7-6 (OQ-1 ruling A): the lifecycle-scoped terminal-state facts.
+   * Calls GET /lifecycle/:lifecycleId/transitions WITHOUT recordId and reads
+   * the `terminalStates` field — the server's read-only echo of
+   * engine.terminalStates(), i.e. the ids the lifecycle YAML declares
+   * `terminal: true`. The client NEVER invents a terminal-state list: an
+   * unavailable lifecycle (404) resolves to [] and consumers fail open (rows
+   * stay visible). Typed accessor only — no policy lives here.
+   */
+  async getLifecycleTerminalStates(lifecycleId: string): Promise<string[]> {
+    try {
+      const response = await request<{ terminalStates?: string[] }>(
+        `/lifecycle/${encodeURIComponent(lifecycleId)}/transitions`,
+      )
+      return response.terminalStates ?? []
+    } catch (error) {
+      if (ApiError.isApiError(error) && error.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
+  /**
    * Search records by query and kinds.
    * Calls POST /ai/search-records with { query, kinds }.
    * Returns combined local and web (Exa) search results.
@@ -5103,6 +5179,15 @@ export const apiClient = {
    */
   vendorPdfBlobUrl(recordId: string): string {
     return `${API_BASE}/vendor-pdfs/${encodeURIComponent(recordId)}/pdf`
+  },
+
+  /**
+   * URL of ONE kept page image of an image-kind vendor-pdf (DOCINGEST-B B3).
+   * Same encodeURIComponent discipline as vendorPdfBlobUrl — the page number
+   * is encoded too, so a crafted value can never ride the URL into a path.
+   */
+  vendorPdfPageUrl(recordId: string, pageNumber: number): string {
+    return `${API_BASE}/vendor-pdfs/${encodeURIComponent(recordId)}/page/${encodeURIComponent(String(pageNumber))}`
   },
 
   // === Per-study Workspace State ===

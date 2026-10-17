@@ -732,6 +732,11 @@ export function AiTabPanel() {
     onAnalysisProposal: (intent) => {
       handleWorkstateProposal(intent, 'analysis')
     },
+    // QMS7-7 (OQ1 ruling A): the record-drafting INTENT rides the SAME flow —
+    // one adapter constant, not a fork (the analysis pattern copied verbatim).
+    onRecordDraftProposal: (intent) => {
+      handleWorkstateProposal(intent, 'record-drafting')
+    },
     // PB-CH-8 fix1: the ledger_answer frame marks THIS turn as a ledger turn
     // (the hook still renders the trace verbatim — this is the flag-set site,
     // mirroring handleWorkstateProposal's workstateTurnRef set).
@@ -1242,6 +1247,7 @@ export function AiTabPanel() {
               {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
               {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
               {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+              {...(flow.card.recordFields ? { recordFields: flow.card.recordFields } : {})}
               {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
               {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
               {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}

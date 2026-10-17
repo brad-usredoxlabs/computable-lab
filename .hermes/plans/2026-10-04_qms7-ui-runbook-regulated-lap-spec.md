@@ -26,9 +26,20 @@ POL-REGULATED denial lap executed from the doc ALONE by an independent reviewer.
   `tracked.policy-bundle.yaml`, `regulated.policy-bundle.yaml` declare `POL-SANDBOX` / `POL-TRACKED` /
   `POL-REGULATED`.
 - **Bundle switch (API):** `PATCH /api/config` (`server/src/api/routes.ts:849`) with body
-  `{"lab":{"policyBundleId":"POL-REGULATED"}}`; handler `configHandlers.patchConfig`. Live per-request
-  (no restart). Non-admin → `403 POLICY_BUNDLE_CHANGE_FORBIDDEN`; unknown id → `400` (checked before the
-  guard). Audited as `policy_bundle_changed {from,to}`.
+  `{"lab":{"policyBundleId":"POL-REGULATED"}}`; handler `configHandlers.patchConfig`
+  (`configHandlers.ts:314-322` merges `lab`). Live per-request (no restart). **CORRECTED 20261004T1100:**
+  this route has **NO authorization gate and NO preHandler**; the tokens `POLICY_BUNDLE_CHANGE_FORBIDDEN`
+  and the audit event `policy_bundle_changed` do **NOT exist anywhere in `server/src`/`app/src`** (they
+  appear only in the legacy cheatsheet §1 and in this spec). Do NOT document a 403 token or a
+  `policy_bundle_changed` audit unless you verify them in code. This API path IS the working bundle switch.
+- **Bundle switch (UI) — KNOWN DEFECT (verified by the orchestrator, browser + tsc, 20261004T1100):** the
+  Settings selector's handler `app/src/shell/SettingsPage.tsx:96` calls `apiClient.patchLabSettings(...)`,
+  which is **not defined** on `apiClient` (client.ts:1922 object literal; only `getLabSettings` at :2867
+  exists). `npx tsc` → `TS2551 Property 'patchLabSettings' does not exist`. Live on `:5192/settings`,
+  clicking a bundle fires `alert("Failed to update policy bundle: apiClient.patchLabSettings is not a function")`
+  and the bundle does NOT change. There is also no server `PATCH /settings/lab` route (routes.ts:592 =
+  GET only). Decision request: `.hermes/plans/2026-10-04_lane1-qms7-bundle-selector-unwired-decision-request.md`.
+  DOCUMENT THE LAP VIA THE API PATH ABOVE and record the selector as a known defect (item 10).
 - **Bundle switch (UI):** `app/src/components/settings/PolicyBundleSelector.tsx` renders the bundle
   catalog (`onClick → onBundleChanged(bundle.id)`), mounted at `app/src/shell/SettingsPage.tsx:285-287`;
   the handler at `SettingsPage.tsx:94-100` calls `apiClient.patchLabSettings({policyBundleId})` and on
@@ -75,8 +86,15 @@ POL-REGULATED denial lap executed from the doc ALONE by an independent reviewer.
 9. Locked content + draft-copy behavior (draft copy is a NEW record via
    `POST /api/records/:id/draft-copy`; automatic supersession and a revision-management UI are
    explicitly OUT of scope).
-10. POL-REGULATED lap: Settings bundle selector → under-granted actor denied despite a permissive
-    preview button → bundle RESTORED (restore verified even if the lap fails).
+10. POL-REGULATED lap (AMENDED by architect decision 2026-10-04, option (a)): switch the bundle with
+    `PATCH /api/config -H 'content-type: application/json' -d '{"lab":{"policyBundleId":"POL-REGULATED"}}'`
+    against `:3092` (the working path; NOTE it has NO auth gate on this trunk — the doc must NOT claim the §1
+    403 `POLICY_BUNDLE_CHANGE_FORBIDDEN` or the `policy_bundle_changed` audit as current behaviour; mark §1 as
+    aspirational in the corrections note). Verify the switch with `GET /api/config` →
+    `config.lab.policyBundleId == POL-REGULATED` — do NOT verify via `GET /api/settings/lab`, which serves a
+    boot-time snapshot (`server.ts:817` vs reassignment at `:1248`) and will keep showing the old bundle until
+    restart. Then the UI lap: under-granted actor denied despite a permissive preview button. Then RESTORE with
+    the same PATCH using `POL-SANDBOX` and verify via `GET /api/config`.
 11. What is NOT automated, stated plainly: competency inference, run-start preconditions, CAPA.
 12. Factual note that pre-isolation demo audit events remain in the live data dir (A4); later evidence
     uses the lane.
@@ -93,6 +111,30 @@ Optionally add a short "corrections to the 2026-09-27 sections" note pointing at
 
 Reviewer runs against `http://localhost:5192` (lane 1) with API probes on `:3092`. Receipts:
 `/home/brad/.hermes/cl/receipts/QMS-7/<runstamp>/`. The doc must link the accepted QMS-6B receipts dir.
+
+## Architect decision applied (2026-10-04, tick 20261004T1100)
+
+Decision **(a)**: `2026-10-04_lane1-qms7-bundle-selector-decision.md` (architect; re-verified every request
+claim and added two findings). QMS-7 stays **docs-only**; the bundle SELECTION step moves to the working
+`PATCH /api/config`; the Settings selector is recorded as a known defect.
+
+- **Receipt mapping (architect, item 2):** `qms-regulated-bundle-selected.png` and `qms-bundle-restored.png`
+  are captures of the **`GET /api/config` JSON** showing `lab.policyBundleId` (terminal/browser JSON view),
+  **NOT** screenshots of the Settings page — after an API switch the Settings display is a stale boot snapshot
+  (`server.ts:817` vs `:1248`) and the selector itself is a recorded defect. `qms-regulated-denial.png`
+  remains a **UI screenshot** of the observed denial. The doc must tell the reviewer this so a Settings-page
+  shot showing POL-SANDBOX is not mistaken for a failed lap.
+- **Known-defect record (item 10):** the Settings policy-bundle selector is non-functional on this trunk —
+  clicking a bundle fires `alert("Failed to update policy bundle: apiClient.patchLabSettings is not a function")`
+  and the bundle does not change; cause `SettingsPage.tsx:96` calls `apiClient.patchLabSettings` (undefined on
+  `apiClient`, `client.ts:1922`; only `getLabSettings` at `:2867`); `tsc` → `TS2551 … Did you mean
+  'getLabSettings'?`; no server `PATCH /settings/lab` route (`routes.ts:592` GET-only); additionally
+  `GET /settings/lab` serves a boot snapshot. A proper fix is proposed as a separate Brad scope amendment
+  (`QMS-8 / WIRE-BUNDLE-SELECTOR`, NOT enqueued).
+- **Corrections note:** §1 "Bundle switching — admin-gated" describes **unimplemented** behaviour (no gate, no
+  403 token, no audit in code); the corrections note must say so and point to the `PATCH /api/config` path.
+- **Do NOT claim** fixing `patchLabSettings` makes `tsc` clean — `app/` tsc emits many unrelated pre-existing
+  errors on this trunk (architect finding 6).
 
 ## Stop boundary
 

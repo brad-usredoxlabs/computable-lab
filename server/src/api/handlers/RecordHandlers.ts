@@ -37,6 +37,7 @@ import type { AuthoringPolicy } from '../../lint/types.js';
 import { authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
+import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
@@ -60,6 +61,14 @@ interface RecordHandlerSecurityOptions {
    * no authoring gates (system works with the wiring ripped out).
    */
   getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
+  /**
+   * QMS7-3: registry-kind lifecycle coverage, loaded from
+   * schema/registry/registry-kinds.registry.yaml via KindLifecycleRegistry.
+   * Absent accessor → no stamp-at-create (every existing path is unchanged;
+   * the system works with the wiring ripped out). NO kind names in TS — the
+   * coverage data decides which creates are stamped as governed drafts.
+   */
+  getKindLifecycleCoverage?: () => KindLifecycleRegistry | undefined;
 }
 
 /** Body of an update request extended with optional presented signature refs. */
@@ -205,6 +214,85 @@ function parentRecordIds(payload: unknown): string[] {
 
 function accessDeniedError(message: string): ApiError {
   return { error: 'FORBIDDEN', message };
+}
+
+/**
+ * QMS7-4 (ruling B) — generic record-ref walk: collect the target ids of every
+ * record-ref object in a payload (the declared ref shape: an object carrying a
+ * string `type` and a string `id`, cf. schema/lab/datatypes/ref.schema.yaml —
+ * the same generic shape extractRoleAssignments demonstrates). NO kind names:
+ * the walk is structural, and only the coverage data decides what is covered.
+ */
+function collectRecordRefIds(payload: unknown): Set<string> {
+  const ids = new Set<string>();
+  const visit = (node: unknown, depth: number): void => {
+    if (depth > 6) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.id === 'string' && obj.id.length > 0 && typeof obj.type === 'string' && obj.type.length > 0) {
+      ids.add(obj.id);
+    }
+    for (const value of Object.values(obj)) visit(value, depth + 1);
+  };
+  visit(payload, 0);
+  return ids;
+}
+
+/**
+ * QMS7-4 archive guard (ruling B, API-level): a NEW operational assignment to
+ * a record whose kind is COVERED (per the coverage data) and whose lifecycle
+ * state is TERMINAL (per the lifecycle YAML, via the engine's read-only
+ * terminalStates getter) is refused before anything durable.
+ *
+ * - exemptKinds come from the coverage file's archiveGuard block (evidence
+ *   kinds are not operational assignments);
+ * - the guard is scoped to COVERED kinds only — governed kinds' lifecycles are
+ *   untouched (V7 coverage scope);
+ * - reads are never guarded (ruling B: archived stays readable/referenceable);
+ * - on update, refs already present in the previous payload are historical and
+ *   stay legal — only refs NEWLY pointing at a terminal covered target fire;
+ * - absent guard data / absent engine → the caller skips this entirely.
+ *
+ * Returns the denial message, or null when the write may proceed.
+ */
+async function archivedTargetAssignmentDenial(
+  store: RecordStore,
+  coverage: KindLifecycleRegistry,
+  engine: LifecycleEngine,
+  sourcePayload: Record<string, unknown>,
+  proposedRefIds: Set<string>,
+  previousRefIds?: Set<string>,
+): Promise<string | null> {
+  const guard = coverage.archiveGuard;
+  if (!guard) return null;
+  const sourceKind = payloadKind(sourcePayload);
+  if (sourceKind && guard.exemptKinds.includes(sourceKind)) return null;
+
+  for (const targetId of proposedRefIds) {
+    // Historical referenceability: a ref that already pointed here is not new.
+    if (previousRefIds?.has(targetId)) continue;
+    const target = await store.get(targetId);
+    if (!target) continue;
+    const targetPayload = payloadObject(target.payload);
+    const targetKind = payloadKind(targetPayload);
+    if (!targetKind) continue;
+    const entry = coverage.entryFor(targetKind);
+    if (!entry) continue; // not a covered kind — out of the guard's scope
+    const targetLifecycleId = typeof targetPayload.lifecycleId === 'string' ? targetPayload.lifecycleId : undefined;
+    if (!targetLifecycleId) continue;
+    const terminal = engine.terminalStates(targetLifecycleId);
+    if (!terminal) continue;
+    // Lifecycle state only — never the DOMAIN status (the `state ?? status`
+    // conflation is bait #5; covered records always carry an explicit state).
+    const targetState = typeof targetPayload.state === 'string' ? targetPayload.state : undefined;
+    if (targetState === undefined || !terminal.has(targetState)) continue;
+    return `${targetId} is archived under the ${targetLifecycleId} lifecycle and cannot receive new assignments.`;
+  }
+  return null;
 }
 
 function unauthenticatedError(message: string): ApiError {
@@ -552,6 +640,60 @@ export function createRecordHandlers(
             if (parent && !(await canAccess(user, 'write', parent))) {
               reply.status(403);
               return accessDeniedError(`User ${user.userId} cannot add child records under ${parentId}`);
+            }
+          }
+        }
+
+        // QMS7-3 generic stamp-at-create: covered kinds (declared in
+        // schema/registry/registry-kinds.registry.yaml) arrive as governed
+        // drafts. NO kind names here — the coverage data decides. Undeclared
+        // kinds (every governed kind included) are UNCHANGED, full stop.
+        // Absent accessor → skip entirely (existing paths byte-identical).
+        {
+          const coverage = security?.getKindLifecycleCoverage?.();
+          const coverageEntry = coverage?.entryFor(String(kind));
+          if (coverageEntry) {
+            const stamped = payloadObject(payload);
+            if (stamped.lifecycleId !== undefined && stamped.lifecycleId !== coverageEntry.lifecycleId) {
+              reply.status(422);
+              return {
+                error: 'LIFECYCLE_COVERAGE_MISMATCH',
+                message: `A ${kind} record is governed by the ${coverageEntry.lifecycleId} lifecycle; it cannot declare ${String(stamped.lifecycleId)}.`,
+              };
+            }
+            if (stamped.state !== undefined && stamped.state !== coverageEntry.defaultState) {
+              reply.status(422);
+              return {
+                error: 'INITIAL_STATE_REQUIRED',
+                message: `Create ${kind} as ${coverageEntry.defaultState}, then use lifecycle transitions.`,
+              };
+            }
+            // Always stamp BOTH: the lifecycle middleware's `state ?? status`
+            // fallback would otherwise read the DOMAIN status as the lifecycle state.
+            stamped.lifecycleId = coverageEntry.lifecycleId;
+            stamped.state = coverageEntry.defaultState;
+          }
+        }
+
+        // QMS7-4 archive guard (ruling B) — CREATE leg: a NEW assignment whose
+        // payload references a terminal-state COVERED record is refused 422
+        // before anything durable. Terminal-ness comes from the lifecycle YAML
+        // via the engine; exemptKinds come from the coverage file's
+        // archiveGuard block. Absent coverage/guard data → skip entirely
+        // (existing paths byte-identical). NO kind or state literals here.
+        {
+          const guardCoverage = security?.getKindLifecycleCoverage?.();
+          if (guardCoverage?.archiveGuard && lifecycleEngine) {
+            const denial = await archivedTargetAssignmentDenial(
+              store,
+              guardCoverage,
+              lifecycleEngine,
+              payloadObject(payload),
+              collectRecordRefIds(payload),
+            );
+            if (denial) {
+              reply.status(422);
+              return { error: 'ARCHIVED_TARGET_ASSIGNMENT', message: denial };
             }
           }
         }
@@ -955,6 +1097,29 @@ export function createRecordHandlers(
             return { error: draftGate.code, message: draftGate.message };
           }
         }
+        // QMS7-4 archive guard (ruling B) — UPDATE leg. Same placement
+        // discipline as the gates above: AFTER the content lock, BEFORE the
+        // store write. Refs are diffed previous -> proposed: a ref that ALREADY
+        // pointed at the terminal covered record is historical and stays legal
+        // (ruling B's "historically referenceable"); only refs NEWLY pointing at
+        // a terminal covered target are refused. Absent guard data → skip.
+        {
+          const guardCoverage = security?.getKindLifecycleCoverage?.();
+          if (guardCoverage?.archiveGuard && lifecycleEngine) {
+            const denial = await archivedTargetAssignmentDenial(
+              store,
+              guardCoverage,
+              lifecycleEngine,
+              proposed,
+              collectRecordRefIds(proposed),
+              collectRecordRefIds(previous),
+            );
+            if (denial) {
+              reply.status(422);
+              return { error: 'ARCHIVED_TARGET_ASSIGNMENT', message: denial };
+            }
+          }
+        }
         if (previous.kind === 'protocol' && !previous.lifecycleId) {
           const service = new RecordRevisionService(store);
           const versions = await service.list(id);
@@ -1092,6 +1257,34 @@ export function createRecordHandlers(
             } catch (revisionErr) {
               console.error(`Failed to record revision/audit for ${id}:`, revisionErr);
             }
+          }
+        }
+
+        // QMS7-2 (OQ2 ruling): a promoted seed write records its provenance.
+        // Handler-side so the actor is the REAL acting user (store.update is
+        // called without an actor on this path). Same discipline as the
+        // lifecycle_transition audit below and the record_revised audit
+        // above: AFTER durability, best-effort, never fails the business
+        // write. 'seed_record_promoted' is DATA flowing into the free-form
+        // audit-event `action` string (schema/governance/audit-event.schema
+        // .yaml enforces only ^[a-z][a-z0-9_]*$ — no enum), so this rides
+        // existing machinery rather than adding vocabulary.
+        if (result.promotion && security?.auditService) {
+          try {
+            await security.auditService.append({
+              actor: user.userId ?? 'anonymous',
+              action: 'seed_record_promoted',
+              subjectType: payloadKind(existing.payload) ?? 'record',
+              subjectId: id,
+              data: {
+                seed_path: result.promotion.seedPath,
+                seed_content_sha: result.promotion.seedContentSha,
+                ...(result.envelope?.meta?.path !== undefined ? { promoted_path: result.envelope.meta.path } : {}),
+                ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
+              },
+            });
+          } catch (promotionAuditErr) {
+            console.error(`Failed to append promotion audit event for ${id}:`, promotionAuditErr);
           }
         }
 

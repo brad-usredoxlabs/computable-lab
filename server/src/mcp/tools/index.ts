@@ -6,6 +6,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
 import type { ToolRegistry } from '../../ai/ToolRegistry.js';
 import { registerRecordTools } from './recordTools.js';
+import { registerOwnershipPolicyTools } from './ownershipPolicyTools.js';
 import { registerSchemaTools } from './schemaTools.js';
 import { registerValidationTools } from './validationTools.js';
 import { registerTreeTools } from './treeTools.js';
@@ -41,6 +42,7 @@ import { registerWorkspaceActionTools } from './workspaceActionTools.js';
 
 export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   registerRecordTools(server, ctx, registry);
+  registerOwnershipPolicyTools(server, ctx, registry);
   registerSchemaTools(server, ctx, registry);
   registerValidationTools(server, ctx, registry);
   registerTreeTools(server, ctx, registry);

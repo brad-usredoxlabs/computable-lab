@@ -122,6 +122,14 @@ export interface UseChatThreadOptions {
    */
   onAnalysisProposal?: (analysis: Record<string, unknown>) => void
   /**
+   * QMS7-7 (OQ1 ruling A) — tier-2 mount (record-drafting): fires when the
+   * model proposes a NEW record for human review. Forwards the INTENT
+   * verbatim; the mount relays it to POST /api/drafts/compile with adapter
+   * 'record-drafting'. Same zero-touch discipline as onAnalysisProposal —
+   * the card owns the flow.
+   */
+  onRecordDraftProposal?: (recordDraft: Record<string, unknown>) => void
+  /**
    * PB-CH-8 fix1 — turn marker (NOT a content relay): fires when the server's
    * ledger_answer frame arrives during the turn. The hook still owns the
    * kind:'ledger' trace render VERBATIM (the dispatch below is unchanged);
@@ -145,6 +153,7 @@ export function useChatThread({
   onAgentAction,
   onWorkstateProposal,
   onAnalysisProposal,
+  onRecordDraftProposal,
   onLedgerAnswer,
   workingFocus,
   runStream,
@@ -302,6 +311,19 @@ export function useChatThread({
                   // end the turn or the chat.
                 }
                 return
+              case 'record_draft_proposal':
+                // QMS7-7 tier-2 (record-drafting): same zero-touch discipline
+                // as the analysis case above — the mount relays the INTENT to
+                // POST /api/drafts/compile (adapter 'record-drafting'); the
+                // hook touches nothing else, with the same never-break-the-turn
+                // wrapper.
+                try {
+                  onRecordDraftProposal?.(event.recordDraft)
+                } catch {
+                  // The card mount owns the flow; a mount explosion must not
+                  // end the turn or the chat.
+                }
+                return
               case 'ledger_answer': {
                 // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot +
                 // server-known audit rows — fetched evidence, never model
@@ -355,7 +377,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onLedgerAnswer, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onLedgerAnswer, runStream],
   )
 
   const stop = useCallback(() => {

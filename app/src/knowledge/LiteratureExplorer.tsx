@@ -379,7 +379,7 @@ export function LiteratureExplorer() {
           margin: 0;
           font-size: 1.25rem;
           font-weight: 600;
-          color: #212529;
+          color: var(--cl-text, #212529);
         }
         .lit-explorer__sources {
           /* source pills */
@@ -392,7 +392,9 @@ export function LiteratureExplorer() {
           flex: 1;
           padding: 0.5rem 0.75rem;
           font-size: 0.85rem;
-          border: 1px solid #dee2e6;
+          border: 1px solid var(--cl-border, #dee2e6);
+          background: var(--cl-bg-elev, #ffffff);
+          color: var(--cl-text, #1f2328);
           border-radius: 8px;
           outline: none;
           transition: border-color 0.15s;
@@ -450,7 +452,7 @@ export function LiteratureExplorer() {
           align-items: center;
           gap: 0.5rem;
           padding: 1rem;
-          color: #868e96;
+          color: var(--cl-text-dim, #868e96);
           font-size: 0.85rem;
         }
         .lit-explorer__spinner {

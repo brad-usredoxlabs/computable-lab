@@ -183,10 +183,18 @@ interface UseAiChatOptions {
    * a NAMED system bubble — never swallowed (same rule as above).
    */
   onAnalysisProposal?: (analysis: Record<string, unknown>) => void
+  /**
+   * QMS7-7 (OQ1 ruling A) — the record-drafting INTENT rides the same
+   * discipline: the mount relays it verbatim to POST /api/drafts/compile
+   * (adapter 'record-drafting') via `useWorkstateProposalFlow`; the trust
+   * boundary is the compile, not this stream. With NO callback registered the
+   * frame becomes a NAMED system bubble — never swallowed (same rule).
+   */
+  onRecordDraftProposal?: (recordDraft: Record<string, unknown>) => void
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -248,6 +256,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // PB-CH-5 repair: same stable-ref convention for the analysis INTENT.
   const analysisProposalRef = useRef(onAnalysisProposal)
   analysisProposalRef.current = onAnalysisProposal
+
+  // QMS7-7 (OQ1 ruling A): the record-drafting INTENT relay (same ref pattern).
+  const recordDraftProposalRef = useRef(onRecordDraftProposal)
+  recordDraftProposalRef.current = onRecordDraftProposal
   const agentActionRef = useRef(onAgentAction)
   agentActionRef.current = onAgentAction
 
@@ -567,6 +579,43 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   id: generateMessageId(),
                   role: 'system',
                   content: 'The assistant proposed an analysis but this page cannot show proposal cards yet. Nothing was written.',
+                  timestamp: Date.now(),
+                },
+              ])
+            }
+            continue
+          }
+
+          // QMS7-7 (OQ1 ruling A) — the record-drafting INTENT frame on the
+          // generic stack. Same block shape as the workstate/analysis branches
+          // above (no forked logic): callback -> verbatim relay, a throwing
+          // host surfaces a system line and the turn continues, and with NO
+          // callback the frame becomes a NAMED system bubble naming the record
+          // draft — never a silent drop. The relay goes to
+          // useWorkstateProposalFlow (adapter 'record-drafting'); POST
+          // /api/drafts/compile is the trust boundary, so nothing here writes.
+          if (event.type === 'record_draft_proposal') {
+            if (recordDraftProposalRef.current) {
+              try {
+                recordDraftProposalRef.current(event.recordDraft)
+              } catch (err: unknown) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: generateMessageId(),
+                    role: 'system',
+                    content: `The record draft proposal card could not open: ${(err as Error).message || 'Unknown error'}. Nothing was written.`,
+                    timestamp: Date.now(),
+                  },
+                ])
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: 'system',
+                  content: 'The assistant proposed a record draft but this page cannot show proposal cards yet. Nothing was written.',
                   timestamp: Date.now(),
                 },
               ])

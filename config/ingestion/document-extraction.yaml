@@ -1,0 +1,67 @@
+# Text-acquisition tools and readable formats for ingested lab documents.
+# External tools and the readable-format policy live here (never hardcoded in
+# TypeScript); a missing tool is an honest diagnostic, never a silently empty
+# document. The upload handler's readable gate, its file.media_type stamp, and
+# the acquisition mediaKind all READ this map — changing what the ingestor
+# accepts is a data edit.
+#
+# Stage A declares the `docx:` reader. Stage B (DOCINGEST-B) declares the
+# `images:` reader below, next to its consumer (the image OCR adapter + the
+# scanned-PDF rasterization arm) — shipped-but-unread config would be dishonest
+# data.
+
+docx:
+  # pandoc reads .docx/.rtf -> plain text; declared, not assumed.
+  # pandoc is ABSENT on this host: the adapter then reports DOCX_TOOL_MISSING
+  # (an honest diagnostic), never an empty success.
+  executable: pandoc
+  args: ['--to', 'plain', '--wrap=none']
+  timeoutSeconds: 60
+
+# Local OCR for photographed/scanned lab pages (DOCINGEST-B B1). Same tools
+# the oligo OCR path declares (config/sequence-analysis/oligo-order.yaml) —
+# the values are DATA: dpi/page cap/timeout/language are config, never
+# hardcoded in TypeScript. A missing binary is an IMAGE_OCR_TOOL_MISSING
+# diagnostic, never a blank page.
+images:
+  executable: tesseract
+  language: eng
+  timeoutSeconds: 120
+  rasterizer: pdftoppm
+  dpi: 200
+  maxPages: 40
+  # Upload-gate policy: which image extensions the ingestor accepts. The
+  # handler gate AND the app picker mirror this list (split-brain is a defect).
+  formats: [png, jpg, jpeg, tif, tiff, webp]
+
+
+# What a readable lab document IS. One entry per accepted extension:
+#   mediaKind   — what the stored file is (drives the review pane's source
+#                 preview: pdf canvases | selectable text | page images).
+#                 DOCINGEST-B: `image` entries landed WITH their reader
+#                 (server/src/extract/ImageTextAdapter.ts) — the reservation
+#                 this map declared is now lifted.
+#   mediaType   — the honest file.media_type stamp for the stored artifact.
+#   analysisLabel — the file-type label the analyze-ingestion prompt uses
+#                 (preserves today's endpoint vocabulary).
+formats:
+  - { extension: pdf,      mediaKind: pdf,         mediaType: application/pdf, analysisLabel: pdf }
+  - { extension: docx,     mediaKind: text,        mediaType: application/vnd.openxmlformats-officedocument.wordprocessingml.document, analysisLabel: other }
+  - { extension: doc,      mediaKind: text,        mediaType: application/msword, analysisLabel: other }
+  - { extension: rtf,      mediaKind: text,        mediaType: application/rtf, analysisLabel: other }
+  - { extension: md,       mediaKind: text,        mediaType: text/markdown, analysisLabel: other }
+  - { extension: markdown, mediaKind: text,        mediaType: text/markdown, analysisLabel: other }
+  - { extension: txt,      mediaKind: text,        mediaType: text/plain, analysisLabel: txt }
+  - { extension: html,     mediaKind: text,        mediaType: text/html, analysisLabel: html }
+  - { extension: htm,      mediaKind: text,        mediaType: text/html, analysisLabel: html }
+  - { extension: xlsx,     mediaKind: spreadsheet, mediaType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, analysisLabel: xlsx }
+  - { extension: xls,      mediaKind: spreadsheet, mediaType: application/vnd.ms-excel, analysisLabel: xlsx }
+  - { extension: csv,      mediaKind: text,        mediaType: text/csv, analysisLabel: csv }
+  # DOCINGEST-B page images (photographs/scans). The upload gate additionally
+  # requires membership in `images.formats` above — both lists are config.
+  - { extension: png,      mediaKind: image,       mediaType: image/png, analysisLabel: other }
+  - { extension: jpg,      mediaKind: image,       mediaType: image/jpeg, analysisLabel: other }
+  - { extension: jpeg,     mediaKind: image,       mediaType: image/jpeg, analysisLabel: other }
+  - { extension: tif,      mediaKind: image,       mediaType: image/tiff, analysisLabel: other }
+  - { extension: tiff,     mediaKind: image,       mediaType: image/tiff, analysisLabel: other }
+  - { extension: webp,     mediaKind: image,       mediaType: image/webp, analysisLabel: other }

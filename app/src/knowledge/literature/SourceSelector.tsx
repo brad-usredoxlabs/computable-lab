@@ -37,9 +37,9 @@ export function SourceSelector({ selected, onSelect }: SourceSelectorProps) {
         .source-pill {
           padding: 0.375rem 0.75rem;
           border-radius: 9999px;
-          border: 1.5px solid var(--pill-color);
-          background: white;
-          color: var(--pill-color);
+          border: 1.5px solid color-mix(in srgb, var(--pill-color) 70%, var(--cl-border, #d0d7de));
+          background: color-mix(in srgb, var(--pill-color) 14%, var(--cl-bg, #ffffff));
+          color: color-mix(in srgb, var(--pill-color) 65%, var(--cl-text, #1f2328));
           font-size: 0.8rem;
           font-weight: 500;
           cursor: pointer;
@@ -47,11 +47,13 @@ export function SourceSelector({ selected, onSelect }: SourceSelectorProps) {
           white-space: nowrap;
         }
         .source-pill:hover {
-          background: color-mix(in srgb, var(--pill-color) 10%, white);
+          background: color-mix(in srgb, var(--pill-color) 26%, var(--cl-bg, #ffffff));
         }
         .source-pill--active {
           background: var(--pill-color);
-          color: white;
+          color: var(--cl-on-accent, #0e1116);
+          border-color: var(--pill-color);
+          font-weight: 600;
         }
         .source-pill--active:hover {
           background: var(--pill-color);

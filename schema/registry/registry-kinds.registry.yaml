@@ -1,0 +1,32 @@
+# Registry-kind lifecycle coverage — which plain kinds get the minimal operational
+# lifecycle and what creates are stamped with. Consumed by KindLifecycleRegistry.ts
+# at create time and by the QMS7-4 migration runner. Governed kinds are NOT listed:
+# their lifecycleId stays declared per-schema (const in *.schema.yaml).
+registryVersion: 1
+lifecycleId: registry-ops
+defaultState: draft
+kinds:
+  - kind: person
+  - kind: equipment
+  - kind: equipment-class
+  - kind: training-record
+  - kind: competency-authorization
+  - kind: instrument
+  - kind: calibration-record
+
+# Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
+# covered record in a terminal lifecycle state is refused at create, and on
+# update when the ref newly CHANGES to one. Historical kinds are exempt —
+# they are evidence, not operational assignments. Archived records stay
+# readable and historically referenceable (usability-off, not erasure).
+archiveGuard:
+  exemptKinds: [audit-event, signature, record-revision]
+
+# QMS7-4 OQ2 (ruled): the migration runner's domain-status -> lifecycle-state
+# mapping is DATA. A covered record whose domain status is named here lands
+# the mapped state; anything else (status-less or unmapped status) lands the
+# declared default. The runner never guesses per-kind in TS.
+migration:
+  stateByDomainStatus:
+    active: active
+  default: draft

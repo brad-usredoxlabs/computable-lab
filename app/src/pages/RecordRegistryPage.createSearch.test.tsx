@@ -125,7 +125,6 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
   },
 }))
 
-vi.mock('../components/registry/CsvImportModal', () => ({ CsvImportModal: () => null }))
 vi.mock('../components/registry/RelatedRecordsCard', () => ({ RelatedRecordsCard: () => null }))
 vi.mock('../editor/taptab/TapTabEditor', () => ({
   // FIX-2: stand-in for ProjectionTapTabEditor. Captures the `data` prop (the

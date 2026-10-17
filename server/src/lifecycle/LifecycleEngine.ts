@@ -103,6 +103,29 @@ export class LifecycleEngine {
     return this.machines.has(lifecycleId)
   }
 
+  /** Plain spec getter: the loaded lifecycle spec exactly as declared in YAML.
+   *  No policy is decided here (coverage loaders validate data against these
+   *  declared facts; the interpretation stays declarative). */
+  specFor(lifecycleId: string): LifecycleSpec | undefined {
+    return this.specs.get(lifecycleId)
+  }
+
+  /**
+   * QMS7-4: the ids of the states the lifecycle YAML declares `terminal: true`
+   * (e.g. registry-ops declares archived terminal). A plain read-only report
+   * of YAML facts — NO terminal-state list is invented or hardcoded in TS
+   * (bait #3). Undefined when the lifecycle is not loaded: consumers skip.
+   */
+  terminalStates(lifecycleId: string): ReadonlySet<string> | undefined {
+    const spec = this.specs.get(lifecycleId)
+    if (!spec) return undefined
+    const terminal = new Set<string>()
+    for (const state of spec.states) {
+      if (state.terminal === true) terminal.add(state.id)
+    }
+    return terminal
+  }
+
   canTransition(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
     const machine = this.machines.get(lifecycleId)
     if (!machine) throw new Error(`Lifecycle not loaded: ${lifecycleId}`)

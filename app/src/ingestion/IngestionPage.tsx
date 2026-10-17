@@ -23,11 +23,16 @@ const LiteratureExplorer = lazy(() =>
   import('../knowledge/LiteratureExplorer').then((m) => ({ default: m.LiteratureExplorer })),
 )
 
-type IngestionTab = 'vendor-pdf' | 'literature' | 'oligo-orders'
+const SequenceSearch = lazy(() =>
+  import('../sequences/SequenceSearch').then((m) => ({ default: m.SequenceSearch })),
+)
+
+type IngestionTab = 'vendor-pdf' | 'literature' | 'sequences' | 'oligo-orders'
 
 const TABS: { id: IngestionTab; label: string }[] = [
-  { id: 'vendor-pdf', label: 'Vendor PDFs' },
+  { id: 'vendor-pdf', label: 'Documents' },
   { id: 'literature', label: 'Literature' },
+  { id: 'sequences', label: 'Sequences' },
   { id: 'oligo-orders', label: 'Primer / probe orders' },
 ]
 
@@ -71,6 +76,10 @@ export function IngestionPage() {
           <div className="ingestion-page__body" data-testid={`ingestion-body-${active}`}>
             {active === 'oligo-orders' ? <SequenceImport orderOnly /> : active === 'vendor-pdf' ? (
               <VendorPdfWorkflowTab />
+            ) : active === 'sequences' ? (
+              <Suspense fallback={<p className="ingestion-page__loading">Loading sequences…</p>}>
+                <SequenceSearch />
+              </Suspense>
             ) : (
               <Suspense fallback={<p className="ingestion-page__loading">Loading literature…</p>}>
                 <LiteratureExplorer />

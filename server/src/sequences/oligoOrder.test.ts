@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { extractOligoRows } from './oligoOrder.js';
+import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
+import { loadAllSchemas } from '../schema/SchemaLoader.js';
+import { createValidator } from '../validation/AjvValidator.js';
+import { LintEngine } from '../lint/LintEngine.js';
+import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
+import { createRecordStore } from '../store/RecordStoreImpl.js';
+import type { AppContext } from '../server.js';
+import { extractOligoRows, ingestOligoOrder } from './oligoOrder.js';
+import { oligoRowsFromDraft, type OligoOrderDraft } from './oligoOrderDraft.js';
+import { sequenceConfig } from './sequenceRuntime.js';
+import { aiReadTriggered, readAiFallbackPolicy } from './oligoOrderAiRead.js';
 describe('oligo order extraction',()=>{
  it('keeps wrapped bases together, separates labels and retains source anchors',async()=>{
   const rows=await extractOligoRows("Name: Probe A\nSequence: 5'-/56-FAM/ACGT\nACGT/3BHQ_1/-3'\fName: Primer B\nSequence: TTTTACGT");
@@ -63,5 +78,141 @@ Line No.| Cat No./Lot No. Type | Description/Sequence Quantity: Amount(OD)
    {label:'QSY',role:'quencher',position:'3-prime'},
   ]);
   expect(rows[1]?.residues).toBe('CCGTATCGCAAGGTTGTCGACAGTCACG');
+ });
+ // Task 4: the fallback policy is DECLARED in config, not coded in TypeScript.
+ it('declares the AI-read fallback policy as DATA in the shipped config',async()=>{
+  const config=await sequenceConfig('oligo-order');
+  const aiFallback=config.aiFallback as {enabled:boolean;offerWhen:string[];mode:string;maxContextChars:number;maxTokens:number;responseFormat:string}|undefined;
+  expect(aiFallback,'config/sequence-analysis/oligo-order.yaml declares no aiFallback block').toBeDefined();
+  expect(aiFallback!.enabled).toBe(true);
+  expect(aiFallback!.offerWhen).toEqual(['no-rows','any-issue','declared-count-mismatch']);
+  expect(aiFallback!.mode).toBe('manual');
+  expect(aiFallback!.maxContextChars).toBe(12000);
+  expect(aiFallback!.maxTokens).toBe(4000);
+  expect(aiFallback!.responseFormat).toBe('json_object');
+  // The declared-count signal rides the existing metadata pattern table.
+  expect(typeof (config.metadata as Record<string,unknown>).declaredItemCount).toBe('string');
+ });
+ // Task 4 flip pair (spec §6): Test A reads the REAL shipped config and asserts
+ // the shipped behavior; Test B passes the SAME signals with a flipped policy
+ // literal. Same compiled code path, data changed, source untouched. (Never
+ // write-flip the shared YAML in a test — concurrent vitest files race on it.)
+ it('the trigger predicate is honored from config: shipped data fires, flipped data flips behavior with zero code change',async()=>{
+  const config=await sequenceConfig('oligo-order');
+  const shipped=readAiFallbackPolicy(config);
+  expect(shipped.enabled).toBe(true);
+  const signals={rowCount:2,issueRowCount:0,declaredCount:3};
+  // Test A — shipped config: the declared-count-mismatch token fires.
+  expect(aiReadTriggered(shipped,signals)).toEqual(['declared-count-mismatch']);
+  // Test B flip 1 — enabled:false: nothing fires (the file-level flip story).
+  expect(aiReadTriggered({...shipped,enabled:false},signals)).toEqual([]);
+  // Test B flip 2 — token removed from offerWhen: that trigger gone, any-issue unaffected.
+  const withoutMismatch={...shipped,offerWhen:shipped.offerWhen.filter(t=>t!=='declared-count-mismatch')};
+  expect(aiReadTriggered(withoutMismatch,signals)).toEqual([]);
+  expect(aiReadTriggered(withoutMismatch,{rowCount:1,issueRowCount:1,declaredCount:null})).toEqual(['any-issue']);
+ });
+ // Task 5: the declaredItemCount regex arms — anchored digits only. Case-
+ // insensitivity comes from the loader's new RegExp(pattern,'i'), so the YAML
+ // pattern itself carries no flags.
+ it('the declaredItemCount pattern counts line items without colliding with price lines',async()=>{
+  const declared=async(countLine:string)=>(await extractOligoRows(`Name: Row One\nSequence: ACGTACGT\n${countLine}`))[0]?.metadata.declaredItemCount;
+  expect(await declared('ITEMS: 3')).toBe('3');
+  expect(await declared('QTY 4')).toBe('4');
+  expect(await declared('Total Items: 4')).toBe('4');
+  // Must NOT match price/amount lines (anchored (\d+)\s*$).
+  expect(await declared('Total Amount: $12.34')).toBeUndefined();
+  expect(await declared('Total 1234567 USD')).toBeUndefined();
+  // A document that declares NO count stays undetectable at the deterministic
+  // layer — honest, not wrong.
+  expect(await declared('Total Amount: 12.34')).toBeUndefined();
+ });
+});
+// Task 5 ingest-level detection: the dangerous 2-of-3-rows case must stop being
+// silent. Harness mirrors SequenceService.test.ts:16-24 (mkdtemp + recursive
+// loadAllSchemas — it picks up schema/sequence-analysis/ post-AI-1 — +
+// createRecordStore + fake AppContext). A .txt upload keeps it off the OCR/pdf
+// path; the accounted/unaccounted fixture is inline, not a vendor PDF.
+let ctx:AppContext;let root:string;
+beforeAll(async()=>{
+ root=await mkdtemp(join(tmpdir(),'cl-oligo-ingest-'));
+ const registry=createSchemaRegistry();const loaded=await loadAllSchemas({basePath:fileURLToPath(new URL('../../../schema',import.meta.url)),recursive:true});
+ expect(loaded.errors).toEqual([]);registry.addSchemas(loaded.entries);
+ const validator=createValidator();for(const id of registry.getTopologicalOrder()){const e=registry.getById(id);if(e)validator.addSchema(e.schema,id);}
+ const store=createRecordStore(createLocalRepoAdapter({basePath:root}),validator,new LintEngine());
+ ctx={store,validator,schemaRegistry:registry,workspaceRoot:root,recordsDir:root} as AppContext;
+},30000);
+afterAll(async()=>{if(root)await rm(root,{recursive:true,force:true});});
+describe('oligo order ingest diagnostics',()=>{
+ it('a PARTIAL read is a declared failure: OLIGO_PARTIAL_READ + the AI-read offer on the existing response',async()=>{
+  // ITEMS: 3 header + two readable labeled-fields rows = accounted 2 / unaccounted 1.
+  const text='ITEMS: 3\nName: Row One\nSequence: ACGTACGT\nName: Row Two\nSequence: TGCATGCA';
+  const result=await ingestOligoOrder(ctx,'USR-test','partial-order.txt',Buffer.from(text));
+  expect(result.candidates).toHaveLength(2);
+  const partial=result.diagnostics.find(d=>d.code==='OLIGO_PARTIAL_READ');
+  expect(partial,'OLIGO_PARTIAL_READ missing: the 2-of-3-rows case is still silent').toBeDefined();
+  expect(partial!.severity).toBe('warning');
+  expect(partial!.message).toContain('declares 3 items but only 2');
+  // The honest signal OLIGO-AI-3's UI consumes must exist alongside it,
+  // quoting the tokens that fired — driven by the config predicate.
+  const offer=result.diagnostics.find(d=>d.code==='OLIGO_AI_READ_OFFERED');
+  expect(offer,'OLIGO_AI_READ_OFFERED missing alongside the partial read').toBeDefined();
+  expect(offer!.message).toContain('declared-count-mismatch');
+ });
+ it('a document that declares no count stays undetectable: no partial diagnostic, no offer (honest, not wrong)',async()=>{
+  const text='Name: Row One\nSequence: ACGTACGT\nName: Row Two\nSequence: TGCATGCA';
+  const result=await ingestOligoOrder(ctx,'USR-test','plain-order.txt',Buffer.from(text));
+  expect(result.candidates).toHaveLength(2);
+  expect(result.diagnostics.some(d=>d.code==='OLIGO_PARTIAL_READ')).toBe(false);
+  expect(result.diagnostics.some(d=>d.code==='OLIGO_AI_READ_OFFERED')).toBe(false);
+ });
+});
+// Task 10 (OLIGO-AI-3): regression pins on the REAL failing document class —
+// the local-OCR text of a scanned Biosystems order (fixtures/thermo-biosystems-
+// scan.txt, regenerated with pdftoppm -r 200 + tesseract from the vendor scan;
+// the PDF itself is never committed). These pin EXISTING merged compiler
+// behavior; the dye-token leak is the documented reason the AI read exists.
+// If a later config-data item strips 6FAM/Cyanine, that change updates THIS
+// pin consciously (spec OQ3: the config follow-up is a carried finding, not a
+// silent re-baseline mid-gate).
+describe('scanned Biosystems order class (fixture pins)',()=>{
+ const fixtureText=readFileSync(fileURLToPath(new URL('./fixtures/thermo-biosystems-scan.txt',import.meta.url)),'utf8');
+ it('pin 1: the deterministic extractor on the real OCR text yields 4 rows, EVERY row carries an issue, and the un-stripped dye tokens stay visible in residues',async()=>{
+  const rows=await extractOligoRows(fixtureText);
+  expect(rows).toHaveLength(4);
+  expect(rows.every(r=>r.issues.length>0)).toBe(true);
+  // Honest limit: 6FAM- and Cyanine 5- are NOT in the config modification
+  // table, so they leak into residues instead of being silently eaten.
+  expect(rows[1]?.residues).toContain('6FAM-');
+  expect(rows[2]?.residues).toContain('6FAM-');
+  expect(rows[0]?.residues).toContain('Cyanine5-');
+  expect(rows[3]?.residues).toContain('Cyanine5-');
+  // Where the table DOES cover a dye, it is stripped and declared.
+  expect(rows[1]?.modifications).toEqual([{label:'QSY',role:'quencher',position:'3-prime'}]);
+  // The OCR-garbled first label is kept honestly, not guessed away.
+  expect(rows.map(r=>r.label)).toEqual(['Zanumulumwm','Akk_GA4_1617ABY','Praus_1686_ABY','RtorqGA4_1813_CY5']);
+  // The order id rides the declared metadata table.
+  expect(rows[0]?.metadata.orderId).toBe('8493629');
+ });
+ it('pin 2: the lowerer on a draft equivalent of the same document flags the unreadable row and declares only table-covered modifications (accounted vs unaccounted)',async()=>{
+  const draft:OligoOrderDraft={kind:'oligo-order-draft',declaredRowCount:4,rows:[
+   {name:'Zanumulumwm:Qu',sequence:null,unreadable:true,sourceQuote:'10 Pass Zanumulumwm:Qu Cyanine 5-GGC TAA TGA GAA GCT TGA TGC CGA AGG AC-QSY2 29 357350 10422.49 Pass 6000 100ul'},
+   {name:'Akk_GA4_1617ABY',sequence:'6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY',sourceQuote:'30 Pass Akk_GA4_1617ABY |6FAM-GTC ACC GCC GAY CAG GAR GAA GG-QSY 23 314470 8494.92 Pass 6000 100ul'},
+   {name:'Praus_1686_ABY',sequence:'6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY',sourceQuote:'50 Pass Praus_1686_ABY |6FAM-GGC CCC AAC ATC GGT CTG ATC TCC-QSY 24 288510 86365 Pass 6000 100y'},
+   {name:'RtorqGA4_1813_CY5',sequence:'Cyanine 5-GCA CAG GCG AAT ACA CCG CTT GAT G-QSY2',sourceQuote:'70 Pass RtorqGA4_1813_CY5 |Cyanine 5-GCA CAG GCG AAT ACA CCG CTT GAT G-QSY2 25 296620 9082.61 Pass 6000'},
+  ]};
+  const rows=await oligoRowsFromDraft(draft);
+  expect(rows).toHaveLength(4);
+  // The unreadable arm: visible for review, flagged, never invented bases.
+  expect(rows[0]?.residues).toBe('');
+  expect(rows[0]?.issues.some(i=>i.includes('could not be read'))).toBe(true);
+  // Accounted: the QSY quencher the pattern table covers is declared on the
+  // rows whose raw ends in -QSY; the uncovered 6FAM/Cyanine/QSY2 tokens stay
+  // visible in residues (same honest limit as pin 1 — one compiler, two
+  // producers; the table covers QSY$ but NOT QSY2).
+  for(const row of rows.slice(1,3)) expect(row.modifications.some(m=>m.label==='QSY'&&m.role==='quencher')).toBe(true);
+  expect(rows[3]?.modifications.some(m=>m.label==='QSY')).toBe(false);
+  expect(rows[1]?.residues).toContain('6FAM-');
+  expect(rows[3]?.residues).toContain('Cyanine5-');
+  expect(rows[3]?.residues).toContain('QSY2');
  });
 });

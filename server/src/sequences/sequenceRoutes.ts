@@ -4,9 +4,10 @@ import type { ToolRegistry } from '../ai/ToolRegistry.js';
 import { SequenceService, SequenceError } from './SequenceService.js';
 import { sequenceConfig, SEQUENCE_SCHEMA, binaryHash } from './sequenceRuntime.js';
 import { fetchSequenceSource } from './sequenceSources.js';
-import { ingestOligoOrder } from './oligoOrder.js';
+import { ingestOligoOrder, aiReadOligoOrder } from './oligoOrder.js';
+import type { OligoAiReadClient } from './oligoOrderAiRead.js';
 import { contentHash, object } from '../revisions/RecordRevisionService.js';
-export function registerSequenceRoutes(app:FastifyInstance,ctx:AppContext,registry:ToolRegistry) {
+export function registerSequenceRoutes(app:FastifyInstance,ctx:AppContext,registry:ToolRegistry,options:{ getAiDeps?:()=>{ llmClient:OligoAiReadClient; model?:string }|undefined }={}) {
  async function actor(request:FastifyRequest) { const user=await ctx.localIdentityService.resolveRequestUser(request);if(!user.userId)throw new SequenceError('Select or sign in as a user.',401);return user.userId; }
  const handle=(fn:(request:FastifyRequest)=>Promise<unknown>)=>async(request:FastifyRequest,reply:import('fastify').FastifyReply)=>{
   try{return await fn(request);}catch(err){reply.status(err instanceof SequenceError?err.status:422);return {error:'SEQUENCE_ACTION_FAILED',message:(err as Error).message};}
@@ -37,6 +38,11 @@ export function registerSequenceRoutes(app:FastifyInstance,ctx:AppContext,regist
   if(!part)throw new SequenceError('Choose an order confirmation PDF or text file.');
   const bytes=await part.toBuffer();if(part.file.truncated)throw new SequenceError('The file exceeds 10 MB.');
   return ingestOligoOrder(ctx,user,part.filename,bytes);
+ }));
+ app.post('/sequences/order/:id/ai-read',handle(async request=>{
+  const user=await actor(request);const ai=options.getAiDeps?.();
+  if(!ai)throw new SequenceError('No AI endpoint is configured. Set an AI model in Settings and try again.',503);
+  return aiReadOligoOrder(ctx,user,(request.params as {id:string}).id,ai);
  }));
  app.get('/sequences/order/:id',handle(async request=>{
   const service=new SequenceService(ctx,await actor(request));const id=(request.params as {id:string}).id;const job=await service.read(id);

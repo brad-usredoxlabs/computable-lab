@@ -440,9 +440,9 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft'],
           description:
-            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. You never supply a timestamp and never invent an id.',
+            'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. compose_record_draft: propose a NEW record for human review via the `recordDraft` envelope (operation \"compose-record\" + `kind` + `fields` — fields the target schema declares ONLY, e.g. title/materialType for a training-material) — the server COMPILES this into a review card via POST /api/drafts/compile: it resolves the kind through the schema corpus, DERIVES the record id from the declared pattern of that schema (never supply an id), validates the fields against the target schema, and NOTHING is written until the user accepts; Accept creates exactly ONE governed DRAFT record. You never supply a timestamp and never invent an id.',
         },
         platformId: {
           type: 'string',
@@ -627,6 +627,29 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
           description:
             'event_shorthand only (SHORTHAND-CHAT): the scientist-intent YAML document — a closed-vocabulary list of high-level biology verbs with natural-language noun labels and numeric parameters (top-level intentId + actions, optional unresolved). NEVER resolved record ids, deck slots, or low-level event primitives: the deterministic compiler owns the event-graph expansion. The server validates the document against the registered scientist-intent schema (Ajv) and compiles it; an invalid document is re-asked, never repaired for you.',
         },
+        // QMS7-7 (OQ1 ruling A): the record-drafting proposal envelope. The
+        // envelope shape here is the tool-declared contract the compile side
+        // validates (recordDraftCompile.ts's envelope schema is its twin); the
+        // TARGET record schema stays the field authority (kind→schema via the
+        // corpus, fields validated against the target schema at staging).
+        recordDraft: {
+          type: 'object',
+          // QMS7-7 FIX1 (adv-review D4): this property is the tool-declared
+          // twin of recordDraftCompile.ts's RECORD_DRAFT_ENVELOPE_SCHEMA —
+          // same required keys, same additionalProperties:false. The lockstep
+          // test (recordDraftEnvelopeLockstep.test.ts) pins them equal so the
+          // model-facing contract can never drift looser than the compile-side
+          // Ajv authority.
+          additionalProperties: false,
+          required: ['operation', 'kind', 'fields'],
+          description:
+            'compose_record_draft only: the record proposal envelope (the record-drafting shape). VERBS AND FIELDS ONLY — `operation` is \"compose-record\"; `kind` is a record kind the lab\'s schema corpus declares (e.g. training-material); `fields` carries ONLY the target schema\'s declared fields (e.g. title, materialType from its enum vocabulary). NEVER an id, a kind inside fields, a state/status, a lifecycleId, or an approval/signature field — the server derives the id from the schema\'s declared pattern and the draft-ness is read-side. THE SERVER compiles this into a review card via POST /api/drafts/compile — the kind is schema-resolved, the fields run the REAL schema validate + lint, an invalid proposal yields a blocked card with path-named diagnostics — and the card only becomes actionable after the user accepts. Accept creates AT MOST ONE governed DRAFT record; nothing is written before Accept.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-record'], description: 'The registered record-drafting verb.' },
+            kind: { type: 'string', minLength: 1, description: 'A record kind the lab\'s schema corpus declares — the server resolves it through the corpus and rejects an unknown kind.' },
+            fields: { type: 'object', description: 'The proposed field values, restricted to the target schema\'s declared fields. The server validates them against the target schema at compile time; unevaluated or smuggled fields are rejected.' },
+          },
+        },
       },
     },
   },
@@ -677,7 +700,7 @@ export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDef
 }
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'sequence_action' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'compose_record_draft' | 'sequence_action' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -734,12 +757,22 @@ export interface AgentIntentArgs {
    * deterministic compiler; the parser never "helps" and never compiles.
    */
   shorthand?: string;
+  /**
+   * compose_record_draft only (QMS7-7, OQ1 ruling A): the record proposal
+   * envelope EXACTLY as the model emitted it — retained by reference, no
+   * copy/filter (the same `ops`/`action`/`workstate`/`analysis` discipline).
+   * The orchestrator emits it VERBATIM as a `record_draft_proposal` event;
+   * the drafts compile endpoint (the 'record-drafting' adapter — schema
+   * resolution + validate + lint + canAccept) is the trust boundary. The
+   * parser never "helps" and never compiles.
+   */
+  recordDraft?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -764,6 +797,11 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
       // trim/repair — parseScientistIntent + Ajv are the sole authorities).
       ...(intent === 'event_shorthand' && typeof args.shorthand === 'string' && args.shorthand.trim().length > 0
         ? { shorthand: args.shorthand }
+        : {}),
+      // QMS7-7: the record proposal envelope is carried VERBATIM (by reference,
+      // no copy/filter — the drafts compile endpoint is the trust boundary).
+      ...(intent === 'compose_record_draft' && args.recordDraft !== null && typeof args.recordDraft === 'object' && !Array.isArray(args.recordDraft)
+        ? { recordDraft: args.recordDraft as Record<string, unknown> }
         : {}),
     };
   }
