@@ -1,0 +1,4 @@
+# SH-QC-1S TEST FIXTURE — the forced-tool compliance policy with NO `surfaces:`
+# section: silent-off (no bounded retry, no compliance-failure return) — the
+# disclosed pre-fix behavior for surfaces the policy does not list.
+surfaces: []

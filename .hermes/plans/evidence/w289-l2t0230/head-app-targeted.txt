@@ -1,0 +1,25 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/app
+
+(node:2529310) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2529310) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2529310) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2529310) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/right-pane/ai/assistStream.test.ts  (11 tests) 14ms
+ ✓ src/ingestion/protocol-review/reviewAiPanel.writeWall.test.ts  (5 tests) 32ms
+ ✓ src/ingestion/protocol-review/ReviewAiPanel.writeWall.test.tsx  (4 tests) 402ms
+stderr | src/event-editor/right-pane/ai/AiTabPanel.protocolEdit.test.tsx > AiTabPanel protocol_edit wiring > branches a protocol_edit emission into ChangesPanel review, never stuck interpreting
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/event-editor/right-pane/ai/AiTabPanel.protocolEdit.test.tsx  (9 tests) 684ms
+
+ Test Files  4 passed (4)
+      Tests  29 passed (29)
+   Start at  04:55:47
+   Duration  28.22s (transform 2.71s, setup 11.00s, collect 6.86s, tests 1.13s, environment 72.38s, prepare 4.42s)
+

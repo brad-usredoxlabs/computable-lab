@@ -1,0 +1,163 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/server
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1a: a forced-tool turn streaming deliberation interleaved with tool calls emits ZERO text_delta — and the tool trace + draft survive
+[agent x6a19w] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent x6a19w] skipping compiler preflight for forced draft tool mode
+[agent x6a19w] tools=1 docDiscussion=false maxTurns=2
+[agent x6a19w] turn 1 starting, promptChars=38328, docDiscussion=false
+[agent x6a19w] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"x6a19w","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":81,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent x6a19w] done event_shorthand success=true events=12 clarifications=0 elapsedMs=81
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1b: accumulatedContent stays intact under suppression — prose-only draft JSON still fires the stop-coercion path
+[agent ap5ehx] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ap5ehx] skipping compiler preflight for forced draft tool mode
+[agent ap5ehx] tools=1 docDiscussion=false maxTurns=2
+[agent ap5ehx] turn 1 starting, promptChars=38328, docDiscussion=false
+[agent ap5ehx] turn 1 finish=stop contentLen=504 toolCalls=0
+[agent ap5ehx] recovered draft args from content as agent_intent; skipped the second call
+[agent-summary] {"traceId":"ap5ehx","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent ap5ehx] done event_shorthand success=true events=12 clarifications=0 elapsedMs=8
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+[agent n3wd3h] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent n3wd3h] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent n3wd3h] tools=1 docDiscussion=false maxTurns=2
+[agent n3wd3h] turn 1 starting, promptChars=28217, docDiscussion=false
+[agent n3wd3h] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"n3wd3h","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":8,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent n3wd3h] done event_shorthand success=true events=12 clarifications=0 elapsedMs=8
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3a: the forced-tool success turn still returns the terminal result payload carrying the A5 product copy
+[agent cqjltl] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent cqjltl] skipping compiler preflight for forced draft tool mode
+[agent cqjltl] tools=1 docDiscussion=false maxTurns=2
+[agent cqjltl] turn 1 starting, promptChars=38328, docDiscussion=false
+[agent cqjltl] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"cqjltl","surface":"workspace.deck","model":"test-model","success":true,"elapsedMs":9,"turns":[],"totals":{"turns":1,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent cqjltl] done event_shorthand success=true events=12 clarifications=0 elapsedMs=9
+
+stdout | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+[agent 6yjz6a] start surface=workspace.deck model=test-model promptLen=36 effectivePromptLen=36 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 6yjz6a] skipping compiler preflight for forced draft tool mode
+[agent 6yjz6a] tools=1 docDiscussion=false maxTurns=3
+[agent 6yjz6a] turn 1 starting, promptChars=38328, docDiscussion=false
+[agent 6yjz6a] turn 1 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent 6yjz6a] turn 2 starting, promptChars=39256, docDiscussion=false
+[agent 6yjz6a] turn 2 finish=tool_calls contentLen=66 toolCalls=1 [agent_intent]
+[agent-summary] {"traceId":"6yjz6a","surface":"workspace.deck","model":"test-model","success":false,"elapsedMs":4,"turns":[],"totals":{"turns":2,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null,"error":"Event drafting on this surface goes through the scientist-intent shorthand — cannot draft: the raw event draft was refused again and the AI did not produce a shorthand document."}
+[agent 6yjz6a] done event_graph_refusal success=false events=0 elapsedMs=4
+
+stderr | src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+[agent 6yjz6a] refused raw event_graph on shorthand surface workspace.deck; re-asking for shorthand
+[agent 6yjz6a] refused a REPEAT raw event_graph on shorthand surface workspace.deck; ending the turn with the honest cannot-draft failure
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts  (5 tests | 5 failed) 121ms
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1a: a forced-tool turn streaming deliberation interleaved with tool calls emits ZERO text_delta — and the tool trace + draft survive
+     → expected [ { type: 'text_delta', …(1) }, …(1) ] to have a length of +0 but got 2
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1b: accumulatedContent stays intact under suppression — prose-only draft JSON still fires the stop-coercion path
+     → expected [ { type: 'text_delta', …(1) }, …(2) ] to have a length of +0 but got 3
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+     → expected "runChatbotCompile" to be called at least once
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3a: the forced-tool success turn still returns the terminal result payload carrying the A5 product copy
+     → expected [ { type: 'text_delta', …(1) }, …(1) ] to have a length of +0 but got 2
+   ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+     → expected [ { type: 'text_delta', …(1) }, …(3) ] to have a length of +0 but got 4
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1a: a forced-tool turn streaming deliberation interleaved with tool calls emits ZERO text_delta — and the tool trace + draft survive
+AssertionError: expected [ { type: 'text_delta', …(1) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:199:59
+    197| 
+    198|     // THE A6 ASSERTION: no deliberation prose reaches the client pipe.
+    199|     expect(events.filter((e) => e.type === 'text_delta')).toHaveLength…
+       |                                                           ^
+    200| 
+    201|     // The suppression is text_delta-ONLY: status + tool_call + tool_r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T1b: accumulatedContent stays intact under suppression — prose-only draft JSON still fires the stop-coercion path
+AssertionError: expected [ { type: 'text_delta', …(1) }, …(2) ] to have a length of +0 but got 3
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:236:59
+    234| 
+    235|     // Suppressed at emission…
+    236|     expect(events.filter((e) => e.type === 'text_delta')).toHaveLength…
+       |                                                           ^
+    237|     // …yet the coercion path consumed the FULL accumulated content: t…
+    238|     // inline recovery fired (one inference call, no `complete` fallba…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T2 (regression pin): the SAME fake on a preflight-llm instance streams deltas verbatim and its compiler preflight still runs
+AssertionError: expected "runChatbotCompile" to be called at least once
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:278:24
+    276| 
+    277|     // The preflight-llm flow itself is byte-unchanged: the compiler p…
+    278|     expect(compileSpy).toHaveBeenCalled();
+       |                        ^
+    279|     expect(result.success).toBe(true);
+    280|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3a: the forced-tool success turn still returns the terminal result payload carrying the A5 product copy
+AssertionError: expected [ { type: 'text_delta', …(1) }, …(1) ] to have a length of +0 but got 2
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:303:59
+    301|     compileSpy.mockRestore();
+    302| 
+    303|     expect(events.filter((e) => e.type === 'text_delta')).toHaveLength…
+       |                                                           ^
+    304|     // The RESULT payload (what the handlers send as the terminal `don…
+    305|     // AIHandlers.ts:296 / RunDraftHandlers.ts) still carries the draf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.draftProseSuppression.test.ts > COMP3-A6 — forced-tool draft turns suppress model prose at emission > T3b: the refusal arm still surfaces the server-built cannot-draft wording — suppression does not eat honest text
+AssertionError: expected [ { type: 'text_delta', …(1) }, …(3) ] to have a length of +0 but got 4
+
+- Expected
++ Received
+
+- 0
++ 4
+
+ ❯ src/ai/AgentOrchestrator.draftProseSuppression.test.ts:337:59
+    335| 
+    336|     // No prose leaked on either turn…
+    337|     expect(events.filter((e) => e.type === 'text_delta')).toHaveLength…
+       |                                                           ^
+    338|     // …but the refusal trail is intact: two refusal status events and…
+    339|     // server-built cannot-draft failure on the result payload.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  05:28:34
+   Duration  3.72s (transform 892ms, setup 0ms, collect 2.69s, tests 121ms, environment 0ms, prepare 422ms)
+
+exit: 1

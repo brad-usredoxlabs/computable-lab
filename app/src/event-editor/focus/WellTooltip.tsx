@@ -78,14 +78,26 @@ export function WellTooltip({ wellId, state, isTubeRack = false, clientX, client
             {rows.map((m, idx) => {
               const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown)
               const count = formatComputedCount(m.count)
+              const density = formatComputedConcentration(m.counterDensity)
+              // SH-QA-4: a carrier-marked row (multi-entry composition_snapshot)
+              // makes NO own-volume claim — the header above is the tooltip's
+              // single volume assertion. The row states what the snapshot
+              // actually carries: its share of the mixture, plus count/density.
+              const isCarrier = Boolean(m.volumeIsCarrier)
+              const concCell = isCarrier
+                ? [conc, count, density].filter(Boolean).join(' · ') || '—'
+                : conc ?? count ?? '—'
+              const volCell = isCarrier
+                ? m.fractionOfMixture ?? '—'
+                : formatVolume(m.volume_uL)
               return (
                 <tr key={idx} className="well-tooltip__material">
                   <td className="well-tooltip__material-name" title={m.materialRef}>
                     {m.materialRef}
                     {m.role ? <span className="well-tooltip__material-role"> · {m.role}</span> : null}
                   </td>
-                  <td className="well-tooltip__material-conc">{conc ?? count ?? '—'}</td>
-                  <td className="well-tooltip__material-vol">{formatVolume(m.volume_uL)}</td>
+                  <td className="well-tooltip__material-conc">{concCell}</td>
+                  <td className="well-tooltip__material-vol">{volCell}</td>
                 </tr>
               )
             })}

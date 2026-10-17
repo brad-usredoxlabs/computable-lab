@@ -369,6 +369,21 @@ export function AiTabPanel() {
     error?: string
   } | null>(null)
 
+  // SHORTHAND-CORPUS WS6 D2 (gate r4 OBS-1): the pair's prompt is the user
+  // TURNS of the current proposal (binding spec shape: prompt (user turns +
+  // SurfaceContext) -> accepted shorthand), not just the last turn. The
+  // thread is ALREADY held in chat state (chatReducer commits every user turn
+  // at send) — no forked store. This ref is only the boundary marker: the
+  // message count when a FRESH proposal starts (typed send, surface-context
+  // send, protocol-builder draft, Extract-Protocol CTA). Clarification-answer
+  // turns continue the proposal, so every user turn from this index onward
+  // belongs to the current proposal.
+  const proposalStartIndexRef = useRef(0)
+  // Mirror of `previewActive` (computed below at render) for the send-time
+  // boundary decision in handleSend — refs are current by the time a click
+  // or Enter fires.
+  const previewActiveRef = useRef(false)
+
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
@@ -605,7 +620,22 @@ export function AiTabPanel() {
       if (!editor) return
       setShorthandApply({ recompiling: true })
       try {
-        const compiled = await apiClient.intentCompile(yaml)
+        // SH-QB-1 (fix 1): the recompile must see the SAME resolution context
+        // the chat path saw — the editor's deck plates ride as the frozen
+        // DeckLabwareSummary mirror (a structural pick of labwareId/name/
+        // labwareType — a generic map, zero name literals). Deck plates are
+        // editor state, not store records; without them a document naming the
+        // plate the scientist is looking at false-bars unknown-noun on every
+        // recompile. No plates ⇒ the argument is not passed at all (key
+        // absent, never `undefined` — exactOptionalPropertyTypes).
+        const deckLabwares = Object.values(editor.state.labwares).map((lw) => ({
+          labwareId: lw.labwareId,
+          labwareType: lw.labwareType,
+          name: lw.name,
+        }))
+        const compiled = deckLabwares.length > 0
+          ? await apiClient.intentCompile(yaml, deckLabwares)
+          : await apiClient.intentCompile(yaml)
         const terminal = compiled.terminalArtifacts ?? {}
         const events = (terminal.events ?? []) as PlateEvent[]
         const gaps = (terminal.gaps ?? []).map((gap) => ({
@@ -613,6 +643,41 @@ export function AiTabPanel() {
           message: typeof gap.message === 'string' ? gap.message : 'compile gap',
           severity: 'warning' as const,
         }))
+        const clarifications = compiled.clarifications ?? []
+        // SH-QB-1 (fix 2, the loud-failure rule): ZERO events IS the
+        // zero-ghost condition — whatever the outcome says. The recompile
+        // takes the existing verbatim-error arm (the same visible surface a
+        // rejected edit already uses; OQ2: no clarification cards here) and
+        // the prior proposal stays. The message NAMES the reason: first
+        // clarification's label + reason, else the first gap message, else the
+        // outcome — never a silent empty preview, never a generic default
+        // when a structured reason exists.
+        if (events.length === 0) {
+          const firstClarification = clarifications[0] as
+            | { label?: unknown; reason?: unknown }
+            | undefined
+          const reason =
+            (typeof firstClarification?.label === 'string' && typeof firstClarification?.reason === 'string'
+              ? `${firstClarification.label}: ${firstClarification.reason}`
+              : undefined)
+            ?? gaps[0]?.message
+            ?? `The recompile produced no events (outcome: ${compiled.outcome ?? 'unknown'})`
+          setShorthandApply({ error: reason })
+          return
+        }
+        // Non-empty events keep today's draft-ready flow; the carried
+        // clarifications ride as warnings beside the gaps (non-blocking
+        // residue stays visible).
+        const warnings = [
+          ...gaps,
+          ...clarifications.map((fact) => ({
+            code: 'compile-clarification',
+            message: typeof fact.reason === 'string' && typeof fact.label === 'string'
+              ? `${fact.label}: ${fact.reason}`
+              : 'compile clarification',
+            severity: 'warning' as const,
+          })),
+        ]
         const prompt = lastShorthandDraftRef.current?.prompt ?? ''
         const platform = getPlatformManifest(editor.state.platforms, editor.state.platformId)
         const variant = getVariantManifest(editor.state.platforms, editor.state.platformId, editor.state.variantId)
@@ -640,7 +705,7 @@ export function AiTabPanel() {
           draftId: `draft-recompile-${Date.now()}`,
           interpretation: { operations: [] },
           changes: changesFromDraftEvents(events),
-          warnings: gaps,
+          warnings,
           terms: [],
           shorthand: yaml,
         })
@@ -768,6 +833,9 @@ export function AiTabPanel() {
   // corpus-capturable. Accepts extra chat.send options (e.g. protocolStepContext).
   const sendSurfaceContext = useCallback(
     (sc: SurfaceContext, extra?: Parameters<typeof chat.send>[1]) => {
+      // WS6 D2: a selection→AI seam starts a FRESH proposal — its pair's
+      // user-turn chain begins at this turn.
+      proposalStartIndexRef.current = messagesRef.current.length
       void sendChat(surfaceAiPrompt(sc), {
         enableThinking: false,
         ...(extra ?? {}),
@@ -867,9 +935,27 @@ export function AiTabPanel() {
     const draft = lastShorthandDraftRef.current
     if (!draft) return
     const { state } = editor
+    // WS6 D2 (OBS-1): the pair's prompt carries the user TURNS of the current
+    // proposal — the original drafting instruction plus every refinement turn
+    // that followed it — read from the thread the chat reducer ALREADY holds
+    // (no forked store). The server seam folds `userPrompt` + `thread` into
+    // one prompt (IntentTrainingPairHandlers.ts:74-79), so the existing POST
+    // body carries them: userPrompt = the drafting turn, thread = the
+    // refinements in order. Assistant turns are not part of the pair shape.
+    // surfaceContext is deliberately absent: the run-chat surface holds no
+    // SurfaceContext for a typed drafting prompt (only the selection→AI seams
+    // build one) — the client does not invent one.
+    const proposalTurns = messagesRef.current
+      .slice(proposalStartIndexRef.current)
+      .filter((m) => m.role === 'user' && m.text.trim().length > 0)
+      .map((m) => m.text.trim())
+    const [draftingTurn, ...refinementTurns] = proposalTurns
     void apiClient
       .intentTrainingPair({
-        userPrompt: draft.prompt,
+        userPrompt: draftingTurn ?? draft.prompt,
+        ...(refinementTurns.length > 0
+          ? { thread: refinementTurns.map((content) => ({ role: 'user', content })) }
+          : {}),
         shorthandYaml: sidebar.shorthand,
         acceptedGraph: {
           events: [...state.events, ...(state.preview?.previewEvents ?? [])],
@@ -973,6 +1059,13 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // WS6 D2: a send with NO mounted preview starts a FRESH proposal — the
+      // pair's user-turn chain begins at this turn. A send while a preview is
+      // mounted is a Revise (the UI says so) and CONTINUES the current
+      // proposal, so the boundary stays put.
+      if (!previewActiveRef.current) {
+        proposalStartIndexRef.current = messagesRef.current.length
+      }
       // PB-CH-4 D1: a fresh send starts a fresh turn — sendChat resets the
       // workstate flag at the choke point, so a flag from a previous turn
       // (e.g. one that ended on an SSE error with no `done` frame) can never
@@ -1120,6 +1213,7 @@ export function AiTabPanel() {
       (editorState.preview.previewPlacements.length > 0 ||
         editorState.preview.previewEvents.length > 0),
   )
+  previewActiveRef.current = previewActive
   const revisionCount = editorState?.preview?.revisionHistory?.length ?? 0
 
   return (
@@ -1187,6 +1281,8 @@ export function AiTabPanel() {
             }
             onDraft={(draftPrompt) => {
               resolvedClarificationsRef.current.clear()
+              // WS6 D2: a protocol-builder draft starts a FRESH proposal.
+              proposalStartIndexRef.current = messagesRef.current.length
 
               // Push the protocol candidate into the editor's graphLemurSource
               // so the context builder includes it in the graphLemur block.
@@ -1220,6 +1316,8 @@ export function AiTabPanel() {
               className="ai-tab__protocol-cta-btn"
               onClick={() => {
                 resolvedClarificationsRef.current.clear()
+                // WS6 D2: the Extract-Protocol CTA starts a FRESH proposal.
+                proposalStartIndexRef.current = messagesRef.current.length
                 void sendChat(
                   `Extract a protocol from the PDF in the active tab. Identify the procedure steps, materials, and labware.`,
                   { enableThinking: false },
@@ -1373,14 +1471,29 @@ export function AiTabPanel() {
             {...(previewActive ? { placeholder: 'Describe a revision to the proposed draft…' } : {})}
           />
         </section>
-      ) : sidebar.mode === 'clarifying' ? (
+      ) : sidebar.mode === 'clarifying' || sidebar.mode === 'updating' ? (
+        // SH-QA-2 (c) S6/S7: the updating strand (answer-resend in flight) used
+        // to render NOTHING here — if the resend turn died on an SSE `error`
+        // frame with no `done` frame, onDraftResult never fired, no reset leg
+        // ran, and the pane sat at "Updating draft…" with zero controls and
+        // zero surfaced reason. The block now covers `updating` too: the chat
+        // error rides as the REASON and the same cancel escape is offered
+        // (OQ4 ruling: CANCEL + REASON only — no retry-resend; the one-path
+        // rule keeps handleClarificationsSubmit the single resend affordance).
         <section className="ai-tab__section ai-tab__section--input-disabled">
-          <p className="ai-tab__input-disabled-text">
-            Answer the questions above to continue.
-          </p>
+          {sidebar.mode === 'clarifying' ? (
+            <p className="ai-tab__input-disabled-text">
+              Answer the questions above to continue.
+            </p>
+          ) : chat.state.error ? (
+            <p className="ai-tab__input-disabled-text" data-testid="updating-strand-reason">
+              {chat.state.error}
+            </p>
+          ) : null}
           <button
             type="button"
             className="ai-tab__input-cancel"
+            {...(sidebar.mode === 'updating' ? { 'data-testid': 'updating-cancel' } : {})}
             onClick={handleCancelDraft}
           >
             Cancel this draft and start a new prompt

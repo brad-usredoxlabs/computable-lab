@@ -20,7 +20,7 @@ import { createLabwareFromRequirement } from '../../../types/labwareRequirement'
 import { createEquipmentFromRequirement } from '../../../types/equipmentRequirement'
 import type { Equipment } from '../../../types/equipment'
 import { equipmentFootprintMm, labwareFootprintMm } from '../../../types/labwareFootprint'
-import type { AiActiveDeckScope, AiAlsoPlace, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement, AiRecordCreation } from '../../../types/ai'
+import type { AiActiveDeckScope, AiAlsoPlace, AiEquipmentRequirement, AiLabwareAddition, AiLabwareRequirement, AiRecordCreation, AiResolvedLabware } from '../../../types/ai'
 import type { PlatformManifest, PlatformVariantManifest } from '../../../types/platformRegistry'
 import { assignVisibleLabwareHandle } from '../../labwareHandles'
 import { resolveOrientation, validatePlacement } from '../../lib/placementRules'
@@ -82,6 +82,10 @@ export interface BuildPreviewArgs {
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
   labwareRequirements: AiLabwareRequirement[]
+  /** Hints the compile resolved against REAL inventory records — offered as
+   *  PLACEMENTS of the existing records (never authored; see the resolved arm
+   *  below and submitSuggestionTool.ts:311). */
+  resolvedLabwares?: AiResolvedLabware[]
   /** Bench equipment the draft wants placed on the bench (never a deck slot). */
   equipmentRequirements?: AiEquipmentRequirement[]
   /** Records the draft wants CREATED (written only on Accept). */
@@ -250,6 +254,7 @@ export function buildPreviewFromDraft({
   events,
   labwareAdditions,
   labwareRequirements,
+  resolvedLabwares = [],
   equipmentRequirements = [],
   recordCreations = [],
   alsoPlace,
@@ -288,6 +293,23 @@ export function buildPreviewFromDraft({
       label: addition.recordId,
       deckSlot: addition.deckSlot,
       labware: labwareRecordToEditorLabware(labwarePayloadForAddition(addition)),
+    })),
+    // The RESOLVED arm: a hint bound against a REAL inventory record is a
+    // PLACEMENT of the record the lab already owns, never a re-creation
+    // (submitSuggestionTool.ts:311). labwareRecordToEditorLabware keys the
+    // editor labware BY THE RECORD ID (labwareId/sourceRecordId === recordId)
+    // and never sets proposedRecord — authoring lives ONLY in the
+    // recordCreations arm below. Payload stays the same honest best-effort the
+    // additions arm ships (definition catalog, else fallback geometry); the
+    // title rides as the name so the ghost shows the record's REAL title
+    // (conditional spread — exactOptionalPropertyTypes, never name: undefined).
+    ...resolvedLabwares.map((resolved) => ({
+      label: resolved.recordId,
+      deckSlot: resolved.deckSlot,
+      labware: labwareRecordToEditorLabware({
+        ...labwarePayloadForAddition(resolved),
+        ...(resolved.title ? { name: resolved.title } : {}),
+      }),
     })),
   ]
 

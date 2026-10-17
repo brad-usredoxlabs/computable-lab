@@ -1,0 +1,44 @@
+{
+  "item": "SH-QA3-mode1-replay",
+  "runAt": "2026-10-16T07:22:15.867Z",
+  "profile": "DS-v4.1-OR",
+  "model": "~deepseek/deepseek-flash-latest",
+  "baseUrlHost": "openrouter.ai",
+  "prompt": "Add 50uL of 50% Thermo trypsin-EDTA / 50% DMEM with 10% FBS containing 200 HepG2 cells per uL to each well.",
+  "runs": 10,
+  "bars": {
+    "zeroProseBlobCards": true,
+    "zeroEmptyGraphs": true,
+    "rawEmissionsRetained": true
+  },
+  "counts": {
+    "blobCardRuns": 0,
+    "emptyGraphRuns": 0,
+    "stripRuns": 1,
+    "eventCounts": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clarificationCounts": [
+      4,
+      4,
+      0,
+      4,
+      0,
+      4,
+      4,
+      4,
+      4,
+      4
+    ]
+  },
+  "note": "Mode 1 (coder, pre-merge): in-process against the worktree boot of the lane data repo store, real active-profile inference client, ONE chain per run. Evidence, not a gate. Mode 2 (orch, as-served vs :3093) is the orchestrator leg."
+}

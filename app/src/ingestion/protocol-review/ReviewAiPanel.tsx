@@ -160,6 +160,18 @@ export function ReviewAiPanel({ recordId, onDraftApplied }: ReviewAiPanelProps) 
 
   const onDraftResult = useCallback(
     (result: AssistDraftResult) => {
+      // W2-89 g2b-1/2 — THE WRITE-WALL REFUSAL (deterministic, server-side
+      // policy: config/drafting/review-write-wall.yaml). A refusal turn
+      // carries the server-built wording and NO proposal payload; the panel
+      // shows the named refusal and closes any prior card — an Apply/Accept
+      // card over a refused ask is the gate's hard-FAIL (g2b-1/2).
+      if (result.refusal) {
+        setProposal(null)
+        setApplyError(null)
+        setApplyNote(null)
+        setRefusal(result.refusal.message)
+        return
+      }
       // R-Defect-1 / PB-CH-4 D1 class: a failed turn (schema rejection, model
       // failure — the error renders in the chat log via summarizeDraftResult)
       // must NEVER open an actionable review over an empty change list.
@@ -172,8 +184,11 @@ export function ReviewAiPanel({ recordId, onDraftApplied }: ReviewAiPanelProps) 
       const protocolEdit = result.protocolEdit
       if (!protocolEdit || !Array.isArray(protocolEdit.ops) || protocolEdit.ops.length === 0) {
         // A plain answer / notes-only turn: the chat log is its surface. No
-        // review card, no Accept (the empty-accept defect class).
+        // review card, no Accept (the empty-accept defect class). The prior
+        // turn's refusal banner is cleared too (advc-W289-l2t0525 DEFECT-3): a
+        // non-refusal turn must not keep reporting the earlier refusal.
         setProposal(null)
+        setRefusal(null)
         return
       }
       if (!view) {

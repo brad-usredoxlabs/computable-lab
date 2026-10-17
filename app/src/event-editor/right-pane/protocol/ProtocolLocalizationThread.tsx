@@ -22,10 +22,15 @@ import { useOptionalEventEditor } from '../../EventEditorContext'
 import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
+import { ClarificationPicker, requestHasPicker } from '../ai/ClarificationPicker'
+import { heldFactToClarificationRequest } from './ProtocolLocalizationThread.clarificationAdapter'
 import type { PlateEvent } from '../../../types/events'
 import type {
+  AiClarificationAnswer,
+  AiClarificationRequest,
   AiLabwareAddition,
   AiLabwareRequirement,
+  AiResolvedLabware,
 } from '../../../types/ai'
 
 export interface BranchQuestionAxis {
@@ -84,13 +89,15 @@ export interface LocalMacro {
   [key: string]: unknown
 }
 
-/** One row in the Review-deck labware checklist. */
+/** One row in the Review-deck labware checklist. `kind` is the compiler
+ *  vocabulary (one term per entity): an addition to author, a symbolic
+ *  requirement, or a hint resolved against an EXISTING inventory record. */
 export interface DeckLabwareSuggestion {
   key: string
   label: string
   deckSlot?: string
   reason?: string
-  requirement: boolean
+  kind: 'addition' | 'requirement' | 'resolved'
 }
 
 export interface ProtocolLocalizationThreadProps {
@@ -104,10 +111,15 @@ export interface ProtocolLocalizationThreadProps {
   links?: { studyId?: string; experimentId?: string; runId?: string }
 }
 
-/** Fold the compile's labwareAdditions + labwareRequirements into a review list. */
+/** Fold the compile's labwareAdditions + labwareRequirements + resolvedLabwares
+ *  into a review list. */
 function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabwareSuggestion[] {
   const additions = (terminalArtifacts.labwareAdditions ?? []) as AiLabwareAddition[]
   const requirements = (terminalArtifacts.labwareRequirements ?? []) as AiLabwareRequirement[]
+  const resolved = Array.isArray(terminalArtifacts.resolvedLabwares)
+    ? (terminalArtifacts.resolvedLabwares as Array<{ hint?: unknown; recordId?: unknown; title?: unknown; deckSlot?: unknown }>)
+      .filter((r) => r && typeof r.recordId === 'string' && r.recordId.length > 0)
+    : []
   const out: DeckLabwareSuggestion[] = []
   const seen = new Set<string>()
   for (const req of requirements) {
@@ -117,7 +129,7 @@ function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabw
       key: req.classCurie,
       label: req.classCurie,
       ...(req.deckSlot ? { deckSlot: req.deckSlot } : {}),
-      requirement: true,
+      kind: 'requirement',
     })
   }
   for (const add of additions) {
@@ -128,7 +140,26 @@ function deriveDeckLabware(terminalArtifacts: Record<string, unknown>): DeckLabw
       label: add.recordId,
       ...(add.deckSlot ? { deckSlot: add.deckSlot } : {}),
       ...(add.reason ? { reason: add.reason } : {}),
-      requirement: false,
+      kind: 'addition',
+    })
+  }
+  // Resolved rows fold LAST through the same `seen` Set: when a recordId is
+  // both an addition (deckSlot arms on non-shorthand pipelines) and a resolved
+  // row, the entity gets ONE checkbox and the addition kind wins. The row
+  // label is the record's REAL title (never a string-guess).
+  for (const res of resolved) {
+    const recordId = res.recordId as string
+    if (seen.has(recordId)) continue
+    seen.add(recordId)
+    const title = typeof res.title === 'string' && res.title.length > 0 ? res.title : undefined
+    out.push({
+      key: recordId,
+      label: title ?? recordId,
+      // Tolerant shape: deckSlot is not on this path today; if a pipeline ever
+      // carries one it rides through the same conditional-spread idiom
+      // (exactOptionalPropertyTypes — absent-or-value, never :undefined).
+      ...(typeof res.deckSlot === 'string' && res.deckSlot.length > 0 ? { deckSlot: res.deckSlot } : {}),
+      kind: 'resolved',
     })
   }
   return out
@@ -155,6 +186,14 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
   const [accepting, setAccepting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [messageKind, setMessageKind] = useState<'info' | 'error'>('info')
+  // THREAD-ASK-1 (Leg 2): the held 422's structured clarifications, kept as
+  // picker requests so the bar is ANSWERABLE where it is shown. Replaced whole
+  // on every fold (a re-send's held result re-folds through foldHeldBundle).
+  const [heldCards, setHeldCards] = useState<AiClarificationRequest[]>([])
+  // Answers picked on the cards, keyed by the clarification's own LABEL — the
+  // same key the server-side binding test pins (answers[<label>] = the
+  // [[material:MAT-…|label]] mention the picker produced).
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({})
 
   const setErrorMsg = useCallback((m: string) => {
     setMessage(m)
@@ -240,17 +279,28 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     const platform = getPlatformManifest(state.platforms, chosenPlatformId)
     const variant = getVariantManifest(state.platforms, chosenPlatformId, state.variantId)
     const reviewedAdditions: AiLabwareAddition[] = proposedLabware
-      .filter((lw) => !lw.requirement && deckPicked.has(lw.key))
+      .filter((lw) => lw.kind === 'addition' && deckPicked.has(lw.key))
       .map((lw) => ({
         recordId: lw.key,
         ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
         ...(lw.reason ? { reason: lw.reason } : {}),
       }))
     const reviewedRequirements: AiLabwareRequirement[] = proposedLabware
-      .filter((lw) => lw.requirement && deckPicked.has(lw.key))
+      .filter((lw) => lw.kind === 'requirement' && deckPicked.has(lw.key))
       .map((lw) => ({
         classCurie: lw.key,
         ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+      }))
+    // The third kind: a picked resolved row ghosts a PLACEMENT of the EXISTING
+    // record (draftPreview's resolved arm — labwareId/sourceRecordId ===
+    // recordId, no proposedRecord; submitSuggestionTool.ts:311). reason stays
+    // addition-only; the row label carries the record's real title.
+    const reviewedResolved: AiResolvedLabware[] = proposedLabware
+      .filter((lw) => lw.kind === 'resolved' && deckPicked.has(lw.key))
+      .map((lw) => ({
+        recordId: lw.key,
+        ...(lw.deckSlot ? { deckSlot: lw.deckSlot } : {}),
+        ...(lw.label !== lw.key ? { title: lw.label } : {}),
       }))
     const { preview } = buildPreviewFromDraft({
       platform,
@@ -258,6 +308,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       events,
       labwareAdditions: reviewedAdditions,
       labwareRequirements: reviewedRequirements,
+      resolvedLabwares: reviewedResolved,
       existingLabwares: state.labwares,
       existingPlacements: state.placements,
       activeDeckScope: activeDeckScope(chosenPlatformId),
@@ -280,6 +331,91 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     setProposedLabware(lab)
     setDeckPicked(new Set(lab.map((p) => p.key)))
   }, [])
+
+  /**
+   * W2-8 A5 (C leg, gate A5c root cause 2): the server's 422 bar HOLDS the
+   * parseable macro + terminalArtifacts + structured clarifications (OQ4(a))
+   * precisely so the client folds them into the review flow instead of
+   * discarding them. The apiClient now surfaces that bundle as a discriminated
+   * `{ held: true }` result; folding here is EXACTLY the 2xx branch
+   * (setLocalMacro + holdForReview) plus an honest info message listing the
+   * unresolved facts (labels + reasons) the scientist should review before
+   * accepting. Nothing is silently resolved on the user's behalf.
+   */
+  const foldHeldBundle = useCallback((held: {
+    clarifications: Array<Record<string, unknown>>
+    localMacro: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    terminalArtifacts: Record<string, unknown>
+  }) => {
+    setNeedsAnswers(false)
+    setLocalMacro(held.localMacro as LocalMacro)
+    const facts = held.clarifications
+      .map((c) => `${String(c.label ?? 'unnamed fact')} (${String(c.reason ?? 'unresolved')})`)
+      .join('; ')
+    setInfoMsg(facts
+      ? `Compiled — unresolved facts to review before accepting: ${facts}`
+      : 'Compiled — review the deck & labware, then place them.')
+    // THREAD-ASK-1 (Leg 2): the same held facts ALSO render as answerable
+    // cards (picker + mint) — additive. Facts with no answer surface map to
+    // null and stay infoMsg-only (no picker-less card). Card state is set
+    // BEFORE the gate call; the gate call itself is byte-unchanged.
+    setHeldCards(held.clarifications
+      .map((fact, index) => heldFactToClarificationRequest(fact, index))
+      .filter((request): request is AiClarificationRequest => request !== null))
+    holdForReview(held.terminalArtifacts)
+  }, [holdForReview])
+
+  // THREAD-ASK-1 (Leg 2): the answers map that rides every compile round-trip
+  // — the branch-axis answers (byte-unchanged axis semantics) merged with the
+  // clarification answers picked on the held cards (additive; a clarification
+  // answer's key is the fact's own label, its value the picker's
+  // [[material:MAT-…|label]] mention — the exact data shape Leg 1 binds).
+  const compileAnswers = useCallback((): Record<string, string> => ({
+    ...answers,
+    ...clarificationAnswers,
+  }), [answers, clarificationAnswers])
+
+  // A pick on a held card records the answer and RE-SENDS through the SAME
+  // apiClient.intentCompileFromPrompt round-trip the answers/corrections flows
+  // use (no new endpoint, no new fetch path). A re-send that re-bars re-folds
+  // through foldHeldBundle — never straight to the canvas.
+  const handleClarificationPick = useCallback((
+    answer: AiClarificationAnswer,
+    request: AiClarificationRequest,
+  ) => {
+    const label = request.prompt
+    const value = answer.mentionToken ?? answer.label ?? answer.value
+    if (!value) return
+    setClarificationAnswers((prev) => ({ ...prev, [label]: value }))
+    setLocalizing(true)
+    void (async () => {
+      try {
+        const res = await apiClient.intentCompileFromPrompt({
+          protocolText: protocolText.trim(),
+          ...(sourceProtocolId ? { sourceProtocolId } : {}),
+          answers: { ...answers, ...clarificationAnswers, [label]: value },
+        })
+        if ('held' in res && res.held === true) {
+          // The re-bar re-folds through the SAME gate path (cards refresh from
+          // the fresh held facts; the answered fact is gone when the spine
+          // bound it).
+          foldHeldBundle(res)
+        } else if (res.localMacro && res.terminalArtifacts) {
+          setNeedsAnswers(false)
+          setHeldCards([])
+          setLocalMacro(res.localMacro as LocalMacro)
+          setMessage('Ready — review the deck & labware, then place them.')
+          holdForReview(res.terminalArtifacts)
+        } else {
+          setErrorMsg('One-shot returned no draft after the clarification answer.')
+        }
+      } catch (err) {
+        setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setLocalizing(false)
+      }
+    })()
+  }, [protocolText, sourceProtocolId, answers, clarificationAnswers, foldHeldBundle, holdForReview])
 
   // W2-8 (spec §3 W4): load the FAMILY's questions once per source protocol.
   // The protocol record's branch_axes[] are its declared questions (data, not
@@ -315,15 +451,35 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     firstUserPrompt.current = text
     try {
       const res = await apiClient.intentCompileFromPrompt({ protocolText: text, sourceProtocolId })
-      if (res.needsAnswers) {
+      if ('held' in res && res.held === true) {
+        // Defensive: the ask call sends no answers, so a held 422 should not
+        // occur here; if the server ever holds one, fold it honestly rather
+        // than discarding it.
+        foldHeldBundle(res)
+      } else if (res.needsAnswers) {
         setAxes(res.axes ?? [])
         setNeedsAnswers(true)
         setAnswers({})
         setLocalMacro(null)
         setPendingDraft(null)
+        // THREAD-ASK-1 fix cycle 2 (D1 residual): this arm DISCARDS the macro
+        // (setLocalMacro(null) + setPendingDraft(null) above), so the cycle-1
+        // invariant applies here too — no stale answerable card survives over
+        // a replaced/discarded macro. Reachable: the always-rendered "Localize
+        // (one-shot)" button sends no answers, so the server returns
+        // needsAnswers while a prior held fold's cards are open. Only the card
+        // SURFACE clears; the clarificationAnswers map is deliberately NOT
+        // cleared — the Leg-1 answers keep riding re-drafts (compileAnswers).
+        setHeldCards([])
         setInfoMsg('Answer the branch questions to localize.')
       } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
+        // THREAD-ASK-1 fix cycle 1 (D1): a success that RESOLVES the macro
+        // collapses the held cards — the same lifecycle the pick's 2xx arm
+        // already has (:405). No stale answerable card survives over a
+        // resolved macro. The picked answers stay in the answers map (Leg 1
+        // data keeps riding re-drafts); only the card surface clears.
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage(
           `Localized: ${res.outcome} — review the deck & labware, then load onto deck `
@@ -338,7 +494,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, holdForReview])
+  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle])
 
   // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
   // text present), AUTO-RUN the branch-question extraction so the if/then
@@ -362,10 +518,19 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       const res = await apiClient.intentCompileFromPrompt({
         protocolText: protocolText.trim(),
         sourceProtocolId,
-        answers,
+        // THREAD-ASK-1: the clarification answers ride ADDITIVELY (with no
+        // picks this is the same map as before — axis semantics byte-unchanged).
+        answers: compileAnswers(),
       })
-      if (res.localMacro && res.terminalArtifacts) {
+      if ('held' in res && res.held === true) {
+        // The 422 bar with a held macro: fold it EXACTLY like the 2xx branch
+        // and surface the unresolved facts honestly (OQ4(a) as designed).
+        foldHeldBundle(res)
+      } else if (res.localMacro && res.terminalArtifacts) {
         setNeedsAnswers(false)
+        // THREAD-ASK-1 fix cycle 1 (D1): resolved macro -> held cards collapse
+        // (same lifecycle as the pick's 2xx arm; see handleLocalize).
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Ready — review the deck & labware, then place them.')
         holdForReview(res.terminalArtifacts)
@@ -373,11 +538,12 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setErrorMsg('One-shot returned no draft after answers.')
       }
     } catch (err) {
+      // A 422 WITHOUT a held macro (or any other failure) keeps the error path.
       setErrorMsg(`Localize failed: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, answers, holdForReview])
+  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
 
   // Per-step refinement: append a Correction, re-localize with the correction
   // (refinements fold into the final macro), then re-hold it through the gate.
@@ -393,9 +559,18 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       const res = await apiClient.intentCompileFromPrompt({
         protocolText: correctedText,
         sourceProtocolId,
-        answers,
+        // THREAD-ASK-1: clarification answers ride additively (see above).
+        answers: compileAnswers(),
       })
-      if (res.localMacro && res.terminalArtifacts) {
+      if ('held' in res && res.held === true) {
+        // A re-draft that bars with a held macro folds the same honest way
+        // (OQ4(a)) instead of discarding the held bundle.
+        foldHeldBundle(res)
+      } else if (res.localMacro && res.terminalArtifacts) {
+        // THREAD-ASK-1 fix cycle 1 (D1): a correction that resolves the macro
+        // collapses the held cards too (same lifecycle as the pick's 2xx arm;
+        // see handleLocalize).
+        setHeldCards([])
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
         holdForReview(res.terminalArtifacts)
@@ -407,7 +582,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, answers, holdForReview])
+  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
 
   const toggleDeckLabware = useCallback((key: string) => {
     setDeckPicked((prev) => {
@@ -552,6 +727,51 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
           >
             Apply &amp; compile
           </button>
+        </div>
+      ) : null}
+
+      {heldCards.length > 0 ? (
+        <div
+          className="protocol-localization-thread__held-clarifications"
+          data-testid="pl-clarification-cards"
+        >
+          <p className="pl-held-clarifications-title">Answer the unresolved facts</p>
+          {heldCards.map((request) => (
+            <section
+              key={request.id}
+              className="pl-held-clarification-card"
+              data-testid="pl-clarification-card"
+            >
+              <div className="pl-held-clarification-head">
+                <span className="pl-held-clarification-menu">{request.menuProvider}</span>
+                <span className="pl-held-clarification-label">{request.prompt}</span>
+              </div>
+              {request.options.length > 0 ? (
+                <div className="pl-held-clarification-options">
+                  {request.options.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="pl-held-clarification-option"
+                      disabled={localizing}
+                      data-testid={`pl-clarification-option-${request.id}`}
+                      onClick={() => handleClarificationPick({
+                        requestId: request.id,
+                        optionId: option.id,
+                        label: option.label,
+                        ...(option.ref ? { ref: option.ref } : {}),
+                      }, request)}
+                    >
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {requestHasPicker(request) ? (
+                <ClarificationPicker request={request} onPick={handleClarificationPick} />
+              ) : null}
+            </section>
+          ))}
         </div>
       ) : null}
 

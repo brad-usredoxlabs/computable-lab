@@ -1,0 +1,11 @@
+src/api/handlers/EventEditorFixHandlers.test.ts
+src/api/handlers/ExtractHandlers.test.ts
+src/api/handlers/MeasurementHandlers.applianceJob.test.ts
+src/api/handlers/SignatureHandlers.test.ts
+src/api/handlers/WorkspaceHandlers.test.ts
+src/governance/AuditEventService.test.ts
+src/integration/extractionE2E.test.ts
+src/revisions/RevisionStorage.test.ts
+src/schema/EventGraphEquipmentSchema.test.ts
+src/schema/LabwarePhysicalGeometryData.test.ts
+src/store/LifecycleBypassAudit.test.ts

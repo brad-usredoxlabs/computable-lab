@@ -1,0 +1,1191 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server
+
+ ✓ src/lint/ProtocolLintRules.test.ts  (43 tests) 252ms
+ ✓ src/lint/Wave2ConstraintVocabularyRules.test.ts  (19 tests) 271ms
+ ✓ src/lint/Wave2ProtocolIntentRules.test.ts  (20 tests) 710ms
+ ❯ src/api/handlers/ExtractHandlers.test.ts  (17 tests | 1 failed) 2251ms
+   ❯ src/api/handlers/ExtractHandlers.test.ts > ExtractHandlers - upload > should return recordId on successful upload
+     → expected "spy" to be called with arguments: [ ObjectContaining{…} ]
+
+Received: 
+
+  1st spy call:
+
+  Array [
+-   ObjectContaining {
+-     "envelope": ObjectContaining {
++   Object {
++     "envelope": Object {
++       "payload": Object {
++         "candidates": Array [],
++         "created_at": "2026-10-11T08:48:02.755Z",
+          "kind": "extraction-draft",
++         "recordId": "XDR-upload-001",
++         "source_artifact": Object {
++           "id": "upload-1234567890",
++           "kind": "file",
++           "locator": "test.pdf",
++         },
++         "status": "pending_review",
++       },
+        "recordId": "XDR-upload-001",
++       "schemaId": "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml",
+      },
+-     "message": StringContaining "Persist extraction-draft XDR-upload-001",
++     "message": "Persist extraction-draft XDR-upload-001 from upload test.pdf",
+      "skipLint": true,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ✓ src/api/handlers/VendorSearchHandlers.test.ts  (36 tests) 29ms
+ ✓ src/api/handlers/RecordHandlers.writeGates.test.ts  (12 tests) 11ms
+ ✓ src/api/handlers/VendorSearchHandlers.phase9.test.ts  (10 tests) 31ms
+ ❯ src/governance/AuditEventService.test.ts  (13 tests | 2 failed) 105ms
+   ❯ src/governance/AuditEventService.test.ts > RecordHandlers signature-ref validation (requires_signature guard) > allows the transition with a matching signature and appends a lifecycle_transition audit event
+     → expected undefined to be true // Object.is equality
+   ❯ src/governance/AuditEventService.test.ts > RecordHandlers append-only kinds > allows mutations when no accessor is configured (system works with config ripped out)
+     → expected undefined to be true // Object.is equality
+ ✓ src/lint/Wave2ProvenanceLadderRules.test.ts  (29 tests) 2886ms
+ ✓ src/store/RecordStore.test.ts  (38 tests) 2929ms
+ ✓ src/schema/SchemaRegistry.test.ts  (25 tests) 2976ms
+stdout | src/api/handlers/W25RegulatedLifecycle.test.ts > W2-5 T3: regulated lifecycle leg > leg A — a promoted protocol born draft CANNOT be PUT to effective: fail-closed LIFECYCLE_TRANSITION_DENIED, nothing persisted
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/api/handlers/W25RegulatedLifecycle.test.ts > W2-5 T3: regulated lifecycle leg > leg B1 (OQ3 GAP — REPORTED, guards NOT widened): a promoted-shaped payload carries NO payload createdBy, so roleAssignments.author is absent and the author-role transition fails closed
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/api/handlers/W25RegulatedLifecycle.test.ts > W2-5 T3: regulated lifecycle leg > leg B2 (the machinery works once an author is assigned): createdBy present -> draft->in_review by the author, then in_review->approved by a different reviewer
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/api/handlers/W25RegulatedLifecycle.test.ts > W2-5 T3: regulated lifecycle leg > leg C — signing lifecycle: ACTIVE transition refused WITHOUT signature, succeeds with a minted signature on the CURRENT saved revision + role assignments; audit lifecycle_transition carries signatureRefs
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+ ✓ src/api/handlers/W25RegulatedLifecycle.test.ts  (4 tests) 158ms
+stdout | src/schema/ServiceDomainSchemas.test.ts > lab-sync service & domain schemas > lifecycles for request, sample, and order load and govern their declared states
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+ ✓ src/governance/governanceStrictness.test.ts  (4 tests) 624ms
+stdout | src/governance/governanceStrictness.test.ts > governance strictness is policy-bundle dependent (§15) > case 1 — POL-SANDBOX allows the role-free draft→in_review transition but still rejects an illegal structural jump
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/governance/governanceStrictness.test.ts > governance strictness is policy-bundle dependent (§15) > case 2 — POL-REGULATED denies the same in_review→approved transition when no reviewer grant exists
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/governance/governanceStrictness.test.ts > governance strictness is policy-bundle dependent (§15) > case 3 — a role-grant record unblocks the regulated transition, emits an audit event, and the audit event is append-only
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/governance/governanceStrictness.test.ts > governance strictness is policy-bundle dependent (§15) > case 4 — signing lifecycle under POL-REGULATED fails closed without a signature and succeeds with a presented signature
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+ ✓ src/lint/LintEngine.test.ts  (27 tests) 9ms
+ ✓ src/schema/EventGraphSemanticKeySchema.test.ts  (8 tests) 559ms
+ ✓ src/schema/ProtocolIdeSchemas.test.ts  (11 tests) 812ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.test.ts  (11 tests) 79ms
+ ✓ src/schema/ServiceDomainSchemas.test.ts  (10 tests) 1917ms
+ ✓ src/revisions/W25MeantEditRevisions.test.ts  (7 tests) 21ms
+ ❯ src/api/handlers/SignatureHandlers.test.ts  (8 tests | 3 failed) 22ms
+   ❯ src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > creates a signature with signedBy from the SESSION user even when the body carries signedBy (body field ignored)
+     → expected "spy" to be called 1 times, but got 2 times
+   ❯ src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > records gitCommit from the subject record meta when reachable
+     → Cannot read properties of undefined (reading 'gitCommit')
+   ❯ src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > carries lifecycleId/targetState/statement through to the signature record
+     → expected undefined to deeply equal { code: 'approved', …(1) }
+ ✓ src/schema/ProcurementSchemaContracts.test.ts  (17 tests) 1663ms
+ ❯ src/api/handlers/WorkspaceHandlers.test.ts  (12 tests | 2 failed) 375ms
+   ❯ src/api/handlers/WorkspaceHandlers.test.ts > WorkspaceHandlers > PUT > GET after PUT returns the persisted state
+     → expected { version: 3, …(6) } to deeply equal { version: 2, …(6) }
+   ❯ src/api/handlers/WorkspaceHandlers.test.ts > WorkspaceHandlers > PUT > v1 legacy payload migrates to v2 on parse (browse → find, project-details inserted)
+     → expected 3 to be 2 // Object.is equality
+ ✓ src/lint/W25LintActivation.test.ts  (11 tests) 1120ms
+ ✓ src/api/handlers/PlannedRunSampleMap.test.ts  (8 tests) 11ms
+ ✓ src/lint/CrossCollectionPredicate.test.ts  (19 tests) 205ms
+ ↓ src/schema/VerbRecordsSemanticInputsLiquidHandling.test.ts  (13 tests | 13 skipped)
+ ↓ src/schema/VerbRecordsSemanticInputsReadoutAndMisc.test.ts  (13 tests | 13 skipped)
+ ↓ src/schema/VerbRecordsSemanticInputsTemperatureAndProcess.test.ts  (14 tests | 14 skipped)
+ ✓ src/schema/EquipmentCapabilityData.test.ts  (13 tests) 172ms
+ ✓ src/schema/Wave2ProtocolIntentSchema.test.ts  (15 tests) 6173ms
+ ✓ src/schema/VerbDefinitionSemanticInputs.test.ts  (8 tests) 463ms
+ ✓ src/api/handlers/ArtifactBlobHandlers.test.ts  (9 tests) 103ms
+ ✓ src/api/handlers/configHandlers.test.ts  (14 tests) 190ms
+ ✓ src/api/handlers/ProtocolIdeHandlers.test.ts  (39 tests) 536ms
+ ✓ src/api/handlers/ProtocolIdeHandlers.routes.test.ts  (16 tests) 647ms
+ ❯ src/schema/LabwarePhysicalGeometryData.test.ts  (6 tests | 2 failed) 448ms
+   ❯ src/schema/LabwarePhysicalGeometryData.test.ts > labware-definition physical geometry data > every SBS-family definition stamps physical_geometry.overall_dimensions_mm = 127×85 (no height)
+     → unstamped/incorrect SBS files:
+registry/12-well-reservoir.yaml: null
+seed/lbw-def-generic-12-reservoir.yaml: null
+seed/lbw-def-generic-384-well-plate.yaml: null
+seed/lbw-def-generic-8-reservoir.yaml: null
+seed/lbw-def-generic-96-tip-rack.yaml: null
+seed/lbw-def-generic-96-well-deep-plate.yaml: null
+seed/lbw-def-generic-96-well-plate.yaml: null
+seed/lbw-def-generic-pvc-microtiter-plate.yaml: null
+seed/lbw-def-integra-tiprack-12-5ul-384-v1.yaml: null
+seed/lbw-def-integra-tiprack-1250ul-96-v1.yaml: null
+seed/lbw-def-integra-tiprack-125ul-384-v1.yaml: null
+seed/lbw-def-integra-tiprack-300ul-96-v1.yaml: null
+seed/lbw-def-opentrons-corning-384-wellplate-112ul-flat-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-1000ul-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-200ul-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-50ul-v1.yaml: null
+seed/lbw-def-opentrons-nest-12-reservoir-22ml-v1.yaml: null
+seed/lbw-def-opentrons-nest-8-reservoir-22ml-v1.yaml: null
+seed/lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1.yaml: null
+seed/lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-1000ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-200ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-20ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-300ul-v1.yaml: null: expected [ …(24) ] to deeply equal []
+   ❯ src/schema/LabwarePhysicalGeometryData.test.ts > labware-definition physical geometry data > app TS mirror carries the same physical_geometry as the stamped seed records
+     → TS mirror entry integra/tiprack_12_5ul_384@v1 missing physical_geometry stamped in lbw-def-integra-tiprack-12-5ul-384-v1.yaml: expected { overall_dimensions_mm: { …(2) } } to deeply equal undefined
+ ✓ src/api/handlers/ProtocolBuilderStream.test.ts  (6 tests) 358ms
+ ✓ src/api/handlers/VendorExaHandlers.test.ts  (7 tests) 29ms
+ ✓ src/schema/ProtocolIdeSessionAnchors.test.ts  (6 tests) 899ms
+ ✓ src/schema/ProtocolPhasesSchema.test.ts  (6 tests) 1901ms
+ ✓ src/schema/IntakeSchemas.test.ts  (10 tests) 926ms
+ ✓ src/store/Artifact.smoke.test.ts  (7 tests) 300ms
+ ✓ src/schema/ProtocolEditOpSchema.test.ts  (60 tests) 7972ms
+ ↓ src/schema/MechanismModelSchemas.test.ts  (6 tests | 6 skipped)
+ ✓ src/schema/Wave2QuantitySchema.test.ts  (33 tests) 8296ms
+ ✓ src/api/handlers/ProtocolIntakeHandlers.routes.test.ts  (17 tests) 2238ms
+ ✓ src/api/handlers/PlannedRunHandlers.test.ts  (5 tests) 8ms
+ ✓ src/api/handlers/RecordHandlers.roleGrant.test.ts  (5 tests) 18ms
+ ✓ src/schema/Wave2ProvenanceLadderSchema.test.ts  (25 tests) 8524ms
+ ✓ src/api/handlers/IntentTrainingPairHandlers.test.ts  (5 tests) 435ms
+ ✓ src/api/handlers/AuthHandlers.test.ts  (7 tests) 635ms
+ ✓ src/schemas/extraction-promotion.smoke.test.ts  (21 tests) 228ms
+ ✓ src/api/handlers/ChatHandlers.test.ts  (4 tests) 49ms
+ ✓ src/integration/W25CandidateImmutability.test.ts  (8 tests) 4007ms
+ ✓ src/schema/DerivedDecisionTreeSchema.test.ts  (3 tests) 319ms
+ ✓ src/schema/ExecutionEvidenceSchemas.test.ts  (3 tests) 716ms
+ ❯ src/store/LifecycleBypassAudit.test.ts  (0 test)
+ ✓ src/api/handlers/VendorPdfBlobHandlers.test.ts  (6 tests) 14ms
+ ✓ src/api/handlers/AIHandlers.attachments.test.ts  (4 tests) 26ms
+ ✓ src/schema/BiologicalTypesSchema.test.ts  (6 tests) 852ms
+ ✓ src/schema/SeedProtocolPhases.test.ts  (30 tests) 73ms
+ ✓ src/schema/DerivationSchemas.test.ts  (7 tests) 408ms
+ ↓ src/schema/PhaseTemplateSeedRecords.test.ts  (7 tests | 7 skipped)
+ ✓ src/api/handlers/GraphSearchHandlers.test.ts  (7 tests) 19ms
+ ✓ src/schema/ControlledDocumentSchemas.test.ts  (21 tests) 7591ms
+ ✓ src/api/handlers/MaterialProfileHandlers.test.ts  (3 tests) 101ms
+ ❯ src/schema/EventGraphEquipmentSchema.test.ts  (4 tests | 3 failed) 647ms
+   ❯ src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > accepts a kind:equipment labwares entry with settings (never labware geometry)
+     → expected false to be true // Object.is equality
+   ❯ src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > accepts an editorLayout placement carrying entityKind/equipmentId (the deck-accept regression)
+     → expected false to be true // Object.is equality
+   ❯ src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > Equipment $def rejects an equipment entry that carries labware geometry
+     → expected undefined not to be undefined
+ ✓ src/schema/EquipmentCapabilitySeat.test.ts  (11 tests) 1036ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.apiKey.test.ts  (4 tests) 30ms
+stdout | src/schema/integration.test.ts > Schema Integration > loading project schemas > loads all schemas from schema/ directory
+Loaded 192 schemas
+
+ ✓ src/api/handlers/LifecycleHandlers.test.ts  (5 tests) 39ms
+ ✓ src/schema/Wave2NamingCrosswalk.test.ts  (6 tests) 7816ms
+ ✓ src/lint/W25RequiredConstraintGate.test.ts  (3 tests) 134ms
+ ✓ src/revisions/RecordRevisionService.test.ts  (5 tests) 18ms
+ ✓ src/schema/VendorPdfSourceSchema.test.ts  (4 tests) 843ms
+ ✓ src/schema/EquipmentFirstClass.test.ts  (7 tests) 937ms
+ ✓ src/schema/BackendFoundations.test.ts  (2 tests) 892ms
+ ✓ src/schema/ConcentrationFirstSchemaContract.test.ts  (11 tests) 4495ms
+ ✓ src/schema/TermSchema.test.ts  (7 tests) 1110ms
+ ❯ src/api/handlers/EventEditorFixHandlers.test.ts  (16 tests | 1 failed) 6460ms
+   ❯ src/api/handlers/EventEditorFixHandlers.test.ts > EventEditorFixHandlers Fix-it job endpoints > startApplyFixJob returns once the job is started and keeps persisting coder/critic progress in the background
+     → expected [ 'queued', 'worktree_ready', …(8) ] to include 'committed'
+ ✓ src/lint/studyRunRules.test.ts  (8 tests) 90ms
+ ✓ src/revisions/SignatureIntegrity.test.ts  (4 tests) 599ms
+stdout | src/revisions/SignatureIntegrity.test.ts > signed revision enforcement > permits approval of the exact saved content and rejects reuse for the next transition
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/revisions/SignatureIntegrity.test.ts > signed revision enforcement > rejects stale signatures after editing and rejects edits in the approval request itself
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/revisions/SignatureIntegrity.test.ts > signed revision enforcement > keeps legacy signatures readable but refuses to use them for new approvals
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+stdout | src/revisions/SignatureIntegrity.test.ts > signed revision enforcement > locks approved content while allowing a freshly signed effective transition
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+
+ ✓ src/api/handlers/ProtocolPromotionHandlers.test.ts  (3 tests) 14ms
+ ✓ src/api/handlers/RecordHandlers.lifecycle.test.ts  (1 test) 12ms
+ ✓ src/api/handlers/CorpusHandlers.test.ts  (4 tests) 22ms
+ ✓ src/revisions/RevisionRoutes.test.ts  (4 tests) 32ms
+ ❯ src/revisions/RevisionStorage.test.ts  (3 tests | 2 failed) 3326ms
+   ❯ src/revisions/RevisionStorage.test.ts > revision schemas and durable storage > persists protocol snapshots through YAML and protects them even with validation bypassed
+     → {"success":false,"validation":{"valid":false,"errors":[{"path":"/source","message":"Unknown property: ingestion","keyword":"additionalProperties","params":{"additionalProperty":"ingestion"},"suggestion":"\"ingestion\" is not a recognized field — check for a typo or remove it."}]},"error":"Validation failed"}: expected { success: false, …(2) } to match object { success: true }
+(4 matching properties omitted from actual)
+   ❯ src/revisions/RevisionStorage.test.ts > revision schemas and durable storage > accepts a graph against the exact saved source and keeps its version after later edits
+     → Cannot read properties of null (reading 'recordId')
+ ✓ src/api/handlers/EquipmentHandlers.test.ts  (2 tests) 18ms
+ ✓ src/schema/DerivationSeedRecords.test.ts  (4 tests) 724ms
+ ✓ src/api/handlers/IdentityHandlers.test.ts  (3 tests) 236ms
+ ✓ src/api/handlers/plateMapExport.test.ts  (2 tests) 20ms
+ ✓ src/schema/PhaseTemplateSchemas.test.ts  (4 tests) 791ms
+ ✓ src/api/handlers/TreeHandlers.inventoryUsage.test.ts  (2 tests) 17ms
+ ✓ src/api/handlers/TreeHandlers.listRuns.test.ts  (3 tests) 18ms
+ ✓ src/lint/PredicateEvaluator.mentionKind.test.ts  (9 tests) 18ms
+ ✓ src/schema/ProtocolProseFieldsSchema.test.ts  (4 tests) 3984ms
+ ✓ src/api/handlers/IntentAcceptHandlers.test.ts  (2 tests) 19ms
+ ✓ src/api/handlers/PredicatesHandlers.test.ts  (2 tests) 19ms
+ ✓ src/api/handlers/JsonLdSearchHandlers.test.ts  (1 test) 29ms
+ ✓ src/schema/AgentActionSchema.test.ts  (4 tests) 668ms
+ ✓ src/schema/governanceSchemas.test.ts  (7 tests) 3129ms
+ ✓ src/schema/PlateEventSchemaContracts.test.ts  (5 tests) 2775ms
+ ✓ src/api/handlers/OntologyTermHandlers.test.ts  (4 tests) 603ms
+ ✓ src/api/handlers/ProtocolBuilderHandlers.test.ts  (5 tests) 15ms
+ ✓ src/schema/BranchAxisSchemaContracts.test.ts  (5 tests) 3445ms
+ ✓ src/api/handlers/PromptTemplateHandlers.test.ts  (2 tests) 108ms
+ ✓ src/api/handlers/VerbActionMapHandlers.test.ts  (3 tests) 44ms
+ ✓ src/api/handlers/LabSettingsHandlers.test.ts  (2 tests) 98ms
+ ✓ src/schema/CandidateMapperSchemaConformance.test.ts  (4 tests) 4241ms
+ ✓ src/schema/Wave25OQ1SeamSchema.test.ts  (5 tests) 3934ms
+ ✓ src/api/handlers/IntentCompileHandlers.test.ts  (2 tests) 127ms
+ ✓ src/schema/integration.test.ts  (9 tests) 8143ms
+ ✓ src/schema/ContextChainSchemaContracts.test.ts  (2 tests) 2413ms
+ ✓ src/schema/MaterialActivities.test.ts  (2 tests) 2522ms
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Initializing app with base path: /tmp/cl-storage-handlers-ws
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Failed to load predicate registry: ENOENT: no such file or directory, open '/tmp/cl-storage-handlers-ws/schema/registry/predicates.registry.yaml'
+Failed to read lifecycle directory /tmp/cl-storage-handlers-ws/schema/core/lifecycles: ENOENT: no such file or directory, scandir '/tmp/cl-storage-handlers-ws/schema/core/lifecycles'
+Failed to load policy bundles: ENOENT: no such file or directory, scandir '/tmp/cl-storage-handlers-ws/schema/core/policy-bundles'
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Loaded repository configuration: main
+Loading schemas from: /tmp/cl-storage-handlers-ws/schema
+Loaded 0 schemas
+Added 0 schemas to validator
+Loaded 0 lint specs, 0 rules
+Loaded 0 lifecycle specs
+Loaded 0 policy bundles
+Loaded 6 material authoring profiles
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-storage-handlers-ws/data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-storage-handlers-ws/data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Embedded Git records repository ready: worktree=/tmp/cl-storage-handlers-ws/data/worktrees/main bare=/tmp/cl-storage-handlers-ws/data/repos/main.git
+
+stdout | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Initializing app with base path: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test
+Loading schemas from: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/schema
+
+stderr | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Config file not found at /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/config.yaml, using defaults
+
+stdout | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Loaded 3 schemas
+Added 3 schemas to validator
+
+stderr | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Failed to load predicate registry: ENOENT: no such file or directory, open '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/schema/registry/predicates.registry.yaml'
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Initializing app with base path: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test
+Loading schemas from: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/schema
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Config file not found at /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/config.yaml, using defaults
+
+stdout | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Loaded 0 lint specs, 0 rules
+Loaded 0 lifecycle specs
+Loaded 0 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /home/brad/.computable-lab
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /home/brad/.computable-lab
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Failed to read lifecycle directory /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/schema/core/lifecycles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/schema/core/lifecycles'
+Failed to load policy bundles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/extraction-e2e-test/schema/core/policy-bundles'
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 1 schemas
+Added 1 schemas to validator
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Failed to load predicate registry: ENOENT: no such file or directory, open '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/schema/registry/predicates.registry.yaml'
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 0 lint specs, 0 rules
+Loaded 0 lifecycle specs
+Loaded 0 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /home/brad/.computable-lab
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /home/brad/.computable-lab
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Failed to read lifecycle directory /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/schema/core/lifecycles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/schema/core/lifecycles'
+Failed to load policy bundles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/tmp/measurement-handlers-appliance-job-test/schema/core/policy-bundles'
+
+stderr | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+<empty line>
+stdout | src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+Embedded Git records repository ready: worktree=/home/brad/.computable-lab/worktrees/main bare=/home/brad/.computable-lab/repos/main.git
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Embedded Git records repository ready: worktree=/home/brad/.computable-lab/worktrees/main bare=/home/brad/.computable-lab/repos/main.git
+
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 192 schemas
+Added 192 schemas to validator
+Loaded 28 predicates from registry
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 192 schemas
+Added 192 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Loaded 0 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 27 lint specs, 81 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w25-t1-promotion-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w25-t1-promotion-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 27 lint specs, 81 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w26-t4-e2e-data-swap
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w26-t4-e2e-data-swap
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Index rebuilt: 125 records
+Index built with 125 records
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+JSON-LD index seeded with 0 records
+
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+<empty line>
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Biology term seeding failed (non-fatal): Error: ENOENT: no such file or directory, open '/tmp/cl-storage-handlers-ws/schema/registry/biological-types/biological-types.yaml'
+    at Proxy.readFileSync (node:fs:621:20)
+    at loadBiologicalTypesRegistry (/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/src/ontology/biologicalTypes.ts:352:24)
+    at Module.loadDefaultBiologicalTypesRegistry (/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/src/ontology/biologicalTypes.ts:357:10)
+    at Module.seedBiologicalTerms (/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/src/terms/seedBiologicalTerms.ts:61:20)
+    at Module.initializeApp (/mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/src/server.ts:593:26)
+    at /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server/src/api/handlers/StorageHandlers.test.ts:58:17
+    at runTest (file:///mnt/vast/home/brad/git/computable-lab/node_modules/@vitest/runner/dist/index.js:781:11)
+    at runSuite (file:///mnt/vast/home/brad/git/computable-lab/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runSuite (file:///mnt/vast/home/brad/git/computable-lab/node_modules/@vitest/runner/dist/index.js:909:15)
+    at runFiles (file:///mnt/vast/home/brad/git/computable-lab/node_modules/@vitest/runner/dist/index.js:958:5) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/tmp/cl-storage-handlers-ws/schema/registry/biological-types/biological-types.yaml'
+}
+
+stdout | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+App initialized
+
+stderr | src/api/handlers/StorageHandlers.test.ts > StorageHandlers browse (integration, local-mount via config) > loads the device from config and browses its files
+Seed protocol prt-seed-biological-transfer create failed: Validation failed
+
+ ✓ src/api/handlers/StorageHandlers.test.ts  (1 test) 2983ms
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w25-t1-promotion-data/worktrees/main bare=/tmp/cl-w25-t1-promotion-data/repos/main.git
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w26-t4-e2e-data-swap/worktrees/main bare=/tmp/cl-w26-t4-e2e-data-swap/repos/main.git
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 48 UI specs
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 48 UI specs
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 125 records
+Index built with 125 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 125 records
+Index built with 125 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+JSON-LD index seeded with 0 records
+
+ ❯ src/integration/extractionE2E.test.ts  (1 test) 10028ms
+ ❯ src/api/handlers/MeasurementHandlers.applianceJob.test.ts  (4 tests) 10408ms
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 148 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 148 records
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+AI inference endpoint probe failed; initializing AI runtime anyway so request-time calls can retry: fetch failed (http://127.0.0.1:1/v1/models) — cause: bad port
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+AI agent initialized (model: profile-model, tools: 184)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Library index built
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Library index built
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/server
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 192 schemas
+Added 192 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 27 lint specs, 81 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w26-t4-e2e-data-fallback
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w26-t4-e2e-data-fallback
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w26-t4-e2e-data-fallback/worktrees/main bare=/tmp/cl-w26-t4-e2e-data-fallback/repos/main.git
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Loaded 48 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 125 records
+Index built with 125 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+JSON-LD index seeded with 0 records
+
+ ✓ src/integration/W25DraftLifecyclePromotion.test.ts  (5 tests) 29412ms
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+[index-manager] merged 125 seed records from /mnt/vast/home/brad/git/wt/W2-89-fix-lane2-l2t0230/records/seed
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Index rebuilt: 148 records
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+AI agent initialized (model: profile-model-b, tools: 184)
+
+stderr | src/integration/Wave2SemanticPassE2E.test.ts
+<empty line>
+stdout | src/integration/Wave2SemanticPassE2E.test.ts
+Library index built
+
+stdout | src/integration/Wave2SemanticPassE2E.test.ts > W2-6 T4: config-only model swap + store-level E2E (A4/A5/A2) > health lintRules count is recorded (boot A)
+W26_HEALTH_LINTRULES 81
+
+ ✓ src/integration/Wave2SemanticPassE2E.test.ts  (7 tests) 44682ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+ FAIL  src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Error: Hook timed out in 10000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/20]⎯
+
+ FAIL  src/integration/extractionE2E.test.ts > E2E: PDF upload → extract → draft → promote → canonical + audit
+TypeError: Cannot read properties of undefined (reading 'close')
+ ❯ src/integration/extractionE2E.test.ts:313:15
+    311| 
+    312|   afterAll(async () => {
+    313|     await app.close();
+       |               ^
+    314|     await rm(testDir, { recursive: true, force: true });
+    315|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/20]⎯
+
+ FAIL  src/store/LifecycleBypassAudit.test.ts [ src/store/LifecycleBypassAudit.test.ts ]
+Error: Transform failed with 1 error:
+/mnt/vast/home/brad/git/computable-lab/server/src/store/LifecycleBypassAudit.test.ts:1:1: ERROR: Syntax error " "
+ ❯ failureErrorWithLog ../../../computable-lab/node_modules/esbuild/lib/main.js:1472:15
+ ❯ ../../../computable-lab/node_modules/esbuild/lib/main.js:755:50
+ ❯ responseCallbacks.<computed> ../../../computable-lab/node_modules/esbuild/lib/main.js:622:9
+ ❯ handleIncomingPacket ../../../computable-lab/node_modules/esbuild/lib/main.js:677:12
+ ❯ Socket.readFromStdout ../../../computable-lab/node_modules/esbuild/lib/main.js:600:7
+ ❯ Socket.emit node:events:514:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/20]⎯
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/governance/AuditEventService.test.ts > RecordHandlers signature-ref validation (requires_signature guard) > allows the transition with a matching signature and appends a lifecycle_transition audit event
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected: 
+true
+
++ Received: 
+undefined
+
+ ❯ src/governance/AuditEventService.test.ts:337:37
+    335|     const result = await handlers.updateRecord(makeUpdateRequest({ sig…
+    336| 
+    337|     expect((result as any).success).toBe(true);
+       |                                     ^
+    338|     expect(store.update).toHaveBeenCalledTimes(1);
+    339|     expect(auditService.append).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/20]⎯
+
+ FAIL  src/governance/AuditEventService.test.ts > RecordHandlers append-only kinds > allows mutations when no accessor is configured (system works with config ripped out)
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected: 
+true
+
++ Received: 
+undefined
+
+ ❯ src/governance/AuditEventService.test.ts:450:37
+    448|     );
+    449| 
+    450|     expect((result as any).success).toBe(true);
+       |                                     ^
+    451|     expect(store.delete).toHaveBeenCalledTimes(1);
+    452|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/20]⎯
+
+ FAIL  src/revisions/RevisionStorage.test.ts > revision schemas and durable storage > persists protocol snapshots through YAML and protects them even with validation bypassed
+AssertionError: {"success":false,"validation":{"valid":false,"errors":[{"path":"/source","message":"Unknown property: ingestion","keyword":"additionalProperties","params":{"additionalProperty":"ingestion"},"suggestion":"\"ingestion\" is not a recognized field — check for a typo or remove it."}]},"error":"Validation failed"}: expected { success: false, …(2) } to match object { success: true }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  Object {
+-   "success": true,
++   "success": false,
+  }
+
+ ❯ src/revisions/RevisionStorage.test.ts:32:46
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/20]⎯
+
+ FAIL  src/revisions/RevisionStorage.test.ts > revision schemas and durable storage > accepts a graph against the exact saved source and keeps its version after later edits
+TypeError: Cannot read properties of null (reading 'recordId')
+ ❯ src/revisions/RevisionStorage.test.ts:47:209
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/20]⎯
+
+ FAIL  src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > accepts a kind:equipment labwares entry with settings (never labware geometry)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/schema/EventGraphEquipmentSchema.test.ts:103:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/20]⎯
+
+ FAIL  src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > accepts an editorLayout placement carrying entityKind/equipmentId (the deck-accept regression)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/schema/EventGraphEquipmentSchema.test.ts:132:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/20]⎯
+
+ FAIL  src/schema/EventGraphEquipmentSchema.test.ts > event-graph first-class equipment branch > Equipment $def rejects an equipment entry that carries labware geometry
+AssertionError: expected undefined not to be undefined
+ ❯ equipmentDefValidator src/schema/EventGraphEquipmentSchema.test.ts:53:24
+ ❯ src/schema/EventGraphEquipmentSchema.test.ts:136:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/20]⎯
+
+ FAIL  src/schema/LabwarePhysicalGeometryData.test.ts > labware-definition physical geometry data > every SBS-family definition stamps physical_geometry.overall_dimensions_mm = 127×85 (no height)
+AssertionError: unstamped/incorrect SBS files:
+registry/12-well-reservoir.yaml: null
+seed/lbw-def-generic-12-reservoir.yaml: null
+seed/lbw-def-generic-384-well-plate.yaml: null
+seed/lbw-def-generic-8-reservoir.yaml: null
+seed/lbw-def-generic-96-tip-rack.yaml: null
+seed/lbw-def-generic-96-well-deep-plate.yaml: null
+seed/lbw-def-generic-96-well-plate.yaml: null
+seed/lbw-def-generic-pvc-microtiter-plate.yaml: null
+seed/lbw-def-integra-tiprack-12-5ul-384-v1.yaml: null
+seed/lbw-def-integra-tiprack-1250ul-96-v1.yaml: null
+seed/lbw-def-integra-tiprack-125ul-384-v1.yaml: null
+seed/lbw-def-integra-tiprack-300ul-96-v1.yaml: null
+seed/lbw-def-opentrons-corning-384-wellplate-112ul-flat-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-1000ul-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-200ul-v1.yaml: null
+seed/lbw-def-opentrons-flex-tiprack-50ul-v1.yaml: null
+seed/lbw-def-opentrons-nest-12-reservoir-22ml-v1.yaml: null
+seed/lbw-def-opentrons-nest-8-reservoir-22ml-v1.yaml: null
+seed/lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1.yaml: null
+seed/lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-1000ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-200ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-20ul-v1.yaml: null
+seed/lbw-def-opentrons-tiprack-300ul-v1.yaml: null: expected [ …(24) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "registry/12-well-reservoir.yaml: null",
++   "seed/lbw-def-generic-12-reservoir.yaml: null",
++   "seed/lbw-def-generic-384-well-plate.yaml: null",
++   "seed/lbw-def-generic-8-reservoir.yaml: null",
++   "seed/lbw-def-generic-96-tip-rack.yaml: null",
++   "seed/lbw-def-generic-96-well-deep-plate.yaml: null",
++   "seed/lbw-def-generic-96-well-plate.yaml: null",
++   "seed/lbw-def-generic-pvc-microtiter-plate.yaml: null",
++   "seed/lbw-def-integra-tiprack-12-5ul-384-v1.yaml: null",
++   "seed/lbw-def-integra-tiprack-1250ul-96-v1.yaml: null",
++   "seed/lbw-def-integra-tiprack-125ul-384-v1.yaml: null",
++   "seed/lbw-def-integra-tiprack-300ul-96-v1.yaml: null",
++   "seed/lbw-def-opentrons-corning-384-wellplate-112ul-flat-v1.yaml: null",
++   "seed/lbw-def-opentrons-flex-tiprack-1000ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-flex-tiprack-200ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-flex-tiprack-50ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-nest-12-reservoir-22ml-v1.yaml: null",
++   "seed/lbw-def-opentrons-nest-8-reservoir-22ml-v1.yaml: null",
++   "seed/lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1.yaml: null",
++   "seed/lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1.yaml: null",
++   "seed/lbw-def-opentrons-tiprack-1000ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-tiprack-200ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-tiprack-20ul-v1.yaml: null",
++   "seed/lbw-def-opentrons-tiprack-300ul-v1.yaml: null",
++ ]
+
+ ❯ src/schema/LabwarePhysicalGeometryData.test.ts:170:82
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/20]⎯
+
+ FAIL  src/schema/LabwarePhysicalGeometryData.test.ts > labware-definition physical geometry data > app TS mirror carries the same physical_geometry as the stamped seed records
+AssertionError: TS mirror entry integra/tiprack_12_5ul_384@v1 missing physical_geometry stamped in lbw-def-integra-tiprack-12-5ul-384-v1.yaml: expected { overall_dimensions_mm: { …(2) } } to deeply equal undefined
+
+- Expected: 
+undefined
+
++ Received: 
+Object {
+  "overall_dimensions_mm": Object {
+    "length": 127,
+    "width": 85,
+  },
+}
+
+ ❯ src/schema/LabwarePhysicalGeometryData.test.ts:203:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/20]⎯
+
+ FAIL  src/api/handlers/EventEditorFixHandlers.test.ts > EventEditorFixHandlers Fix-it job endpoints > startApplyFixJob returns once the job is started and keeps persisting coder/critic progress in the background
+AssertionError: expected [ 'queued', 'worktree_ready', …(8) ] to include 'committed'
+ ❯ src/api/handlers/EventEditorFixHandlers.test.ts:972:22
+    970|       expect(phases).toContain('junior_started');
+    971|       expect(phases).toContain('progress_gate');
+    972|       expect(phases).toContain('committed');
+       |                      ^
+    973|     } finally {
+    974|       await rm(tmp, { recursive: true, force: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/20]⎯
+
+ FAIL  src/api/handlers/ExtractHandlers.test.ts > ExtractHandlers - upload > should return recordId on successful upload
+AssertionError: expected "spy" to be called with arguments: [ ObjectContaining{…} ]
+
+Received: 
+
+  1st spy call:
+
+  Array [
+-   ObjectContaining {
+-     "envelope": ObjectContaining {
++   Object {
++     "envelope": Object {
++       "payload": Object {
++         "candidates": Array [],
++         "created_at": "2026-10-11T08:48:02.755Z",
+          "kind": "extraction-draft",
++         "recordId": "XDR-upload-001",
++         "source_artifact": Object {
++           "id": "upload-1234567890",
++           "kind": "file",
++           "locator": "test.pdf",
++         },
++         "status": "pending_review",
++       },
+        "recordId": "XDR-upload-001",
++       "schemaId": "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml",
+      },
+-     "message": StringContaining "Persist extraction-draft XDR-upload-001",
++     "message": "Persist extraction-draft XDR-upload-001 from upload test.pdf",
+      "skipLint": true,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/api/handlers/ExtractHandlers.test.ts:546:30
+    544|       })
+    545|     );
+    546|     expect(mockStore.create).toHaveBeenCalledWith(
+       |                              ^
+    547|       expect.objectContaining({
+    548|         envelope: expect.objectContaining({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/20]⎯
+
+ FAIL  src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > creates a signature with signedBy from the SESSION user even when the body carries signedBy (body field ignored)
+AssertionError: expected "spy" to be called 1 times, but got 2 times
+ ❯ src/api/handlers/SignatureHandlers.test.ts:164:26
+    162| 
+    163|     expect((result as any).success).toBe(true);
+    164|     expect(store.create).toHaveBeenCalledTimes(1);
+       |                          ^
+    165|     const envelope = (store.create as ReturnType<typeof vi.fn>).mock.c…
+    166|     const payload = envelope.payload as Record<string, unknown>;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/20]⎯
+
+ FAIL  src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > records gitCommit from the subject record meta when reachable
+TypeError: Cannot read properties of undefined (reading 'gitCommit')
+ ❯ src/api/handlers/SignatureHandlers.test.ts:200:57
+    198|     const envelope = (store.create as ReturnType<typeof vi.fn>).mock.c…
+    199|     const payload = envelope.payload as Record<string, unknown>;
+    200|     expect((payload.subject as Record<string, unknown>).gitCommit).toB…
+       |                                                         ^
+    201|       'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+    202|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/20]⎯
+
+ FAIL  src/api/handlers/SignatureHandlers.test.ts > SignatureHandlers.mintSignature > carries lifecycleId/targetState/statement through to the signature record
+AssertionError: expected undefined to deeply equal { code: 'approved', …(1) }
+
+- Expected: 
+Object {
+  "code": "approved",
+  "statement": "I approve this SOP",
+}
+
++ Received: 
+undefined
+
+ ❯ src/api/handlers/SignatureHandlers.test.ts:226:29
+    224| 
+    225|     const payload = (store.create as ReturnType<typeof vi.fn>).mock.ca…
+    226|     expect(payload.meaning).toEqual({ code: 'approved', statement: 'I …
+       |                             ^
+    227|     expect(payload.subject).toEqual({
+    228|       recordId: 'DOC-1',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/20]⎯
+
+ FAIL  src/api/handlers/WorkspaceHandlers.test.ts > WorkspaceHandlers > PUT > GET after PUT returns the persisted state
+AssertionError: expected { version: 3, …(6) } to deeply equal { version: 2, …(6) }
+
+- Expected
++ Received
+
+  Object {
+    "activeTabId": "tab-1",
+    "paneWidths": Object {
+      "left": 0.65,
+      "right": 0.35,
+    },
+    "rightPaneCollapsed": false,
+    "rightPaneMode": "ai",
+    "studyId": "STU-000001",
+    "tabs": Array [
+      Object {
+        "id": "details:STU-000001",
+        "kind": "project-details",
+        "title": "Project",
+      },
+      Object {
+        "eventGraphId": "EVG-000001",
+        "id": "tab-1",
+        "kind": "deck",
+        "title": "Run 1 deck",
+      },
+      Object {
+        "artifactId": "ART-000001",
+        "id": "tab-2",
+        "kind": "pdf",
+        "title": "Vendor protocol",
+      },
+    ],
+-   "version": 2,
++   "version": 3,
+  }
+
+ ❯ src/api/handlers/WorkspaceHandlers.test.ts:191:29
+    189|       );
+    190|       expect(getState.status).toBe(200);
+    191|       expect(result?.state).toEqual(validState);
+       |                             ^
+    192|     });
+    193| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/20]⎯
+
+ FAIL  src/api/handlers/WorkspaceHandlers.test.ts > WorkspaceHandlers > PUT > v1 legacy payload migrates to v2 on parse (browse → find, project-details inserted)
+AssertionError: expected 3 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 3
+
+ ❯ src/api/handlers/WorkspaceHandlers.test.ts:218:37
+    216|         reply,
+    217|       );
+    218|       expect(result?.state.version).toBe(2);
+       |                                     ^
+    219|       expect(result?.state.rightPaneMode).toBe('find');
+    220|       // project-details auto-inserted at index 0.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/20]⎯
+
+ Test Files  11 failed | 102 passed | 5 skipped (118)
+      Tests  16 failed | 1069 passed | 53 skipped (1143)
+   Start at  04:48:00
+   Duration  66.27s (transform 36.36s, setup 31ms, collect 163.02s, tests 239.92s, environment 51ms, prepare 27.49s)
+

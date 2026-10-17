@@ -26,7 +26,7 @@ import { inferAgentIntent, coerceToAgentIntentArgs } from './coerceAgentIntent.j
 import { AGENT_INTENT_TOOL_DEF, AGENT_INTENT_TOOL_NAME, parseAgentIntentArgs } from './submitSuggestionTool.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import { createLabwareLookup } from './compiler/labwareLookup.js';
-import { bindShorthandEventsToDeck } from './shorthandChat.js';
+import { bindShorthandEventsToDeck, factRequestId, takeHeldShorthandIntent } from './shorthandChat.js';
 import { parseScientistIntent } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../compiler/scientistIntent/compileScientistIntent.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
@@ -287,16 +287,119 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(compileSpy).not.toHaveBeenCalled();
   });
 
+  it('refuses a COERCED prose raw-events payload on the shorthand surface — the intent-inferred event_graph routes to the AS-4 refusal, the raw payload is never compiled', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const rawEvents = [{ event_type: 'add_material', details: { well: 'A1', material: 'invented', volumeUl: 999 } }];
+    // COERCION-PINS (ruling A): the route the :217/:252 pins do NOT cover — the
+    // model answers with the draft as PROSE JSON and NO tool call (the appliance's
+    // tool-call parser is off). The prose-recovery leg runs: coerceDraftArgsFromContent
+    // recovers the bare {events:[…]} object (AgentOrchestrator.ts:1909),
+    // coerceToAgentIntentArgs INFERs the event_graph label (coerceAgentIntent.ts),
+    // and that inferred label is what must then hit the AS-4 refusal arm
+    // (AgentOrchestrator.ts:2317) — never the legacy raw-events compile. The stub's
+    // single response repeats (stubModel clamps to the last spec), so the re-ask is
+    // answered with the same prose raw events: the repeat refusal ends the turn
+    // with the honest cannot-draft failure.
+    const model = stubModel([{ content: JSON.stringify({ events: rawEvents }) }]);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 3 },
+      orchestratorDeps(),
+    );
+
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST, onEvent: (e) => events.push(e) });
+    compileSpy.mockRestore();
+
+    // The prose-recovery leg ACTUALLY ran: the draft was parsed from content and
+    // invoked AS agent_intent (intent inferred) — this is not a native tool call.
+    expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(true);
+    // The inferred event_graph hit the refusal on BOTH attempts: first call
+    // refused + re-asked, repeat call refused again (>=1 refusal required; the
+    // stubborn-model route produces exactly two).
+    const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
+    expect(refusals.length).toBeGreaterThanOrEqual(1);
+    expect(refusals.length).toBe(2);
+    // The re-ask demands the shorthand document.
+    const reask = model.captured[1];
+    expect(reask).toBeDefined();
+    expect(JSON.stringify(reask.messages)).toMatch(/event_shorthand/);
+    // The REFUSAL is the diagnostic: the turn ends in the honest cannot-draft
+    // failure, NEVER in the shorthand-schema "could not be repaired" message
+    // (AgentOrchestrator.ts:2266) — the raw payload never reached the shorthand
+    // parser either.
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(String(result.error)).toMatch(/refused again/i);
+    expect(String(result.error)).not.toMatch(/could not be repaired/);
+    expect(String(result.error)).not.toMatch(/scientist-intent schema/);
+    // Zero compiled events, and the raw payload never reached ANY compile path.
+    expect(result.events ?? []).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toMatch('invented');
+    expect('termManifest' in result).toBe(false);
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(model.callCount()).toBe(2);
+  });
+
+  it('an explicit intent:event_graph NATIVE call on the shorthand surface still routes to the AS-4 refusal (COERCION-PINS regression guard for the :217/:252 pins)', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [], labwareAdditions: [], unresolvedRefs: [], diagnostics: [],
+      terminalArtifacts: { events: [], directives: [], gaps: [] }, outcome: 'error',
+    });
+    const rawEvents = [{ event_type: 'add_material', details: { well: 'A1', material: 'invented', volumeUl: 999 } }];
+    const rawCall = { name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_graph', events: rawEvents } };
+    // The NATIVE route (explicit discriminator, no coercion): the stub's single
+    // response repeats, so the re-ask is answered with the same raw call — the
+    // refusal must be TOTAL, exactly as the :217/:252 pins hold it.
+    const model = stubModel([{ toolCalls: [rawCall] }]);
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 3 },
+      orchestratorDeps(),
+    );
+
+    const result = await orchestrator.run({ ...RUN_CHAT_REQUEST, onEvent: (e) => events.push(e) });
+    compileSpy.mockRestore();
+
+    // Routing is the refusal arm directly — no prose-coercion leg ran (the call
+    // was native), and BOTH raw calls were refused.
+    expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(false);
+    const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
+    expect(refusals.length).toBe(2);
+    const reask = model.captured[1];
+    expect(reask).toBeDefined();
+    expect(JSON.stringify(reask.messages)).toMatch(/event_shorthand/);
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/cannot draft/i);
+    expect(result.events ?? []).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toMatch('invented');
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(model.callCount()).toBe(2);
+  });
+
   it('DEFECT-4 (fix cycle 1): a folded document that fails Ajv routes to the extraction-only fallback — the turn does not crash', async () => {
     const { holdShorthandIntent } = await import('./shorthandChat.js');
     const { deriveContextCacheKey } = await import('./systemPrompt.js');
     const key = deriveContextCacheKey('workspace.deck' as never, RUN_CHAT_REQUEST.context as never);
     const heldDoc = parseScientistIntent(AMBIGUOUS_YAML);
     // A held document whose folded re-serialization CANNOT pass Ajv (a field
-    // the wire schema forbids): the fold's final parseScientistIntent must
-    // return null (the permitted extraction-only fallback), never escape as a
-    // ScientistIntentValidationError crashing the turn out of run().
-    (heldDoc.actions[0] as unknown as Record<string, unknown>).bogusField = 'not-a-schema-field';
+    // the wire schema forbids): the fold's final parse through
+    // parseShorthandForChat must return null (the permitted extraction-only
+    // fallback), never escape as a ScientistIntentValidationError crashing the
+    // turn out of run(). SHORTHAND-COMP-2 note: the defect rides an
+    // `unresolved[]` entry because the lift (Task 9) VERBATIM-copies unresolved
+    // and scrubs unknown action-level noise — an action-level bogusField is
+    // now normalized away (that is the lift's job), so the guard is pinned on
+    // a defect the lift deliberately preserves.
+    heldDoc.unresolved.push({ label: 'other thing', reason: 'x', bogusField: 'not-a-schema-field' } as never);
     holdShorthandIntent(key, {
       yaml: AMBIGUOUS_YAML,
       doc: heldDoc,
@@ -390,7 +493,8 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     const requests = result.clarificationRequests ?? [];
     expect(requests.length).toBeGreaterThan(0);
     const fact = requests[0]!;
-    expect(fact.id).toBe('unresolved-1');
+    // SH-QA-1: the join id is CONTENT-keyed (factRequestId), not positional.
+    expect(fact.id).toBe(factRequestId(fact.unresolvedFact!));
     expect(fact.query).toBe('mystery goop');
     expect(fact.options).toEqual([]);
     // The verbatim ScientistIntentUnresolvedFact rides along — the server minted
@@ -418,7 +522,10 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
       ...RUN_CHAT_REQUEST,
       prompt: 'the test reagent',
       clarificationAnswers: [{
-        requestId: 'unresolved-1',
+        // SH-QA-1: answer with the minted CONTENT join id (the sole mint form
+        // the server emits now; the legacy digits arm stays pinned as a
+        // fallback in shorthandChat.cueCascade.test.ts).
+        requestId: first.clarificationRequests![0].id,
         label: 'Test Reagent',
         ref: { id: 'MAT-test-material-1', kind: 'material' },
       }],
@@ -435,6 +542,54 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     expect(foldedDetails.material).toBe('Test Reagent');
     // The folded shorthand is what compiled — carried verbatim for the panel.
     expect(second.shorthand).toMatch('Test Reagent');
+  });
+
+  it('SH-QA-1 fold-leg ledger: a re-hold after a partial fold carries answeredSlots for the closed slot', async () => {
+    // Two unbound slots: material + labware. Answer ONLY the material card
+    // with a seeded label: the material slot resolves (closed → ledgered),
+    // the labware slot still bars (legitimate re-ask, NOT ledgered). The
+    // re-hold must carry the ledger so a later re-derived material fact is
+    // dropped while the slot value stands.
+    const yaml = `intentId: chat-two-slots
+actions:
+  - action: add_material
+    labware: mystery plate
+    material: mystery goop
+    volumeUl: 50
+    targetWells: [A1]
+`;
+    const model = stubModel([{ toolCalls: [shorthandCall(yaml)] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const first = await orchestrator.run({ ...RUN_CHAT_REQUEST, prompt: 'add mystery goop to mystery plate at A1' });
+    const requests = first.clarificationRequests ?? [];
+    expect(requests.length).toBeGreaterThanOrEqual(2);
+    const materialCard = requests.find((r) => r.unresolvedFact?.actionLocation?.argument === 'material')!;
+    expect(materialCard).toBeDefined();
+
+    const second = await orchestrator.run({
+      ...RUN_CHAT_REQUEST,
+      prompt: 'the test reagent',
+      clarificationAnswers: [{ requestId: materialCard.id, label: 'Test Reagent' }],
+    });
+    expect(model.callCount()).toBe(1);
+    // The labware slot still bars — the legitimate re-ask survives.
+    const reasked = second.clarificationRequests ?? [];
+    expect(reasked.some((r) => r.unresolvedFact?.actionLocation?.argument === 'labware')).toBe(true);
+    expect(reasked.some((r) => r.unresolvedFact?.actionLocation?.argument === 'material')).toBe(false);
+
+    // The re-hold carries the ledger for the CLOSED slot only.
+    const { deriveContextCacheKey } = await import('./systemPrompt.js');
+    const key = deriveContextCacheKey(RUN_CHAT_REQUEST.surface, RUN_CHAT_REQUEST.context);
+    const reHeld = takeHeldShorthandIntent(key);
+    expect(reHeld).not.toBeNull();
+    expect(reHeld!.answeredSlots).toEqual([{ actionIndex: 0, argument: 'material', label: 'Test Reagent' }]);
+    expect(reHeld!.clarifications.some((f) => f.actionLocation?.argument === 'material')).toBe(false);
   });
 
   it('the ONE forced tool grows exactly one new intent value with one shorthand arg', () => {

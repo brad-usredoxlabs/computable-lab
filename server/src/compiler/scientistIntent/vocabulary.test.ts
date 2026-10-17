@@ -82,6 +82,7 @@ describe('resolver-spec.validation', () => {
       'vocab-policy-refs-declared',
       'vocab-hint-verbs-carry-policy-ref',
       'vocab-pattern-verbs-forbid-required-resolvable',
+      'vocab-many-args-declare-item-noun-field',
       'vocab-strategy-refs-declared',
     ]);
   });

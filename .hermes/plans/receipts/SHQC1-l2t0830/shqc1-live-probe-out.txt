@@ -1,0 +1,180 @@
+
+Running 1 test using 1 worker
+
+=== CYCLE 1 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": true
+}
+=== POST-CANCEL DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": false
+}
+=== CYCLE 2 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": true
+}
+=== LIVE DONE FRAME 1 SUMMARY ===
+{
+  "present": true,
+  "success": true,
+  "error": null,
+  "eventsLength": 0,
+  "eventsWithDetailsLabwareId": 0,
+  "eventsWithDetailsWellsArray": 0,
+  "distinctDetailsLabwareIds": [],
+  "labwareAdditions": null,
+  "clarificationRequestsLength": 1,
+  "shorthand": "intentId: add-dmem-ghost-plate\nactions:\n  - action: add_material\n    labware: \"ghost plate\"\n    material: \"DMEM\"\n    volumeUl: 50\n    targetWells: [A1:H12]\n"
+}
+=== LIVE DONE FRAME 2 SUMMARY ===
+{
+  "present": true,
+  "success": true,
+  "error": null,
+  "eventsLength": 0,
+  "eventsWithDetailsLabwareId": 0,
+  "eventsWithDetailsWellsArray": 0,
+  "distinctDetailsLabwareIds": [],
+  "labwareAdditions": null,
+  "clarificationRequestsLength": 1,
+  "shorthand": "intentId: add-dmem-to-ghost-plate\nactions:\n  - action: add_material\n    labware: ghost plate\n    material: \"DMEM\"\n    volumeUl: 50\n"
+}
+=== REQ BODY 1 (context keys) ===
+{
+  "studyId": "STU-scratch",
+  "activeTabKind": "project-details",
+  "activeArtifactId": null,
+  "activeEventGraphId": "EVG-SPK-VERIFY",
+  "systemPromptId": "workspace.deck",
+  "systemPromptBody": "You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.",
+  "activeDeckScope": {
+    "locked": false,
+    "platformId": "manual",
+    "variantId": "manual_freeform",
+    "allowedSurfaces": [
+      "lawn"
+    ],
+    "allowedSlots": [],
+    "allowedLabwareIds": [
+      "LBW-96-1"
+    ]
+  },
+  "labwares": [
+    {
+      "labwareId": "LBW-96-1",
+      "labwareType": "plate_96",
+      "name": "ghost plate",
+      "rows": 8,
+      "columns": 12
+    }
+  ],
+  "eventSummary": "No events yet.",
+  "vocabPackId": "liquid-handling/v1",
+  "availableVerbs": [
+    "aspirate",
+    "dispense",
+    "transfer",
+    "multi_dispense",
+    "add_material",
+    "mix",
+    "wash",
+    "incubate",
+    "read",
+    "harvest",
+    "place_tube",
+    "move_tube",
+    "remove_tube",
+    "serial_dilution",
+    "plate_copy",
+    "wash_cycle"
+  ],
+  "deckPlatform": "manual",
+  "deckVariant": "manual_freeform",
+  "deckPlacements": [
+    {
+      "slotId": "lawn",
+      "labwareId": "LBW-96-1"
+    }
+  ],
+  "eventGraphId": "EVG-SPK-VERIFY"
+}
+=== REQ BODY 2 (context keys) ===
+{
+  "studyId": "STU-scratch",
+  "activeTabKind": "project-details",
+  "activeArtifactId": null,
+  "activeEventGraphId": "EVG-SPK-VERIFY",
+  "systemPromptId": "workspace.deck",
+  "systemPromptBody": "You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.",
+  "activeDeckScope": {
+    "locked": false,
+    "platformId": "manual",
+    "variantId": "manual_freeform",
+    "allowedSurfaces": [
+      "lawn"
+    ],
+    "allowedSlots": [],
+    "allowedLabwareIds": [
+      "LBW-96-1"
+    ]
+  },
+  "labwares": [
+    {
+      "labwareId": "LBW-96-1",
+      "labwareType": "plate_96",
+      "name": "ghost plate",
+      "rows": 8,
+      "columns": 12
+    }
+  ],
+  "eventSummary": "No events yet.",
+  "vocabPackId": "liquid-handling/v1",
+  "availableVerbs": [
+    "aspirate",
+    "dispense",
+    "transfer",
+    "multi_dispense",
+    "add_material",
+    "mix",
+    "wash",
+    "incubate",
+    "read",
+    "harvest",
+    "place_tube",
+    "move_tube",
+    "remove_tube",
+    "serial_dilution",
+    "plate_copy",
+    "wash_cycle"
+  ],
+  "deckPlatform": "manual",
+  "deckVariant": "manual_freeform",
+  "deckPlacements": [
+    {
+      "slotId": "lawn",
+      "labwareId": "LBW-96-1"
+    }
+  ],
+  "eventGraphId": "EVG-SPK-VERIFY"
+}
+=== CONSOLE ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[warning] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more informa
+[warning] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see http
+  ✓  1 [chromium] › e2e/zz-shqc1-live-probe.spec.ts:139:1 › LIVE PROBE: real server, prompt -> Discard -> re-prompt; capture both done frames (2.1m)
+
+  1 passed (2.1m)

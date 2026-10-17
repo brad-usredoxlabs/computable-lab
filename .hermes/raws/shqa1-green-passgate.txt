@@ -1,0 +1,11 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ✓ src/compiler/resolution/resolveNounsPass.test.ts  (24 tests) 712ms
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  16:11:12
+   Duration  2.64s (transform 350ms, setup 0ms, collect 976ms, tests 712ms, environment 0ms, prepare 338ms)
+
+EXIT:0

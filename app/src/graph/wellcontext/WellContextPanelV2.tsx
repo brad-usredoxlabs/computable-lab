@@ -275,17 +275,21 @@ function WellStateCard({
         <div className="materials-section">
           <h5>Scientific State</h5>
           <ul className="materials-list">
-            {state.materials.map((material, idx) => (
-              <li key={idx}>
-                <span className="material-name">{material.materialRef}</span>
-                <span className="material-meta">
-                  {formatComputedConcentration(material.concentration, material.concentrationUnknown) || 'no concentration'}
-                  {' · '}
-                  {formatVolume(material.volume_uL)}
-                  {typeof material.count === 'number' ? ` · ${formatComputedCount(material.count)}` : ''}
-                </span>
-              </li>
-            ))}
+            {state.materials.map((material, idx) => {
+              // SH-QA-4: carrier-marked composition rows state their share of
+              // the mixture, never the mixture's volume (the header is the
+              // single volume assertion). Non-carrier rows render as before.
+              const conc = formatComputedConcentration(material.concentration, material.concentrationUnknown) || 'no concentration'
+              const metaParts = material.volumeIsCarrier
+                ? [conc, material.fractionOfMixture, formatComputedCount(material.count), formatComputedConcentration(material.counterDensity)].filter(Boolean)
+                : [conc, formatVolume(material.volume_uL), typeof material.count === 'number' ? formatComputedCount(material.count) : null].filter(Boolean)
+              return (
+                <li key={idx}>
+                  <span className="material-name">{material.materialRef}</span>
+                  <span className="material-meta">{metaParts.join(' · ')}</span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

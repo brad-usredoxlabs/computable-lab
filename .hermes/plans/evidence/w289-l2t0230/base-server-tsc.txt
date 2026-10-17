@@ -1,0 +1,21 @@
+src/ai/AgentOrchestrator.ts(296,11): error TS2322: Type '"equipment" | "material" | "material-spec" | "material-instance" | "aliquot" | "labware" | "vendor-product"' is not assignable to type '"equipment" | "material" | "material-spec" | "aliquot" | "labware" | "selection" | "protocol" | "graph-component"'.
+  Type '"material-instance"' is not assignable to type '"equipment" | "material" | "material-spec" | "aliquot" | "labware" | "selection" | "protocol" | "graph-component"'.
+src/api/handlers/ProtocolIntakeHandlers.ts(396,46): error TS2339: Property 'refreshTree' does not exist on type 'ProtocolIntakeService'.
+src/api/handlers/ProtocolIntakeHandlers.ts(397,51): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/api/handlers/RecordHandlers.ts(35,15): error TS2305: Module '"../../lint/types.js"' has no exported member 'AuthoringPolicy'.
+src/lint/AuthoringGuard.ts(11,15): error TS2305: Module '"./types.js"' has no exported member 'AuthoringPolicy'.
+src/lint/AuthoringGuard.ts(11,32): error TS2305: Module '"./types.js"' has no exported member 'AuthoringRequirement'.
+src/lint/AuthoringGuard.ts(45,22): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/scripts/bootstrapAdmin.ts(40,22): error TS2339: Property 'clear' does not exist on type 'SessionStore'.
+src/store/RecordStoreImpl.ts(270,18): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(270,48): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(296,18): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(296,48): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(422,18): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(422,48): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(460,36): error TS2339: Property 'getVerifiedCommit' does not exist on type 'RepoAdapter'.
+src/store/RecordStoreImpl.ts(576,115): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(576,145): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(774,124): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+src/store/RecordStoreImpl.ts(774,154): error TS2339: Property 'gitCommit' does not exist on type 'RepoFile'.
+server tsc exit 2

@@ -1,0 +1,66 @@
+
+Running 1 test using 1 worker
+
+=== CYCLE 1 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 1,
+  "changesPanel": true,
+  "questionsPanel": false,
+  "tiles": [
+    {
+      "ghost": "false",
+      "affected": "true",
+      "preview": null,
+      "text": "ghost platePreview⟲×"
+    }
+  ]
+}
+=== CYCLE 1 DRILLED DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 96,
+  "affectedCommitted": 0,
+  "changesPanel": true,
+  "questionsPanel": false,
+  "tiles": []
+}
+=== POST-CANCEL DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 0,
+  "affectedCommitted": 0,
+  "changesPanel": false,
+  "questionsPanel": false,
+  "tiles": []
+}
+=== CYCLE 2 DOM ===
+{
+  "ghostTiles": 0,
+  "previewWells": 96,
+  "affectedCommitted": 0,
+  "changesPanel": true,
+  "questionsPanel": false,
+  "tiles": []
+}
+=== REQUEST BODIES (len) ===
+1178, 1389
+=== REQUEST BODY 1 ===
+{"prompt":"Add 50uL of DMEM to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"]},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"ghost plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[],"enableThinking":false}
+=== REQUEST BODY 2 ===
+{"prompt":"Add 50uL of DMEM to each well.","surface":"workspace.deck","context":{"studyId":"STU-scratch","activeTabKind":"project-details","activeArtifactId":null,"activeEventGraphId":"EVG-SPK-VERIFY","systemPromptId":"workspace.deck","systemPromptBody":"You are helping draft compiler-native event graphs for a lab deck. Prefer structured tool calls over free-text. Ghost previews must not commit local namespace records until the user accepts.","activeDeckScope":{"locked":false,"platformId":"manual","variantId":"manual_freeform","allowedSurfaces":["lawn"],"allowedSlots":[],"allowedLabwareIds":["LBW-96-1"],"focusedLabwareId":"LBW-96-1"},"labwares":[{"labwareId":"LBW-96-1","labwareType":"plate_96","name":"ghost plate","rows":8,"columns":12}],"eventSummary":"No events yet.","vocabPackId":"liquid-handling/v1","availableVerbs":["aspirate","dispense","transfer","multi_dispense","add_material","mix","wash","incubate","read","harvest","place_tube","move_tube","remove_tube","serial_dilution","plate_copy","wash_cycle"],"deckPlatform":"manual","deckVariant":"manual_freeform","deckPlacements":[{"slotId":"lawn","labwareId":"LBW-96-1"}],"eventGraphId":"EVG-SPK-VERIFY"},"history":[{"role":"user","content":"Add 50uL of DMEM to each well."},{"role":"assistant","content":"Drafted 96 events.\nDraft compiled deterministically from the scientist-intent shorthand."}],"enableThinking":false}
+=== RESPONSE FRAMES (head) ===
+[
+  "{\"success\":true,\"events\":[{\"eventId\":\"evt-add_material-ghost-0\",\"event_type\":\"add_material\",\"verb\":\"add_material\",\"vocabPackId\":\"general\",\"labwareId\":\"LBW-96-1\",\"details\":{\"well\":\"A1\",\"material\":\"DMEM\",\"volumeUl\":50,\"volume\":{\"value\":50,\"unit\":\"uL\"},\"labwareId\":\"LBW-96-1\",\"wells\":[\"A1\"]},\"provenance\":{\"actor\":\"ai-agent\",\"timestamp\":\"2026-10-16T13:50:41.433Z\",\"method\":\"compiler\",\"actionGroupId\":\"co",
+  "{\"success\":true,\"events\":[{\"eventId\":\"evt-add_material-ghost-0\",\"event_type\":\"add_material\",\"verb\":\"add_material\",\"vocabPackId\":\"general\",\"labwareId\":\"LBW-96-1\",\"details\":{\"well\":\"A1\",\"material\":\"DMEM\",\"volumeUl\":50,\"volume\":{\"value\":50,\"unit\":\"uL\"},\"labwareId\":\"LBW-96-1\",\"wells\":[\"A1\"]},\"provenance\":{\"actor\":\"ai-agent\",\"timestamp\":\"2026-10-16T13:50:41.434Z\",\"method\":\"compiler\",\"actionGroupId\":\"co"
+]
+=== CONSOLE ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[warning] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+[warning] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+  ✓  1 [chromium] › e2e/zz-shqc1-probe.spec.ts:159:1 › PROBE: prompt -> Discard -> re-prompt identical text; capture both cycles (11.9s)
+
+  1 passed (14.8s)

@@ -1191,6 +1191,10 @@ export async function createServer(
         // compiler (surface MEMBERSHIP is registry data, never a TS allow-list).
         // Validated on load; cheap (routes/surfaces.ts has the same precedent).
         surfaces: loadDefaultSurfacesRegistry(ctx.schemaDir),
+        // HARNESS-SEQ-2 (OQ2 ruling): the ONE authorization door gates
+        // workspace_action navigation targets (deny = TARGET_NOT_VISIBLE,
+        // zero action). Same instance as the routes use — one door, one truth.
+        authorizationService: ctx.authorizationService,
         // PB-CH-8: the ledger query host for the query_workstate_history intent.
         // Parts are re-evaluated PER QUERY: the journal re-reads its policy YAML
         // per call (hot-reload, verification 9), canonicalReadStore re-scans

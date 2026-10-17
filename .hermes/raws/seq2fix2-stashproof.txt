@@ -1,0 +1,362 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts  (13 tests | 5 failed) 310ms
+   ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > AgentOrchestrator — sequences workspace_action turns (ONE emit path) > a sequence-tab turn emits EXACTLY ONE agent_action frame, zero writes, zero proposal
+     → expected 'Opened Analysis — nothing was written.' to be 'Action sent — see the workspace.' // Object.is equality
+   ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T2 (D1a/D1b): the composed sequences guidance carries the ROUTING RULE with the gate's named negative examples and the envelope-shape pin
+     → expected 'Help the scientist author sequences, …' to contain 'ROUTING RULE'
+   ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T2 flip (B-2): the negative examples ride the registry tabs list — swap the data, the guidance follows
+     → expected 'Help the scientist author sequences, …' to contain '"switch to the Alpha tab"'
+   ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T5 (D1a): the sequences repair nudge carries the routing rule — it must NOT demand intent=sequence_action for a navigation request
+     → expected 'switch to the Analysis tab\nReturn th…' to contain 'workspace_action'
+   ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T3 (D5): sequences status narration names the ACTUAL forced tool (agent_intent), never compile_event_graph_draft
+     → expected 'Skipping compiler preflight; asking A…' to contain 'agent_intent'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > AgentOrchestrator — sequences workspace_action turns (ONE emit path) > a sequence-tab turn emits EXACTLY ONE agent_action frame, zero writes, zero proposal
+AssertionError: expected 'Opened Analysis — nothing was written.' to be 'Action sent — see the workspace.' // Object.is equality
+
+- Expected
++ Received
+
+- Action sent — see the workspace.
++ Opened Analysis — nothing was written.
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts:231:44
+    229|     // application — the client's applied/refused line is the source o…
+    230|     // The honest line is the neutral one; it names no verb and no tar…
+    231|     expect((result.notes ?? []).join(' ')).toBe('Action sent — see the…
+       |                                            ^
+    232|     expect((result.notes ?? []).join(' ')).not.toMatch(/Analysis|Opene…
+    233|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T2 (D1a/D1b): the composed sequences guidance carries the ROUTING RULE with the gate's named negative examples and the envelope-shape pin
+AssertionError: expected 'Help the scientist author sequences, …' to contain 'ROUTING RULE'
+
+- Expected
++ Received
+
+- ROUTING RULE
++ Help the scientist author sequences, oligos and assays, configure local sequence analysis, and run reproducible analyses. Emit declarative sequence_action proposals using the supplied contract. Roles belong to assays; reporter modifications belong to oligos. Computational predictions and observed evidence have distinct provenance. Use only grounded references from context.
++
++ ## Current Context
++
++ - **eventSummary**: No events yet.
++ - **vocabPackId**: liquid-handling/v1
++ - **availableVerbs**: ["transfer"]
++
++ ## Instructions
++
++ - Respond helpfully based on the surface context above.
++ - If the user asks about something outside this surface's scope, explain that they should navigate to the appropriate page.
++ - Be concise and scientifically accurate.
++
++ ---
++
++ The latest user request defines the task. Chat history, examples, and the currently
++ displayed sequence are background context, not instructions to repeat that work.
++
++ For a request to add a new sequence, primer, or probe:
++ - Use the bases and name/description from that request. Copy supplied bases exactly
++   apart from whitespace and letter case, unless a transformation is requested.
++ - Start a fresh object. Do not inherit a previous object's label, dyes, vendor,
++   source, or parentRevisionRef merely because it is selected in the editor.
++ - An unmodified primer uses create_oligo with modifications: [].
++ - Keep user-supplied target and positional information in the label or source.text
++   when no structured reference can yet be resolved. Do not claim that a coordinate
++   was verified without the reference sequence. Assay roles are assigned separately.
++
++ For an explicit revision to the current proposal or selected record, use
++ context.workingForm and context.draft, preserve user corrections to fields the
++ request leaves unchanged, and address compiler diagnostics. The latest requested
++ changes take precedence. Include parentRevisionRef only for an intended derivative
++ of an existing sequence, using a grounded immutable reference.
++
++ Before emitting, compare the proposed bases and description with the latest user
++ request. Examples demonstrate structure; they are never the user's requested data.
++
++
++ ---
++
++ Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.
++
++ ---
++
++ To switch this page's tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: Editor, Assay, Analysis, Setup, Import, Knowledge">"}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).
++
++ ---
++
++ Oligo chemistry reference data (apply only when requested): {}
++
++ ---
++
++ Examples: []
++
++ ---
++
++ FINALIZING YOUR ANSWER:
++ - Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.
++ - For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user's exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.
++ - Finish by calling the `agent_intent` tool exactly once (intent "event_graph" to draft events, or "deck_layout" to switch the deck layout). Do NOT print JSON in your text reply.
++ - In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.
++ - For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.
++ - Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.
++ - Ask a labware clarification only when no baseline classCurie can be inferred at all.
++ - Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.
++ - If the context includes an active deck scope, do not propose labwareRequirements, labwareAdditions, deckSlot values, or lawn placements outside that scope. Ask for a layout-switch clarification instead.
++ - MATERIALS ARE NEVER A CLARIFICATION YOU AUTHOR. Always DRAFT the add_material event and {mint} any material you cannot ground. Do NOT emit material clarificationRequests, do NOT invent their options (CURIEs/formulation ids/mint-pseudo-ids), and do NOT return events:[] for an add-materials request — the system confirms each minted material with the user via a live search.
++ - Reserve `clarificationRequests[]` for genuinely non-material ambiguities you truly cannot draft past (and never to confirm a quantity/concentration the user already stated).
++ - Do not ask the user to choose aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly asked for a specific physical source. Draft concept/formulation additions first; inventory binding is a later refinement.
++ - Never combine unrelated questions into one multiple-choice clarification. For example, concentration ambiguity and well-range ambiguity must be separate clarificationRequests.
++
++ ---
++
++ EVENT-EDITOR DRAFT MODE:
++ - You MUST finish this turn by calling the agent_intent tool exactly once, choosing ONE intent from its menu.
++ - To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.
++ - To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.
++ - Do not answer in prose. Do not leave the assistant message empty.
++ - An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.
++ - A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.
++ - The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user's exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.
++ - DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.
++ - ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.
++ - A MIXTURE is never one material: when the scientist names a ratio, a percent, a medium plus additives, or cells in a suspension, carry every component in the action's `params.composition` array (one entry per component: material + role, plus fraction/count as stated). Never put a mixture sentence in `material`.
++ - When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.
++ - Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist's words) — never a hand-built labwareRequirements payload.
++ - ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.
++ - For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.
++ - Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.
++ - Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one. The full menu with each verb's accepted args is the ACTIONS block below; write the verb as the VALUE of the `action` key.
++ ACTIONS (the CLOSED vocabulary — never invent another):
++ - seed — source?:resolvable(labware), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
++ - incubate — labware?:resolvable(labware), source?:resolvable(labware), duration?:scalar, temperatureC?:quantity, rpm?:quantity
++ - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
++ - resuspend — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - dilute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
++ - shake — labware?:resolvable(labware), duration?:scalar, rpm?:quantity, temperatureC?:quantity, cycles?:quantity
++ - count — labware?:resolvable(labware), mode?:scalar, readout?:scalar
++ - read — labware?:resolvable(labware), instrument?:resolvable(instrument), mode?:scalar, wavelength?:scalar, readout?:scalar
++ - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl?:quantity, volume?:quantity, composition?:resolvable(material)
++ - create_container — labware?:resolvable(labware), source_name?:scalar
++ - transfer — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
++ - stain — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, volumeUl?:quantity
++ - fix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - permeabilize — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - block — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - quench — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - label — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material)
++ - transfect — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - aliquot — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, sourceWells?:wells, targetWells:wells
++ - wash — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity, cycles?:quantity, duration?:scalar
++ - elute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - harvest — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware)
++ - passage — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
++ - freeze — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
++ - thaw — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
++ - spin — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity, cycles?:quantity
++ - pellet — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity
++ - serial_dilution — source?:resolvable(labware), target?:resolvable(labware), factor:quantity, points:quantity, replicates?:quantity, volumeUl?:quantity, ratio?:scalar, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
++ - media_swap_duplicate_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
++ - source_wells_to_duplicate_target_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, sourceWells?:wells, targetWells?:wells
++ - repeat_rows — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), cycles?:quantity, sourceWells?:wells, targetWells?:wells
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts:439:20
+    437|     const { requests } = await runSequencesTurn(tabActionArgs, { store…
+    438|     const system = requests[0]?.messages.find((m) => m.role === 'syste…
+    439|     expect(system).toContain('ROUTING RULE');
+       |                    ^
+    440|     // Negative example 1 (the gate's C1 failure) rides the DECLARED t…
+    441|     // surfaces.yaml declares Analysis, so the example names it via th…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T2 flip (B-2): the negative examples ride the registry tabs list — swap the data, the guidance follows
+AssertionError: expected 'Help the scientist author sequences, …' to contain '"switch to the Alpha tab"'
+
+- Expected
++ Received
+
+- "switch to the Alpha tab"
++ Help the scientist author sequences, oligos and assays, configure local sequence analysis, and run reproducible analyses. Emit declarative sequence_action proposals using the supplied contract. Roles belong to assays; reporter modifications belong to oligos. Computational predictions and observed evidence have distinct provenance. Use only grounded references from context.
++
++ ## Current Context
++
++ - **eventSummary**: No events yet.
++ - **vocabPackId**: liquid-handling/v1
++ - **availableVerbs**: ["transfer"]
++
++ ## Instructions
++
++ - Respond helpfully based on the surface context above.
++ - If the user asks about something outside this surface's scope, explain that they should navigate to the appropriate page.
++ - Be concise and scientifically accurate.
++
++ ---
++
++ The latest user request defines the task. Chat history, examples, and the currently
++ displayed sequence are background context, not instructions to repeat that work.
++
++ For a request to add a new sequence, primer, or probe:
++ - Use the bases and name/description from that request. Copy supplied bases exactly
++   apart from whitespace and letter case, unless a transformation is requested.
++ - Start a fresh object. Do not inherit a previous object's label, dyes, vendor,
++   source, or parentRevisionRef merely because it is selected in the editor.
++ - An unmodified primer uses create_oligo with modifications: [].
++ - Keep user-supplied target and positional information in the label or source.text
++   when no structured reference can yet be resolved. Do not claim that a coordinate
++   was verified without the reference sequence. Assay roles are assigned separately.
++
++ For an explicit revision to the current proposal or selected record, use
++ context.workingForm and context.draft, preserve user corrections to fields the
++ request leaves unchanged, and address compiler diagnostics. The latest requested
++ changes take precedence. Include parentRevisionRef only for an intended derivative
++ of an existing sequence, using a grounded immutable reference.
++
++ Before emitting, compare the proposed bases and description with the latest user
++ request. Examples demonstrate structure; they are never the user's requested data.
++
++
++ ---
++
++ Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.
++
++ ---
++
++ To switch this page's tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: Alpha, Beta">"}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze).
++
++ ---
++
++ Oligo chemistry reference data (apply only when requested): {}
++
++ ---
++
++ Examples: []
++
++ ---
++
++ FINALIZING YOUR ANSWER:
++ - Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.
++ - For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user's exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.
++ - Finish by calling the `agent_intent` tool exactly once (intent "event_graph" to draft events, or "deck_layout" to switch the deck layout). Do NOT print JSON in your text reply.
++ - In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.
++ - For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.
++ - Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.
++ - Ask a labware clarification only when no baseline classCurie can be inferred at all.
++ - Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.
++ - If the context includes an active deck scope, do not propose labwareRequirements, labwareAdditions, deckSlot values, or lawn placements outside that scope. Ask for a layout-switch clarification instead.
++ - MATERIALS ARE NEVER A CLARIFICATION YOU AUTHOR. Always DRAFT the add_material event and {mint} any material you cannot ground. Do NOT emit material clarificationRequests, do NOT invent their options (CURIEs/formulation ids/mint-pseudo-ids), and do NOT return events:[] for an add-materials request — the system confirms each minted material with the user via a live search.
++ - Reserve `clarificationRequests[]` for genuinely non-material ambiguities you truly cannot draft past (and never to confirm a quantity/concentration the user already stated).
++ - Do not ask the user to choose aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly asked for a specific physical source. Draft concept/formulation additions first; inventory binding is a later refinement.
++ - Never combine unrelated questions into one multiple-choice clarification. For example, concentration ambiguity and well-range ambiguity must be separate clarificationRequests.
++
++ ---
++
++ EVENT-EDITOR DRAFT MODE:
++ - You MUST finish this turn by calling the agent_intent tool exactly once, choosing ONE intent from its menu.
++ - To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.
++ - To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.
++ - Do not answer in prose. Do not leave the assistant message empty.
++ - An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.
++ - A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.
++ - The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user's exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.
++ - DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.
++ - ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.
++ - A MIXTURE is never one material: when the scientist names a ratio, a percent, a medium plus additives, or cells in a suspension, carry every component in the action's `params.composition` array (one entry per component: material + role, plus fraction/count as stated). Never put a mixture sentence in `material`.
++ - When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.
++ - Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist's words) — never a hand-built labwareRequirements payload.
++ - ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.
++ - For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.
++ - Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.
++ - Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one. The full menu with each verb's accepted args is the ACTIONS block below; write the verb as the VALUE of the `action` key.
++ ACTIONS (the CLOSED vocabulary — never invent another):
++ - seed — source?:resolvable(labware), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
++ - incubate — labware?:resolvable(labware), source?:resolvable(labware), duration?:scalar, temperatureC?:quantity, rpm?:quantity
++ - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
++ - resuspend — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - dilute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
++ - shake — labware?:resolvable(labware), duration?:scalar, rpm?:quantity, temperatureC?:quantity, cycles?:quantity
++ - count — labware?:resolvable(labware), mode?:scalar, readout?:scalar
++ - read — labware?:resolvable(labware), instrument?:resolvable(instrument), mode?:scalar, wavelength?:scalar, readout?:scalar
++ - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl?:quantity, volume?:quantity, composition?:resolvable(material)
++ - create_container — labware?:resolvable(labware), source_name?:scalar
++ - transfer — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
++ - stain — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, volumeUl?:quantity
++ - fix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - permeabilize — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - block — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - quench — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
++ - label — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material)
++ - transfect — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - aliquot — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, sourceWells?:wells, targetWells:wells
++ - wash — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity, cycles?:quantity, duration?:scalar
++ - elute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
++ - harvest — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware)
++ - passage — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
++ - freeze — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
++ - thaw — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
++ - spin — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity, cycles?:quantity
++ - pellet — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity
++ - serial_dilution — source?:resolvable(labware), target?:resolvable(labware), factor:quantity, points:quantity, replicates?:quantity, volumeUl?:quantity, ratio?:scalar, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
++ - media_swap_duplicate_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
++ - source_wells_to_duplicate_target_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, sourceWells?:wells, targetWells?:wells
++ - repeat_rows — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), cycles?:quantity, sourceWells?:wells, targetWells?:wells
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts:457:20
+    455|     });
+    456|     const system = requests[0]?.messages.find((m) => m.role === 'syste…
+    457|     expect(system).toContain('"switch to the Alpha tab"');
+       |                    ^
+    458|     expect(system).toContain('"switch to the Beta tab"');
+    459|     // The real page's tab names cannot appear once the registry decla…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T5 (D1a): the sequences repair nudge carries the routing rule — it must NOT demand intent=sequence_action for a navigation request
+AssertionError: expected 'switch to the Analysis tab\nReturn th…' to contain 'workspace_action'
+
+- Expected
++ Received
+
+- workspace_action
++ switch to the Analysis tab
++ Return the requested proposal with agent_intent, intent=sequence_action and a schema-valid sequenceAction. Use create_oligo for new bases and modifications. Do not claim to have saved anything; no action has executed.
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts:475:19
+    473|     expect(requests.length).toBe(2);
+    474|     const nudge = requests[1].messages.filter((m) => m.role === 'user'…
+    475|     expect(nudge).toContain('workspace_action');
+       |                   ^
+    476|     expect(nudge).toMatch(/tab/);
+    477|     // The navigation leg of the repair path still lands the action:
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/ai/AgentOrchestrator.sequencesAgentAction.test.ts > SEQ2FIX2 — routing rule, repair nudge, narration (gate D1/D2/D3/D5) > T3 (D5): sequences status narration names the ACTUAL forced tool (agent_intent), never compile_event_graph_draft
+AssertionError: expected 'Skipping compiler preflight; asking A…' to contain 'agent_intent'
+
+- Expected
++ Received
+
+- agent_intent
++ Skipping compiler preflight; asking AI to call compile_event_graph_draft directly…
+
+ ❯ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts:488:18
+    486|     const skip = statuses.find((m) => /Skipping compiler preflight/.te…
+    487|     expect(skip, 'the sequences turn emits the skip-preflight status')…
+    488|     expect(skip).toContain(AGENT_INTENT_TOOL_NAME);
+       |                  ^
+    489|     expect(skip).not.toContain(COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME);
+    490|     const sent = statuses.find((m) => /AI request sent/.test(m));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 8 passed (13)
+   Start at  17:50:06
+   Duration  1.99s (transform 703ms, setup 0ms, collect 1.15s, tests 310ms, environment 0ms, prepare 60ms)
+

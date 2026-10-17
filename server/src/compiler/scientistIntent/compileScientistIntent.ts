@@ -60,6 +60,8 @@ import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.j
 import { getOntologyTermRegistry } from '../../registry/OntologyTermRegistry.js';
 import { emptyLabState, type LabStateSnapshot } from '../state/LabState.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
+import { stripRedundantMixtureLabels } from './mixtureLabelRedundancy.js';
+import { capResolvedLabwares } from './deckReviewFold.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
 import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
@@ -97,6 +99,10 @@ export interface ScientistIntentCompileDeps {
   /** SPINE-4: engine door override (tests stub the engine deps; the pass,
    *  reconciliation, registration, and the bar are always the real ones). */
   resolveNounsEngine?: ResolveNounsEngine;
+  /** DECK-FOLD-1: deck-review fold policy path override (tests inject a temp
+   *  policy to prove the cap is per-call DATA, not a process-cached literal;
+   *  production uses the shipped config/drafting/deck-review.yaml). */
+  deckReviewPolicyPath?: string | URL;
 }
 
 export interface ScientistIntentCompileResult {
@@ -152,6 +158,12 @@ function buildRegistry(
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
     ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
     ...(deps.resolveNounsEngine ? { resolve: deps.resolveNounsEngine } : {}),
+    // SH-QA-1 (OQ1 ruling): the gated producer facts (the mixture-blob bar)
+    // ride INTO the pass — the pass owns their fate now (drop on a bound
+    // slot, append survivors after engine+required+model facts).
+    ...(normalized.resolutionGatedClarifications
+      ? { resolutionGatedClarifications: normalized.resolutionGatedClarifications }
+      : {}),
   }));
 
   registry.register(createProtocolIntentStatePlanPass());
@@ -216,8 +228,30 @@ export async function compileScientistIntent(
   // resolve_nouns registration below threads (deps.vocabulary ?? shipped
   // singleton) — never the default singleton behind an injected vocab.
   const vocabulary = deps.vocabulary ?? defaultScientistIntentVocabulary();
-  const normalized = normalizeScientistIntent(intent, { vocabulary });
-  const registry = buildRegistry(intent, normalized, deps);
+  // SH-QA-3 (spec §A): the redundancy strip runs BEFORE both normalize AND the
+  // resolve_nouns registration — the door reads the RAW intent doc
+  // (buildRegistry passes `intent` to createResolveNounsPass; normalize is a
+  // separate call), so a normalize-only strip would leave the prose-blob
+  // sentence card fully alive. A top-level scalar noun that is a description
+  // OF a composition riding the same action is stripped from the compile
+  // input; the expander already derives the mixture label from the components
+  // (simpleVerbs compositionSnapshotFromParams). Nothing fired (the
+  // overwhelming case) ⇒ identity passthrough ⇒ the compile is byte-identical
+  // to before. A strip is LOUD (one console.log per stripped slot, the
+  // loud-normalize precedent — never silent data loss: the composition itself
+  // remains the scientist's declared truth). The held chat YAML is untouched
+  // (this is an in-memory compile-input transform, idempotent by T5).
+  const { intent: compileIntent, stripped } = stripRedundantMixtureLabels(intent, vocabulary);
+  for (const slot of stripped) {
+    const carried = (intent.actions[slot.actionIndex] as unknown as Record<string, unknown>)[slot.argument];
+    console.log(
+      `SH-QA-3 redundancy strip: removed the redundant top-level noun "${String(carried)}" `
+      + `at actions[${slot.actionIndex}].${slot.argument} — the composition riding the same action `
+      + 'carries its components; the mixture label is derived from them.',
+    );
+  }
+  const normalized = normalizeScientistIntent(compileIntent, { vocabulary });
+  const registry = buildRegistry(compileIntent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);
 
   const input: Record<string, unknown> = {
@@ -245,6 +279,11 @@ export async function compileScientistIntent(
   // the value cannot reach any compiled event; shipping it silently would be
   // silent data loss. Engine clarifications keep their verbatim precedence;
   // producer items append after them.
+  // SH-QA-1: the gated facts (normalized.resolutionGatedClarifications) are
+  // NO LONGER appended here — the resolve_nouns pass decided their fate and
+  // survivors already ride the bar diagnostic in the same end-of-list
+  // position this append used to produce. Only the ungated producer facts
+  // (unrealized-well-label / unrealized-declared-argument) still append.
   const producerClarifications = normalized.clarifications ?? [];
   const barDiagnostic = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
   if (barDiagnostic || producerClarifications.length > 0) {
@@ -291,6 +330,15 @@ export async function compileScientistIntent(
     gaps,
     ...(resolveLabwareOutput?.labwareAdditions && resolveLabwareOutput.labwareAdditions.length > 0
       ? { labwareAdditions: resolveLabwareOutput.labwareAdditions }
+      : {}),
+    // DECK-FOLD-1: the hints the pass bound against REAL inventory ride to the
+    // deck review as placement offers of the EXISTING records. Same
+    // non-empty-only idiom as labwareAdditions; capped at this single choke
+    // every consumer shares (OQ1) by config/drafting/deck-review.yaml
+    // maxResolvedOffers — rank is the pass-output order verbatim, truncation
+    // is a silent head-slice (a gap would flip outcome via computeOutcome).
+    ...(resolveLabwareOutput?.resolvedLabwares && resolveLabwareOutput.resolvedLabwares.length > 0
+      ? { resolvedLabwares: capResolvedLabwares(resolveLabwareOutput.resolvedLabwares, deps.deckReviewPolicyPath) }
       : {}),
     ...(labStateOutput ? {
       labStateDelta: {

@@ -126,6 +126,7 @@ export function ChangesPanel({
           type="button"
           className="changes-panel__btn changes-panel__btn--discard"
           onClick={onDiscard}
+          data-testid="changes-discard"
         >
           {protocolMode ? 'Reject' : 'Discard'}
         </button>

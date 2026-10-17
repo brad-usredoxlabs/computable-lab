@@ -119,6 +119,24 @@ properties:
                   filter NO-OPS; declaring one is legal but enforces nothing.
                   This enum mirrors the TS union honestly rather than narrowing
                   to firing values (OQ2 disposition).
+              cardinality:
+                type: string
+                enum: [one, many]
+                description: >-
+                  Optional multiplicity of the argument. 'many' on a resolvable arg
+                  means the wire value is an ARRAY of entries, each carrying its noun
+                  in the property named by itemNounField; the resolve_nouns door
+                  iterates it and emits one clarification per unresolved item. Absent
+                  = 'one' (every shipped arg). Interpreted generically — no verb or
+                  arg NAME is referenced by any consumer.
+              itemNounField:
+                type: string
+                pattern: "^[a-z][a-zA-Z0-9_]*$"
+                description: >-
+                  For cardinality: many — the entry property carrying the symbolic
+                  noun the resolver binds (e.g. 'material'). Required by lint when
+                  cardinality is many. Entry shape policy (role/quantity fields,
+                  concrete-instance rejection) lives in the wire schema, not here.
 
   policies:
     type: object

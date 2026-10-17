@@ -397,3 +397,124 @@ describe('compileWorkspaceAction — envelope validation through the REGISTERED 
     expect(out.valid).toBe(true);
   });
 });
+
+// ============================================================================
+// HARNESS-SEQ-2 — the sequences target arms (RED-first)
+// ============================================================================
+
+describe('compileWorkspaceAction — sequences target arms', () => {
+  it('a sequence-tab target the registry DECLARES compiles (validated against the DECLARED tabs list)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Analysis' } },
+      deps(),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.target).toMatchObject({ kind: 'sequence-tab', tab: 'Analysis' });
+  });
+
+  it('a tab the registry does NOT declare is UNSUPPORTED_TARGET with zero action (registry data is the authority)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Settings' } },
+      deps(),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics[0]!.code).toBe('UNSUPPORTED_TARGET');
+    expect(result.diagnostics[0]!.message).toContain('Settings');
+  });
+
+  it('a sequence-record target store-verifies and carries the AUTHORITATIVE label', async () => {
+    const store = stubStore({ 'SEQ-PUC19': { kind: 'sequence', payload: { recordId: 'SEQ-PUC19', kind: 'sequence', label: 'pUC19', length: 2686 } } });
+    const result = await compileWorkspaceAction(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-PUC19', label: 'the plasmid' } },
+      deps({ store: store as never }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.action.target).toMatchObject({ kind: 'sequence-record', recordId: 'SEQ-PUC19', label: 'pUC19' });
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('an invented sequence-record id is UNKNOWN_RECORD (Ajv-validity is not resolution)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-made-up' } },
+      deps(),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics[0]!.code).toBe('UNKNOWN_RECORD');
+  });
+
+  it('a sequence-tab target on a surface WITHOUT declared tabs is UNSUPPORTED_TARGET (no invented vocabulary)', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'analysis', target: { kind: 'sequence-tab', tab: 'Analysis' } },
+      deps(),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics[0]!.code).toBe('UNSUPPORTED_TARGET');
+  });
+
+  it('visibility hook (OQ2): a record the actor cannot read is TARGET_NOT_VISIBLE with zero action', async () => {
+    const store = stubStore({ 'SEQ-PUC19': { kind: 'sequence', payload: { recordId: 'SEQ-PUC19', kind: 'sequence', label: 'pUC19' } } });
+    const visibility = vi.fn(async () => false);
+    const result = await compileWorkspaceAction(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-PUC19' } },
+      deps({ store: store as never, visibility: visibility as never }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics[0]!.code).toBe('TARGET_NOT_VISIBLE');
+    expect(result.diagnostics[0]!.message).toContain('SEQ-PUC19');
+    expect(visibility).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'SEQ-PUC19' }));
+  });
+
+  it('visibility hook (OQ2): a readable record passes the door', async () => {
+    const store = stubStore({ 'SEQ-PUC19': { kind: 'sequence', payload: { recordId: 'SEQ-PUC19', kind: 'sequence', label: 'pUC19' } } });
+    const visibility = vi.fn(async () => true);
+    const result = await compileWorkspaceAction(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-PUC19' } },
+      deps({ store: store as never, visibility: visibility as never }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('visibility hook ABSENT skips the check (existing stubbed callers unchanged)', async () => {
+    const store = stubStore({ 'SEQ-PUC19': { kind: 'sequence', payload: { recordId: 'SEQ-PUC19', kind: 'sequence', label: 'pUC19' } } });
+    const result = await compileWorkspaceAction(
+      { action: 'focus', surface: 'sequences', target: { kind: 'sequence-record', recordId: 'SEQ-PUC19' } },
+      deps({ store: store as never }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('the RESOLVED sequence-tab action re-validates against the same registered $id', async () => {
+    const result = await compileWorkspaceAction(
+      { action: 'open-surface', surface: 'sequences', target: { kind: 'sequence-tab', tab: 'Knowledge' } },
+      deps(),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { loadSchemasFromContent } = await import('../schema/SchemaLoader.js');
+    const { createSchemaRegistry } = await import('../schema/SchemaRegistry.js');
+    const { createValidator } = await import('../validation/AjvValidator.js');
+    const { readFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const contents = new Map<string, string>();
+    for (const p of ['core/datatypes/ref.schema.yaml', 'workflow/agent-action.schema.yaml']) {
+      contents.set(p, await readFile(join(SCHEMA_DIR, p), 'utf8'));
+    }
+    const loaded = loadSchemasFromContent(contents);
+    const registry = createSchemaRegistry();
+    registry.addSchemas(loaded.entries);
+    const validator = createValidator();
+    for (const id of registry.getTopologicalOrder()) {
+      const entry = registry.getById(id);
+      if (entry) validator.addSchema(entry.schema as never, entry.id);
+    }
+    const out = validator.validate(result.action, AGENT_ACTION_SCHEMA_ID);
+    expect(out.valid).toBe(true);
+  });
+});

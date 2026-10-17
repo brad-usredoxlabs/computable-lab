@@ -25,11 +25,13 @@
  *  - malformed-payload repair prompt: quotes the contract (the 502 class's
  *    chat analogue — origin-based, never message-substring sniffing).
  */
-import { stringify as stringifyYaml } from 'yaml';
+import { createHash } from 'node:crypto';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   parseScientistIntent,
   ScientistIntentValidationError,
 } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { liftScientistIntent } from '../compiler/scientistIntent/liftScientistIntent.js';
 import {
   compileScientistIntent,
   type ScientistIntentCompileResult,
@@ -42,6 +44,7 @@ import type {
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
+import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {
@@ -175,12 +178,54 @@ export function bindShorthandEventsToDeck<T extends object>(
       if (boundDetail) {
         nextDetails.labwareId = boundDetail;
         dChanged = true;
+      } else if (boundTop && typeof d.labwareId !== 'string' && typeof d.labwareInstanceId !== 'string') {
+        // COMP-1 Task 21 (Part IV): the client buckets ghost wells by
+        // details.labwareId (collectEventLabwareIds, previewProjection.ts) —
+        // a top-level-only binding left the ghost with no bucket. When the
+        // event's labware label is deck-provable (exact deck-name match or
+        // already a deck id) and details carries NO labware identity, write
+        // the bound id there. NO-OP-safe: an existing details.labwareId OR
+        // details.labwareInstanceId (fix1/D5 — the instance-side identity
+        // carrier used by ProtocolExtractionService.ts:300 /
+        // GraphProjector.ts:153 / PlateMapExporter.ts:69; its presence means
+        // the event is ALREADY instanced) is never touched, and an unprovable
+        // label is never copied — the byte-passthrough arms below are
+        // unchanged.
+        nextDetails.labwareId = boundTop;
+        dChanged = true;
+      } else if (
+        typeof d.labwareId !== 'string'
+        && typeof d.labwareInstanceId !== 'string'
+        && typeof ev.labwareId === 'string'
+        && knownIds.has(ev.labwareId)
+      ) {
+        // The top-level ref is ALREADY a deck id (the model echoed one): the
+        // provable identity is copied down, never invented.
+        nextDetails.labwareId = ev.labwareId;
+        dChanged = true;
       }
       const well = d.well;
       if (typeof well === 'string') {
         const expanded = expandWellTokens([well]);
         if (expanded.length > 1) {
           delete nextDetails.well;
+          nextDetails.wells = expanded;
+          dChanged = true;
+        } else if (
+          expanded.length === 1
+          && !Array.isArray(d.wells)
+          && typeof d.labwareInstanceId !== 'string'
+          && (boundTop || boundDetail || (typeof ev.labwareId === 'string' && knownIds.has(ev.labwareId)))
+        ) {
+          // COMP-1 Task 22 (Part IV criterion 1): the DECK channel
+          // (buildPreviewFromDraft -> buildPreviewWellIndex -> getAffectedWells)
+          // ghosts wells ONLY from details.wells — it never reads the singular
+          // details.well (the normalizePreviewEvents bridge runs on the
+          // labware-editor chat channel only). A deck-bound singular well must
+          // therefore ride the wells carrier too, or the ghost is invisible.
+          // Only fires when the labware is deck-provable (never invents) and
+          // the event is not already instanced via details.labwareInstanceId
+          // (fix1/D5: an instanced event is a full no-op).
           nextDetails.wells = expanded;
           dChanged = true;
         }
@@ -215,6 +260,33 @@ export async function compileShorthandDeterministically(
   });
 }
 
+/**
+ * Parse a MODEL-EMITTED document for the chat turn: lift first (the
+ * declarative alias table absorbs `verb:`, the verb-as-map-key shape, nested
+ * `parameters:`, snake_case keys — the same door the corpus capture and the
+ * headless route use), THEN Ajv as the sole validation authority (rule #3).
+ * Without the lift, every alias the rest of the system forgives is a hard
+ * rejection on this surface, and each rejection costs a model turn spent
+ * guessing. The lift canonicalizes aliases; a fabricated verb still fails the
+ * Ajv enum gate. Idempotent on an already-canonical document (the fold leg
+ * re-serializes canonically before re-parsing through here).
+ * @throws ScientistIntentValidationError (YAML faults are wrapped, so the
+ * caller's re-ask budget sees the SAME error class as before).
+ */
+export function parseShorthandForChat(yamlText: string): ScientistIntent {
+  let raw: unknown;
+  try {
+    raw = parseYaml(yamlText);
+  } catch (error) {
+    throw new ScientistIntentValidationError(
+      `scientist-intent YAML parse failed: ${error instanceof Error ? error.message : String(error)}`,
+      [error],
+    );
+  }
+  const lifted = liftScientistIntent(raw ?? {});
+  return parseScientistIntent(JSON.stringify(lifted));
+}
+
 // ---------------------------------------------------------------------------
 // Held intent per conversation (the getDefaultLabStateCache precedent)
 // ---------------------------------------------------------------------------
@@ -231,6 +303,22 @@ export interface HeldShorthandIntent {
    * entries; the bars are minted by the pipeline's resolve_nouns gate.
    */
   clarifications: readonly ScientistIntentUnresolvedFact[];
+  /**
+   * SH-QA-1 auto-satisfy ledger: the slot identities (actionIndex+argument+
+   * chosen label) a folded answer closed on this held intent. A re-derived
+   * fact for a ledgered slot whose value is STILL the chosen label is moot
+   * (the answer already closed it) and is dropped by `dropSatisfiedFacts`;
+   * a slot that still bars is never ledgered (legitimate re-ask survives).
+   * Travels with the held intent; MAX_HELD eviction semantics unchanged.
+   */
+  answeredSlots?: readonly AnsweredSlot[];
+}
+
+/** One closed slot identity (SH-QA-1 ledger entry). */
+export interface AnsweredSlot {
+  actionIndex: number;
+  argument: string;
+  label: string;
 }
 
 const MAX_HELD_CONVERSATIONS = 64;
@@ -252,13 +340,50 @@ export function takeHeldShorthandIntent(key: string): HeldShorthandIntent | null
   return held;
 }
 
+/**
+ * SH-QC-1-OQ1: drop the held intent for ONE conversation without consuming
+ * it — the server-side clear the UI Cancel leg needs. The leak this closes:
+ * the ONLY removal primitive was the destructive take on the answer-path
+ * fold (AgentOrchestrator.ts take sites), so a CANCELLED proposal stayed
+ * held and a LATER clarification answer folded it in — the scientist lost
+ * authority over what the AI keeps.
+ *
+ * Returns whether an entry existed. Idempotent: clearing an already-clear
+ * conversation is a success (`false`), never an error. Touches ONLY `key` —
+ * every other conversation's hold is untouched. The take/fold semantics on
+ * the answer path are byte-unchanged (repeatEcho P8/D4 guards stay green).
+ */
+export function clearHeldShorthandIntent(key: string): boolean {
+  return heldIntents.delete(key);
+}
+
 // ---------------------------------------------------------------------------
 // Pure structural clarification map (bait 8: verbatim facts, join id only)
 // ---------------------------------------------------------------------------
 
-/** The join id between a chat clarification card and an unresolved fact. */
-export function unresolvedFactRequestId(index: number): string {
-  return `unresolved-${index + 1}`;
+/**
+ * SH-QA-1 (the third hazard): the join id between a chat clarification card
+ * and an unresolved fact is keyed by the fact's CONTENT —
+ * `unresolved-c-<10-hex sha1 of [actionIndex, action, argument, reason,
+ * label]>` — not by array position. Deterministic across compiles (same fact
+ * → same id) and order-independent (a fact-order shift between compiles can
+ * no longer mis-fold). The `label` is IN the key because COMP-4 many-arg
+ * siblings share actionIndex+action+argument+reason and differ only by label
+ * — a key without it collides two component cards. The id stays a STRING on
+ * AgentClarificationRequest.id (the app echoes it verbatim; no wire SHAPE
+ * change). The legacy `unresolved-<n>` positional mint is retired here and
+ * kept ONLY as the fold's pinned back-compat fallback (OQ2 ruling).
+ */
+export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
+  const key = JSON.stringify([
+    fact.actionLocation?.actionIndex ?? null,
+    fact.actionLocation?.action ?? null,
+    fact.actionLocation?.argument ?? null,
+    fact.reason,
+    fact.label,
+  ]);
+  const digest = createHash('sha1').update(key).digest('hex').slice(0, 10);
+  return `unresolved-c-${digest}`;
 }
 
 /**
@@ -272,17 +397,30 @@ export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
 ): AgentClarificationRequest[] {
   const vocabulary = defaultScientistIntentVocabulary();
-  return facts.map((fact, index) => {
+  // SH-QA-3 (fix 2, OQ3 ruling): the mint affordance is gated by the
+  // noun-shape DATA (config/drafting/shorthand-drafting.yaml `nounShape:`,
+  // loaded PER call). A card whose label is a prose sentence REFUSES the
+  // mint: `allowCreateLocal` (a value-only flip on an existing field — no
+  // wire SHAPE change) and the ", or create a local term" prompt clause drop
+  // together by conditional arm. The QUESTION itself is never removed — the
+  // scientist can still search /m or pick a near-miss. A cue hit alone never
+  // refuses mint (the sibling canon formulations stay mintable).
+  const nounShape = loadNounShape();
+  return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
       ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.domain
       : undefined;
     const kind = domain === 'labware' ? 'labware' : domain === 'material' ? 'material' : 'general';
     const menuProvider = domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
+    const mintable = isMintableLabel(fact.label, nounShape);
+    const allowCreateLocal = menuProvider !== 'choice' && mintable;
     return {
-      id: unresolvedFactRequestId(index),
+      id: factRequestId(fact),
       kind,
-      prompt: `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`,
+      prompt: mintable
+        ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+        : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`,
       origin: 'harness',
       entityType: kind,
       menuProvider,
@@ -291,7 +429,7 @@ export function clarificationsFromUnresolvedFacts(
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched.
       options: [],
-      allowCreateLocal: menuProvider !== 'choice',
+      allowCreateLocal,
       unresolvedFact: fact,
     };
   });
@@ -315,18 +453,29 @@ export function clarificationsFromUnresolvedFacts(
 export function foldAnswersIntoShorthand(
   held: HeldShorthandIntent,
   answers: readonly AgentClarificationAnswer[],
-): { yaml: string; doc: ScientistIntent } | null {
+): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
-  const answered = new Set<number>();
+  // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
+  // over the held bar's facts (exact match wins). A fact-order shift between
+  // compiles cannot mis-fold anymore (the live iteration-2 hazard).
+  const factByKey = new Map<string, ScientistIntentUnresolvedFact>();
+  for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
+  const answered = new Set<ScientistIntentUnresolvedFact>();
+  const answeredSlots: AnsweredSlot[] = [];
   for (const answer of answers) {
-    const match = /^unresolved-(\d+)$/.exec(answer.requestId ?? '');
-    if (!match) return null;
-    const factIndex = Number(match[1]) - 1;
-    // The join id indexes the BAR's facts (the compile's clarifications), in
-    // the same order the chat cards were minted — not the document's declared
-    // unresolved entries (a model document declares none).
-    const fact = held.clarifications[factIndex];
+    const requestId = answer.requestId ?? '';
+    let fact = factByKey.get(requestId);
+    if (!fact) {
+      // OQ2 ruling (pinned fallback-only): a legacy digits-only id from a
+      // mid-flight held card still folds POSITIONALLY onto the held array.
+      // A content id NEVER takes this arm (content ids never match the
+      // digits pattern), so the fallback cannot shadow the content join.
+      const legacy = /^unresolved-(\d+)$/.exec(requestId);
+      if (legacy) {
+        fact = held.clarifications[Number(legacy[1]) - 1];
+      }
+    }
     if (!fact) return null;
     const label = typeof answer.label === 'string' && answer.label.trim().length > 0
       ? answer.label.trim()
@@ -337,7 +486,8 @@ export function foldAnswersIntoShorthand(
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action || typeof action[loc.argument] !== 'string') return null;
     action[loc.argument] = label;
-    answered.add(factIndex);
+    answered.add(fact);
+    answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
   }
   if (answered.size === 0) return null;
   // Drop any document-declared unresolved entry that names the same noun slot
@@ -360,11 +510,45 @@ export function foldAnswersIntoShorthand(
   // fallback route — a parse fault must never escape run() as a turn-crashing
   // exception.
   try {
-    return { yaml: yamlText, doc: parseScientistIntent(yamlText) };
+    // The fold re-serializes a canonical document first, so the lift is
+    // idempotent here — routed through parseShorthandForChat for symmetry with
+    // the turn path (one chat-side parse door). The null-return contract is
+    // unchanged: the lift makes strictly MORE documents parse, and a genuinely
+    // invalid folded document still returns null (the caller's permitted
+    // extraction-only fallback).
+    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots };
   } catch (error) {
     if (error instanceof ScientistIntentValidationError) return null;
     throw error;
   }
+}
+
+/**
+ * SH-QA-1 auto-satisfy ledger (fix 2): drop a re-derived fact iff its slot
+ * identity is in the ledger AND the document's slot value is STILL the ledger
+ * label verbatim — a changed slot value re-opens the question (the scientist
+ * edited it; the re-ask is legitimate). A fact WITHOUT actionLocation is
+ * never dropped. This also implements the same-slot rule: answering the first
+ * fact of a slot closes ANY re-derived fact for the same action+argument,
+ * whatever reason it re-derives under (the ledger is reason-blind by design —
+ * it records the closed SLOT, not one card).
+ */
+export function dropSatisfiedFacts(
+  facts: readonly ScientistIntentUnresolvedFact[],
+  ledger: readonly AnsweredSlot[],
+  doc: ScientistIntent,
+): ScientistIntentUnresolvedFact[] {
+  if (ledger.length === 0) return [...facts];
+  const bySlot = new Map<string, AnsweredSlot>();
+  for (const entry of ledger) bySlot.set(`slot:${entry.actionIndex}:${entry.argument}`, entry);
+  return facts.filter((fact) => {
+    const loc = fact.actionLocation;
+    if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return true;
+    const entry = bySlot.get(`slot:${loc.actionIndex}:${loc.argument}`);
+    if (!entry) return true;
+    const value = (doc.actions[entry.actionIndex] as Record<string, unknown> | undefined)?.[entry.argument];
+    return value !== entry.label;
+  });
 }
 
 /**
@@ -405,6 +589,18 @@ export function malformedShorthandRepairPrompt(
     'The contract: a scientist-intent YAML document — top-level `intentId` + `actions[]` (each action carries `action` from the CLOSED vocabulary plus natural-language noun labels and numeric parameters); optional `unresolved`. No resolved record ids, no deck slots, no event primitives.',
     'Schema errors:',
     ...errorLines,
+    // SHORTHAND-COMP-2: quote the CLOSED menu itself (generated from the
+    // vocabulary YAML) plus the ONE document shape the schema accepts — a
+    // rejection must not become a guessing game (one rejection became three
+    // when the model had to reverse-engineer the contract from prose alone).
+    'The shape the schema accepts (the verb is the VALUE of the `action` key):',
+    'intentId: <short id>',
+    'actions:',
+    '  - action: add_material',
+    '    material: "DMEM"',
+    '    volumeUl: 100',
+    '    targetWells: [A1]',
+    defaultScientistIntentVocabulary().contractBlock(),
     'Re-emit the agent_intent call with intent "event_shorthand" and a corrected `shorthand` document. Do not emit events.',
     'Rejected document:',
     rejectedYaml,
@@ -496,6 +692,21 @@ export function shorthandResultFromCompile(
   return {
     success: true,
     events,
+    // COMP-1 Task 20 (Part IV): the raw mapper's precedent
+    // (compileResultToAgentResult, AgentOrchestrator.ts:612) — the compile
+    // already puts resolve_labware's additions on terminalArtifacts
+    // (compileScientistIntent.ts:288-294); without this leg the shorthand
+    // payload ships `labwares: {}` and the client has nothing to bucket the
+    // ghost wells under or place on the deck. Conditional spread only
+    // (exactOptionalPropertyTypes). DRY note: compileResultToAgentResult lives
+    // in AgentOrchestrator.ts (out of this item's file set) and maps a
+    // ChatbotCompileResult, not a ScientistIntentCompileResult — the bodies
+    // share a few spread lines, not half their shape, so the shared-mapper
+    // extraction is NOT warranted; the mapper stays one producer per result
+    // type.
+    ...(compiled.terminalArtifacts.labwareAdditions && compiled.terminalArtifacts.labwareAdditions.length > 0
+      ? { labwareAdditions: compiled.terminalArtifacts.labwareAdditions }
+      : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
     shorthand: shorthandYaml,

@@ -1,0 +1,16 @@
+src/ai/AgentOrchestrator.bypass.test.ts
+src/ai/AgentOrchestratorForwarding.test.ts
+src/ai/AgentOrchestrator.golden.test.ts
+src/ai/AgentOrchestrator.goldenWithSeeds.test.ts
+src/ai/AgentOrchestrator.shorthandChat.test.ts
+src/ai/AgentOrchestrator.tubeGate.test.ts
+src/ai/attachedProtocol.test.ts
+src/ai/ChatbotCompileDeckSlot.test.ts
+src/ai/chatbotCompile.e2e.test.ts
+src/ai/createRecordIntent.test.ts
+src/ai/shorthandChat.e2eStubHonesty.test.ts
+src/ai/submitSuggestionTool.tubeSchema.test.ts
+src/compiler/resolution/compositionArgResolution.test.ts
+src/compiler/scientistIntent/compositionDecomposition.test.ts
+src/compiler/scientistIntent/declaredArgumentReachability.test.ts
+src/compiler/scientistIntent/realizationGolden.test.ts

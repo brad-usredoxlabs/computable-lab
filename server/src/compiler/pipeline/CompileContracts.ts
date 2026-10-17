@@ -344,6 +344,19 @@ export interface TerminalArtifacts {
     deckSlot?: string;
   }>;
   /**
+   * Labware hints the resolve_labware pass bound against REAL inventory
+   * records — the existing records themselves, not proposals to author them.
+   * The deck review lists these as checkable PLACEMENT offers of the existing
+   * records (picking one ghosts a real placement; never a re-creation).
+   * Shape mirrors ResolvedLabware (ChatbotCompilePasses.ts); DISTINCT entity
+   * from resolvedRefs (Spec-023) / resolvedLabwareRefs (Spec-014).
+   */
+  resolvedLabwares?: Array<{
+    hint: string;
+    recordId: string;
+    title?: string;
+  }>;
+  /**
    * Class-level labware requirements (symbolic, e.g. a 96-well deepwell plate)
    * the run needs even when no concrete inventory record is bound yet.
    */

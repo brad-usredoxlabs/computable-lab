@@ -7,7 +7,7 @@
  * works through multiple questions — the draft is paused until all are resolved.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { ClarificationPicker, requestHasPicker } from './ClarificationPicker'
 import { ParameterAnswerInput } from './ParameterAnswerInput'
 import { ShorthandView } from './ChangesPanel'
@@ -46,6 +46,30 @@ export function QuestionsPanel({
   const answeredCount = questions.filter((q) => answers[q.id]).length
   const allAnswered = answeredCount === questions.length && questions.length > 0
 
+  // SH-QA-2 (a): the next card the biologist can still answer. An ANSWERED card
+  // is never actionless — when the batch is not complete its proceed affordance
+  // walks to this question, and the focus effect below makes that walk VISIBLE.
+  const nextUnansweredId = questions.find((q) => !answers[q.id])?.id ?? null
+
+  // SH-QA-2 (a): `activeQuestionId` used to move only a CSS class, which is why
+  // a "Change"/next click "did nothing visible". Now naming a card focuses its
+  // first interactive control — the affordance the user needs is under the
+  // cursor (and keyboard) the moment the card becomes active. The signature
+  // guard fires the focus only when the card BECOMES editable (id changed, or
+  // an answered card was reopened) — answering a card never steals focus from
+  // the one the biologist is typing in.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const lastFocusSignatureRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeQuestionId) return
+    const signature = `${activeQuestionId}|${answers[activeQuestionId] ? 'answered' : 'open'}`
+    if (lastFocusSignatureRef.current === signature) return
+    lastFocusSignatureRef.current = signature
+    if (answers[activeQuestionId]) return
+    const card = listRef.current?.querySelector(`[data-question-id="${activeQuestionId}"]`)
+    card?.querySelector<HTMLElement>('input, button')?.focus()
+  }, [activeQuestionId, answers])
+
   // Auto-submit when all questions are answered — don't make the user
   // hunt for a button. The old ClarificationCards did this via useEffect.
   useEffect(() => {
@@ -72,13 +96,14 @@ export function QuestionsPanel({
         </p>
       </div>
 
-      <div className="questions-panel__list">
+      <div className="questions-panel__list" ref={listRef}>
         {questions.map((request, index) => {
           const answer = answers[request.id]
           const isActive = request.id === activeQuestionId
           return (
             <section
               key={request.id}
+              data-question-id={request.id}
               className={
                 isActive
                   ? 'questions-panel__card questions-panel__card--active'
@@ -107,6 +132,33 @@ export function QuestionsPanel({
                   >
                     Change
                   </button>
+                  {/* SH-QA-2 (a): an answered card is NEVER dead chrome. All
+                      answered → a per-card proceed affordance that calls the
+                      SAME onSubmit the "Update draft" primary calls (OQ2
+                      batch-proceed: the existing handleClarificationsSubmit
+                      resend, no new wire, no per-answer accept). Not all
+                      answered → the card walks to the next unanswered question
+                      via the change-question leg, which the focus effect makes
+                      visible. */}
+                  {allAnswered ? (
+                    <button
+                      type="button"
+                      className="questions-panel__btn questions-panel__btn--primary"
+                      data-testid={`continue-${request.id}`}
+                      onClick={onSubmit}
+                    >
+                      Continue with this answer
+                    </button>
+                  ) : nextUnansweredId && nextUnansweredId !== request.id ? (
+                    <button
+                      type="button"
+                      className="questions-panel__btn"
+                      data-testid={`next-unanswered-${request.id}`}
+                      onClick={() => onChangeQuestion(nextUnansweredId)}
+                    >
+                      Go to next unanswered
+                    </button>
+                  ) : null}
                 </div>
               ) : requestHasPicker(request) ? (
                 <ClarificationPicker

@@ -37,6 +37,12 @@ verbs:
       - name: temperatureC
         kind: quantity
         required: false
+      - name: composition
+        kind: resolvable
+        required: false
+        domain: material
+        cardinality: many
+        itemNounField: material
   - name: incubate
     class: simple
     policyRef: hint-authority
@@ -232,6 +238,12 @@ verbs:
       - name: volume
         kind: quantity
         required: false
+      - name: composition
+        kind: resolvable
+        required: false
+        domain: material
+        cardinality: many
+        itemNounField: material
   - name: create_container
     class: simple
     policyRef: hint-authority
