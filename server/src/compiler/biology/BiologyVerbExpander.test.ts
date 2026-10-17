@@ -29,6 +29,7 @@ import {
   labelExpander,
   transfectExpander,
   shakeExpander,
+  beadBeatExpander,
 } from './verbs/simpleVerbs.js';
 
 // Allowed event types
@@ -122,6 +123,7 @@ describe('BiologyVerbExpander verb expanders', () => {
     label: labelExpander,
     transfect: transfectExpander,
     shake: shakeExpander,
+    bead_beat: beadBeatExpander,
   };
 
   for (const [verb, expander] of Object.entries(expanderMap)) {

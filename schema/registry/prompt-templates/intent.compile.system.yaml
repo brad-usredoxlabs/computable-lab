@@ -27,7 +27,7 @@ content: |
   block | quench | label | transfect | aliquot | wash | elute | harvest |
   passage | freeze | thaw | spin | pellet |
   serial_dilution | media_swap_duplicate_columns |
-  source_wells_to_duplicate_target_columns | repeat_rows
+  source_wells_to_duplicate_target_columns | repeat_rows | bead_beat
 
   PARAMETERS (use only these; natural names, ordinary numbers/strings):
   - source, target, labware: SYMBOLIC labels for a material/plate. NEVER a

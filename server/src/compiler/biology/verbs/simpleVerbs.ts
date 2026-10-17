@@ -632,6 +632,28 @@ export const shakeExpander: BiologyVerbExpander = {
   },
 };
 
+/**
+ * bead_beat: single mix event (mechanical bead-beating disruption).
+ */
+export const beadBeatExpander: BiologyVerbExpander = {
+  verb: 'bead_beat',
+  expand(input) {
+    const { params } = input;
+    return [{
+      eventId: makeEventId('bead_beat'),
+      event_type: 'mix',
+      details: {
+        mode: 'bead_beating',
+        ...(params.cycles !== undefined ? { cycles: params.cycles as number } : {}),
+        ...(params.temperature !== undefined
+          ? { temperature: params.temperature as number }
+          : {}),
+      },
+      ...(params.labware_id ? { labwareId: params.labware_id as string } : {}),
+    }];
+  },
+};
+
 // Register all expanders at module import time
 registerVerbExpander(seedExpander);
 registerVerbExpander(incubateExpander);
@@ -651,3 +673,4 @@ registerVerbExpander(createContainerExpander);
 registerVerbExpander(readExpander);
 registerVerbExpander(transferExpander);
 registerVerbExpander(shakeExpander);
+registerVerbExpander(beadBeatExpander);

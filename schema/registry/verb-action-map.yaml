@@ -110,3 +110,6 @@ mappings:
     obi_id: "OBI:0000293"
     notes: "Move liquid from source to destination wells"
     synonyms: [move]
+  - verb: bead_beat
+    notes: "no canonical mapping"
+    synonyms: [bead-beat, homogenize, bead beat]

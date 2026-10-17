@@ -18,9 +18,9 @@ vocabularies:
   scientist_intent_enum:
     source: schema/workflow/scientist-intent.schema.yaml
     path: "$defs/actionVerb"
-    count: 31
+    count: 32
     mirror: schema/scientist-intent/scientist-intent-vocabulary.yaml
-    mirror_count: 31
+    mirror_count: 32
     mirror_rule: "set equality + declaration order (vocabularyMirrorDrift test)"
   verb_definition_records:
     source: records/seed/verb-definition/
@@ -32,7 +32,7 @@ vocabularies:
     note: "third neighboring vocabulary (kind: operation-registry); named, never conflated"
   neighboring_verb_action_map:
     source: schema/registry/verb-action-map.yaml
-    count: 26
+    count: 27
     note: "synonym/ontology map over scientist-intent verbs; 5 enum verbs unmapped (see findings)"
 
 # verb-definition record id <-> scientist-intent action (when they denote the
@@ -72,7 +72,7 @@ mappings:
     - verb_definition_id: VERB-STIR
       canonical: stir
   enum_only:
-    # 28 of the 31 enum verbs have no verb-definition record (31 - 3 mapped above)
+    # 29 of the 32 enum verbs have no verb-definition record (32 - 3 mapped above)
     - seed
     - mix
     - resuspend
@@ -101,6 +101,11 @@ mappings:
     - media_swap_duplicate_columns
     - source_wells_to_duplicate_target_columns
     - repeat_rows
+    # bead_beat: added to the scientist-intent union by Brad ruling 2026-10-17
+    # (W28-A5 bead-beat approval). This supersedes the VERB-SONICATE
+    # protocol_semantic_only POSTURE for the bead-beating operation only; the
+    # VERB-SONICATE/VERB-STIR verb-definition records themselves are untouched.
+    - bead_beat
 
 findings:
   - id: W2-1-F1
