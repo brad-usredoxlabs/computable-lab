@@ -38,3 +38,13 @@ adapters:
     domain: registry-records
     operations: [compose-record]
     projection: {}
+    # QMS7-7 FIX1 (adv-review D2): the landing tab kind is DATA, not a TS
+    # literal. The compiled landing document (the surface the accepted record
+    # proposal re-focuses) reads landing.tabKind from this block — the same
+    # per-call adapters.yaml load the adapter itself uses. tabKind must be a
+    # lab-session tab kind (schema/workflow/lab-session.schema.yaml enum).
+    # An absent landing key fails the compile honestly with a
+    # LANDING_TAB_KIND_UNDECLARED diagnostic — the compiler never defaults a
+    # surface.
+    landing:
+      tabKind: registry

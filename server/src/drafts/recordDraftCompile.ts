@@ -37,11 +37,16 @@
  *   (max + 1, zero-padded) — NEVER Date.now()/random — so the accept-side
  *   recompile reproduces the reviewHash (the deterministic-idempotence trap).
  * - The landing document is a version:1 lab-session document validated against
- *   the REGISTERED lab-session $id: the single tab is the registry surface the
- *   proposal rode (the record-edit landing for record kinds is a
- *   workstate-tab-kinds.yaml DATA entry — a YAML demand OUTSIDE this item's
- *   sanctioned one-block un-freeze; recorded as a residue in the handoff).
+ *   the REGISTERED lab-session $id: the single tab kind is DECLARATIVE data —
+ *   the record-drafting block's `landing.tabKind` in config/drafting/adapters.yaml
+ *   (adv-review D2), read per call like the adapter itself; an absent key is a
+ *   LANDING_TAB_KIND_UNDECLARED diagnostic, never a defaulted surface. (The
+ *   record-edit landing for record kinds remains a workstate-tab-kinds.yaml
+ *   DATA entry — a YAML demand OUTSIDE this item's sanctioned one-block
+ *   un-freeze; recorded as a residue in the handoff.)
  */
+import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import type { AppContext } from '../server.js';
 import type { JSONSchema } from '../schema/json-schema.js';
 import type { SchemaEntry } from '../schema/types.js';
@@ -55,6 +60,7 @@ export type RecordDraftDiagnosticCode =
   | 'UNKNOWN_RECORD_KIND'
   | 'ID_PATTERN_UNDECLARED'
   | 'UI_SPEC_MISSING'
+  | 'LANDING_TAB_KIND_UNDECLARED'
   | 'STAGED_CREATE_REJECTED'
   | 'COMPILE_INTERNAL';
 
@@ -100,6 +106,27 @@ export function recordDraftDepsFromContext(ctx: AppContext): RecordDraftDeps {
     validateWithSchema: (doc, schema) => ctx.validator.validateWithSchema(doc, schema as never),
     uiSpecFor: (schemaId) => ctx.uiSpecLoader.get(schemaId),
   };
+}
+
+// ============================================================================
+// Landing tab policy — DATA (config/drafting/adapters.yaml, the record-drafting
+// block's `landing:` sub-key; adv-review D2: the surface the accepted proposal
+// re-focuses is declarative, never a TS literal).
+// ============================================================================
+
+const adaptersPath = new URL('../../../config/drafting/adapters.yaml', import.meta.url);
+
+/** Loaded per call (the adapters.yaml / workstate-tab-kinds.yaml precedent —
+ *  presence checks only; no surface knowledge lives in TypeScript, repo rule
+ *  #1). Returns the record-drafting block's declared landing `tabKind`, or
+ *  null when the block or the landing key is absent: the compile then fails
+ *  with a LANDING_TAB_KIND_UNDECLARED diagnostic and ZERO writes — the
+ *  compiler never defaults a surface the YAML did not declare. */
+export function loadRecordDraftLandingTabKind(): string | null {
+  const raw = parse(readFileSync(adaptersPath, 'utf8')) as unknown;
+  const block = (raw as { adapters?: Record<string, unknown> } | null)?.adapters?.['record-drafting'];
+  const landing = (block as { landing?: { tabKind?: unknown } } | undefined)?.landing;
+  return trimmedString(landing?.tabKind) ?? null;
 }
 
 // ============================================================================
@@ -299,7 +326,23 @@ export async function compileRecordDraftIntent(
     }
   }
 
-  // 6. Staged create — the ONE sanctioned write. The staging proxy runs the
+  // 6. Landing tab kind — DECLARATIVE data (adapters.yaml record-drafting
+  //    block's `landing:` sub-key, loaded per call like the adapter itself).
+  //    An absent key is a NAMED diagnostic BEFORE any staging write: the
+  //    compiler never defaults a surface the YAML did not declare (D2).
+  const landingTabKind = loadRecordDraftLandingTabKind();
+  if (!landingTabKind) {
+    return {
+      ok: false,
+      diagnostics: [{
+        code: 'LANDING_TAB_KIND_UNDECLARED',
+        path: '/landing',
+        message: 'The record-drafting adapter declares no landing.tabKind in config/drafting/adapters.yaml, so the compile cannot name the surface the proposal lands on. Nothing was staged; declare the landing tab kind in the adapter block.',
+      }],
+    };
+  }
+
+  // 7. Staged create — the ONE sanctioned write. The staging proxy runs the
   //    REAL schema validate + lint; a rejected envelope is a NAMED diagnostic
   //    carrying the Ajv errors, and nothing partial can land.
   const created = await deps.stage.create({ envelope: { recordId, schemaId, payload } });
@@ -317,14 +360,15 @@ export async function compileRecordDraftIntent(
     };
   }
 
-  // 7. Landing document: the registry surface the proposal rode (the record's
-  //    editor landing is a workstate-tab-kinds.yaml DATA entry — a YAML demand
+  // 8. Landing document: the surface the YAML declares the proposal lands on
+  //    (landing.tabKind above — DATA, not a TS literal; the record's editor
+  //    landing remains a workstate-tab-kinds.yaml DATA entry, a YAML demand
   //    outside this item). Re-validated against the REGISTERED lab-session $id.
   const title = trimmedString(payload.title) ?? recordId;
   const sessionDocument = {
     version: 1 as const,
-    tabs: [{ kind: 'registry', title }],
-    activeTabId: 'registry',
+    tabs: [{ kind: landingTabKind, title }],
+    activeTabId: landingTabKind,
   };
   const projection = deps.validate(sessionDocument, LAB_SESSION_SCHEMA_ID);
   if (!projection.valid) {
