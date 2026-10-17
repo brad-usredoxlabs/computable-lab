@@ -158,6 +158,16 @@ export interface WorkspaceActionCompilerDeps {
   surfaces: SurfacesRegistry;
   /** Existence checks for record targets + protocol steps. Read-only use. */
   store: RecordStore;
+  /**
+   * HARNESS-SEQ-2 (OQ2 ruling) — the OPTIONAL visibility door for navigation
+   * targets. When present, every record target must pass it before an action
+   * compiles; a denial is a TARGET_NOT_VISIBLE diagnostic with ZERO action.
+   * The orchestrator wires it from the RESOLVED request actor +
+   * AuthorizationService.canAccess(actor,'read',record) — the SAME door
+   * sequenceRoutes.ts uses, never a parallel policy. ABSENT ⇒ the check is
+   * skipped (the PB-CH-1 stubbed callers stay honest).
+   */
+  visibility?: (record: { recordId: string }) => Promise<boolean>;
 }
 
 export type WorkspaceActionDiagnosticCode =
@@ -169,6 +179,8 @@ export type WorkspaceActionDiagnosticCode =
   | 'UNKNOWN_RECORD'
   | 'UNKNOWN_STEP'
   | 'UNSUPPORTED_REF'
+  | 'UNSUPPORTED_TARGET'
+  | 'TARGET_NOT_VISIBLE'
   | 'COMPILE_INTERNAL';
 
 export interface WorkspaceActionDiagnostic {
@@ -207,10 +219,27 @@ export interface ResolvedOntologyTarget {
   uri?: string;
 }
 
+/** Resolved sequence-tab target: a tab the SURFACE ENTRY DECLARES (the
+ *  registry `tabs` list is the only authority — no TS allow-list). */
+export interface ResolvedSequenceTabTarget {
+  kind: 'sequence-tab';
+  tab: string;
+}
+
+/** Resolved sequence-record target: a REAL record id verified against the
+ *  store, with the authoritative label (the model's label is overwritten). */
+export interface ResolvedSequenceRecordTarget {
+  kind: 'sequence-record';
+  recordId: string;
+  label: string;
+}
+
 export type ResolvedActionTarget =
   | ResolvedProtocolStepTarget
   | ResolvedRecordTarget
-  | ResolvedOntologyTarget;
+  | ResolvedOntologyTarget
+  | ResolvedSequenceTabTarget
+  | ResolvedSequenceRecordTarget;
 
 /** The compiled, Ajv-revalidated action — the transport shape of the
  *  registered agent-action schema after server-side resolution. */
@@ -277,6 +306,23 @@ function localCurieRecordId(curie: string): string | undefined {
  */
 const TERM_TARGET_KEYS = new Set(['kind', 'label']);
 
+/**
+ * HARNESS-SEQ-2: a well-formed `sequence-tab` target ({kind, tab} only). The
+ * schema's tab enum is a FAST FENCE, but the DECLARED registry `tabs` list is
+ * the authority (OQ1 ruling). A target-scoped fence failure on a well-formed
+ * sequence-tab target therefore falls through to resolution, where the
+ * registry check produces the explainable UNSUPPORTED_TARGET naming the
+ * declared list. A resolved action for an undeclared tab never exists, so
+ * nothing invalid can ever be emitted.
+ */
+function isSequenceTabStyleTarget(target: unknown): target is Record<string, unknown> {
+  const obj = asRecord(target);
+  if (!obj) return false;
+  if (obj.kind !== 'sequence-tab') return false;
+  if (trimmedString(obj.tab) === undefined) return false;
+  return Object.keys(obj).every((key) => key === 'kind' || key === 'tab');
+}
+
 function isTermStyleTarget(target: unknown): target is Record<string, unknown> {
   const obj = asRecord(target);
   if (!obj) return false;
@@ -292,12 +338,12 @@ function errorsAreTargetScoped(result: ValidationResult): boolean {
   return errors.length > 0 && errors.every((e) => e.path.startsWith('/target'));
 }
 
-function bindCandidate(candidate: ActionCandidate, store: RecordStore): Promise<ResolvedActionTarget | WorkspaceActionDiagnostic> {
+function bindCandidate(candidate: ActionCandidate, deps: WorkspaceActionCompilerDeps): Promise<ResolvedActionTarget | WorkspaceActionDiagnostic> {
   const recordId = localCurieRecordId(candidate.curie);
   if (recordId !== undefined) {
     // A local: CURIE is a record claim — verify it exists. A stale index entry
     // must not compile into a ref pointing at nothing.
-    return bindRecordId(recordId, store, candidate.label);
+    return bindRecordId(recordId, deps, candidate.label);
   }
   // Canonical CURIE -> ontology ref from the candidate fields (the spine's
   // tier-0 semantics: canonical term -> CURIE, namespaceOf).
@@ -311,13 +357,24 @@ function bindCandidate(candidate: ActionCandidate, store: RecordStore): Promise<
   });
 }
 
-async function bindRecordId(recordId: string, store: RecordStore, fallbackLabel?: string): Promise<ResolvedRecordTarget | WorkspaceActionDiagnostic> {
-  const record = await store.get(recordId);
+async function bindRecordId(recordId: string, deps: WorkspaceActionCompilerDeps, fallbackLabel?: string): Promise<ResolvedRecordTarget | WorkspaceActionDiagnostic> {
+  const record = await deps.store.get(recordId);
   if (!record) {
     return {
       code: 'UNKNOWN_RECORD',
       message: `Record "${recordId}" does not exist. The server resolves and verifies every id — an invented record id is never emitted.`,
       term: recordId,
+    };
+  }
+  // HARNESS-SEQ-2 (OQ2 ruling): when a visibility door is wired, a record the
+  // resolved actor cannot READ is a TARGET_NOT_VISIBLE diagnostic with ZERO
+  // action — the same door the ordinary read routes use, never a parallel one.
+  // Door ABSENT ⇒ skipped (the PB-CH-1 stubbed callers stay honest).
+  if (deps.visibility && !(await deps.visibility({ recordId: record.recordId }))) {
+    return {
+      code: 'TARGET_NOT_VISIBLE',
+      message: `Record "${record.recordId}" exists but the current user is not allowed to read it. Nothing was focused; the server checks access before any navigation.`,
+      term: record.recordId,
     };
   }
   return {
@@ -364,7 +421,7 @@ async function resolveTerm(
       term,
     };
   }
-  return bindCandidate(top, deps.store);
+  return bindCandidate(top, deps);
 }
 
 /** Verify a ref the model stated explicitly (id present): record ids against
@@ -382,7 +439,7 @@ async function verifyRefTarget(
     };
   }
   if (target.kind === 'record') {
-    return bindRecordId(id, deps.store, trimmedString(target.label));
+    return bindRecordId(id, deps, trimmedString(target.label));
   }
   // kind: 'ontology' — verify the CURIE is one the lab's spine actually knows
   // (a tier-0 canonical term or a local record carrying that CURIE). An
@@ -396,7 +453,7 @@ async function verifyRefTarget(
       term: id,
     };
   }
-  const bound = await bindCandidate(hit, deps.store);
+  const bound = await bindCandidate(hit, deps);
   if ('code' in bound) return bound;
   return bound;
 }
@@ -404,10 +461,46 @@ async function verifyRefTarget(
 async function resolveTarget(
   rawTarget: unknown,
   deps: WorkspaceActionCompilerDeps,
+  surface?: string,
 ): Promise<ResolvedActionTarget | WorkspaceActionDiagnostic> {
   const target = asRecord(rawTarget);
   if (!target) {
     return { code: 'MISSING_TARGET', message: 'A focus action requires a target.' };
+  }
+
+  if (target.kind === 'sequence-tab') {
+    // HARNESS-SEQ-2: valid iff the tab is in the DECLARED `tabs` list of the
+    // surface entry (registry data through the injected SurfacesRegistry —
+    // zero tab policy in TS, repo rule #1/#3). An undeclared tab is an
+    // UNSUPPORTED_TARGET diagnostic riding the existing pipeline_diagnostics
+    // channel; nothing is emitted.
+    const tab = trimmedString(target.tab);
+    if (!tab) {
+      return { code: 'MALFORMED_ENVELOPE', message: 'A sequence-tab target requires a `tab`.' };
+    }
+    const entry = surface !== undefined ? deps.surfaces.get(surface) : null;
+    const declared = entry?.tabs ?? [];
+    if (!declared.includes(tab)) {
+      return {
+        code: 'UNSUPPORTED_TARGET',
+        message: `Tab "${tab}" is not a tab the ${surface ?? 'target'} surface declares (${declared.length > 0 ? declared.join(', ') : 'it declares no tabs'}). Switch to a tab the surface actually declares.`,
+        term: tab,
+      };
+    }
+    return { kind: 'sequence-tab', tab };
+  }
+
+  if (target.kind === 'sequence-record') {
+    // HARNESS-SEQ-2: the model cites a REAL catalog id from injected context;
+    // the store answer is the check (no kind allow-list in TS — kinds are
+    // catalog reality) and the record's own label is authoritative.
+    const recordId = trimmedString(target.recordId);
+    if (!recordId) {
+      return { code: 'MALFORMED_ENVELOPE', message: 'A sequence-record target requires a `recordId`.' };
+    }
+    const bound = await bindRecordId(recordId, deps, trimmedString(target.label));
+    if ('code' in bound) return bound;
+    return { kind: 'sequence-record', recordId: bound.id, label: bound.label };
   }
 
   if (target.kind === 'protocol-step') {
@@ -516,6 +609,10 @@ export async function compileWorkspaceAction(
     // failure (verb, extra keys, malformed ids) is a MALFORMED_ENVELOPE.
     if (isTermStyleTarget(asRecord(proposal)?.target) && errorsAreTargetScoped(rawCheck)) {
       // fall through to resolution below
+    } else if (isSequenceTabStyleTarget(asRecord(proposal)?.target) && errorsAreTargetScoped(rawCheck)) {
+      // HARNESS-SEQ-2: the schema tab enum is the fast fence; the DECLARED
+      // registry `tabs` list is the authority. Fall through so the registry
+      // check names the declared list in the diagnostic.
     } else {
       return {
         ok: false,
@@ -558,7 +655,7 @@ export async function compileWorkspaceAction(
   // 3. Target resolution.
   let target: ResolvedActionTarget | undefined;
   if (proposalObj.target !== undefined) {
-    const resolved = await resolveTarget(proposalObj.target, deps);
+    const resolved = await resolveTarget(proposalObj.target, deps, surface);
     if ('code' in resolved) {
       return { ok: false, diagnostics: [resolved] };
     }

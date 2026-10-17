@@ -47,6 +47,9 @@ vi.mock('../shared/api/client', () => ({
     getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }),
     compileWorkstateDraft: vi.fn(),
     acceptWorkstateDraft: vi.fn(),
+    // The proposal card mounts the surface registry (lane-1 Wave-3 card);
+    // consumer tests stub it per the RegistryHostPage.test.tsx precedent.
+    getSurfaces: vi.fn().mockResolvedValue({ surfaces: [] }),
   },
 }))
 

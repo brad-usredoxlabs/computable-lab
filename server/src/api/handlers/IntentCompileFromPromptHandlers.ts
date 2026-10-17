@@ -38,8 +38,9 @@
  * Classification is ORIGIN-based (thrown-from-driver vs compile RESULT object),
  * never message-substring based. The ask/answer round-trip stays on its own
  * 200 channel: needsAnswers is NOT needs-clarification.
- * The route is WRITE-FREE: its only store use is loadLabInventory's read-only
- * store.list; it never executes a run and never accepts a proposal.
+ * The route is WRITE-FREE: its store uses are read-only — loadLabInventory's
+ * store.list and (W2-8 A5f) the answers-branch source-protocol load via
+ * store.get; it never executes a run and never accepts a proposal.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
@@ -47,8 +48,9 @@ import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { resolveAiProfile } from '../../config/types.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import type { AppContext } from '../../server.js';
-import type { RecordStore } from '../../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 import { ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
+import type { EngineSpineLike } from '../../compiler/resolution/adapters.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../../compiler/scientistIntent/types.js';
 import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import {
@@ -65,9 +67,19 @@ interface CompileFromPromptDeps {
   model?: string;
   /** Injected scientist-intent LLM client (tests). Defaults to config-built. */
   llmClient?: import('../../compiler/scientistIntent/intentCompile.js').ScientistIntentLlmClient;
+  /**
+   * THREAD-ASK-1 (Leg 1, test 6): an explicitly injected candidate spine —
+   * the declared test-seam arm of the SPINE-4 §3 fail-loud doctrine
+   * (compileScientistIntent.ts:139-145: "an explicitly injected ... spine is
+   * legal only as a declared test seam"). Production callers leave it absent
+   * and get the store-backed spine below; a test injects a stub to prove the
+   * clarification-answer binding is DATA: the handler routes the scientist's
+   * stated label to the SPINE (the only binder) and never binds it itself.
+   */
+  spine?: EngineSpineLike;
 }
 
-function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0 } {
+function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0; apiKey?: string } {
   // The one-shot localization path follows the ACTIVE AI profile (default:
   // Ornith on appliance-2), so the compiler grounds against the lab's current
   // model. An explicit `smallModel` config override (or deps baseUrl/model for
@@ -75,11 +87,22 @@ function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { base
   // then to the historical local small model as a last resort.
   const ai = ctx.appConfig?.ai as Record<string, unknown> | undefined;
   const small = ai?.['smallModel'] as
-    | { baseUrl?: string; model?: string }
+    | { baseUrl?: string; model?: string; apiKey?: string }
     | undefined;
   const activeInference = ctx.appConfig?.ai
     ? resolveAiProfile(ctx.appConfig.ai).inference
     : undefined;
+  // W2-8 A5 (gate 2026-10-11_0110-a5b): the built config DROPPED the
+  // profile's apiKey, so createInferenceClient sent NO Authorization
+  // (InferenceClient.ts:52,69-70) and a key-required profile answered 401
+  // ("No cookie auth credentials found") — the accept->LPR half of A5 was
+  // unreachable. The key belongs to the endpoint the config names: a
+  // declared smallModel key wins with its own endpoint, else the ACTIVE
+  // PROFILE's key rides the profile endpoint (the W2-9 chat path's keyed-
+  // client injection, mirrored here). exactOptionalPropertyTypes: computed
+  // first, then conditionally spread — the key is ABSENT when no key
+  // exists, never undefined (the shorthandCorpus.ts:68-70 idiom).
+  const apiKey = small?.apiKey ?? activeInference?.apiKey;
   return {
     provider: 'openai-compatible',
     baseUrl: deps.baseUrl
@@ -92,6 +115,7 @@ function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { base
       ?? 'lfm2.5-2.6b',
     enableThinking: false,
     temperature: 0,
+    ...(apiKey !== undefined ? { apiKey } : {}),
   };
 }
 
@@ -99,6 +123,80 @@ interface CompileFromPromptBody {
   protocolText?: string;
   sourceProtocolId?: string;
   answers?: Record<string, string>;
+}
+
+/**
+ * W2-8 A5 (S leg, gate A5c root cause 1): answers must reach the compile as
+ * DATA. The handler previously used `answers` ONLY as the ask-vs-answer gate,
+ * so the answered call re-derived the same macro and re-barred — answering
+ * structurally could not change the outcome. When answers are present, the
+ * scientist's stated choices are appended to the compile prompt as an explicit
+ * settled-choices block built by ITERATING the request's answers entries: the
+ * axisId and value ride verbatim from the request data (zero phrase/domain
+ * literals here — the labels are the request's + the family record's). The ask
+ * gate, the 422 envelope shape, and the OQ4(a) hold are unchanged.
+ *
+ * THREAD-ASK-1 (Leg 1): a clarification ANSWER rides this SAME map as data —
+ * key = the clarification's own label, value = the scientist's chosen record
+ * in the mention idiom ClarificationPicker's answerFromMention produces
+ * (`[[material:MAT-…|label]]`). Nothing here interprets it: the entry iterates
+ * like any other, and the spine's tier-1 remains the ONLY binder (decision
+ * fact 8 — a minted record is picked up by the next local search with no extra
+ * plumbing). No reason/label branch exists in this handler, by design.
+ */
+function composeAnsweredPrompt(protocolText: string, answers: Record<string, string>): string {
+  const entries = Object.entries(answers);
+  if (entries.length === 0) return protocolText;
+  return [
+    protocolText,
+    '',
+    'SCIENTIST-RESOLVED CHOICES (stated by the scientist for this run — treat as settled, do not re-ask):',
+    ...entries.map(([axisId, value]) => `- ${axisId} = ${value}`),
+  ].join('\n');
+}
+
+/**
+ * W2-8 A5f (spec §D1): the source protocol's DECLARED ROLES ride the answered
+ * prompt as DATA. Same composition pattern as composeAnsweredPrompt above and
+ * composeIntentPrompt (compiler/scientistIntent/intentCompile.ts:128-141, the
+ * LAB INVENTORY block): a framing line + one line per entry, every value read
+ * verbatim from the record payload. Nothing here knows any vocabulary, protocol
+ * title, or role name: the groups are the payload.roles object's own keys, and
+ * each line renders the role's declared fields (roleId, description, and the
+ * record's own id-hint arrays — schema/workflow/protocol.schema.yaml LabwareRole
+ * expectedLabwareKinds / MaterialRole allowedMaterialIds / InstrumentRole
+ * allowedInstrumentIds, detected generically as the role object's string-array
+ * fields). Absent roles / irregular shape -> null: EXACTLY today's prompt
+ * (stop boundary 1 — treat as absent, never an error).
+ */
+function renderDeclaredRolesBlock(envelope: RecordEnvelope): string | null {
+  const payload = typeof envelope.payload === 'object' && envelope.payload !== null && !Array.isArray(envelope.payload)
+    ? envelope.payload as Record<string, unknown>
+    : {};
+  const roles = payload['roles'];
+  if (typeof roles !== 'object' || roles === null || Array.isArray(roles)) return null;
+  const lines: string[] = [];
+  for (const [group, rawGroup] of Object.entries(roles as Record<string, unknown>)) {
+    if (!Array.isArray(rawGroup)) continue;
+    for (const rawRole of rawGroup) {
+      if (typeof rawRole !== 'object' || rawRole === null || Array.isArray(rawRole)) continue;
+      const role = rawRole as Record<string, unknown>;
+      const roleId = typeof role['roleId'] === 'string' ? role['roleId'].trim() : '';
+      if (!roleId) continue;
+      const description = typeof role['description'] === 'string' ? role['description'].trim() : '';
+      const hints = Object.entries(role)
+        .filter(([field, value]) =>
+          field !== 'roleId' && field !== 'description' && Array.isArray(value)
+          && (value as unknown[]).every((v) => typeof v === 'string' && v.trim()))
+        .flatMap(([, value]) => (value as string[]).map((v) => v.trim()));
+      lines.push(`- ${group}: ${roleId}${description ? ` — ${description}` : ''}${hints.length ? ` (declared ids: ${hints.join(', ')})` : ''}`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return [
+    'DECLARED ROLES (declared by the scientist for this protocol — bind matching protocol nouns to these roles; use the role description as the labware/material name when it matches):',
+    ...lines,
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +249,13 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
   // tiers and FALSE-BARS store-resolvable nouns (e.g. add_material.material,
   // seed.material — resolvable, NO hintEligible). compileScientistIntent
   // throws LOUD when deps.spine is absent — injection, not a silent floor.
-  const spine = createResolveSpineFromContext({
+  // THREAD-ASK-1 (Leg 1): deps.spine is the declared test-seam arm of that
+  // doctrine — an explicitly injected spine (a stub proving the spine is the
+  // binder) replaces the store-backed composition; production callers never
+  // pass it. The clarification-answer binding stays pass-through either way:
+  // composeAnsweredPrompt iterates the request's answers entries and the
+  // SPINE remains the only binder.
+  const spine: EngineSpineLike = deps.spine ?? createResolveSpineFromContext({
     store,
     ...(ctx.appConfig !== undefined ? { appConfig: ctx.appConfig } : {}),
     getAppConfig: () => ctx.appConfig,
@@ -194,6 +298,24 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       ...(labware.length ? { labware } : {}),
       ...(materials.length ? { materials } : {}),
     };
+  }
+
+  // W2-8 A5f (spec §D1): load the source protocol record on the ANSWERS branch
+  // ONLY (the ask branch never reads it). store.get(id) is the repo pattern
+  // (UIHandlers.ts:160). Absent id / null record / non-protocol kind / roles
+  // absent or irregular -> null: today's byte-identical prompt, no block, no
+  // error (stop boundary 1). A GENUINE store fault is NOT swallowed here — it
+  // propagates to the handler's existing 500 INTENT_COMPILE_PROMPT_FAILED
+  // convention (R4: loud only for real faults, no new error path).
+  async function loadDeclaredRolesBlock(sourceProtocolId: string | undefined): Promise<string | null> {
+    if (!sourceProtocolId) return null;
+    const envelope = await store.get(sourceProtocolId);
+    if (!envelope) return null;
+    const payload = typeof envelope.payload === 'object' && envelope.payload !== null && !Array.isArray(envelope.payload)
+      ? envelope.payload as Record<string, unknown>
+      : {};
+    if (payload['kind'] !== 'protocol') return null;
+    return renderDeclaredRolesBlock(envelope);
   }
 
   return {
@@ -243,8 +365,20 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       let emitted: { intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileFromSmallLlm>>['compile'] };
       try {
         const labInventory = await loadLabInventory();
+        // W2-8 A5 (S leg): the scientist's answers ride the prompt as data
+        // (see composeAnsweredPrompt) — the compile sees the settled choices
+        // instead of re-deriving the same macro and re-barring.
+        // W2-8 A5f (spec §D1): the source protocol's DECLARED ROLES ride the
+        // SAME answered prompt (appended at this call site — no second channel).
+        // No sourceProtocolId / unreadable record / no roles -> declaredRoles is
+        // null and `prompt` keeps composeAnsweredPrompt's exact output — the
+        // byte-identical today's-prompt guarantee (R2). A store fault stays
+        // loud via this existing catch (R4).
+        let prompt = composeAnsweredPrompt(protocolText, answers);
+        const declaredRoles = await loadDeclaredRolesBlock(body?.sourceProtocolId);
+        if (declaredRoles) prompt = `${prompt}\n\n${declaredRoles}`;
         emitted = await compileFromSmallLlm({
-          prompt: protocolText,
+          prompt,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
           deps: { searchLabwareByHint, spine },

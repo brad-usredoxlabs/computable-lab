@@ -14,12 +14,7 @@
 .sequences-page [role=alert], .sequence-warning { color: var(--cl-danger, #a22); }
 .sequence-library button { display:block; text-align:left; width:100%; margin:.4rem 0; overflow-wrap:anywhere; }
 .sequence-library small { display:block; }
-.sequence-chat { display:flex; flex-direction:column; min-height:0; box-sizing:border-box; overflow:hidden; }
-.sequence-chat > :not(.sequence-chat-messages) { flex-shrink:0; }
-.sequence-chat-messages { flex:1; min-height:0; overflow:auto; overflow-wrap:anywhere; overscroll-behavior:contain; white-space:pre-wrap; }
-.sequence-chat-content { display:flex; flex-direction:column; justify-content:flex-end; min-height:100%; }
-.sequence-chat-content > div { flex-shrink:0; }
-.sequence-chat-latest { align-self:center; margin-top:.4rem; }
+/* .sequence-chat* rules moved to agent/ChatLog.css (HARNESS-SEQ-1 promotion). */
 .sequence-table-scroll, .sequence-alignment { overflow:auto; }
 .sequence-table-scroll table { border-collapse:collapse; font-size:.8rem; }
 .sequence-table-scroll td, .sequence-table-scroll th { border-bottom:1px solid var(--cl-border,#ccc); padding:.4rem; text-align:left; vertical-align:top; }

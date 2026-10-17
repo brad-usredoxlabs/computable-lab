@@ -7,6 +7,7 @@
 
 import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type PlateEventPrimitive, type VerbInput } from '../BiologyVerbExpander.js';
 import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
+import { expandWellTokens } from '../../../ai/wellRange.js';
 
 /**
  * Shared helper for verbs that do add_material + incubate.
@@ -63,13 +64,26 @@ export const seedExpander: BiologyVerbExpander = {
     const material = (params.cell_ref || params.material_ref || params.cells) as string;
     const volume = params.volume as string | undefined;
     const labwareId = params.labware_id as string | undefined;
-    
+    // SHORTHAND-COMP-4 Stage B (OQ2 ruling): the declared composition arg is
+    // CONSUMED, not silently dropped (declared-reachability doctrine) — the
+    // SAME helper the add_material expander uses, no new name knowledge.
+    const composition = compositionSnapshotFromParams(params.composition, params.material);
+
     return [{
       eventId: makeEventId('seed'),
       event_type: 'add_material',
       details: {
         material,
         ...(volume ? { volume } : {}),
+        ...(composition
+          ? {
+              composition_snapshot: composition.snapshot,
+              formulation_kind: composition.formulationKind,
+              material_ref: composition.materialRef,
+              ...(composition.count !== undefined ? { count: composition.count } : {}),
+              ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+            }
+          : {}),
       },
       labwareId,
     }];
@@ -318,6 +332,82 @@ export const readExpander: BiologyVerbExpander = {
 };
 
 /**
+ * SHORTHAND-COMP-3 (Part I task 3): a mixture the scientist names arrives as
+ * `params.composition` — one entry per component. Emit it as the event's
+ * `composition_snapshot` (one ledger line per component; the store-write
+ * normalization in AddMaterialSupport mints a material record per component
+ * and one complex_composition material-spec for the mixture). A `cells`
+ * component carries a COUNT, never a volume — no code path here derives a
+ * count from a volume or a density.
+ *
+ * OQ1 ruling (a): the mixture ITSELF gets a draft `material_ref`
+ * ({kind:'draft', id:'mint:<label>', label}) so the existing store-write
+ * chain (upsertProposedMaterialSpecFromComposition requires details.material_ref
+ * at AddMaterialSupport.ts:215) can mint the one composition spec. The label
+ * is the model's own mixture name when it gave one, else the joined component
+ * labels — the same data-driven naming idiom the chain itself uses
+ * (componentLabels.join(' + '), AddMaterialSupport.ts:224-228). No noun
+ * literals: every string here comes from the document.
+ *
+ * Defensive drops (OQ2 ruling): entries without a non-empty string component
+ * name are SKIPPED; a non-string role becomes 'other' (the role enum lives in
+ * composition-entry.schema.yaml, not in a TS table); fewer than two valid
+ * entries ⇒ null (a single component is a plain add).
+ */
+function compositionSnapshotFromParams(
+  composition: unknown,
+  declaredMixtureLabel: unknown,
+): {
+  snapshot: Record<string, unknown>[];
+  materialRef: Record<string, unknown>;
+  formulationKind: string;
+  count?: number;
+  counterDensity?: Record<string, unknown>;
+} | null {
+  if (!Array.isArray(composition) || composition.length < 2) return null;
+  const snapshot: Record<string, unknown>[] = [];
+  const componentLabels: string[] = [];
+  let count: number | undefined;
+  let counterDensity: Record<string, unknown> | undefined;
+  for (const raw of composition) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const entry = raw as Record<string, unknown>;
+    const label = typeof entry.material === 'string' ? entry.material.trim() : '';
+    if (!label) continue;
+    const role = typeof entry.role === 'string' && entry.role.trim() ? entry.role.trim() : 'other';
+    // A component with no CURIE is a DRAFT ref — the exact shape
+    // MaterialGrounding.ensureLocalMaterialForDraft mints into a MAT- record.
+    const componentRef: Record<string, unknown> = { kind: 'draft', id: `mint:${label}`, label };
+    snapshot.push({
+      component_ref: componentRef,
+      role,
+      ...(entry.concentration !== undefined ? { concentration: entry.concentration } : {}),
+      ...(typeof entry.fraction === 'string' ? { source: `${entry.fraction} of the mixture` } : {}),
+    });
+    componentLabels.push(label);
+    if (role === 'cells') {
+      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) count = entry.count;
+      const density = entry.counterDensity;
+      if (density && typeof density === 'object' && !Array.isArray(density)) {
+        counterDensity = density as Record<string, unknown>;
+      }
+    }
+  }
+  if (snapshot.length < 2) return null;
+  const mixtureLabel =
+    typeof declaredMixtureLabel === 'string' && declaredMixtureLabel.trim()
+      ? declaredMixtureLabel.trim()
+      : componentLabels.join(' + ');
+  return {
+    snapshot,
+    materialRef: { kind: 'draft', id: `mint:${mixtureLabel}`, label: mixtureLabel },
+    formulationKind: 'complex_composition',
+    ...(count !== undefined ? { count } : {}),
+    ...(counterDensity ? { counterDensity } : {}),
+  };
+}
+
+/**
  * add_material: single add_material event.
  * Supports params: labware_id, well, material (object with kind/materialId/volumeUl),
  * or legacy params: labware, material (string), wells (array).
@@ -330,7 +420,20 @@ export const addMaterialExpander: BiologyVerbExpander = {
     const labwareId = (params.labware_id ?? params.labware) as string | undefined;
     const well = params.well as string | undefined;
     const material = params.material as Record<string, unknown> | string | undefined;
-    const wells = params.wells as string[] | undefined;
+    // SHORTHAND-COMP-1 Task 15 (Part III D3): the lowered shorthand candidate
+    // can carry `wells` as a compact ADDRESS RANGE string ("A1:H12" — the
+    // scalar `targetWells` form; add_material declares no kind:wells arg, so
+    // SPINE-7's symbolic-label branch never fires for it). Expand it through
+    // the ONE range parser (server/src/ai/wellRange.ts expandWellTokens — the
+    // same parser the raw path's expandEventWells uses) BEFORE the
+    // Array.isArray branch, so the existing per-well loop fires. A scalar on a
+    // DECLARED kind:wells arg is a symbolic label and routes to the spine
+    // (normalizeScientistIntent); a range string on an undeclared key is a
+    // literal address range and routes here. No second range parser.
+    const rawWells = params.wells as string[] | string | undefined;
+    const wells = typeof rawWells === 'string' && rawWells.trim()
+      ? expandWellTokens([rawWells])
+      : rawWells;
     const materialKind = params.materialKind as string | undefined;
     const volumeUl =
       typeof params.volume_uL === 'number'
@@ -348,6 +451,37 @@ export const addMaterialExpander: BiologyVerbExpander = {
             : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
               ? material.volume_uL
               : undefined;
+    // SHORTHAND-COMP-1 Task 14 (Part III D2): the DECLARED quantity object
+    // `{value, unit}` rides the candidate as `volume` (normalizeScientistIntent
+    // maps ['volume', ['volume']]). It was silently dropped here while
+    // transferExpander (below) already reads the exact same shape. Honor it in
+    // BOTH emit branches; an explicit object overrides the scalar forms.
+    // Unit honesty: NO conversion — `volumeUl` is derived only when the
+    // declared unit is literally 'uL'; {value:0.05, unit:'mL'} carries
+    // `volume` with no `volumeUl` (the Quantity datatype has no arithmetic).
+    const declaredVolume =
+      params.volume && typeof params.volume === 'object'
+        ? (params.volume as { value: number; unit: string })
+        : undefined;
+    const resolvedVolumeUl =
+      declaredVolume && typeof declaredVolume.value === 'number' && declaredVolume.unit === 'uL'
+        ? declaredVolume.value
+        : typeof volumeUl === 'number'
+          ? volumeUl
+          : undefined;
+    const volumeDetails: Record<string, unknown> =
+      typeof resolvedVolumeUl === 'number'
+        ? { volumeUl: resolvedVolumeUl, volume: declaredVolume ?? { value: resolvedVolumeUl, unit: 'uL' } }
+        : declaredVolume
+          ? { volume: declaredVolume }
+          : {};
+    // SHORTHAND-COMP-3 (Part I task 3): the declared components ride the open
+    // params slot (normalizeScientistIntent carries them; ChatbotCompilePasses
+    // hands the whole candidate as `params`). Compute the snapshot ONCE, add it
+    // to BOTH emit branches below. A document without params.composition gets
+    // `undefined` here and emits byte-identically to before (the spreads are
+    // gated on the value).
+    const composition = compositionSnapshotFromParams(params.composition, params.material);
 
     const events: PlateEventPrimitive[] = [];
 
@@ -362,7 +496,16 @@ export const addMaterialExpander: BiologyVerbExpander = {
             material: typeof material === 'string' ? material : undefined,
             ...(typeof material === 'object' && material !== null ? material : {}),
             ...(materialKind ? { materialKind } : {}),
-            ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
+            ...volumeDetails,
+            ...(composition
+              ? {
+                  composition_snapshot: composition.snapshot,
+                  formulation_kind: composition.formulationKind,
+                  material_ref: composition.materialRef,
+                  ...(composition.count !== undefined ? { count: composition.count } : {}),
+                  ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+                }
+              : {}),
           },
           ...(labwareId ? { labwareId } : {}),
         });
@@ -377,7 +520,16 @@ export const addMaterialExpander: BiologyVerbExpander = {
           ...(typeof material === 'object' && material !== null ? material : {}),
           ...(typeof material === 'string' ? { material } : {}),
           ...(materialKind ? { materialKind } : {}),
-          ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
+          ...volumeDetails,
+          ...(composition
+            ? {
+                composition_snapshot: composition.snapshot,
+                formulation_kind: composition.formulationKind,
+                material_ref: composition.materialRef,
+                ...(composition.count !== undefined ? { count: composition.count } : {}),
+                ...(composition.counterDensity ? { counter_density: composition.counterDensity } : {}),
+              }
+            : {}),
         },
         ...(labwareId ? { labwareId } : {}),
       });

@@ -59,6 +59,7 @@ import { validateProtocolEditPayload, formatProtocolEditErrors } from './protoco
 import {
   compileWorkspaceAction,
   type CompileResult,
+  type ResolvedActionTarget,
   type WorkspaceActionCompilerDeps,
 } from './compileWorkspaceAction.js';
 import { selectSubmitCall } from './selectSubmitCall.js';
@@ -66,17 +67,24 @@ import type { SubmitCallLike } from './selectSubmitCall.js';
 import { shadowRouterDepsFromConfig, shadowRouteIfNeeded, type ShadowRouterPick } from './shadowRouterAdapter.js';
 import { resolveDraftMaterials } from './resolveDraftMaterials.js';
 import { surfaceDraftsShorthand } from './shorthandDrafting.js';
+import { loadForcedToolCompliancePolicy, forcedToolComplianceEntry, defaultForcedToolCompliancePolicyPath } from './forcedToolCompliance.js';
+import { reviewAskWallFor, reviewOpsWallFor, type ReviewWallRefusal } from './reviewWriteWall.js';
+import { sequencesFocusGuard } from './sequencesFocusGuard.js';
+import { attachedMismatchGateFor } from './attachedProtocolRetargetGate.js';
 import {
   compileShorthandDeterministically,
   composeLabwareHintLookupWithDeck,
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
+  dropSatisfiedFacts,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
+  parseShorthandForChat,
   shorthandResultFromCompile,
 } from './shorthandChat.js';
-import { parseScientistIntent, ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
+import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { expandWellPattern, wellPatternFromDetails } from './wellPatterns.js';
 import { materialLayerOfRef } from './materialRefFields.js';
 import { expandEventWells } from './wellRange.js';
@@ -327,6 +335,23 @@ function resolvedMentionsFromAnswers(
  * placeholder values; the server is the authority for when a draft was made.
  */
 /**
+ * W2-9 g2d FINAL CYCLE (ruling l2t1040): the candidate ids a COMPILED action
+ * target carries — the observable payload-side ids the retarget gate compares
+ * against the attached protocol. A record target carries `id`, a protocol-step
+ * target carries `protocolId`, an ontology target carries a CURIE `id`. No
+ * kind knowledge beyond the compiler's own discriminated union lives here.
+ */
+function compiledTargetCandidateIds(target: ResolvedActionTarget | undefined): string[] {
+  if (!target) return [];
+  switch (target.kind) {
+    case 'protocol-step': return [target.protocolId];
+    case 'sequence-tab': return []; // a declared tab is not a record — nothing to gate on
+    case 'sequence-record': return [target.recordId];
+    default: return [target.id]; // record | ontology
+  }
+}
+
+/**
  * Rewrite loose labware references in drafted event details against the
  * editor's actual labware list. Models routinely echo a labware's type
  * ("plate_96") or display name instead of its id; when the reference
@@ -505,24 +530,79 @@ function stampDraftProvenance<T>(events: T[]): T[] {
   });
 }
 
-/** Exported for the guard test that pins the equipment bullet (Phase 4.3). */
-export const FORCED_DRAFT_TOOL_INSTRUCTION = [
+/**
+ * SH-PROMPT-HYGIENE-1: the forced-draft instruction bullets are factored into shared
+ * arrays so the legacy const and the shorthand variant are composed from the SAME
+ * verbatim bullet strings. `FORCED_DRAFT_TOOL_INSTRUCTION` (exported, pinned by the
+ * equipment/instruction tests) stays BYTE-IDENTICAL for every non-migrated surface.
+ * `FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND` drops the legacy field menu and the raw-
+ * events placement clause the AS-4 refusal arm makes unusable on shorthand-drafting
+ * surfaces (membership is DATA — config/drafting/shorthand-drafting.yaml, read via
+ * surfaceDraftsShorthand at the ONE push site in buildPrefixRequest; zero surface-name
+ * literals here, repo rule #1). The instrument bullet and the bench-equipment bullet
+ * stay in BOTH variants (OQ-1 owns the migrated-surface equipment routing gap — the
+ * prompt fix must not silently invent an answer).
+ */
+const FORCED_DRAFT_HEAD_BULLETS = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${AGENT_INTENT_TOOL_NAME} tool exactly once, choosing ONE intent from its menu.`,
   '- To draft events onto the deck (add-material, transfers, labware), choose intent "event_shorthand" and put the WHOLE draft in the `shorthand` field as a scientist-intent YAML document: intentId + actions[] using ONLY the closed action vocabulary, with natural-language noun labels (the lab spine binds them) and numeric parameters. You NEVER write events, well grids, labware record ids, or deck slots yourself — the deterministic compiler expands your shorthand into the event graph.',
   '- To change the deck layout (e.g. switch the deck to the freeform bench), choose intent "deck_layout" and set variantId (e.g. "manual_freeform"); LEAVE the event fields empty. The deck switch is applied and persists — you do not need to draft events for a layout change.',
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- An instrument is NEVER an event: to put one on the bench emit equipmentRequirements[{recordId:"EQP-…"}] (or classCurie "equipment:<kind>"). Never write place_tube / move_tube / transfer with an instrument id — an instrument has no wells, and the labwareId of a tube or transfer event must name LABWARE. When the user named an instrument (a <resolved_context> equipment id), place THAT record — do not substitute a stand-in that happens to be on the bench.',
+];
+
+const FORCED_DRAFT_LEGACY_MIDDLE_BULLETS = [
   '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — events, equipmentAdditions, equipmentRequirements, labwareRequirements — not just the intent.',
   '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
   '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
   '- ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.',
+  '- A MIXTURE is never one material: when the scientist names a ratio, a percent, a medium plus additives, or cells in a suspension, carry every component in the action\'s `params.composition` array (one entry per component: material + role, plus fraction/count as stated). Never put a mixture sentence in `material`.',
   '- When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.',
   '- Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist\'s words) — never a hand-built labwareRequirements payload.',
   '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something it already has on the bench is equipmentRequirements / labwareRequirements inside `event_graph` — never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
   '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT labwareRequirements, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
-  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one.',
+];
+
+const FORCED_DRAFT_SHORTHAND_MIDDLE_BULLETS = [
+  '- A tool call with no fields proposes NOTHING: prose is not an action. When the user answers your question (even with "1)" or "yes, do that"), your turn must carry the field that acts — on this surface the action rides the `shorthand` document (or `deck_layout` / `create_record`) — not just the intent.',
+  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
+  '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
+  '- ALWAYS carry the actions for an add-materials request in the shorthand document. NEVER send an empty shorthand for such a request, and never ask the user to confirm a volume or concentration they already stated.',
+  '- A MIXTURE is never one material: when the scientist names a ratio, a percent, a medium plus additives, or cells in a suspension, carry every component in the action\'s `params.composition` array (one entry per component: material + role, plus fraction/count as stated). Never put a mixture sentence in `material`.',
+  '- When the scientist names wells, carry them in the document (sourceWells/targetWells); when they do not, leave them out — the compiler binds the labware and wells from the deck context. Never invent a labware record id.',
+  '- Simple labware/deck setup is still a shorthand document (create_container / add_material naming the labware in the biologist\'s words) — never a hand-built legacy payload.',
+  '- ONE call. `event_shorthand` drafts events onto the deck (a scientist-intent document); `deck_layout` switches the deck; `create_record` AUTHORs records the lab does not have yet (equipment, material or labware) via `records:[{kind,name,…}]`. Adding something the lab lacks is `create_record`; putting something the lab already owns on the bench goes through the shorthand document / deck context — NEVER a raw events payload on this surface; never create a second copy of a record the lab owns. `create_record` writes NOTHING by itself: the user reviews the proposal and Accept creates the record (an existing match is reused with a warning). Set `source` on every creation ("user-description" | "exa:<url>" | "record:<id>"), and never downgrade a named product into a generic kind — ask with an /e clarification or ground it instead. Include `alsoPlace` (e.g. {"surface":"lawn"}) ONLY when the user also wants it on the bench: creating and placing are two decisions and placing is never implied.',
+  '- For BENCH EQUIPMENT (water bath, heat block, heater-shaker, orbital shaker, rocker, vortex, qPCR machine, plate reader) use equipmentRequirements — NOT a labware request, and NEVER a deck slot: equipment sits on the bench. "Add the water baths to the deck" is an equipment placement, not a refusal. Records-first: if the lab already owns it, emit its EQP- recordId (warn the user instead of creating a duplicate); otherwise emit classCurie as `equipment:<kind>` (e.g. equipment:water_bath, equipment:heater_shaker) and put the values it is set to in settings, keyed by the class settingsDefinition (e.g. {"temperature_c":55}). Never invent a CL: equipment class CURIE, and never claim what a piece of equipment accepts — acceptance is data, not your judgement.',
+  '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
+];
+
+const FORCED_DRAFT_TAIL_BULLETS = [
+  '- Action verbs come from the CLOSED scientist-intent vocabulary only — the schema rejects a verb outside it. Never invent one. The full menu with each verb\'s accepted args is the ACTIONS block below; write the verb as the VALUE of the `action` key.',
+  defaultScientistIntentVocabulary().contractBlock(),
+];
+
+/** Exported for the guard test that pins the equipment bullet (Phase 4.3). */
+export const FORCED_DRAFT_TOOL_INSTRUCTION = [
+  ...FORCED_DRAFT_HEAD_BULLETS,
+  ...FORCED_DRAFT_LEGACY_MIDDLE_BULLETS,
+  ...FORCED_DRAFT_TAIL_BULLETS,
+].join('\n');
+
+/**
+ * SH-PROMPT-HYGIENE-1: the shorthand-drafting variant of the forced instruction.
+ * Same head (incl. the instrument bullet), same tail (closed-verb rule + the generated
+ * contract block exactly once), same bench-equipment bullet with its equipment
+ * vocabulary intact; the middle drops the legacy field menu and the raw-events
+ * placement clause (the AS-4 refusal makes a raw events emission unusable on these
+ * surfaces — the refusal arm itself stays untouched). Selected at the ONE push site
+ * in buildPrefixRequest via surfaceDraftsShorthand (DATA membership).
+ */
+export const FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND = [
+  ...FORCED_DRAFT_HEAD_BULLETS,
+  ...FORCED_DRAFT_SHORTHAND_MIDDLE_BULLETS,
+  ...FORCED_DRAFT_TAIL_BULLETS,
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
@@ -790,7 +870,7 @@ export function coerceDraftArgsFromContent(content: unknown): Record<string, unk
   return null;
 }
 
-function buildForcedDraftJsonPrompt(originalPrompt: string): string {
+function buildForcedDraftJsonPrompt(originalPrompt: string, antiEchoClause?: string): string {
   return [
     `You did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call.`,
     'Return ONLY the JSON arguments for that tool (with the "intent" discriminator). No markdown, no explanation.',
@@ -802,6 +882,13 @@ function buildForcedDraftJsonPrompt(originalPrompt: string): string {
     // PROTO-AI-9: the retry prompt must know the protocol_edit envelope too, or
     // a protocol-edit turn can never be recovered by the slow path.
     'For edits to the ATTACHED PROTOCOL (add/delete/reorder/modify its steps), use intent "protocol_edit" with ops:[...] — cite ONLY stepIds/roleIds from the ATTACHED PROTOCOL block; this proposes an edit and writes nothing.',
+    // SH-QC-1S R1 (architect D2): the repeat-prompt echo rode the coerce slow
+    // path because the retry re-sent the polluted history with NO anti-echo
+    // clause and the model pattern-completed on its own prior summary. The
+    // clause (DATA: config/drafting/forced-tool-compliance.yaml
+    // `coerceAntiEcho:`) rides INSIDE this prompt so the second call
+    // challenges the echo instead of re-sending the history unchallenged.
+    ...(antiEchoClause ? [antiEchoClause] : []),
     `Original user prompt: ${originalPrompt}`,
   ].join('\n');
 }
@@ -930,6 +1017,15 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    */
   surfaces?: import('../surfaces/surfaces.js').SurfacesRegistry;
   /**
+   * HARNESS-SEQ-2 (OQ2 ruling) — the lab's ONE authorization door
+   * (server/src/security/AuthorizationService.ts, the same canAccess the
+   * ordinary read/write routes use). When present, the workspace_action
+   * compiler gates navigation targets through it (deny = TARGET_NOT_VISIBLE,
+   * zero action). Optional — without it the compiler skips the visibility
+   * check (the PB-CH-1 stubbed callers stay honest).
+   */
+  authorizationService?: import('../security/AuthorizationService.js').AuthorizationService;
+  /**
    * PB-CH-8 — the ledger query host (workspace-session/ledgerQuery.ts
    * createLedgerQueryHost). The `query_workstate_history` intent runs through
    * it: spine resolution + server-known audit anchor + journal asOf + the
@@ -977,6 +1073,7 @@ export function createAgentOrchestrator(
     historyTurns = 4,
     draftFlowMode = 'forced-tool',
     systemPromptPath,
+    forcedToolCompliancePolicyPath,
   } = agentConfig;
 
   /**
@@ -1089,15 +1186,30 @@ export function createAgentOrchestrator(
     // surface names here (repo rule #1). No store scan — pure policy text.
     const workstateRulesBlock = buildWorkstateRulesBlockForSurface(args.surface);
     const systemSections: string[] = [systemPrompt];
-    if(args.surface==='sequences' && deps.sequenceActionSchema)systemSections.push(
+    if(args.surface==='sequences' && deps.sequenceActionSchema){
+      // HARNESS-SEQ-2: the navigation bullet names the DECLARED tab vocabulary
+      // straight from the surfaces registry entry (data, not literals — repo
+      // rule #1) so the model emits the exact target shape the compiler and
+      // the page executor understand. forceDraftTool STAYS true: every turn
+      // remains a structured emission; the relaxation is that a navigation
+      // turn may satisfy itself with workspace_action instead of drafting.
+      const declaredTabs = deps.surfaces?.get(args.surface)?.tabs ?? []
+      systemSections.push(
       sequenceAuthoringGuidance,
       'Use agent_intent with intent=sequence_action and sequenceAction set to ONE request matching its tool schema. New primer/probe bases plus modifications use create_oligo; save_oligo requires an existing immutable sequenceRef. Do not invent references to existing records, executable paths, checksums or datasets. Proposals do not execute until accepted. Ask for missing scientific information rather than guessing.',
+      // DEFECT-2 gate fix (2026-10-15_1255 leg2): the tab-ask target shape was
+      // missable — the model once emitted "Analysis" as a term target
+      // (UNRESOLVED_TERM). Guidance text only (zero compiler/behavior change):
+      // the tab-name-is-never-a-term rule is stated explicitly next to the
+      // declared vocabulary the bullet already reads from the registry entry.
+      ...(declaredTabs.length > 0 ? ['To switch this page\'s tab — any request naming one of the tabs this page declares — use intent=workspace_action with action "open-surface", surface "sequences" and target {kind:"sequence-tab", tab:"<one of: '+declaredTabs.join(', ')+'">"} — the envelope carries ALL THREE parts (verb + surface + target), e.g. {"intent":"workspace_action","action":{"action":"open-surface","surface":"sequences","target":{"kind":"sequence-tab","tab":"'+declaredTabs[0]+'"}}}. The tab name goes ONLY in the tab field of a sequence-tab target: a tab request is NEVER a term, record label, or ontology target. To show an existing record, use intent=workspace_action with target {kind:"sequence-record", recordId:"<a real id from context.records>"} (a {kind:"record", id:"..."} ref resolves too). Navigation drafts nothing and writes nothing. Use intent=sequence_action only for proposals (save/annotate/analyze). ROUTING RULE: requests naming a declared tab ('+declaredTabs.map((tab) => `"switch to the ${tab} tab"`).join(' ')+') or naming a real record id ("focus on record SEQ-…") are NEVER drafting requests — they are workspace_action, whatever the chat history before them was about.'] : []),
       'Oligo chemistry reference data (apply only when requested): '+JSON.stringify(deps.sequenceOligoGuidance??{}),
       'Examples: '+JSON.stringify((deps.sequenceActionSchema.oneOf as Array<Record<string,unknown>>).flatMap(variant=>variant.examples??[])),
     );
+    }
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
-    if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+    if (forceDraftTool) systemSections.push(surfaceDraftsShorthand(args.surface) ? FORCED_DRAFT_TOOL_INSTRUCTION_SHORTHAND : FORCED_DRAFT_TOOL_INSTRUCTION);
     // Pushed LAST so they sit adjacent to the forced-tool instruction (OQ1
     // ruling: the grounding block carries the compose_analysis routing rule;
     // the rules block carries the compose_workstate tab/target rule — pinned
@@ -1159,6 +1271,10 @@ export function createAgentOrchestrator(
        * shorthand surfaces is DATA (config/drafting/shorthand-drafting.yaml).
        */
       const shorthandSurface = surfaceDraftsShorthand(surfaceName);
+      // SH-QC-1S R1: the forced-tool compliance policy DATA is loaded PER
+      // call (the shorthand-drafting.yaml convention, never process-cached) —
+      // the compliance arm and the coerce anti-echo clause both read it.
+      const compliancePolicy = loadForcedToolCompliancePolicy(forcedToolCompliancePolicyPath ?? defaultForcedToolCompliancePolicyPath);
       let eventGraphRefusalAsked = false;
       let shorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
@@ -1215,11 +1331,47 @@ export function createAgentOrchestrator(
             });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
-              if (compiledFold.outcome === 'needs-clarification') {
-                holdShorthandIntent(conversationKey, { yaml: folded.yaml, doc: folded.doc, clarifications: compiledFold.clarifications });
+              // SH-QA-1 auto-satisfy ledger: the slots this fold closed. A
+              // re-derived fact for a ledgered slot whose value is STILL the
+              // chosen label is moot (the answer already closed it) — dropped
+              // BEFORE the requests are built and BEFORE the re-hold, so a
+              // closed slot never re-surfaces as a second card whatever reason
+              // it re-derives under. A slot that STILL bars (the answer did
+              // not resolve) is not ledgered — the legitimate re-ask survives
+              // (B6: the ledger must not swallow it).
+              // Spec §B: a slot is ledgered ONLY iff the re-derived bar
+              // carries NO fact for that slot identity — a slot that STILL
+              // bars (the answer did not resolve) is never ledgered, so the
+              // legitimate re-ask survives (B6).
+              const slotKey = (a: number, arg: string) => `slot:${a}:${arg}`;
+              const reDerivedSlotKeys = new Set(
+                compiledFold.clarifications
+                  .filter((f) => f.actionLocation?.actionIndex !== undefined
+                    && typeof f.actionLocation?.argument === 'string')
+                  .map((f) => slotKey(f.actionLocation!.actionIndex!, f.actionLocation!.argument!)),
+              );
+              const ledger = [
+                ...(held.answeredSlots ?? []),
+                ...folded.answeredSlots.filter((s) => !reDerivedSlotKeys.has(slotKey(s.actionIndex, s.argument))),
+              ];
+              const survivingFacts = dropSatisfiedFacts(
+                compiledFold.clarifications,
+                ledger,
+                folded.doc,
+              );
+              if (survivingFacts.length > 0) {
+                holdShorthandIntent(conversationKey, {
+                  yaml: folded.yaml,
+                  doc: folded.doc,
+                  clarifications: survivingFacts,
+                  ...(ledger.length > 0 ? { answeredSlots: ledger } : {}),
+                });
               }
+              // The result mapper sees the LEDGER-FILTERED facts: a closed
+              // slot emits no card. The compile itself is untouched (the
+              // frozen pipeline's output rides verbatim otherwise).
               const foldResult = shorthandResultFromCompile(
-                compiledFold,
+                { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
@@ -1251,6 +1403,100 @@ export function createAgentOrchestrator(
           error: 'No model configured — cannot draft: the shorthand drafting path needs a model to extract the scientist-intent document. Ask an administrator to configure the AI runtime.',
         };
       }
+
+      /**
+       * W2-89 g2b-1/2 — THE WRITE WALL (deterministic, structural). The
+       * browser gate proved model discretion fails on the criterion-2
+       * negatives ("rewrite the vendor text…", "relabel … provenance as
+       * vendor truth"): both surfaced actionable Apply/Accept cards across
+       * two runs. The refusal therefore lives BEFORE the model: on a guarded
+       * surface (policy DATA: config/drafting/review-write-wall.yaml, loaded
+       * per call — the shorthand-drafting.yaml precedent), an ask matching a
+       * declared wall returns the refusal envelope INSTEAD of running the
+       * turn: zero inference, zero writes, NO proposal payload reaches the
+       * client, and the honest server-built wording rides the result so the
+       * chat shows a user-facing refusal (never raw reasoning, never
+       * "(no response)"). TS follows the data — no surface literal, no
+       * phrase literal here.
+       *
+       * advc-W289-l2t0525 DEFECT-2 (cycle-2 clause, SUPERSEDED by the W2-89
+       * cycle-3 authority decision, FIX-3): the ask wall now reads the user's
+       * ask AND the clarification-appended prompt. REVERSAL, explicitly: after
+       * the FIX-2 restructure (structural governance: leading-verb + adjacency
+       * triggers, strip/negation exemption on the stripped remainder) the
+       * predicate only fires on wall-crossing CONSTRUCTIONS, so an honest
+       * picker answer — option labels and resolved refs as appended by
+       * `appendClarificationAnswersToPrompt` — cannot trip it, while an answer
+       * that IS an imperative carrying a declared referent IS the attack
+       * (advc-W289-c2 DEFECT-3: the clarification-answer smuggle) and must be
+       * refused before the model. Per the W2-89 cycle-4 ruling (FIX-6), each
+       * clarification answer the user submitted is itself a governed turn: the
+       * ask wall reads the answer's RAW request fields alongside the ask and
+       * the appended prompt. The structured half of the wall (the
+       * payload-side backstop: forbidden op keys + CAN- target-id rules) is
+       * `reviewOpsWallFor` at the protocol_edit branch below.
+       */
+      const askWall = reviewAskWallFor(surfaceName, prompt)
+        ?? reviewAskWallFor(surfaceName, effectivePrompt)
+        ?? (request.clarificationAnswers ?? [])
+             .map((a) => [a.optionId, a.label, a.mentionToken, a.value,
+                          a.ref ? JSON.stringify(a.ref) : '']
+                       .filter((s): s is string => typeof s === 'string' && s.length > 0)
+                       .join('\n'))
+             .map((segment) => reviewAskWallFor(surfaceName, segment))
+             .find((w): w is ReviewWallRefusal => w !== null) ?? null;
+      if (askWall) {
+        console.log(`[agent ${tid}] write-wall refusal surface=${surfaceName} code=${askWall.code} — turn refused before the model (zero inference, zero writes)`);
+        onEvent?.({ type: 'tool_result', toolName: 'write-wall', success: false, durationMs: 0 });
+        const wallElapsed = Date.now() - t0;
+        const wallSummary: AgentSummary = {
+          traceId: tid, surface: surfaceName, model, success: true, elapsedMs: wallElapsed,
+          turns: [],
+          totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          resolvedMentions: 0, bypass: null,
+        };
+        logAgentSummary(tid, wallSummary);
+        return {
+          success: true,
+          notes: [],
+          refusal: { code: askWall.code, message: askWall.message },
+        };
+      }
+
+      /**
+       * HARNESS-SEQ-2 FIX3 (D1, gate 2026-10-16_0445, traces zyyrls/1ta7ju) —
+       * the deterministic sequences focus-guard, BEFORE the model. The gate
+       * proved the negative leg cannot ride model cooperation: the served
+       * model emitted zero agent_intent calls for "focus on record
+       * ANR-000001" (kind analysis-run, outside the surface's declared
+       * selectableKinds), so the client-side selectableKinds gate had nothing
+       * to refuse and the chat showed only the generic model-failure line.
+       * The guard reads the SAME registry DATA (surfaces.yaml selectableKinds
+       * through the injected SurfacesRegistry) plus the store's answer for the
+       * record's kind — zero kind policy in TS — and ends the turn with the
+       * NAMED refusal: zero inference, zero agent_action frames, zero writes.
+       * Swap the registry and the refusal text flips (unit-pinned).
+       */
+      if (surface === 'sequences') {
+        const focusRefusal = await sequencesFocusGuard(
+          { prompt, surface: surfaceName },
+          deps.store && deps.surfaces ? { store: deps.store, surfaces: deps.surfaces } : {},
+        );
+        if (focusRefusal) {
+          console.log(`[agent ${tid}] sequences focus-guard refusal surface=${surfaceName} code=${focusRefusal.code} — named refusal before the model (zero inference, zero writes): ${focusRefusal.message}`);
+          const guardElapsed = Date.now() - t0;
+          const guardSummary: AgentSummary = {
+            traceId: tid, surface: surfaceName, model, success: false, elapsedMs: guardElapsed,
+            turns: [],
+            totals: { turns: 0, toolCalls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            resolvedMentions: 0, bypass: null,
+          };
+          guardSummary.error = focusRefusal.message;
+          logAgentSummary(tid, guardSummary);
+          return { success: false, error: focusRefusal.message };
+        }
+      }
+
       console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
@@ -1294,7 +1540,12 @@ export function createAgentOrchestrator(
       const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
       const skipCompilerPreflight = !runPreflight;
       if (skipCompilerPreflight) {
-        onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
+        // SEQ2FIX2 D5 (gate 2026-10-15_1420): on the sequences surface the
+        // forced tool is agent_intent (buildToolDefs returns the intent tool
+        // and tool_choice pins it) — the narration must name the ACTUAL tool,
+        // not the compile-draft tool other forced flows use. Other surfaces'
+        // narration is byte-unchanged (pinned by AgentOrchestrator.test.ts).
+        onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${surface === 'sequences' ? AGENT_INTENT_TOOL_NAME : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
         console.log(`[agent ${tid}] skipping compiler preflight for forced draft tool mode`);
       }
       if (!skipCompilerPreflight) {
@@ -1587,7 +1838,9 @@ export function createAgentOrchestrator(
 
       const endpointLabel = inferenceEndpointLabel(inferenceConfig);
 
-      let sequenceRepairAttempts = 0;
+      // SH-QC-1S R1: renamed from `sequenceRepairAttempts` — the counter now
+      // serves every DATA-listed forced-tool surface, not one surface.
+      let forcedToolComplianceAttempts = 0;
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -1638,7 +1891,8 @@ export function createAgentOrchestrator(
           let lastToolProgressAt = 0;
           onEvent?.({
             type: 'status',
-            message: `AI request sent to ${endpointLabel}; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
+            // SEQ2FIX2 D5: the sequences forced tool is agent_intent — name it.
+            message: `AI request sent to ${endpointLabel}; waiting for ${forceDraftTool ? (surface === 'sequences' ? AGENT_INTENT_TOOL_NAME : COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME) : 'model output'}…`,
           });
           const streamIterator = inferenceClient.completeStream(completionReq)[Symbol.asyncIterator]();
           while (true) {
@@ -1664,10 +1918,22 @@ export function createAgentOrchestrator(
             if (!choice) continue;
 
             // --- Text content delta ---
+            // COMP3-A6 (architect route (a), emission-side): on a forced-tool
+            // draft flow the model's interleaved first-person deliberation
+            // must never reach the chat pipe — the turn's answer rides the
+            // terminal RESULT payload (summarizeDraftResult -> stream-done
+            // fallbackText), not deltas. Keyed on this instance's DECLARED
+            // draftFlowMode — constructor data, the same declared fork already
+            // branched at :993/:1149/:1155/:3262/:3278 — not a model/host sniff.
+            // accumulatedContent stays byte-unchanged in BOTH modes: history
+            // fidelity and the stop-coercion path + its contentPreview
+            // diagnostic consume it.
             const deltaContent = choice.delta?.content;
             if (typeof deltaContent === 'string' && deltaContent.length > 0) {
               accumulatedContent += deltaContent;
-              onEvent?.({ type: 'text_delta', delta: deltaContent });
+              if (draftFlowMode !== 'forced-tool') {
+                onEvent?.({ type: 'text_delta', delta: deltaContent });
+              }
             }
 
             // --- Tool-call deltas (structure not in ChatMessage type; needs local cast) ---
@@ -1878,14 +2144,46 @@ export function createAgentOrchestrator(
               `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
             );
           } else {
-          if(surface==='sequences') {
-            if(sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
-              sequenceRepairAttempts++;
-              messages.push({role:'user',content:'Return the requested proposal with agent_intent, intent=sequence_action and a schema-valid sequenceAction. Use create_oligo for new bases and modifications. Do not claim to have saved anything; no action has executed.'});
-              onEvent?.({type:'status',message:'Requesting the structured sequence proposal…'});
+          // SH-QC-1S R1 (architect D2): the bounded zero-tool-call compliance
+          // arm is DATA (config/drafting/forced-tool-compliance.yaml — loaded
+          // PER call, the drafting-config convention), NOT a surface literal.
+          // The old gate was `if(surface==='sequences')`, which left the
+          // shorthand surface (workspace.deck) without the retry or the honest
+          // compliance-failure return — the repeat-prompt echo (backend.log
+          // :1462/:1691 `finish=stop contentLen=86 toolCalls=0`) fell through
+          // to the prose-routing exemption and laundered into notes.
+          // HARNESS-SEQ-2 FIX3 (D2, gate 2026-10-16_0445, traces mgcnh6 vs
+          // dh649w): a forced-tool turn that completes with ZERO tool calls
+          // retries the turn bounded by the DATA (keep 1) — logged — then
+          // fails HONESTLY. The honest line names the actual failure: the
+          // model did not emit the forced agent_intent tool call.
+          const complianceEntry = forcedToolComplianceEntry(compliancePolicy, surfaceName);
+          if (complianceEntry) {
+            // SEQ2FIX2 D1a (gate 2026-10-15_1420, traces jbxrxc/8xk70f): the
+            // sequences nudge demanded `intent=sequence_action`
+            // unconditionally — when the stalled turn was a TAB/RECORD request
+            // hijacked by proposal-heavy history, the nudge manufactured the
+            // spurious draft. The nudge now carries the SAME routing rule the
+            // guidance DATA declares: navigation requests (a declared tab, a
+            // real record id) ride workspace_action; only content changes
+            // draft. The wording rides the YAML VERBATIM (byte-identical to
+            // the old pinned literal — moved to data, never reworded). The
+            // deck nudge (SH-QC-1S) carries the anti-claim clause and the
+            // fresh-request rule: a repeat prompt with no clarification
+            // answers is a NEW drafting request; answering with your prior
+            // summary is not a drafting action.
+            if(forcedToolComplianceAttempts<complianceEntry.maxRetries && turn+1<effectiveMaxTurns) {
+              forcedToolComplianceAttempts++;
+              messages.push({role:'user',content:complianceEntry.nudge});
+              onEvent?.({type:'status',message:complianceEntry.retryStatus});
               continue;
             }
-            return {success:false,error:'The model did not return a structured sequence proposal. Nothing was saved.'};
+            // Surface-neutral honest line (no "sequence" wording on other
+            // surfaces): the tool name and the attempt count come from the
+            // DATA + the shared tool constant, not a per-surface branch.
+            const complianceFailure = `The model (${model}) did not emit the required ${AGENT_INTENT_TOOL_NAME} tool call after ${forcedToolComplianceAttempts + 1} attempt${forcedToolComplianceAttempts > 0 ? 's' : ''} (${complianceEntry.maxRetries} retry${complianceEntry.maxRetries > 1 ? 's' : ''} requested). Nothing was saved.`;
+            console.warn(`[agent ${tid}] forced-tool compliance failure surface=${surfaceName} model=${model} attempts=${forcedToolComplianceAttempts + 1} tool=${AGENT_INTENT_TOOL_NAME}`);
+            return {success:false,error:complianceFailure};
           }
           onEvent?.({
             type: 'status',
@@ -1898,7 +2196,7 @@ export function createAgentOrchestrator(
                 model: inferenceConfig.model,
                 messages: [
                   ...messages.slice(0, -1),
-                  { role: 'user', content: buildForcedDraftJsonPrompt(prompt) },
+                  { role: 'user', content: buildForcedDraftJsonPrompt(prompt, compliancePolicy?.coerceAntiEcho) },
                 ],
                 temperature: 0,
                 // No silent ceiling: a draft JSON for a whole selected plate is
@@ -1968,7 +2266,47 @@ export function createAgentOrchestrator(
             ? assistantMsg.content.replace(/\s+/g, ' ').slice(0, 400)
             : '<empty>';
           const error = `AI stopped without calling ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}, and compiler-argument fallback did not produce valid JSON. Last text: ${contentPreview}`;
-          onEvent?.({ type: 'error', message: error });
+          // W2-9 g2c DEFECT-2 (gate 2026-10-12_1330-g2c asks (d)/(e)): when the
+          // model's final text IS its answer — a refusal in prose — the turn
+          // surfaces that prose honestly as an assistant TEXT turn (the notes
+          // channel: the same surface today's notes-only turns use) instead of
+          // a harness-error turn. The internal trace stays in the SERVER LOG
+          // only: the agent-summary line below keeps `error` verbatim for
+          // observability, and no `error` event reaches the client. Success
+          // accounting is unchanged (a zero-tool turn still ends success:false)
+          // and no emission kind is added beyond routing the prose. The prose
+          // is plain text — it can never carry a proposal payload, so the panel
+          // cannot open an Apply/Accept card on this path. Empty/absent prose
+          // keeps the current honest error shape (still no card).
+          const finalProse = typeof assistantMsg.content === 'string' ? assistantMsg.content.trim() : '';
+          // SH-QC-1S R2 (architect D2, structural guard — a deterministic
+          // equality check, not a policy string): the DEFECT-2 exemption above
+          // launders an ECHO into a plausible notes turn. On the verbatim
+          // repeat prompt the model pattern-completes and re-emits the prior
+          // assistant history turn (the cycle-1 draft summary riding back as
+          // raw history) with finish=stop and ZERO tool calls — that is a
+          // compliance failure, not a refusal. Route finalProse to the notes
+          // channel ONLY when it is NOT a normalized-verbatim copy of the
+          // immediately preceding assistant turn in historyMessages
+          // (whitespace-collapsed compare against the last assistant content).
+          // An echo goes to the error channel instead — the user sees an
+          // honest failure, never a dead-deck sidebar card. Tradeoff accepted
+          // by the architect: a refusal that word-for-word repeats the prior
+          // assistant turn is routed as error — acceptable, it still never
+          // carries a proposal payload. A GENUINE distinct refusal prose still
+          // routes to notes (the honestRefusal pins stay green).
+          let lastAssistantTurn: ChatMessage | undefined;
+          for (const message of historyMessages) {
+            if (message.role === 'assistant' && typeof message.content === 'string') lastAssistantTurn = message;
+          }
+          const proseEchoesHistory = finalProse.length > 0
+            && lastAssistantTurn !== undefined
+            && finalProse.replace(/\s+/g, ' ') === String(lastAssistantTurn.content).replace(/\s+/g, ' ');
+          const proseRouted = finalProse.length > 0 && !proseEchoesHistory;
+          if (proseEchoesHistory) {
+            console.warn(`[agent ${tid}] prose echo guard: final text is a normalized-verbatim copy of the prior assistant history turn — routed to the error channel, never notes (SH-QC-1S R2)`);
+          }
+          if (!proseRouted) onEvent?.({ type: 'error', message: error });
           const elapsed = Date.now() - t0;
           turnStats.push({
             turn: turn + 1,
@@ -1997,6 +2335,18 @@ export function createAgentOrchestrator(
             error,
           };
           logAgentSummary(tid, summary);
+          if (proseRouted) {
+            return {
+              success: false,
+              notes: [finalProse],
+              usage: {
+                ...totalUsage,
+                totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                turns: turn + 1,
+                toolCalls: totalToolCalls,
+              },
+            };
+          }
           return {
             success: false,
             error,
@@ -2123,8 +2473,8 @@ export function createAgentOrchestrator(
               const fidelity = validation?.valid ? sequenceRequestDiagnostics(sequenceAction, prompt) : [];
               if (!validation?.valid || fidelity.length) {
                 const errors=fidelity.length?fidelity.map(e=>`${e.path}: ${e.message}`):validation?.errors?.map(e=>`${e.path}: ${e.message}`)??['Sequence actions are not configured.'];
-                if(validation && sequenceRepairAttempts<2 && turn+1<effectiveMaxTurns) {
-                  sequenceRepairAttempts++;
+                if(validation && forcedToolComplianceAttempts<2 && turn+1<effectiveMaxTurns) {
+                  forcedToolComplianceAttempts++;
                   onEvent?.({type:'status',message:'Correcting the proposed sequence action…'});
                   onEvent?.({type:'tool_result',toolName:submitCall.function.name,success:false,durationMs:0});
                   for(const call of assistantMsg.tool_calls??[])messages.push({role:'tool',tool_call_id:call.id,content:call===submitCall?JSON.stringify({valid:false,errors,instruction:'Correct this proposal using the supplied action schema and the original user request. For new oligo bases with modifications use create_oligo; each modification needs position, label and role. Do not invent existing record references. Nothing has been saved.'}):'Ignored extra proposal; no action executed.'});
@@ -2187,10 +2537,12 @@ export function createAgentOrchestrator(
                 return emptySh;
               }
 
-              // Ajv sole authority — validate-in-place, never a repaired re-parse.
+              // Ajv sole authority — lift model aliases first (the same door
+              // the corpus capture and the headless route use), then
+              // validate-in-place, never a repaired re-parse.
               let shorthandDoc: import('../compiler/scientistIntent/types.js').ScientistIntent;
               try {
-                shorthandDoc = parseScientistIntent(shorthandYaml);
+                shorthandDoc = parseShorthandForChat(shorthandYaml);
               } catch (err) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
                 if (err instanceof ScientistIntentValidationError && !shorthandRepairAsked) {
@@ -2385,6 +2737,81 @@ export function createAgentOrchestrator(
                 ops: agentIntent.ops ?? [],
                 ...(agentIntent.protocolId !== undefined ? { protocolId: agentIntent.protocolId } : {}),
               };
+              // W2-89 g2b-2 (defense-in-depth): an op carrying a
+              // provenance/source field is a provenance-falsification attempt
+              // — refused with the honest policy wording BEFORE the envelope
+              // is consulted. The schema's unevaluatedProperties:false stays
+              // the structural half; this is the honest-wording half. The op
+              // vocabulary is NOT extended (the forbidden keys are policy
+              // DATA, config/drafting/review-write-wall.yaml).
+              const opsWall = reviewOpsWallFor(surfaceName, payload);
+              if (opsWall) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const wallElapsed = Date.now() - t0;
+                const wallResult: AgentResult = {
+                  success: true,
+                  notes: [],
+                  refusal: { code: opsWall.code, message: opsWall.message },
+                };
+                const wallSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: true, elapsedMs: wallElapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount, bypass: null,
+                };
+                logAgentSummary(tid, wallSummary);
+                console.log(`[agent ${tid}] done protocol_edit write-wall refusal code=${opsWall.code} ops=${(payload.ops as unknown[]).length} elapsedMs=${wallElapsed}`);
+                shadowRoute('protocol_edit', wallElapsed);
+                return wallResult;
+              }
+              // W2-9 g2d FINAL CYCLE (architect ruling
+              // W29-g2d-wall-mechanism-decision-l2t1040): the STRUCTURAL
+              // RETARGET GATE — the enforced payload-side invariant. When the
+              // DATA rule (`opsWall.attachedMismatchRule`, absent = OFF) is
+              // present, the conversation has an ATTACHED protocol, and the
+              // model's `protocolId` override is defined, matches the declared
+              // protocol-id pattern, and differs from the attached id, the
+              // turn ends with the honest refusal envelope through the
+              // EXISTING refusal channel — BEFORE the envelope is consulted.
+              // An override EQUAL to the attached id stays legal (binding
+              // semantics unchanged); no override passes (attached-scope
+              // binding); a non-PRT-shaped id is not a protocol retarget.
+              const editGate = attachedMismatchGateFor(
+                surfaceName,
+                context.attachedProtocol?.recordId,
+                agentIntent.protocolId,
+              );
+              if (editGate) {
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const gateElapsed = Date.now() - t0;
+                const gateResult: AgentResult = {
+                  success: true,
+                  notes: [],
+                  refusal: { code: editGate.code, message: editGate.message },
+                };
+                const gateSummary: AgentSummary = {
+                  traceId: tid, surface: surfaceName, model, success: true, elapsedMs: gateElapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount, bypass: null,
+                };
+                logAgentSummary(tid, gateSummary);
+                console.log(`[agent ${tid}] done protocol_edit retarget-gate refusal code=${editGate.code} ops=${(payload.ops as unknown[]).length} elapsedMs=${gateElapsed}`);
+                shadowRoute('protocol_edit', gateElapsed);
+                return gateResult;
+              }
               const envelope = await validateProtocolEditPayload(payload);
               const editOk = envelope.valid;
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: editOk, durationMs: 0 });
@@ -2440,7 +2867,27 @@ export function createAgentOrchestrator(
             if (agentIntent.intent === 'workspace_action') {
               const compileDeps: WorkspaceActionCompilerDeps | null =
                 deps.resolveSpine && deps.surfaces && deps.store
-                  ? { resolveSpine: deps.resolveSpine, surfaces: deps.surfaces, store: deps.store }
+                  ? {
+                    resolveSpine: deps.resolveSpine,
+                    surfaces: deps.surfaces,
+                    store: deps.store,
+                    // HARNESS-SEQ-2 (OQ2 ruling): the visibility door for
+                    // navigation targets — the SAME door the ordinary read
+                    // routes use (AuthorizationService.canAccess(actor,'read',
+                    // record), sequenceRoutes.ts:17), never a parallel policy.
+                    // Wired from the RESOLVED request actor (request.
+                    // ledgerActor, PB-CH-8). Door ABSENT (no service wired)
+                    // ⇒ the compiler skips the check, exactly as before.
+                    ...(deps.authorizationService
+                      ? {
+                        visibility: async ({ recordId }: { recordId: string }): Promise<boolean> => {
+                          const record = await deps.store!.get(recordId);
+                          if (!record) return false;
+                          return deps.authorizationService!.canAccess(request.ledgerActor, 'read', record);
+                        },
+                      }
+                      : {}),
+                  }
                   : null;
               const compiled: CompileResult = compileDeps
                 ? await compileWorkspaceAction(agentIntent.action, compileDeps)
@@ -2453,11 +2900,60 @@ export function createAgentOrchestrator(
                 };
               const elapsed = Date.now() - t0;
               if (compiled.ok) {
+                // W2-9 g2d FINAL CYCLE (architect ruling
+                // W29-g2d-wall-mechanism-decision-l2t1040): the SAME structural
+                // retarget gate applied to the COMPILED action. The compiled
+                // target id is observable here (the `done workspace_action`
+                // log line below already prints it): a record target carries
+                // `id`, a protocol-step target carries `protocolId`. A focus/
+                // open whose target id matches the declared protocol-id pattern
+                // and differs from the ATTACHED protocol id is refused with the
+                // same honest envelope through the existing refusal channel —
+                // and NO `agent_action` event is emitted, so no focus can land.
+                const compiledTargetIds = compiledTargetCandidateIds(compiled.action.target);
+                const attachedId = context.attachedProtocol?.recordId;
+                const actionGate = compiledTargetIds
+                  .map((candidateId) => attachedMismatchGateFor(surfaceName, attachedId, candidateId))
+                  .find((refusal) => refusal !== null);
+                if (actionGate) {
+                  onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                  const gateResult: AgentResult = {
+                    success: true,
+                    notes: [],
+                    refusal: { code: actionGate.code, message: actionGate.message },
+                  };
+                  const gateSummary: AgentSummary = {
+                    traceId: tid, surface: surfaceName, model, success: true, elapsedMs: elapsed,
+                    turns: turnStats,
+                    totals: {
+                      turns: turn + 1,
+                      toolCalls: totalToolCalls,
+                      promptTokens: totalUsage.promptTokens,
+                      completionTokens: totalUsage.completionTokens,
+                      totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                    },
+                    resolvedMentions: resolvedMentionsCount, bypass: null,
+                  };
+                  logAgentSummary(tid, gateSummary);
+                  console.log(`[agent ${tid}] done workspace_action retarget-gate refusal code=${actionGate.code} action=${compiled.action.action} target=${compiledTargetIds.join(',')} elapsedMs=${elapsed}`);
+                  return gateResult;
+                }
                 onEvent?.({ type: 'agent_action', action: compiled.action });
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
-                const resolvedLabel = compiled.action.target?.label ?? compiled.action.surface ?? 'the workspace';
+                const resolvedLabel = (compiled.action.target && 'label' in compiled.action.target ? compiled.action.target.label : undefined) ?? ('tab' in (compiled.action.target ?? {}) ? (compiled.action.target as { tab: string }).tab : undefined) ?? compiled.action.surface ?? 'the workspace';
                 const verbLabel = compiled.action.action === 'focus' ? 'Focused on' : 'Opened';
-                const wsResult: AgentResult = { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
+                // SEQ2FIX2 D4 (gate 2026-10-15_1420 leg C2-neg, trace 4v654u):
+                // on the sequences surface the server must NOT narrate an
+                // effect (verb + target) the client has not yet confirmed
+                // applying — the frame may still be refused client-side (the
+                // selectableKinds gate renders the honest refusal right after).
+                // The neutral line names no verb and no target; the client's
+                // applied/refused line is the source of truth. Other surfaces
+                // keep the existing note (pinned by
+                // AgentOrchestrator.workspaceAction.test.ts).
+                const wsResult: AgentResult = surface === 'sequences'
+                  ? { success: true, notes: ['Action sent — see the workspace.'] }
+                  : { success: true, notes: [`${verbLabel} ${resolvedLabel} — nothing was written.`] };
                 const summary: AgentSummary = {
                   traceId: tid,
                   surface: surfaceName,
@@ -2476,7 +2972,7 @@ export function createAgentOrchestrator(
                   bypass: null,
                 };
                 logAgentSummary(tid, summary);
-                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : compiled.action.target.stepId) : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
+                console.log(`[agent ${tid}] done workspace_action compiled ok action=${compiled.action.action} target=${compiled.action.target ? ('id' in compiled.action.target ? compiled.action.target.id : 'kind' in compiled.action.target && compiled.action.target.kind === 'protocol-step' ? compiled.action.target.stepId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-record' ? compiled.action.target.recordId : 'kind' in compiled.action.target && compiled.action.target.kind === 'sequence-tab' ? compiled.action.target.tab : '-') : (compiled.action.surface ?? '-')} elapsedMs=${elapsed}`);
                 return wsResult;
               }
               const diagnostics = compiled.diagnostics.map((d) => ({

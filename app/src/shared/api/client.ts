@@ -4029,22 +4029,104 @@ export const apiClient = {
   },
 
   // ── Scientist-intent one-shot localization (chat-first) ────────────────
-  /** POST /intent/compile-from-prompt — branch-ask or one-shot compile. */
+  /** POST /intent/compile-from-prompt — branch-ask or one-shot compile.
+   *
+   * W2-8 A5 (C leg, gate A5c root cause 2): the server's 422 NEEDS_CLARIFICATION
+   * body DELIBERATELY holds {clarifications, localMacro, terminalArtifacts}
+   * (OQ4(a): "held so the client folds answers into the parseable macro"), but
+   * the shared request() throws on any non-2xx and ApiError carries no parsed
+   * body — so the held bundle was discarded and the UI dead-ended. THIS method
+   * (and only this method) narrow-catches the 422 and, when the body carries a
+   * parseable held macro + terminalArtifacts, returns it as a discriminated
+   * `{ held: true }` result. A 422 WITHOUT a held macro — and every other
+   * status/method — keeps the existing throw behavior byte-identical.
+   */
   async intentCompileFromPrompt(body: {
     protocolText: string
     sourceProtocolId?: string
     answers?: Record<string, string>
   }): Promise<{
+    held?: undefined
     needsAnswers?: boolean
     axes?: Array<{ axisId: string; question: string; choices: Array<{ value: string; label: string }> }>
     outcome?: string
     terminalArtifacts?: Record<string, unknown>
     localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    clarifications?: Array<Record<string, unknown>>
+  } | {
+    held: true
+    error: 'NEEDS_CLARIFICATION'
+    outcome: 'needs-clarification'
+    clarifications: Array<Record<string, unknown>>
+    localMacro: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    terminalArtifacts: Record<string, unknown>
   }> {
-    return request('/intent/compile-from-prompt', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
+    // Self-contained fetch for THIS route only (the held 422 body cannot be
+    // recovered from a thrown ApiError — fromResponse consumes the Response).
+    // The mechanics mirror request() exactly: same URL build, same identity
+    // headers, same ApiError.fromResponse message-building, same NetworkError
+    // mapping. The single difference: a 422 whose body carries the held macro
+    // resolves to the discriminated bundle instead of throwing.
+    const path = '/intent/compile-from-prompt'
+    const baseHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+    const currentUserId = getCurrentUserId()
+    if (currentUserId) baseHeaders['x-user-id'] = currentUserId
+    const sessionToken = getSessionToken()
+    if (sessionToken) baseHeaders['x-cl-session'] = sessionToken
+
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: baseHeaders,
+      })
+
+      if (!response.ok) {
+        const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null
+        const macro = parsed?.localMacro
+        const artifacts = parsed?.terminalArtifacts
+        if (
+          response.status === 422
+          && parsed?.error === 'NEEDS_CLARIFICATION'
+          && typeof macro === 'object' && macro !== null && !Array.isArray(macro)
+          && typeof artifacts === 'object' && artifacts !== null && !Array.isArray(artifacts)
+        ) {
+          return {
+            held: true,
+            error: 'NEEDS_CLARIFICATION',
+            outcome: 'needs-clarification',
+            clarifications: Array.isArray(parsed?.clarifications)
+              ? parsed.clarifications as Array<Record<string, unknown>>
+              : [],
+            localMacro: macro as { intentId?: string; actions?: unknown[]; [key: string]: unknown },
+            terminalArtifacts: artifacts as Record<string, unknown>,
+          }
+        }
+        // No held macro: re-throw the SAME ApiError fromResponse would build.
+        // The Response body is already consumed, so fromResponse reads the
+        // parsed body back through a replay shim (identical message-building).
+        throw await ApiError.fromResponse({
+          status: response.status,
+          statusText: response.statusText,
+          json: async () => parsed,
+        } as Response)
+      }
+
+      return await response.json() as {
+        needsAnswers?: boolean
+        axes?: Array<{ axisId: string; question: string; choices: Array<{ value: string; label: string }> }>
+        outcome?: string
+        terminalArtifacts?: Record<string, unknown>
+        localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+        clarifications?: Array<Record<string, unknown>>
+      }
+    } catch (error) {
+      if (ApiError.isApiError(error)) throw error
+      if (error instanceof TypeError) {
+        throw new NetworkError(`Failed to connect to server (${path}): ${error.message}`)
+      }
+      throw error
+    }
   },
 
   /**
@@ -4052,18 +4134,30 @@ export const apiClient = {
    * the deterministic compiler (SHORTHAND-CHAT: the chat panel's shorthand
    * edit-recompile rides this EXISTING route; the server re-parses with Ajv as
    * sole authority and recompiles — the client is render + POST only).
+   *
+   * SH-QB-1 (OQ1, orchestrator-adopted): ONE additive optional second
+   * parameter — the editor's DECK plate summaries (the exact DeckLabwareSummary
+   * mirror of the chat request's context.labwares element). The body key rides
+   * ONLY when a non-empty array is provided (conditional spread — key ABSENT,
+   * never `undefined`; exactOptionalPropertyTypes). Absent ⇒ the request is
+   * byte-identical to the pre-change shape. The response type gains the
+   * forwarded loud-failure channel (`clarifications`) beside the loose `outcome`.
    */
-  async intentCompile(intentYaml: string): Promise<{
+  async intentCompile(intentYaml: string, deckLabwares?: Array<{ labwareId: string; labwareType?: string; name?: string }>): Promise<{
     outcome?: string
     terminalArtifacts?: {
       events?: unknown[]
       gaps?: Array<{ message?: string } & Record<string, unknown>>
       [key: string]: unknown
     }
+    clarifications?: Array<Record<string, unknown>>
   }> {
     return request('/intent/compile', {
       method: 'POST',
-      body: JSON.stringify({ intent: intentYaml }),
+      body: JSON.stringify({
+        intent: intentYaml,
+        ...(deckLabwares && deckLabwares.length > 0 ? { deckLabwares } : {}),
+      }),
     })
   },
 

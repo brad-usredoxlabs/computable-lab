@@ -102,6 +102,15 @@ function normalizeDocument(value: unknown, vocabulary: ScientistIntentVocabulary
       }
       if (a.volume !== undefined) clean.volume = a.volume;
       if (a.params && typeof a.params === 'object') clean.params = a.params;
+      // COMP-4 Stage B: a declared `cardinality: many` argument
+      // (vocabulary DATA — membership from argContracts, never a key list)
+      // rides through VERBATIM so the resolve_nouns door sees it. The wire
+      // schema has already validated the entry shape (Ajv sole authority).
+      for (const contract of vocabulary.argContracts(actionName)) {
+        if (contract.cardinality !== 'many') continue;
+        const value = a[contract.name];
+        if (Array.isArray(value) && value.length > 0) clean[contract.name] = value;
+      }
       return [clean as unknown as ScientistIntentActionValue];
     }),
     unresolved: unresolvedBase.flatMap((u) => {

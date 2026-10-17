@@ -18,8 +18,9 @@
 import type { RankedCandidate } from '../../resolve/types.js';
 import { materialLayerOf, isWellReadyLayer } from '../../ai/materialRefFields.js';
 import { nearMissSuggestions } from './adapters.js';
-import type { ScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
-import type { ScientistIntent, ScientistIntentActionLocation } from '../scientistIntent/types.js';
+import { loadNounShape, isMintableLabel } from './nounShape.js';
+import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
+import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
 import type {
   BoundNoun,
   Clarification,
@@ -202,7 +203,17 @@ export async function resolveNoun(
 
   // Nothing bound. The mint affordance is OFFERED only on the unknown-noun arm
   // (never on a lookup-failure arm — lookup error != unknown noun, §5.6).
-  const mints = mintAffordances(allCandidates);
+  // SH-QA-3 (fix 2): the mint affordance is filtered by the noun-shape DATA
+  // (config/drafting/shorthand-drafting.yaml `nounShape:` — loaded PER call,
+  // never process-cached). A label whose SHAPE fails the DATA patterns is
+  // never offered as a CURIE-worthy local term. The reason code is UNCHANGED
+  // (`unknown-noun`), the QUESTION survives, and the near-miss suggestions leg
+  // below stays intact — only the mint candidates are withheld. A cue hit
+  // alone never refuses mint: the check is sentence SHAPE, never " in "/"%".
+  const nounShape = loadNounShape();
+  const mints = mintAffordances(allCandidates).filter(
+    (candidate) => isMintableLabel(candidate.mint?.label ?? candidate.label, nounShape),
+  );
   if (sawFailure) {
     clarifications.push(clarificationFor(req, 'resolution-lookup-failed', []));
   } else if (req.declared.kind === 'wells') {
@@ -220,10 +231,59 @@ export async function resolveNoun(
   return { bindings, clarifications, failures, traces };
 }
 
+/** Build one ResolutionRequest riding the DECLARED contract for one label
+ *  (SHORTHAND-COMP-4 Stage B: shared by the scalar arm and the many arm — the
+ *  label is the only difference. Hints, expected*Domain slots and the action
+ *  location all come from the contract/doc, never from a NAME table). */
+function requestFor(
+  verb: ScientistIntentActionKind,
+  index: number,
+  contract: ScientistIntentArgContract,
+  fields: Record<string, unknown>,
+  label: string,
+  deps: EngineDeps,
+): ResolutionRequest {
+  const hints: Array<{ label: string; reason: string }> = [];
+  if (contract.hintEligible === true) {
+    const hintValue = fields[`${contract.name}Hint`];
+    if (typeof hintValue === 'string' && hintValue.trim()) {
+      hints.push({ label: hintValue, reason: `scientist-intent ${contract.name}Hint` });
+    }
+  }
+
+  // expected*Domain slots are named by argument convention
+  // (expectedSourceDomain for 'source', ...) — derived, not a route table.
+  const slotKey = `expected${contract.name.charAt(0).toUpperCase()}${contract.name.slice(1)}Domain`;
+  const expectedDomain = fields[slotKey];
+
+  const actionLocation: ScientistIntentActionLocation = {
+    actionIndex: index,
+    action: verb,
+    argument: contract.name,
+  };
+
+  const wantLevel = deps.levelFor?.(verb, contract.name);
+  return {
+    verb,
+    argument: contract.name,
+    label,
+    declared: contract,
+    actionIndex: index,
+    actionLocation,
+    ...(typeof expectedDomain === 'string' ? { expectedDomain } : {}),
+    ...(hints.length > 0 ? { hints } : {}),
+    ...(wantLevel !== undefined ? { wantLevel } : {}),
+  };
+}
+
 /** The doc-level door: every resolvable/wells argument of every action becomes
  *  a ResolutionRequest riding its DECLARED contract. Verbatim labels are
  *  preserved (resolveDraftMaterials doctrine); *Hint companions enter only as
- *  evidence. */
+ *  evidence. SHORTHAND-COMP-4 Stage B: the DECLARED `cardinality` slot decides
+ *  how the wire value is read — 'many' + an array yields ONE request per entry,
+ *  each label read from the property named by the declared `itemNounField`
+ *  (the clarification's label is then the COMPONENT name). Zero verb/arg/
+ *  domain NAME literals: everything is driven off the declared contract. */
 export async function resolveScientistIntentNouns(
   intent: ScientistIntent,
   vocab: ScientistIntentVocabulary,
@@ -241,41 +301,32 @@ export async function resolveScientistIntentNouns(
       if (contract.kind !== 'resolvable' && contract.kind !== 'wells') continue;
       const fields = action as unknown as Record<string, unknown>;
       const raw = fields[contract.name];
-      if (typeof raw !== 'string' || raw.trim().length === 0) continue;
 
-      const hints: Array<{ label: string; reason: string }> = [];
-      if (contract.hintEligible === true) {
-        const hintValue = fields[`${contract.name}Hint`];
-        if (typeof hintValue === 'string' && hintValue.trim()) {
-          hints.push({ label: hintValue, reason: `scientist-intent ${contract.name}Hint` });
+      // Declared-cardinality arm (Stage B): an array-valued many-arg becomes
+      // one request per entry. Malformed entries are Ajv's job (the wire
+      // schema is the entry-shape authority); an entry whose noun property is
+      // absent/blank is skipped defensively, exactly like a blank scalar.
+      if (contract.cardinality === 'many' && Array.isArray(raw)) {
+        const nounField = contract.itemNounField;
+        if (!nounField) continue; // lint P5 makes this unreachable for shipped data
+        for (const entry of raw) {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+          const noun = (entry as Record<string, unknown>)[nounField];
+          if (typeof noun !== 'string' || noun.trim().length === 0) continue;
+          const outcome = await resolveNoun(requestFor(verb, index, contract, fields, noun.trim(), deps), vocab, deps);
+          bindings.push(...outcome.bindings);
+          clarifications.push(...outcome.clarifications);
+          failures.push(...outcome.failures);
+          traces.push(...outcome.traces);
         }
+        continue;
       }
 
-      // expected*Domain slots are named by argument convention
-      // (expectedSourceDomain for 'source', ...) — derived, not a route table.
-      const slotKey = `expected${contract.name.charAt(0).toUpperCase()}${contract.name.slice(1)}Domain`;
-      const expectedDomain = fields[slotKey];
+      // Scalar arm (byte-identical behavior to pre-Stage-B): non-string values
+      // of a non-many arg stay invisible to the door.
+      if (typeof raw !== 'string' || raw.trim().length === 0) continue;
 
-      const actionLocation: ScientistIntentActionLocation = {
-        actionIndex: index,
-        action: verb,
-        argument: contract.name,
-      };
-
-      const wantLevel = deps.levelFor?.(verb, contract.name);
-      const req: ResolutionRequest = {
-        verb,
-        argument: contract.name,
-        label: raw.trim(),
-        declared: contract,
-        actionIndex: index,
-        actionLocation,
-        ...(typeof expectedDomain === 'string' ? { expectedDomain } : {}),
-        ...(hints.length > 0 ? { hints } : {}),
-        ...(wantLevel !== undefined ? { wantLevel } : {}),
-      };
-
-      const outcome = await resolveNoun(req, vocab, deps);
+      const outcome = await resolveNoun(requestFor(verb, index, contract, fields, raw.trim(), deps), vocab, deps);
       bindings.push(...outcome.bindings);
       clarifications.push(...outcome.clarifications);
       failures.push(...outcome.failures);

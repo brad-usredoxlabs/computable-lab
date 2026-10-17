@@ -67,6 +67,13 @@ export interface ResolveNounsPassDeps {
   termsForSuggestions?: () => Promise<readonly TermLike[]>;
   /** Engine override (tests); defaults to SPINE-3's resolveScientistIntentNouns. */
   resolve?: ResolveNounsEngine;
+  /** SH-QA-1 (OQ1 ruling): producer facts whose fate depends on resolution —
+   *  the pass drops a fact iff the engine BINDS its slot (the same identity
+   *  join §5.1 applies to model hedges) and appends the survivors AFTER
+   *  engine+required+model facts (the position the compile-side append used
+   *  to produce, pinning golden order). The reason code is the producer's
+   *  channel selector; the pass switches on IDENTITY only. */
+  resolutionGatedClarifications?: readonly ScientistIntentUnresolvedFact[];
 }
 
 /** One authoritative binding flattened for the consumption seams. */
@@ -269,11 +276,37 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // (resolve_nouns topologically precedes every noun consumer).
       const required = requiredArgumentClarifications(deps.intent, deps.vocabulary);
 
-      const clarifications = reconcileModelUnresolved(
+      const reconciled = reconcileModelUnresolved(
         deps.intent.unresolved,
         [...engine.clarifications, ...required],
         engine.bindings,
       );
+
+      // SH-QA-1 resolution-aware firing gate: a gated producer fact is MOOT
+      // exactly when the engine bound its slot (resolve-vs-mint is known
+      // HERE, post-resolve — normalize could not know it at raise time).
+      // The join is the §5.1 machinery verbatim: a binding occupies its slot
+      // key; a gated fact is dropped iff its identityKey is a bound SLOT key.
+      // A gated fact WITHOUT slot identity (no actionLocation) is KEPT —
+      // never silently dropped. Zero verb/arg/domain/reason NAME literals:
+      // this switches on engine output + identity keys only.
+      const boundSlotKeys = new Set<string>();
+      for (const binding of engine.bindings) {
+        if (binding.actionIndex !== undefined) boundSlotKeys.add(identityKey(binding));
+      }
+      const gatedSurvivors = (deps.resolutionGatedClarifications ?? [])
+        .filter((fact) => {
+          const loc = fact.actionLocation;
+          if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
+          return !boundSlotKeys.has(identityKey(fact));
+        })
+        .map((fact) => ({ ...fact }));
+
+      // Gated survivors ride AFTER engine + required + model facts — the
+      // SAME end-of-list position the compile-side producer append produced
+      // (golden order pinned). They count toward `blocked` and the bar
+      // diagnostic exactly like an engine clarification.
+      const clarifications = [...reconciled, ...gatedSurvivors];
 
       const resolvedByLabel: Record<string, ResolvedNounBinding> = {};
       for (const binding of engine.bindings) {

@@ -1,0 +1,11 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/SH-QA-1-lane2-l2t1405/server
+
+ ✓ src/ai/shorthandContractDisclosure.test.ts  (11 tests) 23ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  16:22:10
+   Duration  3.52s (transform 1.23s, setup 0ms, collect 1.74s, tests 23ms, environment 0ms, prepare 91ms)
+
+EXIT:0

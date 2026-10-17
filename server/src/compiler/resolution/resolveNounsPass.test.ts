@@ -439,3 +439,175 @@ describe('spine4.resolve-nouns-pass', () => {
     expect((result.output as ResolveNounsOutput).clarifications).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// COMP4-MANY — the vocabulary-declared `cardinality: many` slot at the pass
+// seam (SPINE-8 levelFor precedent): the shipped declaration drives the
+// doc-door's per-entry iteration GENERICALLY (zero verb/arg name literals in
+// the pass or engine — the arg NAME only ever appears as contract data), and a
+// fixture-copy flip of the declared data flips the behavior with zero TS diff.
+// ---------------------------------------------------------------------------
+
+describe('comp4.many-cardinality at the pass seam', () => {
+  const mixtureAction = {
+    action: 'add_material' as const,
+    labware: 'plate',
+    composition: [
+      { material: 'trypsin-EDTA', role: 'solvent' },
+      { material: 'Equine Serum', role: 'additive' },
+    ],
+  };
+
+  it('shipped declaration: the many-arg iterates per entry — resolvedByLabel keys the COMPONENT labels and the unbindable component bars naming IT', async () => {
+    // Precondition: the shipped vocabulary declares the multiplicity (DATA).
+    const declared = shippedVocab().argContracts('add_material').find((a) => a.name === 'composition');
+    expect(declared?.cardinality).toBe('many');
+    expect(declared?.itemNounField).toBe('material');
+
+    const result = await createResolveNounsPass({
+      intent: intentOf([mixtureAction]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({
+        plate: [['local:LAB-plate', '96-well plate']],
+        'trypsin-EDTA': [['local:MAT-trypsin', 'trypsin-EDTA']],
+      }),
+    }).run(emptyRunArgs);
+
+    // The unresolvable COMPONENT bars — the clarification label is the
+    // component name, the actionLocation names the declared argument.
+    expect(result.ok).toBe(false);
+    const clarifications = (result.diagnostics![0]!.details?.['clarifications'] ?? []) as ResolveNounsOutput['clarifications'];
+    expect(clarifications).toHaveLength(1);
+    expect(clarifications[0]!.label).toBe('Equine Serum');
+    expect(clarifications[0]!.actionLocation).toEqual({
+      actionIndex: 0,
+      action: 'add_material',
+      argument: 'composition',
+    });
+
+    // The resolvable component bound through the SAME declared contract.
+    const output = result.output as ResolveNounsOutput;
+    expect(Object.keys(output.resolvedByLabel)).toContain('trypsin-EDTA');
+    expect(output.resolvedByLabel['trypsin-EDTA']).toMatchObject({
+      argument: 'composition',
+      recordId: 'MAT-trypsin',
+    });
+  });
+
+  it('fixture COPY with cardinality/itemNounField removed: the SAME intent behaves as scalar (no per-entry requests) — the iteration follows DECLARED data, not a TS table', async () => {
+    const shippedDir = join(process.cwd(), 'schema', 'scientist-intent');
+    const flipDir = join(process.cwd(), 'tmp', 'comp4-passseam-cardinality-flip');
+    mkdirSync(flipDir, { recursive: true });
+    for (const f of ['scientist-intent-vocabulary.schema.yaml', 'scientist-intent-vocabulary.lint.yaml']) {
+      copyFileSync(join(shippedDir, f), join(flipDir, f));
+    }
+    const shippedData = readFileSync(join(shippedDir, 'scientist-intent-vocabulary.yaml'), 'utf-8');
+    const flippedData = shippedData.replace(
+      /( {6}- name: composition\n(?: {8}[^\n]*\n){3}) {8}cardinality: many\n {8}itemNounField: material\n/g,
+      '$1',
+    );
+    expect(flippedData).not.toBe(shippedData); // the flip really differs
+    writeFileSync(join(flipDir, 'scientist-intent-vocabulary.yaml'), flippedData);
+
+    const fixtureVocabulary = loadScientistIntentVocabulary({ path: join(flipDir, 'scientist-intent-vocabulary.yaml') });
+    expect(shippedVocab().argContracts('add_material').find((a) => a.name === 'composition')?.cardinality).toBe('many');
+    expect(fixtureVocabulary.argContracts('add_material').find((a) => a.name === 'composition')?.cardinality).toBeUndefined();
+
+    const result = await createResolveNounsPass({
+      intent: intentOf([mixtureAction]),
+      vocabulary: fixtureVocabulary,
+      spine: spineReturning({ plate: [['local:LAB-plate', '96-well plate']] }),
+    }).run(emptyRunArgs);
+
+    // Without the declared multiplicity the array-valued arg is invisible to
+    // the door (the pre-Stage-B scalar behavior): no composition slot anywhere.
+    expect(result.ok).toBe(true);
+    const output = result.output as ResolveNounsOutput;
+    expect(Object.keys(output.resolvedByLabel)).not.toContain('Equine Serum');
+    expect(Object.keys(output.resolvedByLabel)).not.toContain('trypsin-EDTA');
+    expect(output.clarifications).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SH-QA-1 — the resolution-aware firing gate at the PASS level.
+// The gate is the §5.1 identity join: a gated producer fact is dropped iff
+// the engine bound its slot; survivors append AFTER engine+required+model
+// facts (the position the compile-side producer append used to produce).
+// The pass switches on engine output + identity keys only — this file pins
+// that by driving the gate with a stub engine (no label table involved).
+// ---------------------------------------------------------------------------
+describe('shqa1.gate — resolution-aware firing gate (channel owner)', () => {
+  // A gated fact riding the blob channel's frozen wire reason (the test pins
+  // the contract string; the pass never reads it — identity decides).
+  const gatedBlob = {
+    label: 'Gamma/Delta Mixture (50:50)',
+    reason: 'unrealized-mixture-blob-material',
+    actionLocation: { actionIndex: 0, action: 'add_material' as const, argument: 'material' },
+  };
+
+  it('a bound slot suppresses the gated fact: ok:true, clarifications [], blocked false', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: gatedBlob.label, volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ [gatedBlob.label]: [['local:MAT-gated', 'Catalogued Mixture']] }),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(true);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.clarifications).toEqual([]);
+    expect(output.blocked).toBe(false);
+  });
+
+  it('an unbound slot keeps the gated fact: it counts toward blocked and rides the bar diagnostic', async () => {
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: 'unbound goop', volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({}),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+    const diag = result.diagnostics.find((d) => d.code === UNRESOLVED_ARGUMENTS_CODE);
+    expect((diag!.details!['clarifications'] as ScientistIntentUnresolvedFact[]).some((c) => c.reason === gatedBlob.reason)).toBe(true);
+  });
+
+  it('bar ORDER: a gated survivor lands AFTER engine + required + model facts (golden order pinned)', async () => {
+    // Engine fact: the unbound labware noun. Required sweep: add_material
+    // declares no required non-scalar arg, so add a verb that does — use the
+    // model-unresolved arm for the third channel instead.
+    const modelFact: ScientistIntentUnresolvedFact = {
+      label: 'model hedge noun',
+      reason: 'model-hedge',
+      actionLocation: { actionIndex: 0, action: 'add_material', argument: 'source' },
+    };
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', labware: 'unbound plate', volumeUl: 10 }], [modelFact]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({}),
+      resolutionGatedClarifications: [gatedBlob],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    const reasons = output.clarifications.map((c) => c.reason);
+    const gatedIndex = reasons.indexOf(gatedBlob.reason);
+    expect(gatedIndex).toBe(reasons.length - 1);
+    expect(reasons.indexOf('unknown-noun')).toBeLessThan(gatedIndex);
+    expect(reasons.indexOf('model-hedge')).toBeLessThan(gatedIndex);
+  });
+
+  it('a gated fact WITHOUT actionLocation is KEPT (never silently dropped) even when its label is bound', async () => {
+    const labelOnly = { label: 'Bound Label', reason: gatedBlob.reason };
+    const result = await createResolveNounsPass({
+      intent: intentOf([{ action: 'add_material', material: 'Bound Label', volumeUl: 10 }]),
+      vocabulary: shippedVocab(),
+      spine: spineReturning({ 'Bound Label': [['local:MAT-bound', 'Bound Label']] }),
+      resolutionGatedClarifications: [labelOnly],
+    }).run(emptyRunArgs);
+    expect(result.ok).toBe(false);
+    const output = result.output as ResolveNounsOutput;
+    expect(output.clarifications.filter((c) => c.reason === gatedBlob.reason)).toHaveLength(1);
+  });
+});

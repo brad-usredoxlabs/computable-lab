@@ -1,0 +1,35 @@
+SHA BEFORE: {
+ "SEQ-827c4175a52a4ef65916eca5": {
+  "status": 200,
+  "contentSha": "2e2eedba582b0e11eeec066bc9d792255a041c52",
+  "raw": "{\"record\":{\"recordId\":\"SEQ-827c4175a52a4ef65916eca5\",\"schemaId\":\"https://computable-lab.com/schema/bio/sequence.schema.y"
+ },
+ "ANR-000001": {
+  "status": 200,
+  "contentSha": "23f80fa59fef876c510f34c443dc46be72e2cb4c",
+  "raw": "{\"record\":{\"recordId\":\"ANR-000001\",\"schemaId\":\"https://computable-lab.com/schema/computable-lab/analysis-run.schema.yaml"
+ }
+}
+
+=== LEG A: empty history, tab request (http 200, 31763ms, 20 events) ===
+event types: status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,status,tool_call,pipeline_diagnostics,tool_result,done
+statuses:
+  - Processing sequences request...
+  - Skipping compiler preflight; asking AI to call agent_intent directly…
+  - Turn 1...
+  - AI request sent to thunderbeast; waiting for agent_intent…
+  - AI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 24s elapsed, waiting for first model chunk.
+  - AI drafting on thunderbeast… 27s elapsed, waiting for first model chunk.
+  - AI stream resumed from thunderbeast.
+  - Drafting on thunderbeast…
+  - Drafting on thunderbeast…
+agent_action frames: []
+diagnostics: [{"code":"UNSUPPORTED_SURFACE","message":"An open-surface action requires a `surface` naming a registered surface id."}]
+done result: {"success":true,"notes":["An open-surface action requires a `surface` naming a registered surface id."],"sequenceProposal":null,"error":null}

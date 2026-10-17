@@ -57,6 +57,14 @@ export interface ScientistIntentArgContract {
    *  land at (vocabulary-declared; the resolve_nouns pass supplies it to the
    *  engine as deps.levelFor). Absent = no level requirement. */
   level?: MaterialLevel;
+  /** COMP-4 Stage B DECLARATION SLOT — multiplicity of the
+   *  argument. 'many' on a resolvable arg means the wire value is an ARRAY of
+   *  entries, each carrying its noun in the property named by itemNounField;
+   *  the resolve_nouns doc-door iterates it generically. Absent = 'one'. */
+  cardinality?: 'one' | 'many';
+  /** For cardinality: many — the entry property carrying the symbolic noun
+   *  the resolver binds (vocabulary-declared; lint P5 requires it). */
+  itemNounField?: string;
 }
 
 export interface ScientistIntentVerbEntry {
@@ -87,6 +95,11 @@ export interface ScientistIntentVocabulary {
   promptVerbBlock(): string;
   /** The action enum for the emit_scientist_intent tool schema. */
   toolActionEnum(): string[];
+  /** The full CONTRACT block: every verb with its declared args, generated
+   *  from this YAML. Single source so the model's menu and the Ajv gate cannot
+   *  drift (the PB-CH-4b precedent: the model's menu must BE the compiler's
+   *  membership check). */
+  contractBlock(): string;
 }
 
 export interface LoadScientistIntentVocabularyOptions {
@@ -161,7 +174,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies }
 
@@ -182,6 +195,11 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       // Generic narrowing of the DECLARED level slot (the meta-schema enum is
       // the validation authority; no per-value branches, no verb knowledge).
       ...(typeof a.level === 'string' ? { level: a.level as MaterialLevel } : {}),
+      // COMP-4 Stage B: the DECLARED multiplicity slots (same
+      // SPINE-8 idiom — meta-schema enum is the authority, no per-value or
+      // per-arg branches; exactOptionalPropertyTypes: conditional spreads).
+      ...(typeof a.cardinality === 'string' ? { cardinality: a.cardinality as 'one' | 'many' } : {}),
+      ...(typeof a.itemNounField === 'string' ? { itemNounField: a.itemNounField } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
@@ -215,6 +233,22 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     return lines.join('\n');
   };
 
+  // The CONTRACT block: one line per verb (declaration order) with its
+  // declared args rendered verbatim from the YAML — `name??:kind(domain)`.
+  // Generated from verbsFrozen + the entries' arg contracts; NO hand-written
+  // verb list (the same authority the Ajv enum injection and the prompt block
+  // read), so a future verb addition auto-appears in every disclosure site.
+  const contractBlock = (): string => {
+    const lines: string[] = ['ACTIONS (the CLOSED vocabulary — never invent another):'];
+    for (const verb of verbsFrozen) {
+      const args = entries.get(verb)!.args
+        .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+        .join(', ');
+      lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
+    }
+    return lines.join('\n');
+  };
+
   return {
     verbs: () => verbsFrozen,
     has: (verb: string) => entries.has(verb),
@@ -224,6 +258,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
     policies: () => policies,
     promptVerbBlock,
     toolActionEnum: () => [...verbsFrozen],
+    contractBlock,
   };
 }
 

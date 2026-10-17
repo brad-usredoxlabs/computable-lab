@@ -6,8 +6,13 @@
 suite: spine6-scientist-intent-goldens
 baseCommit: c74c5214
 treeState:
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 014ca71fbbb3716db0df62cb93662d35f6efef3b3462e823518462357786d12c}
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: bb5cc4d00fe4c55ddc0f21598e1dbe12db5cdc5e8fa6dba8d562464227814178}
+  # COMP4-REBLESS (this item): vocabulary pin re-hashed once on this item's tip
+  # (composition declared cardinality: many on add_material + seed) and the
+  # wire-schema pin re-hashed once (action-level composition property declared
+  # with strict items). Pipeline pin unchanged from the SPINE-7 bless.
+  # Before/after diff per blessed entry in SHORTHAND-COMP4-report.l2t0910.md.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 14d779ce050ee5fd306f2d3772efcaae6386b09cb9fef4e5c9ed8ed7b475f9b4}
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: cb54cbeded8c6cab7b31b89b68e9476b62d04c737dab4fb2a30a2a14167f09d5}
   - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
@@ -23,9 +28,12 @@ fixtures:
   # leg SPINE-6 moved here). Vocabulary-declared wash.material level: aliquot
   # drives the engine's levelFilter arm through the real route.
   - {name: golden.intent-to-clarification.material-level-mismatch, path: fixtures/material-level-mismatch.yaml, sha256: 53a86fe894d62bc32bc3d0b4cf8a0df90fd2e57b15537c38b83e28985cf0307c}
+  # COMP-4 Stage B golden: the declared many-cardinality composition arg bars
+  # naming the unresolvable COMPONENT (422, zero writes, no partial mint).
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 245603b100f927466cb7290656aa0056d489dbd180a1c0c67b8105c1136a3714}
 records:
-  - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: f3253369857f6f31ec597a149ee7a045f5010ab8875c49be46a62d4f601ce02a}
-  - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: 11430dc4af75923b57253729a881f2f0a9b0402a81894d3d16ac9400d0b99afd}
+  - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
+  - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
   - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 47a15d732c3de98589b5e17fd28d59cd88070af9555546fb6e7b184c345f0089}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 085526acdc8ab30dd3d419dd2cdbce9b2462ddbce0bf324cacf16f424e60970a}
   - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 9b115f66c8af9071fd5081d61b4c65841a2d832a248d16a658bf8c77547063dd}
@@ -33,13 +41,23 @@ records:
   # SPINE7-REBLESS: rule-file pins re-hashed once on the SPINE-7 tip (wire
   # schema widened + aliquot.targetWells required); new golden records blessed
   # once on the same tip. Before/after diff in SPINE-7-report.wip-l2t0810.md.
-  - {name: golden.intent-to-graph.roles-seam, path: __records__/roles-seam.golden.json, sha256: c0ba793eaab0af8ce9a5dd4f4a5f9491f70025119f72e3c8ce12f45662cd921b}
+  # DECK-FOLD-1 REBLESS (this item): transfer-read + labware-hint-regression +
+  # roles-seam records re-blessed ONCE — the ONLY divergence is the new
+  # terminalArtifacts.resolvedLabwares key (drift probe proved: divergence path
+  # body.terminalArtifacts.resolvedLabwares and nothing else; normalization
+  # untouched). transfer-read/roles-seam entries come from the SPINE-4
+  # authoritative arm, labware-hint-regression from the one-match hint arm.
+  - {name: golden.intent-to-graph.roles-seam, path: __records__/roles-seam.golden.json, sha256: 8f83234dd6f9c96f2b9480613971e14e808a44a8c7703944d28b86b774976462}
   - {name: golden.intent-to-clarification.missing-required-address, path: __records__/missing-required-address.golden.json, sha256: 0b78c911ee929424bc876afd0c700ad4ef7352e1d761e843d1c60258bafe3e4a}
   # SPINE8-REBLESS: vocabulary pin re-hashed once on this item's tip (wash.material
   # level: aliquot declared — the ONLY treeState line this item moved; wire-schema
   # and pipeline pins unchanged from the SPINE-7 bless). New fixture+record blessed
   # once on the final content. Before/after diff in SPINE-8-report.wip-l2t1345.md.
   - {name: golden.intent-to-clarification.material-level-mismatch, path: __records__/material-level-mismatch.golden.json, sha256: aa9f7fe9265a9fe3b603cc758682b57b57dc002b5e0d2ea38a2062e618424a91}
+  # COMP4-REBLESS: blessed once on the final content (never blessed over
+  # pending wording — MANIFEST header law; SPINE7-REBLESS / DECK-FOLD-1
+  # precedent).
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 4c5587f32e8f80786810a4e2581e9f121093b6c696353df6dbda1fdffea95cea}
 # Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
 outcomeUnionMember: needs-clarification
 # Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):
@@ -50,6 +68,6 @@ outcomeUnionMember: needs-clarification
 # {error:INTENT_COMPILE_FAILED|INTENT_COMPILE_PROMPT_FAILED,message}.
 routeContract: "200 outcome complete|gap; 422 NEEDS_CLARIFICATION+verbatim clarifications+held localMacro+zero-artifact; 502 MALFORMED_MODEL_OUTPUT; 500 INTENT_COMPILE_FAILED"
 reproduce:
-  - {cmd: "cd <wt>/server && npx vitest run src/compiler/scientistIntent/goldens", expect: "15 tests, 0 failures"}
+  - {cmd: "cd <wt>/server && npx vitest run src/compiler/scientistIntent/goldens", expect: "16 tests, 0 failures"}
   - {cmd: "cd <wt>/server && npx tsx scripts/golden-replay.ts", expect: "exit 0 from a clean checkout, offline"}
 liveSmoke: {cmd: "cd <wt>/server && npx tsx scripts/live-smoke.ts", gating: "NEVER CI; manual/orch only; see spec §6"}

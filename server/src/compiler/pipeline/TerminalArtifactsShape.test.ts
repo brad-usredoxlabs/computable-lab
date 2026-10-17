@@ -128,4 +128,30 @@ describe('TerminalArtifacts canonical shape', () => {
     expect(ta.labStateDelta).toBeUndefined();
     expect(ta.resolvedRefs).toBeUndefined();
   });
+
+  // DECK-FOLD-1: resolvedLabwares is a DISTINCT entity from resolvedRefs
+  // (registry refs, Spec-023) and resolvedLabwareRefs (prior-lab-state refs,
+  // Spec-014). Shape mirrors ResolvedLabware (ChatbotCompilePasses.ts):
+  // { hint, recordId, title? } — title present only when the pass had one.
+  it('accepts resolvedLabwares (hints bound to existing inventory records)', () => {
+    const ta: TerminalArtifacts = {
+      events: [],
+      directives: [],
+      gaps: [],
+      resolvedLabwares: [
+        { hint: 'hint plate', recordId: 'LAB-hint-plate', title: 'hint plate' },
+        { hint: 'bare hint', recordId: 'LAB-bare' },
+      ],
+    };
+    expect(ta.resolvedLabwares).toHaveLength(2);
+    // exactOptionalPropertyTypes: title is absent-or-value, never undefined.
+    expect(Object.keys(ta.resolvedLabwares![1]!)).not.toContain('title');
+    expect(Object.keys(ta)).not.toContain('resolvedRefs');
+    expect(Object.keys(ta)).not.toContain('resolvedLabwareRefs');
+  });
+
+  it('resolvedLabwares key stays absent when nothing resolved (non-empty-only propagation)', () => {
+    const ta: TerminalArtifacts = { events: [], directives: [], gaps: [] };
+    expect(Object.keys(ta)).not.toContain('resolvedLabwares');
+  });
 });

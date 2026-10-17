@@ -5,6 +5,10 @@ import { compileScientistIntent } from './compileScientistIntent.js';
 import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm, composeIntentPrompt } from './intentCompile.js';
 import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 import { liftScientistIntent, canonicalActionName, coerceNumeric } from './liftScientistIntent.js';
+import { loadDeckReviewPolicy } from './deckReviewFold.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const THREE_ACTION = `
 intentId: example-001
@@ -389,5 +393,150 @@ describe('extractBranchQuestionsFromSmallLlm (localization preamble)', () => {
       llmClient: llm as never,
     });
     expect(result.axes).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DECK-FOLD-1 — resolvedLabwares on terminalArtifacts (RED-first).
+// The resolve_labware pass ALREADY produces resolvedLabwares (its output
+// slot); the compile runner must propagate them onto TerminalArtifacts,
+// capped by config/drafting/deck-review.yaml at the single propagation choke
+// (OQ1: server-side). Rank = pass-output order verbatim; truncation is a
+// silent head-slice (a gap would flip outcome via computeOutcome).
+// ---------------------------------------------------------------------------
+
+describe('compileScientistIntent resolvedLabwares fold (DECK-FOLD-1)', () => {
+  const policyDir = mkdtempSync(join(tmpdir(), 'deckfold-fold-'));
+  const policyPath = join(policyDir, 'deck-review.yaml');
+
+  /** 14 distinct labware labels, EVERY one resolvable via the declared test
+   *  seam (scientistIntent.test.ts:132 idiom) — a broad inventory that
+   *  exercises the cap against the shipped default (12). */
+  const BROAD_LABELS = Array.from({ length: 14 }, (_, i) => `plate ${String.fromCharCode(65 + i)}`);
+  const BROAD_INTENT = `
+intentId: broad-inventory
+actions:
+${BROAD_LABELS.map((label, i) => `  - { action: transfer, source: ${label}, target: plate A, volumeUl: ${10 + i} }`).join('\n')}
+`;
+
+  function broadDeps(overrides: Record<string, unknown> = {}) {
+    return {
+      spine: createResolveSpine({}),
+      searchLabwareByHint: async (hint: string) => [{ recordId: `LAB-${hint}`, title: hint }],
+      ...overrides,
+    };
+  }
+
+  it('fully-resolved hints propagate resolvedLabwares onto terminalArtifacts', async () => {
+    const doc = parseScientistIntent(`
+intentId: resolved-fold
+actions:
+  - { action: transfer, source: hint plate, target: fresh plate, volumeUl: 25 }
+`);
+    const { terminalArtifacts, outcome } = await compileScientistIntent(doc, broadDeps());
+    expect(outcome).toBe('complete');
+    const keys = Object.keys(terminalArtifacts);
+    expect(keys).toContain('resolvedLabwares');
+    const resolved = terminalArtifacts.resolvedLabwares!;
+    expect(resolved.length).toBe(2);
+    // Shape mirrors ResolvedLabware (ChatbotCompilePasses.ts): hint + recordId
+    // + title present only when the pass had a title. exactOptionalPropertyTypes:
+    // absence asserted via Object.keys, never toEqual-with-undefined.
+    for (const entry of resolved) {
+      expect(typeof entry.hint).toBe('string');
+      expect(typeof entry.recordId).toBe('string');
+      expect(entry.recordId).toBe(`LAB-${entry.hint}`);
+      expect(typeof entry.title).toBe('string');
+    }
+    // Pass order = protocol order (deterministic; no ranking logic).
+    expect(resolved.map((r) => r.hint)).toEqual(['hint plate', 'fresh plate']);
+    // Zero-match legs unchanged: a fully-resolved compile emits NO labwareAdditions key.
+    expect(keys).not.toContain('labwareAdditions');
+  });
+
+  it('no labware candidates => resolvedLabwares key ABSENT (non-empty-only propagation)', async () => {
+    const doc = parseScientistIntent(`
+intentId: no-labware
+actions:
+  - { action: incubate, duration: 10 min, temperatureC: 37 }
+  - { action: spin, rpm: 300 }
+`);
+    const { terminalArtifacts } = await compileScientistIntent(doc, {
+      spine: createResolveSpine({}),
+      searchLabwareByHint: async () => [],
+    });
+    const keys = Object.keys(terminalArtifacts);
+    // The pass ran and produced an EMPTY resolvedLabwares array — the runner
+    // propagates only a non-empty list (the labwareAdditions idiom).
+    expect(keys).not.toContain('resolvedLabwares');
+    expect(keys).not.toContain('labwareAdditions');
+  });
+
+  it('bar branch: an unresolved noun bars atomically and the held artifacts gain NO resolved field', async () => {
+    // Decision fact 5 / bait §6: the 422 needs-clarification terminalArtifacts
+    // stay EXACTLY {events,directives,gaps,protocolIntent?}. Propagating
+    // resolved fields 'while we're there' is the trap.
+    const doc = parseScientistIntent(`
+intentId: zero-match
+actions:
+  - { action: transfer, source: mystery flask, target: mystery beaker, volumeUl: 10 }
+`);
+    const { terminalArtifacts, outcome } = await compileScientistIntent(doc, {
+      spine: createResolveSpine({}),
+      searchLabwareByHint: async () => [],
+    });
+    expect(outcome).toBe('needs-clarification');
+    expect(Object.keys(terminalArtifacts).sort()).toEqual(['directives', 'events', 'gaps', 'protocolIntent']);
+    expect(terminalArtifacts.events).toEqual([]);
+    for (const key of ['resolvedLabwares', 'labwareAdditions', 'labwareRequirements', 'deckLayoutPlan', 'resourceManifest']) {
+      expect(Object.keys(terminalArtifacts)).not.toContain(key);
+    }
+  });
+
+  it('cap: a broad inventory (14 resolved labels) truncates to maxResolvedOffers from the YAML, in pass order', async () => {
+    writeFileSync(policyPath, 'maxResolvedOffers: 3\n');
+    const doc = parseScientistIntent(BROAD_INTENT);
+    const { terminalArtifacts } = await compileScientistIntent(doc, broadDeps({
+      deckReviewPolicyPath: policyPath,
+    }));
+    const resolved = terminalArtifacts.resolvedLabwares!;
+    expect(resolved.length).toBe(3);
+    // Silent head-slice of the deterministic pass order — no gap, outcome unchanged.
+    expect(resolved.map((r) => r.hint)).toEqual(BROAD_LABELS.slice(0, 3));
+    expect(terminalArtifacts.gaps.length).toBe(0);
+  });
+
+  it('cap flip: a policy-path change alters the cap WITHOUT a code change (per-call loader)', async () => {
+    writeFileSync(policyPath, 'maxResolvedOffers: 5\n');
+    const doc = parseScientistIntent(BROAD_INTENT);
+    const { terminalArtifacts } = await compileScientistIntent(doc, broadDeps({
+      deckReviewPolicyPath: policyPath,
+    }));
+    expect(terminalArtifacts.resolvedLabwares!.length).toBe(5);
+  });
+
+  it('shipped default cap comes from config/drafting/deck-review.yaml (no numeric literal in TS)', async () => {
+    const policy = loadDeckReviewPolicy();
+    expect(policy).not.toBeNull();
+    const doc = parseScientistIntent(BROAD_INTENT);
+    const { terminalArtifacts } = await compileScientistIntent(doc, broadDeps());
+    // 14 resolvable labels > default cap => the fold is capped at the YAML value.
+    expect(terminalArtifacts.resolvedLabwares!.length).toBe(policy!.maxResolvedOffers);
+  });
+
+  it('malformed policy THROWS naming the key (fail-loud, never a silent uncapped pass)', async () => {
+    writeFileSync(policyPath, 'maxResolvedOffers: zero\n');
+    const doc = parseScientistIntent(BROAD_INTENT);
+    await expect(compileScientistIntent(doc, broadDeps({
+      deckReviewPolicyPath: policyPath,
+    }))).rejects.toThrow(/maxResolvedOffers/);
+  });
+
+  it('absent policy file => uncapped pass-through (legacy doctrine)', async () => {
+    const doc = parseScientistIntent(BROAD_INTENT);
+    const { terminalArtifacts } = await compileScientistIntent(doc, broadDeps({
+      deckReviewPolicyPath: join(policyDir, 'does-not-exist.yaml'),
+    }));
+    expect(terminalArtifacts.resolvedLabwares!.length).toBe(BROAD_LABELS.length);
   });
 });

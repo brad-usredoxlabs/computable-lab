@@ -1,0 +1,114 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/server
+
+ ✓ src/revisions/Qms6bSchemaDrift.test.ts  (4 tests) 645ms
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/server
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 195 schemas
+Added 195 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 29 lint specs, 83 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 6 lifecycle specs
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w25-t1-promotion-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w25-t1-promotion-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w25-t1-promotion-data/worktrees/main bare=/tmp/cl-w25-t1-promotion-data/repos/main.git
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 127 records
+Index built with 127 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/COMP3-A6FIX-lane2-l2t0430/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 150 records
+
+(node:304721) [FSTDEP022] FastifyWarning: The router options for maxParamLength property access is deprecated. Please use "options.routerOptions" instead for accessing router options. The router options will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Library index built
+
+ ✓ src/integration/W25DraftLifecyclePromotion.test.ts  (5 tests) 18150ms
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  05:43:37
+   Duration  24.20s (transform 4.51s, setup 0ms, collect 5.80s, tests 18.80s, environment 0ms, prepare 368ms)
+
+exit: 0

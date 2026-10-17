@@ -19,6 +19,16 @@ import type { AppConfig } from '../../config/types.js';
 import type { RecordStore } from '../../store/types.js';
 import { parseScientistIntent, ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
 import { compileScientistIntent } from '../../compiler/scientistIntent/compileScientistIntent.js';
+// SH-QB-1 (OQ1/OQ2): the deck-context composition + deck binding are the
+// SAME imported helpers the chat seam uses (shorthandChat.ts:112-123,
+// :138-238) — IMPORT ONLY, never a re-implementation (a hand-rolled
+// name-match here would be a divergent second grammar of the exact-one the
+// deck-fold ruling forbids). shorthandChat is another item's live file.
+import {
+  bindShorthandEventsToDeck,
+  composeLabwareHintLookupWithDeck,
+  type DeckLabwareSummary,
+} from '../../ai/shorthandChat.js';
 
 interface IntentCompileDeps {
   store: RecordStore;
@@ -32,6 +42,17 @@ interface IntentCompileBody {
   intent?: string;
   actions?: unknown[];
   intentId?: string;
+  /**
+   * SH-QB-1 (OQ1, orchestrator-adopted): the editor's DECK plates — the
+   * exact DeckLabwareSummary mirror of the chat request's `context.labwares`
+   * element shape. Deck plates are editor state, not store records: without
+   * them a document naming the plate the scientist is looking at ("plate1")
+   * false-bars as unknown-noun on every recompile (the chat path composes
+   * the same context at AgentOrchestrator.ts:1213-1222). ADDITIVE and
+   * optional — absent ⇒ today's store-only behavior byte-identical (the
+   * goldens replay this route with no deck; the roundTrip T3 pin guards it).
+   */
+  deckLabwares?: readonly DeckLabwareSummary[];
   [key: string]: unknown;
 }
 
@@ -44,6 +65,15 @@ function asYamlDocument(body: unknown): string {
     return JSON.stringify(rec);
   }
   return '';
+}
+
+/** SH-QB-1: the deck plates ONLY when the body actually carries a non-empty
+ *  array (an empty/absent deck ⇒ undefined ⇒ both deck passes skipped ⇒
+ *  byte-identical store-only behavior — the T3 additive-contract pin). */
+function deckFromBody(body: unknown): readonly DeckLabwareSummary[] | undefined {
+  const rec = body as IntentCompileBody | undefined;
+  const deck = rec?.deckLabwares;
+  return Array.isArray(deck) && deck.length > 0 ? deck : undefined;
 }
 
 export function createIntentCompileHandlers(deps: IntentCompileDeps) {
@@ -93,10 +123,42 @@ export function createIntentCompileHandlers(deps: IntentCompileDeps) {
       }
 
       try {
-        const result = await compileScientistIntent(doc, { searchLabwareByHint, spine });
+        // SH-QB-1 (fix 1, OQ1): when the editor threads its deck plates, the
+        // compile sees the SAME resolution context the chat path saw — the
+        // store-backed hint lookup composed deck-first with the IMPORTED
+        // shorthandChat composition (exact-name match wins, store falls
+        // through byte-identically). No deck ⇒ the store-only lookup, exactly
+        // as before.
+        const deck = deckFromBody(request.body);
+        const searchLabware = deck
+          ? composeLabwareHintLookupWithDeck(deck, searchLabwareByHint)
+          : searchLabwareByHint;
+        // exactOptionalPropertyTypes: the lookup key rides only when defined
+        // (the store lookup is always defined today; the conditional spread
+        // keeps the deps object honest regardless).
+        const result = await compileScientistIntent(doc, {
+          ...(searchLabware ? { searchLabwareByHint: searchLabware } : {}),
+          spine,
+        });
+        // SH-QB-1 (fix 1, B5): the SAME post-pass the chat result applies
+        // (shorthandChat.ts:570) — a no-edit round-trip's events equal the
+        // chat path's proposals field-for-field INCLUDING details.labwareId.
+        // Store-only calls skip the pass (zero behavior change).
+        const terminalArtifacts = deck
+          ? { ...result.terminalArtifacts, events: bindShorthandEventsToDeck(result.terminalArtifacts.events, deck) }
+          : result.terminalArtifacts;
+        // SH-QB-1 (fix 2, the dropped-reason channel): the bar arm's
+        // structured clarifications (compileScientistIntent.ts:253-272) used
+        // to be dropped on the floor — 200 + empty events + empty gaps + no
+        // reason = the silent zero-ghost (findings 4). They now ride VERBATIM
+        // (ScientistIntentUnresolvedFact[], no new type, no new reason code),
+        // non-empty-only conditional spread (exactOptionalPropertyTypes).
+        // The 422/needs-clarification conventions of the FROM-PROMPT route
+        // stay untouched (different route, B4).
         return reply.send({
           outcome: result.outcome,
-          terminalArtifacts: result.terminalArtifacts,
+          terminalArtifacts,
+          ...(result.clarifications.length > 0 ? { clarifications: result.clarifications } : {}),
         });
       } catch (err) {
         request.log.error({ err }, 'Failed to compile scientist-intent');

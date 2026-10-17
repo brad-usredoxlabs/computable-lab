@@ -45,6 +45,10 @@ const mocks = vi.hoisted(() => ({
   chatOptions: null as null | {
     onDraftResult?: (result: unknown, prompt: string) => void
   },
+  // The mocked thread mirrors what the real reducer commits: user turns land
+  // in `state.messages` at send time. The panel reads the thread through
+  // chat.state — WS6 D2 asserts the capture reads IT, not a forked store.
+  chatMessages: [] as Array<{ id: string; role: 'user' | 'assistant'; text: string; ts: number }>,
   editor: { current: null as unknown },
   editorActions: {
     setPreview: vi.fn(),
@@ -69,7 +73,7 @@ vi.mock('./useChatThread', () => ({
   }) => {
     mocks.chatOptions = options
     return {
-      state: { messages: [], pending: null, status: null, error: null },
+      state: { messages: mocks.chatMessages, pending: null, status: null, error: null },
       isStreaming: false,
       send: vi.fn(async () => undefined),
       stop: vi.fn(),
@@ -182,6 +186,7 @@ function mountPreview(rerender: (ui: ReturnType<typeof panelTree>) => void) {
 beforeEach(() => {
   cleanup()
   mocks.chatOptions = null
+  mocks.chatMessages = []
   mocks.editor.current = null
   vi.clearAllMocks()
   mocks.api.intentTrainingPair.mockResolvedValue({ ok: false, error: 'corpus.disabled' })
@@ -242,6 +247,52 @@ describe('SHORTHAND-CORPUS WS1 — chat Accept captures the pair', () => {
     fireEvent.click(screen.getByTestId('changes-apply'))
 
     expect(mocks.api.intentTrainingPair).not.toHaveBeenCalled()
+    expect(mocks.editorActions.commitPreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('WS6 D2 (OBS-1): a two-turn proposal posts the WHOLE user-turn chain — original drafting prompt first, refinement turn via the existing thread field', async () => {
+    mountDeckEditor()
+    // The thread the chat reducer holds at Accept time (mirrors chatReducer:
+    // the user turn commits at send, the assistant turn at `done`): the
+    // original drafting instruction, the assistant's clarification round-trip,
+    // then the clarification-answer turn that produced the accepted draft.
+    mocks.chatMessages = [
+      { id: 'u1', role: 'user', text: 'add 100uL of DMEM to A1:A12', ts: 1 },
+      { id: 'a1', role: 'assistant', text: 'Which material do you mean by DMEM?', ts: 2 },
+      { id: 'u2', role: 'user', text: 'Use [[material:MAT-dmem|DMEM]] for material.', ts: 3 },
+    ]
+    const { rerender } = renderPanel()
+    await screen.findByTestId('ai-tab-system-prompt')
+
+    // The clarification-answer turn is the one whose `done` carried the draft.
+    await emitDraft(
+      {
+        success: true,
+        events: [{ eventId: 'ev-dmem', event_type: 'deposit_wells', details: { targetWells: ['A1:A12'] } }],
+        shorthand: SHORTHAND_YAML,
+      },
+      'Use [[material:MAT-dmem|DMEM]] for material.',
+    )
+    expect(await screen.findByTestId('changes-panel')).toBeTruthy()
+    mountPreview(rerender)
+    await screen.findByTestId('changes-panel')
+
+    fireEvent.click(screen.getByTestId('changes-apply'))
+
+    expect(mocks.api.intentTrainingPair).toHaveBeenCalledTimes(1)
+    const body = mocks.api.intentTrainingPair.mock.calls[0]![0] as Record<string, unknown>
+    // BINDING pair shape (spec §BINDING): prompt = the user TURNS, not the
+    // last turn only. The pair's prompt anchor is the ORIGINAL drafting
+    // instruction (gate r4 OBS-1 captured only the answer turn).
+    expect(body.userPrompt).toBe('add 100uL of DMEM to A1:A12')
+    // The refinement turn rides the EXISTING `thread` field (client.ts:4033
+    // already accepts it; IntentTrainingPairHandlers.ts:74-79 folds it into
+    // userLines) — in order, user-role only, no forked corpus client.
+    expect(body.thread).toEqual([
+      { role: 'user', content: 'Use [[material:MAT-dmem|DMEM]] for material.' },
+    ])
+    // The target stays the verbatim accepted shorthand.
+    expect(body.shorthandYaml).toBe(SHORTHAND_YAML)
     expect(mocks.editorActions.commitPreview).toHaveBeenCalledTimes(1)
   })
 

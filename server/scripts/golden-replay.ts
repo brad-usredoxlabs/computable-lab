@@ -48,6 +48,9 @@ const barNames = [
   'golden.intent-to-clarification.unknown-local-term',
   'golden.intent-to-clarification.labware-hint-lookup-failure',
   'golden.intent-to-clarification.model-unresolved-passthrough',
+  // COMP-4 Stage B: the declared many-cardinality composition bar naming the
+  // unresolvable component (same 422 replay family).
+  'golden.intent-to-clarification.unresolvable-mixture-component',
 ] as const;
 
 for (const name of graphNames) {

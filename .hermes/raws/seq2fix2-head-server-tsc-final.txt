@@ -1,0 +1,13 @@
+
+> @computable/server@1.0.0 typecheck
+> tsc --noEmit
+
+src/ai/AgentOrchestrator.ts(345,18): error TS2339: Property 'id' does not exist on type 'ResolvedRecordTarget | ResolvedOntologyTarget | ResolvedSequenceTabTarget | ResolvedSequenceRecordTarget'.
+  Property 'id' does not exist on type 'ResolvedSequenceTabTarget'.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+npm error workspace @computable/server@1.0.0
+npm error location /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+npm error command failed
+npm error command sh -c tsc --noEmit

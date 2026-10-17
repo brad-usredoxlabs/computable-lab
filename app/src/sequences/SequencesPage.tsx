@@ -4,9 +4,13 @@ import { parse, stringify } from 'yaml'
 import { AppShell } from '../shared/shell'
 import { useAiChat } from '../shared/hooks/useAiChat'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
+import { ChatFocusProvider } from '../agent/ChatFocusContext'
+import { HarnessChatPane } from '../agent/HarnessChatPane'
+import { loadSurfaceRegistry } from '../shared/surfaces/registry'
 import { sequenceApi, requestId, recordRef } from './api'
+import { createSequencesAgentActionHandler } from './applyAgentAction'
+import type { AiAgentActionEnvelope } from '../types/ai'
 import { SequenceImport } from './SequenceImport'
-import { SequenceChat } from './SequenceChat'
 import { SequenceEditor, type SequenceEditorHandle } from './SequenceEditor'
 import { SequenceResults } from './SequenceResults'
 import './SequencesPage.css'
@@ -15,7 +19,7 @@ const tabs=['Editor','Assay','Analysis','Setup','Import','Knowledge'] as const
 export function SequencesPage() {
  const [search]=useSearchParams();const [tab,setTab]=useState<typeof tabs[number]>(search.has('source')?'Import':'Editor')
  const [records,setRecords]=useState<RecordItem[]>([]);const [contract,setContract]=useState<any>(null);const [selected,setSelected]=useState('');const [query,setQuery]=useState('')
- const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [message,setMessage]=useState('');const [proposal,setProposal]=useState(()=>{try{return stringify(JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null'))?.replace(/^null\n$/,'')??''}catch{return ''}});const [prompt,setPrompt]=useState('');const [result,setResult]=useState<any>(null)
+ const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [message,setMessage]=useState('');const [proposal,setProposal]=useState(()=>{try{return stringify(JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null'))?.replace(/^null\n$/,'')??''}catch{return ''}});const [result,setResult]=useState<any>(null)
  const [reporter,setReporter]=useState('');const [quencher,setQuencher]=useState('');const [oligoSequence,setOligoSequence]=useState('')
  const [readoutName,setReadoutName]=useState('FAM');const [instrumentType,setInstrumentType]=useState('qpcr');const [readoutMode,setReadoutMode]=useState('ct')
  const [assayName,setAssayName]=useState('');const [forward,setForward]=useState('');const [reverse,setReverse]=useState('');const [probe,setProbe]=useState('');const [channel,setChannel]=useState('');const [expectedLength,setExpectedLength]=useState('');const [target,setTarget]=useState('')
@@ -35,6 +39,19 @@ export function SequencesPage() {
  const selectOptions=(list:RecordItem[])=>list.map(r=><option key={r.recordId} value={r.recordId}>{r.payload.label??r.payload.name??r.payload.title??r.recordId}</option>)
  const editorRef=useRef<SequenceEditorHandle>(null)
  const [editorContext,setEditorContext]=useState<Record<string,any>>({})
+ // HARNESS-SEQ-2: a compiled agent_action frame drives THIS page through the
+ // same paths a human click uses (setTab / selectRecord — the canLeave guard
+ // is inherited, never reimplemented). The decision lives in applyAgentAction
+ // (target-kind branches only); the tab list is the declared const above,
+ // kept in lockstep with the surfaces registry by the server compat test.
+ // DEFECT-1 gate fix (2026-10-15_1255 leg5): the handler receives the FULL
+ // catalog (the Library filter is a rendering concern), so the surface's
+ // DECLARED selectableKinds — registry data from GET /api/surfaces via the
+ // shared loadSurfaceRegistry cache — gate which records the agent path may
+ // select. No kind literals here; an unloaded/undeclared list is fail-closed.
+ const [selectableKinds,setSelectableKinds]=useState<readonly string[]>([])
+ useEffect(()=>{let cancelled=false;void loadSurfaceRegistry().then(surfaces=>{if(cancelled)return;const entry=surfaces.find(s=>s.id==='sequences');setSelectableKinds(entry?.selectableKinds??[])});return()=>{cancelled=true}},[])
+ const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,selectableKinds,records:()=>records.map(r=>({recordId:r.recordId,kind:r.payload.kind})),selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>setTab(t as typeof tabs[number]),selectRecord})(action),[records,selected,selectableKinds])
  const onSequenceProposal=useCallback((p:Record<string,unknown>,userRequest?:string)=>{
   if(['save_sequence','create_oligo'].includes(String(p.operation))){
    setTab('Editor');setProposal('');editorRef.current?.propose(p,userRequest);sessionStorage.removeItem('cl-sequence-proposal')
@@ -42,7 +59,11 @@ export function SequencesPage() {
  },[])
  useEffect(()=>{try{const pending=JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null');if(pending)onSequenceProposal(pending)}catch{/* Keep malformed handoffs inspectable. */}},[onSequenceProposal])
  const aiContext=useMemo(()=>({surface:'sequences' as const,summary:`Sequence workspace — ${tab}`,surfaceContext:{...editorContext,selectedRecordId:selected,records:records.map(r=>({id:r.recordId,kind:r.payload.kind,label:r.payload.label??r.payload.name??r.payload.title,alphabet:r.payload.alphabet,length:r.payload.length,...(r.recordId===selected&&r.payload.residues?.length<=20000?{residues:r.payload.residues}:{}),...(r.payload.kind==='sequence-endpoint'?{configuration:r.payload}:{}),...(r.payload.oligos?{oligos:r.payload.oligos}:{}),...(r.payload.channel_label?{channel:r.payload.channel_label}:{}),...(r.payload.outputArtifactRefs?{outputArtifactRefs:r.payload.outputArtifactRefs}:{}),...(r.payload.statement?{statement:r.payload.statement}:{}),...(r.payload.kind==='measurement-context'?{measurementContext:r.payload}:{}),...(r.payload.kind==='sequence-interpretation-rule'?{rule:r.payload}:{})})),availableOperations:contract?.capabilities?.engines,selection:inputs,parameters,lastActionResult:result}}),[tab,selected,records,contract,inputs,parameters,result,editorContext])
- const chat=useAiChat({aiContext,onSequenceProposal,endpoint:'sequences',proposalScopeKey:`${selected}:${editorContext.proposalScopeKey}`});useRegisterAiChat(chat)
+ const chat=useAiChat({aiContext,onSequenceProposal,endpoint:'sequences',proposalScopeKey:`${selected}:${editorContext.proposalScopeKey}`,onAgentAction});useRegisterAiChat(chat)
+ // Working focus is DERIVED from the resolved surface state only (tab/selected/
+ // records) — zero model calls, zero AI prose (HARNESS-SEQ-1).
+ const selectedRecord=records.find(r=>r.recordId===selected)
+ const chatFocus={surface:'sequences',label:`Sequences — ${tab}${selectedRecord?` · ${selectedRecord.payload.label??selectedRecord.payload.name??selectedRecord.payload.title??selectedRecord.recordId}`:''}`}
  const act=async(action:any)=>{
   setBusy(true);setError('');setMessage('')
   try{const data=await sequenceApi('/actions',{requestId:requestId(),...action});setResult(data);setMessage(data.recordId?`Saved ${data.recordId}${data.status?` — ${data.status}`:''}`:'Action completed.');await refresh();return data}
@@ -103,13 +124,13 @@ export function SequencesPage() {
   </fieldset>
   {byKind('assertion').filter(r=>r.payload.outcome?.detection).map(r=><details key={r.recordId}><summary>{r.payload.statement} — {r.payload.outcome.detection}</summary><pre>{stringify(r.payload)}</pre>{byKind('evidence').filter(e=>[...(e.payload.supports??[]),...(e.payload.refutes??[]),...(e.payload.assesses??[])].some((s:any)=>s.id===r.recordId)).map(e=><pre key={e.recordId}>{stringify(e.payload)}</pre>)}</details>)}
  {byKind('sequence-interpretation-rule').map(r=><details key={r.recordId}><summary>{r.payload.label??r.recordId}</summary><pre>{stringify(r.payload)}</pre></details>)}</>
- return <AppShell brand="Sequences" layout="workspace" leftPane={<main className="sequences-page">
+ return <ChatFocusProvider focus={chatFocus}><AppShell brand="Sequences" layout="workspace" leftPane={<main className="sequences-page">
   <h1>Sequences &amp; assays</h1><nav aria-label="Sequence workspace">{tabs.map(t=><button key={t} aria-pressed={tab===t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
   {editorContext.draft&&tab!=='Editor'&&<button onClick={()=>setTab('Editor')}>Review sequence proposal</button>}
   <div hidden={tab!=='Editor'}>{editor}</div>
   {tab==='Editor'?null:tab==='Assay'?assay:tab==='Analysis'?analysis:tab==='Setup'?setup:tab==='Import'?<SequenceImport onSaved={()=>void refresh()} initialSource={search.get('source')??undefined} initialAccession={search.get('accession')??undefined}/>:knowledge}
   {busy&&<p role="status">Working…</p>}{message&&<p role="status">{message}</p>}{error&&<p role="alert">{error}</p>}
   <details open={!!proposal}><summary>Structured action request</summary><textarea aria-label="Action YAML" rows={12} value={proposal} onChange={e=>setProposal(e.target.value)}/><button disabled={!proposal||busy} onClick={async()=>{try{const action=parse(proposal);if(['save_sequence','create_oligo'].includes(action.operation)){onSequenceProposal(action);return}const data=await act(action);setProposal('');sessionStorage.removeItem('cl-sequence-proposal');if(data.manifest)setTab('Analysis')}catch(e){setError((e as Error).message)}}}>Accept and apply</button><button disabled={busy} onClick={()=>{setProposal('');sessionStorage.removeItem('cl-sequence-proposal')}}>Discard</button></details>
- </main>} navPane={<aside className="sequences-page sequence-library"><h2>Library</h2><input aria-label="Search sequences" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find sequence…"/>{records.filter(r=>['sequence','oligo-spec'].includes(r.payload.kind)).filter(r=>`${r.payload.label} ${r.recordId}`.toLowerCase().includes(query.toLowerCase())).map(r=><button key={r.recordId} onClick={()=>void open(r)}>{r.payload.label}<small>{r.payload.kind==='oligo-spec'?'Oligo':`${r.payload.length??r.payload.residues?.length} residues`}</small></button>)}</aside>} rightPane={<SequenceChat messages={chat.messages} isStreaming={chat.isStreaming} prompt={prompt} onPromptChange={setPrompt} onReview={onSequenceProposal} onSend={()=>{chat.sendPrompt(prompt);setPrompt('')}} onCancel={chat.cancelStream}/>}/>
+ </main>} navPane={<aside className="sequences-page sequence-library"><h2>Library</h2><input aria-label="Search sequences" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find sequence…"/>{records.filter(r=>['sequence','oligo-spec'].includes(r.payload.kind)).filter(r=>`${r.payload.label} ${r.recordId}`.toLowerCase().includes(query.toLowerCase())).map(r=><button key={r.recordId} onClick={()=>void open(r)}>{r.payload.label}<small>{r.payload.kind==='oligo-spec'?'Oligo':`${r.payload.length??r.payload.residues?.length} residues`}</small></button>)}</aside>} rightPane={<HarnessChatPane onReviewProposal={onSequenceProposal}/>}/></ChatFocusProvider>
 
 }

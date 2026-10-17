@@ -252,9 +252,15 @@ function composeBindingKey(
 // ---------------------------------------------------------------------------
 
 const QUANTITY_ID = 'https://computable-lab.com/schema/computable-lab/datatypes/quantity.schema.yaml';
+/** Exported so the wire-contract law test (quantityWireContract.test.ts) reads
+ *  the SAME id — one loader, one id, one validator (COMP-2 12a). */
+export const QUANTITY_SCHEMA_ID = QUANTITY_ID;
 let quantityValidatorPromise: Promise<AjvValidator> | null = null;
 
-async function getQuantityValidator(): Promise<AjvValidator> {
+/** Exported (COMP-2 12a): the realization gate's loader is the ONE Quantity
+ *  validator on this trunk — consumers import it instead of writing a second
+ *  schema loader (plan 12b implementer note). */
+export async function getQuantityValidator(): Promise<AjvValidator> {
   if (!quantityValidatorPromise) {
     quantityValidatorPromise = (async () => {
       const result = await loadAllSchemas({ basePath: resolve(process.cwd(), '..', 'schema') });

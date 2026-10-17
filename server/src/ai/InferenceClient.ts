@@ -33,14 +33,18 @@ function normalizeReasoningContent(response: CompletionResponse): CompletionResp
 }
 
 function normalizeReasoningDelta(chunk: StreamChunk): StreamChunk {
-  for (const choice of chunk.choices ?? []) {
-    const delta = choice.delta as typeof choice.delta & Record<string, unknown>;
-    if (typeof delta.content === 'string' && delta.content.length > 0) continue;
-    const fallback = firstText(delta.reasoning, delta.reasoning_content);
-    if (fallback) {
-      delta.content = fallback;
-    }
-  }
+  // W2-89 g2b-3 — THE CHANNEL BOUNDARY. This used to FOLD a reasoning-only
+  // delta into `content` so blocking callers see text. On the STREAM path
+  // that fold put hidden chain-of-thought on the ANSWER channel: the
+  // orchestrator streams `content` as `text_delta` and the chat bubble
+  // rendered the model's internal reasoning verbatim (gate 2026-10-11_0110-
+  // g2b, every turn). The three other streaming consumers (FoundryCoderPatch,
+  // EventEditorFixHandlers, ProtocolBuilderHandlers) each had to defensively
+  // SKIP that echo — the merge was the anomaly, not the consumers.
+  // Rule: on the stream path reasoning STAYS on the reasoning fields;
+  // `content` is never synthesized from reasoning. The blocking complete()
+  // path keeps its fallback (normalizeReasoningContent) for callers that
+  // only read content.
   return chunk;
 }
 

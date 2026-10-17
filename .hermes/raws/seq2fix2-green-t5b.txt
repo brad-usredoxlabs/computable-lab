@@ -1,0 +1,10 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/HARNESS-SEQ-2-lane2-l2t1045/server
+
+ ✓ src/ai/AgentOrchestrator.sequencesAgentAction.test.ts  (14 tests) 577ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  18:38:10
+   Duration  6.19s (transform 1.83s, setup 0ms, collect 3.79s, tests 577ms, environment 0ms, prepare 468ms)
+
