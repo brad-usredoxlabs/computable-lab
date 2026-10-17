@@ -634,6 +634,14 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
         // corpus, fields validated against the target schema at staging).
         recordDraft: {
           type: 'object',
+          // QMS7-7 FIX1 (adv-review D4): this property is the tool-declared
+          // twin of recordDraftCompile.ts's RECORD_DRAFT_ENVELOPE_SCHEMA —
+          // same required keys, same additionalProperties:false. The lockstep
+          // test (recordDraftEnvelopeLockstep.test.ts) pins them equal so the
+          // model-facing contract can never drift looser than the compile-side
+          // Ajv authority.
+          additionalProperties: false,
+          required: ['operation', 'kind', 'fields'],
           description:
             'compose_record_draft only: the record proposal envelope (the record-drafting shape). VERBS AND FIELDS ONLY — `operation` is \"compose-record\"; `kind` is a record kind the lab\'s schema corpus declares (e.g. training-material); `fields` carries ONLY the target schema\'s declared fields (e.g. title, materialType from its enum vocabulary). NEVER an id, a kind inside fields, a state/status, a lifecycleId, or an approval/signature field — the server derives the id from the schema\'s declared pattern and the draft-ness is read-side. THE SERVER compiles this into a review card via POST /api/drafts/compile — the kind is schema-resolved, the fields run the REAL schema validate + lint, an invalid proposal yields a blocked card with path-named diagnostics — and the card only becomes actionable after the user accepts. Accept creates AT MOST ONE governed DRAFT record; nothing is written before Accept.',
           properties: {

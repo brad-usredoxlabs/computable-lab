@@ -133,10 +133,13 @@ export function loadRecordDraftLandingTabKind(): string | null {
 // The proposal envelope — the shape the agent_intent `recordDraft` tool-def
 // property declares (schema/** is YAML-frozen this item, so the envelope
 // schema lives beside its tool-def twin; Ajv stays the structural authority).
-// `requestId` is compiler-injected (the workstate-intent precedent).
+// EXPORTED so the lockstep test (recordDraftEnvelopeLockstep.test.ts, adv-review
+// D4) can pin the tool-def property against THIS authority — one contract,
+// checked in lockstep, no drift. `requestId` is compiler-injected (the
+// workstate-intent precedent).
 // ============================================================================
 
-const RECORD_DRAFT_ENVELOPE_SCHEMA: object = {
+export const RECORD_DRAFT_ENVELOPE_SCHEMA: object = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'record-drafting proposal envelope',
   type: 'object',
