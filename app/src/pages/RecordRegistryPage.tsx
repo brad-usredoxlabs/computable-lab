@@ -13,6 +13,7 @@ import type { SchemaNode } from '../browser/SchemaTree';
 import type { JsonSchema } from '../types/kernel';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
+import './RecordRegistryPage.css';
 
 // Exported for the test suites: the tab/kinds DATA is the single source for
 // the tab strip, the combobox kinds, and the Create picker (no test-side
@@ -554,20 +555,16 @@ export default function RecordRegistryPage() {
   const hasProjection = projection !== null && projection.blocks && projection.slots;
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="registry-page">
       {/* Left Panel - Record List */}
-      <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white">
+      <div className="registry-list">
         {/* Tabs */}
-        <div className="flex flex-wrap gap-1 border-b border-gray-200 p-2">
+        <div className="registry-list__tabs">
           {REGISTRY_TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabId)}
-              className={`px-2 py-1 text-xs rounded ${
-                activeTab === tab.id
-                  ? 'bg-blue-100 text-blue-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
+              className={`registry-tab${activeTab === tab.id ? ' registry-tab--active' : ''}`}
             >
               {tab.label}
             </button>
@@ -577,7 +574,7 @@ export default function RecordRegistryPage() {
             combobox. Single-kind tabs create directly; multi-kind tabs open
             a picker listing the tab's kinds data (ontology kind strings
             verbatim — no invented display vocab). */}
-        <div className="p-2 border-b border-gray-100 flex items-center gap-2">
+        <div className="registry-list__actions">
           <button
             data-testid="registry-create-button"
             onClick={handleCreateFromTab}
@@ -585,28 +582,24 @@ export default function RecordRegistryPage() {
             // until GET /schemas resolves there is nothing to create against
             // (same degradation as the combobox's activeTabSchemaId='').
             disabled={schemaNodes.length === 0}
-            className="bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-blue-600 disabled:opacity-50"
+            className="registry-btn registry-btn--primary"
           >
             Create
           </button>
           {createKindPickerOpen && (
-            <div data-testid="registry-create-kind-picker" className="flex items-center gap-1">
+            <div data-testid="registry-create-kind-picker" className="registry-kind-picker">
               {activeTabConfig.kinds.map((kind) => (
                 <button
                   key={kind}
                   onClick={() => setPendingCreateKind(kind)}
-                  className={`px-2 py-1 text-xs rounded border ${
-                    pendingCreateKind === kind
-                      ? 'bg-blue-100 text-blue-700 font-medium border-blue-300'
-                      : 'text-gray-600 hover:bg-gray-100 border-gray-200'
-                  }`}
+                  className={`registry-kind-chip${pendingCreateKind === kind ? ' registry-kind-chip--active' : ''}`}
                 >
                   {kind}
                 </button>
               ))}
               <button
                 onClick={() => void openCreateForKind(pendingCreateKind ?? activeTabConfig.kinds[0])}
-                className="px-2 py-1 text-xs rounded bg-blue-500 text-white font-medium hover:bg-blue-600"
+                className="registry-btn registry-btn--primary"
               >
                 Confirm
               </button>
@@ -616,7 +609,7 @@ export default function RecordRegistryPage() {
                   setCreateKindPickerOpen(false);
                   setPendingCreateKind(null);
                 }}
-                className="px-2 py-1 text-xs rounded text-gray-600 hover:bg-gray-100"
+                className="registry-btn registry-btn--ghost"
               >
                 Cancel
               </button>
@@ -624,7 +617,7 @@ export default function RecordRegistryPage() {
           )}
         </div>
         {createError && (
-          <div data-testid="registry-create-error" className="p-2 text-xs text-red-600 border-b border-gray-100">
+          <div data-testid="registry-create-error" className="registry-error">
             {createError}
           </div>
         )}
@@ -632,8 +625,8 @@ export default function RecordRegistryPage() {
             the hide rule itself is the data-driven isTerminalRow predicate
             (declared terminal facts + payload.state) — "Show archived" here is
             label COPY only and is never read as a branch condition (bait 1). */}
-        <div className="p-2 border-b border-gray-100 flex items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-gray-700">
+        <div className="registry-list__archived">
+          <label className="registry-list__archived-label">
             <input
               type="checkbox"
               data-testid="registry-show-archived"
@@ -644,7 +637,7 @@ export default function RecordRegistryPage() {
           </label>
         </div>
         {/* RecordSearchCombobox */}
-        <div className="p-2 border-b border-gray-100">
+        <div className="registry-list__search">
           <RecordSearchCombobox
             kinds={activeTabConfig.kinds as unknown as string[]}
             schemaId={activeTabSchemaId}
@@ -663,13 +656,13 @@ export default function RecordRegistryPage() {
         </div>
         {/* Record List - Compact (QMS7-6: renders visibleRecords — the
             render-time archived filter, see above) */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="registry-list__scroll">
           {loading ? (
-            <div className="text-sm text-center py-8 text-gray-500">Loading...</div>
+            <div className="registry-list__empty">Loading...</div>
           ) : visibleRecords.length === 0 ? (
-            <div className="text-sm text-center py-8 text-gray-500">No records found</div>
+            <div className="registry-list__empty">No records found</div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="registry-list__rows">
               {visibleRecords.map((record) => {
                 const isSelected = record.recordId === selectedRecord?.recordId;
                 const displayName = (record.payload as { name?: string; title?: string; id?: string }).name ||
@@ -680,13 +673,11 @@ export default function RecordRegistryPage() {
                   <div
                     key={record.recordId}
                     onClick={() => handleSelectRecord({ recordId: record.recordId, payload: record.payload })}
-                    className={`p-3 cursor-pointer hover:bg-gray-50 ${
-                      isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : 'border-l-4 border-transparent'
-                    }`}
+                    className={`registry-row${isSelected ? ' registry-row--selected' : ''}`}
                   >
-                    <div className="font-medium text-sm text-gray-900 truncate">{displayName}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    <div className="registry-row__title">{displayName}</div>
+                    <div className="registry-row__meta">
+                      <span className="registry-kind-badge">
                         {kind}
                       </span>
                     </div>
@@ -714,7 +705,7 @@ export default function RecordRegistryPage() {
                     <button
                       onClick={handleCreateDraftRevision}
                       disabled={saving}
-                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                      className="registry-btn registry-btn--primary"
                     >
                       {saving ? 'Creating...' : 'Create draft revision'}
                     </button>
@@ -722,33 +713,33 @@ export default function RecordRegistryPage() {
                     <button
                       onClick={handleSave}
                       disabled={saving || !dirty}
-                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                      className="registry-btn registry-btn--primary"
                     >
                       {saving ? 'Saving...' : 'Save'}
                     </button>
                   )}
                   <button
                     onClick={handleCancel}
-                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
+                    className="registry-btn registry-btn--ghost"
                   >
                     Cancel
                   </button>
                   {draftRevisionNote && (
-                    <span data-testid="draft-revision-note" className="text-xs text-blue-700">
+                    <span data-testid="draft-revision-note" className="registry-note">
                       {draftRevisionNote}
                     </span>
                   )}
                   {dirty && !saving && (
-                    <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
+                    <span className="registry-dirty-dot" title="Unsaved changes" />
                   )}
-                  {error && <span className="text-red-500 text-xs">{error}</span>}
+                  {error && <span className="registry-save-error">{error}</span>}
                 </>
               }
             />
           }
           rail={
             selectedRecord.recordId && editorMode !== 'create' ? (
-              <div className="border-t border-gray-100 p-4">
+              <div className="registry-rail">
                 <RelatedRecordsCard
                   recordId={selectedRecord.recordId}
                   onNavigate={(id) => {
@@ -759,7 +750,7 @@ export default function RecordRegistryPage() {
             ) : undefined
           }
         >
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="registry-editor-body">
             {selectedRecord.recordId && editorMode === 'edit' && (
               <DocumentControlBar
                 record={selectedRecord}
@@ -777,7 +768,7 @@ export default function RecordRegistryPage() {
                 onUpdate={handleSerializedChange}
               />
             ) : (
-              <p className="text-gray-500">
+              <p className="registry-editor-empty">
                 {projectionLoading ? 'Loading editor...' : 'Editor not available for this record'}
               </p>
             )}
@@ -785,10 +776,10 @@ export default function RecordRegistryPage() {
         </DocumentShell>
       ) : (
         /* Placeholder when no record selected */
-        <div className="flex-1 flex items-center justify-center text-gray-500">
+        <div className="registry-placeholder">
           <div className="text-center">
-            <p className="text-lg">Select a record to edit</p>
-            <p className="text-sm mt-2">Or search for a record using the combobox above</p>
+            <p className="registry-placeholder__title">Select a record to edit</p>
+            <p className="registry-placeholder__hint">Or search for a record using the combobox above</p>
           </div>
         </div>
       )}
