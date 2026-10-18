@@ -87,3 +87,13 @@ healthy (/api/health 200). Fleet coder lock FREE; NO coder live.
   floor; Option B stays Brad's call.
 - AS-LANE2-SERVERSUITHE-89-PREEXISTING (carried).
 - AS-LANE2-WIRETEMP-FIRST (discharged: WIRE-TEMP-1 merged first per architect order).
+
+## ADDENDUM (same tick, 00:02): MINT-IDEM-1 composer EXITED code=0; SPEC PROMOTED
+Composer exited ~00:00 (draft on disk 23:55, 18431 B). Orch first-hand review CONFIRMED the
+MaterialGrounding.ts:211-223 mirroring is exact and re-ran the no-existing-mint-suite check
+(rg EMPTY). 3 OQs ruled in the spec's ORCHESTRATOR ADJUDICATION block (hit-label = existing
+record's name; the new RED-first suite IS the 'VocabHandlers mint suite' gate; mintable.schemaId
+choice approved). Canonical: .hermes/plans/2026-10-17_MINT-IDEM-1-mint-idempotency-spec.md.
+NEXT TICK REVISED: (1) dispatch coder MINT-FLOOR-UI-1 (fleet lock); (2) MINT-IDEM-1 coder
+dispatch queues behind it — both fully coder-ready, spec-canonical; (3) everything else in
+NEXT TICK unchanged. No composer live; no coder live; lock FREE.
