@@ -47,6 +47,13 @@ export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRe
   const [options, setOptions] = useState<Option[] | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // D3 (REG-3 fix1): the affordance stays consistent with the committed
+  // "label (id)" display. Until the user types, the query mirrors the
+  // initial value; once the candidate list is loaded, a bare id (or a
+  // stored label) is resolved to the label the loaded list KNOWS. No extra
+  // fetch, no invented label data — the resolution reads the same
+  // kind-scoped listing the picker already loads.
+  const typedRef = useRef(false);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -57,16 +64,18 @@ export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRe
       .listRecordsByKind(refKind, 200)
       .then((r) => {
         if (cancelled) return;
-        setOptions(
-          r.records.map((rec) => ({
-            recordId: rec.recordId,
-            label: labelOf(rec.payload as Record<string, unknown>, rec.recordId),
-          })),
-        );
+        const loaded = r.records.map((rec) => ({
+          recordId: rec.recordId,
+          label: labelOf(rec.payload as Record<string, unknown>, rec.recordId),
+        }));
+        setOptions(loaded);
+        if (typedRef.current) return;
+        const match = loaded.find((o) => o.recordId === value || o.label === value);
+        if (match) setQuery(match.label);
       })
       .catch(() => { if (!cancelled) setOptions([]); });
     return () => { cancelled = true; };
-  }, [refKind]);
+  }, [refKind, value]);
 
   const filtered = useMemo(() => {
     if (!options) return [];
@@ -96,7 +105,7 @@ export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRe
         ref={inputRef}
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => { typedRef.current = true; setQuery(e.target.value); }}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
         className="taptab-inline-input"

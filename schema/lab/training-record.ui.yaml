@@ -51,11 +51,11 @@ form:
       - value: "in_progress"
         label: "In Progress"
     - path: "$.completedAt"
-      widget: "date"
+      widget: "datetime"
       label: "Completed At"
       required: true
     - path: "$.expiresAt"
-      widget: "date"
+      widget: "datetime"
       label: "Expires At"
   - title: "Notes"
     fields:

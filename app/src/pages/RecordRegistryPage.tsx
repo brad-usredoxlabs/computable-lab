@@ -545,6 +545,21 @@ export default function RecordRegistryPage() {
 
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
 
+  // D2 (REG-3 fix1): the editor's mount identity is the editing SUBJECT.
+  // @tiptap/react's useEditor(options, deps=[]) NEVER rebuilds the doc when
+  // `content` changes — with empty deps the instance manager only calls
+  // editor.setOptions(), which merges options and calls view.updateState(this.state):
+  // the existing ProseMirror doc (every fieldRow's attrs.value) is REUSED.
+  // Without a subject key, flipping edit -> create keeps the OPEN record's
+  // doc, and serializeDocument(oldDoc, seedBase) re-applies its values over
+  // the seed base — the gate's "New Record shows TRR-DEMO-1" carryover.
+  // The key changes ONLY when the subject changes (a different record, or
+  // edit <-> create); editing the same record keeps the same key, so no
+  // legitimate editor state is lost to a blanket remount.
+  const editorSubjectKey = selectedRecord
+    ? `${editorMode}:${selectedRecord.recordId || String((selectedRecord.payload as { id?: unknown }).id ?? '')}`
+    : 'none';
+
   // QMS7-6 (AC-5): the archived-browsing filter is applied AT RENDER TIME over
   // whatever `records` state holds (bait 6: no refetch on toggle, the
   // refreshRecords seq-token is untouched). Terminal rows are hidden unless
@@ -760,6 +775,7 @@ export default function RecordRegistryPage() {
             )}
             {hasProjection ? (
               <ProjectionTapTabEditor
+                key={editorSubjectKey}
                 ref={taptabRef}
                 blocks={projection.blocks}
                 slots={projection.slots}
