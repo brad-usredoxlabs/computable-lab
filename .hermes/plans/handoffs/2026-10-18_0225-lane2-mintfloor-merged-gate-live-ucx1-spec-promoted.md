@@ -50,7 +50,15 @@ YAML). Fleet coder lock HELD by LANE-1's live REG-3 coder — lane 2 dispatched 
 ## Workers live at handoff
 - cl-browser-reviewer MINT-FLOOR-UI-1 gate tier-1: bash 1526218 (log above).
 - cl-spec-composer UCX-2: bash 1409372 (log above).
-- (lane-1 owns the fleet coder lock; nothing of lane 2's on it.)
+- cl-coder MINT-IDEM-1: DISPATCHED ~02:32 THIS TICK (appended after write of this handoff):
+  fleet lock probed FREE first (lane-1 REG-3 exited). Wrapper bash 1567902 (Hermes session
+  proc_40d4a1a620ea), lock pid-file 1567962 -> script bash 1567965, hermes 1568956. Log
+  lanes/2/logs/coder-MINTIDEM1-l2t0110.log (buffered; worktree diff is the live signal),
+  worktree wt/MINT-IDEM-1-lane2-l2t0015 @ base e68a6271, report
+  .hermes/plans/MINT-IDEM-1-report.wip-l2t0015.md (the prompt's pinned path), marker
+  'MINT-IDEM-1 DONE <sha>'. Expected duration 45-75 min (smaller than MINT-FLOOR: single
+  server handler + new suite). Due-check ~03:20; 2x ~03:50; 3x ~04:45 (rule 7b).
+  Task-list status set in-progress under the queue lock at claim.
 
 ## NEXT TICK (priority order)
 1. MINT-FLOOR-UI-1 GATE: read receipts/MINT-FLOOR-UI-1/<ts>/REPORT.md. accept -> promote
