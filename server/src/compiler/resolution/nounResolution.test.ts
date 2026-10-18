@@ -646,3 +646,57 @@ actions:
     expect(outcome.clarifications[0]!.reason).toBe('action-location-unreliable');
   });
 });
+
+// ---------------------------------------------------------------------------
+// MINT-FLOOR-UI-1 — the mint floor is offered EXACTLY ONCE per noun on the
+// wire. The two spine-gathering strategies (symbolic_label +
+// ontology_resolution, strategies.ts:101-106/:111-116) each append the spine's
+// per-call mint (ResolveSpine.ts:218), and the engine's per-strategy
+// dedupeByCurie (:43-51) explicitly skips no-curie mint candidates — so N
+// identical mint copies accumulate into the unknown-noun clarification. The
+// blessed goldens bake the duplication in (2 identical mint candidates each).
+// RED at baseline: the mint-shaped candidates number 2. Post-fix: exactly 1,
+// survivor byte-unchanged, near-miss evidence leg untouched.
+// ---------------------------------------------------------------------------
+
+describe('noun-resolution.mint-floor-dedup (MINT-FLOOR-UI-1)', () => {
+  it('the unknown-noun clarification offers the tier-5 mint affordance EXACTLY once per noun; survivor unchanged; near-miss evidence untouched', async () => {
+    const vocab = shippedVocab();
+    const contract = vocab.argContracts('transfer').find((a) => a.name === 'source')!;
+    // REAL spine, fake providers: nothing matches 'mystery flask' => the
+    // unknown-noun arm offers the mint. The label PASSES the nounShape bar
+    // (the same shape the blessed unknown-local-term golden replays).
+    const { spine, tracker } = spineWith(hits(), hits());
+    const deps = depsFor({ spine, tracker, vocab });
+    deps.termsForSuggestions = async () => [
+      { id: 'term-mystery-flask-plus', preferredLabel: 'mystery flask+', aliases: [] },
+    ];
+
+    const outcome = await resolveNoun(
+      request({ verb: 'transfer', argument: 'source', label: 'mystery flask', declared: contract }),
+      vocab,
+      deps,
+    );
+
+    expect(outcome.bindings).toEqual([]);
+    expect(outcome.clarifications).toHaveLength(1);
+    const clarification = outcome.clarifications[0]!;
+    expect(clarification.reason).toBe('unknown-noun');
+
+    const candidates = clarification.candidates ?? [];
+    const mints = candidates.filter((c) => c.label.startsWith('Create local term'));
+    // AC1: EXACTLY ONE mint-shaped candidate (RED at baseline: 2 — the
+    // symbolic_label spine call and the ontology_resolution spine call each
+    // contribute an identical copy).
+    expect(mints).toHaveLength(1);
+    // The survivor is byte-unchanged: same label shape, same 0.05 confidence.
+    expect(mints[0]).toEqual({ label: 'Create local term “mystery flask”', confidence: 0.05 });
+
+    // The dedup collapses ONLY identical tier-5 mint copies: the near-miss
+    // suggestions leg rides the clarification untouched.
+    const suggestion = candidates.find((c) => c.label === 'mystery flask+');
+    expect(suggestion).toBeDefined();
+    expect(suggestion!.confidence).toBe(0.9);
+    expect(candidates.filter((c) => !c.label.startsWith('Create local term'))).toHaveLength(1);
+  });
+});
