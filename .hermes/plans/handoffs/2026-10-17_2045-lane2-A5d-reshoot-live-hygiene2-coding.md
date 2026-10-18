@@ -119,3 +119,16 @@ merged). Stack :3093/:5193 healthy, profile qwen3.8-thunderbeast ACTIVE (verifie
   spec composition only): the mint-floor OQ stays a Brad domain-policy call;
   composing MINT-FLOOR-UI-1 does NOT presume Option B — the picker de-dup ships
   under the status-quo floor. No product-behavior change is assumed.
+
+## ADDENDUM at 21:05 EDT (same tick, budget expiry)
+Gate r1 EXITED: VERDICT: fix (honest, real receipts, no fabricated LPR). Per the
+decision's own Q2.2 fail path the spine non-convergence returned to the architect:
+new decision in flight (pid 543783, watched artifact
+decisions/W28-A5d-reshoot-mint-idempotency-decision.md; prompt amended to carry
+the materialRoles addendum — the barring noun equals the fixture's own declared
+materialRole). Orch confirmed mint-repeat-422 first-hand (probe label
+orch-idem-probe-l2t1935). Live workers at exit: cl-coder HYGIENE-2 pid 497864
+(fleet lock HELD), architect pid 543783. NEXT TICK: (1) architect decision ->
+product task routing per Q3/Q4; (2) HYGIENE-2 merge track (advc first) on
+'HYGIENE2 DONE'; (3) A5d r2 only after the ruled fix lands. Task-list blocks
+carry the same state; see task-list W2-8-A5g note 'GATE r1 FIX -> ARCHITECT'.
