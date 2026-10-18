@@ -170,11 +170,31 @@ export function TabUrlSync() {
   }, [eligible, desired, location.pathname, location.search, navigate])
 
   if (diagnostic === null) return null
+  // UCX2-D1 (orch adjudication l2t1330): PLACEMENT ONLY. This component is a
+  // bare sibling before <Routes> (App.tsx), so the banner lands in the body
+  // flow — but the shell (.cl-app, AppShell.css) is position:fixed inset:0 and
+  // its workspace header (GlobalNavbar + tab strip) paints over that strip:
+  // the banner was DOM-present at rect [16,8,635,21] yet invisible to the
+  // user (elementFromPoint at its center returned .global-navbar__brand-text).
+  // Fix: take the banner out of the body flow — position:fixed, top offset
+  // composed from the workspace header's own row tokens (navbar height + tab
+  // strip height, with literal fallbacks because the layout tokens are scoped
+  // to `.cl-app` and this element sits OUTSIDE the shell), full viewport
+  // width, z-index above the content layer (topbar__surface chip: 5) and
+  // numerically below the navbar menu (GlobalNavbar.css: 40). Geometrically
+  // it never overlaps the navbar: the offset lands it directly below the
+  // header. Copy, dismissal semantics, the ownership latch, and both sync
+  // effects are untouched.
   return (
     <div
       role="status"
       data-testid="ws-param-diagnostic"
       style={{
+        position: 'fixed',
+        top: 'calc(var(--cl-globalnav-height, var(--cl-topbar-height, 40px)) + var(--cl-tabstrip-height, 30px))',
+        left: 0,
+        right: 0,
+        zIndex: 30,
         padding: '0.5rem 1rem',
         background: 'var(--cl-color-warning-bg, #fff4ce)',
         color: 'var(--cl-color-text, #1c1c1c)',
