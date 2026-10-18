@@ -162,13 +162,25 @@ function comparable(payload: Record<string, unknown> | undefined) {
  * a local term" prompt clause, and loses its `Create local term` candidates
  * (the engine withholds the mint candidate on a shape-refused label). Returns
  * the gated copy + the labels it flipped (the disclosed re-pin delta).
+ *
+ * MINT-FLOOR-UI-1 (orch OQ3: the canned 2x-mint shapes in app/e2e/
+ * deck-ghost-shorthand.spec.ts STAY as regression coverage): the shipped engine
+ * now collapses IDENTICAL mint candidates per noun (resolutionEngine
+ * `dedupeMintsByLabel`, keyed on the mint label). The honesty pin keeps its
+ * contract — canned stub === real pipeline output — by applying the SAME
+ * shipped rules to the extracted stub: the noun-shape gate AND the keyed mint
+ * collapse. Disclosed delta: the mintable 'plate' card's duplicate mint copy
+ * collapses 2 -> 1; nothing else moves. The canned app/e2e stub itself is
+ * byte-unchanged.
  */
 function applyMintGate(stub: Record<string, unknown>): {
   stub: Record<string, unknown>;
   flipped: Array<{ label: string; reason: string }>;
+  collapsedMintCopies: string[];
 } {
   const shape = loadNounShape();
   const flipped: Array<{ label: string; reason: string }> = [];
+  const collapsedMintCopies: string[] = [];
   const gateCard = (card: Record<string, unknown> | undefined): void => {
     if (!card) return;
     const fact = card.unresolvedFact as Record<string, unknown> | undefined;
@@ -184,10 +196,35 @@ function applyMintGate(stub: Record<string, unknown>): {
       else fact.candidates = kept;
     }
   };
+  // MINT-FLOOR-UI-1: mirror the shipped keyed mint collapse on cards that KEEP
+  // their mint affordance — identical `Create local term “x”` candidates collapse
+  // to one per card (same rule, same key: the mint label).
+  const collapseMintDuplicates = (card: Record<string, unknown> | undefined): void => {
+    if (!card) return;
+    const fact = card.unresolvedFact as Record<string, unknown> | undefined;
+    if (fact?.candidates === undefined) return;
+    const candidates = fact.candidates as Array<Record<string, unknown>>;
+    const seen = new Set<string>();
+    const kept = candidates.filter((c) => {
+      const mintLabel = String(c.label ?? '');
+      if (!mintLabel.startsWith('Create local term')) return true;
+      if (seen.has(mintLabel)) return false;
+      seen.add(mintLabel);
+      return true;
+    });
+    if (kept.length !== candidates.length) {
+      fact.candidates = kept;
+      collapsedMintCopies.push(String(fact.label ?? card.query ?? ''));
+    }
+  };
   const copy = structuredClone(stub);
-  for (const card of (copy.clarificationRequests ?? []) as Array<Record<string, unknown>>) gateCard(card);
-  gateCard(copy.clarification as Record<string, unknown> | undefined);
-  return { stub: copy, flipped };
+  const cards = [
+    ...((copy.clarificationRequests ?? []) as Array<Record<string, unknown>>),
+    copy.clarification as Record<string, unknown> | undefined,
+  ];
+  for (const card of cards) gateCard(card);
+  for (const card of cards) collapseMintDuplicates(card);
+  return { stub: copy, flipped, collapsedMintCopies };
 }
 
 describe('fix2/N1: the e2e GHOST stub must equal the real pipeline output for its deck state', () => {
@@ -242,6 +279,10 @@ describe('fix2/N1: the e2e CANONICAL stub must equal the real needs-clarificatio
       '50:50 Trypsin-EDTA/DMEM',
       '50:50 Trypsin-EDTA/DMEM',
     ]);
+    // MINT-FLOOR-UI-1 disclosed re-pin delta: the mintable 'plate' card's
+    // DUPLICATE mint copy collapses 2 -> 1 (the shipped keyed mint dedup).
+    // Nothing else moved.
+    expect(gated.collapsedMintCopies).toEqual(['plate']);
     expect(comparable(gated.stub)).toEqual(comparable(real as unknown as Record<string, unknown>));
   });
 
