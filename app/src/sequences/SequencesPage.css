@@ -46,3 +46,11 @@
 .sequence-search__canonical h3 { margin: 0 0 .4rem; font-size: 1rem; }
 .sequence-search__canonical p { margin: 0 0 .4rem; overflow-wrap: anywhere; }
 .sequence-search__result { padding: .4rem 0; border-bottom: 1px solid var(--cl-border, #d0d7de); overflow-wrap: anywhere; }
+
+/* UCX-1 — Sequences Library multi-select toolbar + split rows */
+.sequence-selection-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem; margin: .6rem 0; border: 1px solid var(--cl-border, #d0d7de); border-radius: .4rem; background: var(--cl-bg-elev, #f6f8fa); }
+.sequence-selection-toolbar__name { flex: 1 1 10rem; min-width: 8rem; margin: 0; }
+.sequence-selection-toolbar [data-testid=sequence-selection-count] { font-size: .85rem; color: var(--cl-text-dim, #555); }
+.sequence-library__row { display: flex; align-items: flex-start; gap: .5rem; margin: .4rem 0; }
+.sequence-library__row > input[type=checkbox] { margin-top: .55rem; flex: 0 0 auto; }
+.sequence-library__row > button { flex: 1 1 auto; min-width: 0; }
