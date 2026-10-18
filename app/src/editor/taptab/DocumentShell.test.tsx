@@ -8,7 +8,7 @@
  *  - narrow-width render does not explode
  */
 
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { DocumentShell, DocumentShellHeader, DocumentShellRail } from './DocumentShell'
 
@@ -480,5 +480,129 @@ describe('DocumentShell resizable rail', () => {
     expect(document.body.classList.contains('cl-rail-dragging')).toBe(true)
     fireEvent(document, new PointerEvent('pointerup', { clientX: 650 }))
     expect(document.body.classList.contains('cl-rail-dragging')).toBe(false)
+  })
+
+  it('pointerup with NO movement does not persist a pointer-derived width (O1)', () => {
+    // A click on the splitter is not a resize. The gate observed rendered 320 /
+    // stored 347: a down+up at the same point persisted rect.right - clientX.
+    stubRectWidth(1000)
+    render(
+      <DocumentShell topBar={<DocumentShellHeader title="T" />} rail={<div>rail</div>} railResizable>
+        <div>content</div>
+      </DocumentShell>,
+    )
+    const body = document.querySelector('.document-shell__body') as HTMLElement
+    fireEvent.pointerDown(screen.getByRole('separator'), { clientX: 653 }) // 1000-653 = 347
+    fireEvent(document, new PointerEvent('pointerup', { clientX: 653 }))
+    expect(localStorage.getItem('cl-registry-rail-width')).toBeNull()
+    expect(body.style.getPropertyValue('--shell-rail-width')).toBe('')
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/*  DocumentShell — settle-aware restore clamp (REG-2 FIX1 / D1)      */
+/* ------------------------------------------------------------------ */
+
+describe('DocumentShell settle-aware rail restore', () => {
+  /* jsdom reports zero rects and ships no ResizeObserver. Stub the rect with a
+   * MUTABLE width so the body can report a PRE-SETTLE width at mount and the
+   * SETTLED width once the test fires the resize notification, and install a
+   * mock ResizeObserver the test can trigger by hand. */
+  const realGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+  const realResizeObserver = (globalThis as Record<string, unknown>).ResizeObserver
+
+  let rectWidth = 1000
+  class MockResizeObserver {
+    static instances: MockResizeObserver[] = []
+    private readonly observed: Element[] = []
+    constructor(
+      private readonly callback: (
+        entries: Array<{ target: Element }>,
+        observer: MockResizeObserver,
+      ) => void,
+    ) {
+      MockResizeObserver.instances.push(this)
+    }
+    observe(target: Element): void {
+      this.observed.push(target)
+    }
+    disconnect(): void {
+      /* nothing to release in the mock */
+    }
+    trigger(): void {
+      this.callback(this.observed.map((target) => ({ target })), this)
+    }
+  }
+
+  const stubMutableRect = () => {
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      return {
+        width: rectWidth,
+        height: 600,
+        top: 0,
+        left: 0,
+        right: rectWidth,
+        bottom: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }
+    }
+  }
+  const settleTo = (settledWidth: number) => {
+    rectWidth = settledWidth
+    const observer = MockResizeObserver.instances[MockResizeObserver.instances.length - 1]
+    observer?.trigger()
+  }
+
+  const g_setResizeObserver = (ctor: unknown) => {
+    ;(globalThis as Record<string, unknown>).ResizeObserver = ctor
+  }
+
+  beforeEach(() => {
+    MockResizeObserver.instances = []
+    g_setResizeObserver(MockResizeObserver)
+  })
+
+  afterEach(() => {
+    HTMLElement.prototype.getBoundingClientRect = realGetBoundingClientRect
+    const g = globalThis as Record<string, unknown>
+    if (realResizeObserver === undefined) delete g.ResizeObserver
+    else g.ResizeObserver = realResizeObserver
+    MockResizeObserver.instances = []
+  })
+
+  it('restores the stored width against the SETTLED body, not the pre-settle clamp', () => {
+    localStorage.setItem('cl-registry-rail-width', '250')
+    rectWidth = 574.47 // pre-settle body: 40% = 229.788 — the D1 defect bound
+    stubMutableRect()
+    render(
+      <DocumentShell topBar={<DocumentShellHeader title="T" />} rail={<div>rail</div>} railResizable>
+        <div>content</div>
+      </DocumentShell>,
+    )
+    const body = document.querySelector('.document-shell__body') as HTMLElement
+    // Sequence pin: the mount-time apply still clamps against the rect it has.
+    expect(body.style.getPropertyValue('--shell-rail-width')).toBe('229.788px')
+    // The body settles wider; the persisted 250 fits 40% of 640 = 256.
+    settleTo(640)
+    expect(body.style.getPropertyValue('--shell-rail-width')).toBe('250px')
+  })
+
+  it('re-clamps the stored width DOWN when the settled body is narrower (bound shrinks, value stays authoritative)', () => {
+    localStorage.setItem('cl-registry-rail-width', '250')
+    rectWidth = 1000
+    stubMutableRect()
+    render(
+      <DocumentShell topBar={<DocumentShellHeader title="T" />} rail={<div>rail</div>} railResizable>
+        <div>content</div>
+      </DocumentShell>,
+    )
+    const body = document.querySelector('.document-shell__body') as HTMLElement
+    expect(body.style.getPropertyValue('--shell-rail-width')).toBe('250px')
+    // Settled narrower: 40% = 200 < 220 — the max bound wins ties (documented
+    // clamp order), so the bound shrinks the applied width to 200.
+    settleTo(500)
+    expect(body.style.getPropertyValue('--shell-rail-width')).toBe('200px')
   })
 })
