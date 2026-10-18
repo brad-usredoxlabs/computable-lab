@@ -42,10 +42,21 @@ Author: orchestrator cron tick — lane 1. :3001/:5174 never touched. All git vi
    pinned sha 8c20b073, log logs/browergate-REG4-l1t0710.log, receipts will land under
    ~/.hermes/cl/receipts/REG-4/<UTC ts>/. Live and generating at checkpoint.
 
-8. REG-2 FIX1 CODER LIVE at checkpoint: worktree wt/REG-2-lane1-l1t0400 already shows
-   RED commit 9b586629 + fix commit d42e672c (ResizeObserver settle-clamp + no-move
-   pointerup guard) off ff-merged trunk f1adb419; state.db motion 07:09. It runs the
-   spec's vitest+tsc gates, then exits -> adv-gate auto-fires (queue-advreview-reg2fix1.sh).
+8. REG-2 FIX1 COMPLETED IN-TICK: coder EXITED 07:09 code=0 end-marker `REG2-FIX1 DONE
+   d42e672c`, lock released (fleet queue now EMPTY). Adv-gate auto-fired -> VERDICT:
+   accept, C1-C7 all PASS zero defects (reviews/reg2-fix1-advreview-l1t0635.md; two
+   non-blocking observations: sub-threshold pointermove still renders the O2 grab-offset
+   jump; mount apply provisional by design). ORCH VERIFY first-hand: DocumentShell.test
+   28/28 re-run (25 prior + 3 new pins), tsc head 23 lines zero-DocumentShell comm-empty
+   vs base (tsc-reg2fix1-head-l1t0717.txt), scope = 2 files DocumentShell.tsx/.test.tsx
+   (+171/-3). MERGED --no-ff -> trunk 34d7bf88. App-only, no restart; served module
+   ResizeObserver grep x2. RE-GATE DISPATCHED tier-2 openrouter 07:20 (cloud — tier-1
+   computable slot occupied by the live REG-4 gate), pid 2334785, pinned 34d7bf88, log
+   logs/browergate-REG2-regate-l1t0720-tier2.log, AS-179 W1 verbatim + W6 D1-closure +
+   W6b O1 guard + W8 pinned structural. Recorded AS-ORCH-L1-182 (merge-before-re-gate).
+   taptab dir shows 6 pre-existing failures (documentMapper/RefCombobox/ChipCombobox
+   debt, identical set at REG-4's base measurement) — NOT REG-2's, untouched by both
+   fix diffs; comm-proved out of scope.
 
 ## Queue state after this tick
 
@@ -54,14 +65,13 @@ Author: orchestrator cron tick — lane 1. :3001/:5174 never touched. All git vi
   - REG-4 — MERGED 8c20b073; browser gate LIVE tier-1 (pid 2304361). accept -> mark DONE
     + close AS-ORCH-L1-181. fix -> defect list to a fix run on wt/REG-4-lane1-l1t514
     (fleet FIFO — queue is currently occupied by fix1). Gate death x2 -> ladder tier-2.
-  - REG-2 — FIX1 coding on the fleet lock (pid 2254963, since 06:43; expected ~45-60 min,
-    2x check ~08:25, 3x ~09:15 per SOUL 7b). Flow after exit: adv-gate auto-fire ->
-    orch verify (settle-clamp test re-run, DocumentShell 25/25 + new pins, tsc comm vs
-    same 23-file base, diff scope DocumentShell.tsx/.test.tsx only) -> merge -> re-gate
-    tier-2 with prompts/browergate-REG2-regate-l1t0645-tier2.txt (PIN_SHA = merge sha;
-    pre-flight greps ResizeObserver in the served module). NO restart expected (app-only).
-- Fleet coder lock at tick end: held by REG-2 fix1 (2145477 flock wrapper + 2254963
-  hermes). Queue depth 0 after it.
+  - REG-2 — FIX1 MERGED 34d7bf88; RE-GATE LIVE tier-2 cloud (pid 2334785). accept ->
+    mark DONE + close AS-ORCH-L1-180 + AS-ORCH-L1-182. fix -> defect list to a fix2 run
+    on wt/REG-2-lane1-l1t0400 (fleet FIFO; this is cycle 2 — after two failed cycles
+    route to architect per SOUL 6). Gate death x2 -> the harness is the suspect, escalate
+    per SOUL 6b/6c.
+- Fleet coder lock at tick end: FREE (fix1 exited 07:09, queue empty). Next tick may
+  dispatch a coder immediately if anything needs one.
 
 ## NEXT TICK CHECKLIST
 
@@ -86,6 +96,8 @@ Author: orchestrator cron tick — lane 1. :3001/:5174 never touched. All git vi
 
 - AS-ORCH-L1-181 (NEW, evidence-debt TRUE, OPEN): REG-4 merge-before-gate at 8c20b073 —
   full obligation text in assumptions.md 20261018T0715.
+- AS-ORCH-L1-182 (NEW, evidence-debt TRUE, OPEN): REG-2 FIX1 merge-before-re-gate at
+  34d7bf88 — closes on re-gate accept (assumptions.md 20261018T0720).
 - AS-ORCH-L1-180 stays open (REG-2 merge-before-gate, closes on fix1 re-gate accept).
 - AS-ORCH-L1-179 stays binding (amended W1 criterion for the REG-2 re-gate, verbatim in
   the regate prompt).
@@ -94,7 +106,7 @@ Author: orchestrator cron tick — lane 1. :3001/:5174 never touched. All git vi
 ## evidence-debt / carried
 
 OPEN: AS-ORCH-L1-042; 082; 087 PARTIAL; 088; 089; 096; 097; 099; 101; 119 (+post-QMS76 ext);
-137 residual; 154 (interpretive only); 178; 180; 181 (NEW).
+137 residual; 154 (interpretive only); 178; 180; 181 (NEW); 182 (NEW).
 CLOSED (prior ticks): 173, 174, 176.
 NOTES (future-wave candidates, NOT tasks): NOTE-N4 sibling date-vs-date-time widget kinds;
 N2 --cl-text-faint 2.85:1; N3 styling-guard regex breadth; SignOffReceipt latent
