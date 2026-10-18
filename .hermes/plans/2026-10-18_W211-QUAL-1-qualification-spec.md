@@ -569,3 +569,31 @@ No repo files change, so the repo suites are unchanged-baseline checks:
   history predates both profiles' current configs. Recommendation: orch
   sanctions explicitly at promotion; worker captures whatever is live and
   STOPs on mismatch with the sanctioned identity.
+
+## ORCHESTRATOR RULINGS — l2t1650 (2026-10-18T17:05 EDT) on the RETRY-draft OQs
+(retry l2t1550 finished 16:14, exit 0; its Qs 1-3 below, ruled against the
+canonical l2t1510 text. Executor follows the spec WITH these rulings appended.)
+
+- RETRY-Q1 (PROMPT-B's protocolText not authored yet — MACH-1 in flight):
+  RULING = SEQUENCING, not a spec gap. The 3-prompt set is PINNED AT DISPATCH,
+  not now: the orchestrator names the exact frozen protocolText files (MACH-1
+  merged fixtures under app/e2e/fixtures/w211-golden/, sha-pinned) when it hands
+  the executor its prompt. Until MACH-1 merges, QUAL-1 stays non-dispatchable
+  (already the pre-run gate). The executor MUST NOT author or paraphrase prompt
+  text; it copies a named, sha-pinned file. This preserves pre-registration.
+- RETRY-Q2 (score of runs that converge on clarifications but die PRE-DECK on
+  a non-categorical hedge): RULING = ADOPT the harsher NOT-COMPLETE for the
+  PRIMARY metric (completion-after-legitimate-answers), AND require the report's
+  secondary section to carry a named bucket "converged-but-blocked-pre-deck
+  (non-categorical)" with per-draw receipts and the blocking hedge quoted
+  verbatim. Rationale: the primary metric stays the pre-declared honest
+  definition (a draw that never reached the deck did not complete); the named
+  bucket gives Brad the p_min-relevant shape without moving the goalposts
+  mid-run. Any reproducible CATEGORICAL blocker (erased answer, fabricated
+  fact, unanswerable question) stays a defect ticket regardless of bucket,
+  per the task block.
+- RETRY-Q3 (thunderbeast build-hash not observable from the lane): ACCEPTED as
+  the declared pin-granularity limit — the worker pins endpoint + model id +
+  /v1/models response + activeProfile verbatim and states the build-hash gap in
+  the report's identity section. No fabrication. If Brad later supplies a host-
+  side build hash, requalification re-pins; not a worker task.
