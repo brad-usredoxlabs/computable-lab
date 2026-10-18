@@ -5,8 +5,10 @@
  * Origin: ARCHITECT DECISION W28-A5h (Q2 TASK ANSWER-SURFACE-1). A fact whose
  * actionLocation.argument === 'labware' is labware-semantic: its answer surface
  * must be the LABWARE menu ('/l' — ClarificationPicker routes '/l' to
- * resolveLabware and, because canMint is material-only, honestly shows NO mint
- * floor). Every other (reason, argument) combination keeps the existing
+ * resolveLabware, and because the mint floor row exists only in resolveMaterial
+ * (resolvers.ts:67-92), a '/l' card has NO mint floor — its zero-hit copy says
+ * plain 'No matches', never "keep typing to mint", FIX1 D1). Every other
+ * (reason, argument) combination keeps the existing
  * CLARIFICATION_MENU_BY_REASON value byte-identically — the (reason,'*') row
  * is the single fallback, so every current card is unchanged.
  *

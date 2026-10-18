@@ -37,9 +37,11 @@ import type {
  * SPINE-1 frozen unresolved shape already carries actionLocation on the wire,
  * workflow/scientist-intent.schema.yaml:220-244) are answered by PICKING the
  * '/l' menu (ClarificationPicker routes '/l' to resolveLabware), NEVER by
- * minting: '/vocab/mint' stays MATERIAL-ONLY (domain posture reaffirmed;
- * ClarificationPicker canMint is material-only, so a '/l' card honestly shows
- * no mint floor). No labware minting is added and no schema field is added.
+ * minting: '/vocab/mint' stays MATERIAL-ONLY (domain posture reaffirmed; the
+ * mint floor row is emitted by resolveMaterial alone — resolvers.ts:67-92 —
+ * and resolveLabware emits none, so a '/l' card has no mint floor and its
+ * empty-state copy says plain 'No matches', FIX1 D1). No labware minting is
+ * added and no schema field is added.
  */
 export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificationMenuProvider>> = {
   'unknown-noun': '/m',

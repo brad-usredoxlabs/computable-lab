@@ -259,7 +259,14 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
       : resolver === resolveEquipment
         ? 'Search equipment…'
         : 'Search materials or mint a local term…')
-  const canMint = !request.materialLayer || request.materialLayer === 'material'
+  // Minting is only ever offered by the MATERIAL resolver: the `mint:<q>` floor
+  // row (resolvers.ts:67-92) is emitted inside resolveMaterial and nowhere else
+  // (resolveLabware/resolveEquipment emit none). So the copy must key on the
+  // resolver, not just the layer — otherwise a '/l' or '/e' card with no hits
+  // tells the scientist to "keep typing to mint" on a card with no mint floor
+  // (advc-ANSWERSURFACE1-c1 D1: dead-end affordance copy).
+  const canMint = resolver === resolveMaterial
+    && (!request.materialLayer || request.materialLayer === 'material')
 
   return (
     <div className="message-log__clarification-picker">
