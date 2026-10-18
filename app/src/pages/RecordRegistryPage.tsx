@@ -6,6 +6,7 @@ import { serializeDocument } from '../editor/taptab/recordSerializer';
 import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
+import { RecordProvenanceCard } from '../components/registry/RecordProvenanceCard';
 import { DocumentControlBar } from '../components/registry/DocumentControlBar';
 import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
 import { deriveSchemaNode } from '../browser/SchemaTree';
@@ -61,10 +62,22 @@ function seedIdFromDeclaredPattern(schema: JsonSchema | undefined): string | nul
   return `${anchor[1]}-NEW-${suffix}`;
 }
 
+interface RecordMetaLike {
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  contentSha?: string;
+  gitCommit?: string;
+  commitSha?: string;
+  path?: string;
+}
+
 interface RecordData {
   recordId: string;
   schemaId: string;
   payload: Record<string, unknown>;
+  /** Envelope metadata from the repo (provenance: who/when/content hash). */
+  meta?: RecordMetaLike;
 }
 
 export default function RecordRegistryPage() {
@@ -285,11 +298,16 @@ export default function RecordRegistryPage() {
     }
   }, [selectedRecordId]);
 
-  const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
+  const handleSelectRecord = (record: {
+    recordId: string;
+    payload: Record<string, unknown>;
+    meta?: RecordMetaLike;
+  }) => {
     const recordData: RecordData = {
       recordId: record.recordId,
       schemaId: (record.payload as { schemaId?: string }).schemaId || '',
       payload: record.payload,
+      ...(record.meta ? { meta: record.meta } : {}),
     };
     setSelectedRecord(recordData);
     setEditorMode('edit');
@@ -522,6 +540,7 @@ export default function RecordRegistryPage() {
         recordId: fresh.recordId,
         schemaId: fresh.schemaId,
         payload: fresh.payload,
+        ...(fresh.meta ? { meta: fresh.meta } : {}),
       });
     } catch {
       // The list refresh below still reflects what the server has.
@@ -649,7 +668,11 @@ export default function RecordRegistryPage() {
                 // handleCreateRecord).
                 handleCreateRecord(record.schemaId, record.payload);
               } else {
-                handleSelectRecord({ recordId: record.recordId, payload: record.payload });
+                handleSelectRecord({
+                  recordId: record.recordId,
+                  payload: record.payload,
+                  ...(record.meta ? { meta: record.meta } : {}),
+                });
               }
             }}
           />
@@ -672,7 +695,13 @@ export default function RecordRegistryPage() {
                 return (
                   <div
                     key={record.recordId}
-                    onClick={() => handleSelectRecord({ recordId: record.recordId, payload: record.payload })}
+                    onClick={() =>
+                      handleSelectRecord({
+                        recordId: record.recordId,
+                        payload: record.payload,
+                        ...(record.meta ? { meta: record.meta } : {}),
+                      })
+                    }
                     className={`registry-row${isSelected ? ' registry-row--selected' : ''}`}
                   >
                     <div className="registry-row__title">{displayName}</div>
@@ -739,14 +768,23 @@ export default function RecordRegistryPage() {
             />
           }
           rail={
-            selectedRecord.recordId && editorMode !== 'create' ? (
+            selectedRecord ? (
               <div className="registry-rail">
-                <RelatedRecordsCard
+                {/* Provenance first: who/when/content hash. A create draft has
+                    no record id, so the card renders nothing on its own. */}
+                <RecordProvenanceCard
                   recordId={selectedRecord.recordId}
-                  onNavigate={(id) => {
-                    window.open(`/records/${encodeURIComponent(id)}`, '_blank')
-                  }}
+                  {...(selectedRecord.meta ? { meta: selectedRecord.meta } : {})}
+                  payload={selectedRecord.payload}
                 />
+                {selectedRecord.recordId && editorMode !== 'create' ? (
+                  <RelatedRecordsCard
+                    recordId={selectedRecord.recordId}
+                    onNavigate={(id) => {
+                      window.open(`/records/${encodeURIComponent(id)}`, '_blank')
+                    }}
+                  />
+                ) : null}
               </div>
             ) : undefined
           }
