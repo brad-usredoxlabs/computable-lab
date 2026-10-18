@@ -146,7 +146,9 @@ describe('answer-bind-1.answered-slot-clears-ambiguity (handler leg)', () => {
       // A bar may only come from a DIFFERENT fact — never the answered slot.
       expect((payload.clarifications ?? []).length).toBeGreaterThan(0);
     } else {
-      expect(call.status).toBe(200);
+      // The handler's success path sends WITHOUT an explicit status (fastify
+      // default 200; the mock records undefined for the default).
+      expect(call.status ?? 200).toBe(200);
       expect(payload.outcome === 'complete' || payload.outcome === 'gap').toBe(true);
     }
   });

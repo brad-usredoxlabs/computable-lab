@@ -51,6 +51,7 @@ import type { AppContext } from '../../server.js';
 import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 import { ScientistIntentValidationError } from '../../compiler/scientistIntent/parseScientistIntent.js';
 import type { EngineSpineLike } from '../../compiler/resolution/adapters.js';
+import type { AnsweredNounAnswer } from '../../compiler/resolution/resolveNounsPass.js';
 import type { ScientistIntent, ScientistIntentUnresolvedFact } from '../../compiler/scientistIntent/types.js';
 import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import {
@@ -199,6 +200,27 @@ function renderDeclaredRolesBlock(envelope: RecordEnvelope): string | null {
   ].join('\n');
 }
 
+/**
+ * ANSWER-BIND-1 (W28-A5h Q2, the unshipped DATA half of THREAD-ASK-1): the
+ * mention idiom ClarificationPicker's answerFromMention emits
+ * (`[[<kind>:<id>|<label>]]`) is recognized as DATA. The kind is parsed
+ * generically (the client's recordType strings — NO kind allow-list here, no
+ * domain branch); a value that is not the idiom (axis answers, plain text,
+ * label hedges) is NOT an answer candidate and keeps riding the prompt exactly
+ * as today. The composed prompt is NOT touched by this function at all — the
+ * data channel is ADDITIVE, beside it.
+ */
+const MENTION_ANSWER_PATTERN = /^\[\[([^:\]|]+):([^|\]]+)\|(.+)\]\]$/;
+
+function parseMentionAnswer(value: string): { id: string; label: string } | null {
+  const match = MENTION_ANSWER_PATTERN.exec(value.trim());
+  if (!match) return null;
+  const id = (match[2] ?? '').trim();
+  const label = (match[3] ?? '').trim();
+  if (!id || !label) return null;
+  return { id, label };
+}
+
 // ---------------------------------------------------------------------------
 // SPINE-5 response contract (exported from THIS handler file — the payload
 // type IS ScientistIntentUnresolvedFact, consumed verbatim; no second schema
@@ -318,6 +340,32 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
     return renderDeclaredRolesBlock(envelope);
   }
 
+  // ANSWER-BIND-1 (spec §Contract 2/5): validate the answers-map entries whose
+  // VALUE is the mention idiom against the STORE (store.get — the same access
+  // pattern as loadDeclaredRolesBlock; a GENUINE store fault stays loud via
+  // the existing 500 catch, a null record is an honest miss). A nonexistent id
+  // is IGNORED honestly: no binding, the fact re-bars, output byte-identical
+  // to today. The record's own title/label rides as resolvedLabel evidence
+  // (name/title/label fields, the records.ts matchable-field convention).
+  async function validateAnsweredSlots(answers: Record<string, string>): Promise<AnsweredNounAnswer[]> {
+    const out: AnsweredNounAnswer[] = [];
+    for (const [key, value] of Object.entries(answers)) {
+      if (typeof value !== 'string') continue;
+      const mention = parseMentionAnswer(value);
+      if (!mention) continue; // axis answers / plain text: prompt-echo only, as today
+      const envelope = await store.get(mention.id);
+      if (!envelope) continue; // nonexistent id: honestly ignored
+      const payload = typeof envelope.payload === 'object' && envelope.payload !== null && !Array.isArray(envelope.payload)
+        ? envelope.payload as Record<string, unknown>
+        : {};
+      const recordLabel = ['name', 'title', 'label']
+        .map((f) => (typeof payload[f] === 'string' ? (payload[f] as string).trim() : ''))
+        .find((v) => v.length > 0) ?? envelope.recordId;
+      out.push({ label: key, recordId: envelope.recordId, recordLabel });
+    }
+    return out;
+  }
+
   return {
     async compileFromPrompt(
       request: FastifyRequest<{ Body: unknown }>,
@@ -377,11 +425,23 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
         let prompt = composeAnsweredPrompt(protocolText, answers);
         const declaredRoles = await loadDeclaredRolesBlock(body?.sourceProtocolId);
         if (declaredRoles) prompt = `${prompt}\n\n${declaredRoles}`;
+        // ANSWER-BIND-1: the DATA channel beside the prompt (the prompt above
+        // is byte-unchanged). Validated idiom answers ride compileFromSmallLlm's
+        // EXISTING deps object (ScientistIntentCompileDeps.answeredSlots ->
+        // createResolveNounsPass); slot matching happens in the pass against
+        // the PARSED intent. No idiom entry / no validated id -> the key is
+        // ABSENT (conditional-spread idiom) and the compile is byte-identical
+        // to today for every other caller.
+        const answeredSlots = await validateAnsweredSlots(answers);
         emitted = await compileFromSmallLlm({
           prompt,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
-          deps: { searchLabwareByHint, spine },
+          deps: {
+            searchLabwareByHint,
+            spine,
+            ...(answeredSlots.length > 0 ? { answeredSlots } : {}),
+          },
           labInventory,
         });
       } catch (err) {
