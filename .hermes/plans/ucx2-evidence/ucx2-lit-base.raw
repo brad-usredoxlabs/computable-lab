@@ -1,0 +1,33 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2193210) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2193210) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/literature/pdfProtocolBuilder.card.test.tsx > PdfProtocolBuilder proposal card (PB-CH-6 consumer mount) > a workstate_proposal frame renders the card in the right panel and accept rides the shared flow
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ❯ src/literature/LiteraturePage.test.tsx  (0 test)
+ ✓ src/literature/pdfProtocolBuilder.card.test.tsx  (2 tests) 209ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/literature/LiteraturePage.test.tsx [ src/literature/LiteraturePage.test.tsx ]
+Error: Failed to resolve import "virtual:cla-ai-overlay" from "src/extensions/loadOverlay.ts". Does the file exist?
+ ❯ TransformPluginContext._formatError ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41
+ ❯ TransformPluginContext.error ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16
+ ❯ normalizeUrl ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23
+ ❯ async file:/mnt/vast/home/brad/git/computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+ ❯ TransformPluginContext.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7
+ ❯ PluginContainer.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18
+ ❯ loadAndTransform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 passed (2)
+   Start at  06:35:02
+   Duration  1.49s (transform 487ms, setup 96ms, collect 316ms, tests 209ms, environment 761ms, prepare 154ms)
+
