@@ -56,6 +56,13 @@ export function DocumentShell({
   railResizable = false,
 }: DocumentShellProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
+  /* The authoritative persisted rail width (restore / drag-persist / nudge
+   * write it). The clamp BOUND may shrink what is applied, but never the
+   * authoritative value itself (REG-2 FIX1 / D1). */
+  const railWidthRef = useRef<number | null>(null)
+  /* Mid-drag flag readable from the ResizeObserver callback without
+   * re-subscribing the observer on every dragging toggle. */
+  const draggingRef = useRef(false)
   const [dragging, setDragging] = useState(false)
 
   /* Rail width clamp: [220px, 40% of the body]. The rail is right-anchored,
@@ -76,7 +83,10 @@ export function DocumentShell({
 
   /* Restore the saved width on mount — re-clamped (W4-D1 / AS-ORCH-L1-167):
    * a width saved in a wide window must not breach 40% when restored in a
-   * narrow one. */
+   * narrow one. The stored value becomes the AUTHORITATIVE width; the mount
+   * apply is provisional against whatever rect the body reports at that
+   * instant (REG-2 FIX1 / D1: the body settles ~50ms after mount, so a
+   * one-shot mount clamp binds against a pre-settle width). */
   useEffect(() => {
     if (!railResizable) return
     let saved: string | null = null
@@ -86,16 +96,43 @@ export function DocumentShell({
     if (!Number.isFinite(parsed)) return
     const body = bodyRef.current
     if (!body) return
+    railWidthRef.current = parsed
     applyRailWidth(body, clampRailWidth(parsed, body))
+  }, [railResizable])
+
+  /* Re-clamp against the SETTLED body (REG-2 FIX1 / D1): every body resize —
+   * including the initial notification the observer fires once layout settles —
+   * re-evaluates the clamp bound against the CURRENT rect and re-applies the
+   * authoritative width. The persisted value is never mutated here; only the
+   * bound may shrink what is applied. Skipped mid-drag: there the width is
+   * pointer-driven until pointerup persists it. */
+  useEffect(() => {
+    if (!railResizable) return
+    const body = bodyRef.current
+    if (!body || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (draggingRef.current) return
+      const authoritative = railWidthRef.current
+      if (authoritative === null) return
+      applyRailWidth(body, clampRailWidth(authoritative, body))
+    })
+    observer.observe(body)
+    return () => observer.disconnect()
   }, [railResizable])
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(true)
+    draggingRef.current = true
     document.body.classList.add('cl-rail-dragging')
+    const startX = e.clientX
+    let moved = false
     const move = (ev: PointerEvent) => {
       const body = bodyRef.current
       if (!body) return
+      /* O1: a click on the splitter is not a resize — only a pointer that
+       * actually travelled past the ~2px threshold counts as a drag. */
+      if (Math.abs(ev.clientX - startX) > 2) moved = true
       const w = clampRailWidth(body.getBoundingClientRect().right - ev.clientX, body)
       applyRailWidth(body, w)
     }
@@ -104,9 +141,12 @@ export function DocumentShell({
       document.removeEventListener('pointerup', up)
       document.body.classList.remove('cl-rail-dragging')
       setDragging(false)
+      draggingRef.current = false
       const body = bodyRef.current
       if (!body) return
+      if (!moved) return // pointerup with no movement persists nothing (O1)
       const w = clampRailWidth(body.getBoundingClientRect().right - ev.clientX, body)
+      railWidthRef.current = w
       persistRailWidth(w)
     }
     document.addEventListener('pointermove', move)
@@ -118,9 +158,13 @@ export function DocumentShell({
   const nudgeRail = (delta: number): void => {
     const body = bodyRef.current
     if (!body) return
-    const current = parseFloat(body.style.getPropertyValue('--shell-rail-width'))
+    const stored = railWidthRef.current
+    const current = stored !== null
+      ? stored
+      : parseFloat(body.style.getPropertyValue('--shell-rail-width'))
     const base = Number.isFinite(current) ? current : 320
     const w = clampRailWidth(base + delta, body)
+    railWidthRef.current = w
     applyRailWidth(body, w)
     persistRailWidth(w)
   }
