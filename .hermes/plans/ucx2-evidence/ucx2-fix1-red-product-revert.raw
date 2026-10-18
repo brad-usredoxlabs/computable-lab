@@ -1,0 +1,174 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2518904) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/shared/shell/TabUrlSync.test.tsx > TabUrlSync state → URL (replace-only) > openTab writes the strip into the current search with replace:true
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ❯ src/shared/shell/TabUrlSync.test.tsx  (12 tests | 2 failed) 4217ms
+   ❯ src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases the URL: sync RESUMES and the banner does NOT return
+     → expected '%%nonsense%%' to be 'record:DOC-9,run:RUN-A' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"ws-param-diagnostic"[39m
+        [33mrole[39m=[32m"status"[39m
+        [33mstyle[39m=[32m"padding: 0.5rem 1rem; background: var(--cl-color-warning-bg, #fff4ce); color: var(--cl-color-text, #1c1c1c); display: flex; gap: 1rem; align-items: center;"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mMALFORMED_WS_PARAM[0m
+          [0m: [0m
+          [0mThe workspace link "%%nonsense%%" carries no tab this app can open.[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mDismiss[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+   ❯ src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases a per-entry malformed link too: adopted strip is not re-stomped
+     → expected 'record:DOC-9,notakind!' to be 'record:DOC-9,run:RUN-B' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases the URL: sync RESUMES and the banner does NOT return
+AssertionError: expected '%%nonsense%%' to be 'record:DOC-9,run:RUN-A' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"ws-param-diagnostic"[39m
+        [33mrole[39m=[32m"status"[39m
+        [33mstyle[39m=[32m"padding: 0.5rem 1rem; background: var(--cl-color-warning-bg, #fff4ce); color: var(--cl-color-text, #1c1c1c); display: flex; gap: 1rem; align-items: center;"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mMALFORMED_WS_PARAM[0m
+          [0m: [0m
+          [0mThe workspace link "%%nonsense%%" carries no tab this app can open.[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mDismiss[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected
++ Received
+
+- record:DOC-9,run:RUN-A
++ %%nonsense%%
+
+ ❯ __vi_import_1__.waitFor.timeout src/shared/shell/TabUrlSync.test.tsx:193:46
+    191|     // The strip write must land: the corrected search replaces the ma…
+    192|     await waitFor(
+    193|       () => expect(searchParams().get('ws')).toBe('record:DOC-9,run:RU…
+       |                                              ^
+    194|       { timeout: 2000 },
+    195|     )
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases a per-entry malformed link too: adopted strip is not re-stomped
+AssertionError: expected 'record:DOC-9,notakind!' to be 'record:DOC-9,run:RUN-B' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected
++ Received
+
+- record:DOC-9,run:RUN-B
++ record:DOC-9,notakind!
+
+ ❯ __vi_import_1__.waitFor.timeout src/shared/shell/TabUrlSync.test.tsx:238:46
+    236|     })
+    237|     await waitFor(
+    238|       () => expect(searchParams().get('ws')).toBe('record:DOC-9,run:RU…
+       |                                              ^
+    239|       { timeout: 2000 },
+    240|     )
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 10 passed (12)
+   Start at  08:16:00
+   Duration  7.19s (transform 164ms, setup 96ms, collect 240ms, tests 4.22s, environment 814ms, prepare 164ms)
+

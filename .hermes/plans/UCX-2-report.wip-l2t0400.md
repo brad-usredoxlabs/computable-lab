@@ -4,7 +4,10 @@ Item: UCX-2, lane 2. Coder: cl-coder (l2t0400).
 Worktree: /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400
 Branch: wt/UCX-2-lane2-l2t0400 (base 3f0f54b7, contains spec-verified base d91cdd32)
 Commits:
-- RED:   94ad9b8f1d0aed67b6e36af58d002c373cec9c11 — 7 NEW test files only (no existing test file edited)
+- RED:   94ad9b8f1d0aed67b6e36af58d002c373cec9c11 — 6 NEW test files only (no existing test file edited)
+  [CORRECTED per advc-UCX2-l2t0655 defect 3: the commit message and this report originally said
+  "7 NEW test files"; `git diff --name-status 94ad9b8f^..94ad9b8f` adds EXACTLY 6, and the RED raw
+  reports "Test Files 6 failed (6)". See UCX-2-report.fix1-l2t0705.md §DEFECT 3.]
 - CODE:  0676ed6387b9fbda338e672032b639b110fbcd87 — app-only product code
 Spec: .hermes/plans/2026-10-18_UCX-2-deep-linkable-surfaces-spec.md (read fully; all four
 ORCHESTRATOR ADJUDICATION rulings OQ1-OQ4 honored; MEASUREMENT CORRECTION honored — every
