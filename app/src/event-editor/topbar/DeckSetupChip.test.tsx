@@ -179,6 +179,23 @@ describe('DeckSetupChip', () => {
     expect(screen.getByTestId('deck-setup-switch-note').textContent).toMatch(/clears/i)
   })
 
+  it('renders the panel in a portal on document.body so no toolbar overflow can clip it', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    const panel = screen.getByTestId('deck-setup-panel')
+    // A toolbar with overflow-x:auto clips absolutely-positioned children —
+    // on a phone the panel existed but was never visible. Portal out.
+    expect(panel.parentElement).toBe(document.body)
+    expect(getComputedStyle(panel).position === 'fixed' || panel.style.position === 'fixed').toBe(true)
+  })
+
+  it('clicking INSIDE the panel does not close it (outside-click must ignore the portal)', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    fireEvent.mouseDown(screen.getByTestId('deck-setup-panel'))
+    expect(screen.getByTestId('deck-setup-panel')).toBeInTheDocument()
+  })
+
   it('closes on Escape', () => {
     setup()
     fireEvent.click(screen.getByTestId('deck-setup-trigger'))

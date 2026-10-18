@@ -24,6 +24,7 @@
  * commit.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { isDeckSetupLocked, useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest } from '../../shared/lib/platformRegistry'
 import { getAllPacks } from '../../shared/vocab/registry'
@@ -39,6 +40,13 @@ export function DeckSetupChip() {
   // "Switch deck" step inside the panel. Closing the panel re-arms the lock.
   const [switchArmed, setSwitchArmed] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  // The panel is PORTALLED to document.body and positioned `fixed`: it lives
+  // inside a toolbar that scrolls horizontally on a phone (overflow-x:auto),
+  // and an absolutely-positioned child of a scroll container is clipped — the
+  // panel existed in the DOM but was never visible.
+  const [anchor, setAnchor] = useState({ left: 8, top: 0, width: 320 })
 
   const manifest = getPlatformManifest(state.platforms, state.platformId)
   const platformLabel = manifest?.label ?? state.platformId
@@ -67,23 +75,41 @@ export function DeckSetupChip() {
     setSwitchArmed(false)
   }
 
+  const openPanel = () => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    const width = Math.min(340, window.innerWidth - 16)
+    const left = rect
+      ? Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+      : 8
+    setAnchor({ left, top: rect ? rect.bottom + 6 : 0, width })
+    setOpen(true)
+  }
+
   useEffect(() => {
     if (!open) return
     const onDocPointer = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null
       if (target && wrapRef.current?.contains(target)) return
+      // The panel is portalled OUT of wrapRef: a tap inside it is not an
+      // outside click.
+      if (target && panelRef.current?.contains(target)) return
       closePanel()
     }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closePanel()
     }
+    const onViewportChange = () => closePanel()
     document.addEventListener('mousedown', onDocPointer)
     document.addEventListener('touchstart', onDocPointer, { passive: true })
     document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
     return () => {
       document.removeEventListener('mousedown', onDocPointer)
       document.removeEventListener('touchstart', onDocPointer)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', onViewportChange)
+      window.removeEventListener('scroll', onViewportChange, true)
     }
   }, [open])
 
@@ -96,6 +122,7 @@ export function DeckSetupChip() {
         className={
           locked ? 'deck-setup__trigger deck-setup__trigger--locked' : 'deck-setup__trigger'
         }
+        ref={triggerRef}
         data-testid="deck-setup-trigger"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -104,7 +131,7 @@ export function DeckSetupChip() {
             ? `Deck setup — ${summary} (fixed for this run; open to switch)`
             : `Deck setup — ${summary}`
         }
-        onClick={() => (open ? closePanel() : setOpen(true))}
+        onClick={() => (open ? closePanel() : openPanel())}
       >
         {locked ? (
           <span className="deck-setup__lock" aria-hidden>
@@ -117,8 +144,21 @@ export function DeckSetupChip() {
         </span>
       </button>
 
-      {open ? (
-        <div className="deck-setup__panel" data-testid="deck-setup-panel" role="dialog" aria-label="Deck setup">
+      {open
+        ? createPortal(
+            <div
+              ref={panelRef}
+              className="deck-setup__panel"
+              data-testid="deck-setup-panel"
+              role="dialog"
+              aria-label="Deck setup"
+              style={{
+                position: 'fixed',
+                left: `${anchor.left}px`,
+                top: `${anchor.top}px`,
+                width: `${anchor.width}px`,
+              }}
+            >
           <div className="deck-setup__step" data-setup-step="deck">
             <span className="deck-setup__step-label">1 · Deck</span>
             <div className="deck-setup__options">
@@ -211,8 +251,10 @@ export function DeckSetupChip() {
               </p>
             </div>
           ) : null}
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
