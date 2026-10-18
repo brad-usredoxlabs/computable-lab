@@ -170,3 +170,31 @@ N2 (--cl-text-faint 2.85:1 contrast) remains a plan-level NOTE for a
 future contrast wave. ENV: :3092 boot-to-ready can exceed the script's
 60s window (~75s observed) — restart reported failure while the backend
 came up; always re-probe health before concluding a restart failed.
+
+## LATE ARRIVALS (same tick, 01:50-02:05)
+
+- REG-1 GATE ATTEMPT 3 (tier 2, OpenRouter deepseek-v4.1-flash) EXITED with a REAL scored
+  verdict and VALID receipts (~/.hermes/cl/receipts/REG-1/2026-10-18_054942/: trail.json,
+  checks.json, rail-visible shots both themes, probe-controlbar shot, report last line
+  VERDICT: fix). The named criterion PASSES in both themes with a really-rendered rail.
+  DEFECT D1: DocumentControlBar.tsx hardcoded bg-gray-50/border-gray-200/bg-gray-100 (9
+  sites; orch-verified git grep on trunk) -> near-white card + illegible buttons on dark.
+  FIX RUN QUEUED: queue-reg1-fix1.sh (runner 1515095; acquired fleet lock 01:5x behind
+  nothing — REG-3 had released), worktree wt/REG-1-lane1-l1t2305, report
+  reg1-fix1-report-l1t0155.md, end-line REG1-FIX1 DONE <sha>. Adversarial gate + orch
+  verify + merge + RE-GATE after. AS-ORCH-L1-172 recorded. Tier ladder outcome: tier 2
+  succeeded where tier 1 voided twice — record tier in future gate prompts.
+- REG-3 CODER DONE 01:52 (head 42d7f3e8; full gate story in
+  reg3-report-l1t2355.md; task block tick_reconcile_20261018T0200 has the summary).
+  ADVERSARIAL GATE LIVE (proc 1530533, cloud tier — deliberately NOT competing with the
+  fleet lock or thunderbeast): reviews/reg3-advreview-l1t0158.md.
+- FLEET LOCK: REG-1-fix1 queued/holding (check appliance2-coder.pid next tick).
+- REG-4 composer still live at budget expiry (runner 1417526, started 01:34; expected
+  ~02:20).
+- NEXT TICK PRIORITIES: (1) REG-1 fix1 report -> adv gate -> verify -> merge -> re-gate
+  (tier 2 worked; receipts dir naming flexible, evidence rules binding). (2) REG-3 adv
+  verdict -> orch verify -> merge -> RESTART STACK -> editor-draft curl -> browser gate
+  (tier 2 recommended from the start; prompt must reuse attempt-3 hardening: record-
+  selection flow + elementExists + on-disk shots). (3) REG-4 draft adjudication when the
+  composer lands. (4) REG-2 coder waits on fleet lock + REG-1 closure (serialization
+  REG-1->REG-2->REG-4).
