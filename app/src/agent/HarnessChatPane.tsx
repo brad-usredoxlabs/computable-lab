@@ -15,6 +15,7 @@
 import { useState } from 'react'
 import { useAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
+import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import { SurfaceFocusHeader } from './SurfaceFocusHeader'
 import './HarnessChatPane.css'
 
@@ -24,7 +25,10 @@ export interface HarnessChatPaneProps {
 }
 
 export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
-  const { chat } = useAiPanel()
+  // `proposalFlow` is registered by the SAME surface that owns the chat: the
+  // pane renders the one pending compile card and drives accept/reject through
+  // it. Absent flow (a surface that only chats) = no card, no dead controls.
+  const { chat, proposalFlow } = useAiPanel()
   const [prompt, setPrompt] = useState('')
 
   if (!chat) {
@@ -43,6 +47,15 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
   return (
     <div className="harness-chat-pane" data-testid="harness-chat-pane">
       <SurfaceFocusHeader />
+      {proposalFlow?.card ? (
+        <div className="harness-chat-pane__proposal" data-testid="harness-chat-proposal">
+          <WorkstateProposalCard
+            {...proposalFlow.card}
+            onAccept={() => void proposalFlow.acceptWorkstate()}
+            onReject={() => proposalFlow.rejectWorkstate()}
+          />
+        </div>
+      ) : null}
       <ChatLog
         messages={chat.messages}
         isStreaming={chat.isStreaming}

@@ -8,11 +8,13 @@
  * - Right rail adapts: Plan → AI tab; Execute → Chat tab with run conversation
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
-import { AgentChatPane } from '../agent/AgentChatPane'
+import { HarnessChatPane } from '../agent/HarnessChatPane'
+import { useSurfaceChat } from '../agent/useSurfaceChat'
+import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
@@ -94,6 +96,23 @@ export function RunWorkspacePage() {
     return () => window.removeEventListener('cl:run-renamed', onRenamed)
   }, [runId])
 
+  const aiContext = useMemo((): AiContext => ({
+    surface: 'run-workspace',
+    summary: `Run workspace: ${runId}${runTitle ? ` — ${runTitle}` : ''}`,
+    surfaceContext: {
+      runId,
+      studyId: resolvedStudyId,
+      runTitle: runTitle ?? null,
+      mode,
+      ...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {}),
+    },
+    editorMode: mode,
+  }), [runId, resolvedStudyId, runTitle, mode, resolvedEventGraphId])
+
+  // The universal chat: one call gives the run surface its chat AND the
+  // proposal flow (compile → card → accept/reject) the pane renders.
+  useSurfaceChat({ aiContext, endpoint: 'event-editor' })
+
   if (!runId) {
     return (
       <div className="run-workspace-page__error">
@@ -135,7 +154,7 @@ export function RunWorkspacePage() {
           <FocusModalsProvider>
             <RunWorkspaceShell
               navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
-              rightPane={<AgentChatPane />}
+              rightPane={<HarnessChatPane />}
               viewerToolbar={
                 <div className="run-workspace-toolbar">
                   <ModeToggle mode={mode} onChange={setMode} />

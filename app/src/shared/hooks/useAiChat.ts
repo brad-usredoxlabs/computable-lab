@@ -147,7 +147,7 @@ export type AcceptEventHandler = (event: PlateEvent) => void
  */
 export type AddLabwareFromRecordHandler = (record: Record<string, unknown>, addition?: AiLabwareAddition) => void
 
-interface UseAiChatOptions {
+export interface UseAiChatOptions {
   /** Page-level AI context — determines surface and context payload. */
   aiContext: AiContext
   /**

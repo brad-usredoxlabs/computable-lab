@@ -27,12 +27,11 @@ import { WellContextPanelV2, type SelectedWell } from './wellcontext/WellContext
 import type { SelectedTool } from './tools'
 import { VocabPackSelector } from './events/VocabPackSelector'
 import { RoleAssignmentPanel } from './semantic'
-import { useRegisterAiChat } from '../shared/context/AiPanelContext'
+import { useSurfaceChat } from '../agent/useSurfaceChat'
 import { RefPicker, type Ref } from '../shared/ref'
 import { ReadoutContextPanel } from './readouts/ReadoutContextPanel'
 import { usePlatformRegistry } from '../shared/hooks/usePlatformRegistry'
 import { useToolConstraints } from './hooks/useToolConstraints'
-import { useAiChat } from '../shared/hooks/useAiChat'
 import { useLabwareAiContext } from './hooks/useLabwareAiContext'
 import { useBiologyMode } from './hooks/useBiologyMode'
 import { useReadoutsMode } from './hooks/useReadoutsMode'
@@ -1008,7 +1007,7 @@ function LabwareEventEditorContent({
     })),
     manualPipettingMode,
   })
-  const aiChat = useAiChat({
+  const { chat: aiChat } = useSurfaceChat({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,
     onAddLabwareFromRecord: (record, addition) => {
@@ -1020,8 +1019,6 @@ function LabwareEventEditorContent({
       }
     },
   })
-  useRegisterAiChat(aiChat)
-
   const committedEventIds = useMemo(
     () => new Set(state.events.map((event) => event.eventId)),
     [state.events]

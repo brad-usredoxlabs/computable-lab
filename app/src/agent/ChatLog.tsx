@@ -105,7 +105,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
 
   return <aside className="sequences-page sequence-chat">
     <h2>AI Chat</h2>
-    <p className="sequence-hint">Describe a sequence edit, assay, analysis or tool setup. Review proposed actions before applying them.</p>
+    <p className="sequence-hint">Ask for an edit, a draft or a navigation. Review proposed actions before applying them.</p>
     <div className="sequence-chat-messages" ref={scrollerRef} onScroll={onScroll} role="log" aria-label="Conversation" aria-live="polite" tabIndex={0}>
       <div className="sequence-chat-content" ref={contentRef}>
         {messages.map((message, index) => <div key={message.id}>

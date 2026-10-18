@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AiPanelProvider, useRegisterAiChat } from '../shared/context/AiPanelContext'
 import type { UseAiChatReturn } from '../shared/hooks/useAiChat'
 import type { ChatMessage } from '../types/ai'
+import type { WorkstateProposalFlow } from '../shared/ai/useWorkstateProposalFlow'
 import { ChatFocusProvider } from './ChatFocusContext'
 import { HarnessChatPane } from './HarnessChatPane'
 
@@ -59,12 +60,58 @@ function stubChat(overrides: Partial<UseAiChatReturn> = {}): UseAiChatReturn {
 }
 
 /** Host that registers a chat into the nearest AiPanelProvider (the seam's producer). */
-function Registrant({ chat, children }: { chat: UseAiChatReturn; children: React.ReactNode }) {
-  useRegisterAiChat(chat)
+function Registrant({
+  chat,
+  flow,
+  children,
+}: {
+  chat: UseAiChatReturn
+  flow?: WorkstateProposalFlow
+  children: React.ReactNode
+}) {
+  useRegisterAiChat(chat, flow ?? null)
   return <>{children}</>
 }
 
 describe('HarnessChatPane', () => {
+  it('renders the pending compile card from the registered proposal flow', () => {
+    const chat = stubChat()
+    const accept = vi.fn()
+    const reject = vi.fn()
+    const flow = {
+      card: { phase: 'review' as const, summary: 'Add 1 mM clofibrate to A1:C3', draftId: 'DRF-1', revision: 2 },
+      proposeWorkstate: vi.fn(),
+      acceptWorkstate: async () => { accept() },
+      rejectWorkstate: reject,
+      handleAgentAction: () => undefined,
+    } satisfies WorkstateProposalFlow
+
+    render(
+      <AiPanelProvider>
+        <Registrant chat={chat} flow={flow}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+
+    expect(screen.getByTestId('harness-chat-proposal')).toBeInTheDocument()
+    expect(screen.getByTestId('workstate-card')).toHaveTextContent('Add 1 mM clofibrate to A1:C3')
+
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }))
+    expect(accept).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders no proposal card when the surface registered no flow', () => {
+    render(
+      <AiPanelProvider>
+        <Registrant chat={stubChat()}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+    expect(screen.queryByTestId('harness-chat-proposal')).toBeNull()
+  })
+
   it('renders the registered chat under the nearest AiPanelProvider', () => {
     const chat = stubChat({ messages: [message('u1', 'user', 'Add a primer'), message('a1', 'assistant', 'Drafted a proposal')] })
     render(

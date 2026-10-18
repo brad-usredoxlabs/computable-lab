@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
-import { useAiChat } from '../shared/hooks/useAiChat'
-import { useRegisterAiChat } from '../shared/context/AiPanelContext'
+import { useSurfaceChat } from '../agent/useSurfaceChat'
 import { useResultInterpretation } from './hooks/useResultInterpretation'
 import { useEvidenceAssembly } from './hooks/useEvidenceAssembly'
 import { useEditorMode } from './hooks/useEditorMode'
@@ -58,8 +57,9 @@ export function RunWorkspacePage() {
   }), [runId, activeTab, summary?.runId, summary?.title, summary?.status, workspace])
   // Phase 2: persist to /api/ai/threads/event-editor (Phase 7 subsumes this
   // route under /event-editor).
-  const aiChat = useAiChat({ aiContext, endpoint: 'event-editor' })
-  useRegisterAiChat(aiChat)
+  // Universal chat + proposal flow in ONE call: the shared pane renders the
+  // compile card (workstate / analysis / record-drafting) from it.
+  const { chat: aiChat } = useSurfaceChat({ aiContext, endpoint: 'event-editor' })
 
   const resolvedRunId = runId ?? 'RUN-UNKNOWN'
 
