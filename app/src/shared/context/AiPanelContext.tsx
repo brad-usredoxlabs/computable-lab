@@ -75,6 +75,19 @@ export function useAiPanel() {
   return { ...rest, chat: chatRef.current }
 }
 
+/**
+ * Optional form of `useAiPanel`: returns null when there is no AiPanelProvider
+ * (and therefore no registered chat) instead of throwing. Surfaces that may
+ * mount without the provider — and shell chrome that must decide whether THIS
+ * surface has a universal chat — use this.
+ */
+export function useOptionalAiPanel(): { chat: UseAiChatReturn | null } | null {
+  const ctx = useContext(AiPanelContext)
+  if (!ctx) return null
+  void ctx.chatVersion // subscribe to registration/unregistration
+  return { chat: ctx.chatRef.current }
+}
+
 export function useRegisterAiChat(chat: UseAiChatReturn) {
   const ctx = useContext(AiPanelContext)
   if (!ctx) throw new Error('useRegisterAiChat must be used within AiPanelProvider')

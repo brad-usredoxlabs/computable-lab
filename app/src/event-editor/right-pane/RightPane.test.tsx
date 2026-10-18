@@ -31,10 +31,24 @@ vi.mock('./protocol/ProtocolTabPanel', () => ({
   ProtocolTabPanel: () => <div data-testid="panel-protocol">PROTOCOL</div>,
 }))
 
+// The universal pane (harness) — what a surface with a REGISTERED chat shows.
+vi.mock('../../agent/HarnessChatPane', () => ({
+  HarnessChatPane: () => <div data-testid="panel-harness">HARNESS</div>,
+}))
+
+// Which chat the shared AI-panel slot holds. `null` models a surface that has
+// not registered one.
+const panelSlot = vi.hoisted(() => ({ chat: null as unknown }))
+vi.mock('../../shared/context/AiPanelContext', () => ({
+  useOptionalAiPanel: () => ({ chat: panelSlot.chat }),
+  useAiPanel: () => ({ chat: panelSlot.chat }),
+}))
+
 import { RightPane } from './RightPane'
 
 beforeEach(() => {
   window.localStorage.clear()
+  panelSlot.chat = null
 })
 
 afterEach(() => {
@@ -112,5 +126,22 @@ describe('RightPane', () => {
     renderRightPane('find')
     await screen.findByTestId('panel-ai')
     expect(screen.queryByTestId('panel-search')).toBeNull()
+  })
+})
+
+
+describe('RightPane — universal chat pane', () => {
+  it('falls back to the legacy AI panel when the surface registered no chat', () => {
+    panelSlot.chat = null
+    renderRightPane()
+    expect(screen.getByTestId('panel-ai')).toBeInTheDocument()
+    expect(screen.queryByTestId('panel-harness')).toBeNull()
+  })
+
+  it('renders the universal chat pane when the surface registered one', () => {
+    panelSlot.chat = { messages: [], isStreaming: false, sendPrompt: () => {}, cancelStream: () => {} }
+    renderRightPane()
+    expect(screen.getByTestId('panel-harness')).toBeInTheDocument()
+    expect(screen.queryByTestId('panel-ai')).toBeNull()
   })
 })

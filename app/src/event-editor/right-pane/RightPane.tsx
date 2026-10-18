@@ -20,6 +20,8 @@
  */
 
 import { useWorkspace } from '../workspace/WorkspaceContext'
+import { useOptionalAiPanel } from '../../shared/context/AiPanelContext'
+import { HarnessChatPane } from '../../agent/HarnessChatPane'
 import { useOptionalEventEditor } from '../EventEditorContext'
 import type { WorkspaceRightPaneMode } from '../workspace/types'
 import { AiTabPanel } from './ai/AiTabPanel'
@@ -38,6 +40,11 @@ const TABS: { mode: WorkspaceRightPaneMode; label: string }[] = [
 
 export function RightPane() {
   const ws = useWorkspace()
+  // Universal chat seam (HARNESS-SEQ-1): a surface that registered its chat
+  // through AiPanelContext gets the SAME pane the sequences/run surfaces use.
+  // Surfaces that registered nothing (registry, record host, artifacts) keep
+  // the legacy AiTabPanel, which owns its own engine.
+  const panelSlot = useOptionalAiPanel()
   const active = ws.state.rightPaneMode === 'find' ? 'ai' : ws.state.rightPaneMode
 
   // Derive runId from the active tab. Only execution tabs and deck tabs
@@ -85,13 +92,17 @@ export function RightPane() {
       </div>
       <div className="right-pane__body">
         {active === 'ai' ? (
-          <>
-            {/* Live working-focus header (three-pane harness, plan §9): "EDITING:
-                Step 3 — <concept>". Derives from the resolved focused step, never
-                an AI-authored note. */}
-            <ChatContextHeader />
-            <AiTabPanel />
-          </>
+          panelSlot?.chat ? (
+            <HarnessChatPane />
+          ) : (
+            <>
+              {/* Live working-focus header (three-pane harness, plan §9): "EDITING:
+                  Step 3 — <concept>". Derives from the resolved focused step, never
+                  an AI-authored note. */}
+              <ChatContextHeader />
+              <AiTabPanel />
+            </>
+          )
         ) : null}
         {active === 'search' ? <SearchTabPanel /> : null}
         {active === 'details' ? <DetailsTabPanel /> : null}
