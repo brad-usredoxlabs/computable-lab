@@ -67,6 +67,7 @@ import type { EngineSpineLike } from '../resolution/adapters.js';
 import {
   createResolveNounsPass,
   UNRESOLVED_ARGUMENTS_CODE,
+  type AnsweredNounAnswer,
   type ResolveNounsEngine,
   type ResolveNounsOutput,
 } from '../resolution/resolveNounsPass.js';
@@ -103,6 +104,12 @@ export interface ScientistIntentCompileDeps {
    *  policy to prove the cap is per-call DATA, not a process-cached literal;
    *  production uses the shipped config/drafting/deck-review.yaml). */
   deckReviewPolicyPath?: string | URL;
+  /** ANSWER-BIND-1 (W28-A5h Q2): the caller-validated clarification answers
+   *  (mention idiom parsed + recordId confirmed in the store by the handler).
+   *  Threaded VERBATIM into createResolveNounsPass — the pass, not this
+   *  module, decides slot matching (the intent only exists parsed). Absent:
+   *  every other caller is byte-unchanged. */
+  answeredSlots?: readonly AnsweredNounAnswer[];
 }
 
 export interface ScientistIntentCompileResult {
@@ -164,6 +171,9 @@ function buildRegistry(
     ...(normalized.resolutionGatedClarifications
       ? { resolutionGatedClarifications: normalized.resolutionGatedClarifications }
       : {}),
+    // ANSWER-BIND-1: the validated answers ride into the pass verbatim — the
+    // pass matches them against the PARSED intent's declared resolvable slots.
+    ...(deps.answeredSlots ? { answeredSlots: deps.answeredSlots } : {}),
   }));
 
   registry.register(createProtocolIntentStatePlanPass());
