@@ -1510,3 +1510,25 @@
 .taptab-protocol-step-text strong {
   font-weight: 700;
 }
+
+/* Draggable rail splitter (opt-in; registry only) */
+.document-shell__rail-resizer {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: transparent;
+  border-left: 1px solid var(--shell-border);
+  margin-left: -1px; /* overlaps the rail's own border */
+}
+
+.document-shell__rail-resizer:hover,
+.document-shell__rail-resizer--dragging {
+  background: var(--shell-accent-soft);
+}
+
+.document-shell__rail-resizer:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: -2px;
+}
+
+body { user-select: auto; }
+body.cl-rail-dragging { user-select: none; cursor: col-resize; }

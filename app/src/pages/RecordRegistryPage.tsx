@@ -693,6 +693,7 @@ export default function RecordRegistryPage() {
       {selectedRecord ? (
         <DocumentShell
           width="full"
+          railResizable
           topBar={
             <DocumentShellHeader
               title={title}
