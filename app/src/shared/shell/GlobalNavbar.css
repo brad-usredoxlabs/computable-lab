@@ -147,3 +147,11 @@
   align-items: center;
   gap: 4px;
 }
+
+/* Mobile menu footer: Create / User / Settings are touch targets, not 16px
+ * glyphs (the gear measured 16x18px on a phone viewport). */
+.global-navbar--mobile .global-navbar__menu-footer button {
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+}

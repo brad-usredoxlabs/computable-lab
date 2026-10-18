@@ -115,14 +115,20 @@ export function GlobalNavbar() {
             role="menu"
             onClick={(event) => {
               const target = event.target as Element | null
-              if (target?.closest('a, button')) setMenuOpen(false)
+              if (!target) return
+              // The footer controls (Create / User / Settings) open their OWN
+              // overlay, rendered INSIDE this menu subtree. Closing the menu on
+              // the click that opened the overlay unmounted it immediately, so
+              // Settings / Theme / About were unreachable on a phone.
+              if (target.closest('[data-menu-keep-open]')) return
+              if (target.closest('a, button')) setMenuOpen(false)
             }}
           >
             {destinations}
             <div className="global-navbar__menu-search">
               <GlobalSearchBar />
             </div>
-            <div className="global-navbar__menu-footer">
+            <div className="global-navbar__menu-footer" data-menu-keep-open="true">
               <div className="global-navbar__menu-actions">
                 <CreateMenu />
               </div>

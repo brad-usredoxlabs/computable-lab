@@ -7,6 +7,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { GlobalNavbar } from './GlobalNavbar'
+import { ThemeProvider } from './useTheme'
 
 afterEach(() => {
   cleanup()
@@ -88,6 +89,50 @@ describe('GlobalNavbar', () => {
     expect(screen.getByTestId('global-nav-registry')).toBeDefined()
     expect(screen.getByTestId('global-search-bar')).toBeDefined()
     expect(screen.getByTestId('create-menu')).toBeDefined()
+
+    restore()
+  })
+
+  /**
+   * The mobile hamburger hosts the footer controls (Create, User, Settings).
+   * Those controls open their OWN overlay, rendered INSIDE the menu subtree, so
+   * the menu must stay mounted while one of them is used. The menu's blanket
+   * `closest('a, button')` auto-close used to unmount the settings dropdown on
+   * the same click that opened it — Settings/Theme/About were unreachable on a
+   * phone.
+   */
+  it('keeps the mobile menu mounted when the Settings gear opens its dropdown', () => {
+    const restore = installMobileViewport()
+    render(
+      <ThemeProvider>
+        <MemoryRouter>
+          <GlobalNavbar />
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+
+    fireEvent.click(screen.getByLabelText('Open menu'))
+    fireEvent.click(screen.getByTestId('settings-menu-trigger'))
+
+    // The menu (and therefore the settings dropdown inside it) is still there.
+    expect(screen.getByTestId('global-nav-projects')).toBeDefined()
+    expect(screen.getByTestId('brand-menu-dropdown')).toBeDefined()
+
+    restore()
+  })
+
+  it('still closes the mobile menu when a destination navigates', () => {
+    const restore = installMobileViewport()
+    render(
+      <MemoryRouter>
+        <GlobalNavbar />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByLabelText('Open menu'))
+    fireEvent.click(screen.getByTestId('global-nav-claims'))
+
+    expect(screen.queryByTestId('global-nav-projects')).toBeNull()
 
     restore()
   })
