@@ -23,7 +23,7 @@ form:
   - title: "Calibration"
     fields:
     - path: "$.equipmentRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment"
       required: true
       refKind: "equipment"
@@ -48,8 +48,9 @@ form:
       - value: "limited_use"
         label: "Limited Use"
     - path: "$.performedByRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Performed By"
+      refKind: "person"
   - title: "Notes"
     fields:
     - path: "$.notes"

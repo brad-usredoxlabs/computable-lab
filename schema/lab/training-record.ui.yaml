@@ -22,17 +22,17 @@ form:
   - title: "Training"
     fields:
     - path: "$.personRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Person"
       required: true
       refKind: "person"
     - path: "$.trainingMaterialRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Training Material"
       required: true
       refKind: "training-material"
     - path: "$.trainerRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Trainer"
       refKind: "person"
   - title: "Status"

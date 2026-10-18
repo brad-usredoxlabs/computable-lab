@@ -39,7 +39,7 @@ form:
       - value: "maintenance"
         label: "Maintenance"
     - path: "$.equipmentRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Linked Equipment"
       refKind: "equipment"
     - path: "$.manufacturer"

@@ -24,7 +24,7 @@ form:
   - title: "Qualification"
     fields:
     - path: "$.equipmentRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment"
       refKind: "equipment"
       required: true
@@ -32,7 +32,7 @@ form:
       widget: "text"
       label: "Qualification Type"
     - path: "$.performedByRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Performed By"
       refKind: "person"
   - title: "Status"
