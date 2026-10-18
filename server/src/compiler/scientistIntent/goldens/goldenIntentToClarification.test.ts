@@ -94,6 +94,10 @@ describe('golden.intent-to-clarification.unknown-local-term', () => {
     const candidates = item['candidates'] as Array<Record<string, unknown>>;
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates[0]).toEqual({ label: 'Create local term “mystery flask”', confidence: 0.05 });
+    // MINT-FLOOR-UI-1: the mint affordance is offered EXACTLY once per noun on
+    // the wire (RED at baseline: the engine accumulates two identical copies —
+    // one per spine-gathering strategy).
+    expect(candidates.filter((c) => String(c['label']).startsWith('Create local term'))).toHaveLength(1);
     expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'transfer', argument: 'source' });
 
     assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
@@ -148,6 +152,9 @@ describe('golden.intent-to-clarification.labware-hint-lookup-failure', () => {
     const candidates = contrast['candidates'] as Array<Record<string, unknown>>;
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates[0]).toEqual({ label: 'Create local term “mystery reagent”', confidence: 0.05 });
+    // MINT-FLOOR-UI-1: exactly ONE mint affordance per noun on the wire
+    // (RED at baseline: two identical copies accumulate).
+    expect(candidates.filter((c) => String(c['label']).startsWith('Create local term'))).toHaveLength(1);
 
     // Clause 5: atomic zero-artifact + zero writes + golden deep-equal over
     // the WHOLE 422 body.
@@ -191,6 +198,9 @@ describe('golden.intent-to-clarification.material-level-mismatch', () => {
     const candidates = item['candidates'] as Array<Record<string, unknown>>;
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates[0]).toEqual({ label: 'Create local term “ethanol”', confidence: 0.05 });
+    // MINT-FLOOR-UI-1: exactly ONE mint affordance per noun on the wire
+    // (RED at baseline: two identical copies accumulate).
+    expect(candidates.filter((c) => String(c['label']).startsWith('Create local term'))).toHaveLength(1);
 
     assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
     expect(run.spies.writeCalls).toBe(0);
@@ -253,6 +263,9 @@ describe('golden.intent-to-clarification.unresolvable-mixture-component', () => 
     const candidates = item['candidates'] as Array<Record<string, unknown>>;
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates[0]).toEqual({ label: 'Create local term “Equine Serum”', confidence: 0.05 });
+    // MINT-FLOOR-UI-1: exactly ONE mint affordance per noun on the wire
+    // (RED at baseline: two identical copies accumulate).
+    expect(candidates.filter((c) => String(c['label']).startsWith('Create local term'))).toHaveLength(1);
 
     assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
     expect(run.spies.writeCalls).toBe(0);

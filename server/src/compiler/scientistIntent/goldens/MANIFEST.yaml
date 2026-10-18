@@ -39,8 +39,8 @@ records:
   - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
   - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
   - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 47a15d732c3de98589b5e17fd28d59cd88070af9555546fb6e7b184c345f0089}
-  - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 085526acdc8ab30dd3d419dd2cdbce9b2462ddbce0bf324cacf16f424e60970a}
-  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 9b115f66c8af9071fd5081d61b4c65841a2d832a248d16a658bf8c77547063dd}
+  - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
+  - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}
   # SPINE7-REBLESS: rule-file pins re-hashed once on the SPINE-7 tip (wire
   # schema widened + aliquot.targetWells required); new golden records blessed
@@ -57,11 +57,18 @@ records:
   # level: aliquot declared — the ONLY treeState line this item moved; wire-schema
   # and pipeline pins unchanged from the SPINE-7 bless). New fixture+record blessed
   # once on the final content. Before/after diff in SPINE-8-report.wip-l2t1345.md.
-  - {name: golden.intent-to-clarification.material-level-mismatch, path: __records__/material-level-mismatch.golden.json, sha256: aa9f7fe9265a9fe3b603cc758682b57b57dc002b5e0d2ea38a2062e618424a91}
+  - {name: golden.intent-to-clarification.material-level-mismatch, path: __records__/material-level-mismatch.golden.json, sha256: beaeb2e495434a4faa60039a008c66921c7e091c7aeed62f35a692fc66649106}
   # COMP4-REBLESS: blessed once on the final content (never blessed over
   # pending wording — MANIFEST header law; SPINE7-REBLESS / DECK-FOLD-1
   # precedent).
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 4c5587f32e8f80786810a4e2581e9f121093b6c696353df6dbda1fdffea95cea}
+  # MINT-FLOOR-UI-1 REBLESS (orch ruling OQ2, blessed ONCE in the same commit
+  # as the resolutionEngine mint-dedup fix): the 4 unknown-noun records in this
+  # section (unknown-local-term, labware-hint-lookup-failure, material-level-mismatch,
+  # unresolvable-mixture-component) re-blessed — the ONLY divergence is the
+  # collapsed duplicate tier-5 mint candidate per noun (2 -> 1); bless script
+  # proved non-mint content byte-identical. No other record or manifest entry
+  # moved. Before/after diff in MINT-FLOOR-UI-1-report.wip-l2t0015.md.
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 75ef78d867f7682b1aa0119b8735aab0fb5a1bec99899b83c7a94fa6ccaf757e}
 # Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
 outcomeUnionMember: needs-clarification
 # Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):

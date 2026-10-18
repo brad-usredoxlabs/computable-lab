@@ -54,6 +54,26 @@ function mintAffordances(candidates: readonly RankedCandidate[]): RankedCandidat
   return candidates.filter((c) => c.tier === 5 || !c.curie);
 }
 
+/** MINT-FLOOR-UI-1 — keyed collapse of IDENTICAL mint affordances. The two
+ *  spine-gathering strategies (symbolic_label + ontology_resolution) each
+ *  carry the spine's per-call tier-5 mint (ResolveSpine.ts:218), and
+ *  dedupeByCurie above explicitly skips no-curie candidates — so N identical
+ *  mint copies used to reach the unknown-noun clarification (the blessed
+ *  goldens baked 2 per noun). The key is the mint identity the candidate
+ *  already carries (`mint.label`, fallback `label`) — candidate STRUCTURE
+ *  (tier/curie/mint.label), never a verb, class, domain, or noun NAME.
+ *  Different mint labels (a near-miss mint for another term) stay distinct.
+ *  Non-mint candidates never enter this map. */
+function dedupeMintsByLabel(candidates: readonly RankedCandidate[]): RankedCandidate[] {
+  const byMintLabel = new Map<string, RankedCandidate>();
+  for (const candidate of candidates) {
+    const key = candidate.mint?.label ?? candidate.label;
+    const existing = byMintLabel.get(key);
+    if (!existing || candidate.score > existing.score) byMintLabel.set(key, candidate);
+  }
+  return [...byMintLabel.values()];
+}
+
 function candidateFact(candidate: RankedCandidate): { label: string; confidence: number } {
   return { label: candidate.label, confidence: confidenceOf(candidate) };
 }
@@ -211,8 +231,13 @@ export async function resolveNoun(
   // below stays intact — only the mint candidates are withheld. A cue hit
   // alone never refuses mint: the check is sentence SHAPE, never " in "/"%".
   const nounShape = loadNounShape();
-  const mints = mintAffordances(allCandidates).filter(
-    (candidate) => isMintableLabel(candidate.mint?.label ?? candidate.label, nounShape),
+  // The noun-shape bar runs FIRST (unchanged): it gates WHAT enters. Only
+  // what passed is collapsed — identical mint copies for the same mint label
+  // collapse to one (MINT-FLOOR-UI-1); different mint labels stay distinct.
+  const mints = dedupeMintsByLabel(
+    mintAffordances(allCandidates).filter(
+      (candidate) => isMintableLabel(candidate.mint?.label ?? candidate.label, nounShape),
+    ),
   );
   if (sawFailure) {
     clarifications.push(clarificationFor(req, 'resolution-lookup-failed', []));

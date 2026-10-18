@@ -390,3 +390,67 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
     expect(body.answers!['lysis_variant']).toBe('variant_a')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Test 9 (MINT-FLOOR-UI-1, OQ1 strict): the held card offers the mint floor
+// EXACTLY ONCE per noun. The real 422 wire shape carries the tier-5 mint
+// candidate TWICE for the fact's own label (curly quotes — the server's
+// mintAffordance, ResolveSpine.ts:271). Pre-fix the card renders BOTH as
+// dead-end option buttons (handleClarificationPick answers with the literal
+// 'Create local term "x"' label the spine cannot bind) ON TOP OF the picker's
+// own mint floor row (resolvers.ts:67-92, straight quotes) — three mint
+// affordances for one noun. Post-fix: the duplicated mint option buttons are
+// dropped by the keyed mint-identity rule (quote-normalized against the
+// fact's OWN label — never a noun table), and the picker's floor row is the
+// single affordance. RED at baseline: two mint option buttons found.
+// ---------------------------------------------------------------------------
+
+describe('ProtocolLocalizationThread — one mint affordance per noun on the held card (MINT-FLOOR-UI-1)', () => {
+  it('9. the real 2x-mint wire shape renders exactly ONE mint affordance: zero mint option buttons, one picker mint floor row', async () => {
+    const FACT_LABEL = 'lysis-reagent'
+    // The blessed-baseline wire shape: the SAME mint candidate twice, curly
+    // quotes (exactly what the 422 clarification carried pre-fix).
+    const DUPLICATED_MINT_RES = {
+      ...HELD_RES,
+      clarifications: [
+        {
+          label: FACT_LABEL,
+          reason: 'unknown-noun',
+          candidates: [
+            { label: `Create local term “${FACT_LABEL}”`, confidence: 0.05 },
+            { label: `Create local term “${FACT_LABEL}”`, confidence: 0.05 },
+          ],
+        },
+      ],
+      localMacro: {
+        ...HELD_RES.localMacro,
+        unresolved: [{ label: FACT_LABEL, reason: 'unknown-noun' }],
+      },
+    }
+
+    resolveMaterial.mockImplementation(async (q: string) => [mintSuggestion(q)])
+    mockClient.getRecord.mockResolvedValue({ payload: { branch_axes: [] } })
+    mockClient.intentCompileFromPrompt
+      .mockResolvedValueOnce(ASK_RES)
+      .mockResolvedValueOnce(DUPLICATED_MINT_RES)
+    render(<ProtocolLocalizationThread initialProtocolText={`1. Lyse the culture in the ${FACT_LABEL}`} sourceProtocolId="CAN-protocol-thread-ask" />)
+    await waitFor(() => expect(screen.getByTestId('pl-clarify')).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Lyse (variant a)'))
+    fireEvent.click(screen.getByTestId('pl-submit-answers'))
+    await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
+
+    const card = await screen.findByTestId('pl-clarification-card')
+    expect(card.textContent).toContain(FACT_LABEL)
+
+    // The mint option buttons: the keyed rule drops the mint offer that
+    // duplicates the picker's own floor row for THIS fact's label. RED at
+    // baseline: two identical `Create local term “lysis-reagent”` buttons.
+    const optionTexts = Array.from(card.querySelectorAll('.pl-held-clarification-option')).map((el) => el.textContent ?? '')
+    expect(optionTexts.filter((t) => t.includes('Create local term'))).toEqual([])
+
+    // The picker's mint floor row (straight quotes, resolvers.ts:70) is the
+    // card's ONE mint affordance.
+    const mintRows = await screen.findAllByText(`Create local term "${FACT_LABEL}"`)
+    expect(mintRows).toHaveLength(1)
+  })
+})
