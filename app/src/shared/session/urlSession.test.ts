@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceTab } from '../../event-editor/workspace/types'
 import type { OpenTabState, OpenTabsState } from '../shell/OpenTabsContext'
+import { tabPath } from '../shell/WorkspaceTabStrip'
 import {
   WS_PARAM,
   WSA_PARAM,
@@ -63,7 +64,6 @@ describe('tabFromStableId (mirror of stableTabId)', () => {
     const cases: Array<[string, string, Record<string, unknown>]> = [
       ['project:STU-1', 'project', { studyId: 'STU-1' }],
       ['run:RUN-1', 'run', { runId: 'RUN-1' }],
-      ['execution:EVG-1', 'execution', { eventGraphId: 'EVG-1' }],
       ['deck:EVG-2', 'deck', { eventGraphId: 'EVG-2' }],
       ['claim:CLM-1', 'claim', { claimId: 'CLM-1' }],
       ['lab:EQ-1', 'lab-entity', { recordId: 'EQ-1' }],
@@ -98,6 +98,53 @@ describe('tabFromStableId (mirror of stableTabId)', () => {
     expect(tabFromStableId('collection:notacollection')).toBeNull()
     expect(tabFromStableId('create:alien')).toBeNull()
   })
+
+  // FIX1 (advc defect 4): `execution` is UNDECODABLE on purpose. Its stable id
+  // (executionTabId = `execution:<eventGraphId>`, types.ts:158) carries NO
+  // runId, and WorkspaceTabStrip.tabPath maps execution → `/runs/${tab.runId}`.
+  // A decoded tab with runId:'' therefore navigates to `/runs/` — the RUNS
+  // COLLECTION route (App.tsx:152), not the run workspace (/runs/:runId,
+  // App.tsx:202). Nothing in the URL can re-derive runId (no server call in
+  // scope, no second id convention), so the kind is dropped rather than
+  // restored as a mis-navigating tab.
+  it('execution ids return null: a decoded tab must never carry runId:"" (defect 4)', () => {
+    expect(tabFromStableId('execution:EVG-1')).toBeNull()
+    const decoded = decodeWorkspaceParams('ws=execution:EVG-1&wsa=execution:EVG-1')
+    expect(decoded.state).toBeNull()
+    expect(decoded.diagnostic?.code).toBe('MALFORMED_WS_PARAM')
+  })
+
+  it('an execution entry is dropped per-entry; valid siblings survive', () => {
+    const decoded = decodeWorkspaceParams('ws=registry,execution:EVG-1&wsa=registry')
+    expect(decoded.state!.tabs.map((t) => t.tab.id)).toEqual(['registry'])
+    expect(decoded.diagnostic?.code).toBe('MALFORMED_WS_PARAM')
+  })
+
+  it('encodeWorkspaceParams never encodes an execution tab (unencodable kind)', () => {
+    const state = stateOf(
+      [
+        entry({ id: 'run:RUN-1', kind: 'run', runId: 'RUN-1', title: 'Run' }),
+        entry({ id: 'execution:EVG-1', kind: 'execution', eventGraphId: 'EVG-1', runId: 'RUN-1', title: 'Execute' }),
+      ],
+      'execution:EVG-1',
+    )
+    const params = new URLSearchParams(encodeWorkspaceParams(state))
+    expect(params.get(WS_PARAM)).toBe('run:RUN-1')
+    // wsa names only an encodable tab: an execution-active strip writes no wsa
+    // (decode then activates the first surviving tab).
+    expect(params.get(WSA_PARAM)).toBeNull()
+  })
+
+  it('no decoded tab can ever produce the bare /runs/ path (navigation safety)', () => {
+    const decoded = decodeWorkspaceParams(
+      'ws=run:RUN-1,deck:EVG-2,execution:EVG-1,registry&wsa=run:RUN-1',
+    )
+    expect(decoded.state).not.toBeNull()
+    const paths = decoded.state!.tabs.map((t) => tabPath(t.tab))
+    expect(paths).not.toContain('/runs/')
+    expect(paths).not.toContain('')
+    expect(decoded.diagnostic?.code).toBe('MALFORMED_WS_PARAM')
+  })
 })
 
 describe('encodeWorkspaceParams', () => {
@@ -124,6 +171,14 @@ describe('encodeWorkspaceParams', () => {
 
   it('no tabs ⇒ no params at all (never an empty ws)', () => {
     expect(encodeWorkspaceParams(stateOf([], null))).toBe('')
+  })
+
+  it('an execution-only strip encodes to NO params (unencodable kind, never an empty ws)', () => {
+    const state = stateOf(
+      [entry({ id: 'execution:EVG-1', kind: 'execution', eventGraphId: 'EVG-1', runId: 'RUN-1', title: 'Execute' })],
+      'execution:EVG-1',
+    )
+    expect(encodeWorkspaceParams(state)).toBe('')
   })
 })
 
@@ -178,9 +233,12 @@ describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
   // them minimally and the host page's mount re-registration enriches them —
   // exactly how a localStorage reload works today. The gate pins what the id
   // DOES carry: kind, base id, and the id-encoded payload fields.
+  // FIX1 (advc defect 4): `execution` is NO LONGER masked here. Its runId is
+  // not carried by the stable id and cannot be re-derived, so the kind is
+  // dropped from the decodable set entirely (see the navigation-safety pins
+  // below) — masking it in LOSSY_FIELDS hid a mis-navigating decoded tab.
   const LOSSY_FIELDS: Record<string, string[]> = {
     run: ['eventGraphId'],
-    execution: ['runId'],
     deck: ['runId'],
     'lab-entity': ['schemaId', 'entityType'],
     'record-edit': ['recordKind'],
@@ -192,14 +250,29 @@ describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
     expect(decoded.state).not.toBeNull()
     const round = decoded.state!
 
-    expect(round.tabs.length).toBe(state.tabs.length)
-    for (let i = 0; i < state.tabs.length; i++) {
-      const want = state.tabs[i]!
+    // FIX1 (advc defect 4): execution is unencodable, so it drops out of the
+    // strip; every OTHER kind survives in order.
+    const wantTabs = state.tabs.filter((t) => t.tab.kind !== 'execution')
+    expect(round.tabs.length).toBe(wantTabs.length)
+    for (let i = 0; i < wantTabs.length; i++) {
+      const want = wantTabs[i]!
       const got = round.tabs[i]!
       // Slot-suffix kinds (project-details/splash) encode to the bare kind and
-      // re-derive on decode; every other kind must round-trip to the EXACT id.
+      // re-derive on a FRESH slotted id. FIX1 (advc defect 2): the colon
+      // separator is asserted — the RED pin's original force. tabId.ts's slot
+      // format is `kind:<slot>`, so a decoded id that loses the `kind:`
+      // separator IS the drift this gate exists to catch.
       if (want.tab.kind === 'project-details' || want.tab.kind === 'splash') {
-        expect(got.tab.id.startsWith(want.tab.kind), `kind ${want.tab.kind}`).toBe(true)
+        expect(got.tab.id.startsWith(`${want.tab.kind}:`), `kind ${want.tab.kind}`).toBe(true)
+        // Exact rebuilt shape: kind + ':' + slotSuffix() (tabId.ts:24-26 —
+        // Date.now base36 ':' random base36). Drift in either source fails here.
+        // The final segment is `*` because Math.random().toString(36) can
+        // terminate early (e.g. 0.5 → 'i'); the CONTRACT pinned is the two
+        // separators, not the random segment's length.
+        expect(
+          got.tab.id,
+          `kind ${want.tab.kind} rebuilt id shape`,
+        ).toMatch(new RegExp(`^${want.tab.kind}:[0-9a-z]+:[0-9a-z]*$`))
       } else {
         expect(got.tab.id, `kind ${want.tab.kind}`).toBe(want.tab.id)
       }
@@ -232,6 +305,8 @@ describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
     const decoded = decodeWorkspaceParams(encodeWorkspaceParams(suffixed))
     expect(decoded.state!.tabs.map((t) => t.tab.kind)).toEqual(['project-details', 'splash'])
     expect(decoded.state!.activeTabId).toBe(decoded.state!.tabs[1]!.tab.id)
-    expect(decoded.state!.tabs[1]!.tab.id.startsWith('splash')).toBe(true)
+    expect(decoded.state!.tabs[1]!.tab.id.startsWith('splash:'), 'slot id keeps the kind: separator').toBe(true)
+    // Exact rebuilt shape (defect 2): splash + ':' + slotSuffix() (tabId.ts:24-26).
+    expect(decoded.state!.tabs[1]!.tab.id).toMatch(/^splash:[0-9a-z]+:[0-9a-z]*$/)
   })
 })

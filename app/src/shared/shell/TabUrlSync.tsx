@@ -23,6 +23,13 @@
  * banner names MALFORMED_WS_PARAM. Never throws (render-nothing convention,
  * workstateExecutor.ts sibling).
  *
+ * Banner ownership (advc-UCX2-l2t0655 defect 1): the banner owns a malformed
+ * URL — the strip is NOT written over it — until it is fixed OR DISMISSED.
+ * Dismissal releases ownership of THAT search only: the banner stays hidden,
+ * the STATE→URL effect resumes writing, and the corrected search replaces the
+ * malformed one on the next strip change. A DIFFERENT malformed link re-arms
+ * the banner (dismissal is not a session-wide mute).
+ *
  * Loop defenses (both pinned by TabUrlSync.test.tsx): the no-op guard
  * (desired search === current search) and the ref-tracked lastWritten.
  */
@@ -66,6 +73,10 @@ export function TabUrlSync() {
   // and then the adoption branch would clear the banner).
   const diagnosticRef = useRef<WorkspaceParamDiagnostic | null>(null)
   const pendingAdoptionRef = useRef(false)
+  // The exact ws/wsa fragment the user dismissed. Ownership of a malformed
+  // link ends at dismissal, but ONLY for that link — a new malformed link
+  // (a different fragment) re-arms the banner.
+  const dismissedFragmentRef = useRef<string | null>(null)
   const [diagnostic, setDiagnostic] = useState<WorkspaceParamDiagnostic | null>(null)
 
   const desired = encodeWorkspaceParams(state)
@@ -90,10 +101,23 @@ export function TabUrlSync() {
     if (fragment === desired) {
       lastWrittenRef.current = normalized
       diagnosticRef.current = null
+      dismissedFragmentRef.current = null
       setDiagnostic(null)
       return
     }
     const decoded = decodeWorkspaceParams(location.search)
+    if (decoded.diagnostic && dismissedFragmentRef.current === fragment) {
+      // DEFECT 1 FIX: this exact malformed link was already dismissed, so its
+      // ownership is released: the banner does NOT re-arm on a re-run of this
+      // effect (the old code re-set diagnosticRef + setDiagnostic here, which
+      // popped the banner back AND kept the STATE→URL guard dead for the rest
+      // of the session), and the dismissed link is inert for URL→STATE — it
+      // must not re-adopt (stomp) the live strip. STATE→URL now owns the
+      // search and the corrected strip replaces the malformed one.
+      diagnosticRef.current = null
+      lastWrittenRef.current = normalized
+      return
+    }
     diagnosticRef.current = decoded.diagnostic ?? null
     setDiagnostic(decoded.diagnostic ?? null)
     if (decoded.state) {
@@ -108,6 +132,8 @@ export function TabUrlSync() {
     if (!eligible) return
     // A malformed link the user has not dismissed yet is NOT silently
     // rewritten — the banner owns that URL until it is fixed or dismissed.
+    // Dismissal (below) clears diagnosticRef, so sync RESUMES from the next
+    // strip change and the corrected search replaces the malformed one.
     if (diagnosticRef.current !== null) return
     // An adoption just dispatched replaceState; the re-render carrying the
     // adopted state is in flight — writing the PRE-adoption state back would
@@ -149,7 +175,20 @@ export function TabUrlSync() {
       <span>
         {diagnostic.code}: {diagnostic.message}
       </span>
-      <button type="button" onClick={() => setDiagnostic(null)}>
+      <button
+        type="button"
+        onClick={() => {
+          // DEFECT 1 FIX: dismissal RELEASES the banner's ownership of this
+          // malformed link — diagnosticRef is cleared (the STATE→URL guard
+          // stops early-returning, so sync resumes and the corrected search
+          // replaces the malformed one on the next strip change) and the
+          // dismissed fragment is remembered so this effect does not re-arm
+          // the banner for the SAME link.
+          dismissedFragmentRef.current = wsFragment(location.search)
+          diagnosticRef.current = null
+          setDiagnostic(null)
+        }}
+      >
         Dismiss
       </button>
     </div>

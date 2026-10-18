@@ -41,6 +41,24 @@ function isSlotSuffixedKind(kind: WorkspaceTab['kind']): boolean {
   return kind === 'project-details' || kind === 'splash'
 }
 
+/**
+ * Kinds the ONE-id URL scheme cannot restore, so they are UNENCODABLE: the
+ * stable id does not carry every field the tab needs to be navigable.
+ *
+ * `execution` is the case (advc-UCX2-l2t0655 defect 4): executionTabId is
+ * `execution:<eventGraphId>` (types.ts:158) and carries NO runId, while
+ * WorkspaceTabStrip.tabPath maps execution → `/runs/${tab.runId}`. A decoded
+ * tab with runId:'' therefore navigates to `/runs/` — the runs COLLECTION
+ * route (App.tsx:152) — not the run workspace (/runs/:runId, App.tsx:202).
+ * runId cannot be re-derived from the URL (no second id convention, no server
+ * call in this item's scope), so the kind is dropped rather than restored as
+ * a mis-navigating tab. Same class as project-details, which encodes to the
+ * bare kind because it has no stable identifier at all.
+ */
+function isUnencodableKind(kind: WorkspaceTab['kind']): boolean {
+  return kind === 'execution'
+}
+
 /** The BASE stable id of a tab: slot suffixes stripped, everything else is
  *  already value-derived by the ONE id policy (tabId.ts). */
 function baseStableId(tab: WorkspaceTab): string {
@@ -52,10 +70,13 @@ function baseStableId(tab: WorkspaceTab): string {
  * '' when there is nothing to encode — never an empty `ws`.
  */
 export function encodeWorkspaceParams(state: OpenTabsState): string {
-  if (state.tabs.length === 0) return ''
+  const encodable = state.tabs.filter((t) => !isUnencodableKind(t.tab.kind))
+  if (encodable.length === 0) return ''
   const params = new URLSearchParams()
-  params.set(WS_PARAM, state.tabs.map((t) => baseStableId(t.tab)).join(','))
-  const active = state.tabs.find((t) => t.tab.id === state.activeTabId)
+  params.set(WS_PARAM, encodable.map((t) => baseStableId(t.tab)).join(','))
+  // wsa names only an ENCODABLE tab: an unencodable-active strip writes no
+  // wsa, and decode activates the first surviving tab.
+  const active = encodable.find((t) => t.tab.id === state.activeTabId)
   if (active) params.set(WSA_PARAM, baseStableId(active.tab))
   return params.toString()
 }
@@ -88,11 +109,11 @@ export function tabFromStableId(id: string): WorkspaceTab | null {
       if (!runId) return null
       return { id: trimmed, kind: 'run', runId, title: runId }
     }
-    case 'execution': {
-      const eventGraphId = rest[0]
-      if (!eventGraphId) return null
-      return { id: trimmed, kind: 'execution', eventGraphId, runId: '', title: eventGraphId }
-    }
+    case 'execution':
+      // UNENCODABLE kind (see isUnencodableKind): the stable id carries no
+      // runId, so a rebuilt tab would navigate to the bare `/runs/` collection
+      // route instead of the run workspace. Dropped per-entry, never rebuilt.
+      return null
     case 'deck': {
       const eventGraphId = rest[0]
       if (!eventGraphId) return null
