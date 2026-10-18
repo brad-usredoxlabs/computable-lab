@@ -1,7 +1,8 @@
 # CANONICAL — REG-3 spec (composer l1t2355 draft, PROMOTED by orchestrator 2026-10-18 with the binding OQ rulings at the bottom)
 
-> Status: DRAFT. Do not dispatch a coder against this until the orchestrator promotes it to
-> the canonical spec path. Plan is authority; this is the execution spec around it.
+> Status: PROMOTED (2026-10-18). Coder dispatch authorized — follow the binding
+> orchestrator OQ rulings at the END of this file. Plan is authority; this is the
+> execution spec around it.
 
 # REG-3 — record-ref widget: ref fields pick RECORDS of the declared kind and commit canonical ref objects
 
