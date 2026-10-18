@@ -187,6 +187,65 @@ describe('ClarificationPicker', () => {
   })
 })
 
+describe('mint empty-state copy only appears where a mint floor actually exists (ANSWER-SURFACE-1 FIX1 D1)', () => {
+  // The mint row (`mint:<q>`, resolvers.ts:67-92) is emitted by resolveMaterial
+  // ONLY — resolveLabware/resolveEquipment emit none. So a '/l' or '/e' card
+  // with a non-empty query and zero hits must NOT invite the scientist to mint
+  // (advc-ANSWERSURFACE1-c1 D1: dead-end affordance copy).
+  const MINT_COPY = 'No matches — keep typing to mint a local term'
+
+  it('a /l card with a non-empty query and zero resolver hits shows plain "No matches", never the mint-inviting copy', async () => {
+    resolveLabware.mockResolvedValue([])
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, id: 'clar-l-1', kind: 'general', menuProvider: '/l', query: 'microcentrifuge tube' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
+    expect(await screen.findByText('No matches')).toBeTruthy()
+    expect(screen.queryByText(MINT_COPY)).toBeNull()
+  })
+
+  it('a /e card with a non-empty query and zero resolver hits shows plain "No matches", never the mint-inviting copy', async () => {
+    resolveEquipment.mockResolvedValue([])
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, id: 'clar-e-1', kind: 'general', menuProvider: '/e', query: 'plate reader' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(resolveEquipment).toHaveBeenCalled())
+    expect(await screen.findByText('No matches')).toBeTruthy()
+    expect(screen.queryByText(MINT_COPY)).toBeNull()
+  })
+
+  it('the /m material card KEEPS the mint-inviting copy (the mint floor row exists there)', async () => {
+    resolveMaterial.mockResolvedValue([])
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, id: 'clar-m-1', materialLayer: 'material' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
+    expect(await screen.findByText(MINT_COPY)).toBeTruthy()
+  })
+
+  it('a layer-scoped /m card (aliquot) keeps plain "No matches" — minting is never an answer to "which aliquot?"', async () => {
+    resolveMaterial.mockResolvedValue([])
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, id: 'clar-m-2', materialLayer: 'aliquot' }}
+        onPick={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(resolveMaterial).toHaveBeenCalled())
+    expect(await screen.findByText('No matches')).toBeTruthy()
+    expect(screen.queryByText(MINT_COPY)).toBeNull()
+  })
+})
+
 describe('a NEW question must not show the PREVIOUS material’s options', () => {
   // Brad (2026-09-20): "add 1 million HepG2 cells" — the reasoning was right, but
   // every option in the picker was about clofibrate, the material from the

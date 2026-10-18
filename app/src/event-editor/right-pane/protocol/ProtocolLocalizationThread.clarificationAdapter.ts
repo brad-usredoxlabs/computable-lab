@@ -7,8 +7,11 @@
  * consumes `AiClarificationRequest` (app/src/types/ai.ts: {id, kind, prompt,
  * menuProvider, options, ...}). The two shapes are NOT unified and neither is
  * renamed (spec §8 bait 2): this module maps fact -> request and invents
- * nothing — label -> query/prompt, candidates -> options, reason -> menu via
- * the DATA table below (presentation mapping, not scattered branches).
+ * nothing — label -> query/prompt, candidates -> options, (reason, argument) ->
+ * menu via the DATA tables below (presentation mapping, not scattered branches;
+ * `argument` is read generically off the wire fact's actionLocation — the
+ * SPINE-1 frozen unresolved shape — never inferred from the label or the
+ * candidates).
  *
  * A fact whose reason has NO entry in the table has no answer surface: the
  * thread renders no card for it and the honest infoMsg line remains the
@@ -21,24 +24,53 @@ import type {
 } from '../../../types/ai'
 
 /**
- * reason -> menu provider, as DATA (spec §8 bait 4: presentation mapping
+ * (reason,'*') -> menu provider, as DATA (spec §8 bait 4: presentation mapping
  * belongs in the client adapter as a table, not scattered branches). Only the
  * noun-resolution reasons the spine's resolution engine emits with an answer
- * surface are listed; everything else falls through to no card.
+ * surface are listed; everything else falls through to no card. This row is
+ * the SINGLE fallback: every (reason, argument) combination not named in the
+ * argument table below renders exactly what this table says today.
  *
- * OPEN QUESTION (Brad, THREAD-ASK-1 spec): /vocab/mint is MATERIAL-ONLY today
- * (VocabHandlers MINTABLE declares 'material' only; ClarificationPicker canMint
- * excludes non-material layers). Unknown-noun facts here are often
- * labware-semantic; they map to the '/m' menu because it is the ONLY menu
- * carrying a mint floor TODAY (decision fact 8: a minted MAT- binds tier-1
- * regardless of the noun's labware semantics). Whether /vocab/mint gains a
- * labware draft floor is a domain-policy call — NOT decided here, and no
- * labware minting is added.
+ * CLOSED (ANSWER-SURFACE-1, ARCHITECT DECISION W28-A5h Q2 — this closes the
+ * OPEN QUESTION this table used to carry, THREAD-ASK-1 spec / W2-11-D4):
+ * labware-semantic facts (fact.actionLocation.argument === 'labware' — the
+ * SPINE-1 frozen unresolved shape already carries actionLocation on the wire,
+ * workflow/scientist-intent.schema.yaml:220-244) are answered by PICKING the
+ * '/l' menu (ClarificationPicker routes '/l' to resolveLabware), NEVER by
+ * minting: '/vocab/mint' stays MATERIAL-ONLY (domain posture reaffirmed; the
+ * mint floor row is emitted by resolveMaterial alone — resolvers.ts:67-92 —
+ * and resolveLabware emits none, so a '/l' card has no mint floor and its
+ * empty-state copy says plain 'No matches', FIX1 D1). No labware minting is
+ * added and no schema field is added.
  */
 export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificationMenuProvider>> = {
   'unknown-noun': '/m',
   'ambiguous-noun': '/m',
   'resolution-lookup-failed': '/m',
+}
+
+/**
+ * ANSWER-SURFACE-1: (reason, argument) -> menu overrides, as the same DATA
+ * table class. `argument` is declared vocabulary data (the arg-contract names
+ * carried on the wire fact's actionLocation) — reading it is a generic read of
+ * the fact, not a noun/verb/protocol literal. A reason with NO menu row never
+ * gets a card, argument or not (the lookup consults the reason table first).
+ */
+const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Record<string, AiClarificationMenuProvider>>>> = {
+  'unknown-noun': { labware: '/l' },
+  'ambiguous-noun': { labware: '/l' },
+  'resolution-lookup-failed': { labware: '/l' },
+}
+
+/**
+ * The ONE menu lookup: (reason, argument) override first, (reason,'*') as the
+ * single fallback. No if-ladders, no scattered branches.
+ */
+function menuForFact(reason: string, argument: string | undefined): AiClarificationMenuProvider | undefined {
+  const fallback = CLARIFICATION_MENU_BY_REASON[reason]
+  if (!fallback) return undefined
+  if (argument === undefined) return fallback
+  return CLARIFICATION_MENU_BY_REASON_ARGUMENT[reason]?.[argument] ?? fallback
 }
 
 /**
@@ -80,7 +112,14 @@ export function heldFactToClarificationRequest(
   const label = typeof fact.label === 'string' && fact.label.trim() ? fact.label.trim() : ''
   if (!label) return null
   const reason = typeof fact.reason === 'string' ? fact.reason : ''
-  const menuProvider = CLARIFICATION_MENU_BY_REASON[reason]
+  // ANSWER-SURFACE-1: the menu pick is keyed on (reason, argument) — `argument`
+  // is read generically off the wire fact's actionLocation (SPINE-1 frozen
+  // shape), never inferred from the label or the candidates.
+  const actionLocation = typeof fact.actionLocation === 'object' && fact.actionLocation !== null
+    ? fact.actionLocation as { argument?: unknown }
+    : undefined
+  const argument = typeof actionLocation?.argument === 'string' ? actionLocation.argument : undefined
+  const menuProvider = menuForFact(reason, argument)
   if (!menuProvider) return null
 
   const rawCandidates = Array.isArray(fact.candidates) ? fact.candidates : []
