@@ -692,6 +692,7 @@ export default function RecordRegistryPage() {
       {/* Right Panel - DocumentShell Editor */}
       {selectedRecord ? (
         <DocumentShell
+          width="full"
           topBar={
             <DocumentShellHeader
               title={title}

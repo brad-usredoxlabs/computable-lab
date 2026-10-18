@@ -27,6 +27,12 @@ interface DocumentShellProps {
   railBelow?: boolean
   /** Optional class on the outer wrapper */
   className?: string
+  /**
+   * Column width posture. 'prose' (default) keeps the capped paper column every
+   * existing surface expects; 'full' lets the column fill the main pane — used
+   * by the registry, whose records are wide diagnostic/QMS forms, not prose.
+   */
+  width?: 'prose' | 'full'
 }
 
 /**
@@ -40,9 +46,10 @@ export function DocumentShell({
   rail,
   railBelow = false,
   className = '',
+  width = 'prose',
 }: DocumentShellProps) {
   return (
-    <div className={`document-shell ${className}`}>
+    <div className={`document-shell document-shell--width-${width} ${className}`}>
       {/* ── Narrow top control bar ─────────────────────────────── */}
       <div className="document-shell__topbar" role="banner">
         {topBar}

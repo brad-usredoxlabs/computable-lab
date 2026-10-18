@@ -94,6 +94,16 @@
   background-color: var(--shell-hover-bg);
 }
 
+/* Full-width posture: the registry's wide forms use the whole main pane. */
+.document-shell--width-full .document-shell__column {
+  padding: 1.25rem 1.5rem;
+}
+
+.document-shell--width-full .document-shell__column .taptab-editor-container {
+  max-width: none;
+  box-shadow: none;
+}
+
 /* Secondary diagnostics / related-record rail */
 
 .document-shell__rail {
