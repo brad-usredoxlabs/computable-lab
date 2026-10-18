@@ -15,6 +15,12 @@ All git run with `-c core.fileMode=false`.
 
 ## WHAT CHANGED (fix commit e70db989, 4 files, +240/-23)
 
+Pin count (corrected, per the defect-3 discipline): the fix commit adds EXACTLY 8 new `it()`
+pins — 3 in TabUrlSync.test.tsx (defect 1) + 5 in urlSession.test.ts (defect 4/2) — plus the
+restored defect-2 assertions inside two EXISTING pins and the LOSSY_FIELDS/execution edits.
+(The fix commit's message says "7 new pins"; that is an undercount of its own 8 — history is
+not rewritten per the no-reset/no-rebase rule, corrected here. 39 pre-fix tests → 47 at head.)
+
   M app/src/shared/shell/TabUrlSync.tsx          (defect 1)
   M app/src/shared/shell/TabUrlSync.test.tsx     (defect 1 pins + harness)
   M app/src/shared/session/urlSession.ts         (defect 4)
