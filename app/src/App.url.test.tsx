@@ -3,6 +3,16 @@
  * the storage/default workspace WITH a visible banner (data-testid
  * "ws-param-diagnostic"), never a crash, and per-entry keep-valid/drop-bad.
  *
+ * UCX2-D1 (RED) — the banner's PLACEMENT: the shell (.cl-app, AppShell.css) is
+ * position:fixed inset:0, so a banner rendered into the bare body flow lands
+ * UNDER the fixed navbar (orch adjudication l2t1330: rect [16,8,635,21],
+ * elementFromPoint at its center returns .global-navbar__brand-text — the user
+ * sees nothing). The placement post-condition pinned here: the banner carries
+ * the fixed-position offset below the workspace header (navbar + tab strip,
+ * via the layout tokens) and a z-index above the content layer yet below the
+ * navbar menu's z-index 40 (GlobalNavbar.css). jsdom expresses this exactly
+ * through the inline style declaration — no layout engine needed.
+ *
  * Harness mirrors App.test.tsx (BrowserRouter → MemoryRouter via __START_URL__)
  * plus window.history.replaceState so the provider's hydration read of
  * window.location.search sees the same search the router mounts with.
@@ -124,5 +134,30 @@ describe('App deep-link hydration (UCX-2)', () => {
     await waitFor(() => expect(screen.getByTestId('literature-page')).toBeTruthy())
     expect(screen.queryByTestId('ws-param-diagnostic')).toBeNull()
     expect(window.location.search).toBe('?view=build')
+  })
+
+  // UCX2-D1 (orch adjudication l2t1330): the banner was DOM-present yet
+  // OCCLUDED — the shell is position:fixed inset:0 and the workspace header
+  // (GlobalNavbar + tab strip) paints over the body-flow strip the bare
+  // <TabUrlSync/> sibling rendered into. Placement post-condition, expressible
+  // in jsdom via the inline style declaration: the banner is position:fixed,
+  // offset BELOW the workspace header via the layout tokens (navbar height +
+  // tab strip height), spans the viewport width, and carries a z-index above
+  // the content layer yet below the navbar menu's z-index 40.
+  it('UCX2-D1: the malformed-ws banner is placed below the fixed navbar, not under it', async () => {
+    visit('/registry?ws=%%nonsense%%&wsa=zzz')
+    const banner = await screen.findByTestId('ws-param-diagnostic')
+    expect(banner.style.position, 'banner must be position:fixed (shell is a fixed overlay grid — body-flow placement lands under the navbar)').toBe('fixed')
+    expect(banner.style.top, 'banner top must offset below the workspace header via the layout tokens').toContain('var(--cl-globalnav-height')
+    expect(banner.style.top).toContain('var(--cl-tabstrip-height')
+    expect(banner.style.left).toBe('0px')
+    expect(banner.style.right).toBe('0px')
+    const z = Number(banner.style.zIndex)
+    expect(Number.isFinite(z), 'banner must carry an explicit z-index').toBe(true)
+    expect(z, 'banner must sit above content (topbar__surface chip z-index 5) and below the navbar menu (z-index 40)').toBeGreaterThan(5)
+    expect(z).toBeLessThan(40)
+    // Copy and dismissal semantics are FROZEN — the placement fix must not touch them.
+    expect(banner.textContent).toContain('MALFORMED_WS_PARAM')
+    expect(screen.getByRole('button', { name: /dismiss/i })).toBeTruthy()
   })
 })
