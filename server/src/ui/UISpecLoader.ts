@@ -18,7 +18,7 @@ import type {
  */
 const VALID_WIDGET_TYPES: Set<string> = new Set([
   'text', 'textarea', 'number', 'select', 'multiselect',
-  'checkbox', 'radio', 'date', 'datetime', 'ref', 'reflist',
+  'checkbox', 'radio', 'date', 'datetime', 'ref', 'reflist', 'record-ref',
   'array', 'object', 'hidden', 'readonly', 'custom', 'markdown',
   'combobox', 'chips',
   'protocol-prose-authoring', 'protocol-material-roles',
@@ -285,7 +285,7 @@ export class UISpecLoader {
     }
     
     // Validate refKind for ref widgets (warn but don't error — can be inferred from path)
-    if (['ref', 'reflist'].includes(field.widget as string)) {
+    if (['ref', 'reflist', 'record-ref'].includes(field.widget as string)) {
       if (field.refKind !== undefined && typeof field.refKind !== 'string') {
         errors.push(`${path}.refKind: must be a string if provided`);
       }
