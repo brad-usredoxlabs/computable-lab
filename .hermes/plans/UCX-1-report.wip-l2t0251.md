@@ -1,7 +1,7 @@
 # UCX-1 CODER REPORT — Sequences surface: multi-select toolbar over the result list
 Lane 2 · coder l2t0251 · worktree /mnt/vast/home/brad/git/wt/UCX-1-lane2-l2t0251
 Branch wt/UCX-1-lane2-l2t0251 · base 8546827d5c245c01f7360d4e41f052590ab549a5
-Spec: /mnt/vast/home/brad/git/wt/UCX-1-lane2-l2t0251/.hermes/plans/2026-10-18_UCX-1-sequences-multiselect-toolbar-spec.md (read fully; ORCHESTRATOR ADJUDICATION OQ1-OQ4 followed)
+Spec: /mnt/vast/home/brad/git/cl-integration-2/.hermes/plans/2026-10-18_UCX-1-sequences-multiselect-toolbar-spec.md (read fully; ORCHESTRATOR ADJUDICATION OQ1-OQ4 followed)
 
 ## COMMITS
 - RED:   eda42f6c test(UCX-1 RED): SequencesPage multi-select toolbar pins 1-8
