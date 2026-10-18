@@ -72,14 +72,13 @@ describe('hedge-type-1 generated prompt posture (string pins)', () => {
   });
 
   it('RED pin: the generated prompt FORBIDS hedging the absence of an OPTIONAL parameter', () => {
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/NEVER hedge the absence of an OPTIONAL parameter/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/NEVER hedge the absence of a parameter[^\n]*marks OPTIONAL/);
     expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/omit the field/);
   });
 
   it('RED pin: the generated prompt mandates actionLocation + exact label + not-stated reason', () => {
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/actionLocation/);
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/\{actionIndex:[^\n]*action:[^\n]*argument:/);
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/EXACTLY the scientist's own word/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/actionLocation[^\n]*actionIndex[^\n]*action[^\n]*argument/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/EXACTLY the scientist's own/);
     expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/not-stated/);
   });
 
@@ -102,19 +101,22 @@ describe('hedge-type-1 registry mirror lock-step (same posture in the YAML mirro
   });
 
   it('RED pin: the mirror carries the optional-hedge prohibition', () => {
-    expect(mirror).toMatch(/NEVER hedge the absence of an OPTIONAL parameter/);
+    expect(mirror).toMatch(/NEVER hedge the absence of a parameter[^\n]*marks OPTIONAL/);
     expect(mirror).toMatch(/omit the field/);
   });
 
   it('RED pin: the mirror carries the actionLocation mandate + not-stated reason', () => {
-    expect(mirror).toMatch(/actionLocation/);
-    expect(mirror).toMatch(/EXACTLY the scientist's own word/);
+    expect(mirror).toMatch(/actionLocation[^\n]*actionIndex[^\n]*action[^\n]*argument/);
+    expect(mirror).toMatch(/EXACTLY the scientist's own/);
     expect(mirror).toMatch(/not-stated/);
   });
 
   it('mirror anti-fabrication core stays byte-present', () => {
     expect(mirror).toContain('instead of inventing');
-    expect(mirror).toContain('Do NOT add wells or volumes the scientist did not state.');
+    // YAML block-scalar folding keeps this rule wrapped across lines; both
+    // fragments must stay byte-present.
+    expect(mirror).toContain('Do NOT add wells or volumes the');
+    expect(mirror).toContain('scientist did not state.');
   });
 });
 

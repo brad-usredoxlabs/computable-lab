@@ -40,7 +40,9 @@ function normalizePlaceholders(text: string): string {
     .replace(/<short id>/g, 'parity')
     .replace(/<one of the verbs below>/g, vocab.verbs()[0]!)
     .replace(/^\s*<parameters>\s*\n/gm, '')
+    .replace(/<the scientist's own word for the thing you could not commit to>/g, 'parity thing')
     .replace(/<thing you could not commit to>/g, 'parity thing')
+    .replace(/<not-stated \| ambiguous \| contradicts-the-text>/g, 'not-stated')
     .replace(/<why>/g, 'parity reason');
 }
 
