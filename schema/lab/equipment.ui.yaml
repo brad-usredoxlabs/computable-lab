@@ -40,11 +40,11 @@ form:
   - title: "Details"
     fields:
     - path: "$.equipmentClassRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment Class"
       refKind: "equipment-class"
     - path: "$.instrumentRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Linked Instrument"
       refKind: "instrument"
     - path: "$.manufacturer"

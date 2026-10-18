@@ -25,6 +25,7 @@ export type WidgetType =
   | 'select'
   | 'multiselect'
   | 'ref'
+  | 'record-ref'
   | 'reflist'
   | 'combobox'
   | 'chips'

@@ -77,7 +77,7 @@ export function buildSuggestionPlanFromFieldHint(
   const sources = extractSources(props);
   const ontologies = extractOntologies(props);
   const searchField = extractSearchField(props);
-  const isRef = widget === 'ref' || widget === 'reflist';
+  const isRef = widget === 'ref' || widget === 'reflist' || widget === 'record-ref';
   const isCombobox = widget === 'combobox';
 
   return {

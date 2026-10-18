@@ -19,6 +19,7 @@ export type WidgetType =
   | 'date'           // Date picker
   | 'datetime'       // Date + time picker
   | 'ref'            // Record reference picker
+  | 'record-ref'     // Single record reference (record picker, canonical ref object)
   | 'reflist'        // Multiple record references
   | 'array'          // Array of items
   | 'object'         // Nested object

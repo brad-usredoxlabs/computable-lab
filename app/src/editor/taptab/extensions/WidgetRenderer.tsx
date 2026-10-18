@@ -9,6 +9,7 @@ import { focusAdjacentTapTabField } from '../tabNavPlugin';
 import type { WidgetType } from '../types';
 import { EnumCombobox } from '../EnumCombobox';
 import { RefCombobox } from '../RefCombobox';
+import { RecordRefPicker } from '../RecordRefPicker';
 import { RichTextField } from '../RichTextField';
 import { ReadonlyWidget } from '../widgets/ReadonlyWidget';
 import { DatetimeWidget } from '../widgets/DatetimeWidget';
@@ -307,6 +308,20 @@ export function WidgetRenderer({
 
   if (widget === 'select' && editing && options) {
     return <EnumCombobox options={options} value={String(value ?? '')} onSelect={handleComboboxSelect} onCancel={handleComboboxCancel} />;
+  }
+
+  // Record references (person, equipment, training-material …) are RECORDS, not
+  // vocabulary terms: the picker lists records of the ui.yaml-declared refKind
+  // and commits the canonical ref object.
+  if (widget === 'record-ref' && editing) {
+    return (
+      <RecordRefPicker
+        value={editText}
+        refKind={refKind || 'default'}
+        onSelect={(ref) => { onCommit(ref); setEditing(false); }}
+        onCancel={handleRefCancel}
+      />
+    );
   }
 
   if ((widget === 'ref' || widget === 'combobox') && editing) {

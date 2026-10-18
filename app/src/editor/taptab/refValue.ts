@@ -18,7 +18,7 @@
  */
 
 /** Widget types whose stored value is a structured ref (schema type: object). */
-const REF_VALUE_WIDGETS = new Set(['ref'])
+const REF_VALUE_WIDGETS = new Set(['ref', 'record-ref'])
 
 /** True when the widget's stored value must follow the ref value contract. */
 export function isRefWidget(widget: unknown): boolean {
