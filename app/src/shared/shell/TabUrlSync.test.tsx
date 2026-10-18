@@ -48,7 +48,7 @@ const STORED = {
 let ctx: OpenTabsContextValue | null = null
 let lastSearch = ''
 
-function Probe(): null {
+function Probe() {
   ctx = useOpenTabs()
   const location = useLocation()
   lastSearch = location.search

@@ -174,6 +174,17 @@ describe('decodeWorkspaceParams', () => {
 })
 
 describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
+  // Fields the STABLE ID does not carry (tabId.ts): the decoded tab re-derives
+  // them minimally and the host page's mount re-registration enriches them —
+  // exactly how a localStorage reload works today. The gate pins what the id
+  // DOES carry: kind, base id, and the id-encoded payload fields.
+  const LOSSY_FIELDS: Record<string, string[]> = {
+    run: ['eventGraphId'],
+    execution: ['runId'],
+    deck: ['runId'],
+    'lab-entity': ['schemaId', 'entityType'],
+    'record-edit': ['recordKind'],
+  }
   it('decode(encode(state)) ≈ state for every kind incl. slot-suffixed ids', () => {
     const state = stateOf(TABS_BY_KIND.map((t) => entry(t)), 'registry')
     const decoded = decodeWorkspaceParams(encodeWorkspaceParams(state))
@@ -185,17 +196,22 @@ describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
     for (let i = 0; i < state.tabs.length; i++) {
       const want = state.tabs[i]!
       const got = round.tabs[i]!
-      // Slot-suffix kinds (project-details/splash) re-derive a fresh slot id;
-      // every other kind must round-trip to the EXACT base id.
+      // Slot-suffix kinds (project-details/splash) encode to the bare kind and
+      // re-derive on decode; every other kind must round-trip to the EXACT id.
       if (want.tab.kind === 'project-details' || want.tab.kind === 'splash') {
-        expect(got.tab.id.startsWith(`${want.tab.kind}:`), `kind ${want.tab.kind}`).toBe(true)
+        expect(got.tab.id.startsWith(want.tab.kind), `kind ${want.tab.kind}`).toBe(true)
       } else {
         expect(got.tab.id, `kind ${want.tab.kind}`).toBe(want.tab.id)
       }
       expect(got.tab.kind).toBe(want.tab.kind)
-      // Every non-optional payload field survives the round trip.
+      // Every id-carried payload field survives the round trip.
+      const lossy = LOSSY_FIELDS[want.tab.kind] ?? []
       const { id: _id, kind: _kind, title: _title, ...wantFields } = want.tab as WorkspaceTab & Record<string, unknown>
       const { id: _gid, kind: _gkind, title: _gtitle, ...gotFields } = got.tab as WorkspaceTab & Record<string, unknown>
+      for (const field of lossy) {
+        delete (wantFields as Record<string, unknown>)[field]
+        delete (gotFields as Record<string, unknown>)[field]
+      }
       expect(gotFields, `kind ${want.tab.kind} fields`).toEqual(wantFields)
       expect(typeof got.tab.title).toBe('string')
       expect(got.contentHistory).toEqual([got.tab])
@@ -216,6 +232,6 @@ describe('round-trip mirror-drift gate (every WorkspaceTab kind)', () => {
     const decoded = decodeWorkspaceParams(encodeWorkspaceParams(suffixed))
     expect(decoded.state!.tabs.map((t) => t.tab.kind)).toEqual(['project-details', 'splash'])
     expect(decoded.state!.activeTabId).toBe(decoded.state!.tabs[1]!.tab.id)
-    expect(decoded.state!.tabs[1]!.tab.id.startsWith('splash:')).toBe(true)
+    expect(decoded.state!.tabs[1]!.tab.id.startsWith('splash')).toBe(true)
   })
 })

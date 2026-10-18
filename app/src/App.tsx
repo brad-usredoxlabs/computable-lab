@@ -33,6 +33,7 @@ import { useMentionNavigation } from './shared/taptab/slashMenu'
 import { Slot } from './extensions'
 import { useRecordHistory } from './shared/shell/useRecordHistory'
 import { useSessionSync } from './shared/session/useSessionSync'
+import { TabUrlSync } from './shared/shell/TabUrlSync'
 import './shared/styles/tokens.css'
 
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
@@ -96,7 +97,11 @@ function RecordHistoryListener(): null {
 function SessionSync(): null {
   const navigate = useNavigate()
   const location = useLocation()
+  // UCX-2 (OQ3): an explicit ?ws= deep link outranks the server-session BOOT
+  // adopt — the URL wins at boot. ATTACH-on-focus adopt is unchanged.
+  const hasExplicitWorkspaceLink = new URLSearchParams(window.location.search).has('ws')
   useSessionSync({
+    ...(hasExplicitWorkspaceLink ? { skipBootPull: true } : {}),
     onAdopt: (path) => {
       // Attached to a session from another device (or from storage) — go where
       // that session is, UNLESS the user is already on an explicit deep link:
@@ -136,6 +141,7 @@ export function App() {
               <MentionNavigator />
               <RecordHistoryListener />
               <SessionSync />
+              <TabUrlSync />
               <Routes>
               {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
                   by the ProjectCollectionView). */}

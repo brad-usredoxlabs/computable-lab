@@ -23,6 +23,7 @@ import {
 } from 'react'
 import type { BreadcrumbItem, WorkspaceRightPaneMode, WorkspaceTab } from '../../event-editor/workspace/types'
 import { getCurrentUserId } from '../api/base'
+import { decodeWorkspaceParams } from '../session/urlSession'
 
 export interface OpenTabState {
   tab: WorkspaceTab
@@ -529,6 +530,24 @@ export interface OpenTabsProviderProps {
   children: ReactNode
 }
 
+/**
+ * UCX-2 — the initial resolver: the URL strip (cl:workspace-strip-binding,
+ * ?ws=/?wsa=) REPLACES the storage state entirely when it decodes (the strip
+ * is the strip — no union); malformed or absent params keep the storage state
+ * (= the default workspace). Still SYNCHRONOUS first-render (hydration.test
+ * pins it; HomeRedirect.tsx forbids any effect-based load). window.location
+ * .search is read directly — the provider sits ABOVE BrowserRouter and cannot
+ * use router hooks (App.tsx). Import direction mirrors sessionYaml.ts:24
+ * (session → shell); the ESM cycle urlSession ↔ OpenTabsContext resolves at
+ * call time, boot-pinned by OpenTabsContext.hydration/url tests.
+ */
+export function initialTabsState(userId?: string): OpenTabsState {
+  const stored = loadFromStorage(userId)
+  if (typeof window === 'undefined') return stored
+  const decoded = decodeWorkspaceParams(window.location.search)
+  return decoded.state ?? stored
+}
+
 export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
   // Hydrate SYNCHRONOUSLY on the first render: HomeRedirect and every host
   // page's mount effect read `state` during that render, so a useEffect-based
@@ -536,12 +555,19 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
   // below write the EMPTY pre-hydration state over the stored session (which,
   // under StrictMode's double-invoked effects, wiped it on every page load).
   const resolvedUserId = userId ?? getCurrentUserId() ?? undefined
-  const [state, dispatch] = useReducer(openTabsReducer, resolvedUserId, loadFromStorage)
+  const [state, dispatch] = useReducer(openTabsReducer, resolvedUserId, initialTabsState)
   const hydratedRef = useRef(false)
+  // UCX-2: the mount-time hydration already ran in the useReducer init
+  // (URL-over-storage). The re-read must fire ONLY on a genuine user switch —
+  // a mount-time re-dispatch of loadFromStorage would stomp a URL-hydrated
+  // strip (and StrictMode's double-invoked effects would make that certain).
+  const hydratedForUserRef = useRef<string | undefined | null>(resolvedUserId)
 
   // A user switch re-reads that user's session instead of bleeding the
   // previous user's tabs into the new one. (The switcher also reloads.)
   useEffect(() => {
+    if (hydratedForUserRef.current === resolvedUserId) return
+    hydratedForUserRef.current = resolvedUserId
     dispatch({ type: 'replace', state: loadFromStorage(resolvedUserId) })
   }, [resolvedUserId])
 

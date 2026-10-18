@@ -57,6 +57,7 @@ vi.mock('../agent/HarnessChatPane', () => ({
 import { SequencesPage } from './SequencesPage'
 import { AiPanelProvider } from '../shared/context/AiPanelContext'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
+import { ThemeProvider } from '../shared/shell'
 
 function Probe() {
   const location = useLocation()
@@ -67,14 +68,16 @@ function mountPage(url: string) {
   searchSpy.calls.length = 0
   chatCapture.opts = null
   return render(
-    <OpenTabsProvider>
-      <AiPanelProvider>
-        <MemoryRouter initialEntries={[url]}>
-          <SequencesPage />
-          <Probe />
-        </MemoryRouter>
-      </AiPanelProvider>
-    </OpenTabsProvider>,
+    <ThemeProvider>
+      <OpenTabsProvider>
+        <AiPanelProvider>
+          <MemoryRouter initialEntries={[url]}>
+            <SequencesPage />
+            <Probe />
+          </MemoryRouter>
+        </AiPanelProvider>
+      </OpenTabsProvider>
+    </ThemeProvider>,
   )
 }
 
