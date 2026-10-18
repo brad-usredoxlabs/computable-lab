@@ -16,6 +16,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { AiClarification, AiClarificationAnswer, AiClarificationRequest, ChatMessage } from '../types/ai'
 import { clarificationAnswerPrompt } from '../event-editor/right-pane/ai/AiTabPanel'
+import { ClarificationPicker, requestHasPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
 import './ChatLog.css'
 
 export interface ChatLogProps {
@@ -103,6 +104,86 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     setFollowing(atBottom)
   }
 
+  /**
+   * A clarification turn is a PROMPT plus something to choose. The box must
+   * never render empty: a typed clarifier (no `clarification.options`) used to
+   * produce a bordered box containing only an empty <ol> — on a phone that
+   * reads as a mangled grey rectangle under the question.
+   */
+  function renderClarificationBlock(message: ChatMessage) {
+    const clarification = message.clarification!
+    const options = clarification.options ?? []
+    const request = clarificationRequest(clarification)
+    const promptDiffers = message.content !== clarification.prompt
+    if (options.length === 0) {
+      // No literal options — but a MENU-BACKED clarifier ("the draft names
+      // 'unobtainium' … choose what it is") is answerable through the picker.
+      // The server persists exactly this shape (options: [], menuProvider '/m',
+      // query, allowCreateLocal), so rendering nothing left the question
+      // unanswerable, and rendering the empty <ol> left a mangled grey box.
+      if (!onClarificationPick || !requestHasPicker(request)) return null
+      return <div className="chat-log-clarification" key={`clar-${message.id}`}>
+        {promptDiffers && <p>{clarification.prompt}</p>}
+        <ClarificationPicker
+          request={request}
+          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request))}
+        />
+      </div>
+    }
+    return <div className="chat-log-clarification" key={`clar-${message.id}`}>
+      {promptDiffers && <p>{clarification.prompt}</p>}
+      {onClarificationPick && <ol className="chat-log-clarification-options">
+        {options.map((option, optionIndex) => <li key={option.id}>
+          <button onClick={() => onClarificationPick(clarificationAnswerPrompt(
+            {
+              requestId: clarification.id ?? message.id,
+              optionId: option.id,
+              label: option.label,
+              ...(option.ref !== undefined ? { ref: option.ref } : {}),
+            } satisfies AiClarificationAnswer,
+            clarificationRequest(clarification),
+          ))}>{optionIndex + 1}. {option.label}</button>
+        </li>)}
+      </ol>}
+    </div>
+  }
+
+  /**
+   * Typed (menu-backed) clarifications: the question carries its own options or
+   * a picker. Ignoring them left the pane showing a question with no way to
+   * answer it — the old pane rendered them through QuestionsPanel.
+   */
+  function renderTypedClarification(messageId: string, request: AiClarificationRequest) {
+    const options = request.options ?? []
+    const hasPicker = requestHasPicker(request)
+    if (options.length === 0 && !hasPicker) return null
+    return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
+      <p>{request.prompt}</p>
+      {options.length > 0 && onClarificationPick ? (
+        <ol className="chat-log-clarification-options">
+          {options.map((option, optionIndex) => <li key={option.id}>
+            <button onClick={() => onClarificationPick(clarificationAnswerPrompt(
+              {
+                requestId: request.id,
+                optionId: option.id,
+                label: option.label,
+                ...(option.ref !== undefined ? { ref: option.ref } : {}),
+              } satisfies AiClarificationAnswer,
+              request,
+            ))}>{optionIndex + 1}. {option.label}</button>
+          </li>)}
+        </ol>
+      ) : null}
+      {hasPicker && onClarificationPick ? (
+        <ClarificationPicker
+          key={request.id}
+          request={request}
+          onPick={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request))}
+        />
+      ) : null}
+    </div>
+  }
+
   return <aside className="sequences-page sequence-chat">
     <h2>AI Chat</h2>
     <p className="sequence-hint">Ask for an edit, a draft or a navigation. Review proposed actions before applying them.</p>
@@ -112,24 +193,8 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
           <p>{message.content}</p>
           {message.sequenceProposal && onReview && <button onClick={() => onReview(message.sequenceProposal!, message.sequenceProposalRequest ?? messages.slice(0, index).reverse().find(m => m.role === 'user')?.content)}>Review action</button>}
-          {message.clarification && <div className="chat-log-clarification">
-            {/* useAiChat already surfaces clarification.prompt as the message
-                body; only repeat it when the body differs. */}
-            {message.content !== message.clarification.prompt && <p>{message.clarification.prompt}</p>}
-            {onClarificationPick && <ol className="chat-log-clarification-options">
-              {message.clarification.options.map((option, optionIndex) => <li key={option.id}>
-                <button onClick={() => onClarificationPick(clarificationAnswerPrompt(
-                  {
-                    requestId: message.clarification!.id ?? message.id,
-                    optionId: option.id,
-                    label: option.label,
-                    ...(option.ref !== undefined ? { ref: option.ref } : {}),
-                  } satisfies AiClarificationAnswer,
-                  clarificationRequest(message.clarification!),
-                ))}>{optionIndex + 1}. {option.label}</button>
-              </li>)}
-            </ol>}
-          </div>}
+          {message.clarification && renderClarificationBlock(message)}
+          {message.clarificationRequests?.map((request) => renderTypedClarification(message.id, request))}
         </div>)}
       </div>
     </div>

@@ -291,6 +291,11 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
               content: m.content,
               ...(m.metadata?.sequenceProposal ? { sequenceProposal: m.metadata.sequenceProposal as Record<string, unknown> } : {}),
               ...(typeof m.metadata?.sequenceProposalRequest === 'string' ? { sequenceProposalRequest: m.metadata.sequenceProposalRequest } : {}),
+              // A clarifier survives a reload WITH its answering surface: the
+              // menuProvider/query/options are what make it answerable. Dropping
+              // them left a persisted question with nothing to pick (or, before
+              // ChatLog was guarded, a bordered EMPTY box).
+              ...(m.metadata?.clarification ? { clarification: m.metadata.clarification as NonNullable<ChatMessage['clarification']> } : {}),
               timestamp: Date.parse(m.createdAt) || Date.now(),
             }))
           hydrated.forEach((m) => persistedIdsRef.current.add(m.id))

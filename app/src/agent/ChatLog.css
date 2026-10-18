@@ -3,7 +3,7 @@
    `sequence-chat` class name is pinned by e2e/sequence-chat-scroll.spec.ts. */
 .sequence-chat { display:flex; flex-direction:column; min-height:0; box-sizing:border-box; overflow:hidden; }
 .sequence-chat > :not(.sequence-chat-messages) { flex-shrink:0; }
-.sequence-chat-messages { flex:1; min-height:0; overflow:auto; overflow-wrap:anywhere; overscroll-behavior:contain; white-space:pre-wrap; }
+.sequence-chat-messages { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; overflow-wrap:anywhere; overscroll-behavior:contain; white-space:pre-wrap; }
 .sequence-chat-content { display:flex; flex-direction:column; justify-content:flex-end; min-height:100%; }
 .sequence-chat-content > div { flex-shrink:0; }
 .sequence-chat-latest { align-self:center; margin-top:.4rem; }
@@ -15,8 +15,38 @@
 .sequence-chat button:disabled { opacity:.5; cursor:default; }
 .sequence-chat .sequence-hint { font-size:.8rem; color:var(--cl-text-dim, #555); }
 
-/* Clarification turn: the prompt plus its numbered options as buttons —
-   answering is the next chat turn, never a blocking card. */
-.chat-log-clarification { margin:.5rem 0; padding:.5rem; border:1px solid var(--cl-border, #aaa); border-radius:.4rem; }
-.chat-log-clarification p { margin:0; }
-.chat-log-clarification-options { list-style:none; margin:.4rem 0 0; padding:0; display:flex; flex-wrap:wrap; gap:.4rem; }
+/* Clarification turn. On a phone the pane is ~340px wide: options must STACK
+ * full-width and wrap their own text. The old wrap-in-a-row layout let a long
+ * label push the option list past the pane edge, which made the whole log
+ * scroll sideways and the box look mangled. */
+.chat-log-clarification {
+  margin: .5rem 0;
+  padding: .6rem .65rem;
+  border: 1px solid var(--cl-border, #aaa);
+  border-radius: .5rem;
+  background: var(--cl-bg-elev-2, transparent);
+  min-width: 0;
+}
+.chat-log-clarification p { margin: 0 0 .45rem; font-size: .85rem; line-height: 1.35; }
+.chat-log-clarification-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  min-width: 0;
+}
+.chat-log-clarification-options li { min-width: 0; }
+.chat-log-clarification-options button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;      /* comfortable tap target */
+  padding: .5rem .6rem;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.chat-log-clarification-options button:active { border-color: var(--cl-accent, #0969da); }

@@ -77,6 +77,54 @@ describe('sequence conversation scrolling', () => {
     expect(screen.queryByRole('button', { name: 'Latest messages' })).toBeNull()
   })
 
+  it('answers a menu-backed clarifier through the picker (the real "unknown material" shape)', () => {
+    // Shape persisted by the server for the live clarifier:
+    // {options: [], menuProvider: '/m', query, allowCreateLocal: true}
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      { ...message('clarify', 'assistant', 'The draft names "unobtainium" — choose what it is.'),
+        clarification: {
+          id: 'unresolved-1',
+          prompt: 'The draft names "unobtainium" — choose what it is.',
+          entityType: 'material',
+          menuProvider: '/m',
+          query: 'unobtainium',
+          allowCreateLocal: true,
+          options: [],
+        } },
+    ]} />)
+    expect(document.querySelector('.message-log__clarification-picker')).not.toBeNull()
+    expect(document.querySelector('.chat-log-clarification')).not.toBeNull()
+    // No empty option list is ever rendered.
+    expect(document.querySelector('.chat-log-clarification-options')).toBeNull()
+  })
+
+  it('never renders an empty clarification box when the clarifier carries no options', () => {
+    // Reproduced live (phone, 2026-10-17): a typed clarifier left a bordered,
+    // EMPTY box under the question — the mangled grey rectangle.
+    render(<ChatLog {...props} onClarificationPick={vi.fn()} messages={[
+      { ...message('clarify', 'assistant', 'The draft names "unobtainium" — choose what it is.'),
+        clarification: { id: 'clar-1', prompt: 'The draft names "unobtainium" — choose what it is.', entityType: 'material', options: [] } },
+    ]} />)
+    expect(document.querySelector('.chat-log-clarification')).toBeNull()
+    expect(screen.getByRole('log', { name: 'Conversation' })).toHaveTextContent('unobtainium')
+  })
+
+  it('renders a typed clarification request with its menu options', () => {
+    const onClarificationPick = vi.fn()
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
+      { ...message('clarify', 'assistant', 'Which material?'),
+        clarificationRequests: [{
+          id: 'req-1', kind: 'general', prompt: 'Which material?', entityType: 'material',
+          menuProvider: 'choice',
+          options: [{ id: 'o1', label: 'Clofibrate 1 mM' }, { id: 'o2', label: 'DMSO' }],
+        }] },
+    ]} />)
+    const box = screen.getByTestId('chat-log-request-req-1')
+    expect(box).toHaveTextContent('Which material?')
+    fireEvent.click(screen.getByRole('button', { name: '1. Clofibrate 1 mM' }))
+    expect(onClarificationPick).toHaveBeenCalledTimes(1)
+  })
+
   it('renders a clarification turn and answers it as the next chat turn (lane-2 answer text)', () => {
     const onClarificationPick = vi.fn()
     render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
