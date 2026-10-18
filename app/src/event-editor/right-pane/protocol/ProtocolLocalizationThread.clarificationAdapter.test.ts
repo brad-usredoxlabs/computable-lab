@@ -99,10 +99,14 @@ describe('clarificationAdapter — menu keyed on (reason, actionLocation.argumen
   })
 
   it('8. the reason table itself is unchanged (presentation data, sanctioned extension)', () => {
+    // SAMPLE-CARD-1 DELIBERATE PIN UPDATE (same pattern ANSWER-SURFACE-1 used
+    // for the argument table): the three engine rows keep their exact values;
+    // the ONLY delta is the new sanctioned 'not-stated' row.
     expect({ ...CLARIFICATION_MENU_BY_REASON }).toEqual({
       'unknown-noun': '/m',
       'ambiguous-noun': '/m',
       'resolution-lookup-failed': '/m',
+      'not-stated': '/m',
     })
   })
 })

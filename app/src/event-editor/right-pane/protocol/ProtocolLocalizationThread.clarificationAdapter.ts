@@ -47,6 +47,12 @@ export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificati
   'unknown-noun': '/m',
   'ambiguous-noun': '/m',
   'resolution-lookup-failed': '/m',
+  // SAMPLE-CARD-1 (ARCHITECT DECISION W28-A5i Q2): the stable model-side
+  // reason for a stated-but-uncommitted fact (the emitter types it with
+  // actionLocation + exact label). Without this row the fact gets NO card and
+  // is unanswerable-by-construction; with it the shipped ANSWER-BIND-1
+  // exact-identity join (b52f5dfc) is the answer path — zero new machinery.
+  'not-stated': '/m',
 }
 
 /**
@@ -60,6 +66,10 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   'unknown-noun': { labware: '/l' },
   'ambiguous-noun': { labware: '/l' },
   'resolution-lookup-failed': { labware: '/l' },
+  // SAMPLE-CARD-1 (W28-A5i Q2): a labware-semantic not-stated fact answers by
+  // PICKING '/l' (resolveLabware — no mint floor, resolvers.ts:67-92), exactly
+  // the ANSWER-SURFACE-1 pattern; every other argument falls to '/m'.
+  'not-stated': { labware: '/l' },
 }
 
 /**
