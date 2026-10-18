@@ -44,12 +44,16 @@ pulls server-side sequence tests through lane-exclude symlinks → ENOENT noise)
 - The 23 are pre-existing debt; not chased, not grown.
 
 ## DIFF SCOPE (app-only — VERIFIED)
+[ORCH CORRECTION l2t0400 — advc defect 1 (advisory): the line below originally quoted
+"4 files changed, 128 insertions(+), 5 deletions(-)" against `diff --stat 8546827d HEAD`;
+that stat is the FEAT-commit delta (10cc7335 vs its parent eda42f6c), not base..HEAD. The
+true numbers, re-run and confirmed by the orchestrator at l2t0400:]
 `git -c core.fileMode=false diff --stat 8546827d HEAD` →
-  app/src/sequences/SequencesPage.tsx            (3 lines changed + libraryRows derivation)
+  app/src/sequences/SequencesPage.tsx            (3 hunks, +8/-2 incl. libraryRows derivation)
   app/src/sequences/SequencesPage.css            (+8 chrome rules)
-  app/src/sequences/SequencesPage.multiSelect.test.tsx (new, 264 lines)
-  app/e2e/sequences-multiselect.spec.ts          (new)
-4 files changed, 128 insertions(+), 5 deletions(-).
+  app/src/sequences/SequencesPage.multiSelect.test.tsx (new, 268 lines at HEAD: 264 at RED, amended +4 in feat)
+  app/e2e/sequences-multiselect.spec.ts          (new, 105 lines)
+5 files changed, 530 insertions(+), 2 deletions(-) incl. this report doc (4 app files, 389 insertions, 2 deletions).
 ZERO hunks under server/ or schema/. **YAML: none touched** — no surfaces.yaml,
 no agent-action.schema.yaml, no sequence-action.schema.yaml, no ui/lint YAML.
 No :3093 reload concern applies.
