@@ -36,7 +36,7 @@
  * hard-requires OpenTabsProvider and the chrome is unrelated to this surface.
  */
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { SequencesPage } from './SequencesPage'
@@ -153,7 +153,8 @@ describe('SequencesPage multi-select toolbar', () => {
     fireEvent.click(screen.getByTestId('sequence-select-all'))
     await waitFor(() => expect(countText()).toBe('1 selected'))
     expect(check('SEQ-A').checked).toBe(true)
-    expect(check('SEQ-B').checked).toBe(false)
+    // SEQ-B is filtered out of the DOM; the count (1) proves it was not added.
+    expect(screen.queryByTestId('sequence-check-SEQ-B')).toBeNull()
   })
 
   it('pin 4: toolbar save_collection body deep-equals the Analysis-fieldset body (byte-for-byte, requestId deterministic)', async () => {
@@ -182,7 +183,10 @@ describe('SequencesPage multi-select toolbar', () => {
     fireEvent.click(screen.getByLabelText('Alpha'))
     fireEvent.click(screen.getByLabelText('Beta'))
     fireEvent.change(screen.getByLabelText('Collection name'), { target: { value: 'Gates' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save collection' }))
+    // The toolbar's Save button shares the name 'Save collection' — scope to
+    // the Analysis fieldset so the OLD flow's button is the one clicked.
+    const fieldset = screen.getByRole('group', { name: 'Reference / alignment collection' })
+    fireEvent.click(within(fieldset).getByRole('button', { name: 'Save collection' }))
     await waitFor(() => expect(actionBodies().length).toBe(1))
     const fieldsetBody = actionBodies()[0]
     expect(toolbarBody).toEqual(fieldsetBody)
