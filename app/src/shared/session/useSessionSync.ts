@@ -33,6 +33,14 @@ export interface SessionSyncOptions {
    * router-free and unit-testable.
    */
   onAdopt?: (activeTabPath: string | null) => void
+  /**
+   * UCX-2: skip the BOOT pull entirely when the URL carries an explicit
+   * workspace strip (?ws=) — a deep link must not be yanked away by a newer
+   * server session. ATTACH-on-focus (the focus/visibilitychange pull) is
+   * unchanged. Absent means undefined via conditional spread (never explicit
+   * undefined).
+   */
+  skipBootPull?: boolean
 }
 
 /** Route of a session's active tab (null when it has none / no route). */
@@ -72,6 +80,7 @@ export function useSessionSync(options: SessionSyncOptions = {}): void {
   const onAdopt = options.onAdopt
   const onAdoptRef = useRef(onAdopt)
   onAdoptRef.current = onAdopt
+  const skipBootPull = options.skipBootPull === true
 
   const adopt = useCallback(
     (tabs: unknown[], activeTabId: string | null, updatedAt: string) => {
@@ -94,6 +103,8 @@ export function useSessionSync(options: SessionSyncOptions = {}): void {
   useEffect(() => {
     let cancelled = false
     const pull = async (boot: boolean) => {
+      // UCX-2: an explicit ?ws= deep link wins at boot — skip the GET.
+      if (boot && skipBootPull) return
       try {
         const { session } = await apiClient.getSession()
         if (cancelled) return
@@ -124,7 +135,7 @@ export function useSessionSync(options: SessionSyncOptions = {}): void {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
     }
-  }, [adopt])
+  }, [adopt, skipBootPull])
 
   // PUSH (debounced) — skipped for state adopted from the server.
   useEffect(() => {

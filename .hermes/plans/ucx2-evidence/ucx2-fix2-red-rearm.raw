@@ -1,0 +1,118 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2828873) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/shared/shell/TabUrlSync.test.tsx > TabUrlSync state → URL (replace-only) > openTab writes the strip into the current search with replace:true
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ❯ src/shared/shell/TabUrlSync.test.tsx  (13 tests | 1 failed) 1172ms
+   ❯ src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss then correction then re-navigation to the SAME malformed fragment re-arms the banner
+     → Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate"[39m
+    [36m>[39m
+      [0mexternal[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+    [36m>[39m
+      [0mexternal-malformed[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-same-malformed"[39m
+    [36m>[39m
+      [0mexternal-same-malformed[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate"[39m
+    [36m>[39m
+      [0mexternal[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+    [36m>[39m
+      [0mexternal-malformed[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-same-malformed"[39m
+    [36m>[39m
+      [0mexternal-same-malformed[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss then correction then re-navigation to the SAME malformed fragment re-arms the banner
+TestingLibraryElementError: Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate"[39m
+    [36m>[39m
+      [0mexternal[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+    [36m>[39m
+      [0mexternal-malformed[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-same-malformed"[39m
+    [36m>[39m
+      [0mexternal-same-malformed[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate"[39m
+    [36m>[39m
+      [0mexternal[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+    [36m>[39m
+      [0mexternal-malformed[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mdata-testid[39m=[32m"external-navigate-same-malformed"[39m
+    [36m>[39m
+      [0mexternal-same-malformed[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../computable-lab/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/shared/shell/TabUrlSync.test.tsx:253:33
+    251|     // Re-navigate to the EXACT dismissed malformed fragment.
+    252|     fireEvent.click(screen.getByTestId('external-navigate-same-malform…
+    253|     const banner = await screen.findByTestId('ws-param-diagnostic')
+       |                                 ^
+    254|     expect(banner.textContent).toContain('MALFORMED_WS_PARAM')
+    255|     // Malformed → do NOT touch state: the live strip survives the bad…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Start at  10:03:11
+   Duration  4.23s (transform 131ms, setup 46ms, collect 159ms, tests 1.17s, environment 357ms, prepare 59ms)
+

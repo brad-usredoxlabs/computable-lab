@@ -1,0 +1,39 @@
+
+> @computable/app@0.1.0 typecheck
+> tsc --noEmit
+
+src/event-editor/EventEditorContext.tsx(1288,29): error TS2339: Property 'equipments' does not exist on type '{ eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; placements: EventEditorPlacement[]; }'.
+src/event-editor/deck/LawnSurface.moveAcross.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/deck/PreviewActionBar.test.tsx(108,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/editorHistory.test.ts(176,34): error TS2345: Argument of type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: never[]; labwares: {}; placements: never[]; }' is not assignable to parameter of type 'EventEditorAction'.
+  Property 'equipments' is missing in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: never[]; labwares: {}; placements: never[]; }' but required in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; equipments: Record<string, Equipment>; placements: EventEditorPlacement[]; }'.
+src/event-editor/editorHistory.test.ts(199,37): error TS2345: Argument of type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: PlateEvent[]; labwares: {}; placements: never[]; }' is not assignable to parameter of type 'EventEditorAction'.
+  Property 'equipments' is missing in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: null; events: PlateEvent[]; labwares: {}; placements: never[]; }' but required in type '{ type: "load_event_graph_success"; eventGraphId: string; runId: string | null; events: PlateEvent[]; labwares: Record<string, Labware>; equipments: Record<string, Equipment>; placements: EventEditorPlacement[]; }'.
+src/event-editor/focus/LabwareFocus.instrument.test.tsx(47,5): error TS2353: Object literal may only specify known properties, and 'runDeckLock' does not exist in type 'EventEditorState'.
+src/event-editor/right-pane/ai/systemPromptForViewer.ts(46,3): error TS2322: Type '"document" | "protocol-review" | "pdf" | "deck" | "project-details"' is not assignable to type 'SystemPromptKind'.
+  Type '"protocol-review"' is not assignable to type 'SystemPromptKind'.
+src/event-editor/right-pane/ai/useChatThread.deckLayout.test.tsx(52,9): error TS2353: Object literal may only specify known properties, and 'onDeckLayout' does not exist in type 'UseChatThreadOptions'.
+src/event-editor/right-pane/ai/useChatThread.deckLayout.test.tsx(84,9): error TS2353: Object literal may only specify known properties, and 'onDeckLayout' does not exist in type 'UseChatThreadOptions'.
+src/event-editor/right-pane/protocol/ProtocolLocalizationThread.tsx(232,35): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
+src/event-editor/topbar/DeckModeSwitcher.tsx(11,24): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
+src/event-editor/viewer/Viewer.tsx(65,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
+src/event-editor/viewer/ViewerToolbar.tsx(55,13): error TS2322: Type '{ id: string; kind: "protocol-review"; recordId: string; title: string; }' is not assignable to type 'never'.
+src/event-editor/viewer/deck/DeckToolbar.tsx(38,31): error TS2339: Property 'runDeckLock' does not exist on type 'EventEditorState'.
+src/ingestion/components/IngestionUploadModal.tsx(232,23): error TS2554: Expected 2 arguments, but got 1.
+src/ingestion/protocol-review/ExtractionProgressPanel.test.tsx(9,19): error TS6133: 'fireEvent' is declared but its value is never read.
+src/shared/context/useSurfaceContext.ts(36,3): error TS2322: Type '{ editorMode?: string | undefined; surfaceData?: Record<string, unknown> | undefined; surface: string; active: ActiveObject; selection: SelectionItem[]; }' is not assignable to type 'SurfaceContextPayload'.
+  Types of property 'surface' are incompatible.
+    Type 'string' is not assignable to type 'SurfaceId'.
+src/shared/hooks/useAiChat.surfaceContext.test.ts(34,5): error TS2322: Type '"materials"' is not assignable to type 'SurfaceId'.
+src/shared/hooks/useAiChat.surfaceContext.test.ts(47,53): error TS2739: Type 'SurfaceContextPayload' is missing the following properties from type 'AiContext': summary, surfaceContext
+src/shared/hooks/useAiChat.surfaceContext.test.ts(66,53): error TS2739: Type 'SurfaceContextPayload' is missing the following properties from type 'AiContext': summary, surfaceContext
+src/shared/hooks/useAiChat.surfaceContext.test.ts(82,53): error TS2739: Type 'SurfaceContextPayload' is missing the following properties from type 'AiContext': summary, surfaceContext
+src/shared/hooks/useAiChat.surfaceContext.test.ts(102,7): error TS2322: Type '"event-editor"' is not assignable to type 'SurfaceId'.
+src/shared/hooks/useAiChat.surfaceContext.test.ts(107,53): error TS2739: Type 'SurfaceContextPayload' is missing the following properties from type 'AiContext': summary, surfaceContext
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /mnt/vast/home/brad/git/cl-integration-2/app
+npm error workspace @computable/app@0.1.0
+npm error location /mnt/vast/home/brad/git/cl-integration-2/app
+npm error command failed
+npm error command sh -c tsc --noEmit
