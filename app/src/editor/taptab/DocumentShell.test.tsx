@@ -272,3 +272,31 @@ describe('DocumentShellRail', () => {
     expect(screen.queryByText('Diagnostics')).not.toBeInTheDocument()
   })
 })
+
+/* ------------------------------------------------------------------ */
+/*  DocumentShell — column width posture                              */
+/* ------------------------------------------------------------------ */
+
+describe('DocumentShell width mode', () => {
+  it('defaults to the capped prose column', () => {
+    render(
+      <DocumentShell topBar={<DocumentShellHeader title="T" />}>
+        <div>content</div>
+      </DocumentShell>,
+    )
+    const shell = screen.getByRole('banner').parentElement!
+    expect(shell.className).toContain('document-shell')
+    expect(shell.className).toContain('document-shell--width-prose')
+    expect(shell.className).not.toContain('document-shell--width-full')
+  })
+
+  it('width="full" lets the editing column fill the main pane', () => {
+    render(
+      <DocumentShell topBar={<DocumentShellHeader title="T" />} width="full">
+        <div>content</div>
+      </DocumentShell>,
+    )
+    const shell = screen.getByRole('banner').parentElement!
+    expect(shell.className).toContain('document-shell--width-full')
+  })
+})

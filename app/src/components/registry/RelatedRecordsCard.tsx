@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../shared/api/client';
+import './RelatedRecordsCard.css';
 
 interface RelatedRecord {
   recordId: string;
@@ -30,28 +31,26 @@ export function RelatedRecordsCard({ recordId, onNavigate }: RelatedRecordsCardP
   }, [recordId]);
 
   if (loading) {
-    return <div className="text-gray-500 text-sm">Loading related...</div>;
+    return <div className="related-records__empty">Loading related...</div>;
   }
 
   if (related.length === 0) {
-    return <div className="text-gray-400 text-sm">No related records</div>;
+    return <div className="related-records__empty">No related records</div>;
   }
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-gray-700 mb-2">Related Records</h3>
-      <div className="space-y-1">
+    <div className="related-records">
+      <h3 className="related-records__title">Related Records</h3>
+      <div className="related-records__rows">
         {related.map((item) => (
           <button
             key={item.recordId}
             onClick={() => onNavigate(item.recordId)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 w-full text-left text-sm"
+            className="related-records__row"
           >
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-              {item.kind}
-            </span>
-            <span className="text-gray-900 truncate flex-1">{item.title}</span>
-            <span className="text-xs text-gray-400">via {item.refField}</span>
+            <span className="related-records__kind">{item.kind}</span>
+            <span className="related-records__label">{item.title}</span>
+            <span className="related-records__via">via {item.refField}</span>
           </button>
         ))}
       </div>

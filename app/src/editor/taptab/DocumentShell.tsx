@@ -25,6 +25,12 @@ interface DocumentShellProps {
   rail?: React.ReactNode
   /** When true, render the rail inline below the document (mobile) */
   railBelow?: boolean
+  /**
+   * Column width posture. 'prose' (default) keeps the capped paper column every
+   * existing surface expects; 'full' lets the column fill the main pane — used
+   * by the registry, whose records are wide diagnostic/QMS forms, not prose.
+   */
+  width?: 'prose' | 'full'
   /** Optional class on the outer wrapper */
   className?: string
 }
@@ -39,10 +45,11 @@ export function DocumentShell({
   children,
   rail,
   railBelow = false,
+  width = 'prose',
   className = '',
 }: DocumentShellProps) {
   return (
-    <div className={`document-shell ${className}`}>
+    <div className={`document-shell document-shell--width-${width} ${className}`}>
       {/* ── Narrow top control bar ─────────────────────────────── */}
       <div className="document-shell__topbar" role="banner">
         {topBar}

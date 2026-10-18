@@ -107,6 +107,23 @@
   gap: 1rem;
 }
 
+/* Full-width posture: the registry's wide forms use the whole main pane. */
+
+.document-shell--width-full {
+  /* The wide posture gives the paper column room: the diagnostics rail is a
+   * supporting column, not a third of the pane. */
+  --shell-rail-width: 240px;
+}
+
+.document-shell--width-full .document-shell__column {
+  padding: 1.25rem 1.5rem;
+}
+
+.document-shell--width-full .document-shell__column .taptab-editor-container {
+  max-width: none;
+  box-shadow: none;
+}
+
 /* On narrow viewports the rail drops below the column */
 
 @media (max-width: 768px) {

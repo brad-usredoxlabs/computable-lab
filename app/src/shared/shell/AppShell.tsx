@@ -78,6 +78,12 @@ export interface AppShellProps {
    * studies remember their own pane widths.
    */
   panelAutoSaveId?: string
+  /**
+   * Default width (percent) of the MAIN pane in the two-pane workspace split.
+   * Absent keeps the historical 60/40. Form-heavy surfaces (the registry) pass
+   * a wider default: their records are wide diagnostic tables, not prose.
+   */
+  mainPaneDefaultSize?: number
   children?: ReactNode
 }
 
@@ -96,6 +102,7 @@ export function AppShell({
   bare,
   layout = 'stacked',
   panelAutoSaveId,
+  mainPaneDefaultSize,
   children,
 }: AppShellProps) {
   const { resolvedTheme } = useTheme()
@@ -143,6 +150,7 @@ export function AppShell({
       )}
       {isWorkspace ? (
         <WorkspaceMain
+          {...(mainPaneDefaultSize !== undefined ? { mainPaneDefaultSize } : {})}
           viewerToolbar={viewerToolbar}
           navPane={navPane}
           leftPane={leftPane}
@@ -159,6 +167,8 @@ export function AppShell({
 }
 
 interface WorkspaceMainProps {
+  /** Default width (percent) of the main pane; defaults to 60. */
+  mainPaneDefaultSize?: number
   viewerToolbar?: ReactNode
   navPane?: ReactNode
   leftPane?: ReactNode
@@ -182,6 +192,7 @@ function WorkspaceMain({
   leftPane,
   rightPane,
   panelAutoSaveId,
+  mainPaneDefaultSize = 60,
 }: WorkspaceMainProps) {
   const hasRight = rightPane !== undefined && rightPane !== null
   const hasNav = navPane !== undefined && navPane !== null
@@ -301,7 +312,7 @@ function WorkspaceMain({
         {...(panelAutoSaveId ? { autoSaveId: panelAutoSaveId } : {})}
       >
         <Panel
-          defaultSize={60}
+          defaultSize={mainPaneDefaultSize}
           minSize={20}
           collapsible
           collapsedSize={0}
@@ -311,7 +322,7 @@ function WorkspaceMain({
         </Panel>
         <PanelResizeHandle className="cl-workspace__handle" />
         <Panel
-          defaultSize={40}
+          defaultSize={100 - mainPaneDefaultSize}
           minSize={20}
           collapsible
           collapsedSize={0}

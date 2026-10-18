@@ -14,7 +14,7 @@
  *     project-details (no stale target); NO SURFACE_AI_REQUEST_EVENT fires
  *     on selection (OQ2 ruling); the OpenTabs strip gains no per-record tab.
  *  5. layout: the hand-rolled h-[calc(100vh-4rem)] root is replaced by a
- *     pane-filling height (h-full min-h-0), keeping the bounded list parent.
+ *     pane-filling height (.registry-page), keeping the bounded list parent.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -348,8 +348,9 @@ describe('RegistryHostPage — /registry in the unified workspace shell (QMS7-1)
     const divs = Array.from(container.querySelectorAll('div'))
     // The old hand-rolled calc(100vh-4rem) root is gone…
     expect(divs.some((d) => String(d.className).includes('calc(100vh'))).toBe(false)
-    // …replaced by a pane-filling height so the list's overflow-y-auto keeps
-    // a bounded parent (spec LAYOUT bait).
-    expect(divs.some((d) => String(d.className).includes('h-full') && String(d.className).includes('min-h-0'))).toBe(true)
+    // …replaced by the registry's own pane-filling root class (RecordRegistryPage.css:
+    // height:100%; min-height:0) so the list's overflow-y-auto keeps a bounded
+    // parent (spec LAYOUT bait). Theme tokens, not utility strings.
+    expect(divs.some((d) => String(d.className).includes('registry-page'))).toBe(true)
   })
 })

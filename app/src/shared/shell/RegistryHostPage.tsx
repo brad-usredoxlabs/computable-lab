@@ -41,11 +41,14 @@ export function RegistryHostPage() {
     navigateActiveTab(tab)
   }, [navigateActiveTab])
 
+  // The registry edits wide diagnostic/QMS records: the record pane gets a
+  // wider default split than the prose-oriented 60/40.
   return (
     <WorkspaceProvider studyId={SCRATCH_STUDY_ID}>
       <AppShell
         brand="Registry"
         layout="workspace"
+        mainPaneDefaultSize={74}
         topbarTabs={<WorkspaceTabStrip />}
         leftPane={<RecordRegistryPage />}
         rightPane={<RightPane />}
