@@ -14,12 +14,10 @@
  */
 
 import { UndoRedoControls } from '../../topbar/UndoRedoControls'
-import { DeckModeSwitcher } from '../../topbar/DeckModeSwitcher'
-import { VocabSwitcher } from '../../topbar/VocabSwitcher'
+import { DeckSetupChip } from '../../topbar/DeckSetupChip'
 import { ToolSwitcher } from '../../topbar/ToolSwitcher'
 import { TipChip } from '../../topbar/TipChip'
 import { EventGraphChip } from '../../topbar/EventGraphChip'
-import { useEventEditor } from '../../EventEditorContext'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { EditableTitle } from '../../../shared/shell/EditableTitle'
 import { TabBreadcrumb } from '../../../shared/shell/TabBreadcrumb'
@@ -33,9 +31,7 @@ export interface DeckToolbarProps {
 }
 
 export function DeckToolbar({ tab, breadcrumb }: DeckToolbarProps) {
-  const { state } = useEventEditor()
   const ws = useWorkspace()
-  const runDeckLocked = state.runDeckLock?.locked === true
 
   // Only show the editable title for deck tabs that have a runId
   const hasRun = tab?.kind === 'deck' && tab.runId
@@ -90,12 +86,9 @@ export function DeckToolbar({ tab, breadcrumb }: DeckToolbarProps) {
       ) : null}
       {hasRun ? <span className="deck-toolbar__separator" aria-hidden /> : null}
       <UndoRedoControls />
-      {!runDeckLocked ? (
-        <>
-          <DeckModeSwitcher />
-          <VocabSwitcher />
-        </>
-      ) : null}
+      {/* Deck setup is ONE composite control; once the run's deck is fixed it
+          renders as a read-only summary instead of live pulldowns. */}
+      <DeckSetupChip />
       <ToolSwitcher />
       <TipChip />
       <EventGraphChip />

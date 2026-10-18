@@ -18,7 +18,7 @@
  * final macro is posted to the corpus moat (THE MOAT).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useOptionalEventEditor } from '../../EventEditorContext'
+import { useOptionalEventEditor, isDeckSetupLocked } from '../../EventEditorContext'
 import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
@@ -229,7 +229,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     setDeckPlatform(editorState.platformId)
   }, [deckPlatform, editorState?.platformId])
 
-  const deckLocked = editorState?.runDeckLock?.locked === true
+  const deckLocked = editorState ? isDeckSetupLocked(editorState) : false
 
   // Minimal deck scope for preview (mirror StepLocalizationPane). Built from an
   // explicit platform/variant so the Review-deck gate can ghost onto the deck

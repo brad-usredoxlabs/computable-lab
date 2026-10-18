@@ -167,6 +167,170 @@
    sit right at the top of the workspace without an overflowing full-size
    row. Scoped to the DeckToolbar (`.viewer-toolbar--deck`), which carries
    the `.event-editor` context class. */
+/* ---- Deck setup: ONE composite control (deck -> variant -> vocab) ---- */
+.event-editor .deck-setup {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.event-editor .deck-setup__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-editor .deck-setup__trigger:hover {
+  border-color: var(--cl-border-strong);
+}
+
+.event-editor .deck-setup__trigger[aria-expanded='true'] {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .deck-setup__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .deck-setup__caret {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--cl-text-faint);
+}
+
+.event-editor .deck-setup__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: min(92vw, 340px);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+.event-editor .deck-setup__step-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-text-faint);
+}
+
+.event-editor .deck-setup__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.event-editor .deck-setup__option {
+  padding: 4px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-editor .deck-setup__option:hover {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+}
+
+.event-editor .deck-setup__option--active {
+  background: var(--cl-accent-soft);
+  border-color: var(--cl-accent);
+  color: var(--cl-accent);
+  font-weight: 600;
+}
+
+.event-editor .deck-setup--locked {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  max-width: min(70vw, 360px);
+  min-width: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.event-editor .deck-setup--locked .deck-setup__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .deck-setup__lock {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+/* The deck toolbar root CARRIES .event-editor, so `.event-editor
+ * .viewer-toolbar--deck` (ancestor form) never matched it — the bar wrapped
+ * into a tall column on a phone (~229px). It must own the row width and stay
+ * one line with horizontal scroll instead. */
+.event-editor.viewer-toolbar--deck {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  /* On a phone the run toolbar shares its row with the mode buttons; give the
+   * deck bar the full width below them instead of splitting 111px between two. */
+  .cl-workspace__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .event-editor.viewer-toolbar--deck {
+    flex: 1 1 100%;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  /* One chip instead of three pulldowns: the toolbar keeps room for tool + tip. */
+  .event-editor .viewer-toolbar--deck .deck-setup__trigger {
+    max-width: 44vw;
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+
+  .event-editor .deck-setup__panel {
+    width: calc(100vw - 24px);
+    max-width: 340px;
+  }
+}
+
 @media (max-width: 768px) {
   .event-editor .viewer-toolbar--deck {
     gap: 4px;

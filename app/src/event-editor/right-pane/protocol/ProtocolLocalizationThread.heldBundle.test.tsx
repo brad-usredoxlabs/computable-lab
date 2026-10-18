@@ -33,6 +33,8 @@ vi.mock('../../../shared/api/client', () => ({
 }))
 
 vi.mock('../../EventEditorContext', () => ({
+  // Deck setup is a start-of-run decision; these suites never lock it.
+  isDeckSetupLocked: () => false,
   useOptionalEventEditor: () => ({
     state: {
       platforms: [{ id: 'integra_assist', label: 'Integra Assist', variants: [{ id: 'default', title: 'Default', slots: [{ id: 'B2', kind: 'standard' }, { id: 'B5', kind: 'standard' }] }] }],

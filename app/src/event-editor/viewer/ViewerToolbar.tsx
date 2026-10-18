@@ -14,7 +14,7 @@
 import { DeckToolbar } from './deck/DeckToolbar'
 import { PdfToolbar } from './pdf/PdfToolbar'
 import { DocumentToolbar } from './document/DocumentToolbar'
-import { DeckModeSwitcher } from '../topbar/DeckModeSwitcher'
+import { DeckSetupChip } from '../topbar/DeckSetupChip'
 import type { WorkspaceTab } from '../workspace/types'
 
 export interface ViewerToolbarProps {
@@ -48,7 +48,7 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
       // Show mode switcher so user can navigate back to plan/deck view.
       return (
         <div className="event-editor viewer-toolbar viewer-toolbar--execution">
-          <DeckModeSwitcher />
+          <DeckSetupChip />
         </div>
       )
     default: {

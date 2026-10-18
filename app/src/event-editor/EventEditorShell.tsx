@@ -2,8 +2,7 @@ import { useEventEditor } from './EventEditorContext'
 import { AppShell, NavLinks } from '../shared/shell'
 import { DeckStage } from './deck/DeckStage'
 import { Slot } from '../extensions'
-import { DeckModeSwitcher } from './topbar/DeckModeSwitcher'
-import { VocabSwitcher } from './topbar/VocabSwitcher'
+import { DeckSetupChip } from './topbar/DeckSetupChip'
 import { ToolSwitcher } from './topbar/ToolSwitcher'
 import { TipChip } from './topbar/TipChip'
 import { EventGraphChip } from './topbar/EventGraphChip'
@@ -11,8 +10,7 @@ import { EventGraphChip } from './topbar/EventGraphChip'
 const brand = 'Event Editor'
 const topbarMiddle = (
   <>
-    <DeckModeSwitcher />
-    <VocabSwitcher />
+    <DeckSetupChip />
     <ToolSwitcher />
     <TipChip />
     <EventGraphChip />

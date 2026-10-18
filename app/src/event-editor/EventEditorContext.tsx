@@ -301,6 +301,20 @@ export interface EventEditorState {
   history: EditorHistory
 }
 
+/**
+ * Deck setup (platform + variant + vocab pack) is a START-OF-RUN decision: it
+ * defines the slot space, so changing it mid-run would invalidate every
+ * placement. Once the run declares its deck (method load) or the editor holds
+ * any deck content, the trio is fixed. Tool + tip stay in-run controls.
+ */
+export function isDeckSetupLocked(state: EventEditorState): boolean {
+  return (
+    state.runDeck !== null ||
+    (state.placements?.length ?? 0) > 0 ||
+    (state.events?.length ?? 0) > 0
+  )
+}
+
 export function addMaterialRefDetails(ref: Ref): Pick<
   AddMaterialDetails,
   | 'material_ref'

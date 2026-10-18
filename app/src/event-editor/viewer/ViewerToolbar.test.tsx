@@ -32,7 +32,9 @@ const eventEditorMock = vi.hoisted(() => ({
     runId: null as string | null,
     dirty: false,
     history: { past: [], future: [] },
-    runDeckLock: null as null | { locked: true; platformId: string; variantId: string; source: string; lockedAt: string },
+    runDeck: null as null | { platformId: string; variantId: string },
+    placements: [] as unknown[],
+    events: [] as unknown[],
   },
 }))
 
@@ -41,6 +43,13 @@ const eventEditorMock = vi.hoisted(() => ({
 // hook with a minimal shape that satisfies every chip's reads without
 // pulling in EventEditorProvider.
 vi.mock('../EventEditorContext', () => ({
+  // Same rule the real module exports: the run's deck (or any deck content)
+  // fixes the setup.
+  isDeckSetupLocked: (state: {
+    runDeck: unknown
+    placements: unknown[]
+    events: unknown[]
+  }) => state.runDeck !== null || state.placements.length > 0 || state.events.length > 0,
   useEventEditor: () => ({
     state: eventEditorMock.state,
     actions: {
@@ -53,6 +62,13 @@ vi.mock('../EventEditorContext', () => ({
       redo: () => undefined,
     },
   }),
+}))
+
+// DeckToolbar reads the workspace only to rename the tab; the dispatcher test
+// does not mount a WorkspaceProvider, so stub the hook (it was an implicit
+// dependency the deck-branch tests could not satisfy before).
+vi.mock('../workspace/WorkspaceContext', () => ({
+  useWorkspace: () => ({ renameTab: () => undefined }),
 }))
 
 // Mock the PdfToolbar so we don't transitively import pdfjs-dist (which
@@ -84,7 +100,7 @@ vi.mock('./document/DocumentToolbar', () => ({
 import { ViewerToolbar } from './ViewerToolbar'
 
 beforeEach(() => {
-  eventEditorMock.state.runDeckLock = null
+  eventEditorMock.state.runDeck = null
 })
 
 afterEach(() => cleanup())
@@ -128,18 +144,20 @@ describe('ViewerToolbar dispatcher', () => {
     render(<ViewerToolbar tab={tab} />)
     // The DeckToolbar's wrapper class confirms the deck branch was taken.
     expect(document.querySelector('.viewer-toolbar--deck')).toBeTruthy()
-    expect(screen.getByText('Deck')).toBeTruthy()
-    expect(screen.getByText('Vocab')).toBeTruthy()
+    // The deck setup is ONE composite chip (not three pulldowns) that names the
+    // current choices; tool stays an in-run control.
+    const setup = screen.getByTestId('deck-setup-trigger')
+    expect(setup.textContent).toContain('Manual')
+    expect(setup.textContent).toContain('Single plate')
     expect(screen.getByText('Tool')).toBeTruthy()
+    // The composite control holds no native selects (Tool is still a chip).
+    expect(document.querySelectorAll('.deck-setup select')).toHaveLength(0)
   })
 
   it('hides locked deck context controls for deck tabs', () => {
-    eventEditorMock.state.runDeckLock = {
-      locked: true,
+    eventEditorMock.state.runDeck = {
       platformId: 'manual',
       variantId: 'manual_single_plate',
-      source: 'first-edit',
-      lockedAt: '2026-06-15T00:00:00.000Z',
     }
     const tab: WorkspaceTab = {
       id: 't1',
@@ -149,6 +167,9 @@ describe('ViewerToolbar dispatcher', () => {
     }
     render(<ViewerToolbar tab={tab} />)
     expect(document.querySelector('.viewer-toolbar--deck')).toBeTruthy()
+    // Read-only summary: the run's deck was chosen at its start.
+    expect(screen.queryByTestId('deck-setup-trigger')).toBeNull()
+    expect(screen.getByTestId('deck-setup-chip').textContent).toContain('Manual')
     expect(screen.queryByText('Deck')).toBeNull()
     expect(screen.queryByText('Vocab')).toBeNull()
     expect(screen.getByText('Tool')).toBeTruthy()
