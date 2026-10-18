@@ -28,7 +28,10 @@
  * Dismissal releases ownership of THAT search only: the banner stays hidden,
  * the STATE→URL effect resumes writing, and the corrected search replaces the
  * malformed one on the next strip change. A DIFFERENT malformed link re-arms
- * the banner (dismissal is not a session-wide mute).
+ * the banner (dismissal is not a session-wide mute). The latch clears when a
+ * STATE→URL correction lands (advc-UCX2-c2 NEW-1), so re-navigating onto the
+ * SAME dismissed malformed fragment re-arms the banner too — dismissal is not
+ * permanent amnesia for a bad link that comes back.
  *
  * Loop defenses (both pinned by TabUrlSync.test.tsx): the no-op guard
  * (desired search === current search) and the ref-tracked lastWritten.
@@ -155,6 +158,14 @@ export function TabUrlSync() {
     // NORMALIZED search WITHOUT the '?' prefix (normalizeSearch never has one).
     if (mergedStr === normalizeSearch(location.search)) return
     lastWrittenRef.current = mergedStr
+    // FIX2 (advc-UCX2-c2 NEW-1): the correction landing IS the moment the URL
+    // becomes valid, so the dismissal latch clears HERE — the :101-107 branch
+    // can never run for the dismissed fragment after this write (the :98
+    // lastWritten early-return shadows it). Without this clear, a dismissed
+    // malformed ws would be silently rewritten forever: a re-navigation onto
+    // the SAME bad link would hit the :109 dismissed branch and never re-arm
+    // the banner.
+    dismissedFragmentRef.current = null
     navigate(`${location.pathname}${desiredSearch}`, { replace: true })
   }, [eligible, desired, location.pathname, location.search, navigate])
 

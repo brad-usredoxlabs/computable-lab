@@ -70,6 +70,15 @@ function Probe() {
       >
         external-malformed
       </button>
+      {/* FIX2 (advc-UCX2-c2 NEW-1): the EXACT fragment the mount opened with —
+          the same malformed link a re-navigation (back/forward or a clicked
+          link) would land on after it was dismissed and corrected away. */}
+      <button
+        data-testid="external-navigate-same-malformed"
+        onClick={() => navigate('/record/DOC-9?ws=%%nonsense%%&wsa=zzz', { replace: true })}
+      >
+        external-same-malformed
+      </button>
     </>
   )
 }
@@ -217,6 +226,34 @@ describe('TabUrlSync URL → state (external change)', () => {
     // State is still untouched by a malformed link (spec: malformed → do NOT
     // touch state) — the storage strip is intact.
     expect(ctx!.state.tabs.map((t) => t.tab.id)).toEqual(['record:DOC-9'])
+  })
+
+  // FIX2 (advc-UCX2-c2 NEW-1): the dismissal latch must clear when the
+  // STATE→URL correction lands, so re-navigating to the SAME malformed
+  // fragment (back/forward or a clicked link) RE-ARMS the banner instead of
+  // being silently rewritten forever.
+  it('dismiss then correction then re-navigation to the SAME malformed fragment re-arms the banner', async () => {
+    mountSync('/record/DOC-9?ws=%%nonsense%%&wsa=zzz')
+    await screen.findByTestId('ws-param-diagnostic')
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    await waitFor(() => expect(screen.queryByTestId('ws-param-diagnostic')).toBeNull())
+
+    // The strip change corrects the URL (the D1 contract).
+    act(() => {
+      ctx!.openTab({ id: 'run:RUN-A', kind: 'run', runId: 'RUN-A', title: 'Run A' })
+    })
+    await waitFor(
+      () => expect(searchParams().get('ws')).toBe('record:DOC-9,run:RUN-A'),
+      { timeout: 2000 },
+    )
+    expect(searchParams().toString()).not.toContain('nonsense')
+
+    // Re-navigate to the EXACT dismissed malformed fragment.
+    fireEvent.click(screen.getByTestId('external-navigate-same-malformed'))
+    const banner = await screen.findByTestId('ws-param-diagnostic')
+    expect(banner.textContent).toContain('MALFORMED_WS_PARAM')
+    // Malformed → do NOT touch state: the live strip survives the bad link.
+    expect(ctx!.state.tabs.map((t) => t.tab.id)).toEqual(['record:DOC-9', 'run:RUN-A'])
   })
 
   // FIX1 (defect 1, adoption half): a dismissed PER-ENTRY malformed link
