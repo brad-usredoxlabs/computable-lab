@@ -1,0 +1,111 @@
+/* QMS-6 lifecycle chrome — state pill, transition buttons, dirty/error notes.
+ * Token-only (--cl-*): every colour follows .cl-app[data-theme]; the pill
+ * states differentiate via the semantic status tokens (info/success soft
+ * fills + dim/faint ink), never fixed palette shades. */
+.dcb {
+  margin-bottom: 16px;
+}
+
+.dcb__card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+}
+
+/* Current-state pill: same base shape, semantic fill/ink per lifecycle state
+   (mirrors the soft-fill + solid-ink pairing tokens.css defines). */
+.dcb__state-pill {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.dcb__state-pill--draft {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-dim);
+}
+
+.dcb__state-pill--in_review {
+  background: var(--cl-info-soft);
+  border-color: var(--cl-info-border);
+  color: var(--cl-info);
+}
+
+.dcb__state-pill--approved {
+  background: var(--cl-success-soft);
+  border-color: var(--cl-success-border);
+  color: var(--cl-success);
+}
+
+.dcb__state-pill--effective {
+  background: var(--cl-success-soft);
+  border-color: var(--cl-success-border);
+  color: var(--cl-success);
+}
+
+/* Terminal states read as struck-through, faded ink — legible in both themes. */
+.dcb__state-pill--superseded {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-faint);
+  text-decoration: line-through;
+}
+
+.dcb__state-pill--archived {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-faint);
+  text-decoration: line-through;
+}
+
+.dcb__note {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+.dcb__btn {
+  appearance: none;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border-strong);
+  background: transparent;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.dcb__btn:hover:not(:disabled) {
+  background: var(--cl-bg-elev-2);
+  border-color: var(--cl-accent);
+}
+
+.dcb__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dcb__terminal {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+/* Dirty-editor block hint: warn ink (tokens.css defines --cl-warn). */
+.dcb__save-hint {
+  font-size: 13px;
+  color: var(--cl-warn);
+}
+
+.dcb__error {
+  font-size: 13px;
+  color: var(--cl-danger);
+}
+
+.dcb__receipt {
+  margin-top: 8px;
+}
