@@ -1,0 +1,368 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "stool samples",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cstool samples\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 1,
+     "action": "add_material",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 2,
+     "action": "create_container",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 3,
+     "action": "transfer",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "lysis buffer",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201clysis buffer\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 4,
+     "action": "add_material",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 4,
+     "action": "add_material",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 5,
+     "action": "bead_beat",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 6,
+     "action": "spin",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "wash plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cwash plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 7,
+     "action": "create_container",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "binding plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cbinding plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 8,
+     "action": "transfer",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "wash plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cwash plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 8,
+     "action": "transfer",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "wash plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cwash plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 9,
+     "action": "wash",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "wash plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cwash plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 11,
+     "action": "transfer",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "elution buffer",
+    "reason": "not present in lab inventory; bound to closest elution-related material (final eluate / DNase-RNase Free Water) by compiler"
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "zymo-biomics-prep",
+   "actions": [
+    {
+     "action": "create_container",
+     "labware": "sample plate"
+    },
+    {
+     "action": "add_material",
+     "source": "stool samples",
+     "target": "sample plate",
+     "source_name": "stool sample",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "create_container",
+     "labware": "binding plate"
+    },
+    {
+     "action": "transfer",
+     "source": "sample plate",
+     "target": "binding plate",
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "source": "lysis buffer",
+     "target": "binding plate",
+     "source_name": "Lysis Solution",
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "binding plate",
+     "duration": "5 min"
+    },
+    {
+     "action": "spin",
+     "labware": "binding plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "create_container",
+     "labware": "wash plate"
+    },
+    {
+     "action": "transfer",
+     "source": "binding plate",
+     "target": "wash plate",
+     "volumeUl": 500
+    },
+    {
+     "action": "wash",
+     "labware": "wash plate",
+     "source_name": "MagWash 2",
+     "volumeUl": 800,
+     "cycles": 3
+    },
+    {
+     "action": "create_container",
+     "labware": "eluate plate"
+    },
+    {
+     "action": "transfer",
+     "source": "wash plate",
+     "target": "eluate plate",
+     "source_name": "elution buffer",
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "eluate plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "eluate plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": [
+    {
+     "label": "elution buffer",
+     "reason": "not present in lab inventory; bound to closest elution-related material (final eluate / DNase-RNase Free Water) by compiler"
+    }
+   ]
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "zymo-biomics-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "sample plate",
+       "labwareHint": "sample plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "stool samples",
+       "labwareHint": "stool samples",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "binding plate",
+       "labwareHint": "binding plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "lysis buffer",
+       "labwareHint": "lysis buffer",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "wash plate",
+       "labwareHint": "wash plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "eluate plate",
+       "labwareHint": "eluate plate",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": [
+     {
+      "id": "unresolved-elution buffer",
+      "kind": "operation",
+      "label": "elution buffer",
+      "reason": "not present in lab inventory; bound to closest elution-related material (final eluate / DNase-RNase Free Water) by compiler",
+      "blocksLowering": false
+     }
+    ]
+   }
+  }
+ }
+}

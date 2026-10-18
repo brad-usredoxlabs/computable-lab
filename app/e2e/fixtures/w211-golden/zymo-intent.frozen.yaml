@@ -1,0 +1,323 @@
+# =============================================================================
+# W211-MACH-1 GOLDEN FIXTURE — zymo-intent.frozen.yaml (v1)
+# =============================================================================
+# Versioned, declarative, ZYMO-derived scientist-intent fixture for the golden
+# deterministic leg (spec: .hermes/plans/2026-10-18_W211-MACH-1-golden-fixture-spec.md).
+#
+# WHAT THIS IS: harness DATA. It is NOT product policy and is special-cased
+# nowhere in code. The frozen `modelOutput` / `branchQuestionsOutput` blocks are
+# the FROZEN WIRE RESPONSES the harness replay server serves at the producer's
+# own wire boundary (OpenAI-compatible /v1/chat/completions). Everything from
+# validation, role resolution, clarification rendering, answer submission, mint,
+# persistence, recompile, deck review, accept and LPR runs on PRODUCTION paths.
+#
+# SELF-PIN: the sha256 of THIS file's exact bytes is pinned in PROVENANCE.md and
+# asserted by zymo-intent.integrity.test.ts (vitest) and by the golden harness
+# (w211-golden-fixture.spec.mjs) before any leg runs — fixture drift refuses the
+# gate (campaign-fixtures pattern: zymo-semantic-draft.frozen.yaml + PROVENANCE.md).
+#
+# PROVENANCE: derived from the D4_PROMPT lineage (app/e2e/w2-11-campaign-demo.spec.mjs
+# :888-899, architect ruling W211-D4-noun-drift-fixture-decision-l2t2150) plus the
+# frozen ZYMO campaign draft content (server/src/ingestion/vendor-protocol/
+# campaign-fixtures/). Every scientific statement is bench-plausible for a
+# ZymoBIOMICS 96 MagBead-style DNA prep. Authored by cl-coder l2t1330 2026-10-18;
+# obligation classes per the W211-MACH-1 block with the STEP 0 OQ2 probe outcome
+# applied (class-(d) BLOCKED-ON-FIX — see obligations[3] and the report).
+# =============================================================================
+fixtureId: w211-golden-zymo-bench-prep
+version: 1
+cohortNonce: v211g1
+
+# The scientist's free text the UI sends (pl-protocol-text). The replay producer
+# answers it with the frozen modelOutput below; the prose and the macro state
+# the SAME experiment (fixture review doc maps sentence -> obligation).
+protocolText: |
+  ZymoBIOMICS 96 MagBead-style DNA prep on the bench, single 96-well plate workflow.
+  Bring one Sample Plate holding 50 uL of each stool sample in wells A1-D4 to the bench.
+  Transfer 50 uL from the Sample Plate to the Lysis Plate.
+  Add 700 uL of Lysis Solution to each well A1-D4 of the Lysis Plate.
+  Bead beat the samples in the Bead Beating Plate for 30 s.
+  Spin the Lysis Plate at 3000 rpm for 10 min.
+  Transfer 500 uL from the Lysis Plate to the MagBinding Plate.
+  Add 500 uL of MagBinding Beads v211g1 to each well A1-D4 of the MagBinding Plate.
+  Add 800 uL of MagBinding Buffer to each well A1-D4 of the MagBinding Plate, then wash the plate once.
+  Elute the MagBinding Plate into the Sample Plate with 100 uL of nuclease-free water.
+  Incubate the Sample Plate at 37 C for 30 min.
+  Read the Sample Plate at 600 nm absorbance.
+
+# ---------------------------------------------------------------------------
+# THE OBLIGATIONS (classes per the W211-MACH-1 block; STEP 0 outcome applied)
+# ---------------------------------------------------------------------------
+obligations:
+  - id: a-role-unique-noun
+    class: role-uniquely-resolvable-noun
+    noun: Sample Plate
+    slots: "transfer.source, elute.target, incubate.labware, read.labware"
+    seededAgainst: "exactly ONE labware record names it (LAB-w211-sample-plate)"
+    expected: "binds WITHOUT a card on the first draw (single in-band tier-1 hit, resolutionEngine.ts single-winner arm); no clarification fact ever names its label"
+    status: built
+  - id: b-ambiguous-labware-slot
+    class: genuine-ambiguity-on-labware-semantic-slot
+    noun: Bead Beating Plate
+    slots: "bead_beat.labware"
+    seededAgainst: "TWO labware records whose names both land in the acceptance band (Bead Beating Plate A / B)"
+    expected: "fact carries reason ambiguous-noun + actionLocation.argument 'labware'; card renders the '/l' labware surface (ANSWER-SURFACE-1) with NO mint floor row; answer by PICKING a candidate in the real ClarificationPicker; the pick emits [[labware:<id>|label]]; ANSWER-BIND-1 binds it authoritatively; the NEXT compile deterministically lacks the fact and the recomputed artifacts carry the PICKED record id"
+    status: built
+  - id: c-unknown-material-noun
+    class: unknown-noun-material
+    noun: MagBinding Beads v211g1
+    slots: "add_material.material"
+    seededAgainst: "NOTHING (zero store match; cohort nonce v211g1 keeps it fresh per cohort; the leg FAILS if the nonce pre-exists)"
+    expected: "fact carries reason unknown-noun with the mint affordance; card renders '/m' WITH the mint floor row; take the REAL UI mint act (picker floor row -> POST /vocab/mint {refKind:'material', label}); the minted record is a governed material; the next compile binds the slot and the fact clears; minted id is read dynamically, never fixture-pinned"
+    status: built
+  - id: d-gap-fact-deck-surface
+    class: one-gap-fact-answered-through-its-real-surface
+    noun: "(non-noun gap fact — prose-reason clarification, no actionLocation)"
+    slots: "n/a"
+    seededAgainst: "n/a"
+    expected: "spec: the fact is answered through its real surface and survives to the deck"
+    status: "BLOCKED-ON-FIX — STEP 0 probe (see report §STEP0 + named fix task W211-GAPCARD-1): a non-noun gap fact reaches NO answerable card surface. On the held-422 arm heldFactToClarificationRequest maps it to null (no menu row for its reason -> no card, infoMsg only); on the 200-gap arm the client 200 arms never read res.clarifications and setHeldCards([]). Answering it requires a product change (adapter menu row for gap reasons + a client arm that folds 200-gap clarifications) — a STOP-boundary fix task, NOT absorbed here."
+    status_note: "the three built legs (a/b/c) stand; the deck-surface fidelity bar transfers to the (b)-picked record's placement offer (expectedDeck below)"
+
+# STEP 0 OQ2 PROBE EVIDENCE (empirical, lane stack :3093, 2026-10-18, l2t1330;
+# raw bodies under .hermes/plans/w211-step0/):
+# - probeA (realistic bench prose, no answers): 200 needsAnswers ask arm.
+# - probeB2 (answered draw, real model): 422 held bundle carrying
+#   ambiguous-noun 'Bead Beating Plate' actionLocation.argument 'labware'
+#   (candidates A/B, confidence 1.0) AND a prose gap fact (reason = free text,
+#   actionLocation absent, candidates 0). The held-422 fold IS reachable.
+# - probeC (BIND-1): answering the (b) fact with [[labware:LAB-w211-golden-
+#   beadplate-a|Bead Beating Plate A]] -> the fact is GONE on the next draw;
+#   only the (c) unknown-noun remains (mint affordance present).
+# - probeD: POST /vocab/mint {refKind:'material'} mints the (c) noun; the
+#   idiom answer clears it. (Residue deleted; nonce stays fresh.)
+# - probeE (frozen macro compiled deterministically): exactly the planted (b)
+#   ambiguity bars; class-(a) nouns bind with NO fact.
+# - probeF2 (all nouns resolvable): outcome complete, 14 events,
+#   resolvedLabwares = 4 titled records -> deriveDeckLabware renders 4 titled
+#   checkboxes (the deck-surface fidelity bar for legs a/b/c).
+# - CLASS-(d) FINDING: the prose gap fact from probeB2 maps to null in
+#   heldFactToClarificationRequest (CLARIFICATION_MENU_BY_REASON has no row for
+#   a free-text reason) -> NO card on the held arm; the 200-gap arm discards
+#   clarifications client-side. Under the frozen replay producer the macro
+#   emits NO gap fact at all (probeE), so the golden leg cannot even plant one
+#   without a product change. Filed as W211-GAPCARD-1.
+
+# ---------------------------------------------------------------------------
+# FROZEN WIRE RESPONSES (the ONLY non-production component is the producer;
+# the replay server is transport-only — it interprets nothing, binds nothing)
+# ---------------------------------------------------------------------------
+
+# Response to the branch-questions call (tools[0].function.name =
+# emit_branch_questions). axes: [] — the seeded family's DECLARED branch_axes
+# are the protocol's own data and win the merge (mergeQuestionAxes); the AI
+# pass adds nothing.
+branchQuestionsOutput:
+  axes: []
+
+# Response to the scientist-intent draw (tools[0].function.name =
+# emit_scientist_intent). Shape: the emit_scientist_intent tool-call arguments
+# (key-as-action verb values from the shipped vocabulary; symbolic noun labels,
+# never record ids / deck slots / well addresses). Every noun below is either
+# seeded exactly once (a), seeded twice (b), or the fresh nonce (c); no verb
+# carries a declared-required argument the macro omits (no missing-required sweep).
+modelOutput:
+  intentId: w211-golden-bench-prep
+  actions:
+    - action: transfer
+      source: Sample Plate
+      target: Lysis Plate
+      volumeUl: 50
+    - action: add_material
+      target: Lysis Plate
+      material: Lysis Solution
+      volumeUl: 700
+    - action: bead_beat
+      labware: Bead Beating Plate
+      duration: 30 s
+    - action: spin
+      labware: Lysis Plate
+      rpm: 3000
+      duration: 10 min
+    - action: transfer
+      source: Lysis Plate
+      target: MagBinding Plate
+      volumeUl: 500
+    - action: add_material
+      target: MagBinding Plate
+      material: MagBinding Beads v211g1
+      volumeUl: 500
+    - action: add_material
+      target: MagBinding Plate
+      material: MagBinding Buffer
+      volumeUl: 800
+    - action: wash
+      labware: MagBinding Plate
+      cycles: 1
+    - action: elute
+      source: MagBinding Plate
+      target: Sample Plate
+      material: nuclease-free water
+      volumeUl: 100
+    - action: incubate
+      labware: Sample Plate
+      duration: 30 min
+      temperatureC: 37
+    - action: read
+      labware: Sample Plate
+      mode: absorbance
+      wavelength: 600 nm
+
+# ---------------------------------------------------------------------------
+# PLANTED FACTS (machine-readable). These are the EXACT wire facts the frozen
+# macro produces on the first answered draw — measured first-hand against the
+# live lane stack (probeE, .hermes/plans/w211-step0/probeE-frozen-compile.json)
+# and the answered-draw probe (probeB2). The integrity test feeds each `wire`
+# fact through the product's OWN adapter
+# (ProtocolLocalizationThread.clarificationAdapter.ts heldFactToClarificationRequest)
+# and asserts the adapter's answer surface matches `expected` — so the fixture's
+# obligation claims are checked against product behaviour, not asserted in code.
+# expectedMenu '/l' is the ANSWER-SURFACE-1 pin (RED at the pre-fix tip 534f7e5f,
+# where every noun fact routed '/m'). expectedCard:false on the gap fact is the
+# class-(d) BLOCKED-ON-FIX pin (holds at base AND tip — it documents the gap).
+# ---------------------------------------------------------------------------
+plantedFacts:
+  - obligation: b-ambiguous-labware-slot
+    wire:
+      label: Bead Beating Plate
+      reason: ambiguous-noun
+      candidates:
+        - { label: "Bead Beating Plate A", confidence: 1 }
+        - { label: "Bead Beating Plate B", confidence: 1 }
+      actionLocation: { actionIndex: 2, action: bead_beat, argument: labware }
+    expected:
+      expectedCard: true
+      expectedMenu: "/l"
+      expectedOptionLabels: ["Bead Beating Plate A", "Bead Beating Plate B"]
+      expectedAnswerIdiom: "[[labware:<seed id>|label]]"
+  - obligation: c-unknown-material-noun
+    wire:
+      label: MagBinding Beads v211g1
+      reason: unknown-noun
+      candidates:
+        - { label: "Create local term \u201cMagBinding Beads v211g1\u201d", confidence: 0.05 }
+      actionLocation: { actionIndex: 5, action: add_material, argument: material }
+    expected:
+      expectedCard: true
+      expectedMenu: "/m"
+      # MINT-FLOOR-UI-1: the server's tier-5 mint affordance for THIS fact's own
+      # label is dropped as a dead-end option button; the picker's own floor row
+      # is the card's ONE mint act.
+      expectedOptionLabels: []
+      expectedAnswerIdiom: "[[material:<minted id>|label]]"
+  - obligation: d-gap-fact-deck-surface
+    wire:
+      label: Bead Beating Plate vs Lysis Plate
+      reason: "The protocol transfers to the Lysis Plate and adds Lysis Solution there, but bead-beats in the Bead Beating Plate; it is unclear whether the bead-beating occurs on the same physical plate (Lysis Plate) or a separate Bead Beating Plate."
+      candidates: []
+    expected:
+      expectedCard: false
+      expectedMenu: null
+      expectedOptionLabels: []
+      blockedOnFix: W211-GAPCARD-1
+  - obligation: a-role-unique-noun
+    wire: null
+    expected:
+      expectedCard: false
+      expectedMenu: null
+      expectedOptionLabels: []
+      note: "no wire fact is produced for a uniquely-resolvable in-band noun (probeE: zero facts name 'Sample Plate')"
+
+# ---------------------------------------------------------------------------
+# EXPECTED DECK (the fidelity bar the golden leg asserts — label-correspondence,
+# NOT boxCount>0). After (b) is picked and (c) minted, the completing compile's
+# terminalArtifacts.resolvedLabwares feed pl-deck-review; the checkbox labels
+# must include the PICKED (b) record's real title (the strongest fidelity link:
+# the deck shows what the scientist picked) plus the other bound labware nouns.
+# ---------------------------------------------------------------------------
+expectedDeck:
+  mustIncludeLabels:
+    - Bead Beating Plate A
+    - Sample Plate
+    - Lysis Plate
+    - MagBinding Plate
+  exactCheckboxCount: 4
+  zeroAdditionRows: "probeF2: the completing compile carries NO labwareAdditions — every deck row is a resolved placement of a real record (label = the record's real title)"
+  pickedCheckboxLabel: Bead Beating Plate A
+
+# ---------------------------------------------------------------------------
+# EVIDENCE STATEMENT (the spec's mandatory honest label, in the fixture's own
+# words): this fixture drives a WORKFLOW-INTEGRATION test. The natural-language
+# producer is REPLACED AT ITS OWN WIRE BOUNDARY (the OpenAI-compatible
+# /v1/chat/completions call) by a transport-only replay server serving the
+# frozen blocks above. This is NOT model proof: nothing here claims a model can
+# produce this output. Everything downstream of the producer — Ajv validation,
+# normalization, resolve_nouns, the SPINE-3 engine, clarification rendering,
+# answer binding, mint, persistence, recompile, deck review, accept, LPR —
+# runs unchanged on production paths.
+# ---------------------------------------------------------------------------
+evidenceStatement: "workflow-integration test; producer replaced at its wire boundary; NOT model proof"
+
+# ---------------------------------------------------------------------------
+# SEED PLAN (names which nouns are SEEDED vs which stay ZERO-MATCH — the
+# DECK-FOLD-1 discipline, spec.mjs :1038-1041). NOTE recorded by the STEP 0
+# build: at this tip deriveDeckLabware (ProtocolLocalizationThread.tsx:116-165)
+# folds labwareAdditions AND resolvedLabwares AND labwareRequirements, so the
+# trap's original mechanism ("resolvedLabwares re-empty the review") no longer
+# holds verbatim; the seed plan still names every seeded noun and every noun
+# that stays unseeded, and the leg asserts label-correspondence.
+# ---------------------------------------------------------------------------
+seedPlan:
+  seededLabware:
+    - recordId: LAB-w211-sample-plate
+      name: Sample Plate
+      role: "class-(a) noun — the ONLY record naming it"
+    - recordId: LAB-w211-golden-lysisplate
+      name: Lysis Plate
+      role: "supporting noun — single in-band match"
+    - recordId: LAB-w211-golden-beadplate-a
+      name: Bead Beating Plate A
+      role: "class-(b) candidate 1 (the leg PICKS this one)"
+    - recordId: LAB-w211-golden-beadplate-b
+      name: Bead Beating Plate B
+      role: "class-(b) candidate 2 (keeps the ambiguity non-vacuous)"
+    - recordId: LAB-w211-golden-magplate
+      name: MagBinding Plate
+      role: "supporting noun — single in-band match"
+  seededMaterials:
+    - recordId: MAT-w211-lysis
+      name: Lysis Solution
+    - recordId: MAT-w211-magbuffer
+      name: MagBinding Buffer
+    - recordId: MAT-w211-water
+      name: DNase/RNase Free Water
+      synonyms: "nuclease-free water (routes the elute.material noun tier-1)"
+  zeroMatchNouns:
+    - noun: MagBinding Beads v211g1
+      role: "class-(c) — stays ZERO-MATCH until the real UI mint act creates it (material-only mint floor; NEVER a labware mint)"
+  neverSeed:
+    - "no LAB record for the class-(c) noun (minting labware is the ruled category error, A5h Q3)"
+    - "no record whose name contains 'Bead Beating Plate' beyond the two candidates (would flip (b) to a single-winner bind)"
+
+# ---------------------------------------------------------------------------
+# FIDELITY EXPECTATIONS the harness asserts against the recomputed compile
+# (action/parameter/role/answer fidelity, not liveness).
+# ---------------------------------------------------------------------------
+fidelity:
+  expectedActions:
+    - "transfer volumeUl 50 (Sample Plate -> Lysis Plate)"
+    - "add_material volumeUl 700 material Lysis Solution"
+    - "bead_beat duration 30 s"
+    - "spin rpm 3000 duration 10 min"
+    - "transfer volumeUl 500 (Lysis Plate -> MagBinding Plate)"
+    - "add_material volumeUl 500 material MagBinding Beads v211g1"
+    - "add_material volumeUl 800 material MagBinding Buffer"
+    - "wash cycles 1"
+    - "elute volumeUl 100 material nuclease-free water"
+    - "incubate temperatureC 37 duration 30 min"
+    - "read mode absorbance wavelength 600 nm"
+  expectedAnswers:
+    - "the (b) pick lands as [[labware:<seed id>|label]] and the recomputed resolvedLabwares carry that recordId for hint 'Bead Beating Plate'"
+    - "the (c) mint lands as [[material:<minted id>|label]] (id read from the mint, never pinned) and the minted record is kind material"
+    - "the family axis answer lands in the LPR branch_resolution"
+  zeroSurvivingBlockers: "the FINAL draw is 200 with clarifications absent/empty"

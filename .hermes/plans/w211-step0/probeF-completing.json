@@ -1,0 +1,75 @@
+{
+ "status": 200,
+ "body": {
+  "outcome": "needs-clarification",
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "w211-probe-f-completing",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Lysis Plate",
+       "labwareHint": "Lysis Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bead Beating Plate A",
+       "labwareHint": "Bead Beating Plate A",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": []
+   }
+  },
+  "clarifications": [
+   {
+    "label": "MagBinding Beads",
+    "reason": "ambiguous-noun",
+    "candidates": [
+     {
+      "label": "MagBinding Beads",
+      "confidence": 1
+     },
+     {
+      "label": "MagBinding Beads v211g1",
+      "confidence": 1
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 5,
+     "action": "add_material",
+     "argument": "material"
+    }
+   }
+  ]
+ }
+}

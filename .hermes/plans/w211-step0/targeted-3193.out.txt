@@ -1,0 +1,12 @@
+seed LAB-w211-sample-plate 409
+seed LAB-w211-golden-lysisplate 409
+seed LAB-w211-golden-beadplate-a 409
+seed LAB-w211-golden-beadplate-b 409
+seed LAB-w211-golden-magplate 409
+seed MAT-w211-lysis 409 {"success": false, "error": "Record already exists: MAT-w211-lysis"}
+seed MAT-w211-magbuffer 409 {"success": false, "error": "Record already exists: MAT-w211-magbuffer"}
+seed MAT-w211-water 409 {"success": false, "error": "Record already exists: MAT-w211-water"}
+zero-match guard: MagBinding Beads v211g1 present? False
+CHECK1 status: 200 keys: ['axes', 'needsAnswers']
+CHECK2 status: 422 keys: ['clarifications', 'error', 'localMacro', 'outcome', 'terminalArtifacts']
+   fact: unknown-noun | 'MagBinding Beads v211g1' | arg: material

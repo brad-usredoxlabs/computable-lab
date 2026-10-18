@@ -63,6 +63,8 @@ const USER_ID = process.env.CL_GATE_USER_ID ?? 'USR-BRAD'
 const ZYMO_PDF_SHA = '257f57196f6cd7a337e5ad42d7da74f2ab2c3e1e343a41c898d76c7d085d613b'
 const DRAFT_SHA = 'd878727ae69305d73623b6e6fd99ddf7a1bc999efd7b8d84c9c9944afdc98058'
 const ANSWERS_SHA = 'ac383fe4c71d164b52decaa332aeea1c87617a7efab29d294b3cb3a49fd7492e'
+// W211-MACH-1 golden fixture self-pin (PROVENANCE.md carries the same value).
+const GOLDEN_FIXTURE_SHA = '706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640'
 const XDR_ID = 'XDR-w211-gate'
 const PLR_ID = 'PLR-w211-gate'
 const RUN_ID = 'RUN-w211-gate'
@@ -103,10 +105,16 @@ function fixtures() {
     repoPath('server', 'src', 'ingestion', 'vendor-protocol', 'campaign-fixtures', 'zymo-robot-answers.frozen.yaml'),
     ANSWERS_SHA,
   ).toString('utf8')
+  // W211-MACH-1 golden fixture (harness DATA, self-pinned like the others).
+  const goldenFixtureText = readSelfPinned(
+    repoPath('app', 'e2e', 'fixtures', 'w211-golden', 'zymo-intent.frozen.yaml'),
+    GOLDEN_FIXTURE_SHA,
+  ).toString('utf8')
   loaded = {
     pdfBytes,
     draftText,
     answersText,
+    goldenFixtureText,
     vpdfId: `VPDF-${ZYMO_PDF_SHA.slice(0, 12).toUpperCase()}`, // VPDF-257F57196F6C
   }
   return loaded
@@ -644,6 +652,88 @@ async function seededFamilyPayload() {
   return fam.payload
 }
 
+// ---------------------------------------------------------------------------
+// W211-MACH-1 golden-leg helpers (l2t1330). The golden fixture is harness DATA
+// (app/e2e/fixtures/w211-golden/zymo-intent.frozen.yaml, self-pinned above);
+// these helpers seed its seedPlan rows GET-first and clear the class-(c) nonce
+// so every run starts from the same store state. The fixture YAML is parsed
+// with the repo's own `yaml` package via a LAZY dynamic import (app/ has no own
+// yaml dep; resolution walks to the repo root node_modules — verified l2t1330),
+// so vitest collection of this .mjs stays side-effect-free.
+// ---------------------------------------------------------------------------
+async function goldenFixtureData() {
+  const { parse } = await import('yaml')
+  return parse(fixtures().goldenFixtureText)
+}
+
+async function seedGoldenRows(fx) {
+  for (const row of fx.seedPlan.seededLabware) {
+    const existing = await apiGet(`/records/${encodeURIComponent(row.recordId)}`)
+    if (existing.status === 200) continue
+    const res = await apiPost('/records', {
+      schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+      payload: {
+        kind: 'labware',
+        recordId: row.recordId,
+        name: row.name,
+        labwareType: 'plate',
+        aliases: [row.name.toLowerCase().replace(/ /g, '_'), row.name.toLowerCase()],
+      },
+      message: 'W211-MACH-1 golden harness: seed row (fixture seedPlan)',
+    })
+    if (res.status !== 200 && res.status !== 201) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+  }
+  for (const row of fx.seedPlan.seededMaterials) {
+    const existing = await apiGet(`/records/${encodeURIComponent(row.recordId)}`)
+    if (existing.status === 200) continue
+    const payload = { kind: 'material', id: row.recordId, domain: 'reagent', name: row.name }
+    if (row.synonyms) payload.synonyms = String(row.synonyms).split(',').map((s) => s.trim())
+    const res = await apiPost('/records', {
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+      payload,
+      message: 'W211-MACH-1 golden harness: seed row (fixture seedPlan)',
+    })
+    if (res.status !== 200 && res.status !== 201) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+  }
+}
+
+async function clearGoldenNonce(fx) {
+  // DECK-FOLD-1 discipline (spec.mjs trap warning, verbatim): the class-(c)
+  // noun must stay ZERO-MATCH until the real UI mint act creates it. A prior
+  // run's minted record (dynamic MAT-* id) is found by NAME and deleted before
+  // the leg; the minted id is never fixture-pinned.
+  const nonceNoun = fx.seedPlan.zeroMatchNouns[0].noun
+  const listing = await apiGet('/records?kind=material&limit=500')
+  for (const r of listing.body?.records ?? []) {
+    if ((r.payload ?? {}).name === nonceNoun) {
+      const d = await apiDelete(`/records/${encodeURIComponent(r.recordId)}`)
+      console.log(`[golden] cleared prior-run minted nonce ${r.recordId} -> ${d.status}`)
+    }
+  }
+  const after = await apiGet('/records?kind=material&limit=500')
+  const present = (after.body?.records ?? []).some((r) => (r.payload ?? {}).name === nonceNoun)
+  expect(present, `zero-match guard: '${nonceNoun}' must NOT pre-exist before the golden leg (class-(c) needs a fresh nonce)`).toBe(false)
+}
+
+/** Strip volatile per-compile identity tokens so byte-stability measures the
+ *  CONTENT, not random event ids. Named instability (eventId suffixes) is
+ *  recorded separately — never averaged away. */
+function canonicalCompileSha(body) {
+  const strip = (v) => {
+    if (Array.isArray(v)) return v.map(strip)
+    if (v && typeof v === 'object') {
+      const out = {}
+      for (const [k, val] of Object.entries(v)) {
+        if (k === 'eventId') continue
+        out[k] = strip(val)
+      }
+      return out
+    }
+    return v
+  }
+  return createHash('sha256').update(JSON.stringify(strip(body))).digest('hex')
+}
+
 test.describe('W2-11 zymo campaign demo gate', () => {
   // l2t1735 harness fix: the config default is 30s/test; D3 alone budgets a
   // 90s model turn + a 120s proposal wait + three 60s refusal waits (the W2-9
@@ -1103,8 +1193,7 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     console.log(`[D4 paste] LPR ${lpr.recordId} branch_resolution=${JSON.stringify(resolution)}`)
   })
 
-  test('D5: robot realization — merged lowerRealization/realizeAndCompile headless leg (honestly named)', async () => {
-    // SPEC §4 D5 OPERATIVE BRANCH (C27): no server route exposes
+  test('D5: robot realization — merged lowerRealization/realizeAndCompile headless leg (honestly named)', async () => {    // SPEC §4 D5 OPERATIVE BRANCH (C27): no server route exposes
     // realizeAndCompile; the leg runs the MERGED functions in the server
     // workspace via the generated tsx leg (golden-suite canon: recordingStore
     // + createResolveSpineFromContext) over the seeded family + committed

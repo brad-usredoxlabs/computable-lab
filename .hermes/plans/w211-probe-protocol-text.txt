@@ -1,0 +1,12 @@
+Manual zymoBIOMICS-style microbial prep on the bench, single 96-well workflow.
+
+Bring one Sample Plate holding 50 uL of each stool sample in wells A1-D4 to the bench.
+Transfer 50 uL from the Sample Plate to the Binding Plate.
+Add 700 uL of lysis buffer to each well of the Binding Plate.
+Bead beat the Binding Plate for 5 minutes.
+Spin the Binding Plate for 10 minutes at 3000 rpm.
+Transfer 500 uL from the Binding Plate to the Wash Plate.
+Wash the Wash Plate 3 times with 800 uL of wash buffer.
+Elute the Wash Plate with 100 uL of elution buffer.
+Incubate the Eluate Plate at 37 C for 30 minutes.
+Read the Eluate Plate at OD600.

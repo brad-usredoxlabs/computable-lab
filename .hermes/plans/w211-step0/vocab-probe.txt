@@ -1,0 +1,102 @@
+VERBS: seed, incubate, mix, resuspend, dilute, shake, count, read, add_material, create_container, transfer, stain, fix, permeabilize, block, quench, label, transfect, aliquot, wash, elute, harvest, passage, freeze, thaw, spin, pellet, serial_dilution, media_swap_duplicate_columns, source_wells_to_duplicate_target_columns, repeat_rows, bead_beat
+POLICIES: {
+ "strategyOrder": [
+  "explicit_wells",
+  "hint_search",
+  "symbolic_label",
+  "ontology_resolution",
+  "mint_local"
+ ],
+ "ambiguity": {
+  "mode": "clarify",
+  "confidenceAccept": {
+   "min": 0.7,
+   "max": 1
+  },
+  "strategyRef": "symbolic_label"
+ },
+ "hintAuthority": {
+  "mode": "lab_hint_first",
+  "strategyRef": "hint_search"
+ },
+ "ruleIds": [
+  "hint-authority",
+  "ambiguity-clarify"
+ ]
+}
+--- transfer (class simple)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"volumeUl","kind":"quantity","required":false}
+    {"name":"volume","kind":"quantity","required":false}
+    {"name":"sourceWells","kind":"wells","required":false}
+    {"name":"targetWells","kind":"wells","required":false}
+--- spin (class simple)
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"rpm","kind":"quantity","required":false}
+    {"name":"duration","kind":"scalar","required":false}
+    {"name":"temperatureC","kind":"quantity","required":false}
+    {"name":"cycles","kind":"quantity","required":false}
+--- incubate (class simple)
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"duration","kind":"scalar","required":false}
+    {"name":"temperatureC","kind":"quantity","required":false}
+    {"name":"rpm","kind":"quantity","required":false}
+--- wash (class compound)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"material","kind":"resolvable","required":false,"domain":"material","level":"aliquot"}
+    {"name":"volumeUl","kind":"quantity","required":false}
+    {"name":"cycles","kind":"quantity","required":false}
+    {"name":"duration","kind":"scalar","required":false}
+--- bead_beat (class simple)
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"material","kind":"resolvable","required":false,"domain":"material","hintEligible":true}
+    {"name":"duration","kind":"scalar","required":false}
+    {"name":"temperatureC","kind":"quantity","required":false}
+    {"name":"cycles","kind":"quantity","required":false}
+--- add_material (class simple)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"material","kind":"resolvable","required":false,"domain":"material"}
+    {"name":"source_name","kind":"scalar","required":false}
+    {"name":"volumeUl","kind":"quantity","required":false}
+    {"name":"volume","kind":"quantity","required":false}
+    {"name":"composition","kind":"resolvable","required":false,"domain":"material","cardinality":"many","itemNounField":"material"}
+--- mix (class simple)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"duration","kind":"scalar","required":false}
+    {"name":"cycles","kind":"quantity","required":false}
+    {"name":"rpm","kind":"quantity","required":false}
+    {"name":"temperatureC","kind":"quantity","required":false}
+--- elute (class compound)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"material","kind":"resolvable","required":false,"domain":"material"}
+    {"name":"volumeUl","kind":"quantity","required":false}
+--- bind: NOT IN VOCAB
+--- resuspend (class simple)
+    {"name":"source","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"target","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"material","kind":"resolvable","required":false,"domain":"material"}
+    {"name":"volumeUl","kind":"quantity","required":false}
+--- lyse: NOT IN VOCAB
+--- heat: NOT IN VOCAB
+--- cool: NOT IN VOCAB
+--- read_plate: NOT IN VOCAB
+--- centrifuge: NOT IN VOCAB
+--- vortex: NOT IN VOCAB
+--- shake (class simple)
+    {"name":"labware","kind":"resolvable","required":false,"domain":"labware","hintEligible":true}
+    {"name":"duration","kind":"scalar","required":false}
+    {"name":"rpm","kind":"quantity","required":false}
+    {"name":"temperatureC","kind":"quantity","required":false}
+    {"name":"cycles","kind":"quantity","required":false}
