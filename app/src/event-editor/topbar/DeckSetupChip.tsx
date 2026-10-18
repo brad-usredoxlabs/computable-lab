@@ -16,8 +16,12 @@
  * the platform manifest, packs from the vocab registry narrowed by the
  * manifest's allowedVocabIds. No platform/vocab literals.
  *
- * Deck setup is a start-of-run decision: once `runDeckLock.locked` is true the
- * chip is a read-only summary — no panel, no knobs.
+ * Deck setup is a start-of-run decision: once the run has a deck (or deck
+ * content) the chip STILL OPENS — the choices are shown greyed out, so you can
+ * see how the run was set up — with an explicit "Switch deck" action inside the
+ * panel. Switching clears the deck (the reducer wipes placements/events, since
+ * slot ids aren't comparable across decks), so the panel says so before you
+ * commit.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isDeckSetupLocked, useEventEditor } from '../EventEditorContext'
@@ -31,13 +35,17 @@ function optionTestId(prefix: string, id: string): string {
 export function DeckSetupChip() {
   const { state, actions } = useEventEditor()
   const [open, setOpen] = useState(false)
+  // A locked run can still be re-planned, but only through an explicit
+  // "Switch deck" step inside the panel. Closing the panel re-arms the lock.
+  const [switchArmed, setSwitchArmed] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   const manifest = getPlatformManifest(state.platforms, state.platformId)
   const platformLabel = manifest?.label ?? state.platformId
   const variants = manifest?.variants ?? []
   const variantTitle = variants.find((v) => v.id === state.variantId)?.title
-  const locked = isDeckSetupLocked(state)
+  const deckLocked = isDeckSetupLocked(state)
+  const locked = deckLocked && !switchArmed
 
   // Vocab packs: the manifest whitelist, falling back to every pack (the rule
   // the previous VocabSwitcher used) — data-driven either way.
@@ -49,20 +57,25 @@ export function DeckSetupChip() {
   }, [manifest])
   const vocabLabel = vocabOptions.find((p) => p.packId === state.vocabPackId)?.displayName
 
-  // A locked run can never reopen the setup.
+  // Locking the deck (fresh run content) closes any in-progress re-plan.
   useEffect(() => {
-    if (locked) setOpen(false)
-  }, [locked])
+    if (deckLocked && !switchArmed) setOpen(false)
+  }, [deckLocked, switchArmed])
+
+  const closePanel = () => {
+    setOpen(false)
+    setSwitchArmed(false)
+  }
 
   useEffect(() => {
     if (!open) return
     const onDocPointer = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null
       if (target && wrapRef.current?.contains(target)) return
-      setOpen(false)
+      closePanel()
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') closePanel()
     }
     document.addEventListener('mousedown', onDocPointer)
     document.addEventListener('touchstart', onDocPointer, { passive: true })
@@ -76,32 +89,28 @@ export function DeckSetupChip() {
 
   const summary = [platformLabel, variantTitle, vocabLabel].filter(Boolean).join(' · ')
 
-  if (locked) {
-    return (
-      <span
-        className="deck-setup deck-setup--locked"
-        data-testid="deck-setup-chip"
-        title="Deck setup was chosen at the start of this run and can no longer change."
-      >
-        <span className="deck-setup__lock" aria-hidden>
-          🔒
-        </span>
-        <span className="deck-setup__summary">{summary}</span>
-      </span>
-    )
-  }
-
   return (
     <div className="deck-setup" data-testid="deck-setup-chip" ref={wrapRef}>
       <button
         type="button"
-        className="deck-setup__trigger"
+        className={
+          locked ? 'deck-setup__trigger deck-setup__trigger--locked' : 'deck-setup__trigger'
+        }
         data-testid="deck-setup-trigger"
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={`Deck setup — ${summary}`}
-        onClick={() => setOpen((o) => !o)}
+        title={
+          locked
+            ? `Deck setup — ${summary} (fixed for this run; open to switch)`
+            : `Deck setup — ${summary}`
+        }
+        onClick={() => (open ? closePanel() : setOpen(true))}
       >
+        {locked ? (
+          <span className="deck-setup__lock" aria-hidden>
+            🔒
+          </span>
+        ) : null}
         <span className="deck-setup__summary">{summary}</span>
         <span className="deck-setup__caret" aria-hidden>
           ▾
@@ -124,6 +133,7 @@ export function DeckSetupChip() {
                   }
                   data-testid={optionTestId('deck-setup-option', platform.id)}
                   aria-pressed={platform.id === state.platformId}
+                  disabled={locked}
                   onClick={() => actions.setPlatform(platform.id)}
                 >
                   {platform.label}
@@ -147,6 +157,7 @@ export function DeckSetupChip() {
                     }
                     data-testid={optionTestId('deck-setup-option', variant.id)}
                     aria-pressed={variant.id === state.variantId}
+                    disabled={locked}
                     onClick={() => actions.setVariant(variant.id)}
                   >
                     {variant.title}
@@ -171,12 +182,33 @@ export function DeckSetupChip() {
                     }
                     data-testid={optionTestId('deck-setup-vocab', pack.packId)}
                     aria-pressed={pack.packId === state.vocabPackId}
+                    disabled={locked}
                     onClick={() => actions.setVocab(pack.packId)}
                   >
                     {pack.displayName}
                   </button>
                 ))}
               </div>
+            </div>
+          ) : null}
+
+          {locked ? (
+            <div className="deck-setup__locked-footer">
+              <button
+                type="button"
+                className="deck-setup__switch"
+                data-testid="deck-setup-switch"
+                onClick={() => setSwitchArmed(true)}
+              >
+                Switch deck…
+              </button>
+              <p className="deck-setup__switch-note" data-testid="deck-setup-switch-note">
+                The deck is fixed for this run. Switching clears it —{' '}
+                {state.placements?.length ?? 0} placement
+                {(state.placements?.length ?? 0) === 1 ? '' : 's'} and{' '}
+                {state.events?.length ?? 0} event
+                {(state.events?.length ?? 0) === 1 ? '' : 's'} on this deck.
+              </p>
             </div>
           ) : null}
         </div>

@@ -167,9 +167,11 @@ describe('ViewerToolbar dispatcher', () => {
     }
     render(<ViewerToolbar tab={tab} />)
     expect(document.querySelector('.viewer-toolbar--deck')).toBeTruthy()
-    // Read-only summary: the run's deck was chosen at its start.
-    expect(screen.queryByTestId('deck-setup-trigger')).toBeNull()
-    expect(screen.getByTestId('deck-setup-chip').textContent).toContain('Manual')
+    // The run's deck was chosen at its start: the chip summarises it and opens
+    // a greyed-out view with an explicit Switch-deck action (not live knobs).
+    const trigger = screen.getByTestId('deck-setup-trigger')
+    expect(trigger.textContent).toContain('🔒')
+    expect(trigger.textContent).toContain('Manual')
     expect(screen.queryByText('Deck')).toBeNull()
     expect(screen.queryByText('Vocab')).toBeNull()
     expect(screen.getByText('Tool')).toBeTruthy()

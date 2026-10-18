@@ -131,11 +131,52 @@ describe('DeckSetupChip', () => {
     expect(mocked.setVocab).toHaveBeenCalledWith('cell-culture/v1')
   })
 
-  it('is read-only once the run deck is locked: no trigger, no panel, no knobs', () => {
+  it('once the run deck is locked the chip still opens, but every choice is greyed out', () => {
     setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
-    expect(screen.getByTestId('deck-setup-chip').textContent).toContain('Manual')
-    expect(screen.queryByTestId('deck-setup-trigger')).toBeNull()
-    expect(screen.queryByTestId('deck-setup-panel')).toBeNull()
+    const chip = screen.getByTestId('deck-setup-chip')
+    expect(chip.textContent).toContain('Manual')
+
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    expect(screen.getByTestId('deck-setup-panel')).toBeInTheDocument()
+    // Choices are visible (so you can see what the run was set up with) but
+    // inert.
+    const platform = screen.getByTestId('deck-setup-option-manual') as HTMLButtonElement
+    expect(platform.disabled).toBe(true)
+  })
+
+  it('locks the SAME panel behind an explicit "Switch deck" action', () => {
+    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+
+    const switchBtn = screen.getByTestId('deck-setup-switch')
+    expect(switchBtn.textContent).toMatch(/switch deck/i)
+
+    fireEvent.click(switchBtn)
+    const platform = screen.getByTestId('deck-setup-option-integra_assist') as HTMLButtonElement
+    expect(platform.disabled).toBe(false)
+
+    fireEvent.click(platform)
+    expect(mocked.setPlatform).toHaveBeenCalledWith('integra_assist')
+  })
+
+  it('re-locks when the panel is closed and reopened', () => {
+    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    fireEvent.click(screen.getByTestId('deck-setup-switch'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    const platform = screen.getByTestId('deck-setup-option-manual') as HTMLButtonElement
+    expect(platform.disabled).toBe(true)
+  })
+
+  it('states the consequence: switching clears the deck', () => {
+    setup({
+      runDeck: { platformId: 'manual', variantId: 'manual_single_plate' },
+      placements: [{}, {}, {}],
+    })
+    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    expect(screen.getByTestId('deck-setup-switch-note').textContent).toMatch(/clears/i)
   })
 
   it('closes on Escape', () => {

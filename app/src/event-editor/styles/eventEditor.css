@@ -269,6 +269,58 @@
   font-weight: 600;
 }
 
+/* Locked run: the same panel, but the choices read as "what this run was set
+ * up with" — greyed, inert — plus the one action that re-plans the deck. */
+.event-editor .deck-setup__trigger--locked {
+  color: var(--cl-text-dim);
+}
+
+.event-editor .deck-setup__option:disabled {
+  opacity: 0.55;
+  cursor: default;
+  background: transparent;
+  border-color: var(--cl-border);
+  color: var(--cl-text-dim);
+  font-weight: 400;
+}
+
+.event-editor .deck-setup__option:disabled:hover {
+  background: transparent;
+  color: var(--cl-text-dim);
+}
+
+.event-editor .deck-setup__locked-footer {
+  border-top: 1px solid var(--cl-border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-editor .deck-setup__switch {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-editor .deck-setup__switch:hover {
+  border-color: var(--cl-warn);
+  color: var(--cl-warn);
+}
+
+.event-editor .deck-setup__switch-note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--cl-text-faint);
+}
+
 .event-editor .deck-setup--locked {
   display: inline-flex;
   align-items: center;
