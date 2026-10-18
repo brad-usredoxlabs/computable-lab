@@ -19,6 +19,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore } from '../../store/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
+import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { NamespaceConfig } from '../../config/types.js';
 import type { ApiError } from '../types.js';
 import { localMaterialIdForLabel } from '../../materials/termId.js';
@@ -67,6 +68,21 @@ const MINTABLE: Record<
   },
 };
 
+/** Local mirror of MaterialGrounding's module-private `asPayload` (:50-54):
+ *  object payload → record map, else null. Duplicated (not imported) to keep
+ *  the diff to one file; MaterialGrounding's helpers stay private. */
+function asPayload(env: RecordEnvelope | null): Record<string, unknown> | null {
+  return env?.payload && typeof env.payload === 'object' && !Array.isArray(env.payload)
+    ? env.payload as Record<string, unknown>
+    : null;
+}
+
+/** Local mirror of MaterialGrounding's `payloadName` (:56-58): `payload.name`
+ *  trimmed, else '' — never undefined (exactOptionalPropertyTypes). */
+function payloadName(payload: Record<string, unknown> | null): string {
+  return typeof payload?.name === 'string' ? payload.name.trim() : '';
+}
+
 export function createVocabHandlers(
   store: RecordStore,
   namespace?: NamespaceConfig,
@@ -96,8 +112,38 @@ export function createVocabHandlers(
 
       // Deterministic local id: same label always → same recordId, so
       // re-minting (e.g. re-normalizing an accepted graph, or a user re-picking
-      // the same term) is idempotent. Mirrors MaterialGrounding.ensureLocalMaterialForDraft.
+      // the same term) is idempotent: a repeat mint returns the EXISTING record
+      // (200, same shape) instead of failing on the store's create-collision
+      // guard. Mirrors MaterialGrounding.ensureLocalMaterialForDraft (:211-223):
+      // exact normalized-name match among materials, then lookup by record id.
       const recordId = localMaterialIdForLabel(label);
+      const baseUri = namespace?.baseUri ?? 'http://localhost:3001/records/';
+
+      // Lookup-first (mirrors MaterialGrounding.ts:211-214): exact normalized
+      // name equality (trim + toLowerCase) over MATERIALS only.
+      const materials = await store.list({ schemaId: mintable.schemaId, limit: 10000 });
+      const needle = label.toLowerCase();
+      const nameMatch = materials.find((env) => payloadName(asPayload(env)).toLowerCase() === needle);
+      if (nameMatch) {
+        return {
+          success: true,
+          recordId: nameMatch.recordId,
+          label: payloadName(asPayload(nameMatch)) || label,
+          iri: `${baseUri}${nameMatch.recordId}`,
+        };
+      }
+
+      // Lookup by the deterministic id (mirrors MaterialGrounding.ts:219-223).
+      const existing = await store.get(recordId);
+      if (existing) {
+        return {
+          success: true,
+          recordId: existing.recordId,
+          label: payloadName(asPayload(existing)) || label,
+          iri: `${baseUri}${existing.recordId}`,
+        };
+      }
+
       const payload = mintable.build(recordId, label, body.sourceQuery);
 
       const envelope = createEnvelope(payload, mintable.schemaId, {
@@ -125,7 +171,6 @@ export function createVocabHandlers(
         };
       }
 
-      const baseUri = namespace?.baseUri ?? 'http://localhost:3001/records/';
       return {
         success: true,
         recordId,
