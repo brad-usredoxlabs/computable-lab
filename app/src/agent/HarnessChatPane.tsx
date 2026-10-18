@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { useAiPanel } from '../shared/context/AiPanelContext'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
+import { ChatPreviewCard } from './ChatPreviewCard'
 import { SurfaceFocusHeader } from './SurfaceFocusHeader'
 import './HarnessChatPane.css'
 
@@ -47,6 +48,9 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
   return (
     <div className="harness-chat-pane" data-testid="harness-chat-pane">
       <SurfaceFocusHeader />
+      {/* Staged deck proposal: apply/discard + per-event drop, reachable even
+          when the deck itself is off screen (mobile drawer). */}
+      <ChatPreviewCard chat={chat} />
       {proposalFlow?.card ? (
         <div className="harness-chat-pane__proposal" data-testid="harness-chat-proposal">
           <WorkstateProposalCard

@@ -112,6 +112,83 @@ describe('HarnessChatPane', () => {
     expect(screen.queryByTestId('harness-chat-proposal')).toBeNull()
   })
 
+  it('surfaces the staged preview with apply / discard wired to the chat', () => {
+    const chat = stubChat({
+      hasPreview: true,
+      previewEvents: [
+        { eventId: 'EVT-1', event_type: 'transfer' },
+        { eventId: 'EVT-2', event_type: 'read' },
+      ] as never,
+      previewLabwareAdditions: [{ labwareId: 'LBW-1' }] as never,
+    })
+    render(
+      <AiPanelProvider>
+        <Registrant chat={chat}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+
+    const card = screen.getByTestId('chat-preview')
+    expect(card).toHaveTextContent('2')
+    expect(card).toHaveTextContent('1')
+
+    fireEvent.click(screen.getByTestId('chat-preview-apply'))
+    expect(chat.acceptPreview).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByTestId('chat-preview-discard'))
+    expect(chat.rejectPreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks Apply while ontology refs are unresolved, and says why', () => {
+    const chat = stubChat({
+      hasPreview: true,
+      previewEvents: [{ eventId: 'EVT-1', event_type: 'transfer' }] as never,
+      unresolvedRefs: [{ ref: { id: 'CHEBI:16236' }, label: 'ethanol' }] as never,
+    })
+    render(
+      <AiPanelProvider>
+        <Registrant chat={chat}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+
+    expect(screen.getByTestId('chat-preview-unresolved')).toBeInTheDocument()
+    const apply = screen.getByTestId('chat-preview-apply') as HTMLButtonElement
+    expect(apply.disabled).toBe(true)
+    fireEvent.click(apply)
+    expect(chat.acceptPreview).not.toHaveBeenCalled()
+  })
+
+  it('lets the scientist drop one proposed event without discarding the rest', () => {
+    const chat = stubChat({
+      hasPreview: true,
+      previewEvents: [{ eventId: 'EVT-1', event_type: 'transfer' }] as never,
+    })
+    render(
+      <AiPanelProvider>
+        <Registrant chat={chat}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+
+    fireEvent.click(screen.getByTestId('chat-preview-toggle-EVT-1'))
+    expect(chat.setPreviewEventState).toHaveBeenCalledWith('EVT-1', 'rejected')
+  })
+
+  it('renders no preview card when nothing is staged', () => {
+    render(
+      <AiPanelProvider>
+        <Registrant chat={stubChat()}>
+          <HarnessChatPane />
+        </Registrant>
+      </AiPanelProvider>,
+    )
+    expect(screen.queryByTestId('chat-preview')).toBeNull()
+  })
+
   it('renders the registered chat under the nearest AiPanelProvider', () => {
     const chat = stubChat({ messages: [message('u1', 'user', 'Add a primer'), message('a1', 'assistant', 'Drafted a proposal')] })
     render(

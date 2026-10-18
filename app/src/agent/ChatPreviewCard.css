@@ -1,0 +1,120 @@
+/* ChatPreviewCard — staged-deck-proposal controls in the chat pane.
+ * Token-only (--cl-*): follows .cl-app[data-theme]. */
+.chat-preview {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+}
+
+.chat-preview__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-preview__title {
+  font-weight: 600;
+}
+
+.chat-preview__counts {
+  color: var(--cl-text-dim);
+  font-size: 11px;
+}
+
+.chat-preview__blocked {
+  margin: 6px 0 0;
+  color: var(--cl-warn);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chat-preview__events {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.chat-preview__event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-preview__event--dropped .chat-preview__event-label {
+  text-decoration: line-through;
+  color: var(--cl-text-faint);
+}
+
+.chat-preview__event-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-preview__toggle {
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.chat-preview__toggle:hover {
+  color: var(--cl-text);
+  border-color: var(--cl-border-strong);
+}
+
+.chat-preview__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chat-preview__btn {
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.chat-preview__btn:hover:not(:disabled) {
+  border-color: var(--cl-border-strong);
+}
+
+.chat-preview__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chat-preview__btn--apply {
+  background: var(--cl-accent);
+  border-color: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font-weight: 600;
+}
+
+.chat-preview__btn--apply:hover:not(:disabled) {
+  background: var(--cl-accent-hover);
+  border-color: var(--cl-accent-hover);
+}
