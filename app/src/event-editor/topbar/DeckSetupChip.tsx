@@ -1,33 +1,37 @@
 /**
- * DeckSetupChip — the run's DECK SETUP as one composite control.
+ * DeckSetupChip — the run's DECK SETUP as one compact, cascading control.
  *
- * Before: three separate pulldowns (Deck platform / Deck variant / Vocab pack)
- * each held its own toolbar real estate — worst on a phone.
+ * Before: three separate pulldowns (Deck / Variant / Vocab) each held its own
+ * toolbar real estate — worst on a phone. Now: one summary chip; tapping it
+ * opens ONE panel whose rows follow the natural order of the decision —
  *
- * Now: a single summary chip; tapping it opens ONE panel that presents the
- * choice in its natural PROGRESSIVE order —
- *   1. Deck    (manual / Integra Assist / Opentrons …)
- *   2. Variant (Single SBS Plate, Technician Mode, Assist Plus 3-position …)
- *   3. Vocab   (the pack the run's verbs are drawn from)
- * Picking a deck reseeds variant + vocab + tool from that platform's defaults
- * (the reducer's rule), so the sequence narrows rather than fights.
+ *   1 · Vocab   →  which verb pack this run speaks
+ *   2 · Deck    →  only platforms that CAN run that vocab (allowedVocabIds)
+ *   3 · Variant →  only the chosen platform's layouts
  *
- * Everything here is DATA: platforms come from state.platforms, variants from
- * the platform manifest, packs from the vocab registry narrowed by the
- * manifest's allowedVocabIds. No platform/vocab literals.
+ * Each row shows its current value; tapping a row expands ONLY that row's
+ * options, and every list below it is filtered by the choices above. Picking a
+ * vocab that the current platform does not support re-seats the platform on the
+ * first one that does (the reducer then reseeds variant + tool defaults).
+ *
+ * Everything is DATA: packs from the vocab registry, platforms from
+ * state.platforms, variants from the platform manifest, and the vocab→platform
+ * filter from `allowedPlatformsForVocab`. No platform/vocab literals.
  *
  * Deck setup is a start-of-run decision: once the run has a deck (or deck
- * content) the chip STILL OPENS — the choices are shown greyed out, so you can
- * see how the run was set up — with an explicit "Switch deck" action inside the
- * panel. Switching clears the deck (the reducer wipes placements/events, since
- * slot ids aren't comparable across decks), so the panel says so before you
- * commit.
+ * content) the rows are shown GREYED so you can read how the run was set up,
+ * with one explicit "Switch deck" action that un-greys them. Switching clears
+ * the deck (slot ids aren't comparable across decks), and the panel says so.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isDeckSetupLocked, useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest } from '../../shared/lib/platformRegistry'
+import { allowedPlatformsForVocab } from '../../shared/lib/platformRegistry'
+import type { PlatformManifest } from '../../types/platformRegistry'
 import { getAllPacks } from '../../shared/vocab/registry'
+
+type Stage = 'vocab' | 'deck' | 'variant'
 
 function optionTestId(prefix: string, id: string): string {
   return `${prefix}-${id.replace(/[^a-zA-Z0-9_-]+/g, '~')}`
@@ -39,13 +43,17 @@ export function DeckSetupChip() {
   // A locked run can still be re-planned, but only through an explicit
   // "Switch deck" step inside the panel. Closing the panel re-arms the lock.
   const [switchArmed, setSwitchArmed] = useState(false)
+  // Which row's options are expanded. The panel opens on the first step of the
+  // cascade, so the choice is always made in order.
+  const [stage, setStage] = useState<Stage>('vocab')
+
   const wrapRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  // The panel is PORTALLED to document.body and positioned `fixed`: it lives
-  // inside a toolbar that scrolls horizontally on a phone (overflow-x:auto),
-  // and an absolutely-positioned child of a scroll container is clipped — the
-  // panel existed in the DOM but was never visible.
+  // The panel is PORTALLED (into the themed .cl-app root when present) and
+  // positioned `fixed`: it lives inside a toolbar that scrolls horizontally on
+  // a phone (overflow-x:auto), and an absolutely-positioned child of a scroll
+  // container is clipped — the panel used to exist in the DOM but never show.
   const [anchor, setAnchor] = useState({ left: 8, top: 0, width: 320 })
 
   const manifest = getPlatformManifest(state.platforms, state.platformId)
@@ -55,15 +63,19 @@ export function DeckSetupChip() {
   const deckLocked = isDeckSetupLocked(state)
   const locked = deckLocked && !switchArmed
 
-  // Vocab packs: the manifest whitelist, falling back to every pack (the rule
-  // the previous VocabSwitcher used) — data-driven either way.
-  const vocabOptions = useMemo(() => {
-    const packs = getAllPacks()
-    const allowed = new Set(manifest?.allowedVocabIds ?? [])
-    const narrowed = allowed.size > 0 ? packs.filter((p) => allowed.has(p.packId)) : packs
-    return narrowed.length > 0 ? narrowed : packs
-  }, [manifest])
+  // Vocab packs: every registered pack (the platform filter applies to the DECK
+  // list, not to the pack list — a pack is the axis you choose first).
+  const vocabOptions = useMemo(() => getAllPacks(), [])
   const vocabLabel = vocabOptions.find((p) => p.packId === state.vocabPackId)?.displayName
+
+  // Step 2 is dictated by step 1: only platforms that can run this vocab.
+  const platformOptions = useMemo<PlatformManifest[]>(() => {
+    const allowed = allowedPlatformsForVocab(state.platforms, state.vocabPackId)
+    // Defensive: a pack no platform declares still lets you see the decks.
+    return allowed.length > 0 ? allowed : state.platforms
+  }, [state.platforms, state.vocabPackId])
+
+  const summary = [vocabLabel, platformLabel, variantTitle].filter(Boolean).join(' · ')
 
   // Locking the deck (fresh run content) closes any in-progress re-plan.
   useEffect(() => {
@@ -73,15 +85,15 @@ export function DeckSetupChip() {
   const closePanel = () => {
     setOpen(false)
     setSwitchArmed(false)
+    setStage('vocab')
   }
 
   const openPanel = () => {
     const rect = triggerRef.current?.getBoundingClientRect()
     const width = Math.min(340, window.innerWidth - 16)
-    const left = rect
-      ? Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
-      : 8
+    const left = rect ? Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) : 8
     setAnchor({ left, top: rect ? rect.bottom + 6 : 0, width })
+    setStage('vocab')
     setOpen(true)
   }
 
@@ -106,14 +118,163 @@ export function DeckSetupChip() {
     window.addEventListener('scroll', onViewportChange, true)
     return () => {
       document.removeEventListener('mousedown', onDocPointer)
-      document.removeEventListener('touchstart', onDocPointer)
+      document.removeEventListener('touchstart', onDocPointer, true)
       document.removeEventListener('keydown', onKey)
       window.removeEventListener('resize', onViewportChange)
       window.removeEventListener('scroll', onViewportChange, true)
     }
   }, [open])
 
-  const summary = [platformLabel, variantTitle, vocabLabel].filter(Boolean).join(' · ')
+  /** Step 1 → 2. A pack the current deck cannot run re-seats the deck. */
+  const chooseVocab = (packId: string) => {
+    actions.setVocab(packId)
+    const allowed = allowedPlatformsForVocab(state.platforms, packId)
+    const currentStillOk = allowed.some((p) => p.id === state.platformId)
+    if (allowed.length > 0 && !currentStillOk) actions.setPlatform(allowed[0].id)
+    setStage('deck')
+  }
+
+  /** Step 2 → 3. The reducer reseeds variant + vocab + tool for the platform. */
+  const choosePlatform = (platformId: string) => {
+    actions.setPlatform(platformId)
+    const next = getPlatformManifest(state.platforms, platformId)
+    setStage((next?.variants.length ?? 0) > 1 ? 'variant' : 'vocab')
+    if ((next?.variants.length ?? 0) <= 1) closePanel()
+  }
+
+  /** Step 3 → done. */
+  const chooseVariant = (variantId: string) => {
+    actions.setVariant(variantId)
+    closePanel()
+  }
+
+  const stageRow = (
+    id: Stage,
+    index: number,
+    label: string,
+    value: string | undefined,
+    activeId: string | undefined,
+    options: Array<{ id: string; label: string }>,
+    onChoose: (id: string) => void,
+    testIdPrefix: string,
+  ) => {
+    const expanded = stage === id
+    return (
+      <div className="deck-setup__step" data-setup-step={id}>
+        <button
+          type="button"
+          className={expanded ? 'deck-setup__row deck-setup__row--open' : 'deck-setup__row'}
+          data-testid={`deck-setup-row-${id}`}
+          aria-expanded={expanded}
+          disabled={locked}
+          onClick={() => setStage(id)}
+        >
+          <span className="deck-setup__step-label">
+            {index} · {label}
+          </span>
+          <span className="deck-setup__value">{value ?? '—'}</span>
+          <span className="deck-setup__caret" aria-hidden>
+            {expanded ? '▴' : '▾'}
+          </span>
+        </button>
+        {expanded ? (
+          <div className="deck-setup__options">
+            {options.map((option) => (
+              <button
+                type="button"
+                key={option.id}
+                className={
+                  option.id === activeId
+                    ? 'deck-setup__option deck-setup__option--active'
+                    : 'deck-setup__option'
+                }
+                data-testid={optionTestId(testIdPrefix, option.id)}
+                aria-pressed={option.id === activeId}
+                disabled={locked}
+                onClick={() => onChoose(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  const panel = (
+    <div
+      ref={panelRef}
+      className="deck-setup__panel"
+      data-testid="deck-setup-panel"
+      role="dialog"
+      aria-label="Deck setup"
+      style={{
+        position: 'fixed',
+        left: `${anchor.left}px`,
+        top: `${anchor.top}px`,
+        width: `${anchor.width}px`,
+      }}
+    >
+      {stageRow(
+        'vocab',
+        1,
+        'Vocab',
+        vocabLabel,
+        state.vocabPackId,
+        vocabOptions.map((p) => ({ id: p.packId, label: p.displayName })),
+        chooseVocab,
+        'deck-setup-vocab',
+      )}
+
+      {stageRow(
+        'deck',
+        2,
+        'Deck',
+        platformLabel,
+        state.platformId,
+        platformOptions.map((p) => ({ id: p.id, label: p.label })),
+        choosePlatform,
+        'deck-setup-option',
+      )}
+
+      {variants.length > 1
+        ? stageRow(
+            'variant',
+            3,
+            'Variant',
+            variantTitle,
+            state.variantId,
+            variants.map((v) => ({ id: v.id, label: v.title })),
+            chooseVariant,
+            'deck-setup-option',
+          )
+        : null}
+
+      {locked ? (
+        <div className="deck-setup__locked-footer">
+          <button
+            type="button"
+            className="deck-setup__switch"
+            data-testid="deck-setup-switch"
+            onClick={() => {
+              setSwitchArmed(true)
+              setStage('vocab')
+            }}
+          >
+            Switch deck…
+          </button>
+          <p className="deck-setup__switch-note" data-testid="deck-setup-switch-note">
+            The deck is fixed for this run. Switching clears it —{' '}
+            {state.placements?.length ?? 0} placement
+            {(state.placements?.length ?? 0) === 1 ? '' : 's'} and{' '}
+            {state.events?.length ?? 0} event
+            {(state.events?.length ?? 0) === 1 ? '' : 's'} on this deck.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
 
   return (
     <div className="deck-setup" data-testid="deck-setup-chip" ref={wrapRef}>
@@ -144,117 +305,7 @@ export function DeckSetupChip() {
         </span>
       </button>
 
-      {open
-        ? createPortal(
-            <div
-              ref={panelRef}
-              className="deck-setup__panel"
-              data-testid="deck-setup-panel"
-              role="dialog"
-              aria-label="Deck setup"
-              style={{
-                position: 'fixed',
-                left: `${anchor.left}px`,
-                top: `${anchor.top}px`,
-                width: `${anchor.width}px`,
-              }}
-            >
-          <div className="deck-setup__step" data-setup-step="deck">
-            <span className="deck-setup__step-label">1 · Deck</span>
-            <div className="deck-setup__options">
-              {state.platforms.map((platform) => (
-                <button
-                  type="button"
-                  key={platform.id}
-                  className={
-                    platform.id === state.platformId
-                      ? 'deck-setup__option deck-setup__option--active'
-                      : 'deck-setup__option'
-                  }
-                  data-testid={optionTestId('deck-setup-option', platform.id)}
-                  aria-pressed={platform.id === state.platformId}
-                  disabled={locked}
-                  onClick={() => actions.setPlatform(platform.id)}
-                >
-                  {platform.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {variants.length > 1 ? (
-            <div className="deck-setup__step" data-setup-step="variant">
-              <span className="deck-setup__step-label">2 · Variant</span>
-              <div className="deck-setup__options">
-                {variants.map((variant) => (
-                  <button
-                    type="button"
-                    key={variant.id}
-                    className={
-                      variant.id === state.variantId
-                        ? 'deck-setup__option deck-setup__option--active'
-                        : 'deck-setup__option'
-                    }
-                    data-testid={optionTestId('deck-setup-option', variant.id)}
-                    aria-pressed={variant.id === state.variantId}
-                    disabled={locked}
-                    onClick={() => actions.setVariant(variant.id)}
-                  >
-                    {variant.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {vocabOptions.length > 1 ? (
-            <div className="deck-setup__step" data-setup-step="vocab">
-              <span className="deck-setup__step-label">{variants.length > 1 ? '3' : '2'} · Vocab</span>
-              <div className="deck-setup__options">
-                {vocabOptions.map((pack) => (
-                  <button
-                    type="button"
-                    key={pack.packId}
-                    className={
-                      pack.packId === state.vocabPackId
-                        ? 'deck-setup__option deck-setup__option--active'
-                        : 'deck-setup__option'
-                    }
-                    data-testid={optionTestId('deck-setup-vocab', pack.packId)}
-                    aria-pressed={pack.packId === state.vocabPackId}
-                    disabled={locked}
-                    onClick={() => actions.setVocab(pack.packId)}
-                  >
-                    {pack.displayName}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {locked ? (
-            <div className="deck-setup__locked-footer">
-              <button
-                type="button"
-                className="deck-setup__switch"
-                data-testid="deck-setup-switch"
-                onClick={() => setSwitchArmed(true)}
-              >
-                Switch deck…
-              </button>
-              <p className="deck-setup__switch-note" data-testid="deck-setup-switch-note">
-                The deck is fixed for this run. Switching clears it —{' '}
-                {state.placements?.length ?? 0} placement
-                {(state.placements?.length ?? 0) === 1 ? '' : 's'} and{' '}
-                {state.events?.length ?? 0} event
-                {(state.events?.length ?? 0) === 1 ? '' : 's'} on this deck.
-              </p>
-            </div>
-          ) : null}
-        </div>,
-            document.body,
-          )
-        : null}
+      {open ? createPortal(panel, document.querySelector('.cl-app') ?? document.body) : null}
     </div>
   )
 }

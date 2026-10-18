@@ -6,7 +6,9 @@ export function platformLabel(platforms: PlatformManifest[], platformId: string)
   return platforms.find((platform) => platform.id === platformId)?.label || platformId
 }
 
-export function allowedPlatformsForVocab(platforms: PlatformManifest[], vocabId: MethodVocabId): PlatformManifest[] {
+// The vocab id is a registry key (open set), not a closed union: the pack list
+// comes from the vocab registry, so the filter must accept any pack id.
+export function allowedPlatformsForVocab(platforms: PlatformManifest[], vocabId: string): PlatformManifest[] {
   return platforms.filter((platform) => platform.allowedVocabIds.includes(vocabId))
 }
 

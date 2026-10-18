@@ -1,17 +1,22 @@
 /**
- * DeckSetupChip — the run's deck setup is ONE composite control, not three
- * pulldowns (Deck / Variant / Vocab) eating toolbar width — worst on a phone.
+ * DeckSetupChip — the run's deck setup as ONE compact, CASCADING control.
  *
  * Contract:
- *  - closed: a single trigger chip summarising the current setup; no <select>;
- *  - open: the choices in their natural PROGRESSIVE order — Deck, then Variant,
- *    then Vocab — as one panel;
- *  - picking a deck uses the existing action (the reducer reseeds variant +
- *    vocab + tool defaults for the new platform);
- *  - once the run's deck is locked the setup is read-only: no panel, no knobs
- *    (it was chosen at the start of the run).
+ *  - closed: a single trigger chip summarising the setup; no native <select>;
+ *  - open: three rows in the order the decision is actually made —
+ *    Vocab → Deck → Variant — with only the FIRST row's options expanded;
+ *  - each menu is dictated by the previous choice: the deck list holds only
+ *    platforms whose allowedVocabIds include the chosen pack; the variant list
+ *    only that platform's layouts;
+ *  - picking a vocab the current deck cannot run re-seats the deck on the first
+ *    platform that can (the reducer reseeds variant + tool);
+ *  - once the run has its deck the rows are greyed (disabled) with one explicit
+ *    "Switch deck" action that un-greys them;
+ *  - the panel is portalled so a scrolling toolbar can never clip it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const platforms = [
@@ -19,7 +24,8 @@ const platforms = [
     id: 'manual',
     label: 'Manual',
     compilerFamily: 'manual',
-    allowedVocabIds: ['liquid-handling/v1', 'cell-culture/v1'],
+    // liquid handling only — the cascade must hide it for a cell pack
+    allowedVocabIds: ['liquid-handling/v1'],
     toolTypeIds: ['pipette_1ch'],
     variants: [
       { id: 'manual_single_plate', title: 'Single SBS Plate', slots: [] },
@@ -30,7 +36,7 @@ const platforms = [
     id: 'integra_assist',
     label: 'Integra Assist',
     compilerFamily: 'assist_plus',
-    allowedVocabIds: ['liquid-handling/v1'],
+    allowedVocabIds: ['cell-culture/v1'],
     toolTypeIds: ['viaflo'],
     variants: [{ id: 'assist_plus_3pos', title: 'Integra Assist Plus (3-position)', slots: [] }],
   },
@@ -84,6 +90,10 @@ function setup(state: Partial<typeof mocked.state> = {}) {
   return render(<DeckSetupChip />)
 }
 
+function open() {
+  fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+}
+
 afterEach(() => {
   cleanup()
   mocked.setPlatform.mockReset()
@@ -96,78 +106,104 @@ describe('DeckSetupChip', () => {
     setup()
     expect(screen.getByTestId('deck-setup-chip')).toBeInTheDocument()
     expect(document.querySelectorAll('select')).toHaveLength(0)
-    // The summary names the chosen deck and variant, so the toolbar needs no
-    // separate labels.
-    expect(screen.getByTestId('deck-setup-trigger').textContent).toContain('Manual')
-    expect(screen.getByTestId('deck-setup-trigger').textContent).toContain('Single SBS Plate')
+    const text = screen.getByTestId('deck-setup-trigger').textContent
+    expect(text).toContain('Liquid Handling v1')
+    expect(text).toContain('Manual')
+    expect(text).toContain('Single SBS Plate')
   })
 
-  it('opens ONE panel with the choices in progressive order: Deck, Variant, Vocab', () => {
+  it('opens with the three cascade rows, only the FIRST expanded', () => {
     setup()
-    expect(screen.queryByTestId('deck-setup-panel')).toBeNull()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    open()
     const panel = screen.getByTestId('deck-setup-panel')
-    expect(panel).toBeInTheDocument()
-
-    const labels = Array.from(panel.querySelectorAll('[data-setup-step]')).map((el) =>
+    const rows = Array.from(panel.querySelectorAll('[data-setup-step]')).map((el) =>
       el.getAttribute('data-setup-step'),
     )
-    expect(labels).toEqual(['deck', 'variant', 'vocab'])
+    expect(rows).toEqual(['vocab', 'deck', 'variant'])
+
+    // Only the vocab options are on screen until that choice is made.
+    expect(screen.getByTestId('deck-setup-vocab-cell-culture~v1')).toBeInTheDocument()
+    expect(screen.queryByTestId('deck-setup-option-manual')).toBeNull()
   })
 
-  it('choosing a deck dispatches setPlatform (the reducer reseeds variant + vocab)', () => {
+  it('step 2 is dictated by step 1: only decks that can run the chosen vocab', () => {
     setup()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    fireEvent.click(screen.getByTestId('deck-setup-option-integra_assist'))
-    expect(mocked.setPlatform).toHaveBeenCalledWith('integra_assist')
+    open()
+    // liquid-handling → Manual only (Integra declares cell-culture).
+    fireEvent.click(screen.getByTestId('deck-setup-vocab-liquid-handling~v1'))
+    fireEvent.click(screen.getByTestId('deck-setup-row-deck'))
+    expect(screen.getByTestId('deck-setup-option-manual')).toBeInTheDocument()
+    expect(screen.queryByTestId('deck-setup-option-integra_assist')).toBeNull()
   })
 
-  it('choosing a variant and a vocab pack dispatch their actions', () => {
+  it('choosing a vocab the current deck cannot run re-seats the deck', () => {
     setup()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    fireEvent.click(screen.getByTestId('deck-setup-option-manual_collapsed'))
-    expect(mocked.setVariant).toHaveBeenCalledWith('manual_collapsed')
+    open()
     fireEvent.click(screen.getByTestId('deck-setup-vocab-cell-culture~v1'))
     expect(mocked.setVocab).toHaveBeenCalledWith('cell-culture/v1')
-  })
-
-  it('once the run deck is locked the chip still opens, but every choice is greyed out', () => {
-    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
-    const chip = screen.getByTestId('deck-setup-chip')
-    expect(chip.textContent).toContain('Manual')
-
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    expect(screen.getByTestId('deck-setup-panel')).toBeInTheDocument()
-    // Choices are visible (so you can see what the run was set up with) but
-    // inert.
-    const platform = screen.getByTestId('deck-setup-option-manual') as HTMLButtonElement
-    expect(platform.disabled).toBe(true)
-  })
-
-  it('locks the SAME panel behind an explicit "Switch deck" action', () => {
-    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-
-    const switchBtn = screen.getByTestId('deck-setup-switch')
-    expect(switchBtn.textContent).toMatch(/switch deck/i)
-
-    fireEvent.click(switchBtn)
-    const platform = screen.getByTestId('deck-setup-option-integra_assist') as HTMLButtonElement
-    expect(platform.disabled).toBe(false)
-
-    fireEvent.click(platform)
+    // Manual declares liquid-handling only, so the deck moves to Integra.
     expect(mocked.setPlatform).toHaveBeenCalledWith('integra_assist')
   })
 
-  it('re-locks when the panel is closed and reopened', () => {
-    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    fireEvent.click(screen.getByTestId('deck-setup-switch'))
-    fireEvent.keyDown(document, { key: 'Escape' })
+  it('choosing a deck advances to its variants and dispatches setPlatform', () => {
+    setup()
+    open()
+    fireEvent.click(screen.getByTestId('deck-setup-vocab-liquid-handling~v1'))
+    fireEvent.click(screen.getByTestId('deck-setup-row-deck'))
+    fireEvent.click(screen.getByTestId('deck-setup-option-manual'))
 
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    const platform = screen.getByTestId('deck-setup-option-manual') as HTMLButtonElement
-    expect(platform.disabled).toBe(true)
+    expect(mocked.setPlatform).toHaveBeenCalledWith('manual')
+    // Manual has two layouts, so the cascade advances to the variant row.
+    expect(screen.getByTestId('deck-setup-option-manual_collapsed')).toBeInTheDocument()
+  })
+
+  it('choosing a variant dispatches setVariant and closes the panel', () => {
+    setup()
+    open()
+    fireEvent.click(screen.getByTestId('deck-setup-vocab-liquid-handling~v1'))
+    fireEvent.click(screen.getByTestId('deck-setup-row-deck'))
+    fireEvent.click(screen.getByTestId('deck-setup-option-manual'))
+    fireEvent.click(screen.getByTestId('deck-setup-option-manual_collapsed'))
+
+    expect(mocked.setVariant).toHaveBeenCalledWith('manual_collapsed')
+    expect(screen.queryByTestId('deck-setup-panel')).toBeNull()
+  })
+
+  it('renders the panel in a portal so no toolbar overflow can clip it', () => {
+    setup()
+    open()
+    const panel = screen.getByTestId('deck-setup-panel')
+    expect(panel.parentElement).toBe(document.body)
+    expect(panel.style.position).toBe('fixed')
+  })
+
+  it('clicking INSIDE the panel does not close it (outside-click ignores the portal)', () => {
+    setup()
+    open()
+    fireEvent.mouseDown(screen.getByTestId('deck-setup-panel'))
+    expect(screen.getByTestId('deck-setup-panel')).toBeInTheDocument()
+  })
+
+  it('once the run deck is locked every row is greyed but still readable', () => {
+    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
+    open()
+    const deckRow = screen.getByTestId('deck-setup-row-deck') as HTMLButtonElement
+    expect(deckRow.disabled).toBe(true)
+    // The chosen values stay visible.
+    expect(deckRow.textContent).toContain('Manual')
+    expect(screen.getByTestId('deck-setup-switch')).toBeInTheDocument()
+  })
+
+  it('"Switch deck" un-greys the cascade and restarts it at vocab', () => {
+    setup({ runDeck: { platformId: 'manual', variantId: 'manual_single_plate' } })
+    open()
+    fireEvent.click(screen.getByTestId('deck-setup-switch'))
+
+    const deckRow = screen.getByTestId('deck-setup-row-deck') as HTMLButtonElement
+    expect(deckRow.disabled).toBe(false)
+    expect(screen.queryByTestId('deck-setup-switch')).toBeNull()
+    // The cascade restarts at step 1.
+    expect(screen.getByTestId('deck-setup-vocab-cell-culture~v1')).toBeInTheDocument()
   })
 
   it('states the consequence: switching clears the deck', () => {
@@ -175,30 +211,27 @@ describe('DeckSetupChip', () => {
       runDeck: { platformId: 'manual', variantId: 'manual_single_plate' },
       placements: [{}, {}, {}],
     })
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    open()
     expect(screen.getByTestId('deck-setup-switch-note').textContent).toMatch(/clears/i)
   })
 
-  it('renders the panel in a portal on document.body so no toolbar overflow can clip it', () => {
-    setup()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    const panel = screen.getByTestId('deck-setup-panel')
-    // A toolbar with overflow-x:auto clips absolutely-positioned children —
-    // on a phone the panel existed but was never visible. Portal out.
-    expect(panel.parentElement).toBe(document.body)
-    expect(getComputedStyle(panel).position === 'fixed' || panel.style.position === 'fixed').toBe(true)
-  })
-
-  it('clicking INSIDE the panel does not close it (outside-click must ignore the portal)', () => {
-    setup()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
-    fireEvent.mouseDown(screen.getByTestId('deck-setup-panel'))
-    expect(screen.getByTestId('deck-setup-panel')).toBeInTheDocument()
+  it('the panel CSS is NOT scoped under .event-editor (it is portalled out of that tree)', () => {
+    // Regression: the panel is portalled into .cl-app, so an ancestor selector
+    // `.event-editor .deck-setup__panel` matches nothing and the menu renders
+    // unstyled with no theme tokens.
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/event-editor/styles/eventEditor.css'),
+      'utf8',
+    )
+    expect(css).toContain('.deck-setup__panel {')
+    expect(css).not.toMatch(/\.event-editor\s+\.deck-setup__panel/)
+    expect(css).toContain('.deck-setup__row {')
+    expect(css).toContain('.deck-setup__value {')
   })
 
   it('closes on Escape', () => {
     setup()
-    fireEvent.click(screen.getByTestId('deck-setup-trigger'))
+    open()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByTestId('deck-setup-panel')).toBeNull()
   })
