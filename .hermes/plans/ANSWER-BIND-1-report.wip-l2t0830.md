@@ -112,6 +112,17 @@ RED raw (excerpt):
 ```
  Test Files  1 failed (1)
       Tests  3 failed | 4 passed (7)
+
+[ORCH ANNOTATION 2026-10-18T10:40 EDT, advc-c1 D1 — CORRECTED RAW, orch-run]:
+ the handler-leg RED excerpt above is MIS-ATTRIBUTED. Orchestrator re-ran
+ `git checkout b7347111 -- <this test file>; git checkout 534f7e5f -- <the three
+ production files>; npx vitest run <this file>` in this worktree (coder exited,
+ tree restored to tip after): real RED = `Tests  2 failed | 5 passed (7)`. The
+ 'nonexistent id byte-identical' pin PASSES at base — it is a REGRESSION pin
+ (green before AND after), not a RED failure. Same measurement as
+ advc-c1 reviewer (reviews/advc-ANSWERBIND1-c1-l2t1000.md D1). Conclusion
+ unchanged: the two real RED failures are the fact-GONE pin and the §5.1 join
+ pin. No product-code defect found by the review; D1 is report-accuracy only."
  FAIL ... > answered with [[labware:<existing id>|label]]: the ambiguous-noun fact ... GONE
      → expected [ { label: 'microcentrifuge tube', reason: 'ambiguous-noun', … } ] … (fact still bars)
  FAIL ... > §5.1 join end-to-end: a model hedge carrying the answered label is dropped
