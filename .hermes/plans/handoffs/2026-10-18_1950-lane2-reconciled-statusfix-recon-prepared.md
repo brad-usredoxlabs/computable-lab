@@ -81,6 +81,17 @@ W211-MACH-1 resume3. Queue: HEDGE-TYPE-1 fix1 wrapper 39591 waiting on the lock
 4. Wrapper exit-75 checks (fix1 abort ~23:20 — re-wrap with fresh deadline).
 5. PROTO-AI-13 recount each tick (path pinned in the block; n=317/500).
 
+## R2-CLAIM ADJUDICATED (l2t1930 cont., ~20:00)
+- The r2 'stuck Loading protocol' claim is REFUTED first-hand at the served
+  trunk: orch playwright probe (app-dir run per the tightened rule;
+  receipts/W28-A5D-R3/2026-10-18_1958-orch-r2claim-probe/protocol-page.png)
+  opened /record/CAN-protocol-1788721664608: STUCK-LOADING=false, Steps+
+  Materials rendered, 0 console errors. r2's BLOCKED was invalid twice over
+  (zero receipts + non-reproducing claim). No product defect opened; the r3
+  route stands. Prompt for the tier-2 r3 gate must carry this refutation so
+  the next reviewer navigates /record/<protocolId> (r2 apparently polled a
+  transient state or used a bad selector).
+
 ## Blockers / open obligations
 - W28-A5D-R3: blocked on HEDGE-TYPE-1 merge ONLY. Resume = fix1 merge + probe
   r3 v2 ARM A -> tier-2 gate.
