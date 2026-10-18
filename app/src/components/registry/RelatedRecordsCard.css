@@ -1,0 +1,66 @@
+/* Registry rail card — related records + their registry kinds.
+ * Token-only (--cl-*): reads the active theme; never fixed palette shades. */
+.related-records {
+  color: var(--cl-text);
+}
+
+.related-records__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.related-records__empty {
+  font-size: 13px;
+  color: var(--cl-text-faint);
+}
+
+.related-records__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.related-records__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.related-records__row:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.related-records__kind {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cl-accent-soft);
+  color: var(--cl-text-dim);
+}
+
+.related-records__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.related-records__via {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--cl-text-faint);
+}
