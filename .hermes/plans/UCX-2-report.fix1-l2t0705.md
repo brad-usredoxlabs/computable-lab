@@ -48,6 +48,13 @@ Mechanism fixed in TabUrlSync.tsx:
    the user dismissed, not a session-wide mute. When the URL becomes valid (fragment ===
    desired), dismissedFragmentRef is cleared too, so a later re-appearance of the same bad
    link re-arms the banner.
+   [CORRECTED per advc-UCX2-c2-l2t0800 defect NEW-1 (annotated, not silently rewritten): the
+   last sentence's MECHANISM was false at e1a5e178 — the :101-107 clear could never run for the
+   dismissed fragment after the STATE→URL correction (the lastWritten early-return shadowed it),
+   so the same bad link was silently rewritten forever. Fix2 (this cycle) makes the CLAIM true
+   by clearing dismissedFragmentRef at the STATE→URL write landing instead, pinned by
+   'dismiss then correction then re-navigation to the SAME malformed fragment re-arms the
+   banner'. Evidence: UCX-2-report.fix2-l2t0835.md §NEW-1.]
 Spec reading honored: "Malformed -> do NOT touch state" — the banner owns the URL until fixed
 OR dismissed; dismissal releases ownership. State is still never touched by a malformed link.
 
@@ -205,6 +212,18 @@ G4 FULL app run (zero NEW failing FILE names):
   Raw base: /tmp/ucx2-fix1-full-base.raw (captured during the stash-base run; name list saved
   as ucx2-evidence/ucx2-fix1-base-fullfiles.txt). Raw head: ucx2-evidence/ucx2-fix1-full-head.raw;
   names: ucx2-evidence/ucx2-fix1-head-fullfiles.txt.
+  [CORRECTED per advc-UCX2-c2-l2t0800 defect NEW-2 (annotated, not silently rewritten): the
+  56-entry name lists above came from a lossy extraction that dropped 4 FAIL lines whose paths
+  end in .mjs — e2e/gate-pbch6.spec.mjs, e2e/w2-11-campaign-demo.spec.mjs,
+  e2e/w28-said-meant-surface.spec.mjs, e2e/w29-review-ai-panel.spec.mjs — present in BOTH saved
+  raws (grep -oP 'FAIL\s+\S+' | sort -u → 60 unique names each side). The reviewer's 61-vs-61
+  counts come from THEIR fresh runs, where SlideOverEditor.test.tsx additionally flapped (it
+  PASSES in both saved raws: "✓ src/components/registry/SlideOverEditor.test.tsx (12 tests)");
+  the reviewer's 5 omitted names are the 4 .mjs files + that flap. Corrected lists (60 vs 60):
+  ucx2-evidence/ucx2-fix2-{base,head}-fullfiles.corrected.txt; comm -3 on them → EMPTY; the
+  conclusion (ZERO NEW failing file names) is UNCHANGED. Fresh fix2-cycle runs re-confirm:
+  head 60 failed | 325 passed (385), cl-integration-2 trunk 61 failed | 320 passed (381),
+  comm -13 (head-exclusive vs trunk) → EMPTY. Full commands + raws: UCX-2-report.fix2-l2t0835.md §NEW-2.]
   Flap bookkeeping (memory-documented load-flap debt): parallel head-run #1 additionally showed
   AddMaterialForm.biological.test.tsx; parallel head-run #2 additionally showed
   AiTabPanel.runPageSurface.test.tsx; the serial head run showed NEITHER; the final head run
@@ -237,6 +256,9 @@ G5 Typecheck:
   forbids silently adopting a malformed link, and a blanket release would let a stale dismissed
   link re-stomp the strip on every effect re-run. A new/different malformed link re-arms the
   banner; a valid URL clears the dismissal latch so the same bad link re-arms if it returns.
+  [CORRECTED per advc-UCX2-c2 NEW-1: the latch-clear-on-valid-URL half was FALSE as implemented
+  at e1a5e178 (shadowed by the lastWritten early-return); fix2 restores the assumption's truth
+  by clearing the latch at the STATE→URL correction landing. See UCX-2-report.fix2-l2t0835.md.]
 - AS-L2T0705-UCX2-008 (defect 4 option choice): option 1 (drop execution from the decodable
   set) chosen over option 2 (re-derive runId at decode/host-mount). Option 2 needs a runId the
   URL does not carry: re-derivation would require a server lookup (out of scope, no server

@@ -1,0 +1,400 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sequences/nativeDraft.test.ts  (4 tests) 80ms
+ ✓ src/shared/shell/openTabsReducer.idempotent.test.ts  (5 tests) 23ms
+ ✓ src/shared/shell/openTabsReducer.history.test.ts  (7 tests) 25ms
+ ✓ src/shared/shell/OpenTabsContext.test.ts  (19 tests) 48ms
+ ✓ src/shared/session/urlSession.test.ts  (18 tests) 75ms
+ ✓ src/shared/session/workstateExecutor.test.ts  (35 tests) 225ms
+stderr | src/shared/shell/RegistryHostPage.test.tsx > RegistryHostPage — /registry in the unified workspace shell (QMS7-1) > renders the workspace shell around the registry: navbar + tab strip + right pane
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/shared/shell/TabBreadcrumb.test.tsx > TabBreadcrumb > renders crumb buttons and current label
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/shell/TabBreadcrumb.test.tsx  (4 tests) 283ms
+stderr | src/shared/shell/TabUrlSync.test.tsx > TabUrlSync state → URL (replace-only) > openTab writes the strip into the current search with replace:true
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/session/useSessionSync.boot.test.ts  (2 tests) 108ms
+stderr | src/shared/session/useWorkstateExecutor.test.tsx > useWorkstateExecutor — tier 1 through the live store > registry not loaded yet yields diagnostics, never a throw (null registry)
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/session/useSessionSync.test.ts  (3 tests) 187ms
+stderr | src/shared/shell/SurfaceIndicator.test.tsx > SurfaceIndicator > renders the find surface label on /find
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/shell/SurfaceIndicator.test.tsx  (4 tests) 207ms
+stdout | src/shared/session/useWorkstateExecutor.test.tsx > useWorkstateExecutor — two-client harness: only applied state reaches the sync path > client A accept-applies and pushes; shared store bytes equal the ACCEPTED doc; client B adopts exactly the accepted tabs; an unaccepted doc never enters the store
+HARNESS store bytes after A push: {"tabs":[{"kind":"project","studyId":"STU-1","title":"DHVC","activeRightPaneMode":"ai"},{"kind":"run","runId":"RUN-7","title":"Titration","activeRightPaneMode":"protocol"}],"activeTabId":"run:RUN-7","updatedAt":"2026-10-06T00:00:02.000Z"}
+
+stdout | src/shared/session/useWorkstateExecutor.test.tsx > useWorkstateExecutor — two-client harness: only applied state reaches the sync path > client A accept-applies and pushes; shared store bytes equal the ACCEPTED doc; client B adopts exactly the accepted tabs; an unaccepted doc never enters the store
+HARNESS store bytes after smuggle attempt: [{"kind":"project","studyId":"STU-1","title":"DHVC","activeRightPaneMode":"ai"},{"kind":"run","runId":"RUN-7","title":"Titration","activeRightPaneMode":"protocol"}]
+
+ ✓ src/shared/session/useWorkstateExecutor.test.tsx  (16 tests) 483ms
+ ✓ src/sequences/SequenceSearch.test.tsx  (8 tests) 932ms
+ ✓ src/shared/shell/GlobalNavbar.test.tsx  (4 tests) 665ms
+stderr | src/shared/shell/GlobalNavbar.test.tsx > GlobalNavbar > renders all primary destinations
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/shell/TabUrlSync.test.tsx  (13 tests) 1883ms
+ ✓ src/sequences/SequenceEditor.test.tsx  (2 tests) 1977ms
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sequences/SequenceImport.test.tsx  (7 tests) 2944ms
+ ✓ src/shared/shell/OpenTabsContext.url.test.ts  (4 tests) 129ms
+stderr | src/shared/shell/WorkspaceTabStrip.duplicateKeys.test.tsx > WorkspaceTabStrip renders a duplicated persisted session with unique keys > renders one tab element per id and the console stays free of the duplicate-key warning
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/shell/WorkspaceTabStrip.duplicateKeys.test.tsx  (3 tests) 223ms
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sequences/applyAgentAction.test.ts  (19 tests) 39ms
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?tab=Analysis activates the Analysis tab on first paint
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > malformed ?tab=Nope degrades to the default Editor with no crash
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?source= without ?tab= still routes to Import (existing behavior byte-pin)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a valid ?tab= outranks ?source=
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:53)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+ ✓ src/sequences/SequencesPage.urltab.test.tsx  (6 tests) 2058ms
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2881199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/shared/shell/activeProject.test.ts  (4 tests) 13ms
+ ✓ src/shared/session/protocolReviewTab.test.ts  (3 tests) 9ms
+ ✓ src/shared/shell/recentStore.test.ts  (4 tests) 67ms
+ ✓ src/shared/session/sessionYaml.dedupe.test.ts  (3 tests) 115ms
+ ✓ src/shared/session/sessionYaml.test.ts  (6 tests) 184ms
+ ✓ src/shared/shell/SplashSearch.test.ts  (2 tests) 87ms
+ ✓ src/shared/session/applySessionDocument.test.ts  (4 tests) 187ms
+ ✓ src/shared/shell/OpenTabsContext.hydration.test.ts  (3 tests) 233ms
+ ✓ src/shared/shell/EditableTitle.test.tsx  (5 tests) 820ms
+stderr | src/shared/shell/AppShell.test.tsx > AppShell three-pane workspace layout > renders three panes (nav/action/chat) when a navPane is supplied
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/shared/shell/AppShell.test.tsx  (2 tests) 1059ms
+stderr | src/shared/shell/RegistryHostPage.test.tsx > RegistryHostPage — /registry in the unified workspace shell (QMS7-1) > selection re-targets the AI context live: record-edit on select, project-details on cancel
+Warning: Cannot update a component (`RecordRegistryPage`) while rendering a different component (`ProjectionTapTabEditor`). To locate the bad setState() call inside `ProjectionTapTabEditor`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+    at ProjectionTapTabEditor (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.test.tsx:157:5)
+    at div
+    at div
+    at div
+    at div
+    at DocumentShell (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/editor/taptab/DocumentShell.tsx:6:3)
+    at div
+    at RecordRegistryPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/pages/RecordRegistryPage.tsx:46:59)
+    at div
+    at PanelWithForwardedRef (file:///mnt/vast/home/brad/git/computable-lab/node_modules/react-resizable-panels/dist/react-resizable-panels.development.edge-light.js:38:3)
+    at forwardRef(Panel)
+    at div
+    at PanelGroupWithForwardedRef (file:///mnt/vast/home/brad/git/computable-lab/node_modules/react-resizable-panels/dist/react-resizable-panels.development.edge-light.js:1537:3)
+    at forwardRef(PanelGroup)
+    at div
+    at WorkspaceMain (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/AppShell.tsx:134:3)
+    at div
+    at AppShell (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/AppShell.tsx:22:3)
+    at WorkspaceProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/event-editor/workspace/WorkspaceContext.tsx:13:3)
+    at RegistryHostPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.tsx:22:42)
+    at Suspense
+    at DeferredMount (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.test.tsx:195:26)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+Warning: Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?
+
+Check the render method of `RecordRegistryPage`.
+    at ProjectionTapTabEditor (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.test.tsx:157:5)
+    at div
+    at div
+    at div
+    at div
+    at DocumentShell (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/editor/taptab/DocumentShell.tsx:6:3)
+    at div
+    at RecordRegistryPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/pages/RecordRegistryPage.tsx:46:59)
+    at div
+    at PanelWithForwardedRef (file:///mnt/vast/home/brad/git/computable-lab/node_modules/react-resizable-panels/dist/react-resizable-panels.development.edge-light.js:38:3)
+    at forwardRef(Panel)
+    at div
+    at PanelGroupWithForwardedRef (file:///mnt/vast/home/brad/git/computable-lab/node_modules/react-resizable-panels/dist/react-resizable-panels.development.edge-light.js:1537:3)
+    at forwardRef(PanelGroup)
+    at div
+    at WorkspaceMain (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/AppShell.tsx:134:3)
+    at div
+    at AppShell (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/AppShell.tsx:22:3)
+    at WorkspaceProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/event-editor/workspace/WorkspaceContext.tsx:13:3)
+    at RegistryHostPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.tsx:22:42)
+    at Suspense
+    at DeferredMount (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/RegistryHostPage.test.tsx:195:26)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:326:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+
+ ✓ src/shared/shell/RegistryHostPage.test.tsx  (6 tests) 10116ms
+
+ Test Files  31 passed (31)
+      Tests  225 passed (225)
+   Start at  10:14:32
+   Duration  24.39s (transform 14.64s, setup 33.34s, collect 33.94s, tests 25.48s, environment 249.30s, prepare 13.51s)
+
