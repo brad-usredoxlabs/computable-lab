@@ -125,6 +125,51 @@ describe('createIntentAcceptHandlers', () => {
     expect(br[1].matched).toBe(true);
   });
 
+  // ---- W28-AXISSLUG-1 fix cycle 1 (advc-AXISSLUG1-c1 DEFECT): slugifyRecordLabel does
+  // not guarantee a leading [a-z]. '4c_variant' -> '4c-variant' is schema-INVALID against
+  // the LPR axisId pattern ^[a-z][a-z0-9-]*$ — the exact 409 this ticket targets. The
+  // call-site guard must prefix a digit-leading slug with 'axis-'. ----
+
+  it('fix1: a digit-leading answer key gets the axis- prefix so axisId matches the pattern', async () => {
+    created.length = 0;
+    const h = createIntentAcceptHandlers(ctx);
+    const reply = send();
+    await h.accept(mockRequest({
+      ...VALID,
+      answers: { '4c_variant': 'variant_a', '96-well_plate': 'plate_96' },
+    }) as never, reply.r as never);
+
+    expect(created).toHaveLength(1);
+    const br = (created[0].payload as any).branch_resolution;
+    expect(br).toHaveLength(2);
+
+    // real-helper probes: slugifyRecordLabel('4c_variant') === '4c-variant' (invalid),
+    // slugifyRecordLabel('96-well_plate') === '96-well-plate' (invalid)
+    expect(slugifyRecordLabel('4c_variant')).toBe('4c-variant');
+    expect(slugifyRecordLabel('96-well_plate')).toBe('96-well-plate');
+
+    // guard fires: BOTH axisId and the choices key carry the prefixed id
+    expect(br[0].axisId).toBe('axis-4c-variant');
+    expect(br[0].axisId).toMatch(AXIS_ID_PATTERN);
+    expect(br[0].choices).toEqual({ 'axis-4c-variant': 'variant_a' });
+
+    expect(br[1].axisId).toBe('axis-96-well-plate');
+    expect(br[1].axisId).toMatch(AXIS_ID_PATTERN);
+    expect(br[1].choices).toEqual({ 'axis-96-well-plate': 'plate_96' });
+
+    // chosen values remain byte-verbatim
+    expect(br[0].branchIds).toEqual(['variant_a']);
+    expect(br[1].branchIds).toEqual(['plate_96']);
+
+    // the guard does NOT touch an already-valid key: no 'axis-' prefix on 'lysis-method'
+    created.length = 0;
+    const reply2 = send();
+    await h.accept(mockRequest({ ...VALID, answers: { 'lysis-method': 'bead-beater' } }) as never, reply2.r as never);
+    const br2 = (created[0].payload as any).branch_resolution;
+    expect(br2[0].axisId).toBe('lysis-method');
+    expect(br2[0].choices).toEqual({ 'lysis-method': 'bead-beater' });
+  });
+
   it('idempotence: an already-conforming key is unchanged by the slug', () => {
     expect(slugifyRecordLabel('lysis-method')).toBe('lysis-method');
     expect(slugifyRecordLabel('sample-type')).toBe('sample-type');
