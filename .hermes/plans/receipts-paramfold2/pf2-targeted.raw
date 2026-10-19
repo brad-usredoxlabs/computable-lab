@@ -1,0 +1,16 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+ ✓ src/compiler/resolution/resolveNounsPass.paramFold.test.ts  (8 tests) 5ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (3 tests) 102ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (6 tests) 119ms
+stdout | src/compiler/scientistIntent/promptShapeParity.test.ts > one-shot shape acceptance on both Brad prompts (headless) > prompt 1 (the 50uL mixture) parses on the FIRST pass — no shape rejection, no re-ask
+SH-QA-3 redundancy strip: removed the redundant top-level noun "HepG2 cells in Thermo trypsin-EDTA / Thermo DMEM + FBS" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/promptShapeParity.test.ts  (9 tests) 66ms
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  05:08:34
+   Duration  1.29s (transform 722ms, setup 0ms, collect 2.25s, tests 292ms, environment 1ms, prepare 413ms)
+

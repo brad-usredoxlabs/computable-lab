@@ -1,0 +1,26 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+ ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts  (15 tests | 1 failed) 101ms
+   ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts > hedge-type-1 acceptance (a): declared-optional absence compiles complete (fake LLM) > companion characterization: the SAME shape WITH a hedge bars — the hedge, not the engine, manufactures the wall
+     → expected 0 to be greater than 0
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/hedgeOptionality.test.ts > hedge-type-1 acceptance (a): declared-optional absence compiles complete (fake LLM) > companion characterization: the SAME shape WITH a hedge bars — the hedge, not the engine, manufactures the wall
+AssertionError: expected 0 to be greater than 0
+ ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts:280:43
+    278|     // A kept model hedge is a clarification/gap: outcome is NOT compl…
+    279|     expect(compile.outcome).not.toBe('complete');
+    280|     expect(compile.clarifications.length).toBeGreaterThan(0);
+       |                                           ^
+    281|   });
+    282| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  05:02:23
+   Duration  4.09s (transform 347ms, setup 0ms, collect 1.27s, tests 101ms, environment 0ms, prepare 302ms)
+
