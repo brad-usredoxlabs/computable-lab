@@ -130,3 +130,113 @@ orchestrator verification + adversarial review, then the probe r6 arm-B loop che
 gate sequence.
 
 STAGHEDGE1 IMPLEMENTED
+
+## Fix cycle 1 (adversarial reviewer defect 1 — guard (4) exact-equality discipline unpinned)
+
+Defect (reviewer finding): the suite as a whole did not pin guard (4)'s exact-label identity.
+Replacing `if (!answeredByKey.has(fact.label.trim())) return true;` with the bidirectional
+containment join
+`if (!answers.some((a) => fact.label.includes(a.label) || a.label.includes(fact.label))) return true;`
+left ALL 9 tests green — the suite would not catch a regression to the A5d V6 drift class it
+claims to guard.
+
+Fix scope: TEST-FILE-ONLY. One new case, SH9, added beside SH5 in
+`server/src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts` (same harness idiom:
+`intentOf` / `hedge` / `runPass`, stage verb + `firstResolvable` slot — the exact
+declared-resolvable slot SH1's drop case uses). SH9 answers with a key that is a PROPER SUBSTRING
+of the fact label (`'variant'` vs `HEDGE_LABEL` = `'variant b'`) and asserts the fact SURVIVES:
+`result.ok === false`, `blocked === true`, exactly ONE clarification carrying label `HEDGE_LABEL`,
+reason `NOT_STATED`, pinned `actionLocation`, plus `bindings === []` (a containment join mints
+nothing either — the defect it catches is the consumed QUESTION). Production code untouched.
+
+### RED containment-mutation evidence (mutation-sensitivity proof)
+
+Temporarily swapped guard (4) in `resolveNounsPass.ts:401` to the reviewer's exact containment
+expression (one-line edit), then ran the new suite:
+
+    RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-STAGHEDGE-1-lane2/server
+     ❯ src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts  (10 tests | 1 failed) 11ms
+       ❯ ... > SH9 negative guard (4) exact-equality discipline: an answered key that is a PROPER
+         SUBSTRING of the fact label at the SAME declared-resolvable slot SH1 drops — fact KEPT ...
+         → expected true to be false // Object.is equality
+
+    FAIL ... SH9 negative guard (4) exact-equality discipline ...
+    AssertionError: expected true to be false // Object.is equality
+
+    - Expected
+    + Received
+
+    - false
+    + true
+
+     ❯ src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts:307:23
+        305|     const output = result.output as ResolveNounsOutput;
+        306|
+        307|     expect(result.ok).toBe(false);
+           |                       ^
+        308|     expect(output.blocked).toBe(true);
+        309|     expect(output.clarifications).toHaveLength(1);
+
+    Test Files  1 failed (1)
+    Tests  1 failed | 9 passed (10)
+
+Right-reason proof: the single failure is SH9's `expect(result.ok).toBe(false)` receiving `true` —
+under the containment join the partial mention `'variant'` WRONGLY CONSUMES the `'variant b'` card
+(the question is dropped, so the pass goes ok:true). Exactly the A5d V6 drift class the guard
+comment forbids, and exactly the arm the reviewer said was unpinned. The other 9 cases (SH1, SH1
+control, SH2-SH8) stayed green under the mutation — confirming the reviewer's reproduction and that
+SH9 is the case that closes the gap.
+
+The temp one-line mutation was then REVERTED. Note: one intermediate invocation
+(`npx vitest run <file> -w server`) mis-parsed the path filter and ran the whole server suite;
+that run is disregarded as evidence (its 448 failures are pre-existing full-suite trunk debt,
+unrelated to resolve_nouns). All cited runs use the lane idiom
+`npm run test:run -w server -- <path>`.
+
+### Zero-diff proof (production code byte-identical)
+
+    $ git -c core.fileMode=false diff 60bcab23 -- server/src/compiler/resolution/resolveNounsPass.ts | wc -l
+    0
+    $ git -c core.fileMode=false diff 60bcab23 -- server/src/compiler/resolution/resolveNounsPass.ts
+    (empty)
+
+`resolveNounsPass.ts` is byte-identical to impl commit 60bcab23. The only file changed in this fix
+cycle is the test file.
+
+### Final test output (reverted state, SH9 included)
+
+`npm run test:run -w server -- src/compiler/resolution/` from the worktree root:
+
+     ✓ src/compiler/resolution/hintParity.test.ts  (8 tests) 6ms
+     ✓ src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts  (10 tests) 9ms
+     ✓ src/compiler/resolution/resolveNounsPass.answeredNouns.test.ts  (8 tests) 108ms
+     ✓ src/compiler/resolution/resolveNounsPass.paramFold.test.ts  (14 tests) 10ms
+     ✓ src/compiler/resolution/nounResolution.test.ts  (16 tests) 263ms
+     ✓ src/compiler/resolution/spine4Registration.test.ts  (18 tests) 123ms
+     ✓ src/compiler/resolution/spine4ProductionWiring.test.ts  (4 tests) 55ms
+     ✓ src/compiler/resolution/resolveNounsPass.test.ts  (24 tests) 676ms
+     ✓ src/compiler/resolution/compositionArgResolution.test.ts  (14 tests) 799ms
+
+    Test Files  9 passed (9)
+    Tests  116 passed (116)
+
+115 -> 116: the new SH9 is the only added test; every pre-existing case stays green.
+
+### Final typecheck output
+
+`npm run typecheck -w server` from the worktree root:
+
+    > @computable/server@1.0.0 typecheck
+    > tsc --noEmit
+
+    (no diagnostics) — exit 0. Zero errors.
+
+### Fix cycle 1 diff summary
+
+    server/src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts | +38 (SH9 only; 9 -> 10 tests)
+    server/src/compiler/resolution/resolveNounsPass.ts                    | 0 (byte-identical to 60bcab23)
+
+Commit on W28-STAGHEDGE-1-lane2: `test(compiler): pin guard-4 exact-label identity against
+containment join (SH1-SH9)`. NOT merged, NOT pushed; stacks untouched.
+
+STAGHEDGE1 FIX1 DONE
