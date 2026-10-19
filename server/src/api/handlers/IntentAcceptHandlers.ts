@@ -83,7 +83,15 @@ export function createIntentAcceptHandlers(ctx: AppContext) {
               // Object.entries order; colliding slugs each get their own per-row provenance
               // (no de-dup, no suffixing, no id invention).
               branch_resolution: Object.entries(body.answers).map(([key, chosenValue]) => {
-                const axisId = slugifyRecordLabel(key);
+                // fix cycle 1 (advc-AXISSLUG1-c1): slugifyRecordLabel does not guarantee a
+                // leading [a-z] — '4c_variant' -> '4c-variant' reproduces the exact 409 (the
+                // axisId pattern ^[a-z][a-z0-9-]*$ rejects digit-leading ids; the helper's
+                // 'unknown' fallback only fires on empty). Call-site guard: prefix a
+                // digit-leading slug with 'axis-' (pinned prefix). Applied once; the same
+                // normalized value feeds BOTH axisId and the choices key. Values stay
+                // byte-verbatim. The shared helper itself is NOT modified.
+                const slugged = slugifyRecordLabel(key);
+                const axisId = /^[a-z]/.test(slugged) ? slugged : `axis-${slugged}`;
                 return {
                   axisId,
                   matched: true,
