@@ -109,3 +109,26 @@ rule held on both lanes).
   at 3x the orch writes the spec from the evidence base and flags PROVISIONAL
   per rule 7b).
 - No lane-2 coder live; fleet lock legitimately with lane 1.
+
+## ADDENDUM l2t2140b (22:10 EDT, budget checkpoint)
+- MACH-1 advc c2 returned ACCEPT (residual O1/O2 MINOR, non-blocking; assumption
+  AS-LANE2-MACH1-O1-O2-RESIDUAL-MINOR-ACCEPTED in assumptions.md).
+- ORCH FINAL GATES DONE MYSELF: integrity vitest 8/8 GREEN at aea12351 (22:00
+  EDT), node --check OK, scope comm EMPTY (no schema/server/app-src files in
+  the 93-file diff -> NO stack restart needed). Orch-authored merge-time
+  evidence report .hermes/plans/W211-MACH-1-report.md (887ea241), MERGED
+  --no-ff -> 8b2c973a. MACH-1 MARKED DONE (browser clause stays OPEN, ridden by
+  A5d r3).
+- W28-A5D-R3 GATE NOW FULLY LIFTED (HEDGE + MACH-1 both merged). NEXT TICK
+  runs the r3 sequence WITHOUT waiting on anything: step0 probe r3 v2
+  (tmp-orch/step0-probe-a5d-r3-v2.py, containment b52f5dfc 5cdfb8d0 aea12351
+  8b2c973a) -> ARM A -> fill prompts/review-W28A5d-r3-TEMPLATE-l2t2010.txt ->
+  TIER-2 gate per rule 6c. This also clears SAMPLE-CARD-1 + MACH-1 browser
+  obligations and the SAMPLECARD1-NOTSTATED-LITERAL evidence debt.
+- QUAL-1 dispatch gate: HEDGE merged YES, MACH-1 merged YES, lock free pending
+  lane-1 VPDF-1 (holder 317708). Next tick may queue QUAL-1 (and GAPCARD-1 after
+  spec promotion) behind the fleet lock.
+- LIVE AT EXIT: GAPCARD-1 composer bash 342069 (~60 min, PAST its 45-min
+  expected; rule-7b: next tick checks the draft file + log for forward motion;
+  at 3x ~23:05 the orch composes the spec itself from the evidence base and
+  flags PROVISIONAL). No lane-2 coder live; fleet lock with lane 1.
