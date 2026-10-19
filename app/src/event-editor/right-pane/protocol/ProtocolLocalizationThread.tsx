@@ -23,7 +23,8 @@ import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
 import { ClarificationPicker, requestHasPicker } from '../ai/ClarificationPicker'
-import { heldFactToClarificationRequest } from './ProtocolLocalizationThread.clarificationAdapter'
+import { ParameterAnswerInput } from '../ai/ParameterAnswerInput'
+import { foldCards } from './ProtocolLocalizationThread.clarificationAdapter'
 import type { PlateEvent } from '../../../types/events'
 import type {
   AiClarificationAnswer,
@@ -324,6 +325,27 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     })
   }, [editor, activeDeckScope, deckPlatform, deckPicked, proposedLabware, deckLocked])
 
+  // W211-GAPCARD-1 (the 200-gap FOLD ARM): a 200 outcome-'gap' response carries
+  // `clarifications` additively (server sends it only when non-empty; the
+  // 'complete' arm OMITS the key — exactOptionalPropertyTypes conditional
+  // spread, IntentCompileFromPromptHandlers.ts). Today's three 2xx success arms
+  // discarded it (setHeldCards([]) with res.clarifications never read — the
+  // STEP-0 finding). Now: a non-empty clarifications array folds through the
+  // SAME shared adapter call-site as foldHeldBundle (foldCards — bait 6: ONE
+  // call-site, cards set BEFORE holdForReview, the gate call byte-unchanged),
+  // so a gap fact renders its card INSIDE the deck gate beside pl-deck-review.
+  // exactOptionalPropertyTypes guard: Array.isArray + length, never `in` alone
+  // (the key is ABSENT on 'complete'). Absent/empty keeps today's
+  // setHeldCards([]) behavior EXACTLY (no phantom cards). The answers map is
+  // never cleared here (fix-cycle invariant).
+  const foldResponseClarifications = useCallback((
+    clarifications: Array<Record<string, unknown>> | undefined,
+  ) => {
+    setHeldCards(Array.isArray(clarifications) && clarifications.length > 0
+      ? foldCards(clarifications)
+      : [])
+  }, [])
+
   // Route a finished compile through the Review-deck gate (never ghost blindly).
   const holdForReview = useCallback((terminalArtifacts: Record<string, unknown>) => {
     setPendingDraft(terminalArtifacts)
@@ -359,9 +381,10 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     // cards (picker + mint) — additive. Facts with no answer surface map to
     // null and stay infoMsg-only (no picker-less card). Card state is set
     // BEFORE the gate call; the gate call itself is byte-unchanged.
-    setHeldCards(held.clarifications
-      .map((fact, index) => heldFactToClarificationRequest(fact, index))
-      .filter((request): request is AiClarificationRequest => request !== null))
+    // W211-GAPCARD-1: the fold maps through the ONE shared adapter call-site
+    // (foldCards), which also carries the gap-shape fallback — a slot-less,
+    // table-less gap fact gains the picker-less 'choice' card here too.
+    setHeldCards(foldCards(held.clarifications))
     holdForReview(held.terminalArtifacts)
   }, [holdForReview])
 
@@ -479,7 +502,10 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         // already has (:405). No stale answerable card survives over a
         // resolved macro. The picked answers stay in the answers map (Leg 1
         // data keeps riding re-drafts); only the card surface clears.
-        setHeldCards([])
+        // W211-GAPCARD-1: an outcome-'gap' 200 that CARRIES clarifications now
+        // folds them into cards beside the deck gate; a 'complete' 200 (key
+        // absent) still clears the surface exactly as before.
+        foldResponseClarifications(res.clarifications)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage(
           `Localized: ${res.outcome} — review the deck & labware, then load onto deck `
@@ -494,7 +520,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle])
+  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
   // text present), AUTO-RUN the branch-question extraction so the if/then
@@ -530,7 +556,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setNeedsAnswers(false)
         // THREAD-ASK-1 fix cycle 1 (D1): resolved macro -> held cards collapse
         // (same lifecycle as the pick's 2xx arm; see handleLocalize).
-        setHeldCards([])
+        // W211-GAPCARD-1: a 200-gap response that carries clarifications folds
+        // them into cards beside the deck gate (see handleLocalize).
+        foldResponseClarifications(res.clarifications)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Ready — review the deck & labware, then place them.')
         holdForReview(res.terminalArtifacts)
@@ -543,7 +571,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
+  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   // Per-step refinement: append a Correction, re-localize with the correction
   // (refinements fold into the final macro), then re-hold it through the gate.
@@ -570,7 +598,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         // THREAD-ASK-1 fix cycle 1 (D1): a correction that resolves the macro
         // collapses the held cards too (same lifecycle as the pick's 2xx arm;
         // see handleLocalize).
-        setHeldCards([])
+        // W211-GAPCARD-1: a 200-gap response that carries clarifications folds
+        // them into cards beside the deck gate (see handleLocalize).
+        foldResponseClarifications(res.clarifications)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
         holdForReview(res.terminalArtifacts)
@@ -582,7 +612,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
+  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   const toggleDeckLabware = useCallback((key: string) => {
     setDeckPicked((prev) => {
@@ -769,7 +799,26 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
               ) : null}
               {requestHasPicker(request) ? (
                 <ClarificationPicker request={request} onPick={handleClarificationPick} />
-              ) : null}
+              ) : (
+                // W211-GAPCARD-1: a picker-less card ('choice' — the gap-shape
+                // surface, resolverFor returns null for it) is answered by
+                // TYPING, exactly the surface QuestionsPanel already uses for a
+                // parameter question. The typed answer rides handleClarificationPick
+                // (value = answer.label ?? answer.value — plain text, never a
+                // fake [[…]] idiom) into clarificationAnswers[<fact label>], so
+                // composeAnsweredPrompt carries it as a settled-choices line.
+                // No new fetch path, no new endpoint.
+                <ParameterAnswerInput
+                  requestId={request.id}
+                  placeholder="Type your answer…"
+                  disabled={localizing}
+                  onAnswer={(answer) => handleClarificationPick({
+                    requestId: request.id,
+                    label: answer.label,
+                    value: answer.value,
+                  }, request)}
+                />
+              )}
             </section>
           ))}
         </div>

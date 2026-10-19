@@ -102,11 +102,18 @@ describe('clarificationAdapter — menu keyed on (reason, actionLocation.argumen
     // SAMPLE-CARD-1 DELIBERATE PIN UPDATE (same pattern ANSWER-SURFACE-1 used
     // for the argument table): the three engine rows keep their exact values;
     // the ONLY delta is the new sanctioned 'not-stated' row.
+    // GAPCARD-1 DELIBERATE PIN UPDATE (same sanctioned pattern): the ONLY
+    // further delta is the two prompt-declared model rows
+    // (intent.compile.system.yaml:22) + the explicit declared-no-surface entry
+    // for 'missing-required-argument' (null BY DATA, not by fallthrough).
     expect({ ...CLARIFICATION_MENU_BY_REASON }).toEqual({
       'unknown-noun': '/m',
       'ambiguous-noun': '/m',
       'resolution-lookup-failed': '/m',
       'not-stated': '/m',
+      'ambiguous': '/m',
+      'contradicts-the-text': '/m',
+      'missing-required-argument': null,
     })
   })
 })

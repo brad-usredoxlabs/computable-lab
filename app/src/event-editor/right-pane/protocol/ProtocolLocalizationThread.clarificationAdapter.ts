@@ -13,9 +13,32 @@
  * SPINE-1 frozen unresolved shape — never inferred from the label or the
  * candidates).
  *
- * A fact whose reason has NO entry in the table has no answer surface: the
- * thread renders no card for it and the honest infoMsg line remains the
- * fallback (spec test 4).
+ * TWO answer-surface rules, both DATA (W211-GAPCARD-1 updated this header):
+ *
+ * 1. A fact whose reason is NAMED in the table gets the table's menu. A null
+ *    table entry is a DECLARED no-surface (the stable engine code
+ *    'missing-required-argument' — it always carries a filled actionLocation,
+ *    the sweep fills it, resolveNounsPass.ts:243-258): the thread renders no
+ *    card for it and the honest infoMsg line remains the fallback (spec test 4).
+ *
+ * 2. GAP-SHAPE FALLBACK (W211-GAPCARD-1): a fact whose reason has NO table
+ *    entry AND which carries NO slot identity (actionLocation absent — the same
+ *    generic read `heldFactToClarificationRequest` already does; precedent:
+ *    resolveNounsPass.ts:394-411 keys gated fate on slot identity as data,
+ *    "never silently dropped") is a slot-less gap fact: it gets the picker-less
+ *    'choice' surface (the EXISTING types/ai.ts:215 union member — the free-text
+ *    box QuestionsPanel already uses for a picker-less question). Facts WITH
+ *    slot identity but no row stay null. The fallback keys ONLY on table-entry
+ *    presence + actionLocation presence + the candidates read — NEVER a
+ *    substring/regex against a reason sentence.
+ *
+ * The fallback lives in the FOLD mapper (`clarificationRequestForFact` /
+ * `foldCards`), NOT inside `heldFactToClarificationRequest`: the golden
+ * fixture's integrity pin 5d feeds the class-(d) wire through
+ * `heldFactToClarificationRequest` and pins expectedCard:false (BLOCKED-ON-FIX
+ * record; the fixture bytes are frozen until the named follow-up flips the pin
+ * AND the sha together). The thread folds every arm through `foldCards` — the
+ * ONE adapter call-site.
  */
 import type {
   AiClarificationMenuProvider,
@@ -43,7 +66,7 @@ import type {
  * empty-state copy says plain 'No matches', FIX1 D1). No labware minting is
  * added and no schema field is added.
  */
-export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificationMenuProvider>> = {
+export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificationMenuProvider | null>> = {
   'unknown-noun': '/m',
   'ambiguous-noun': '/m',
   'resolution-lookup-failed': '/m',
@@ -53,6 +76,21 @@ export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificati
   // is unanswerable-by-construction; with it the shipped ANSWER-BIND-1
   // exact-identity join (b52f5dfc) is the answer path — zero new machinery.
   'not-stated': '/m',
+  // GAPCARD-1: the two OTHER prompt-declared model reasons
+  // (schema/registry/prompt-templates/intent.compile.system.yaml:22 declares
+  // `not-stated | ambiguous | contradicts-the-text`). Declared vocabulary, not
+  // invented codes — 'ambiguous' is the MODEL-side reason, distinct from the
+  // engine's 'ambiguous-noun' (resolutionEngine.ts:217). Without these rows a
+  // model fact carrying either is unanswerable-by-construction — the exact
+  // SAMPLE-CARD-1 disease the 'not-stated' row cured.
+  'ambiguous': '/m',
+  'contradicts-the-text': '/m',
+  // GAPCARD-1: the stable engine code's "declared no surface" as DATA (the
+  // sweep always fills its actionLocation, resolveNounsPass.ts:243-258 — a
+  // slot-identity fact, never the slot-less gap shape). The explicit null
+  // entry keeps the existing null pins green BY DATA, not by incidental
+  // fallthrough, and blocks the gap-shape fallback for this reason.
+  'missing-required-argument': null,
 }
 
 /**
@@ -61,6 +99,10 @@ export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificati
  * carried on the wire fact's actionLocation) — reading it is a generic read of
  * the fact, not a noun/verb/protocol literal. A reason with NO menu row never
  * gets a card, argument or not (the lookup consults the reason table first).
+ * GAPCARD-1: the two new prompt-declared model rows carry the same labware
+ * override as every other carded reason — exactly the SAMPLE-CARD-1 pattern
+ * (a labware-semantic fact answers by PICKING '/l', every other argument falls
+ * to the (reason,'*') row).
  */
 const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Record<string, AiClarificationMenuProvider>>>> = {
   'unknown-noun': { labware: '/l' },
@@ -70,6 +112,9 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   // PICKING '/l' (resolveLabware — no mint floor, resolvers.ts:67-92), exactly
   // the ANSWER-SURFACE-1 pattern; every other argument falls to '/m'.
   'not-stated': { labware: '/l' },
+  // GAPCARD-1: same pattern for the two prompt-declared model reasons.
+  'ambiguous': { labware: '/l' },
+  'contradicts-the-text': { labware: '/l' },
 }
 
 /**
@@ -151,4 +196,75 @@ export function heldFactToClarificationRequest(
     query: label,
     options,
   }
+}
+
+/**
+ * GAPCARD-1 (fold mapper): the thread's ONE fact->request rule.
+ *
+ * 1. A fact with a table row maps exactly as `heldFactToClarificationRequest`
+ *    does today — rows win over the shape fallback (a row'd reason with NO slot
+ *    identity keeps its row: the 'not-stated' prose-label case stays '/m').
+ * 2. Otherwise the GAP-SHAPE FALLBACK: a fact whose reason is NOT NAMED in the
+ *    table AND which carries NO slot identity (actionLocation absent — the same
+ *    generic read as above) is a slot-less gap fact: menuProvider 'choice' (the
+ *    EXISTING types/ai.ts:215 union member — the picker-less free-text surface;
+ *    a 'choice' card has no mint floor and no picker). A table-less fact WITH
+ *    slot identity stays null — the fallback is slot-identity-gated; a wider
+ *    fallback is the design error, not the pin's.
+ *
+ * Keys ONLY on table-entry presence + actionLocation presence + the candidates
+ * read. Zero substring/regex matching against a reason sentence anywhere
+ * (spec bait 4: a HARD defect). NOT inside `heldFactToClarificationRequest`:
+ * the golden fixture's integrity pin 5d feeds the class-(d) wire through that
+ * function and pins expectedCard:false until the named follow-up flips the pin
+ * AND the fixture sha together (OQ3).
+ */
+export function clarificationRequestForFact(
+  fact: Record<string, unknown>,
+  index: number,
+): AiClarificationRequest | null {
+  const menuRequest = heldFactToClarificationRequest(fact, index)
+  if (menuRequest) return menuRequest
+  const reason = typeof fact.reason === 'string' ? fact.reason : ''
+  // An explicit null table entry (declared no-surface) and a fact WITH slot
+  // identity both stay null: only an UNNAMED reason + no slot identity reaches
+  // the gap-shape fallback.
+  if (reason in CLARIFICATION_MENU_BY_REASON) return null
+  const hasSlotIdentity = typeof fact.actionLocation === 'object' && fact.actionLocation !== null
+  if (hasSlotIdentity) return null
+  const label = typeof fact.label === 'string' && fact.label.trim() ? fact.label.trim() : ''
+  if (!label) return null
+  // Same construction as the menu mapper (:191-198); candidates survive as
+  // option buttons beside the free-text box (OQ5 ratified — no new rendering
+  // rule, the card code already renders both).
+  const rawCandidates = Array.isArray(fact.candidates) ? fact.candidates : []
+  const options: AiClarificationOption[] = rawCandidates
+    .filter((c): c is { label: string } =>
+      typeof c === 'object' && c !== null && typeof (c as { label?: unknown }).label === 'string'
+      && !!(c as { label: string }).label.trim())
+    .filter((c) => !isMintOfferForLabel(c.label.trim(), label))
+    .map((c, i) => ({ id: `held-candidate-${index}-${i}`, label: c.label.trim() }))
+  return {
+    id: `held-fact-${index}`,
+    kind: 'general',
+    prompt: label,
+    menuProvider: 'choice',
+    query: label,
+    options,
+  }
+}
+
+/**
+ * W211-GAPCARD-1 (fold discipline, bait 6): the ONE adapter call-site. Every
+ * arm that folds clarification facts into the held-card surface maps through
+ * THIS helper — a second `.map(heldFactToClarificationRequest)` call-site in
+ * the thread is the drift class. Facts with no answer surface map to null and
+ * stay infoMsg-only (no picker-less card).
+ */
+export function foldCards(
+  facts: ReadonlyArray<Record<string, unknown>>,
+): AiClarificationRequest[] {
+  return facts
+    .map((fact, index) => clarificationRequestForFact(fact, index))
+    .filter((request): request is AiClarificationRequest => request !== null)
 }
