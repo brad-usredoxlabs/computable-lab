@@ -1,0 +1,171 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-OPTIONBIND1-lane2-l2t1515/server
+
+ ✓ src/compiler/resolution/resolutionEngine.optionRef.test.ts  (9 tests) 175ms
+ ❯ src/compiler/scientistIntent/clarificationContract.test.ts  (15 tests | 1 failed) 286ms
+   ❯ src/compiler/scientistIntent/clarificationContract.test.ts > clarification-contract.candidate shape freeze (SPINE-3 cannot silently widen it) > the schema candidates item is exactly {label required, confidence optional 0..1, additionalProperties false, unevaluatedProperties false}
+     → expected [ 'confidence', 'label', 'ref' ] to deeply equal [ 'confidence', 'label' ]
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.answeredPrompt.test.ts  (4 tests) 104ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.declaredRoles.test.ts  (7 tests) 107ms
+ ❯ src/api/handlers/IntentCompileFromPromptHandlers.answeredBinding.test.ts  (7 tests | 1 failed) 113ms
+   ❯ src/api/handlers/IntentCompileFromPromptHandlers.answeredBinding.test.ts > answer-bind-1.answered-slot-clears-ambiguity (handler leg) > nonexistent id: the full clarifications payload stays byte-identical to today (ambiguous fact re-bars)
+     → expected [ { …(4) } ] to deeply equal [ { …(4) } ]
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.clarificationAnswers.test.ts  (5 tests) 100ms
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 115ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.test.ts  (11 tests) 139ms
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts  (3 tests | 1 failed) 141ms
+   ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+     → expected [ Array(1) ] to deeply equal []
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > payload is 200 complete-shaped, clarifications ABSENT, zero writes
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the stripped compile emits the SAME events as the composition-only canned output (the paste-#3 good path)
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (3 tests | 1 failed) 132ms
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+     → expected [ Array(1) ] to deeply equal []
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (6 tests | 1 failed) 136ms
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.ambiguous-material > golden.intent-to-clarification.ambiguous-material
+     → expected [ { …(3) }, { …(3) } ] to deeply equal [ { …(2) }, { …(2) } ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/clarificationContract.test.ts > clarification-contract.candidate shape freeze (SPINE-3 cannot silently widen it) > the schema candidates item is exactly {label required, confidence optional 0..1, additionalProperties false, unevaluatedProperties false}
+AssertionError: expected [ 'confidence', 'label', 'ref' ] to deeply equal [ 'confidence', 'label' ]
+
+- Expected
++ Received
+
+  Array [
+    "confidence",
+    "label",
++   "ref",
+  ]
+
+ ❯ src/compiler/scientistIntent/clarificationContract.test.ts:258:39
+    256| 
+    257|     const props = item.properties as Record<string, Record<string, unk…
+    258|     expect(Object.keys(props).sort()).toEqual(['confidence', 'label']);
+       |                                       ^
+    259|     expect(props.label?.type).toBe('string');
+    260|     expect(props.confidence?.type).toBe('number');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/api/handlers/IntentCompileFromPromptHandlers.answeredBinding.test.ts > answer-bind-1.answered-slot-clears-ambiguity (handler leg) > nonexistent id: the full clarifications payload stays byte-identical to today (ambiguous fact re-bars)
+AssertionError: expected [ { …(4) } ] to deeply equal [ { …(4) } ]
+
+- Expected
++ Received
+
+  Array [
+    Object {
+      "actionLocation": Object {
+        "action": "bead_beat",
+        "actionIndex": 0,
+        "argument": "labware",
+      },
+      "candidates": Array [
+        Object {
+          "confidence": 1,
+          "label": "Ontology microcentrifuge tube",
++         "ref": "LAB-mct-ont",
+        },
+        Object {
+          "confidence": 1,
+          "label": "Microcentrifuge tube",
++         "ref": "LAB-mct-seed",
+        },
+      ],
+      "label": "microcentrifuge tube",
+      "reason": "ambiguous-noun",
+    },
+  ]
+
+ ❯ src/api/handlers/IntentCompileFromPromptHandlers.answeredBinding.test.ts:183:36
+    181|     // Today's behavior, pinned VERBATIM: exactly the one ambiguous-no…
+    182|     // with its two store candidates and its actionLocation.
+    183|     expect(payload.clarifications).toEqual([
+       |                                    ^
+    184|       {
+    185|         label: LABEL,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.ambiguous-material > golden.intent-to-clarification.ambiguous-material
+AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal [ { …(2) }, { …(2) } ]
+
+- Expected
++ Received
+
+  Array [
+    Object {
+      "confidence": 1,
+      "label": "standard plate alpha",
++     "ref": "LAB-plate-alpha",
+    },
+    Object {
+      "confidence": 1,
+      "label": "standard plate beta",
++     "ref": "LAB-plate-beta",
+    },
+  ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts:65:32
+     63|     expect(item['label']).toBe('standard plate');
+     64|     expect(item['reason']).toBe('ambiguous-noun');
+     65|     expect(item['candidates']).toEqual([
+       |                                ^
+     66|       { label: 'standard plate alpha', confidence: 1 },
+     67|       { label: 'standard plate beta', confidence: 1 },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "treeState schema/workflow/scientist-intent.schema.yaml: manifest a670a50c021037c8e146f4a6c1a27677680d51f6d5dfee72c13f1b35093b1409 actual 5327495e9c708df799ba4a00db6418d78022b85dbc56ebb83055c1e4b3d8de63",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:143:24
+    141|     // silently re-blessing. Every manifest-pinned file re-hashed vs m…
+    142|     const mismatches = manifestHashMismatches(manifest);
+    143|     expect(mismatches).toEqual([]);
+       |                        ^
+    144|   });
+    145| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "treeState schema/workflow/scientist-intent.schema.yaml: manifest a670a50c021037c8e146f4a6c1a27677680d51f6d5dfee72c13f1b35093b1409 actual 5327495e9c708df799ba4a00db6418d78022b85dbc56ebb83055c1e4b3d8de63",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts:105:52
+    103| 
+    104|   it('the MANIFEST did not move: manifestHashMismatches is empty (B4)'…
+    105|     expect(manifestHashMismatches(loadManifest())).toEqual([]);
+       |                                                    ^
+    106|   });
+    107| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  5 failed | 6 passed (11)
+      Tests  5 failed | 72 passed (77)
+   Start at  16:32:53
+   Duration  4.86s (transform 2.16s, setup 1ms, collect 35.41s, tests 1.55s, environment 3ms, prepare 4.78s)
+

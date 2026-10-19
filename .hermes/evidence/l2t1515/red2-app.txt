@@ -1,0 +1,56 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-OPTIONBIND1-lane2-l2t1515/app
+
+(node:3120293) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx  (4 tests | 2 failed) 244ms
+   ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx > clarificationAdapter — the candidate handle rides onto the option (W28-OPTIONBIND-1) > 1. a ref-bearing wire candidate builds an option carrying ref (the EXISTING AiClarificationOption.ref? field, no new field)
+     → expected undefined to be 'lbw-seed-tube-1p5ml' // Object.is equality
+   ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx > ProtocolLocalizationThread — an option pick with a handle emits the binding idiom (W28-OPTIONBIND-1) > 3. clicking a ref-bearing option re-sends answers[<fact label>] as [[labware:<id>|<label>]] (the answerFromMention idiom the server validates)
+     → expected '1.5 mL Microcentrifuge Tube' to be '[[labware:lbw-seed-tube-1p5ml|1.5 mL …' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx > clarificationAdapter — the candidate handle rides onto the option (W28-OPTIONBIND-1) > 1. a ref-bearing wire candidate builds an option carrying ref (the EXISTING AiClarificationOption.ref? field, no new field)
+AssertionError: expected undefined to be 'lbw-seed-tube-1p5ml' // Object.is equality
+
+- Expected: 
+"lbw-seed-tube-1p5ml"
+
++ Received: 
+undefined
+
+ ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx:156:34
+    154|     expect(req!.options.map((o) => o.label)).toEqual([SEED_TITLE, 'Mic…
+    155|     // RED at base: the adapter's option is {id, label} only.
+    156|     expect(req!.options[0]!.ref).toBe(SEED_ID)
+       |                                  ^
+    157|     expect(req!.options[1]!.ref).toBe('lbw-rack-tube')
+    158|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx > ProtocolLocalizationThread — an option pick with a handle emits the binding idiom (W28-OPTIONBIND-1) > 3. clicking a ref-bearing option re-sends answers[<fact label>] as [[labware:<id>|<label>]] (the answerFromMention idiom the server validates)
+AssertionError: expected '1.5 mL Microcentrifuge Tube' to be '[[labware:lbw-seed-tube-1p5ml|1.5 mL …' // Object.is equality
+
+- Expected
++ Received
+
+- [[labware:lbw-seed-tube-1p5ml|1.5 mL Microcentrifuge Tube]]
++ 1.5 mL Microcentrifuge Tube
+
+ ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.optionbind.test.tsx:188:39
+    186|     // answerFromMention emits (ClarificationPicker.tsx:124) and
+    187|     // MENTION_ANSWER_PATTERN + store.get() bind unchanged.
+    188|     expect(body.answers![FACT_LABEL]).toBe(`[[labware:${SEED_ID}|${SEE…
+       |                                       ^
+    189|   })
+    190| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  16:26:50
+   Duration  8.68s (transform 1.39s, setup 758ms, collect 1.96s, tests 244ms, environment 4.91s, prepare 207ms)
+
