@@ -105,7 +105,7 @@ actions:
 unresolved:
   - label: "<the scientist's own word for the thing you could not commit to>"
     reason: "<not-stated | ambiguous | contradicts-the-text>"
-    actionLocation: { actionIndex: 1, action: transfer, argument: source }
+    actionLocation: {actionIndex: 1, action: transfer, argument: source }
 
 Use 'volumeUl' (not volume_ul). The verb is the VALUE of 'action:' — never a map key of its own.
 
@@ -127,7 +127,7 @@ RULES:
 - Do not add wells/volumes the scientist did not state.
 - serial_dilution / media_swap / repeat macros are ONE action — do not unroll.
 - Hedge under unresolved ONLY what the scientist STATED but you could not commit to (ambiguous, contradicted, existing-vs-new unknown) or a REQUIRED parameter the ARGUMENTS block marks required and the text omits — put it under unresolved instead of inventing it.
-- NEVER hedge the absence of a parameter the ARGUMENTS block marks OPTIONAL: omit the field. The compiler's required-argument sweep and downstream fold own optional absences.
+- NEVER hedge the absence of an OPTIONAL parameter (the ARGUMENTS block marks it optional): omit the field. The compiler's required-argument sweep and downstream fold own optional absences.
 - Every unresolved entry about a specific action's argument MUST carry actionLocation: {actionIndex, action, argument} (the argument named exactly as the ARGUMENTS block declares it) and label: EXACTLY the scientist's own word for the thing — never a sentence. Use reason "not-stated" for a thing the scientist named but left uncommitted.`;
 }
 

@@ -43,12 +43,17 @@ import {
   INTENT_COMPILE_SYSTEM_PROMPT,
   compileFromSmallLlm,
 } from './intentCompile.js';
-import { defaultScientistIntentVocabulary } from './vocabulary.js';
+import {
+  defaultScientistIntentVocabulary,
+  loadScientistIntentVocabulary,
+  VOCABULARY_DATA_FILE,
+} from './vocabulary.js';
 import { createResolveSpineFromContext } from '../../resolve/ResolveSpine.js';
 
 const REGISTRY_TEMPLATE_PATH = join(
   process.cwd(), 'schema', 'registry', 'prompt-templates', 'intent.compile.system.yaml',
 );
+const FIXTURES = join(process.cwd(), 'src', 'compiler', 'scientistIntent', 'fixtures');
 
 function mirrorContent(): string {
   return (parseYaml(readFileSync(REGISTRY_TEMPLATE_PATH, 'utf-8')) as { content: string }).content;
@@ -71,14 +76,17 @@ describe('hedge-type-1 generated prompt posture (string pins)', () => {
     );
   });
 
+  // FIX RUN (adversarial c1 / D2): the RED pin literals are RESTORED to the
+  // strict patterns written at 587423f1 — the product now fits the pinned
+  // contract instead of the contract being fitted to the product.
   it('RED pin: the generated prompt FORBIDS hedging the absence of an OPTIONAL parameter', () => {
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/NEVER hedge the absence of a parameter[^\n]*marks OPTIONAL/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/NEVER hedge the absence of an OPTIONAL parameter/);
     expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/omit the field/);
   });
 
   it('RED pin: the generated prompt mandates actionLocation + exact label + not-stated reason', () => {
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/actionLocation[^\n]*actionIndex[^\n]*action[^\n]*argument/);
-    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/EXACTLY the scientist's own/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/\{actionIndex:[^\n]*action:[^\n]*argument:/);
+    expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/EXACTLY the scientist's own word/);
     expect(INTENT_COMPILE_SYSTEM_PROMPT).toMatch(/not-stated/);
   });
 
@@ -100,23 +108,26 @@ describe('hedge-type-1 registry mirror lock-step (same posture in the YAML mirro
     expect(mirror).not.toContain('If any parameter is ambiguous or missing');
   });
 
+  // FIX RUN (adversarial c1 / D2+D3): strict pins restored; the MIRROR is now
+  // reflowed/worded so each pinned phrase is contiguous in the parsed block
+  // scalar AND byte-identical to the generated prompt (a YAML block scalar
+  // PRESERVES the line break when the continuation line is MORE indented than
+  // the block base — the old wrapped wording is exactly what forced the
+  // fragment split; the reflow removes the cause, not the assertion).
   it('RED pin: the mirror carries the optional-hedge prohibition', () => {
-    expect(mirror).toMatch(/NEVER hedge the absence of a parameter[^\n]*marks OPTIONAL/);
+    expect(mirror).toMatch(/NEVER hedge the absence of an OPTIONAL parameter/);
     expect(mirror).toMatch(/omit the field/);
   });
 
   it('RED pin: the mirror carries the actionLocation mandate + not-stated reason', () => {
-    expect(mirror).toMatch(/actionLocation[^\n]*actionIndex[^\n]*action[^\n]*argument/);
-    expect(mirror).toMatch(/EXACTLY the scientist's own/);
+    expect(mirror).toMatch(/\{actionIndex:[^\n]*action:[^\n]*argument:/);
+    expect(mirror).toMatch(/EXACTLY the scientist's own word/);
     expect(mirror).toMatch(/not-stated/);
   });
 
-  it('mirror anti-fabrication core stays byte-present', () => {
-    expect(mirror).toContain('instead of inventing');
-    // YAML block-scalar folding keeps this rule wrapped across lines; both
-    // fragments must stay byte-present.
-    expect(mirror).toContain('Do NOT add wells or volumes the');
-    expect(mirror).toContain('scientist did not state.');
+  it('mirror anti-fabrication core stays byte-present — IDENTICAL wording to the generated prompt', () => {
+    expect(mirror).toContain('instead of inventing it');
+    expect(mirror).toContain('Do not add wells/volumes the scientist did not state.');
   });
 });
 
@@ -157,13 +168,28 @@ describe('hedge-type-1 generated ARGUMENTS block (required-vs-optional from argC
   });
 
   it('the block is generated from data: a fixture vocabulary minus a verb loses its line (rip-out posture)', () => {
-    // Same authority as promptVerbBlock(): the block reads vocab.verbs()/
-    // argContracts(), so a vocabulary without a verb has no line for it.
-    const fixtureVocab = defaultScientistIntentVocabulary(); // shipped instance (cache identity)
-    const fixturePrompt = intentCompileSystemPrompt(fixtureVocab);
-    for (const verb of fixtureVocab.verbs()) {
-      expect(argContractLines(fixturePrompt).some((l) => l.startsWith(`- ${verb}`)), verb).toBe(true);
-    }
+    // FIX RUN (adversarial c1 / D4): REAL mutation leg, mirroring
+    // vocabularyMirrorDrift's — the shipped vocabulary HAS a pellet line; the
+    // vocab-minus-pellet FIXTURE's generated block does NOT. The block reads
+    // vocab.verbs()/argContracts(), so removing the verb from data removes
+    // the line with zero TypeScript edits.
+    const shipped = defaultScientistIntentVocabulary();
+    const fixtureVocab = loadScientistIntentVocabulary({
+      path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
+    });
+    expect(fixtureVocab.has('pellet')).toBe(false);
+
+    const shippedLines = argContractLines(intentCompileSystemPrompt(shipped));
+    const fixtureLines = argContractLines(intentCompileSystemPrompt(fixtureVocab));
+    expect(shippedLines.some((l) => l.startsWith('- pellet'))).toBe(true);
+    expect(fixtureLines.some((l) => l.startsWith('- pellet'))).toBe(false);
+
+    // Set diff both directions: fixture block verbs == shipped block verbs minus pellet.
+    const blockVerb = (l: string) => l.slice(2).split(' — ')[0]!.trim();
+    const shippedVerbs = shippedLines.filter((l) => l.startsWith('- ')).map(blockVerb);
+    const fixtureVerbs = fixtureLines.filter((l) => l.startsWith('- ')).map(blockVerb);
+    expect(fixtureVerbs).toEqual(shippedVerbs.filter((v) => v !== 'pellet'));
+    expect(fixtureVerbs).not.toContain('pellet');
   });
 });
 

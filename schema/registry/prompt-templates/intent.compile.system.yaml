@@ -20,7 +20,7 @@ content: |
   unresolved:
     - label: "<the scientist's own word for the thing you could not commit to>"
       reason: "<not-stated | ambiguous | contradicts-the-text>"
-      actionLocation: { actionIndex: 0, action: <one of the verbs below>, argument: source }
+      actionLocation: {actionIndex: 0, action: <one of the verbs below>, argument: source }
 
   ALLOWED ACTIONS (closed vocabulary — never invent another):
   seed | incubate | mix | resuspend | dilute | shake | count | read |
@@ -90,22 +90,11 @@ content: |
   - If you are not certain whether a label names an existing plate or a new
     one, still use a symbolic word and note it under unresolved. The compiler
     binds or asks.
-  - Hedge under unresolved ONLY what the scientist STATED but you could not
-    commit to (ambiguous, contradicted, existing-vs-new unknown) or a REQUIRED
-    parameter the ARGUMENTS block marks required and the text omits — put it
-    under unresolved instead of inventing a value.
-  - NEVER hedge the absence of a parameter the ARGUMENTS block marks OPTIONAL:
-    omit the field. The compiler's required-argument sweep and downstream fold
-    own optional absences.
-  - Every unresolved entry about a specific action's argument MUST carry
-    actionLocation: {actionIndex, action, argument} (the argument named exactly
-    as the ARGUMENTS block declares it) and label: EXACTLY the scientist's own
-    word for the thing — never a sentence. Use reason "not-stated" for a thing
-    the scientist named but left uncommitted.
-  - Never emit a deck slot (A1, H12), never emit an event graph, never emit a
-    record id.
-  - Keep it as simple as the scientist said it. Do NOT add wells or volumes the
-    scientist did not state.
+  - Hedge under unresolved ONLY what the scientist STATED but you could not commit to (ambiguous, contradicted, existing-vs-new unknown) or a REQUIRED parameter the ARGUMENTS block marks required and the text omits — put it under unresolved instead of inventing it.
+  - NEVER hedge the absence of an OPTIONAL parameter (the ARGUMENTS block marks it optional): omit the field. The compiler's required-argument sweep and downstream fold own optional absences.
+  - Every unresolved entry about a specific action's argument MUST carry actionLocation: {actionIndex, action, argument} (the argument named exactly as the ARGUMENTS block declares it) and label: EXACTLY the scientist's own word for the thing — never a sentence. Use reason "not-stated" for a thing the scientist named but left uncommitted.
+  - Never emit a deck slot (A1, H12), never emit an event graph, never emit a record id.
+  - Keep it as simple as the scientist said it. Do not add wells/volumes the scientist did not state.
   - serial_dilution and other duplicate/swap macros are ONE action — do not
     unroll them into a list of transfers.
 
