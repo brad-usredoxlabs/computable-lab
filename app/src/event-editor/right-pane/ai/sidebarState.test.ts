@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initialSidebarState, sidebarReducer, isChatEnabled, primaryActionLabel, headerLabel } from './sidebarState'
+import { initialSidebarState, sidebarReducer, isChatEnabled, primaryActionLabel, headerLabel, questionKey, dedupeQuestions } from './sidebarState'
 import type { AiClarificationRequest } from '../../../types/ai'
 
 const mockQuestion: AiClarificationRequest = {
@@ -328,5 +328,44 @@ describe('sidebarState — SHORTHAND-CHAT shorthand on the review state', () => 
       expect(state.shorthand).toBe('intentId: x\nactions: []\n')
       expect(state.answers['q1']?.label).toBe('y')
     }
+  })
+})
+
+
+describe('clarification de-duplication', () => {
+  const sameTermA: AiClarificationRequest = {
+    id: 'u-1',
+    kind: 'material',
+    entityType: 'material',
+    prompt: 'The draft names "DMEM" and the lab spine could not bind it.',
+    menuProvider: '/m',
+    query: 'DMEM',
+    options: [],
+  }
+
+  it('two requests about the same term share one question key', () => {
+    expect(questionKey(sameTermA)).toBe(questionKey({ ...sameTermA, id: 'u-2' }))
+  })
+
+  it('different terms are different questions', () => {
+    expect(questionKey(sameTermA)).not.toBe(questionKey({ ...sameTermA, query: 'clofibrate' }))
+  })
+
+  it('the reducer collapses identical questions from one turn (no "2 answers needed")', () => {
+    const state = sidebarReducer(initialSidebarState, {
+      type: 'clarifications-needed',
+      draftId: 'DRF-1',
+      questions: [sameTermA, { ...sameTermA, id: 'u-2' }],
+    })
+    expect(state.mode).toBe('clarifying')
+    if (state.mode === 'clarifying') {
+      expect(state.questions).toHaveLength(1)
+      expect(state.questions[0]!.id).toBe('u-1')
+      expect(state.activeQuestionId).toBe('u-1')
+    }
+  })
+
+  it('keeps genuinely distinct questions', () => {
+    expect(dedupeQuestions([sameTermA, { ...sameTermA, id: 'u-3', query: 'clofibrate' }])).toHaveLength(2)
   })
 })

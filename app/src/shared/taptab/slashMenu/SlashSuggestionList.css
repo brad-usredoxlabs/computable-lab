@@ -1,0 +1,128 @@
+/* SlashSuggestionList — the shared suggestion popover (slash menu in the
+ * editor, and the clarification picker in the AI pane).
+ *
+ * Token-only. It used to be inline hardcoded `background: 'white'` with
+ * `#0f172a` text and `min-width: 260px`, which on a dark, 343px-wide phone pane
+ * rendered as a white slab wider than its card.
+ */
+.slash-suggestion-list {
+  background: var(--cl-bg-elev, #ffffff);
+  border: 1px solid var(--cl-border, #d0d5dd);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+  /* Cap at ~40% of the viewport so the popover always fits; scroll inside. */
+  max-height: min(280px, 40vh);
+  overflow-y: auto;
+  /* Fill the trigger it is anchored to; never force a width wider than it. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--cl-text, #0f172a);
+  font-size: 0.9rem;
+}
+
+.slash-suggestion-list__row {
+  display: flex;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--cl-text, #0f172a);
+  cursor: pointer;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  font: inherit;
+}
+
+.slash-suggestion-list__row:hover:not(:disabled),
+.slash-suggestion-list__row--focused {
+  background: var(--cl-bg-elev-2, #f1f5f9);
+}
+
+.slash-suggestion-list__row:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.slash-suggestion-list__label {
+  font-size: 0.9rem;
+  color: var(--cl-text, #0f172a);
+  overflow-wrap: anywhere;
+}
+
+.slash-suggestion-list__subtitle {
+  font-size: 0.78rem;
+  margin-top: 2px;
+  color: var(--cl-text-dim, #64748b);
+  overflow-wrap: anywhere;
+}
+
+.slash-suggestion-list__badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 6px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.slash-suggestion-list__body {
+  min-width: 0;
+}
+
+.slash-suggestion-list__empty {
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--cl-text-dim, #64748b);
+}
+
+/* Hover detail card (docked beside the list). Same token rule as the list. */
+.slash-suggestion-detail {
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  z-index: 10000;
+  pointer-events: none;
+  background: var(--cl-bg-elev, #ffffff);
+  border: 1px solid var(--cl-border, #d0d5dd);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cl-text, #0f172a);
+}
+
+.slash-suggestion-detail__source {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-dim, #475569);
+}
+
+.slash-suggestion-detail__definition {
+  margin: 0 0 8px;
+  color: var(--cl-text-dim, #334155);
+  overflow-wrap: anywhere;
+}
+
+.slash-suggestion-detail__rows {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+}
+
+.slash-suggestion-detail__label {
+  color: var(--cl-text-faint, #64748b);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.slash-suggestion-detail__value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

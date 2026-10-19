@@ -162,6 +162,10 @@ export interface ClarificationPickerProps {
 
 export function ClarificationPicker({ request, onPick }: ClarificationPickerProps) {
   const [query, setQuery] = useState(request.query ?? '')
+  // The suggestion popover is anchored under the field; near the bottom of a
+  // phone viewport it must flip ABOVE the field instead of hanging off-screen.
+  const [listAbove, setListAbove] = useState(false)
+  const anchorRef = useRef<HTMLDivElement>(null)
   const [items, setItems] = useState<SlashSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -249,6 +253,20 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     })()
   }
 
+
+  // Keep the popover inside the viewport: flip above the field when there is
+  // not enough room below (a 390x844 phone put the rows ~360px below the fold).
+  useEffect(() => {
+    const el = anchorRef.current
+    if (!el || items.length === 0) {
+      setListAbove(false)
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    const listHeight = Math.min(280, window.innerHeight * 0.4)
+    setListAbove(rect.bottom + 6 + listHeight > window.innerHeight && rect.top > listHeight + 6)
+  }, [items.length, query])
+
   // The question's own layer decides the wording; only an unscoped menu (or a
   // concept question) invites minting, because a mint creates a concept — which
   // is never a valid answer to "which aliquot?".
@@ -277,13 +295,23 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
           if (listRef.current?.onKeyDown(e.nativeEvent)) e.preventDefault()
         }}
       />
-      <SlashSuggestionList
-        ref={listRef}
-        items={items}
-        loading={loading}
-        emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
-        command={command}
-      />
+      <div
+        ref={anchorRef}
+        className={
+          listAbove
+            ? 'message-log__clarification-popover message-log__clarification-popover--above'
+            : 'message-log__clarification-popover'
+        }
+        data-testid="clarification-popover"
+      >
+        <SlashSuggestionList
+          ref={listRef}
+          items={items}
+          loading={loading}
+          emptyLabel={query ? (canMint ? 'No matches — keep typing to mint a local term' : 'No matches') : 'Type to search'}
+          command={command}
+        />
+      </div>
     </div>
   )
 }

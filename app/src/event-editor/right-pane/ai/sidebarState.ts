@@ -179,6 +179,34 @@ export type SidebarAction =
 
 export const initialSidebarState: AiSidebarState = { mode: 'ready' }
 
+
+/**
+ * Identity of a clarification question for de-duplication. The compiler emits
+ * one clarification PER unresolved request, so a label referenced twice (or a
+ * re-run after an answer) produced IDENTICAL questions side by side — on a
+ * phone that read as "2 answers needed" for one term. Two questions are the
+ * same question when they ask about the same entity, about the same words, with
+ * the same prompt.
+ */
+export function questionKey(question: AiClarificationRequest): string {
+  const entity = question.entityType ?? question.kind ?? ''
+  const subject = (question.query ?? '').trim().toLowerCase()
+  return `${entity}|${subject}|${question.prompt.trim().toLowerCase()}`
+}
+
+/** Collapse identical questions, keeping the first (its id is the stable key). */
+export function dedupeQuestions(questions: AiClarificationRequest[]): AiClarificationRequest[] {
+  const seen = new Set<string>()
+  const out: AiClarificationRequest[] = []
+  for (const question of questions) {
+    const key = questionKey(question)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(question)
+  }
+  return out
+}
+
 export function sidebarReducer(state: AiSidebarState, action: SidebarAction): AiSidebarState {
   switch (action.type) {
     case 'start-interpreting':
@@ -192,18 +220,23 @@ export function sidebarReducer(state: AiSidebarState, action: SidebarAction): Ai
       if (state.mode !== 'interpreting') return state
       return { ...state, progress: action.progress }
 
-    case 'clarifications-needed':
+    case 'clarifications-needed': {
+      // ONE question per unresolved term. The compiler legitimately emits a
+      // clarification per request, so the same term can arrive twice; showing
+      // both made the queue double every round ("1 answers needed" → "2").
+      const questions = dedupeQuestions(action.questions)
       return {
         mode: 'clarifying',
         draftId: action.draftId,
-        questions: action.questions,
+        questions,
         answers: {},
-        activeQuestionId: action.questions[0]?.id ?? '',
+        activeQuestionId: questions[0]?.id ?? '',
         // SHORTHAND-CHAT fix cycle 1 (advc1 DEFECT-5): same conditional-spread
         // discipline as 'draft-ready' — a clarification from a draft WITHOUT
         // shorthand leaves the clarifying state byte-identical.
         ...(action.shorthand !== undefined ? { shorthand: action.shorthand } : {}),
       }
+    }
 
     case 'answer-question':
       if (state.mode !== 'clarifying') return state

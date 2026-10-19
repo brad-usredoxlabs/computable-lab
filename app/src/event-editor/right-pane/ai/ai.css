@@ -161,10 +161,16 @@
   opacity: 0.8;
 }
 
+/* This element carries TEXT ("0 of 1 answered"), so it must be a text row.
+ * It used to be styled as a 3px-tall bar: the label spilled out of the box and
+ * overlapped the action buttons on a phone. */
 .questions-panel__progress {
   flex: 0 0 auto;
-  height: 3px;
-  background: var(--cl-border);
+  padding: 6px 12px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--cl-text-dim, var(--cl-text));
+  border-top: 1px solid var(--cl-border);
 }
 
 .questions-panel__list {
@@ -181,10 +187,10 @@
 .questions-panel__actions {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;          /* a phone cannot fit two long buttons on one row */
   justify-content: flex-end;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid var(--cl-border);
 }
 
 .questions-panel__card {
@@ -200,8 +206,9 @@
 
 .questions-panel__card-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
   font-size: 11px;
   color: var(--cl-text-dim, var(--cl-text));
   opacity: 0.85;
@@ -210,6 +217,8 @@
 .questions-panel__prompt {
   margin: 6px 0 0;
   color: var(--cl-text);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .questions-panel__snippet {
@@ -815,6 +824,26 @@
   display: grid;
   gap: 6px;
   margin-top: 8px;
+}
+
+/* The suggestion popover is ANCHORED to the field, not flowing after it: as a
+ * flow child it pushed the question card taller and opened below the phone
+ * viewport. It flips above the field when there is no room below. */
+.message-log__clarification-picker {
+  position: relative;
+}
+
+.message-log__clarification-popover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+}
+
+.message-log__clarification-popover--above {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .message-log__clarification-search {

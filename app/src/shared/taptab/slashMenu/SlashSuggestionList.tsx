@@ -11,6 +11,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import type { SlashSuggestion, SlashSuggestionDetail } from './types'
 import { badgeStyles } from './tokens'
+import './SlashSuggestionList.css'
 
 export interface SlashSuggestionListProps {
   items: SlashSuggestion[]
@@ -96,16 +97,16 @@ export const SlashSuggestionList = forwardRef<
 
   if (loading && items.length === 0) {
     return (
-      <div style={containerStyle}>
-        <div style={emptyStyle}>Searching…</div>
+      <div className="slash-suggestion-list">
+        <div className="slash-suggestion-list__empty">Searching…</div>
       </div>
     )
   }
 
   if (items.length === 0) {
     return (
-      <div style={containerStyle}>
-        <div style={emptyStyle}>{emptyLabel ?? 'No matches'}</div>
+      <div className="slash-suggestion-list">
+        <div className="slash-suggestion-list__empty">{emptyLabel ?? 'No matches'}</div>
       </div>
     )
   }
@@ -117,7 +118,7 @@ export const SlashSuggestionList = forwardRef<
     <div
       ref={listRef}
       role="listbox"
-      style={containerStyle}
+      className="slash-suggestion-list"
       onScroll={clearHover}
       onMouseLeave={clearHover}
     >
@@ -138,42 +139,28 @@ export const SlashSuggestionList = forwardRef<
               e.preventDefault()
               if (!item.disabled) command(item)
             }}
-            style={{
-              display: 'flex',
-              width: '100%',
-              padding: '10px 12px',
-              border: 'none',
-              background: focused ? '#f1f5f9' : 'white',
-              cursor: item.disabled ? 'not-allowed' : 'pointer',
-              opacity: item.disabled ? 0.6 : 1,
-              alignItems: 'flex-start',
-              gap: '10px',
-              textAlign: 'left',
-              font: 'inherit',
-              color: 'inherit',
-            }}
+            className={
+              focused
+                ? 'slash-suggestion-list__row slash-suggestion-list__row--focused'
+                : 'slash-suggestion-list__row'
+            }
           >
+            {/* Badge colours are per-badge semantics (tokens.ts), not theme
+                chrome — they stay inline; everything else is CSS. */}
             <span
+              className="slash-suggestion-list__badge"
               style={{
-                fontSize: '0.68rem',
-                fontWeight: 700,
                 color: colors.color,
                 background: colors.background,
                 border: `1px solid ${colors.border}`,
-                borderRadius: '999px',
-                padding: '2px 6px',
-                marginTop: '2px',
-                whiteSpace: 'nowrap',
               }}
             >
               {item.badge}
             </span>
-            <span style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>{item.label}</div>
+            <span className="slash-suggestion-list__body">
+              <div className="slash-suggestion-list__label">{item.label}</div>
               {item.subtitle && (
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                  {item.subtitle}
-                </div>
+                <div className="slash-suggestion-list__subtitle">{item.subtitle}</div>
               )}
             </span>
           </button>
@@ -221,43 +208,21 @@ export function DetailTooltip({
   return (
     <div
       role="tooltip"
-      style={{
-        position: 'fixed',
-        left,
-        top,
-        width: WIDTH,
-        maxHeight: 'min(320px, 50vh)',
-        overflowY: 'auto',
-        zIndex: 10000,
-        pointerEvents: 'none',
-        background: 'white',
-        border: '1px solid #d0d5dd',
-        borderRadius: '8px',
-        boxShadow: '0 12px 28px rgba(0,0,0,0.16)',
-        padding: '10px 12px',
-        fontSize: '0.8rem',
-        color: '#0f172a',
-        lineHeight: 1.45,
-      }}
+      className="slash-suggestion-detail"
+      style={{ position: 'fixed', left, top, width: WIDTH }}
     >
       {detail.source && (
         <div
-          style={{
-            fontSize: '0.68rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: '#475569',
-            marginBottom: detail.definition || detail.id ? '6px' : 0,
-          }}
+          className="slash-suggestion-detail__source"
+          style={{ marginBottom: detail.definition || detail.id ? '6px' : 0 }}
         >
           {detail.source}
         </div>
       )}
       {detail.definition && (
-        <p style={{ margin: '0 0 8px', color: '#334155' }}>{detail.definition}</p>
+        <p className="slash-suggestion-detail__definition">{detail.definition}</p>
       )}
-      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px' }}>
+      <dl className="slash-suggestion-detail__rows">
         {detail.ontology && <TooltipRow label="Ontology" value={detail.ontology} />}
         {detail.id && <TooltipRow label="ID" value={detail.id} mono />}
         {detail.iri && <TooltipRow label="IRI" value={detail.iri} mono />}
@@ -280,16 +245,10 @@ function TooltipRow({
 }) {
   return (
     <>
-      <dt style={{ color: '#64748b', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{label}</dt>
+      <dt className="slash-suggestion-detail__label">{label}</dt>
       <dd
-        style={{
-          margin: 0,
-          minWidth: 0,
-          overflowWrap: 'anywhere',
-          ...(mono
-            ? { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.72rem' }
-            : {}),
-        }}
+        className="slash-suggestion-detail__value"
+        style={mono ? { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.72rem' } : undefined}
       >
         {value}
       </dd>
@@ -297,23 +256,3 @@ function TooltipRow({
   )
 }
 
-const containerStyle: React.CSSProperties = {
-  background: 'white',
-  border: '1px solid #d0d5dd',
-  borderRadius: '8px',
-  boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
-  // Cap at ~40% of viewport so the popover always fits even when the
-  // trigger is near the screen edge; scroll internally beyond that.
-  maxHeight: 'min(280px, 40vh)',
-  overflowY: 'auto',
-  minWidth: '260px',
-  // Without a max-width, long CHEBI/CL/etc. labels can stretch the popover
-  // across the whole viewport. Cap it so it stays a panel, not a banner.
-  maxWidth: 'min(420px, 90vw)',
-}
-
-const emptyStyle: React.CSSProperties = {
-  padding: '12px',
-  fontSize: '0.85rem',
-  color: '#64748b',
-}
