@@ -18,8 +18,9 @@ content: |
     - action: <one of the verbs below>
       <parameters>
   unresolved:
-    - label: "<thing you could not commit to>"
-      reason: "<why>"
+    - label: "<the scientist's own word for the thing you could not commit to>"
+      reason: "<not-stated | ambiguous | contradicts-the-text>"
+      actionLocation: {actionIndex: 0, action: <one of the verbs below>, argument: source }
 
   ALLOWED ACTIONS (closed vocabulary — never invent another):
   seed | incubate | mix | resuspend | dilute | shake | count | read |
@@ -28,6 +29,40 @@ content: |
   passage | freeze | thaw | spin | pellet |
   serial_dilution | media_swap_duplicate_columns |
   source_wells_to_duplicate_target_columns | repeat_rows | bead_beat
+
+  ARGUMENTS (declared per-verb arguments; a name written with '?' is OPTIONAL — the compiler treats its absence as legal):
+  - seed — source?:resolvable(labware), material?:resolvable(material), labware?:resolvable(labware), volumeUl?:quantity, duration?:scalar, temperatureC?:quantity, composition?:resolvable(material)
+  - incubate — labware?:resolvable(labware), source?:resolvable(labware), duration?:scalar, temperatureC?:quantity, rpm?:quantity
+  - mix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), duration?:scalar, cycles?:quantity, rpm?:quantity, temperatureC?:quantity
+  - resuspend — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
+  - dilute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
+  - shake — labware?:resolvable(labware), duration?:scalar, rpm?:quantity, temperatureC?:quantity, cycles?:quantity
+  - count — labware?:resolvable(labware), mode?:scalar, readout?:scalar
+  - read — labware?:resolvable(labware), instrument?:resolvable(instrument), mode?:scalar, wavelength?:scalar, readout?:scalar
+  - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl?:quantity, volume?:quantity, composition?:resolvable(material)
+  - create_container — labware?:resolvable(labware), source_name?:scalar
+  - transfer — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
+  - stain — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, volumeUl?:quantity
+  - fix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
+  - permeabilize — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
+  - block — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
+  - quench — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar
+  - label — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material)
+  - transfect — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
+  - aliquot — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, sourceWells?:wells, targetWells:wells
+  - wash — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity, cycles?:quantity, duration?:scalar
+  - elute — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), volumeUl?:quantity
+  - harvest — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware)
+  - passage — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), ratio?:scalar, volumeUl?:quantity
+  - freeze — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
+  - thaw — labware?:resolvable(labware), temperatureC?:quantity, duration?:scalar
+  - spin — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity, cycles?:quantity
+  - pellet — labware?:resolvable(labware), rpm?:quantity, duration?:scalar, temperatureC?:quantity
+  - serial_dilution — source?:resolvable(labware), target?:resolvable(labware), factor:quantity, points:quantity, replicates?:quantity, volumeUl?:quantity, ratio?:scalar, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
+  - media_swap_duplicate_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, temperatureC?:quantity, sourceWells?:wells, targetWells?:wells
+  - source_wells_to_duplicate_target_columns — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, cycles?:quantity, sourceWells?:wells, targetWells?:wells
+  - repeat_rows — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), cycles?:quantity, sourceWells?:wells, targetWells?:wells
+  - bead_beat — labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, temperatureC?:quantity, cycles?:quantity
 
   PARAMETERS (use only these; natural names, ordinary numbers/strings):
   - source, target, labware: SYMBOLIC labels for a material/plate. NEVER a
@@ -55,12 +90,11 @@ content: |
   - If you are not certain whether a label names an existing plate or a new
     one, still use a symbolic word and note it under unresolved. The compiler
     binds or asks.
-  - If any parameter is ambiguous or missing, put a short entry under
-    unresolved instead of inventing a value.
-  - Never emit a deck slot (A1, H12), never emit an event graph, never emit a
-    record id.
-  - Keep it as simple as the scientist said it. Do NOT add wells or volumes the
-    scientist did not state.
+  - Hedge under unresolved ONLY what the scientist STATED but you could not commit to (ambiguous, contradicted, existing-vs-new unknown) or a REQUIRED parameter the ARGUMENTS block marks required and the text omits — put it under unresolved instead of inventing it.
+  - NEVER hedge the absence of an OPTIONAL parameter (the ARGUMENTS block marks it optional): omit the field. The compiler's required-argument sweep and downstream fold own optional absences.
+  - Every unresolved entry about a specific action's argument MUST carry actionLocation: {actionIndex, action, argument} (the argument named exactly as the ARGUMENTS block declares it) and label: EXACTLY the scientist's own word for the thing — never a sentence. Use reason "not-stated" for a thing the scientist named but left uncommitted.
+  - Never emit a deck slot (A1, H12), never emit an event graph, never emit a record id.
+  - Keep it as simple as the scientist said it. Do not add wells/volumes the scientist did not state.
   - serial_dilution and other duplicate/swap macros are ONE action — do not
     unroll them into a list of transfers.
 

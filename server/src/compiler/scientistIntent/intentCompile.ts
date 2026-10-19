@@ -48,12 +48,36 @@ export interface ScientistIntentLlmClient {
 export const INTENT_COMPILE_MAX_TOKENS = 8000;
 
 /**
+ * The ARGUMENTS block for the system prompt (HEDGE-TYPE-1): one line per verb
+ * (declaration order) with its declared args marked required-vs-optional —
+ * `name:kind` is REQUIRED, `name?:kind` is OPTIONAL (the vocabulary's declared
+ * `required` field decides the mark; the same `name?` rendering as
+ * contractBlock()). GENERATED from vocabulary.verbs()/argContracts() exactly
+ * like promptVerbBlock() — TypeScript keeps NO verb or arg name here, so the
+ * emitter's hedge rule reads the SAME declared optionality the compiler's
+ * required-argument sweep reads (the W28-A5i Q1 contract-vs-data contradiction
+ * this task closes).
+ */
+function promptArgContractBlock(vocab: ScientistIntentVocabulary): string {
+  const lines: string[] = [];
+  for (const verb of vocab.verbs()) {
+    const args = vocab.argContracts(verb)
+      .map((a) => `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`)
+      .join(', ');
+    lines.push(`- ${verb}${args ? ` — ${args}` : ''}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Closed-vocabulary system prompt for the small model. The ALLOWED ACTIONS verb
  * block is GENERATED from the vocabulary YAML (schema/scientist-intent/
  * scientist-intent-vocabulary.yaml) — TypeScript keeps no verb list here. The
- * PARAMETERS/RULES prose stays hand-written this wave: it is prose, not a verb
- * list (per-verb argument contracts already exist in the vocabulary data for
- * SPINE-3 to generate richer prompts).
+ * ARGUMENTS block (HEDGE-TYPE-1) is likewise GENERATED from the vocabulary's
+ * arg contracts (required-vs-optional marks). The PARAMETERS/RULES prose stays
+ * hand-written this wave: it is prose, not a verb list (per-verb argument
+ * contracts already exist in the vocabulary data for SPINE-3 to generate
+ * richer prompts).
  * (The reusable `intent.compile.system` template is also shipped in
  * schema/registry/prompt-templates/ for the registry/UI layer — a drift-gated
  * mirror, checked by scientist-intent-vocabulary.mirror-drift.)
@@ -79,13 +103,17 @@ actions:
     rpm: 4000
     duration: "5 min"
 unresolved:
-  - label: "<thing you could not commit to>"
-    reason: "<why>"
+  - label: "<the scientist's own word for the thing you could not commit to>"
+    reason: "<not-stated | ambiguous | contradicts-the-text>"
+    actionLocation: {actionIndex: 1, action: transfer, argument: source }
 
 Use 'volumeUl' (not volume_ul). The verb is the VALUE of 'action:' — never a map key of its own.
 
 ALLOWED ACTIONS (never invent another):
 ${vocab.promptVerbBlock()}
+
+ARGUMENTS (declared per-verb arguments; a name written with '?' is OPTIONAL — the compiler treats its absence as legal):
+${promptArgContractBlock(vocab)}
 
 PARAMETERS (only these; ordinary words/numbers):
 - source / target / labware: SYMBOLIC label (e.g. "standards", "cells", "media"). NEVER a deck slot or record id.
@@ -98,7 +126,9 @@ RULES:
 - Never emit a deck slot, an event graph, or a record id.
 - Do not add wells/volumes the scientist did not state.
 - serial_dilution / media_swap / repeat macros are ONE action — do not unroll.
-- If a parameter is ambiguous or missing, put it under unresolved instead of inventing it.`;
+- Hedge under unresolved ONLY what the scientist STATED but you could not commit to (ambiguous, contradicted, existing-vs-new unknown) or a REQUIRED parameter the ARGUMENTS block marks required and the text omits — put it under unresolved instead of inventing it.
+- NEVER hedge the absence of an OPTIONAL parameter (the ARGUMENTS block marks it optional): omit the field. The compiler's required-argument sweep and downstream fold own optional absences.
+- Every unresolved entry about a specific action's argument MUST carry actionLocation: {actionIndex, action, argument} (the argument named exactly as the ARGUMENTS block declares it) and label: EXACTLY the scientist's own word for the thing — never a sentence. Use reason "not-stated" for a thing the scientist named but left uncommitted.`;
 }
 
 /** Production default: the prompt generated from the shipped vocabulary. */
