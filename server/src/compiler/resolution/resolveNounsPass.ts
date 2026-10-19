@@ -42,6 +42,9 @@ import { buildStrategyRegistry } from './strategies.js';
 // module so the SAME rule serves the pass AND normalizeScientistIntent (the
 // raw gaps source). The leaf imports nothing from this module — acyclic.
 import { foldDeclaredOptionalAbsentHedges } from './declaredOptionalHedgeFold.js';
+// STAGHEDGE-1 (W28-A5m §Q2 (b)): the consume guard (3) reads the SAME stable
+// not-stated code the fold leaf declares — imported, never re-declared.
+import { NOT_STATED_REASON } from './declaredOptionalHedgeFold.js';
 // Re-export both names unchanged: every existing importer/test of
 // `foldDeclaredOptionalAbsentHedges` / `NOT_STATED_REASON` from
 // './resolveNounsPass.js' resolves through here, byte-unchanged (the pin that
@@ -343,6 +346,65 @@ function answeredSlotBindings(
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// STAGHEDGE-1 (W28-A5m §Q2 option (b)) — the MODEL-HEDGE LABEL-DIVERGENCE
+// consume. A model-side not-stated fact whose label DIVERGES from its slot's
+// raw value can never bind via the value-join above (`answerByKey.get(raw)`
+// needs raw == answer key), so no binding exists, boundKeys never covers its
+// identityKey, and every existing drop arm misses it — the card re-emits every
+// round (probe r5 arm B stagnation). The fact-level consume mirrors the
+// PARAM-FOLD's guard discipline: a MODEL fact is MOOT — dropped before
+// reconcile/blocked — exactly when all four guards hold, each read as
+// data/identity, never as a domain name:
+//   (1) the fact carries slot identity (same guard shape as the fold's guard 1
+//       / SH-QA-1's gate);
+//   (2) its actionLocation slot is a declared `kind: resolvable` contract of
+//       its verb (the SAME read as answeredSlotBindings above — scalar cards
+//       stay untouched: no mint-floor, no gate-widening);
+//   (3) the fact carries the stable NOT_STATED_REASON code (ambiguous /
+//       contradicts-the-text stay kept, same as fold guard 5);
+//   (4) an answered entry's KEY EQUALS the fact's label (exact-label identity,
+//       never containment — the same join discipline as the value-join, the
+//       document side trimmed exactly like the raw slot value is there).
+// The consume DROPS THE QUESTION ONLY: the slot keeps its raw value for the
+// ENGINE to resolve normally; NO binding is minted here, and the value-join /
+// answeredSlotBindings stay byte-unchanged for everything they already settle.
+// One label-answered mention consumes EVERY fact carrying that label at a
+// resolvable slot — the ':293-295 the scientist answered the MENTION'
+// generalization, already this file's own comment (sub-class 2a defused).
+// Engine clarifications, the §5.2 sweep, and gated survivors are UNTOUCHED by
+// construction: this reads only the model's own facts against the declared
+// contract data + the validated answers list.
+// ---------------------------------------------------------------------------
+
+export function consumeAnsweredLabelHedges(
+  vocabulary: ScientistIntentVocabulary,
+  modelFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AnsweredNounAnswer[],
+): readonly ScientistIntentUnresolvedFact[] {
+  if (answers.length === 0) return modelFacts;
+  const answeredByKey = new Map(answers.map((a) => [a.label, a]));
+  return modelFacts.filter((fact) => {
+    const loc = fact.actionLocation;
+    // Guard (1): slot identity, or KEEP.
+    if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
+    // Guard (2): the declared contract list of the fact's OWN verb location;
+    // no contract, or a contract whose declared kind is not the resolvable
+    // kind (the same discriminator answeredSlotBindings reads), -> KEEP.
+    const verb = loc.action;
+    if (typeof verb !== 'string') return true;
+    const contract = vocabulary.argContracts(verb).find((c) => c.name === loc.argument);
+    if (!contract || contract.kind !== 'resolvable') return true;
+    // Guard (3): a stable not-stated reason code, or KEEP.
+    if (fact.reason !== NOT_STATED_REASON) return true;
+    // Guard (4): the scientist answered THIS mention (a store-validated entry
+    // keyed exactly by the fact's label), or KEEP.
+    if (!answeredByKey.has(fact.label.trim())) return true;
+    // All four: the question is moot. CONSUME — the QUESTION only.
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The pass
 // ---------------------------------------------------------------------------
 
@@ -414,8 +476,20 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // clarifications, the §5.2 sweep, and the gated survivors below are
       // UNTOUCHED by construction (the fold reads only the model's own facts
       // against the declared contract data + the parsed action).
+      //
+      // STAGHEDGE-1 (W28-A5m §Q2 (b)): the answered-label consume rides the
+      // SAME stage, applied to the FOLDED model facts, so a consumed fact
+      // never re-enters reconcile and never counts toward `blocked` (the
+      // stagnation arm the ruling names). Drops the QUESTION only — the slot
+      // keeps its raw value and the answeredSlotBindings value-join above is
+      // byte-unchanged for everything it already settles.
+      const foldedModelFacts = foldDeclaredOptionalAbsentHedges(
+        deps.intent,
+        deps.vocabulary,
+        deps.intent.unresolved,
+      );
       const reconciled = reconcileModelUnresolved(
-        foldDeclaredOptionalAbsentHedges(deps.intent, deps.vocabulary, deps.intent.unresolved),
+        consumeAnsweredLabelHedges(deps.vocabulary, foldedModelFacts, deps.answeredSlots ?? []),
         [...settledEngineClarifications, ...required],
         bindings,
       );
