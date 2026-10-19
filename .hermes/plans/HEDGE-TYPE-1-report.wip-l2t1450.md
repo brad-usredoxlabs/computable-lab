@@ -201,3 +201,185 @@ separate FOLD/notice product decision — not pre-decided here.
 - No UI surface in this task -> no browser gate (spec §Report/markers).
 
 Marker: HEDGE-TYPE-1 DONE 9df81fac
+
+---
+
+## FIX RUN (l2t1920) — adversarial c1 defects D1..D4
+
+Review: /home/brad/.hermes/cl/lanes/2/reviews/advc-HEDGETYPE1-c1-l2t1845.md
+(VERDICT: fix — 2 major, 2 minor). All four defects fixed on this same
+worktree/branch; no new worktree, no trunk touch, lane stack untouched.
+
+Files changed in the fix commit (git -c core.fileMode=false diff --stat):
+
+    .../prompt-templates/intent.compile.system.yaml    | 23 ++------
+    .../scientistIntent/hedgeOptionality.test.ts       | 66 +++++++++++++++-------
+    .../src/compiler/scientistIntent/intentCompile.ts  |  4 +-
+    .../scientistIntent/vocabularyMirrorDrift.test.ts  | 61 ++++++++++++++++++++
+    4 files changed, 115 insertions(+), 39 deletions(-)
+
+### F1. D1 (MAJOR) — mirror ARGUMENTS block now ENFORCED by a drift leg
+
+vocabularyMirrorDrift.test.ts gains:
+- `argContractBlockLines(text)` — extracts the ARGUMENTS block from a prompt
+  text (works identically on the generated prompt and the parsed mirror).
+- NEW leg `(f) mirror ARGUMENTS block == generated promptArgContractBlock(vocab)
+  — BYTE-identical line-for-line`: compares the mirror's block to the generated
+  block line-by-line (mismatch list must be EMPTY), plus a per-verb/per-arg
+  data leg asserting the mirror's marks agree with vocab.argContracts
+  (required unmarked, optional carry '?').
+- NEW `MUTATION LEG (D1)`: flips ONE required-vs-optional mark in a throwaway
+  in-memory copy of the mirror text (bead_beat `duration?:scalar` ->
+  `duration:scalar`) and asserts the byte-compare goes RED (mismatched.length
+  == 1, mirror side carries the flipped mark, generated side the true one).
+  Test-the-test: the enforcement leg demonstrably catches the desync class.
+
+Independent byte-comparison (review §4 method, re-run at fix tip):
+
+    gen lines: 32 mirror lines: 32
+    TOTAL MISMATCH LINES: 0
+
+Throwaway local desync check (NOT committed — mirror restored via
+`git checkout --` immediately after; `git status` confirmed only the intended
+files modified): with the mirror's bead_beat line deliberately desynced, the
+new (f) leg FAILED as designed:
+
+    ❯ ... > (f) mirror ARGUMENTS block == generated promptArgContractBlock(vocab) — BYTE-identical line-for-line
+    ❯ ... > MUTATION LEG (D1): a stale mirror ARGUMENTS line (optional mark flipped) makes the byte-compare go RED
+         Tests  2 failed | 6 passed (8)
+
+### F2. D2 (MAJOR) — RED pins RESTORED to the strict 587423f1 literals
+
+hedgeOptionality.test.ts pins restored to the exact RED-commit patterns:
+- `/NEVER hedge the absence of an OPTIONAL parameter/` (both prompt + mirror)
+- `/\{actionIndex:[^\n]*action:[^\n]*argument:/` (both)
+- `/EXACTLY the scientist's own word/` (both)
+- mirror anti-fabrication byte pins restored STRICT and strengthened:
+  `toContain('instead of inventing it')` +
+  `toContain('Do not add wells/volumes the scientist did not state.')`
+  (the fragment-split is GONE).
+The RED failures were resolved by changing the PRODUCT (mirror reflow +
+wording alignment, F3), not by editing the assertions. Diff vs 587423f1 shows
+the shipped pins are now a superset-strict of the RED pins (only additions:
+the D4 mutation-leg asserts).
+
+### F3. D3 (MINOR) — mirror anti-fabrication core byte-identical to generated
+
+intent.compile.system.yaml RULES reflowed: each pinned phrase is now ONE
+contiguous line at block-base indent (YAML block scalar keeps it unfolded),
+and the wording is aligned to the generated prompt:
+- `...put it under unresolved instead of inventing it.` (was "inventing a value.")
+- `Do not add wells/volumes the scientist did not state.` (was "Do NOT add
+  wells or volumes the / scientist did not state." wrapped)
+- `actionLocation: {actionIndex: 0, ...` in the mirror's TOP-LEVEL SHAPE and
+  `{actionIndex: 1, ...` in the generated prompt — the strict
+  `/\{actionIndex:[^\n]*action:[^\n]*argument:/` pin now matches BOTH artifacts
+  (the space after `{` was what the loosened regex had papered over).
+Generated prompt wording aligned too: `NEVER hedge the absence of an OPTIONAL
+parameter (the ARGUMENTS block marks it optional): omit the field.` — the
+strict `/NEVER hedge the absence of an OPTIONAL parameter/` pin now matches
+both artifacts verbatim.
+Mandate grep (raw):
+
+    $ grep -n "instead of inventing it" server/src/compiler/scientistIntent/intentCompile.ts schema/registry/prompt-templates/intent.compile.system.yaml
+    intentCompile.ts:129: ... put it under unresolved instead of inventing it.
+    intent.compile.system.yaml:93: ... put it under unresolved instead of inventing it.
+    $ grep -n "Do not add wells/volumes the scientist did not state." <same two files>
+    intentCompile.ts:127: - Do not add wells/volumes the scientist did not state.
+    intent.compile.system.yaml:97: - Keep it as simple as the scientist said it. Do not add wells/volumes the scientist did not state.
+
+### F4. D4 (MINOR) — real mutation leg replaces the overclaiming test
+
+The 'rip-out posture' test now uses the vocab-minus-pellet FIXTURE
+(loadScientistIntentVocabulary({path: fixtures/vocab-minus-pellet/...})):
+asserts the shipped block HAS `- pellet`, the fixture-generated block does
+NOT, and a set diff shows fixture block verbs == shipped minus pellet. The
+rip-out property is genuinely exercised (mirrors vocabularyMirrorDrift's
+mutation leg), zero TS edits.
+
+### V1. RED evidence for the fix (strictened pins first)
+
+Log: /home/brad/.hermes/cl/lanes/2/logs/HEDGE-TYPE-1-fix1-red-l2t1920.log
+(strictened test files run against the pre-fix product):
+
+    Test Files  1 failed | 1 passed (2)
+         Tests  5 failed | 18 passed (23)
+
+The 5 failures: generated-prompt NEVER-hedge pin, generated actionLocation
+strict regex pin, mirror NEVER-hedge pin, mirror actionLocation strict regex
+pin, mirror anti-fabrication byte pins ('instead of inventing it' /
+contiguous wells clause). vocabularyMirrorDrift passed at this point (8 tests)
+because its new (f) leg byte-compares mirror-vs-generated — both were
+hand-matched pre-reflow; the D1 gap was enforcement, proven by the throwaway
+desync check in F1. The D4 fixture leg passed pre-fix (it tests generation,
+which was already data-driven; the defect was the test's fake body).
+
+### V2. Targeted green (post-fix)
+
+Log: /home/brad/.hermes/cl/lanes/2/logs/HEDGE-TYPE-1-fix1-targeted-green-l2t1920.log
+
+    ✓ src/compiler/scientistIntent/vocabularyContractBlock.test.ts  (3 tests)
+    ✓ src/compiler/scientistIntent/vocabularyMirrorDrift.test.ts  (8 tests)
+    ✓ src/compiler/scientistIntent/scientistIntentContract.test.ts  (15 tests)
+    ✓ src/compiler/scientistIntent/hedgeOptionality.test.ts  (15 tests)
+    ✓ src/compiler/scientistIntent/promptShapeParity.test.ts  (9 tests)
+    ✓ src/compiler/scientistIntent/vocabularyRipOut.test.ts  (8 tests)
+    Test Files  6 passed (6)
+         Tests  58 passed (58)
+
+vocabularyMirrorDrift: GREEN (8 tests — 6 prior + (f) byte-compare + D1
+mutation leg). promptShapeParity: GREEN (9 tests).
+
+### V3. Whole directory green
+
+    $ cd server && npm run test:run src/compiler/scientistIntent
+    Log: /home/brad/.hermes/cl/lanes/2/logs/HEDGE-TYPE-1-fix1-green-dir-l2t1920.log
+    Test Files  25 passed (25)
+         Tests  284 passed (284)   (was 282 at c1 tip; +2 = the new D1 legs)
+
+### V4. Criterion (c) — engine empty-diff commands (re-run at fix tip)
+
+    $ git -c core.fileMode=false diff 3e65a172...HEAD -- server/src/compiler/resolution/resolveNounsPass.ts
+    (no output — EMPTY)
+    $ git -c core.fileMode=false diff 3e65a172...HEAD -- server/src/compiler/resolution/resolutionEngine.ts
+    (no output — EMPTY)
+    $ git -c core.fileMode=false diff 3e65a172 -- server/src/compiler/resolution/resolveNounsPass.ts server/src/compiler/resolution/resolutionEngine.ts | wc -l
+    0
+
+### V5. Server typecheck (zero NEW errors)
+
+    $ npm run typecheck -w server   (from worktree root)
+    > @computable/server@1.0.0 typecheck
+    > tsc --noEmit
+    (exit 0 — zero errors, same as c1 tip)
+
+### V6. Full server suite — fail-file NAME SET comm vs base (unchanged)
+
+Fix-tip raw: /home/brad/.hermes/cl/lanes/2/logs/HEDGE-TYPE-1-fix1-full-tip-l2t1920.log
+
+    Test Files  89 failed | 671 passed | 9 skipped (769)
+         Tests  99 failed | 6309 passed | 70 skipped (6651)
+
+FAIL-file name sets (sorted unique from "FAIL  <file>" lines): 89 at fix tip,
+90 at base (same base raw as §5).
+
+    comm -13 base fix1  ->  EMPTY   (ZERO new failing files)
+    comm -23 base fix1  ->  src/foundry/FoundryCoderPatch.test.ts  (fails at BASE, passes at tip — same direction as §5)
+
+Named honestly: ZymoCampaignNegatives.test.ts (2 legs: import-set closure +
+pipeline/routes sha pins) is in the BASE fail-file set (line 63 of both
+sorted lists) — pre-existing trunk debt, not introduced by this fix run; it
+fails identically at c1 tip and at fix tip.
+
+### V7. Constraints re-verified
+
+- Zero engine-file changes (V4). resolveNounsPass.ts:435 bar + KEEP arm untouched.
+- Anti-fabrication core byte-present in generated prompt AND mirror (F3 grep).
+- Generated ARGUMENTS block still from vocabulary data — intentCompile.ts fix
+  diff is 4 lines of template DATA text only (wording alignment); the renderer
+  promptArgContractBlock() is unchanged; zero verb/arg name literals added.
+- exactOptionalPropertyTypes: typecheck exit 0 (V5).
+- Mirror yaml change needs a lane-stack restart to reach running registry
+  consumers (unchanged note from c1; orchestrator-owned).
+
+Marker: HEDGE-TYPE-1 FIX1 DONE 5f8671c5
