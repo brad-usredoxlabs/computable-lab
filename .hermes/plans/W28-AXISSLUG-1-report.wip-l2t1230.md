@@ -114,3 +114,62 @@ All numbers above are post-fix. The stale dir is parked at /tmp/axisslug_lane2_s
   remain carried for adjudication per spec; untouched.
 
 AXISSLUG1 DONE
+
+## Fix cycle 1 (advc-AXISSLUG1-c1-l2t1355, VERDICT: fix, 1 real defect)
+
+### Defect (restated verbatim from review)
+
+slugifyRecordLabel does not guarantee a leading [a-z]. Real-helper probes:
+"4c_variant" -> "4c-variant" (schema-valid=false), "9mm_lysis" -> "9mm-lysis" false,
+"37C_bead" -> "37c-bead" false; the 'unknown' fallback only fires on empty. The LPR
+axisId pattern ^[a-z][a-z0-9-]*$ rejects digit-leading ids — a digit-leading model key
+reproduces the exact 409 this ticket targets. Spec AC3 ("never emits an invalid id")
+was not met.
+
+### Fix (orch-directed smallest call-site guard)
+
+server/src/api/handlers/IntentAcceptHandlers.ts only (MaterialCompiler.slugifyRecordLabel
+untouched — shared declared behavior): after slugifyRecordLabel(key), if the result does
+not match /^[a-z]/, prefix it with the pinned 'axis-' prefix (comment pins the prefix).
+Applied once; the same normalized value feeds BOTH axisId and the choices key (structure
+unchanged). Values (branchIds, choices VALUES) remain byte-verbatim. No new files, no
+YAML, no other handler.
+
+    const slugged = slugifyRecordLabel(key);
+    const axisId = /^[a-z]/.test(slugged) ? slugged : `axis-${slugged}`;
+
+### RED -> GREEN evidence
+
+RED (commit 08734e77, pin added first):
+    ❯ src/api/handlers/IntentAcceptHandlers.test.ts  (8 tests | 1 failed)
+    FAIL ... > fix1: a digit-leading answer key gets the axis- prefix so axisId matches the pattern
+    AssertionError: expected '4c-variant' to be 'axis-4c-variant' // Object.is equality
+     Test Files  1 failed (1)
+          Tests  1 failed | 7 passed (8)
+
+GREEN (after fix commit 1d0a1667):
+    ✓ src/api/handlers/IntentAcceptHandlers.test.ts  (8 tests) 6ms
+     Test Files  1 passed (1)
+          Tests  8 passed (8)
+
+Pins added: answers key '4c_variant' -> axisId 'axis-4c-variant' matching
+^[a-z][a-z0-9-]*$, choices key same, value 'variant_a' verbatim; '96-well_plate' ->
+'axis-96-well-plate' (digit-leading after slug), value 'plate_96' verbatim; real-helper
+probes pinned (slugifyRecordLabel('4c_variant')==='4c-variant',
+('96-well_plate')==='96-well-plate'); already-valid 'lysis-method' stays unprefixed.
+
+### Typecheck
+
+npm run typecheck -w server: 25 'error TS' lines (exit 2) — identical to HEAD 5179d595
+measured in-lane (stash-base rerun; diff of sorted error-line sets: IDENTICAL, ZERO new;
+matches the disclosed 25 error-TS baseline). None mention IntentAcceptHandlers.
+
+### Diff stat (RED + fix commits)
+
+    .../src/api/handlers/IntentAcceptHandlers.test.ts  | 45 ++++++++++++++++++++++
+    server/src/api/handlers/IntentAcceptHandlers.ts    | 10 ++++-
+    2 files changed, 54 insertions(+), 1 deletion(-)
+
+Commits: 08734e77 (RED test), 1d0a1667 (fix), report commit follows.
+
+AXISSLUG1 FIX1 DONE
