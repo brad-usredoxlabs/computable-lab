@@ -281,6 +281,44 @@ describe('staghedge-1.model-hedge label-divergence consume (resolve_nouns)', () 
     expect(output.blocked).toBe(true);
   });
 
+  it('SH9 negative guard (4) exact-equality discipline: an answered key that is a PROPER SUBSTRING of the fact label at the SAME declared-resolvable slot SH1 drops — fact KEPT (exact-label identity, never containment; a containment join recreates the A5d V6 drift class)', async () => {
+    // The answers map carries 'variant' — a proper substring of the fact's
+    // label HEDGE_LABEL ('variant b') — at the very slot SH1's drop case
+    // uses. Guard (4) is an EXACT-key equality: a partial mention is NOT an
+    // answer for this mention, so the card stays visible. A bidirectional
+    // containment join (fact.label.includes(a.label) || a.label.includes(
+    // fact.label)) would consume the fact here — this case pins the
+    // discipline the source states (resolveNounsPass.ts guard (4) comment,
+    // 'exact-label identity, never containment — the same join discipline as
+    // the value-join').
+    const partialAnswer: AnsweredNounAnswer = {
+      label: 'variant',
+      recordId: 'LAB-staghedge-partial',
+      recordLabel: 'Partial mention record',
+    };
+    const intent = intentOf(
+      [{ action: stageVerb, [firstResolvable.name]: DIVERGENT_VALUE } as ScientistIntent['actions'][number]],
+      [hedge(firstResolvable.name, stageVerb, 0)],
+    );
+
+    const result = await runPass(intent, { answeredSlots: [partialAnswer] });
+    const output = result.output as ResolveNounsOutput;
+
+    expect(result.ok).toBe(false);
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.label).toBe(HEDGE_LABEL);
+    expect(output.clarifications[0]!.reason).toBe(NOT_STATED);
+    expect(output.clarifications[0]!.actionLocation).toEqual({
+      actionIndex: 0,
+      action: stageVerb,
+      argument: firstResolvable.name,
+    });
+    // The containment join would ALSO have minted nothing here — the failure
+    // it catches is the consumed QUESTION, pinned by the assertions above.
+    expect(output.bindings).toEqual([]);
+  });
+
   it('SH6 negative guard (1): a not-stated fact WITHOUT actionLocation is KEPT even when its label is answered (slot-less facts stay visible defects)', async () => {
     const slotless: ScientistIntentUnresolvedFact = { label: HEDGE_LABEL, reason: NOT_STATED };
     const intent = intentOf(
