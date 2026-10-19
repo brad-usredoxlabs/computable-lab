@@ -56,6 +56,11 @@ const foldArgs = optionalArgs.slice(0, 3);
  *  both read from the data. */
 const optionalResolvable = optionalArgs.find((a) => a.kind === 'resolvable')!;
 const optionalPlain = optionalArgs.find((a) => a.kind !== 'resolvable')!;
+/** A declared-optional SCALAR arg (the probe's duration class) and a
+ *  declared-optional QUANTITY arg (the numeric-presence pin) — both READ
+ *  from the data, never name literals (W28-FOLDSENT-1). */
+const optionalScalar = optionalArgs.find((a) => a.kind === 'scalar')!;
+const optionalQuantity = optionalArgs.find((a) => a.kind === 'quantity')!;
 /** First verb (declaration order) with a declared-REQUIRED argument — the
  *  sweep's stage for the never-folded engine-fact pin. */
 const requiredVerb = vocab.verbs().find((verb) =>
@@ -274,6 +279,102 @@ describe('param-fold-1.declared-optional-absence fold (resolve_nouns)', () => {
     // Engine fact first (verbatim), gated survivor last (the pinned
     // end-of-list position); the foldable model facts are GONE.
     expect(output.clarifications).toEqual([engineFact, gatedFact]);
+    expect(output.blocked).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W28-FOLDSENT-1 (W28-A5l) — the SENTINEL-IN-SLOT class. The model sometimes
+// writes its own hedge sentinel INTO a declared-optional scalar slot
+// (observed probe shape: `duration: "not-stated"`). Guard (4) must read a
+// slot value that IS the module's stable NOT_STATED_REASON code as DECLARED
+// ABSENCE — the fact is by-construction unanswerable (ANSWER-BIND skips
+// non-resolvable slots), so keeping it manufactures the residual-set dead
+// end. Exact trimmed equality only; guards (1)(2)(3)(5) untouched.
+// ---------------------------------------------------------------------------
+
+describe('param-fold-1 sentinel-in-slot (W28-FOLDSENT-1)', () => {
+  it('FS1 RED pin (probe shape): a declared-optional scalar slot holding the sentinel itself + a not-stated fact is FOLDED — zero clarifications, blocked:false', async () => {
+    const action = {
+      action: foldVerb,
+      [optionalScalar.name]: NOT_STATED,
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(intentOf([action], [hedge(optionalScalar.name)]));
+    const output = result.output as ResolveNounsOutput;
+
+    expect(output.clarifications).toEqual([]);
+    expect(output.blocked).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+
+  it('FS1b sentinel with surrounding whitespace is trimmed to the sentinel — FOLDED (guard 4 presence test is trim-equality)', async () => {
+    const action = {
+      action: foldVerb,
+      [optionalScalar.name]: `  ${NOT_STATED}  `,
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(intentOf([action], [hedge(optionalScalar.name)]));
+    const output = result.output as ResolveNounsOutput;
+
+    expect(output.clarifications).toEqual([]);
+    expect(output.blocked).toBe(false);
+  });
+
+  it('FS2 no over-fold: the same slot holding a REAL value stays present — the hedge is KEPT', async () => {
+    const action = {
+      action: foldVerb,
+      [optionalScalar.name]: '20 min',
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(intentOf([action], [hedge(optionalScalar.name)]));
+    const output = result.output as ResolveNounsOutput;
+
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.reason).toBe(NOT_STATED);
+    expect(output.clarifications[0]!.actionLocation?.argument).toBe(optionalScalar.name);
+    expect(output.blocked).toBe(true);
+  });
+
+  it('FS3 exact equality, not substring: a slot merely CONTAINING the sentinel ("not-statedly 20 min") is present — KEPT', async () => {
+    const action = {
+      action: foldVerb,
+      [optionalScalar.name]: `${NOT_STATED}ly 20 min`,
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(intentOf([action], [hedge(optionalScalar.name)]));
+    const output = result.output as ResolveNounsOutput;
+
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.actionLocation?.argument).toBe(optionalScalar.name);
+    expect(output.blocked).toBe(true);
+  });
+
+  it('FS4 number arm unchanged: a numeric slot holding 0 is present-and-KEPT (0 is a value, not absence)', async () => {
+    const action = {
+      action: foldVerb,
+      [optionalQuantity.name]: 0,
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(intentOf([action], [hedge(optionalQuantity.name)]));
+    const output = result.output as ResolveNounsOutput;
+
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.actionLocation?.argument).toBe(optionalQuantity.name);
+    expect(output.blocked).toBe(true);
+  });
+
+  it('FS5 guard (3) precedence: a REQUIRED slot holding the sentinel is still KEPT (guard 3 fires before guard 4 — required-sentinel is a different class, out of scope)', async () => {
+    const action = {
+      action: requiredVerb,
+      [requiredArg.name]: NOT_STATED,
+    } as ScientistIntent['actions'][number];
+    const result = await runPass(
+      intentOf([action], [hedge(requiredArg.name, NOT_STATED, requiredVerb)]),
+    );
+    const output = result.output as ResolveNounsOutput;
+
+    // Guard (3) keeps the model hedge; the sweep adds nothing because the
+    // slot IS present (the sentinel is a value for the sweep's presence
+    // test — the sweep is guard-(4) logic's mirror, untouched here).
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.reason).toBe(NOT_STATED);
+    expect(output.clarifications[0]!.actionLocation?.argument).toBe(requiredArg.name);
     expect(output.blocked).toBe(true);
   });
 });

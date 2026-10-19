@@ -295,3 +295,51 @@ describe('hedge-type-1 acceptance (a): declared-optional absence compiles comple
     expect(compile.terminalArtifacts.events.some((e) => e.event_type === 'mix')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// W28-FOLDSENT-1 (W28-A5l) — the SENTINEL-IN-SLOT shape on the RAW channel.
+// Observed probe emission: the model writes its own hedge sentinel INTO the
+// declared-optional scalar slot (`duration: "not-stated"`) AND hedges the
+// same slot. Guard (4) must read the sentinel slot as declared absence so
+// the fold fires at the RAW source (normalizeScientistIntent) exactly as it
+// fires on the omitted-slot shape — no unresolved_ref ghost, no gap, the
+// answer loop never opens on a by-construction-unanswerable card.
+// ---------------------------------------------------------------------------
+
+describe('W28-FOLDSENT-1 sentinel-in-slot raw-channel convergence (PARAM-FOLD-2 surface)', () => {
+  it('duration:"not-stated" IN the slot + a not-stated hedge on it folds at the raw source — no clarification, no gap, complete', async () => {
+    const actions = [{ action: 'bead_beat', labware: LABWARE_LABEL, duration: 'not-stated' }];
+    const hedge = [{
+      label: 'duration',
+      reason: 'not-stated',
+      actionLocation: { actionIndex: 0, action: 'bead_beat', argument: 'duration' },
+    }];
+    const { compile } = await compileWithFakeLlm(actions, hedge);
+
+    expect(compile.outcome).toBe('complete');
+    expect(compile.clarifications).toEqual([]);
+    // RAW consumers both see the folded set (normalizeScientistIntent's
+    // unresolvedRefs loop AND protocolIntent.unresolved).
+    expect(compile.normalized.unresolvedRefs).toEqual([]);
+    expect(compile.terminalArtifacts.gaps).toEqual([]);
+    expect(compile.terminalArtifacts.protocolIntent?.unresolved ?? []).toEqual([]);
+    // No over-fold side effect: the macro still expands.
+    expect(compile.terminalArtifacts.events.length).toBeGreaterThan(0);
+    expect(compile.terminalArtifacts.events.some((e) => e.event_type === 'mix')).toBe(true);
+  });
+
+  it('no over-fold on the raw channel: duration:"20 min" + a not-stated hedge stays a gap (a stated value is answerable data, sentinel-equality is exact)', async () => {
+    const actions = [{ action: 'bead_beat', labware: LABWARE_LABEL, duration: '20 min' }];
+    const hedge = [{
+      label: 'duration',
+      reason: 'not-stated',
+      actionLocation: { actionIndex: 0, action: 'bead_beat', argument: 'duration' },
+    }];
+    const { compile } = await compileWithFakeLlm(actions, hedge);
+
+    // The hedge contradicts a stated value: guard (4) keeps it — the raw
+    // channel still carries the fact (characterization of the KEEP side).
+    expect(compile.normalized.unresolvedRefs.length).toBeGreaterThan(0);
+    expect(compile.clarifications.length).toBeGreaterThan(0);
+  });
+});
