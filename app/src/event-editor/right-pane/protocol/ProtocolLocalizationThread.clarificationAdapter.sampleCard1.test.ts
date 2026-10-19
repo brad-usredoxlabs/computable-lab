@@ -61,11 +61,18 @@ describe('clarificationAdapter — not-stated gets its card (SAMPLE-CARD-1, W28-
   it('3. every EXISTING engine-reason card mapping is byte-identical (fallback rule pinned)', () => {
     // (reason,'*') table: the three engine rows keep their exact values; the
     // only addition is the new 'not-stated' row itself.
+    // GAPCARD-1 DELIBERATE PIN UPDATE (same sanctioned pattern): the ONLY
+    // further delta is the two prompt-declared model rows
+    // (intent.compile.system.yaml:22) + the explicit declared-no-surface entry
+    // for 'missing-required-argument' (null BY DATA, not by fallthrough).
     expect({ ...CLARIFICATION_MENU_BY_REASON }).toEqual({
       'unknown-noun': '/m',
       'ambiguous-noun': '/m',
       'resolution-lookup-failed': '/m',
       'not-stated': '/m',
+      'ambiguous': '/m',
+      'contradicts-the-text': '/m',
+      'missing-required-argument': null,
     })
     // Loop-pin each existing engine reason at (reason,'*') and at
     // (reason, labware): unchanged, byte-for-byte, exactly as ANSWER-SURFACE-1
