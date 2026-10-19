@@ -38,6 +38,18 @@ import {
 } from './adapters.js';
 import { resolveScientistIntentNouns } from './resolutionEngine.js';
 import { buildStrategyRegistry } from './strategies.js';
+// PARAM-FOLD-2 (W28-A5k): the declared-optional-absence fold lives in a LEAF
+// module so the SAME rule serves the pass AND normalizeScientistIntent (the
+// raw gaps source). The leaf imports nothing from this module — acyclic.
+import { foldDeclaredOptionalAbsentHedges } from './declaredOptionalHedgeFold.js';
+// Re-export both names unchanged: every existing importer/test of
+// `foldDeclaredOptionalAbsentHedges` / `NOT_STATED_REASON` from
+// './resolveNounsPass.js' resolves through here, byte-unchanged (the pin that
+// the extract is a MOVE, not a rewrite).
+export {
+  foldDeclaredOptionalAbsentHedges,
+  NOT_STATED_REASON,
+} from './declaredOptionalHedgeFold.js';
 import type { BoundNoun, EngineDeps, EngineFailure, EngineOutcome } from './types.js';
 import type { MaterialLevel } from '../../resolve/types.js';
 import type { Pass, PassDiagnostic, PassResult } from '../pipeline/types.js';
@@ -320,6 +332,17 @@ function answeredSlotBindings(
 }
 
 // ---------------------------------------------------------------------------
+// PARAM-FOLD-1 (W28-A5j) — the declared-optional-absence fold. MOVED (verbatim)
+// to ./declaredOptionalHedgeFold.ts in PARAM-FOLD-2 (W28-A5k) so the SAME rule
+// serves this pass AND normalizeScientistIntent (the raw gaps source); both
+// names re-exported from here unchanged (see the import block above). The
+// guards 1-5 (slot identity, contract join, required !== true, argument ABSENT,
+// stable NOT_STATED_REASON code) live in the leaf module. Engine clarifications
+// and gated survivors remain UNTOUCHED by construction: the fold reads only the
+// model's own facts against the declared contract data + the parsed action.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // The pass
 // ---------------------------------------------------------------------------
 
@@ -385,8 +408,14 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
         return c.reason === MISSING_REQUIRED_ARGUMENT_REASON;
       });
 
+      // PARAM-FOLD-1 (W28-A5j): the model's facts pass the declared-optional-
+      // absence fold BEFORE reconciliation — a folded fact never enters
+      // `clarifications` and never counts toward `blocked`. Engine
+      // clarifications, the §5.2 sweep, and the gated survivors below are
+      // UNTOUCHED by construction (the fold reads only the model's own facts
+      // against the declared contract data + the parsed action).
       const reconciled = reconcileModelUnresolved(
-        deps.intent.unresolved,
+        foldDeclaredOptionalAbsentHedges(deps.intent, deps.vocabulary, deps.intent.unresolved),
         [...settledEngineClarifications, ...required],
         bindings,
       );

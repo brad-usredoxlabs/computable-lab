@@ -1,0 +1,126 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+stdout | src/compiler/scientistIntent/pf2Probe.test.ts > pf2 probe > V1 verbatim ghost shape at post-fix head
+=== HEAD HEDGED emission: {
+ "outcome": "complete",
+ "clarifications": [],
+ "gaps": [],
+ "unresolvedRefs": [],
+ "protocolIntentUnresolved": [],
+ "eventTypes": [
+  "mix"
+ ]
+}
+
+stdout | src/compiler/scientistIntent/pf2Probe.test.ts > pf2 probe > CHANNEL-ALIVE a: slot-less not-stated fact (no actionLocation) -> KEPT by the fold -> still unresolved_ref gap, outcome STILL gap
+=== HEAD SLOTLESS emission: {
+ "outcome": "gap",
+ "clarifications": [],
+ "gaps": [
+  {
+   "kind": "unresolved_ref",
+   "message": "Microcentrifuge tube (not-stated)",
+   "details": {
+    "kind": "unresolved_symbol",
+    "label": "Microcentrifuge tube",
+    "reason": "not-stated"
+   }
+  }
+ ],
+ "unresolvedRefs": [
+  {
+   "kind": "unresolved_symbol",
+   "label": "Microcentrifuge tube",
+   "reason": "not-stated"
+  }
+ ],
+ "protocolIntentUnresolved": [
+  {
+   "id": "unresolved-Microcentrifuge tube",
+   "kind": "operation",
+   "label": "Microcentrifuge tube",
+   "reason": "not-stated",
+   "blocksLowering": false
+  }
+ ],
+ "eventTypes": [
+  "mix"
+ ]
+}
+
+stdout | src/compiler/scientistIntent/pf2Probe.test.ts > pf2 probe > CHANNEL-ALIVE a2: slot-less not-stated fact the engine cannot bind -> bars (needs-clarification), held out of complete
+=== HEAD SLOTLESS-UNBOUND emission: {
+ "outcome": "needs-clarification",
+ "clarifications": [
+  {
+   "label": "the incubation time",
+   "reason": "not-stated"
+  }
+ ],
+ "gaps": [],
+ "unresolvedRefs": [
+  {
+   "kind": "unresolved_symbol",
+   "label": "the incubation time",
+   "reason": "not-stated"
+  }
+ ],
+ "protocolIntentUnresolved": [
+  {
+   "id": "unresolved-the incubation time",
+   "kind": "operation",
+   "label": "the incubation time",
+   "reason": "not-stated",
+   "blocksLowering": false
+  }
+ ],
+ "eventTypes": []
+}
+
+stdout | src/compiler/scientistIntent/pf2Probe.test.ts > pf2 probe > CHANNEL-ALIVE b: ambiguous slot-located hedge -> KEPT by the fold -> still unresolved_ref gap, outcome STILL gap
+=== HEAD AMBIGUOUS emission: {
+ "outcome": "gap",
+ "clarifications": [],
+ "gaps": [
+  {
+   "kind": "unresolved_ref",
+   "message": "Microcentrifuge tube (ambiguous)",
+   "details": {
+    "kind": "unresolved_symbol",
+    "label": "Microcentrifuge tube",
+    "reason": "ambiguous"
+   }
+  }
+ ],
+ "unresolvedRefs": [
+  {
+   "kind": "unresolved_symbol",
+   "label": "Microcentrifuge tube",
+   "reason": "ambiguous"
+  }
+ ],
+ "protocolIntentUnresolved": [
+  {
+   "id": "unresolved-Microcentrifuge tube",
+   "kind": "operation",
+   "label": "Microcentrifuge tube",
+   "reason": "ambiguous",
+   "blocksLowering": false
+  }
+ ],
+ "eventTypes": [
+  "mix"
+ ]
+}
+
+stdout | src/compiler/scientistIntent/pf2Probe.test.ts > pf2 probe > IDEMPOTENCE: fold(fold(set)) == fold(set), and normalize + pass double-fire is a no-op
+=== IDEMPOTENCE once: ["the incubation time","cycles"]
+
+ ✓ src/compiler/scientistIntent/pf2Probe.test.ts  (5 tests) 48ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  05:08:26
+   Duration  1.15s (transform 343ms, setup 0ms, collect 557ms, tests 48ms, environment 0ms, prepare 63ms)
+

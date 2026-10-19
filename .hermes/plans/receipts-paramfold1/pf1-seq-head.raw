@@ -1,0 +1,100 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+stdout | src/sequences/sequenceIntent.test.ts > repairs a schema-valid replay of the old probe for a new primer (repair succeeds: true)
+[agent glgmci] start surface=sequences model=test promptLen=122 effectivePromptLen=122 historyLen=2 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent glgmci] skipping compiler preflight for forced draft tool mode
+[agent glgmci] tools=1 docDiscussion=false maxTurns=15
+[agent glgmci] turn 1 starting, promptChars=17794, docDiscussion=false
+[agent glgmci] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent glgmci] turn 2 starting, promptChars=18261, docDiscussion=false
+[agent glgmci] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stderr | src/sequences/sequenceIntent.test.ts > repairs a schema-valid replay of the old probe for a new primer (repair succeeds: true)
+[agent] no ai.inference.maxTokens for model test; using 4096. A reasoning model needs far more — it will be cut off mid-draft (see config.example.yaml).
+
+stdout | src/sequences/sequenceIntent.test.ts > repairs a schema-valid replay of the old probe for a new primer (repair succeeds: false)
+[agent ljn7fn] start surface=sequences model=test promptLen=122 effectivePromptLen=122 historyLen=2 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent ljn7fn] skipping compiler preflight for forced draft tool mode
+[agent ljn7fn] tools=1 docDiscussion=false maxTurns=15
+[agent ljn7fn] turn 1 starting, promptChars=17794, docDiscussion=false
+[agent ljn7fn] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent ljn7fn] turn 2 starting, promptChars=18261, docDiscussion=false
+[agent ljn7fn] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent ljn7fn] turn 3 starting, promptChars=18728, docDiscussion=false
+[agent ljn7fn] turn 3 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/sequences/sequenceIntent.test.ts > sequence actions in the existing chat emission > returns a validated proposal without compiling an event graph or writing records
+[agent imi2kf] start surface=sequences model=test promptLen=18 effectivePromptLen=18 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent imi2kf] skipping compiler preflight for forced draft tool mode
+[agent imi2kf] tools=1 docDiscussion=false maxTurns=15
+[agent imi2kf] turn 1 starting, promptChars=17399, docDiscussion=false
+[agent imi2kf] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/sequences/sequenceIntent.test.ts > provides a resolved sequence contract for local model context
+Sequence action contract characters: 18748
+
+stdout | src/sequences/sequenceIntent.test.ts > repairs an invalid oligo proposal without executing it (correction succeeds: true)
+[agent r0lc6e] start surface=sequences model=test promptLen=55 effectivePromptLen=55 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent r0lc6e] skipping compiler preflight for forced draft tool mode
+[agent r0lc6e] tools=1 docDiscussion=false maxTurns=15
+[agent r0lc6e] turn 1 starting, promptChars=17436, docDiscussion=false
+[agent r0lc6e] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent r0lc6e] turn 2 starting, promptChars=18144, docDiscussion=false
+[agent r0lc6e] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+ ✓ src/sequences/sequenceIntent.test.ts  (11 tests) 1191ms
+stdout | src/sequences/sequenceIntent.test.ts > repairs an invalid oligo proposal without executing it (correction succeeds: false)
+[agent 0ublqf] start surface=sequences model=test promptLen=55 effectivePromptLen=55 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 0ublqf] skipping compiler preflight for forced draft tool mode
+[agent 0ublqf] tools=1 docDiscussion=false maxTurns=15
+[agent 0ublqf] turn 1 starting, promptChars=17436, docDiscussion=false
+[agent 0ublqf] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 0ublqf] turn 2 starting, promptChars=18144, docDiscussion=false
+[agent 0ublqf] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+[agent 0ublqf] turn 3 starting, promptChars=18852, docDiscussion=false
+[agent 0ublqf] turn 3 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/sequences/sequenceIntent.test.ts > requires a validated sequence proposal when tool selection is automatic: json
+[agent 7xmpyf] start surface=sequences model=test promptLen=22 effectivePromptLen=22 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent 7xmpyf] skipping compiler preflight for forced draft tool mode
+[agent 7xmpyf] tools=1 docDiscussion=false maxTurns=15
+[agent 7xmpyf] turn 1 starting, promptChars=17403, docDiscussion=false
+[agent 7xmpyf] turn 1 finish=stop contentLen=332 toolCalls=0
+[agent 7xmpyf] recovered draft args from content as agent_intent; skipped the second call
+
+stdout | src/sequences/sequenceIntent.test.ts > requires a validated sequence proposal when tool selection is automatic: encoded_action
+[agent hnxdhz] start surface=sequences model=test promptLen=22 effectivePromptLen=22 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent hnxdhz] skipping compiler preflight for forced draft tool mode
+[agent hnxdhz] tools=1 docDiscussion=false maxTurns=15
+[agent hnxdhz] turn 1 starting, promptChars=17403, docDiscussion=false
+[agent hnxdhz] turn 1 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/sequences/sequenceIntent.test.ts > requires a validated sequence proposal when tool selection is automatic: prose_then_tool
+[agent aghmbs] start surface=sequences model=test promptLen=22 effectivePromptLen=22 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent aghmbs] skipping compiler preflight for forced draft tool mode
+[agent aghmbs] tools=1 docDiscussion=false maxTurns=15
+[agent aghmbs] turn 1 starting, promptChars=17403, docDiscussion=false
+[agent aghmbs] turn 1 finish=stop contentLen=21 toolCalls=0
+[agent aghmbs] turn 2 starting, promptChars=18048, docDiscussion=false
+[agent aghmbs] turn 2 finish=tool_calls contentLen=0 toolCalls=1 [agent_intent]
+
+stdout | src/sequences/sequenceIntent.test.ts > requires a validated sequence proposal when tool selection is automatic: prose_only
+[agent o0uo3u] start surface=sequences model=test promptLen=22 effectivePromptLen=22 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent o0uo3u] skipping compiler preflight for forced draft tool mode
+[agent o0uo3u] tools=1 docDiscussion=false maxTurns=15
+[agent o0uo3u] turn 1 starting, promptChars=17403, docDiscussion=false
+[agent o0uo3u] turn 1 finish=stop contentLen=21 toolCalls=0
+[agent o0uo3u] turn 2 starting, promptChars=18048, docDiscussion=false
+[agent o0uo3u] turn 2 finish=stop contentLen=21 toolCalls=0
+
+stderr | src/sequences/sequenceIntent.test.ts > requires a validated sequence proposal when tool selection is automatic: prose_only
+[agent o0uo3u] forced-tool compliance failure surface=sequences model=test attempts=2 tool=agent_intent
+
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  03:25:52
+   Duration  4.68s (transform 1.20s, setup 0ms, collect 1.69s, tests 1.19s, environment 0ms, prepare 199ms)
+
+EXIT=0

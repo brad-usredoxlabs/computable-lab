@@ -1,0 +1,33 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+ ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts  (15 tests | 1 failed) 66ms
+   ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts > hedge-type-1 acceptance (a): declared-optional absence compiles complete (fake LLM) > PARAM-FOLD-2 convergence: a not-stated hedge on an absent declared-optional yields the data-compliant outcome — no clarification, no gap, complete
+     → expected 'gap' to be 'complete' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/hedgeOptionality.test.ts > hedge-type-1 acceptance (a): declared-optional absence compiles complete (fake LLM) > PARAM-FOLD-2 convergence: a not-stated hedge on an absent declared-optional yields the data-compliant outcome — no clarification, no gap, complete
+AssertionError: expected 'gap' to be 'complete' // Object.is equality
+
+- Expected
++ Received
+
+- complete
++ gap
+
+ ❯ src/compiler/scientistIntent/hedgeOptionality.test.ts:287:29
+    285|     // Emitter-compliance and emitter-violation produce the SAME compi…
+    286|     // (W28-A5j Q2 convergence, now true on the gaps side too, W28-A5k…
+    287|     expect(compile.outcome).toBe('complete');
+       |                             ^
+    288|     expect(compile.clarifications).toEqual([]);
+    289|     // No unresolved_ref ghost anywhere: the raw source (normalize) fo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  05:08:58
+   Duration  2.45s (transform 359ms, setup 0ms, collect 575ms, tests 66ms, environment 0ms, prepare 63ms)
+
