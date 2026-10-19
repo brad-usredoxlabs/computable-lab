@@ -186,4 +186,9 @@ SERVER full-suite fail-file SET vs baseline (comm of sorted FAIL-file lists):
   from server tsc, so it never enters the typecheck count.
 - Nothing merged; trunk untouched; stacks untouched.
 
+DONE-line convention (prior lanes: ANSWER-BIND-1, COERCION-PINS, EDITOR9,
+HARNESS-SEQ-1): the sha names the lane's last SUBSTANTIVE commit (the Group 2
+implementation), not the report commit. Branch head after this report commit
+is 1f1a4355 (docs only).
+
 W28-OPTIONBIND1 DONE 6ef0263da6c3b91369d58524e5e39c2e696a8542
