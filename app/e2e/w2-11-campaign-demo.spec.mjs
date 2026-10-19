@@ -64,7 +64,10 @@ const ZYMO_PDF_SHA = '257f57196f6cd7a337e5ad42d7da74f2ab2c3e1e343a41c898d76c7d08
 const DRAFT_SHA = 'd878727ae69305d73623b6e6fd99ddf7a1bc999efd7b8d84c9c9944afdc98058'
 const ANSWERS_SHA = 'ac383fe4c71d164b52decaa332aeea1c87617a7efab29d294b3cb3a49fd7492e'
 // W211-MACH-1 golden fixture self-pin (PROVENANCE.md carries the same value).
-const GOLDEN_FIXTURE_SHA = '706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640'
+// v1.1 (advc-W211MACH1-c1 FIX1 D3): the fidelity block became machine-readable
+// (expectedMacro/expectedActionCount). Values unchanged; PROVENANCE.md carries
+// the same value and integrity test 1 re-pins it.
+const GOLDEN_FIXTURE_SHA = 'be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768'
 const XDR_ID = 'XDR-w211-gate'
 const PLR_ID = 'PLR-w211-gate'
 const RUN_ID = 'RUN-w211-gate'
@@ -707,7 +710,11 @@ async function seedGoldenRows(fx) {
       payload,
       message: 'W211-MACH-1 golden harness: seed row (fixture seedPlan)',
     })
-    if (res.status !== 200 && res.status !== 201) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+    // Resume-3 discipline (advc-W211MACH1-c1 D6: mirrored from the labware
+    // branch — the step-0 log targeted-3193.out.txt shows material POSTs
+    // genuinely returning 409 'Record already exists'): a GET miss + POST 409
+    // (race / stale GET) is NOT a failure for re-runs.
+    if (res.status !== 200 && res.status !== 201 && res.status !== 409) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
   }
 }
 
@@ -1553,6 +1560,10 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // landed in the bead_beat slot (resolvedLabwares carries the PICKED record
     // id); the (c) mint landed in the add_material slot; the class-(a) noun
     // bound silently; the declared parameters survived.
+    // SOURCE OF TRUTH (advc-W211MACH1-c1 D3): every fidelity bar below reads
+    // fx.fidelity (fixture's expected block) — the harness carries NO inline
+    // fidelity literals. Integrity test 8 pins that block against the frozen
+    // macro, so harness and fixture cannot drift apart.
     const resolved = finalBody?.terminalArtifacts?.resolvedLabwares ?? []
     const resolvedIds = resolved.map((r) => r.recordId)
     expect(resolvedIds, 'the (b) pick bound the bead_beat slot to the PICKED record').toContain('LAB-w211-golden-beadplate-a')
@@ -1560,16 +1571,16 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     expect(resolvedIds, 'the supporting nouns bound').toEqual(expect.arrayContaining(['LAB-w211-golden-lysisplate', 'LAB-w211-golden-magplate']))
     expect(resolvedIds, 'the (b) loser B is NOT bound').not.toContain('LAB-w211-golden-beadplate-b')
     const macroActions = finalBody?.localMacro?.actions ?? []
-    const beadBeat = macroActions.find((a) => a.action === 'bead_beat')
-    expect(beadBeat?.labware, 'the recomputed macro carries the (b) noun').toBe('Bead Beating Plate')
-    expect(beadBeat?.duration, 'fidelity: bead_beat duration survived').toBe('30 s')
-    const beadsAdd = macroActions.find((a) => a.action === 'add_material' && String(a.material ?? '').includes('MagBinding Beads'))
-    expect(beadsAdd?.volumeUl, 'fidelity: the (c) add_material volume survived').toBe(500)
-    const incubate = macroActions.find((a) => a.action === 'incubate')
-    expect(incubate?.temperatureC, 'fidelity: declared temperature survived (WIRE-TEMP-1)').toBe(37)
-    const readAct = macroActions.find((a) => a.action === 'read')
-    expect(readAct?.mode, 'fidelity: read mode survived').toBe('absorbance')
-    expect(macroActions.length, 'no action silently discarded (11 planted actions)').toBe(11)
+    const expectedMacro = fx.fidelity.expectedMacro
+    expect(macroActions.length, `no action silently discarded (${fx.fidelity.expectedActionCount} planted actions)`).toBe(fx.fidelity.expectedActionCount)
+    for (let i = 0; i < expectedMacro.length; i += 1) {
+      const exp = expectedMacro[i]
+      const act = macroActions[i]
+      expect(act?.action, `fidelity: recomputed macro action ${i} is '${exp.action}' (fixture expectedMacro)`).toBe(exp.action)
+      for (const [key, want] of Object.entries(exp.params ?? {})) {
+        expect(act?.[key], `fidelity: '${exp.action}' param '${key}' survived as the fixture's expected value`).toEqual(want)
+      }
+    }
     expect(events.length, 'the compile emitted the run graph').toBeGreaterThan(0)
 
     // --- DECK REVIEW: label-correspondence, NOT boxCount>0. The completing
@@ -1609,11 +1620,21 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     const resolution = lpr.payload.branch_resolution ?? []
     expect(resolution.length, 'the answered family axis rides branch_resolution').toBeGreaterThan(0)
     const overrides = lpr.payload.overrides?.parameters ?? []
-    expect(overrides.length, 'the accepted macro rides overrides.parameters verbatim').toBe(11)
+    expect(overrides.length, `the accepted macro rides overrides.parameters verbatim (${fx.fidelity.expectedActionCount} actions)`).toBe(fx.fidelity.expectedActionCount)
     const lprBeadBeat = overrides.find((a) => a.action === 'bead_beat')
     expect(lprBeadBeat?.labware, 'the LPR carries the (b) noun').toBe('Bead Beating Plate')
     const lprBeads = overrides.find((a) => a.action === 'add_material' && String(a.material ?? '').includes('MagBinding Beads'))
     expect(lprBeads?.material, 'the LPR carries the minted noun label').toBe('MagBinding Beads v211g1')
+    // D3 (fixture-sourced): the accepted macro rides the fixture's expected
+    // block verbatim — same bar as the recomputed intent, asserted on the LPR.
+    for (let i = 0; i < expectedMacro.length; i += 1) {
+      const exp = expectedMacro[i]
+      const act = overrides[i]
+      expect(act?.action, `LPR fidelity: overrides.parameters[${i}] is '${exp.action}' (fixture expectedMacro)`).toBe(exp.action)
+      for (const [key, want] of Object.entries(exp.params ?? {})) {
+        expect(act?.[key], `LPR fidelity: '${exp.action}' param '${key}' rode overrides verbatim`).toEqual(want)
+      }
+    }
     writeFileSync(goldenReceiptPath('g1-lpr-reread.json'), JSON.stringify({ recordId: lpr.recordId, payload: lpr.payload }, null, 1))
     console.log(`[G1 paste] LPR ${lpr.recordId} inherits_from=${lpr.payload.inherits_from.id} overrides=${overrides.length} branch_resolution=${JSON.stringify(resolution).slice(0, 200)}`)
 

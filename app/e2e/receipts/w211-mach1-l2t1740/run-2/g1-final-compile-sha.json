@@ -1,0 +1,22 @@
+{
+ "canonicalCompileSha": "41500602713bde26345e2eb013ad3f336af26c80c02c48b6ccca6c6b81880d2b",
+ "rawCompileSha": "72716d71ec1ad6105bfc78af598863b024794ee4557123a5b1f0cc7661b42254",
+ "eventIds": [
+  "evt-transfer-eo4ro6dk",
+  "evt-add_material-rrpmnwaq",
+  "evt-bead_beat-x75mvrps",
+  "evt-spin-wzcy1tgh",
+  "evt-transfer-6vnld0mi",
+  "evt-add_material-telqolio",
+  "evt-add_material-x5w4dzsi",
+  "evt-wash-add-hyvffb9t",
+  "evt-wash-remove-btbrv21n",
+  "evt-transfer-0t1b89q1",
+  "evt-incubate-vw2e5buq",
+  "evt-read-a1aplow2"
+ ],
+ "unexpectedIdShapes": [
+  "evt-wash-add-hyvffb9t",
+  "evt-wash-remove-btbrv21n"
+ ]
+}

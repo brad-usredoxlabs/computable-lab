@@ -3,8 +3,10 @@
 Review artifact per the spec's FIXTURE CONTRACT §5: every planted sentence,
 which obligation it serves, and why its ambiguity class ACTUALLY exercises the
 machinery. Fixture: `app/e2e/fixtures/w211-golden/zymo-intent.frozen.yaml`
-(sha256 706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640,
-self-pinned; PROVENANCE.md carries the same value).
+(sha256 be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768,
+self-pinned; PROVENANCE.md carries the same value; content-rev 1.1 = advc c1
+FIX1 D3/D5 — fidelity block machine-readable + SELF-PIN comment corrected,
+reviewed VALUES unchanged).
 
 ## Scope honesty (the historical drift this fixture is NOT)
 

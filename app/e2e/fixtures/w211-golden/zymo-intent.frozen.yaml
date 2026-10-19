@@ -13,8 +13,10 @@
 #
 # SELF-PIN: the sha256 of THIS file's exact bytes is pinned in PROVENANCE.md and
 # asserted by zymo-intent.integrity.test.ts (vitest) and by the golden harness
-# (w211-golden-fixture.spec.mjs) before any leg runs — fixture drift refuses the
-# gate (campaign-fixtures pattern: zymo-semantic-draft.frozen.yaml + PROVENANCE.md).
+# (app/e2e/w2-11-campaign-demo.spec.mjs, leg G1: `npx playwright test
+# w2-11-campaign-demo.spec.mjs -g "G1"`) before any leg runs — fixture drift
+# refuses the gate (campaign-fixtures pattern: zymo-semantic-draft.frozen.yaml +
+# PROVENANCE.md).
 #
 # PROVENANCE: derived from the D4_PROMPT lineage (app/e2e/w2-11-campaign-demo.spec.mjs
 # :888-899, architect ruling W211-D4-noun-drift-fixture-decision-l2t2150) plus the
@@ -302,8 +304,45 @@ seedPlan:
 # ---------------------------------------------------------------------------
 # FIDELITY EXPECTATIONS the harness asserts against the recomputed compile
 # (action/parameter/role/answer fidelity, not liveness).
+#
+# MACHINE-READABLE (advc-W211MACH1-c1 D3): the G1 leg asserts against
+# `expectedMacro` / `expectedActionCount` (fx.fidelity) — the harness holds NO
+# inline fidelity literals — and integrity test 8 pins this block against the
+# frozen `modelOutput` above, so the harness bar and this declared block cannot
+# drift apart. The VALUES are the proven bar from the three green runs
+# (app/e2e/receipts/w211-mach1-l2t1740/run-{1,2,3}/g1-final-200.json +
+# g1-lpr-reread.json); D3 moved only their SOURCE of truth into this block.
+# `action` is what the RECOMPUTED macro carries; `fromMacroAction` names the
+# frozen wire verb when the product lifts it (elute -> transfer,
+# liftScientistIntent.ts ACTION_SYNONYMS — product behaviour, proven by the leg).
+# `expectedActions` keeps the named human-readable bars, one per machine entry.
 # ---------------------------------------------------------------------------
 fidelity:
+  expectedActionCount: 11
+  expectedMacro:
+    - action: transfer
+      params: { source: Sample Plate, target: Lysis Plate, volumeUl: 50 }
+    - action: add_material
+      params: { target: Lysis Plate, material: Lysis Solution, volumeUl: 700 }
+    - action: bead_beat
+      params: { labware: Bead Beating Plate, duration: 30 s }
+    - action: spin
+      params: { labware: Lysis Plate, rpm: 3000, duration: 10 min }
+    - action: transfer
+      params: { source: Lysis Plate, target: MagBinding Plate, volumeUl: 500 }
+    - action: add_material
+      params: { target: MagBinding Plate, material: MagBinding Beads v211g1, volumeUl: 500 }
+    - action: add_material
+      params: { target: MagBinding Plate, material: MagBinding Buffer, volumeUl: 800 }
+    - action: wash
+      params: { labware: MagBinding Plate, cycles: 1 }
+    - action: transfer
+      fromMacroAction: elute
+      params: { source: MagBinding Plate, target: Sample Plate, material: nuclease-free water, volumeUl: 100 }
+    - action: incubate
+      params: { labware: Sample Plate, duration: 30 min, temperatureC: 37 }
+    - action: read
+      params: { labware: Sample Plate, mode: absorbance, wavelength: 600 nm }
   expectedActions:
     - "transfer volumeUl 50 (Sample Plate -> Lysis Plate)"
     - "add_material volumeUl 700 material Lysis Solution"

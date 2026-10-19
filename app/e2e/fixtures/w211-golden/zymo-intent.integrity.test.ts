@@ -46,8 +46,10 @@ const REPO_ROOT = resolve(HERE, '../../../..')
 const FIXTURE_PATH = join(HERE, 'zymo-intent.frozen.yaml')
 const VOCABULARY_PATH = join(REPO_ROOT, 'schema', 'scientist-intent', 'scientist-intent-vocabulary.yaml')
 
-/** Self-pin (PROVENANCE.md carries the same value; drift refuses the gate). */
-const FIXTURE_SHA = '706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640'
+/** Self-pin (PROVENANCE.md carries the same value; drift refuses the gate).
+ *  v1.1 (advc-W211MACH1-c1 FIX1 D3): the fidelity block became machine-readable
+ *  (expectedMacro/expectedActionCount); the asserted VALUES are unchanged. */
+const FIXTURE_SHA = 'be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768'
 
 const fixtureBytes = readFileSync(FIXTURE_PATH)
 const fixture = parseYaml(fixtureBytes.toString('utf8'))
@@ -214,5 +216,44 @@ describe('W211-MACH-1 golden fixture integrity (zymo-intent.frozen.yaml v1)', ()
     expect(fixture.evidenceStatement).toContain('workflow-integration')
     expect(fixture.evidenceStatement).toContain('wire boundary')
     expect(fixture.evidenceStatement).toContain('NOT model proof')
+  })
+
+  it('8. the fidelity block is machine-readable and pinned to the frozen macro (advc c1 D3 anti-drift)', () => {
+    // The G1 leg asserts the recomputed macro against fx.fidelity.expectedMacro
+    // (no inline harness literals). This leg pins THAT block against the frozen
+    // modelOutput the replay producer serves, so the declared bar and the wire
+    // data cannot drift apart independently.
+    const fidelity = fixture.fidelity ?? {}
+    const expectedMacro = fidelity.expectedMacro ?? []
+    const actions = fixture.modelOutput?.actions ?? []
+
+    expect(expectedMacro.length, 'expectedMacro carries one entry per frozen macro action').toBe(actions.length)
+    expect(fidelity.expectedActionCount, 'expectedActionCount names the action-count bar the leg asserts').toBe(actions.length)
+    expect((fidelity.expectedActions ?? []).length, 'one named human-readable bar per machine entry').toBe(actions.length)
+
+    for (let i = 0; i < actions.length; i += 1) {
+      const wire = actions[i]
+      const exp = expectedMacro[i]
+      // The declared entry either names the wire verb directly, or names it via
+      // fromMacroAction when the product lifts it (elute -> transfer,
+      // liftScientistIntent.ts ACTION_SYNONYMS — product behaviour, proven by
+      // the leg's own receipt).
+      const wireVerb = String(exp.fromMacroAction ?? exp.action)
+      expect(wire.action, `fidelity entry ${i} must name a frozen macro action in order`).toBe(wireVerb)
+      const params = exp.params ?? {}
+      for (const [key, value] of Object.entries(params)) {
+        expect(wire[key], `fidelity entry '${wireVerb}' param '${key}' must equal the frozen macro value`).toBe(value)
+      }
+      // No frozen parameter may be missing from the declared bar (nothing
+      // silently dropped from the fidelity claim).
+      for (const key of Object.keys(wire)) {
+        if (key === 'action') continue
+        expect(params, `frozen param '${key}' on '${wireVerb}' missing from the declared fidelity bar`).toHaveProperty(key)
+      }
+    }
+
+    // The declared answers/bar exist and are non-empty (the leg asserts each).
+    expect((fidelity.expectedAnswers ?? []).length, 'the (b)/(c)/axis answer bars are declared').toBe(3)
+    expect(String(fidelity.zeroSurvivingBlockers)).toContain('200')
   })
 })

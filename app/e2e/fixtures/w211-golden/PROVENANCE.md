@@ -2,7 +2,7 @@
 
 ## SELF-PIN (asserted by zymo-intent.integrity.test.ts and by the golden harness leg before any run)
 
-- `zymo-intent.frozen.yaml` sha256: `706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640` (fixture v1, final)
+- `zymo-intent.frozen.yaml` sha256: `be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768` (fixture v1 content-rev 1.1, final; 1.1 = advc-W211MACH1-c1 FIX1 D3/D5: fidelity block made machine-readable (`expectedMacro`/`expectedActionCount`) + SELF-PIN comment names the real harness file — asserted VALUES unchanged; v1 sha was `706838e9e6f719ce57b339e67f917d54135ddcbcab72ea205e795b483ed35640`)
 - `replay-producer.mjs` sha256 (authored copy; the harness spawns THIS file): `8039c582f831d9f68727a0d6e558ee882d11f6d1cb0e877663d80f830be04a30`
 
 Fixture drift refuses the gate (same discipline as the W2-11 campaign fixtures
@@ -100,3 +100,82 @@ holds verbatim; the seed plan still names every seeded and every unseeded noun,
 and the leg asserts label-correspondence (probeF2: the completing compile
 carries NO labwareAdditions — all 4 deck rows are resolved placements titled
 with the records' real titles).
+
+## FIX RUN (advc-W211MACH1-c1 l2t2030 — D2/D3/D5/D6, l2t2110)
+
+Fixes applied (D4 and D1 are orchestrator adjudications — untouched here):
+
+- **D2** (RED half incomplete): committed evidence note
+  `.hermes/plans/w211-step0/red-answered-facts-prebind1-note.md` — git-level
+  proof 534f7e5f is pre-BIND-1 (`merge-base --is-ancestor b52f5dfc 534f7e5f`
+  -> exit 1; `--is-ancestor 534f7e5f 5cdfb8d0` -> exit 0) + citation of BIND-1's
+  own committed RED receipts (RED commit b7347111, tests-only, ancestor-proven
+  of base; raws in `.hermes/plans/ANSWER-BIND-1-report.wip-l2t0830.md`
+  §"RED-first evidence": "fact still bars" = answered facts survived pre-BIND-1).
+- **D3** (fidelity bar hardcoded): fixture `fidelity` block made machine-readable
+  (`expectedActionCount: 11`, `expectedMacro` — 11 entries with `params`, the
+  `elute` entry carries `fromMacroAction: elute` for the product's
+  liftScientistIntent transfer lift). The G1 leg now asserts the recomputed
+  macro AND the LPR `overrides.parameters` against `fx.fidelity` — the harness
+  carries NO inline fidelity literals (the old `toBe('30 s')/toBe(500)/
+  toBe(37)/toBe('absorbance')/toBe(11)` literals are gone). Asserted VALUES are
+  the proven bar from the three green runs — unchanged, only their source of
+  truth moved. Anti-drift: integrity test 8 pins `fidelity.expectedMacro`
+  against the frozen `modelOutput` (per-entry verb order + every param both
+  directions). Fixture content-rev 1.1 (sha below); pins updated in
+  integrity.test.ts, spec.mjs, and this file.
+- **D5** (stale filename): fixture SELF-PIN comment now names
+  `app/e2e/w2-11-campaign-demo.spec.mjs` leg G1 (`-g "G1"`), not the
+  nonexistent `w211-golden-fixture.spec.mjs`.
+- **D6** (asymmetric 409): `seedGoldenRows` material loop now tolerates 409
+  exactly like the labware branch. Probe (private stack, this run):
+  `fix1/D6-409-probe.txt` — POST of an existing material row genuinely returns
+  `409 {"success":false,"error":"Record already exists: MAT-w211-magbuffer"}`.
+
+### RAW VERIFICATION OUTPUTS (fix1, private SEAM-A stack :3193/:5293/:43117 only — orch :3093/:5193 untouched)
+
+1. `node --check app/e2e/w2-11-campaign-demo.spec.mjs` -> exit 0 (NODE-CHECK OK).
+
+2. Integrity test GREEN at the new fixture (8 tests, was 7):
+
+```
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W211-MACH-1-lane2-l2t1210/app
+ ✓ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts  (8 tests) 5ms
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+```
+
+   Drift-leg proof (temporarily desynced copy — `temperatureC: 37` -> `38` in
+   `expectedMacro`, NOT committed; fixture restored to sha
+   `be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768` after):
+
+```
+ ❯ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts  (8 tests | 2 failed) 11ms
+   ❯ ... > 1. self-pin: fixture bytes match the pinned sha256 (drift refuses the gate)
+     → fixture drift — update PROVENANCE.md and re-review before running the gate: expected '72dfa99ca87e0bf2a2fd157e77e57b1120163…' to be 'be891b174f8b0c63a19ea567f2889985dfe5e…'
+   ❯ ... > 8. the fidelity block is machine-readable and pinned to the frozen macro (advc c1 D3 anti-drift)
+     → fidelity entry 'incubate' param 'temperatureC' must equal the frozen macro value: expected 37 to be 38
+```
+
+3. ONE green G1 re-run (D3 sourced-fidelity + D6 pass) — full raw in
+   `app/e2e/receipts/w211-mach1-l2t1740/fix1/G1-green-at-fix1.raw`:
+
+```
+[G1 draw1 attempt 1] ask arm -> HTTP 200
+[G1 draw2 attempt 1] answered compile -> HTTP 422
+[G1 pick-b] answered re-POST -> HTTP 422
+[G1 mint-c] POST /vocab/mint (fired by the UI) -> recordId MAT-magbinding-beads-v211g1-vizl
+[G1 pick-c] answered re-POST -> HTTP 200
+[G1 seam-a proof] replay log grew 5 entries during the leg: [branch-questions, branch-questions, intent-draw-tool, intent-draw-tool, intent-draw-tool]
+  ✓  1 [chromium] › e2e/w2-11-campaign-demo.spec.mjs:1290:3 › W2-11 zymo campaign demo gate › G1: golden fixture — replay producer drives the real UI end-to-end with fidelity assertions (41.5s)
+  1 passed (49.0s)
+```
+
+   Byte-stability bar HOLDING at the fix run:
+   `md5sum fix1/g1-deck-content.json` = `c45096014e9bd6053e83b5dd89b20ce1`
+   (identical to run-1/2/3); `canonicalCompileSha` =
+   `41500602713bde26345e2eb013ad3f336af26c80c02c48b6ccca6c6b81880d2b` (identical);
+   `rawCompileSha` differs as named (eventId suffixes — recorded, not averaged).
+
+Receipts: `app/e2e/receipts/w211-mach1-l2t1740/fix1/` (raw + json + screenshots
++ D6 probe). Private stack stopped after the run (own pidfiles only).
