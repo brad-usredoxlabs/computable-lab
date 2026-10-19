@@ -14,6 +14,30 @@ import { OwnershipPolicyService } from './OwnershipPolicyService.js';
 export const ACCESS_POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml';
 
 /**
+ * IB-L1-PERF-1: request-scoped ACL snapshot. Built ONCE per list request
+ * (`buildAclSnapshot`) and consumed by every `canAccess` in that request so
+ * the visibility hot path never re-scans the access-policy / group collections
+ * per record. Lifetime is the REQUEST: the next request rebuilds, so
+ * write-visibility is automatic and a stale-ACL class of security defect
+ * cannot exist. NO TTL, NO cross-request cache, NO invalidation machinery.
+ *
+ * The snapshot changes data LOADING only. Every structure is built from the
+ * exact same `store.list` passes and coercion the unsnapshotted path performs,
+ * in the same order, so every decision is identical (pinned by
+ * AclRequestSnapshot.test.ts T4 parity).
+ */
+export interface AclSnapshot {
+  /** Every access-policy envelope from the snapshot's single list pass, in list order. */
+  policyEnvelopes: RecordEnvelope[];
+  /** resourceRef.id -> FIRST matching policy envelope (matches findPolicyForRecord's `.find` semantics). */
+  policyByResource: Map<string, RecordEnvelope>;
+  /** Coerced group records from the snapshot's single group list pass. */
+  groups: GroupRecord[];
+  /** Project (study) policy index, built from the same policy pass (same last-wins loop as loadProjectPolicies). */
+  projectPolicies: ProjectPolicyIndex;
+}
+
+/**
  * OWN-15 (OQ2 adjudication (c)): the typed, observable refusal emitted at mint
  * when a declared principal (a defaultGrants entry or the stamped owner) does
  * not resolve against the users/groups surfaces. The grant is stripped and the
@@ -114,16 +138,50 @@ export class AuthorizationService {
     private readonly ownershipPolicy?: OwnershipPolicyService,
   ) {}
 
-  async canAccess(userId: string | null | undefined, action: AccessAction, record: RecordEnvelope): Promise<boolean> {
+  async canAccess(userId: string | null | undefined, action: AccessAction, record: RecordEnvelope, snapshot?: AclSnapshot): Promise<boolean> {
     // OWN-15 (OQ3 adjudication) — the ONE declared delegation rule: the owner of
     // the record an access-policy row references satisfies `admin` on that ACL
     // row. Checked here (this service owns store access), never branched per
     // handler; every call site keeps its single canAccess(..., 'admin', ...) call.
-    if (await this.referencedRecordOwnerSatisfiesAdmin(userId, action, record)) return true;
-    const effectivePolicy = await this.resolveEffectivePolicy(record);
-    const groups = await this.loadGroups();
-    const projectPolicies = await this.loadProjectPolicies();
+    if (await this.referencedRecordOwnerSatisfiesAdmin(userId, action, record, snapshot)) return true;
+    const effectivePolicy = await this.resolveEffectivePolicy(record, new Set<string>(), snapshot);
+    const groups = snapshot ? snapshot.groups : await this.loadGroups();
+    const projectPolicies = snapshot ? snapshot.projectPolicies : await this.loadProjectPolicies();
     return new AccessControlService(groups).canAccess({ policy: effectivePolicy, userId, action, projectPolicies });
+  }
+
+  /**
+   * IB-L1-PERF-1: build the request-scoped ACL snapshot — ONE pass over the
+   * access-policy collection, ONE pass over groups, project index computed
+   * from the already-listed policies (no re-list). Call ONCE per list request
+   * and thread the result into every canAccess of that request. Lifetime is
+   * the request only: nothing is stored on the service, so the next request
+   * rebuilds and write-visibility is automatic.
+   */
+  async buildAclSnapshot(): Promise<AclSnapshot> {
+    const policyEnvelopes = await this.store.list({ kind: 'access-policy', limit: 10000 });
+    const policyByResource = new Map<string, RecordEnvelope>();
+    for (const env of policyEnvelopes) {
+      const resourceId = getResourceRefId(env);
+      if (resourceId && !policyByResource.has(resourceId)) policyByResource.set(resourceId, env);
+    }
+    const groups = (await this.store.list({ kind: 'group', limit: 10000 }))
+      .map(coerceGroup)
+      .filter((group): group is GroupRecord => group !== null);
+    // Same last-wins loop as loadProjectPolicies, over the already-listed
+    // policies — identical index, zero extra store.list.
+    const byResource = new Map<string, AccessPolicyRecord>();
+    for (const env of policyEnvelopes) {
+      const coerced = coercePolicy(env);
+      const resourceId = getResourceRefId(env);
+      if (coerced && resourceId) byResource.set(resourceId, coerced);
+    }
+    return {
+      policyEnvelopes,
+      policyByResource,
+      groups,
+      projectPolicies: { get: (projectId: string) => byResource.get(projectId) ?? null },
+    };
   }
 
   /**
@@ -138,12 +196,13 @@ export class AuthorizationService {
     userId: string | null | undefined,
     action: AccessAction,
     record: RecordEnvelope,
+    snapshot?: AclSnapshot,
   ): Promise<boolean> {
     if (action !== 'admin' || !userId) return false;
     if (kindOf(record) !== 'access-policy') return false;
     const resourceId = getResourceRefId(record);
     if (!resourceId || resourceId === record.recordId) return false;
-    const owner = await this.ownerOfReferencedRecord(resourceId, record.recordId);
+    const owner = await this.ownerOfReferencedRecord(resourceId, record.recordId, snapshot);
     return owner !== null && owner === userId;
   }
 
@@ -158,11 +217,13 @@ export class AuthorizationService {
    * here was a revocation-bypass. Null when no declared owner resolves (never
    * guessed).
    */
-  private async ownerOfReferencedRecord(resourceId: string, excludeAclRecordId: string): Promise<string | null> {
+  private async ownerOfReferencedRecord(resourceId: string, excludeAclRecordId: string, snapshot?: AclSnapshot): Promise<string | null> {
     const referenced = await this.store.get(resourceId);
     if (!referenced) return null;
 
-    const policies = await this.store.list({ kind: 'access-policy', limit: 10000 });
+    // Snapshot path: same envelopes, same order, same skip/coerce loop — just
+    // no per-call store.list. Absent snapshot keeps today's behavior exactly.
+    const policies = snapshot ? snapshot.policyEnvelopes : await this.store.list({ kind: 'access-policy', limit: 10000 });
     for (const env of policies) {
       if (env.recordId === excludeAclRecordId) continue;
       if (getResourceRefId(env) !== resourceId) continue;
@@ -173,7 +234,7 @@ export class AuthorizationService {
     for (const parentId of parentIds(referenced)) {
       const parent = await this.store.get(parentId);
       if (!parent) continue;
-      const inherited = await this.resolveEffectivePolicy(parent, new Set<string>([excludeAclRecordId]));
+      const inherited = await this.resolveEffectivePolicy(parent, new Set<string>([excludeAclRecordId]), snapshot);
       if (inherited) return inherited.ownerUserId;
     }
 
@@ -279,7 +340,7 @@ export class AuthorizationService {
     return result.envelope ?? envelope;
   }
 
-  async resolveEffectivePolicy(record: RecordEnvelope, visited = new Set<string>()): Promise<AccessPolicyRecord | null> {
+  async resolveEffectivePolicy(record: RecordEnvelope, visited = new Set<string>(), snapshot?: AclSnapshot): Promise<AccessPolicyRecord | null> {
     if (visited.has(record.recordId)) return null;
     visited.add(record.recordId);
 
@@ -287,21 +348,22 @@ export class AuthorizationService {
       return coercePolicy(record);
     }
 
-    const direct = await this.findPolicyForRecord(record.recordId);
+    const direct = await this.findPolicyForRecord(record.recordId, snapshot);
     const directPolicy = coercePolicy(direct);
     if (directPolicy) return directPolicy;
 
     for (const parentId of parentIds(record)) {
       const parent = await this.store.get(parentId);
       if (!parent) continue;
-      const inherited = await this.resolveEffectivePolicy(parent, visited);
+      const inherited = await this.resolveEffectivePolicy(parent, visited, snapshot);
       if (inherited) return inherited;
     }
 
     return null;
   }
 
-  async findPolicyForRecord(recordId: string): Promise<RecordEnvelope | null> {
+  async findPolicyForRecord(recordId: string, snapshot?: AclSnapshot): Promise<RecordEnvelope | null> {
+    if (snapshot) return snapshot.policyByResource.get(recordId) ?? null;
     const policies = await this.store.list({ kind: 'access-policy', limit: 10000 });
     return policies.find((policy) => getResourceRefId(policy) === recordId) ?? null;
   }

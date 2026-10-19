@@ -29,7 +29,7 @@ import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
-import type { AuthorizationService, MintPrincipalRefusal } from '../../security/AuthorizationService.js';
+import type { AuthorizationService, AclSnapshot, MintPrincipalRefusal } from '../../security/AuthorizationService.js';
 import type { OwnershipPolicyService } from '../../security/OwnershipPolicyService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
@@ -326,14 +326,19 @@ export function createRecordHandlers(
     return user;
   };
 
-  const canAccess = async (user: ResolvedRequestUser, action: AccessAction, record: Awaited<ReturnType<RecordStore['get']>>): Promise<boolean> => {
+  const canAccess = async (
+    user: ResolvedRequestUser,
+    action: AccessAction,
+    record: Awaited<ReturnType<RecordStore['get']>>,
+    snapshot?: AclSnapshot,
+  ): Promise<boolean> => {
     if (record && payloadKind(record.payload) === 'record-revision') {
       const source = await store.get(String(payloadObject(record.payload).sourceRecordId));
       if (!source) return false;
-      return !security?.authorizationService || security.authorizationService.canAccess(user.userId, action, source);
+      return !security?.authorizationService || security.authorizationService.canAccess(user.userId, action, source, snapshot);
     }
     if (!record || !security?.authorizationService) return true;
-    return security.authorizationService.canAccess(user.userId, action, record);
+    return security.authorizationService.canAccess(user.userId, action, record, snapshot);
   };
 
   /**
@@ -457,9 +462,17 @@ export function createRecordHandlers(
           ? scopedRecords.slice(Number(offset ?? 0), Number(offset ?? 0) + Number(limit ?? scopedRecords.length))
           : scopedRecords;
 
+        // IB-L1-PERF-1: build the request-scoped ACL snapshot ONCE for this
+        // list request so the visibility loop never re-scans the access-policy
+        // / group collections per record. Request lifetime only — the next
+        // request rebuilds, so write-visibility is automatic.
+        const aclSnapshot = security?.authorizationService
+          ? await security.authorizationService.buildAclSnapshot()
+          : undefined;
+
         const visibleRecords = [];
         for (const record of pagedRecords) {
-          if (await canAccess(user, 'read', record)) visibleRecords.push(record);
+          if (await canAccess(user, 'read', record, aclSnapshot)) visibleRecords.push(record);
         }
         
         return {
