@@ -13,6 +13,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { ScientistIntentActionValue } from '../../compiler/scientistIntent/types.js';
+import { slugifyRecordLabel } from '../../compiler/material/MaterialCompiler.js';
 
 export const LOCAL_PROTOCOL_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
@@ -74,12 +75,22 @@ export function createIntentAcceptHandlers(ctx: AppContext) {
         overrides,
         ...(body?.answers && Object.keys(body.answers).length > 0
           ? {
-              branch_resolution: Object.entries(body.answers).map(([axisId, chosenValue]) => ({
-                axisId,
-                matched: true,
-                branchIds: [chosenValue],
-                choices: { [axisId]: chosenValue },
-              })),
+              // W28-AXISSLUG-1 (gate r4 DEFECT-1): the answer KEY is data joining into the
+              // schema-patterned axisId field (^[a-z][a-z0-9-]*$ forbids underscores, and the
+              // model emits underscore axis ids on purpose per the intentCompile tool schema).
+              // Slug each key through the existing helper for BOTH axisId and the choices key.
+              // Chosen values (branchIds, choices VALUES) are NEVER rewritten. Entries stay in
+              // Object.entries order; colliding slugs each get their own per-row provenance
+              // (no de-dup, no suffixing, no id invention).
+              branch_resolution: Object.entries(body.answers).map(([key, chosenValue]) => {
+                const axisId = slugifyRecordLabel(key);
+                return {
+                  axisId,
+                  matched: true,
+                  branchIds: [chosenValue],
+                  choices: { [axisId]: chosenValue },
+                };
+              }),
             }
           : {}),
         ...(body?.links ? { links: body.links } : {}),
