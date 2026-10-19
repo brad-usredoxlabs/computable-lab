@@ -137,6 +137,19 @@ describe('clarificationAdapter — gap reasons get their menu rows (W211-GAPCARD
   })
 
   it('5. every EXISTING table reason is byte-identical at (reason,*), (reason,labware), (reason,other-arg) (sampleCard1 loop pin copied — the ANSWER-SURFACE-1 / SAMPLE-CARD-1 bars cannot regress)', () => {
+    // W28-SOURCEROW-1 DELIBERATE PIN UPDATE (the sanctioned GAPCARD-1 /
+    // SAMPLE-CARD-1 pattern, W28-A5n Q2): the ONLY delta in this loop is the
+    // ('not-stated','source') expectation '/m' -> '/l' — 'source' is declared
+    // `domain: labware` for every verb that declares it, so the material
+    // funnel was a domain misroute. The OTHER three reasons' 'source' pins
+    // stay '/m' (their (reason,'*') rows are unchanged), and every
+    // (reason,'*') and (reason,labware) pin is unchanged.
+    const expectedSourceMenu: Record<string, string> = {
+      'unknown-noun': '/m',
+      'ambiguous-noun': '/m',
+      'resolution-lookup-failed': '/m',
+      'not-stated': '/l', // W28-SOURCEROW-1: the one flipped pin
+    }
     for (const reason of ['unknown-noun', 'ambiguous-noun', 'resolution-lookup-failed', 'not-stated']) {
       expect(heldFactToClarificationRequest(fact(reason), 0)!.menuProvider).toBe('/m')
       expect(heldFactToClarificationRequest(fact(reason, {
@@ -144,7 +157,7 @@ describe('clarificationAdapter — gap reasons get their menu rows (W211-GAPCARD
       }), 0)!.menuProvider).toBe('/l')
       expect(heldFactToClarificationRequest(fact(reason, {
         actionLocation: { actionIndex: 0, action: 'add_material', argument: 'source' },
-      }), 0)!.menuProvider).toBe('/m')
+      }), 0)!.menuProvider).toBe(expectedSourceMenu[reason])
     }
   })
 

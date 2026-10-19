@@ -180,6 +180,12 @@ describe('answer-bind-1.answered-slot-clears-ambiguity (handler leg)', () => {
     const payload = call.payload as { clarifications: Array<Record<string, unknown>> };
     // Today's behavior, pinned VERBATIM: exactly the one ambiguous-noun fact
     // with its two store candidates and its actionLocation.
+    // W28-OPTIONBIND-1 DELIBERATE PIN UPDATE (sanctioned pin+row pattern,
+    // W28-A5n Q1): each candidate entry now ALSO carries the additive optional
+    // `ref` — the engine's OWN store-backed record id for these tier-1 labware
+    // rows (the same ids the store holds: LAB-mct-ont / LAB-mct-seed). The
+    // fact's label/reason/actionLocation and the candidate ORDER are unchanged;
+    // the answer stays inert (nonexistent id -> honestly ignored -> re-bar).
     expect(payload.clarifications).toEqual([
       {
         label: LABEL,
@@ -187,8 +193,8 @@ describe('answer-bind-1.answered-slot-clears-ambiguity (handler leg)', () => {
         // Engine's declared stable order: score DESC then curie ASC
         // (resolutionEngine.ts:38-41) — both clamp to 1, so curie order.
         candidates: [
-          { label: 'Ontology microcentrifuge tube', confidence: 1 },
-          { label: 'Microcentrifuge tube', confidence: 1 },
+          { label: 'Ontology microcentrifuge tube', confidence: 1, ref: 'LAB-mct-ont' },
+          { label: 'Microcentrifuge tube', confidence: 1, ref: 'LAB-mct-seed' },
         ],
         actionLocation: { actionIndex: 0, action: 'bead_beat', argument: 'labware' },
       },

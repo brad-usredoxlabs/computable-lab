@@ -1,0 +1,134 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-OPTIONBIND1-lane2-l2t1515/server
+
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts  (9 tests | 5 failed) 292ms
+   ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 1. ambiguous labware-hint candidates (tier 1, bare-recordId curie) carry ref = the record id
+     → expected [ undefined, undefined ] to deeply equal [ 'LBW-A', 'LBW-B' ]
+   ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 2. spine tier-0 term-record candidates (local:<recordId> curie) carry ref = the UNWRAPPED record id
+     → expected [ undefined, undefined ] to deeply equal [ 'TERM-gemini-a', 'TERM-gemini-b' ]
+   ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 3. the unresolved-shape candidate entry carries the ref KEY (absent-or-value, never :undefined)
+     → expected [ 'confidence', 'label' ] to deeply equal [ 'confidence', 'label', 'ref' ]
+   ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 7. model-side candidates cannot inject a handle: parse normalization keeps {label, confidence} (anti-fabrication at the parse door)
+     → scientist-intent failed schema validation: 1 error(s)
+   ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.spine-1 candidate shape (additive optional ref) > 8. a candidate WITH a string ref validates; without one still validates
+     → expected [ { …(5) } ] to deeply equal []
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 1. ambiguous labware-hint candidates (tier 1, bare-recordId curie) carry ref = the record id
+AssertionError: expected [ undefined, undefined ] to deeply equal [ 'LBW-A', 'LBW-B' ]
+
+- Expected
++ Received
+
+  Array [
+-   "LBW-A",
+-   "LBW-B",
++   undefined,
++   undefined,
+  ]
+
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts:131:74
+    129|     expect(candidates.map((c) => c.label)).toEqual(['Gemini reader A',…
+    130|     // RED at base: candidateFact emits {label, confidence} only.
+    131|     expect(candidates.map((c) => (c as Record<string, unknown>)['ref']…
+       |                                                                          ^
+    132|   });
+    133| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 2. spine tier-0 term-record candidates (local:<recordId> curie) carry ref = the UNWRAPPED record id
+AssertionError: expected [ undefined, undefined ] to deeply equal [ 'TERM-gemini-a', 'TERM-gemini-b' ]
+
+- Expected
++ Received
+
+  Array [
+-   "TERM-gemini-a",
+-   "TERM-gemini-b",
++   undefined,
++   undefined,
+  ]
+
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts:155:81
+    153|     // prefix is the spine's declared CURIE convention, unwrapped exac…
+    154|     // resolveNounsPass.ts recordIdFromCurie unwraps binding curies.
+    155|     expect(candidates.map((c) => (c as Record<string, unknown>)['ref']…
+       |                                                                                 ^
+    156|       'TERM-gemini-a',
+    157|       'TERM-gemini-b',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 3. the unresolved-shape candidate entry carries the ref KEY (absent-or-value, never :undefined)
+AssertionError: expected [ 'confidence', 'label' ] to deeply equal [ 'confidence', 'label', 'ref' ]
+
+- Expected
++ Received
+
+  Array [
+    "confidence",
+    "label",
+-   "ref",
+  ]
+
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts:176:48
+    174|     const candidates = (outcome.clarifications[0]!.candidates ?? []) a…
+    175|     // exactOptionalPropertyTypes contract: the KEY is present with a …
+    176|     expect(Object.keys(candidates[0]!).sort()).toEqual(['confidence', …
+       |                                                ^
+    177|     expect(typeof candidates[0]!['ref']).toBe('string');
+    178|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.candidate record handle (W28-A5n Q1) > 7. model-side candidates cannot inject a handle: parse normalization keeps {label, confidence} (anti-fabrication at the parse door)
+ScientistIntentValidationError: scientist-intent failed schema validation: 1 error(s)
+ ❯ Module.parseScientistIntent src/compiler/scientistIntent/parseScientistIntent.ts:201:11
+    199|   const result = getValidator(vocabulary).validate(parsed, SCIENTIST_I…
+    200|   if (!result.valid) {
+    201|     throw new ScientistIntentValidationError(
+       |           ^
+    202|       `scientist-intent failed schema validation: ${result.errors.leng…
+    203|       result.errors,
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts:264:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errors: [ { path: '/unresolved/0/candidates/0', message: 'Unknown property: ref', keyword: 'additionalProperties', params: { additionalProperty: 'ref' }, suggestion: '"ref" is not a recognized field — check for a typo or remove it.' } ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/compiler/resolution/resolutionEngine.optionRef.test.ts > optionbind.spine-1 candidate shape (additive optional ref) > 8. a candidate WITH a string ref validates; without one still validates
+AssertionError: expected [ { …(5) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "keyword": "additionalProperties",
++     "message": "Unknown property: ref",
++     "params": Object {
++       "additionalProperty": "ref",
++     },
++     "path": "/unresolved/0/candidates/0",
++     "suggestion": "\"ref\" is not a recognized field — check for a typo or remove it.",
++   },
++ ]
+
+ ❯ src/compiler/resolution/resolutionEngine.optionRef.test.ts:305:35
+    303|         unresolved: [{ label: 'Gemini', reason: 'ambiguous-noun', cand…
+    304|       }, SCIENTIST_INTENT_SCHEMA_ID);
+    305|       expect(result.errors ?? []).toEqual([]);
+       |                                   ^
+    306|       expect(result.valid).toBe(true);
+    307|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 4 passed (9)
+   Start at  16:26:44
+   Duration  4.67s (transform 347ms, setup 0ms, collect 1.27s, tests 292ms, environment 0ms, prepare 469ms)
+

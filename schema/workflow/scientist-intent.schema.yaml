@@ -270,3 +270,21 @@ properties:
                 type: number
                 minimum: 0
                 maximum: 1
+              # ---- W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1) ----
+              # ADDITIVE optional field: the candidate's OWN store-backed record
+              # id (the id store.get() accepts — the spine's `local:<recordId>`
+              # suffix unwrapped, or the bare recordId the labware-hint/registry
+              # adapters carry). Emitted by the resolution engine ONLY for a
+              # tier <= 1 candidate whose CURIE names a record; the tier-5 mint
+              # affordance and tier > 1 ontology hits carry NONE (anti-
+              # fabrication: the handle is the engine's existing gathered
+              # evidence, never a minted or inferred value). It exists so an
+              # option-button pick can emit the same `[[labware:<id>|label]]`
+              # idiom ClarificationPicker's answerFromMention already emits and
+              # the ANSWER-BIND validation already accepts. The
+              # additionalProperties/unevaluatedProperties posture and the
+              # required set are UNCHANGED — a fabricated extra key is still
+              # rejected.
+              ref:
+                type: string
+                minLength: 1

@@ -16,7 +16,14 @@ treeState:
   # Before/after diff recorded in W2-8-A5g-report.wip-l2t1710.md. Golden
   # fixtures/records unchanged — only the two treeState rule files moved.
   - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: aa57f2e3627ab828d2b7b3180ac04b303cc0989520c6ef087ba3a151ea25a73c}
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: a670a50c021037c8e146f4a6c1a27677680d51f6d5dfee72c13f1b35093b1409}
+  # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
+  # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
+  # store-backed record handle for tier <= 1 candidates; mint affordances and
+  # tier > 1 hits carry none). The candidates item's additionalProperties:
+  # false / unevaluatedProperties: false posture and its required set are
+  # UNCHANGED — the only delta in the file is the new optional property block.
+  # Vocabulary and pipeline pins unchanged from the prior bless.
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 5327495e9c708df799ba4a00db6418d78022b85dbc56ebb83055c1e4b3d8de63}
   - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
@@ -38,7 +45,14 @@ fixtures:
 records:
   - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
   - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
-  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 47a15d732c3de98589b5e17fd28d59cd88070af9555546fb6e7b184c345f0089}
+  # W28-OPTIONBIND-1 REBLESS (this item): ambiguous-material re-blessed ONCE —
+  # the ONLY divergence is each ambiguous-noun candidate entry gaining the
+  # additive optional `ref` (the engine's store-backed record ids
+  # LAB-plate-alpha / LAB-plate-beta; replayKernel before/after diff recorded
+  # in W28-OPTIONBIND1-report.wip-l2t1515.md). Fixture bytes unchanged; every
+  # other record unchanged (the mint affordance and lookup-failure arms carry
+  # NO ref — anti-fabrication legs 4-6 of resolutionEngine.optionRef.test.ts).
+  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 5fc65b92754633b95a6b5b81a4803bcf3abbe6f0852a8584a82df0d2b82e5f46}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
   - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}

@@ -111,7 +111,16 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   // SAMPLE-CARD-1 (W28-A5i Q2): a labware-semantic not-stated fact answers by
   // PICKING '/l' (resolveLabware — no mint floor, resolvers.ts:67-92), exactly
   // the ANSWER-SURFACE-1 pattern; every other argument falls to '/m'.
-  'not-stated': { labware: '/l' },
+  // W28-SOURCEROW-1 (ARCHITECT DECISION W28-A5n Q2, DATA-AMENDMENT): 'source'
+  // IS labware-semantic by the declared data — EVERY declared `source`
+  // argument in scientist-intent-vocabulary.yaml (all 23 verbs that declare
+  // it) is `kind: resolvable` + `domain: labware`; the vocabulary NEVER
+  // declares a material-domain `source` (material semantics are the separately
+  // declared `material`/`source_name` args). A source-argument not-stated fact
+  // answered on the '/m' material funnel is the same domain misroute
+  // SAMPLE-CARD-1 cured for `labware`. One row added; the (reason,'*')
+  // fallback row stays '/m' — a SOURCE-LESS not-stated hedge keeps '/m'.
+  'not-stated': { labware: '/l', source: '/l' },
   // GAPCARD-1: same pattern for the two prompt-declared model reasons.
   'ambiguous': { labware: '/l' },
   'contradicts-the-text': { labware: '/l' },
@@ -179,14 +188,25 @@ export function heldFactToClarificationRequest(
 
   const rawCandidates = Array.isArray(fact.candidates) ? fact.candidates : []
   const options: AiClarificationOption[] = rawCandidates
-    .filter((c): c is { label: string } =>
+    .filter((c): c is { label: string; ref?: unknown } =>
       typeof c === 'object' && c !== null && typeof (c as { label?: unknown }).label === 'string'
       && !!(c as { label: string }).label.trim())
     // MINT-FLOOR-UI-1: the mint offer for THIS fact's own label is the
     // picker's floor row already — drop the duplicate dead-end option button.
     // Mint offers for a DIFFERENT term survive (keyed rule, not a blanket).
     .filter((c) => !isMintOfferForLabel(c.label.trim(), label))
-    .map((c, i) => ({ id: `held-candidate-${index}-${i}`, label: c.label.trim() }))
+    .map((c, i) => ({
+      id: `held-candidate-${index}-${i}`,
+      label: c.label.trim(),
+      // W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1): ride the wire
+      // candidate's store-backed record handle (the SPINE-1 candidate entry's
+      // additive optional `ref`, emitted by the engine for tier <= 1 record
+      // candidates only — mint affordances and tier > 1 hits carry none) onto
+      // the EXISTING AiClarificationOption.ref? field (types/ai.ts), with the
+      // id semantics MessageLog.optionRefId already reads. A candidate without
+      // a handle keeps the option shape byte-unchanged.
+      ...(typeof c.ref === 'string' && c.ref.trim() ? { ref: { id: c.ref.trim() } } : {}),
+    }))
 
   return {
     id: `held-fact-${index}`,

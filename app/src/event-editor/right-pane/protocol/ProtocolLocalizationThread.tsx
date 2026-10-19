@@ -24,6 +24,7 @@ import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/pla
 import { apiClient } from '../../../shared/api/client'
 import { ClarificationPicker, requestHasPicker } from '../ai/ClarificationPicker'
 import { ParameterAnswerInput } from '../ai/ParameterAnswerInput'
+import { mentionTokenForOption } from '../ai/MessageLog'
 import { foldCards } from './ProtocolLocalizationThread.clarificationAdapter'
 import type { PlateEvent } from '../../../types/events'
 import type {
@@ -790,6 +791,23 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
                         optionId: option.id,
                         label: option.label,
                         ...(option.ref ? { ref: option.ref } : {}),
+                        // W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1): an
+                        // option that carries the engine's store-backed record
+                        // handle answers with the BINDING idiom — the exact
+                        // `[[labware:<id>|label]]` shape ClarificationPicker's
+                        // answerFromMention emits (via the existing
+                        // mentionTokenForOption builder, same safeMentionPart
+                        // rules), so the untouched server validation
+                        // (MENTION_ANSWER_PATTERN + store.get) binds the pick
+                        // through the untouched :313 value-join. An option
+                        // WITHOUT a ref keeps today's plain-label value
+                        // byte-unchanged (no fabricated idiom).
+                        ...(option.ref
+                          ? (() => {
+                              const token = mentionTokenForOption(request, option)
+                              return token ? { mentionToken: token } : {}
+                            })()
+                          : {}),
                       }, request)}
                     >
                       <span>{option.label}</span>

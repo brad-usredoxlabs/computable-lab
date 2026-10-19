@@ -1,0 +1,27 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-OPTIONBIND1-lane2-l2t1515/app
+
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2954360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.test.ts  (9 tests) 7ms
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.sampleCard1.test.ts  (4 tests) 8ms
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.gapcard.test.ts  (10 tests) 10ms
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.test.tsx  (6 tests) 222ms
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.heldBundle.test.tsx  (3 tests) 247ms
+ ✓ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.gapcard.test.tsx  (5 tests) 307ms
+
+ Test Files  6 passed (6)
+      Tests  37 passed (37)
+   Start at  15:32:10
+   Duration  16.82s (transform 2.12s, setup 12.20s, collect 7.03s, tests 801ms, environment 66.78s, prepare 3.34s)
+
