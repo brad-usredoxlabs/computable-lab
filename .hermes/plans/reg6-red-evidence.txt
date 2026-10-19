@@ -1,0 +1,364 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app
+
+(node:3226817) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > provenance docks at the BOTTOM: footer is a sibling AFTER the editor body, not in a rail
+Warning: Cannot update a component (`RecordRegistryPage`) while rendering a different component (`ProjectionTapTabEditor`). To locate the bad setState() call inside `ProjectionTapTabEditor`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+    at ProjectionTapTabEditor (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/pages/RecordRegistryPage.rail.test.tsx:113:5)
+    at div
+    at div
+    at div
+    at div
+    at DocumentShell (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/editor/taptab/DocumentShell.tsx:6:3)
+    at div
+    at RecordRegistryPage (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/pages/RecordRegistryPage.tsx:50:59)
+Warning: Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?
+
+Check the render method of `RecordRegistryPage`.
+    at ProjectionTapTabEditor (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/pages/RecordRegistryPage.rail.test.tsx:113:5)
+    at div
+    at div
+    at div
+    at div
+    at DocumentShell (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/editor/taptab/DocumentShell.tsx:6:3)
+    at div
+    at RecordRegistryPage (/mnt/vast/home/brad/git/wt/REG-6-lane1-l1t1545/app/src/pages/RecordRegistryPage.tsx:50:59)
+
+ ❯ src/pages/RecordRegistryPage.rail.test.tsx  (4 tests | 4 failed) 106ms
+   ❯ src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > provenance docks at the BOTTOM: footer is a sibling AFTER the editor body, not in a rail
+     → expected null not to be null
+   ❯ src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > the registry DocumentShell renders NO rail and NO role=separator resizer
+     → expected <aside …(3)>…(1)</aside> to be null
+   ❯ src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > create draft: no provenance element and the footer wrapper renders nothing visible
+     → expected null not to be null
+   ❯ src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > CSS pins: footer wrapper is chrome-free; visual separation lives on .provenance
+     → expected '/* /registry — record list + document…' not to contain '.registry-rail'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > provenance docks at the BOTTOM: footer is a sibling AFTER the editor body, not in a rail
+AssertionError: expected null not to be null
+ ❯ src/pages/RecordRegistryPage.rail.test.tsx:194:24
+    192| 
+    193|     expect(body).not.toBeNull()
+    194|     expect(footer).not.toBeNull()
+       |                        ^
+    195|     expect(provenance).not.toBeNull()
+    196| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > the registry DocumentShell renders NO rail and NO role=separator resizer
+AssertionError: expected <aside …(3)>…(1)</aside> to be null
+ ❯ src/pages/RecordRegistryPage.rail.test.tsx:224:62
+    222| 
+    223|     expect(container.querySelector('.document-shell')).not.toBeNull()
+    224|     expect(container.querySelector('.document-shell__rail')).toBeNull()
+       |                                                              ^
+    225|     expect(container.querySelector('.document-shell__rail-resizer')).t…
+    226|     expect(screen.queryByRole('complementary')).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > create draft: no provenance element and the footer wrapper renders nothing visible
+AssertionError: expected null not to be null
+ ❯ src/pages/RecordRegistryPage.rail.test.tsx:243:24
+    241|     // The wrapper exists but is EMPTY — zero height, no chrome of its…
+    242|     const footer = container.querySelector('.registry-provenance-foote…
+    243|     expect(footer).not.toBeNull()
+       |                        ^
+    244|     expect(footer!.childElementCount).toBe(0)
+    245|     expect(footer!.textContent).toBe('')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/pages/RecordRegistryPage.rail.test.tsx > RecordRegistryPage — REG-6 bottom-docked provenance, no side rail > CSS pins: footer wrapper is chrome-free; visual separation lives on .provenance
+AssertionError: expected '/* /registry — record list + document…' not to contain '.registry-rail'
+
+- Expected
++ Received
+
+- .registry-rail
++ /* /registry — record list + document editor chrome.
++  * Token-only (--cl-*): every colour follows .cl-app[data-theme]. */
++ .registry-page {
++   display: flex;
++   height: 100%;
++   min-height: 0;
++   color: var(--cl-text);
++   background: var(--cl-bg);
++ }
++
++ .registry-list {
++   width: 20rem;
++   flex-shrink: 0;
++   display: flex;
++   flex-direction: column;
++   border-right: 1px solid var(--cl-border);
++   background: var(--cl-bg-elev);
++ }
++
++ .registry-list__tabs {
++   display: flex;
++   flex-wrap: wrap;
++   gap: 4px;
++   padding: 8px;
++   border-bottom: 1px solid var(--cl-border);
++ }
++
++ .registry-tab {
++   appearance: none;
++   border: 0;
++   border-radius: 4px;
++   background: transparent;
++   color: var(--cl-text-dim);
++   padding: 4px 8px;
++   font-size: 12px;
++   cursor: pointer;
++ }
++
++ .registry-tab:hover {
++   background: var(--cl-bg-elev-2);
++   color: var(--cl-text);
++ }
++
++ .registry-tab--active {
++   background: var(--cl-accent-soft);
++   color: var(--cl-accent);
++   font-weight: 600;
++ }
++
++ .registry-list__actions {
++   display: flex;
++   align-items: center;
++   gap: 8px;
++   padding: 8px;
++   border-bottom: 1px solid var(--cl-border);
++ }
++
++ .registry-btn {
++   appearance: none;
++   border: 1px solid var(--cl-border);
++   border-radius: 4px;
++   background: var(--cl-bg-elev-2);
++   color: var(--cl-text);
++   padding: 6px 12px;
++   font-size: 12px;
++   font-weight: 500;
++   cursor: pointer;
++ }
++
++ .registry-btn:hover:not(:disabled) {
++   border-color: var(--cl-border-strong);
++ }
++
++ .registry-btn:disabled {
++   opacity: 0.5;
++   cursor: default;
++ }
++
++ .registry-btn--primary {
++   background: var(--cl-accent);
++   border-color: var(--cl-accent);
++   color: var(--cl-on-accent);
++ }
++
++ .registry-btn--primary:hover:not(:disabled) {
++   background: var(--cl-accent-hover);
++   border-color: var(--cl-accent-hover);
++ }
++
++ .registry-btn--ghost {
++   background: transparent;
++   border-color: transparent;
++   color: var(--cl-text-dim);
++ }
++
++ .registry-btn--ghost:hover:not(:disabled) {
++   background: var(--cl-bg-elev-2);
++   color: var(--cl-text);
++ }
++
++ .registry-kind-picker {
++   display: flex;
++   flex-wrap: wrap;
++   align-items: center;
++   gap: 4px;
++ }
++
++ .registry-kind-chip {
++   border: 1px solid var(--cl-border);
++   border-radius: 4px;
++   background: transparent;
++   color: var(--cl-text-dim);
++   padding: 4px 8px;
++   font-size: 12px;
++   cursor: pointer;
++ }
++
++ .registry-kind-chip--active {
++   background: var(--cl-accent-soft);
++   border-color: var(--cl-accent);
++   color: var(--cl-accent);
++   font-weight: 600;
++ }
++
++ .registry-error {
++   padding: 8px;
++   border-bottom: 1px solid var(--cl-border);
++   font-size: 12px;
++   color: var(--cl-danger);
++ }
++
++ .registry-list__archived {
++   display: flex;
++   align-items: center;
++   gap: 8px;
++   padding: 8px;
++   border-bottom: 1px solid var(--cl-border);
++ }
++
++ .registry-list__archived-label {
++   display: flex;
++   align-items: center;
++   gap: 8px;
++   font-size: 12px;
++   color: var(--cl-text-dim);
++ }
++
++ .registry-list__archived input {
++   accent-color: var(--cl-accent);
++ }
++
++ .registry-list__search {
++   padding: 8px;
++   border-bottom: 1px solid var(--cl-border);
++ }
++
++ .registry-list__scroll {
++   flex: 1;
++   overflow-y: auto;
++ }
++
++ .registry-list__empty {
++   padding: 32px 0;
++   text-align: center;
++   font-size: 13px;
++   color: var(--cl-text-dim);
++ }
++
++ .registry-list__rows {
++   display: flex;
++   flex-direction: column;
++ }
++
++ .registry-row {
++   padding: 10px 12px;
++   border-left: 4px solid transparent;
++   border-bottom: 1px solid var(--cl-border);
++   cursor: pointer;
++ }
++
++ .registry-row:hover {
++   background: var(--cl-bg-elev-2);
++ }
++
++ .registry-row--selected {
++   background: var(--cl-accent-soft);
++   border-left-color: var(--cl-accent);
++ }
++
++ .registry-row__title {
++   font-size: 13px;
++   font-weight: 600;
++   color: var(--cl-text);
++   overflow: hidden;
++   text-overflow: ellipsis;
++   white-space: nowrap;
++ }
++
++ .registry-row__meta {
++   margin-top: 4px;
++ }
++
++ .registry-kind-badge {
++   display: inline-block;
++   padding: 1px 8px;
++   border-radius: 999px;
++   background: var(--cl-bg-elev-2);
++   color: var(--cl-text-dim);
++   font-size: 11px;
++ }
++
++ .registry-editor-body {
++   flex: 1;
++   overflow-y: auto;
++   padding: 16px;
++ }
++
++ .registry-editor-empty {
++   color: var(--cl-text-dim);
++ }
++
++ .registry-placeholder {
++   flex: 1;
++   display: flex;
++   align-items: center;
++   justify-content: center;
++   color: var(--cl-text-dim);
++ }
++
++ .registry-placeholder__title {
++   margin: 0;
++   font-size: 16px;
++ }
++
++ .registry-placeholder__hint {
++   margin-top: 8px;
++   font-size: 13px;
++   color: var(--cl-text-faint);
++ }
++
++ .registry-note {
++   font-size: 12px;
++   color: var(--cl-accent);
++ }
++
++ .registry-save-error {
++   font-size: 12px;
++   color: var(--cl-danger);
++ }
++
++ .registry-dirty-dot {
++   display: inline-block;
++   width: 8px;
++   height: 8px;
++   border-radius: 999px;
++   background: var(--cl-warn);
++ }
++
++ .registry-rail {
++   display: flex;
++   flex-direction: column;
++   gap: 16px;
++   padding: 16px;
++   border-top: 1px solid var(--cl-border);
++ }
++
+
+ ❯ src/pages/RecordRegistryPage.rail.test.tsx:257:21
+    255| 
+    256|     // The dead rail class is retired from the surface stylesheet.
+    257|     expect(css).not.toContain('.registry-rail')
+       |                     ^
+    258| 
+    259|     // The footer exists and is token-only flex layout — NO border/bac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  16:58:05
+   Duration  1.24s (transform 148ms, setup 40ms, collect 194ms, tests 106ms, environment 358ms, prepare 162ms)
+
