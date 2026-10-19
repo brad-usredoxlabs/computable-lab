@@ -7,7 +7,7 @@
  * derivation logic and makes NO model calls. Without a provider, consumers see
  * null (the run page's ChatContextHeader fallback stays untouched).
  */
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
 export interface ChatFocus {
@@ -31,11 +31,23 @@ const ChatFocusContext = createContext<ChatFocusContextValue | null>(null)
  */
 export function ChatFocusProvider({ focus, children }: { focus?: ChatFocus | null; children: ReactNode }) {
   const [internal, setInternal] = useState<ChatFocus | null>(null)
+  // STABLE setter: a fresh identity per render made a publishing child re-run
+  // its effect on every render (setState → new setter → effect → …).
+  const setFocus = useCallback((next: ChatFocus | null) => { setInternal(next) }, [])
   const value = useMemo<ChatFocusContextValue>(() => ({
     focus: focus !== undefined ? focus : internal,
-    setFocus: (next) => { setInternal(next) },
-  }), [focus, internal])
+    setFocus,
+  }), [focus, internal, setFocus])
   return <ChatFocusContext.Provider value={value}>{children}</ChatFocusContext.Provider>
+}
+
+/**
+ * Setter for hosts whose focus lives in a CHILD of the provider (e.g. a deck
+ * whose selection is editor state). No provider -> a no-op, never a throw.
+ */
+export function useSetChatFocus(): (focus: ChatFocus | null) => void {
+  const ctx = useContext(ChatFocusContext)
+  return ctx?.setFocus ?? (() => undefined)
 }
 
 /** The published focus, or null when no provider / no focus. Never throws. */

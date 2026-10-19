@@ -14,10 +14,11 @@
  * that needs the deck-slot placement decision the full editor owns; leaving the
  * callback absent is honest (no silent half-apply), and the events still land.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import { useSurfaceChat } from '../../agent/useSurfaceChat'
 import type { AiContext } from '../../types/aiContext'
+import { useSetChatFocus } from '../../agent/ChatFocusContext'
 
 export function DeckSurfaceChat() {
   const { state, actions } = useEventEditor()
@@ -60,6 +61,21 @@ export function DeckSurfaceChat() {
     endpoint: 'event-editor',
     onAcceptEvent: actions.appendEvent,
   })
+
+  // Publish the pane's working-focus box. Without this the universal pane's
+  // SurfaceFocusHeader renders NOTHING (it is a carrier, not a deriver), which
+  // is why the deck lost the "what are we looking at" box when it moved off the
+  // legacy pane. Derived from resolved editor state only — zero model calls.
+  const setFocus = useSetChatFocus()
+  const deckLabel = state.eventGraphId ? `Deck ${state.eventGraphId}` : 'Deck (unsaved)'
+  const selectionLabel = state.selection?.wells?.length
+    ? `${state.selection.wells.length} well${state.selection.wells.length === 1 ? '' : 's'} selected`
+    : null
+  const focusDetail = [state.platformId, state.variantId, selectionLabel].filter(Boolean).join(' · ')
+  useEffect(() => {
+    setFocus({ surface: 'event-editor', label: deckLabel, detail: focusDetail })
+    return () => setFocus(null)
+  }, [setFocus, deckLabel, focusDetail])
 
   return null
 }

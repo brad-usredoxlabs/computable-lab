@@ -26,6 +26,8 @@ import { ProtocolPreviewBridge } from '../../event-editor/protocol/ProtocolPrevi
 import { Viewer } from '../../event-editor/viewer/Viewer'
 import { DeckToolbar } from '../../event-editor/viewer/deck/DeckToolbar'
 import { DeckSurfaceChat } from '../../event-editor/deck/DeckSurfaceChat'
+import { ChatFocusProvider } from '../../agent/ChatFocusContext'
+import { useDeckAutosave } from '../../event-editor/deck/useDeckAutosave'
 import { apiClient } from '../../shared/api/client'
 import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { deckTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
@@ -35,6 +37,12 @@ import '../../event-editor/styles/eventEditor.css'
 interface DeckMeta {
   studyId: string
   title: string
+}
+
+/** Mounts the debounced deck autosave (a hook with no UI). */
+function DeckAutosave() {
+  useDeckAutosave()
+  return null
 }
 
 export function DeckHostPage() {
@@ -125,19 +133,22 @@ export function DeckHostPage() {
         {...(runId ? { runId } : {})}
       >
         <FocusModalsProvider>
-          {/* The deck route's universal chat: persisted thread + proposal flow.
-              Mounted INSIDE EventEditorProvider so it can read/append the deck. */}
-          <DeckSurfaceChat />
-          <ProtocolSelectionProvider>
-            <AppShell
-              brand={meta.title}
-              layout="workspace"
-              topbarTabs={<WorkspaceTabStrip />}
-              viewerToolbar={<DeckToolbar tab={deckTab} breadcrumb={breadcrumb} />}
-              leftPane={leftPane}
-              rightPane={<RightPane />}
-            />
-          </ProtocolSelectionProvider>
+          {/* The deck route's universal chat: persisted thread + proposal flow,
+              plus the working-focus carrier its pane header renders. */}
+          <ChatFocusProvider>
+            <DeckSurfaceChat />
+            <DeckAutosave />
+            <ProtocolSelectionProvider>
+              <AppShell
+                brand={meta.title}
+                layout="workspace"
+                topbarTabs={<WorkspaceTabStrip />}
+                viewerToolbar={<DeckToolbar tab={deckTab} breadcrumb={breadcrumb} />}
+                leftPane={leftPane}
+                rightPane={<RightPane />}
+              />
+            </ProtocolSelectionProvider>
+          </ChatFocusProvider>
           <ProtocolPreviewBridge />
         </FocusModalsProvider>
       </EventEditorProvider>
