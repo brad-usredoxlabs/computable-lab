@@ -36,9 +36,18 @@ export const NOT_STATED_REASON = 'not-stated' as const;
 /** Same presence test as the §5.2 sweep's helper (resolveNounsPass.ts) —
  *  private copy so this leaf stays acyclic and importable from both call
  *  sites (W28-A5k: 'a private argumentPresent copy or a shared-helper
- *  import — smallest diff'). */
+ *  import — smallest diff').
+ *  W28-FOLDSENT-1 (W28-A5l): a string slot value that IS this module's own
+ *  stable hedge sentinel (NOT_STATED_REASON, trimmed exact equality) is
+ *  DECLARED ABSENCE, not presence — the model wrote its hedge INTO the slot
+ *  and the fact is by-construction unanswerable. Zero new domain literals:
+ *  the module's existing stable reason code is the only token (module law
+ *  at the header + the NOT_STATED_REASON comment still holds). The §5.2
+ *  sweep's own copy in resolveNounsPass.ts stays byte-identical: the sweep
+ *  raises questions the DATA asks; only the fold adjudicates the hedge's
+ *  own sentinel. */
 function argumentPresent(raw: unknown): boolean {
-  if (typeof raw === 'string') return raw.trim().length > 0;
+  if (typeof raw === 'string') return raw.trim().length > 0 && raw.trim() !== NOT_STATED_REASON;
   if (Array.isArray(raw)) return raw.length > 0;
   if (typeof raw === 'number') return Number.isFinite(raw);
   return false;
