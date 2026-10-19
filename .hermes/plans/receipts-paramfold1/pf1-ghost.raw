@@ -1,0 +1,57 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+stdout | unknown test
+=== COMPLIANT emission (no unresolved): {
+ "outcome": "complete",
+ "clarifications": [],
+ "gaps": [],
+ "unresolvedRefs": [],
+ "protocolIntentUnresolved": []
+}
+=== HEDGED emission (folded class): {
+ "outcome": "gap",
+ "clarifications": [],
+ "gaps": [
+  {
+   "kind": "unresolved_ref",
+   "message": "duration (not-stated)",
+   "details": {
+    "kind": "unresolved_symbol",
+    "label": "duration",
+    "reason": "not-stated"
+   }
+  }
+ ],
+ "unresolvedRefs": [
+  {
+   "kind": "unresolved_symbol",
+   "label": "duration",
+   "reason": "not-stated"
+  }
+ ],
+ "protocolIntentUnresolved": [
+  {
+   "id": "unresolved-duration",
+   "kind": "operation",
+   "label": "duration",
+   "reason": "not-stated",
+   "blocksLowering": false
+  }
+ ]
+}
+
+ ❯ src/compiler/scientistIntent/pf1GhostProbe.test.ts  (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/pf1GhostProbe.test.ts [ src/compiler/scientistIntent/pf1GhostProbe.test.ts ]
+Error: No test suite found in file /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server/src/compiler/scientistIntent/pf1GhostProbe.test.ts
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  03:19:18
+   Duration  2.40s (transform 343ms, setup 0ms, collect 632ms, tests 0ms, environment 0ms, prepare 171ms)
+
+EXIT=1
