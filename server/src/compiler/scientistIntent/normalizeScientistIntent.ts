@@ -23,6 +23,17 @@
 import type { ProtocolIntent, ProtocolPatternIntent } from '../protocolIntent/ProtocolIntent.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from './types.js';
 import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from './vocabulary.js';
+// PARAM-FOLD-2 (W28-A5k Q1): the declared-optional-absence fold, consumed at
+// the RAW SOURCE. The gaps channel (unresolvedRefs -> gatherGaps ->
+// terminalArtifacts.gaps) and protocolIntent.unresolved are legitimate — a
+// fact the data cannot settle SHOULD surface as a gap. What was illegitimate
+// was feeding them the RAW parsed `intent.unresolved` set, which the pass-side
+// fold is ruled to override: one fact, two contradictory verdicts. Folding
+// here (the original data site, not a new suppression site) makes every
+// downstream consumer — gatherGaps, computeOutcome, the UI surfaces — read
+// the same truth the resolve_nouns pass reads. The leaf imports nothing from
+// scientistIntent/ values and nothing from the pass module: acyclic.
+import { foldDeclaredOptionalAbsentHedges } from '../resolution/declaredOptionalHedgeFold.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { expandWellTokens } from '../../ai/wellRange.js';
 import { parse as parseYaml } from 'yaml';
@@ -797,6 +808,16 @@ export function normalizeScientistIntent(
   // cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
   // interim bar is OFF — LOUD (fix1/D3: one console.warn naming the path).
   const mixtureCues = loadMixtureCues(options?.mixtureCuesPath ?? MIXTURE_CUES_PATH);
+  // PARAM-FOLD-2 (W28-A5k Q1): ONE fold call over the raw parsed unresolved
+  // set, at the top of the unresolved handling. The fold is pure over the
+  // parsed intent + the vocabulary (both already in hand — the compile threads
+  // the SAME vocabulary instance here it threads into resolve_nouns) and
+  // needs no engine output, so early application is lossless. The folded
+  // array feeds BOTH raw consumers below (the unresolvedRefs loop and
+  // protocolIntent.unresolved). The fold is idempotent: the resolve_nouns pass
+  // re-folds the same set later on the compile path and the second
+  // application is a no-op by construction.
+  const foldedUnresolved = foldDeclaredOptionalAbsentHedges(intent, vocabulary, intent.unresolved);
   // every distinct symbolic noun label becomes a candidate labware resource so
   // ProtocolIntent validation + resolve_labware can bind it downstream.
   const symbolicLabels = new Map<string, string>(); // label -> role hint
@@ -842,7 +863,7 @@ export function normalizeScientistIntent(
     resolutionStatus: 'candidate' as const,
   }));
 
-  for (const fact of intent.unresolved) {
+  for (const fact of foldedUnresolved) {
     unresolvedRefs.push({
       kind: 'unresolved_symbol',
       label: fact.label,
@@ -869,7 +890,7 @@ export function normalizeScientistIntent(
         operations: [],
         patterns,
         assumptions: [],
-        unresolved: intent.unresolved.map((fact) => ({
+        unresolved: foldedUnresolved.map((fact) => ({
           id: `unresolved-${fact.label}`,
           kind: 'operation' as const,
           label: fact.label,

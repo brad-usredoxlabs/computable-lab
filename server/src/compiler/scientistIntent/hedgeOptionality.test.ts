@@ -31,8 +31,10 @@
  *     bead_beat-without-duration/cycles macro shape (characterization: the
  *     engine already tolerates declared-optional absence — the wall was the
  *     emission contract);
- *  8. companion characterization: the SAME shape WITH a hedge bars — proving
- *     the hedge (not the engine) is what manufactures the wall.
+ *  8. companion (FLIPPED by PARAM-FOLD-2 / W28-A5k Q3): the SAME shape WITH a
+ *     not-stated hedge on an ABSENT declared-optional converges on the
+ *     data-compliant outcome — no clarification, no gap, 'complete'. (The old
+ *     pin "a hedge bars" characterized the wall W28-A5j ruled a defect.)
  */
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -268,15 +270,28 @@ describe('hedge-type-1 acceptance (a): declared-optional absence compiles comple
     expect(compile.terminalArtifacts.events.some((e) => e.event_type === 'mix')).toBe(true);
   });
 
-  it('companion characterization: the SAME shape WITH a hedge bars — the hedge, not the engine, manufactures the wall', async () => {
+  // FLIP (PARAM-FOLD-2 / W28-A5k Q3): this test's PRE-FOLD pin — "the SAME
+  // shape WITH a hedge bars" — characterized the wall W28-A5j ruled a defect.
+  // The fold now converges the hedged emission on the data-compliant outcome
+  // at BOTH channels (clarifications AND the raw gaps source in normalize):
+  // the vocabulary declares the absence legal, so the hedge is moot.
+  it('PARAM-FOLD-2 convergence: a not-stated hedge on an absent declared-optional yields the data-compliant outcome — no clarification, no gap, complete', async () => {
     const hedge = [{
       label: 'duration',
       reason: 'not-stated',
       actionLocation: { actionIndex: 0, action: 'bead_beat', argument: 'duration' },
     }];
     const { compile } = await compileWithFakeLlm(BEAD_ACTIONS_NO_OPTIONALS, hedge);
-    // A kept model hedge is a clarification/gap: outcome is NOT complete.
-    expect(compile.outcome).not.toBe('complete');
-    expect(compile.clarifications.length).toBeGreaterThan(0);
+    // Emitter-compliance and emitter-violation produce the SAME compile
+    // (W28-A5j Q2 convergence, now true on the gaps side too, W28-A5k Q1).
+    expect(compile.outcome).toBe('complete');
+    expect(compile.clarifications).toEqual([]);
+    // No unresolved_ref ghost anywhere: the raw source (normalize) folded it.
+    expect(compile.terminalArtifacts.gaps).toEqual([]);
+    expect(compile.normalized.unresolvedRefs).toEqual([]);
+    expect(compile.terminalArtifacts.protocolIntent?.unresolved ?? []).toEqual([]);
+    // The macro still expands: the fold changes the fact's fate, not the events.
+    expect(compile.terminalArtifacts.events.length).toBeGreaterThan(0);
+    expect(compile.terminalArtifacts.events.some((e) => e.event_type === 'mix')).toBe(true);
   });
 });
