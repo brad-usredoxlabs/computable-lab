@@ -25,6 +25,7 @@ import { ProtocolSelectionProvider } from '../../event-editor/protocol/ProtocolS
 import { ProtocolPreviewBridge } from '../../event-editor/protocol/ProtocolPreviewBridge'
 import { Viewer } from '../../event-editor/viewer/Viewer'
 import { DeckToolbar } from '../../event-editor/viewer/deck/DeckToolbar'
+import { DeckSurfaceChat } from '../../event-editor/deck/DeckSurfaceChat'
 import { apiClient } from '../../shared/api/client'
 import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { deckTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
@@ -124,6 +125,9 @@ export function DeckHostPage() {
         {...(runId ? { runId } : {})}
       >
         <FocusModalsProvider>
+          {/* The deck route's universal chat: persisted thread + proposal flow.
+              Mounted INSIDE EventEditorProvider so it can read/append the deck. */}
+          <DeckSurfaceChat />
           <ProtocolSelectionProvider>
             <AppShell
               brand={meta.title}
