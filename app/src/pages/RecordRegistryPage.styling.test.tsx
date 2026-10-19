@@ -17,7 +17,7 @@ const REQUIRED = [
   '.registry-row__title', '.registry-row__meta', '.registry-kind-badge',
   '.registry-editor-body', '.registry-editor-empty', '.registry-placeholder',
   '.registry-placeholder__title', '.registry-placeholder__hint',
-  '.registry-note', '.registry-save-error', '.registry-dirty-dot', '.registry-rail',
+  '.registry-note', '.registry-save-error', '.registry-dirty-dot', '.registry-provenance-footer',
 ]
 
 describe('RecordRegistryPage styling (theme tokens)', () => {

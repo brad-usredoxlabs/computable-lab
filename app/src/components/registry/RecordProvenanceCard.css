@@ -1,4 +1,10 @@
-.provenance { color: var(--cl-text); }
+/* REG-6: the registry rail is gone — the card carries its own visual
+   separation from the record content above it. */
+.provenance {
+  color: var(--cl-text);
+  border-top: 1px solid var(--cl-border);
+  padding-top: 12px;
+}
 .provenance__summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--cl-text); }
 .provenance__summary:hover { color: var(--cl-accent); }
 .provenance__rows { margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; }

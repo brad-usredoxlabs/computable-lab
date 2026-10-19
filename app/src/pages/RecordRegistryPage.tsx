@@ -726,7 +726,6 @@ export default function RecordRegistryPage() {
       {selectedRecord ? (
         <DocumentShell
           width="full"
-          railResizable
           topBar={
             <DocumentShellHeader
               title={title}
@@ -772,25 +771,6 @@ export default function RecordRegistryPage() {
               }
             />
           }
-          rail={
-            selectedRecord ? (
-              <div className="registry-rail">
-                <RecordProvenanceCard
-                  recordId={selectedRecord.recordId}
-                  {...(selectedRecord.meta ? { meta: selectedRecord.meta } : {})}
-                  payload={selectedRecord.payload}
-                />
-                {selectedRecord.recordId && editorMode !== 'create' ? (
-                  <RelatedRecordsCard
-                    recordId={selectedRecord.recordId}
-                    onNavigate={(id) => {
-                      window.open(`/records/${encodeURIComponent(id)}`, '_blank')
-                    }}
-                  />
-                ) : null}
-              </div>
-            ) : undefined
-          }
         >
           <div className="registry-editor-body">
             {selectedRecord.recordId && editorMode === 'edit' && (
@@ -815,6 +795,26 @@ export default function RecordRegistryPage() {
                 {projectionLoading ? 'Loading editor...' : 'Editor not available for this record'}
               </p>
             )}
+          </div>
+          {/* REG-6: provenance docks at the BOTTOM of the record content —
+              full width, chrome-free wrapper (the cards carry their own
+              separation; a create draft renders an empty zero-height
+              wrapper). Verbatim move from the retired side rail: same props,
+              same editorMode !== 'create' guard. */}
+          <div className="registry-provenance-footer">
+            <RecordProvenanceCard
+              recordId={selectedRecord.recordId}
+              {...(selectedRecord.meta ? { meta: selectedRecord.meta } : {})}
+              payload={selectedRecord.payload}
+            />
+            {selectedRecord.recordId && editorMode !== 'create' ? (
+              <RelatedRecordsCard
+                recordId={selectedRecord.recordId}
+                onNavigate={(id) => {
+                  window.open(`/records/${encodeURIComponent(id)}`, '_blank')
+                }}
+              />
+            ) : null}
           </div>
         </DocumentShell>
       ) : (
