@@ -210,6 +210,14 @@ const SECTION_HEADINGS: Array<{ kind: VendorProtocolSectionKind; title: string; 
   { kind: 'specifications', title: 'Specifications', pattern: headingPattern('Specifications') },
   { kind: 'product_description', title: 'Product Description', pattern: headingPattern('Product Description') },
   { kind: 'protocol', title: 'Protocol', pattern: headingPattern('Protocol') },
+  // Quick-reference sheets print the protocol under the vendor's own heading
+  // "Quick Protocol" (CellROX qr.pdf, MAN0007985). The `Protocol` entry is
+  // anchored at line start, so "Quick Protocol" never matched and the sheet
+  // yielded no protocol section, a vendor_protocol_missing_protocol_section
+  // warning, and zero of its six printed steps. Same kind, same vocabulary
+  // builder — a handbook with BOTH headings yields two protocol sections,
+  // exactly like the DNeasy matrix.
+  { kind: 'protocol', title: 'Quick Protocol', pattern: headingPattern('Quick Protocol') },
   // Manuals write the appendices both ways: a bare "Appendices" list heading
   // and per-letter headings ("Appendix A", "Appendix B"). Matching only the
   // plural let the PROTOCOL section run on into the appendices — the D4300T
