@@ -240,3 +240,80 @@ Commit on W28-STAGHEDGE-1-lane2: `test(compiler): pin guard-4 exact-label identi
 containment join (SH1-SH9)`. NOT merged, NOT pushed; stacks untouched.
 
 STAGHEDGE1 FIX1 DONE
+
+## Fix cycle 2
+
+Adversarial reviewer cycle 2, Defect 1 [minor]: SH9 pinned only the substring
+containment direction (`fact.label.includes(a.label)` — answer key a proper
+substring of the fact label). The mirror containment join
+`a.label.includes(fact.label)` (answer key a proper SUPERSTRING of the fact
+label) passed ALL 10 tests, despite the guard's own rule being 'never
+containment' and the cycle-1 remediation naming 'substring OR superstring'.
+
+Fix (TEST-FILE-ONLY, mirror case): added SH10 to
+`server/src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts` —
+answered key `'variant b extended'` (a proper superstring of the fact label
+HEDGE_LABEL `'variant b'`) at the SAME declared-resolvable slot SH1 drops,
+mirroring SH9's harness exactly. Asserts the clarification SURVIVES:
+ok:false, blocked:true, exactly 1 clarification with label HEDGE_LABEL,
+reason NOT_STATED, actionLocation {actionIndex:0, action:stageVerb,
+argument:firstResolvable.name}, bindings [].
+
+### Mutation-sensitivity proof (two ways)
+
+(a) Superstring-only containment mutation — guard (4) line temporarily
+    `if (!answers.some((a) => a.label.includes(fact.label.trim()))) return true;`:
+
+    Tests  1 failed | 10 passed (11)
+    FAIL  ... > SH10 negative guard (4) mirror: an answered key that is a PROPER SUPERSTRING ...
+
+    SH10 FAILS, SH9 stays green — SH10 is the ONLY case that catches the mirror
+    arm the reviewer flagged.
+
+(b) Cycle-1 bidirectional containment mutation — guard (4) line temporarily
+    `if (!answers.some((a) => a.label.includes(fact.label.trim()) || fact.label.includes(a.label))) return true;`:
+
+    Tests  2 failed | 9 passed (11)
+    FAIL  ... > SH9 negative guard (4) exact-equality discipline ...
+    FAIL  ... > SH10 negative guard (4) mirror ...
+
+    The bidirectional mutation is still caught — now by BOTH arms.
+
+Both temp mutations were REVERTED immediately after each run; the final
+guard (4) line is the original exact-key `answeredByKey.has(fact.label.trim())`.
+
+### Zero production diff proof
+
+    git -c core.fileMode=false diff 60bcab23 -- server/src/compiler/resolution/resolveNounsPass.ts | wc -l
+    0
+
+`resolveNounsPass.ts` is byte-identical to impl commit 60bcab23; the only
+modified file in the fix is the test file.
+
+### Final suite output (post-revert)
+
+    npm run test:run -w server -- src/compiler/resolution/
+
+     ✓ src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts  (11 tests)
+     Test Files  9 passed (9)
+          Tests  117 passed (117)
+
+116 -> 117: the new SH10 is the only added test; every pre-existing case stays green.
+
+### Final typecheck output
+
+    npm run typecheck -w server
+
+    > @computable/server@1.0.0 typecheck
+    > tsc --noEmit
+
+    (no diagnostics) — exit 0. Zero errors.
+
+### Fix cycle 2 diff summary
+
+    server/src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts | +38 (SH10 only; 10 -> 11 tests)
+    server/src/compiler/resolution/resolveNounsPass.ts                    | 0 (byte-identical to 60bcab23)
+
+Commit on W28-STAGHEDGE-1-lane2: `test(compiler): pin guard-4 against superstring containment mirror (SH10)` (268c6173). NOT merged, NOT pushed; stacks untouched.
+
+STAGHEDGE1 FIX2 DONE
