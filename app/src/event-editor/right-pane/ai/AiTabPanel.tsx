@@ -1490,14 +1490,20 @@ export function AiTabPanel() {
               {chat.state.error}
             </p>
           ) : null}
-          <button
-            type="button"
-            className="ai-tab__input-cancel"
-            {...(sidebar.mode === 'updating' ? { 'data-testid': 'updating-cancel' } : {})}
-            onClick={handleCancelDraft}
-          >
-            Cancel this draft and start a new prompt
-          </button>
+          {/* ONE cancel affordance per state. While clarifying, the Questions
+              panel already owns "Cancel this draft" — rendering a second one
+              here stacked two identical buttons, one of them unstyled and
+              sitting on top of the question card. */}
+          {sidebar.mode === 'clarifying' ? null : (
+            <button
+              type="button"
+              className="ai-tab__input-cancel"
+              {...(sidebar.mode === 'updating' ? { 'data-testid': 'updating-cancel' } : {})}
+              onClick={handleCancelDraft}
+            >
+              Cancel this draft and start a new prompt
+            </button>
+          )}
         </section>
       ) : null}
 

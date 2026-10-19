@@ -133,13 +133,24 @@
   padding: 0;
   display: flex;
   flex-direction: column;
+  /* THE scroll region for the questions flow. The pane above it is fixed
+   * chrome (focus header, status, sources, sub-tabs); the questions section
+   * owns whatever height is left and scrolls inside it, so the card is
+   * reachable instead of being clipped to a sliver. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
+/* The panel lives inside the pane's scrolling body — it must NOT claim 100% of
+ * a bounded parent and then starve its own list. With `height:100%` the list
+ * collapsed to 49px (clientHeight 49 vs scrollHeight 155) and the question card
+ * was clipped to a sliver: "answer the questions above" with no questions
+ * visible. Content-sized, one scroll (the pane's), never an inner one. */
 .questions-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: 100%;
+  height: auto;
 }
 
 /* Header and footer stay put; only the list moves. */
@@ -174,10 +185,11 @@
 }
 
 .questions-panel__list {
-  flex: 1 1 auto;
+  /* Content-sized: the card must render in full, never be squeezed into a
+   * few-pixel window by the header above it. */
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 10px;
