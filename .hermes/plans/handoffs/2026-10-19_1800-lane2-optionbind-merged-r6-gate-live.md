@@ -112,3 +112,26 @@ grep on served sources). Active AI profile qwen3.8-thunderbeast (live-verified).
   receipts-lane2/W28-A5D-R3/2026-10-19_1755-r6/. Do NOT re-dispatch while alive.
 - No coder live; fleet lock free (stale lease record 'reg6-coder 3076448' harmless — flock
   -n acquires regardless). No scout/browser-reviewer local-slot use in flight.
+
+## AMENDMENT 18:15 EDT (same tick) — r6 ACCEPTED; THREE TASKS CLOSED
+r6 gate exited fast with a COMPLETE valid verdict: VERDICT: accept (tier-2 cloud; one clean
+run, no rerun). Receipts validated first-hand: REPORT.md + trail.json + 11 distinct-md5
+shots (dup check zero), containment of all 9 SHAs incl 6ef0263d confirmed by the driver at
+trunk 59216622. A5 every leg PASS; THE POINT OF r6 proven in-browser: option pick emitted
+[[labware:lbw-seed-tube-1p5ml|...]] and the r5-stalled tube card cleared next draw;
+completing path emptied in 2 cycles; deck filled; accept 200 minted
+LPR-w2-8-gate-t2d-meant-title-lyse-sample-ga-mvft39xu; ORCH GET independent: branch_resolution
+= [{lysis-method: bead-beater}, {lyse-variant: variant_a}] hyphenated verbatim.
+OBSERVATION-r6-1: sample card rendered /l ('No matches', no mint row; shot 05-r1c1-before.png)
+-> SAMPLE-CARD-1 F2 browser obligation MET. OBSERVATION-r6-2 carried (non-blocking): accept
+confirmation text omits the minted id (minor UX) — named follow-up candidate for the next
+planned UI item, not a gate miss.
+CLOSED: W28-A5D-R3 done, W28-OPTIONBIND-1 done, W28-SOURCEROW-1 done (task-list flipped under
+queue lock, DONE notes with evidence paths). Report promoted .hermes/plans/
+W28-A5D-R3-r6-gate-report.md. AS-LANE2-OPTIONBIND-MERGE-PREBROWSER CLEARED (assumptions.md).
+QUEUE after close: every remaining open item is BRAD-pending (p_min/promotion QUAL-1; W2-8/
+W2-11/A5g dispositions; W2-11 naming-stability finding QUEUED; OR-profile 400 residual) or
+INSUFFICIENT-side (PROTO-AI-13 320/500). A5n observation-2 generalization ('target' + other
+carded reasons /l) is ruled NOT-claimable this window — enqueue with next adjudication.
+NEXT TICK: nothing coder-ready -> recount PROTO-AI-13, watch BRAD artifacts, no-work.log line,
+exit. Fleet lock free; no workers live.
