@@ -107,6 +107,10 @@ function fixtureRecords(): RecordEnvelope[] {
     },
     {
       // The point of the task: no 'DMSO' in this payload at all.
+      // Carries the schema-real status enum value (material-instance.schema.yaml
+      // :86-88 enum [available, reserved, consumed, expired, discarded]) as
+      // P7 leak bait: entry construction copies an explicit field whitelist, so
+      // the banned word must NOT reach the serialized report via passthrough.
       recordId: 'MINST-SIGMA-D8642',
       schemaId: SCHEMA('material-instance'),
       payload: {
@@ -114,10 +118,12 @@ function fixtureRecords(): RecordEnvelope[] {
         id: 'MINST-SIGMA-D8642',
         name: 'Sigma D8642',
         vendor_product_ref: { kind: 'record', type: 'vendor-product', id: 'VPR-SIGMA-D8642' },
+        status: 'available',
       },
     },
     {
-      // Lot joined directly via material_ref.
+      // Lot joined directly via material_ref. Carries the schema-real lot
+      // status enum value (material-lot.schema.yaml :64-66) as leak bait.
       recordId: 'LOT-DMSO-20260217',
       schemaId: SCHEMA('material-lot'),
       payload: {
@@ -126,6 +132,7 @@ function fixtureRecords(): RecordEnvelope[] {
         material_ref: { kind: 'record', type: 'material', id: 'mat-seed-dmso-anhydrous' },
         lot_number: 'LOT-20260217-01',
         supplier: { name: 'Sigma-Aldrich', catalog_number: 'D8642', vendor_lot: 'SLCM4455' },
+        status: 'reserved',
       },
     },
     {
