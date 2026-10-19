@@ -47,6 +47,11 @@ export const RESOLVE_NOUNS_PASS_ID = 'resolve_nouns' as const;
 export const UNRESOLVED_ARGUMENTS_CODE = 'unresolved_arguments' as const;
 /** Stable reason code for the declared-required sweep (§5.2). */
 export const MISSING_REQUIRED_ARGUMENT_REASON = 'missing-required-argument' as const;
+/** Stable reason code for the model's not-stated hedge (the emitter
+ *  contract's closed reason set, intentCompile.ts:107 + the mirror yaml).
+ *  A stable code like the one above — legal per the module law :20-23, NOT
+ *  a verb/class/argument NAME. PARAM-FOLD-1 (W28-A5j) guard (5). */
+export const NOT_STATED_REASON = 'not-stated' as const;
 
 /** The engine door, injectable so tests can stub engine output (§6). */
 export type ResolveNounsEngine = (
@@ -320,6 +325,60 @@ function answeredSlotBindings(
 }
 
 // ---------------------------------------------------------------------------
+// PARAM-FOLD-1 (W28-A5j) — the declared-optional-absence fold. The exact
+// mirror of §5.2 in the other direction: the sweep trusts DECLARED DATA over
+// a SILENT model (a required absence becomes a question the DATA raises);
+// the fold trusts DECLARED DATA over a HEDGING model (a question the model
+// raises about an OPTIONAL absence the data says is not a question). A
+// MODEL-side fact is MOOT — dropped before the bar — exactly when all five
+// guards hold, each read as data/identity, never as a domain name:
+//   (1) the fact carries slot identity (same guard shape as SH-QA-1's gate);
+//   (2) its own actionLocation joins a declared arg contract of its verb
+//       (no contract -> KEEP: never silently drop a fact the data can't
+//       speak for);
+//   (3) the contract declares the absence legal (required !== true);
+//   (4) the argument is ABSENT in the parsed action (a PRESENT hedge stays
+//       answerable — the SAMPLE-CARD-1 class survives on data alone, no
+//       kind check needed);
+//   (5) the fact carries the stable NOT_STATED_REASON code (ambiguous /
+//       contradicts-the-text are stated-but-uncommitted — kept).
+// Engine clarifications and gated survivors are UNTOUCHED by construction:
+// this reads only the model's own facts against the declared contract list
+// + the parsed action — never identity-matched against engine output.
+// ---------------------------------------------------------------------------
+
+export function foldDeclaredOptionalAbsentHedges(
+  intent: ScientistIntent,
+  vocabulary: ScientistIntentVocabulary,
+  modelFacts: readonly ScientistIntentUnresolvedFact[],
+): ScientistIntentUnresolvedFact[] {
+  return modelFacts.filter((fact) => {
+    const loc = fact.actionLocation;
+    // Guard (1): slot identity, or KEEP.
+    if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
+    // Guard (2): the declared contract list of the fact's OWN verb location;
+    // a location that names no verb, or no contract for that (action,
+    // argument) -> KEEP.
+    const verb = loc.action;
+    if (typeof verb !== 'string') return true;
+    const contract = vocabulary
+      .argContracts(verb)
+      .find((c) => c.name === loc.argument);
+    if (!contract) return true;
+    // Guard (3): the vocabulary declares the absence legal, or KEEP.
+    if (contract.required === true) return true;
+    // Guard (4): the argument is ABSENT in the parsed action, or KEEP.
+    const action = intent.actions[loc.actionIndex];
+    if (!action) return true;
+    if (argumentPresent((action as unknown as Record<string, unknown>)[contract.name])) return true;
+    // Guard (5): a stable reason code, or KEEP.
+    if (fact.reason !== NOT_STATED_REASON) return true;
+    // All five: the data already settles this — the hedge is moot. FOLD.
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The pass
 // ---------------------------------------------------------------------------
 
@@ -385,8 +444,14 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
         return c.reason === MISSING_REQUIRED_ARGUMENT_REASON;
       });
 
+      // PARAM-FOLD-1 (W28-A5j): the model's facts pass the declared-optional-
+      // absence fold BEFORE reconciliation — a folded fact never enters
+      // `clarifications` and never counts toward `blocked`. Engine
+      // clarifications, the §5.2 sweep, and the gated survivors below are
+      // UNTOUCHED by construction (the fold reads only the model's own facts
+      // against the declared contract data + the parsed action).
       const reconciled = reconcileModelUnresolved(
-        deps.intent.unresolved,
+        foldDeclaredOptionalAbsentHedges(deps.intent, deps.vocabulary, deps.intent.unresolved),
         [...settledEngineClarifications, ...required],
         bindings,
       );
