@@ -50,9 +50,9 @@
  */
 import { test, expect } from '@playwright/test'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5193'
@@ -63,6 +63,11 @@ const USER_ID = process.env.CL_GATE_USER_ID ?? 'USR-BRAD'
 const ZYMO_PDF_SHA = '257f57196f6cd7a337e5ad42d7da74f2ab2c3e1e343a41c898d76c7d085d613b'
 const DRAFT_SHA = 'd878727ae69305d73623b6e6fd99ddf7a1bc999efd7b8d84c9c9944afdc98058'
 const ANSWERS_SHA = 'ac383fe4c71d164b52decaa332aeea1c87617a7efab29d294b3cb3a49fd7492e'
+// W211-MACH-1 golden fixture self-pin (PROVENANCE.md carries the same value).
+// v1.1 (advc-W211MACH1-c1 FIX1 D3): the fidelity block became machine-readable
+// (expectedMacro/expectedActionCount). Values unchanged; PROVENANCE.md carries
+// the same value and integrity test 1 re-pins it.
+const GOLDEN_FIXTURE_SHA = 'be891b174f8b0c63a19ea567f2889985dfe5e7fc687507a214945f956211b768'
 const XDR_ID = 'XDR-w211-gate'
 const PLR_ID = 'PLR-w211-gate'
 const RUN_ID = 'RUN-w211-gate'
@@ -103,10 +108,16 @@ function fixtures() {
     repoPath('server', 'src', 'ingestion', 'vendor-protocol', 'campaign-fixtures', 'zymo-robot-answers.frozen.yaml'),
     ANSWERS_SHA,
   ).toString('utf8')
+  // W211-MACH-1 golden fixture (harness DATA, self-pinned like the others).
+  const goldenFixtureText = readSelfPinned(
+    repoPath('app', 'e2e', 'fixtures', 'w211-golden', 'zymo-intent.frozen.yaml'),
+    GOLDEN_FIXTURE_SHA,
+  ).toString('utf8')
   loaded = {
     pdfBytes,
     draftText,
     answersText,
+    goldenFixtureText,
     vpdfId: `VPDF-${ZYMO_PDF_SHA.slice(0, 12).toUpperCase()}`, // VPDF-257F57196F6C
   }
   return loaded
@@ -644,6 +655,135 @@ async function seededFamilyPayload() {
   return fam.payload
 }
 
+// Resume-3 (l2t1740): promotion + run seeding rode the RETIRED D4 arm (orch
+// l2t1735 moved them out of beforeAll). G1 now owns the rider; D5/D6 call the
+// same idempotent ensure so every leg is runnable standalone (-g "<leg>") as
+// well as in the serial full run. promoteFamily()/seedRun() are GET-first and
+// repoint the PLR at THIS run's family (orch l2t2230), so re-calling is safe.
+async function ensureFamilySeeded() {
+  if (!familyId) {
+    familyId = await promoteFamily()
+    await seedRun(familyId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// W211-MACH-1 golden-leg helpers (l2t1330). The golden fixture is harness DATA
+// (app/e2e/fixtures/w211-golden/zymo-intent.frozen.yaml, self-pinned above);
+// these helpers seed its seedPlan rows GET-first and clear the class-(c) nonce
+// so every run starts from the same store state. The fixture YAML is parsed
+// with the repo's own `yaml` package via a LAZY dynamic import (app/ has no own
+// yaml dep; resolution walks to the repo root node_modules — verified l2t1330),
+// so vitest collection of this .mjs stays side-effect-free.
+// ---------------------------------------------------------------------------
+async function goldenFixtureData() {
+  const { parse } = await import('yaml')
+  return parse(fixtures().goldenFixtureText)
+}
+
+async function seedGoldenRows(fx) {
+  for (const row of fx.seedPlan.seededLabware) {
+    const existing = await apiGet(`/records/${encodeURIComponent(row.recordId)}`)
+    if (existing.status === 200) continue
+    const res = await apiPost('/records', {
+      schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+      payload: {
+        kind: 'labware',
+        recordId: row.recordId,
+        name: row.name,
+        labwareType: 'plate',
+        aliases: [row.name.toLowerCase().replace(/ /g, '_'), row.name.toLowerCase()],
+      },
+      message: 'W211-MACH-1 golden harness: seed row (fixture seedPlan)',
+    })
+    // Resume-3 discipline: a 409 'already exists' is NOT a failure for re-runs
+    // (GET-first already covers the common case; this covers the race).
+    if (res.status !== 200 && res.status !== 201 && res.status !== 409) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+  }
+  for (const row of fx.seedPlan.seededMaterials) {
+    const existing = await apiGet(`/records/${encodeURIComponent(row.recordId)}`)
+    if (existing.status === 200) continue
+    const payload = { kind: 'material', id: row.recordId, domain: 'reagent', name: row.name }
+    if (row.synonyms) payload.synonyms = String(row.synonyms).split(',').map((s) => s.trim())
+    const res = await apiPost('/records', {
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+      payload,
+      message: 'W211-MACH-1 golden harness: seed row (fixture seedPlan)',
+    })
+    // Resume-3 discipline (advc-W211MACH1-c1 D6: mirrored from the labware
+    // branch — the step-0 log targeted-3193.out.txt shows material POSTs
+    // genuinely returning 409 'Record already exists'): a GET miss + POST 409
+    // (race / stale GET) is NOT a failure for re-runs.
+    if (res.status !== 200 && res.status !== 201 && res.status !== 409) throw new Error(`golden seed ${row.recordId} -> ${res.status}: ${JSON.stringify(res.body).slice(0, 300)}`)
+  }
+}
+
+async function clearGoldenNonce(fx) {
+  // DECK-FOLD-1 discipline (spec.mjs trap warning, verbatim): the class-(c)
+  // noun must stay ZERO-MATCH until the real UI mint act creates it. A prior
+  // run's minted record (dynamic MAT-* id) is found by NAME and deleted before
+  // the leg; the minted id is never fixture-pinned.
+  const nonceNoun = fx.seedPlan.zeroMatchNouns[0].noun
+  const listing = await apiGet('/records?kind=material&limit=500')
+  for (const r of listing.body?.records ?? []) {
+    if ((r.payload ?? {}).name === nonceNoun) {
+      const d = await apiDelete(`/records/${encodeURIComponent(r.recordId)}`)
+      console.log(`[golden] cleared prior-run minted nonce ${r.recordId} -> ${d.status}`)
+    }
+  }
+  const after = await apiGet('/records?kind=material&limit=500')
+  const present = (after.body?.records ?? []).some((r) => (r.payload ?? {}).name === nonceNoun)
+  expect(present, `zero-match guard: '${nonceNoun}' must NOT pre-exist before the golden leg (class-(c) needs a fresh nonce)`).toBe(false)
+}
+
+// Golden-leg receipts (worker contract: app/e2e/receipts/w211-mach1-l2t<ts>/).
+// l2t1740 CRITICAL HARNESS FACT (vite log proof, verbatim):
+//   [vite] page reload e2e/receipts/w211-mach1-l2t1740/g1-draw2-held422.json
+// The dev server watches EVERYTHING under its root (app/). A receipt written
+// under app/e2e/receipts/ MID-LEG full-RELOADS the browser page and wipes the
+// folded cards/answers (the diag MutationObserver shows the whole document
+// replaced right after the draw-2 write). So during the leg, receipts are
+// STAGED outside the watch root (.run/w211/receipts-staging/) and flushed to
+// the contract dir only when the leg's UI work is done (or in afterAll, so a
+// failed leg still leaves its RED evidence on disk).
+const GOLDEN_RECEIPT_CONTRACT_DIR = ['app', 'e2e', 'receipts', 'w211-mach1-l2t1740']
+function goldenReceiptStagingDir() {
+  const dir = repoPath('.run', 'w211', 'receipts-staging')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+function goldenReceiptPath(name) {
+  return join(goldenReceiptStagingDir(), name)
+}
+function flushGoldenReceipts() {
+  const staging = goldenReceiptStagingDir()
+  const dest = repoPath(...GOLDEN_RECEIPT_CONTRACT_DIR)
+  mkdirSync(dest, { recursive: true })
+  for (const f of readdirSync(staging)) {
+    copyFileSync(join(staging, f), join(dest, f))
+    rmSync(join(staging, f), { force: true })
+  }
+}
+
+/** Strip volatile per-compile identity tokens so byte-stability measures the
+ *  CONTENT, not random event ids. Named instability (eventId suffixes) is
+ *  recorded separately — never averaged away. */
+function canonicalCompileSha(body) {
+  const strip = (v) => {
+    if (Array.isArray(v)) return v.map(strip)
+    if (v && typeof v === 'object') {
+      const out = {}
+      for (const [k, val] of Object.entries(v)) {
+        if (k === 'eventId') continue
+        out[k] = strip(val)
+      }
+      return out
+    }
+    return v
+  }
+  return createHash('sha256').update(JSON.stringify(strip(body))).digest('hex')
+}
+
 test.describe('W2-11 zymo campaign demo gate', () => {
   // l2t1735 harness fix: the config default is 30s/test; D3 alone budgets a
   // 90s model turn + a 120s proposal wait + three 60s refusal waits (the W2-9
@@ -664,6 +804,14 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // the UN-promoted record. Promotion + run seeding now happen in D4, the
     // first leg that needs a family. D2/D3 run against the live un-promoted
     // MEANT path — which is exactly what they claim to gate.
+  })
+
+  test.afterAll(async () => {
+    // Receipts are STAGED outside the vite watch root during legs (see
+    // goldenReceiptPath comment); flush them to the contract dir here so a
+    // FAILED leg still leaves its RED evidence on disk (the reload this flush
+    // triggers lands after all legs finished — nothing live to lose).
+    flushGoldenReceipts()
   })
 
   test('PRECHECK: seeded SAID + MEANT present (family/run arrive with D4)', async () => {
@@ -808,7 +956,16 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     expect(xdrAfter.payload.status, 'XDR status unchanged (no promotion through the chat wall)').toBe(statusBefore)
   })
 
-  test('D4: downstream questions — run workspace localization answers + accept -> LPR', async ({ page }) => {
+  // W211-MACH-1 (l2t1740): the D4 RAW-DRAW ARM IS RETIRED TO QUAL-1 EVIDENCE —
+  // skip-marked, NOT deleted (spec hard rule 5). Its trail lives in
+  // /home/brad/.hermes/cl/receipts/W2-11-ZYMO-GOLDEN-DEMO/ (gate-14 runs) and
+  // its model-draw baseline is W211-QUAL-1's subject
+  // (.hermes/plans/2026-10-18_W211-QUAL-1-qualification-spec.md). The body —
+  // D4_PROMPT, the mint loop, the stall clause, MAX_REDRAW and the boxCount>0
+  // assertion — stays BYTE-UNTOUCHED in this skipped arm. The deterministic
+  // golden leg (G1, below) replaces it as the gate; G1 takes over D4's
+  // promotion + run seeding, which D5/D6 ride.
+  test.skip('D4: downstream questions — run workspace localization answers + accept -> LPR (RETIRED to W211-QUAL-1 evidence)', async ({ page }) => {
     // Orch l2t1735: promotion + run seeding live HERE (moved out of beforeAll)
     // so D2/D3 gate the un-promoted MEANT path first. D5/D6 ride familyId.
     if (!familyId) {
@@ -1103,6 +1260,412 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     console.log(`[D4 paste] LPR ${lpr.recordId} branch_resolution=${JSON.stringify(resolution)}`)
   })
 
+  // ==========================================================================
+  // W211-MACH-1 GOLDEN LEG (l2t1740) — the deterministic leg the spec gates.
+  //
+  // EVIDENCE STATEMENT (the fixture's own words, restated at the leg): this is
+  // a WORKFLOW-INTEGRATION test. The natural-language producer is REPLACED AT
+  // ITS OWN WIRE BOUNDARY (the OpenAI-compatible POST /v1/chat/completions the
+  // product's InferenceClient calls) by the transport-only replay server
+  // (app/e2e/fixtures/w211-golden/replay-producer.mjs) serving the frozen
+  // blocks of zymo-intent.frozen.yaml. This is NOT model proof. Everything
+  // downstream — Ajv validation, normalization, resolve_nouns, the SPINE-3
+  // engine, clarification rendering, answer binding, mint, persistence,
+  // recompile, deck review, accept, LPR — runs unchanged on production paths.
+  //
+  // SEAM A (orchestrator ruling OQ1): the stack's ai config names the replay
+  // server as the compile-path producer endpoint (ai.smallModel,
+  // IntentCompileFromPromptHandlers.ts:90-121 — a declared smallModel key wins
+  // with its own endpoint). The leg PROVES the seam is live: it asserts the
+  // replay server's own request log grew during the leg (the producer call
+  // landed on the harness's process, not a model). README-replay-seam.md
+  // carries the exact config diff + steps for the orchestrator's stack.
+  //
+  // REAL SURFACES ONLY (spec hard rule 4): every answer in this leg is a CLICK
+  // on the card (picker row / mint floor row), every recompile is the UI's own
+  // re-POST. ZERO apiPost('/intent/compile-from-prompt') and ZERO
+  // apiPost('/vocab/mint') calls inside the leg; the only API calls are GET
+  // receipts (records, LPR reread) and the idempotent seed-plan rider.
+  // ==========================================================================
+  test('G1: golden fixture — replay producer drives the real UI end-to-end with fidelity assertions', async ({ page }) => {
+    test.setTimeout(15 * 60 * 1000)
+    const fx = await goldenFixtureData()
+
+    // --- SEAM A wiring proof: the replay server is up and its request log is
+    // the leg's own wiring evidence. The log path is the documented one under
+    // .run/w211/ (the private-stack helper's location); the orchestrator's
+    // stack override is passed via W211_REPLAY_LOG when the profile is
+    // repointed. Absent log file => the seam is NOT wired => honest fail.
+    const replayLogPath = process.env.W211_REPLAY_LOG ?? repoPath('.run', 'w211', 'replay-requests.jsonl')
+    const replayHealth = await fetch('http://127.0.0.1:43117/replay-health').then((r) => r.json()).catch(() => null)
+    expect(replayHealth?.ok, 'the golden replay producer must be serving (SEAM A: the stack ai profile points at it)').toBe(true)
+    expect(replayHealth?.fixture, 'the replay server serves THIS fixture').toBe(fx.fixtureId)
+    const replayLogBefore = existsSync(replayLogPath) ? readFileSync(replayLogPath, 'utf8').split('\n').filter(Boolean).length : 0
+
+    // --- Store-state rider: seed the fixture's seedPlan rows GET-first
+    // (409 already-exists tolerated) and clear any prior-run minted nonce so
+    // the class-(c) noun starts ZERO-MATCH every run.
+    await ensureFamilySeeded()
+    await seedGoldenRows(fx)
+    await clearGoldenNonce(fx)
+
+    // --- Navigate the run's METHOD deck surface (the product's protocol-tab
+    // host; same nav the D4 arm proved, reused verbatim).
+    await page.goto(`${BASE_URL}/`)
+    await page.evaluate((u) => window.localStorage.setItem('cl.currentUserId', u), USER_ID)
+    // DIAGNOSTIC (l2t1740): log every remount of the localization thread from
+    // the page side so the failure timeline is visible in the run log.
+    page.on('console', (msg) => {
+      const t = msg.text()
+      if (t.includes('W211-DIAG')) console.log(`[page] ${t}`)
+    })
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        const seen = new Set()
+        const obs = new MutationObserver((muts) => {
+          for (const m of muts) {
+            for (const n of m.removedNodes) {
+              if (!(n instanceof HTMLElement)) continue
+              const el = n.matches('[data-testid="pl-protocol-text"]') ? n : n.querySelector?.('[data-testid="pl-protocol-text"]')
+              if (el && !seen.has(el)) { seen.add(el); console.log(`W211-DIAG thread REMOVED at ${Math.round(performance.now())}ms`) }
+            }
+            for (const n of m.addedNodes) {
+              if (!(n instanceof HTMLElement)) continue
+              const el = n.matches('[data-testid="pl-protocol-text"]') ? n : n.querySelector?.('[data-testid="pl-protocol-text"]')
+              if (el) console.log(`W211-DIAG thread MOUNTED at ${Math.round(performance.now())}ms`)
+            }
+          }
+        })
+        obs.observe(document.documentElement, { childList: true, subtree: true })
+      })
+    })
+    await page.goto(`${BASE_URL}/deck/${EVG_ID}/${RUN_ID}`)
+    await page.waitForLoadState('networkidle')
+    const protoTab = page.getByTestId('right-pane-tab-protocol')
+    await expect(protoTab, 'the deck right pane must offer the Protocol tab').toBeVisible({ timeout: 20000 })
+    await protoTab.click()
+    await page.waitForTimeout(1500)
+    const details = page.getByTestId('protocol-localization-details')
+    await expect(details, 'the run workspace protocol tab must surface the localization thread').toBeVisible({ timeout: 30000 })
+    await expect(page.getByTestId('protocol-localization-thread')).toBeVisible()
+
+    // --- DRAW 1 + DRAW 2 + CARDS, driven on a SETTLED thread (l2t1740
+    // run-1/run-2 diagnosis, deterministic fix).
+    // ProtocolTabPanel mounts the thread with
+    // key=`${oneShotSrc.recordId}:${oneShotSourceText ? 't' : 'n'}` (:1789).
+    // The run's protocol resolves ASYNCHRONOUSLY (run -> PLR -> family ->
+    // oneShotSourceText via protocolTextFromSource), so the key FLIPS after
+    // first paint and every flip REMOUNTS the thread, wiping protocolText +
+    // answers + heldCards and re-running the auto-ask (ProtocolLocalizationThread
+    // :502-508). Run 1's aria snapshot proved it: the 422 folded into cards,
+    // then a late flip re-asked (infoMsg 'Answer the branch questions to
+    // localize.', Apply & compile back to disabled, textarea back to the
+    // family's derived step text) and the picker was gone.
+    // So the leg (i) settles on the FAMILY-SETTLED state — the textarea holds
+    // the family's own derived step prose AND pl-clarify offers the family's
+    // rack axis (that axis can only come from the family record, proving
+    // sourceProtocolId resolved) AND the value is stable across polls;
+    // (ii) drives the whole ask -> answer -> compile -> cards chain and
+    // VERIFIES the chain survived (cards on screen + the fixture nonce still
+    // in the textarea); (iii) re-settles and re-drives, bounded, if a flip
+    // landed mid-chain. Every gate is state-based, never a guessed sleep.
+    const textArea = page.getByTestId('pl-protocol-text')
+    const familyStepMarker = 'BashingBead'
+
+    async function settleThread() {
+      await expect(textArea, 'the localization thread textarea must mount').toBeVisible({ timeout: 30000 })
+      const rackChoice = page.getByTestId('pl-clarify')
+        .locator('.pl-axis__choice', { hasText: /BashingBead Lysis Rack/i }).first().locator('input[type="radio"]')
+      await expect(rackChoice, 'the thread must settle on the attached family (its declared branch_axes are loaded)').toBeVisible({ timeout: 90000 })
+      let last = null
+      let stable = 0
+      for (let i = 0; i < 25 && stable < 3; i += 1) {
+        const t = await textArea.inputValue().catch(() => null)
+        if (t !== null && t === last && t.includes(familyStepMarker)) stable += 1
+        else stable = 0
+        last = t
+        await page.waitForTimeout(1000)
+      }
+      expect(stable >= 3, 'the thread must hold the family-derived text value-stably (no pending remount) before the leg drives it').toBe(true)
+    }
+
+    let heldBody = null
+    let chainError = null
+    for (let attempt = 1; attempt <= 3 && heldBody === null; attempt += 1) {
+      try {
+        await settleThread()
+        await textArea.fill(fx.protocolText)
+        // The nonce filter pins MY click's response: the thread's auto-ask (the
+        // family's own derived step text) never contains the fixture nonce.
+        const askResPromise = page.waitForResponse((r) => r.url().includes('/intent/compile-from-prompt')
+          && r.request().method() === 'POST'
+          && (r.request().postData() ?? '').includes(fx.cohortNonce), { timeout: 120000 })
+        await page.getByTestId('pl-localize-btn').click()
+        const askRes = await askResPromise
+        console.log(`[G1 draw1 attempt ${attempt}] ask arm -> HTTP ${askRes.status()}`)
+        expect(askRes.status(), 'the ask round-trip answers with the branch questions').toBe(200)
+
+        // Answer the family axis (rack branch — the same branch the golden's
+        // robot answers keep) and any remaining axes so Apply & compile enables.
+        const clarify = page.getByTestId('pl-clarify')
+        await expect(clarify, 'the family branch_axes questions must appear').toBeVisible({ timeout: 60000 })
+        const rackChoice = clarify.locator('.pl-axis__choice', { hasText: /BashingBead Lysis Rack/i }).first().locator('input[type="radio"]')
+        await expect(rackChoice, 'the rack condition must be offered on the axis').toBeVisible({ timeout: 10000 })
+        await rackChoice.check()
+        const axes = clarify.locator('.pl-axis')
+        const axisCount = await axes.count()
+        for (let a = 0; a < axisCount; a += 1) {
+          const axis = axes.nth(a)
+          const checked = await axis.locator('input[type="radio"]:checked').count()
+          if (checked === 0) await axis.locator('input[type="radio"]').first().check()
+        }
+
+        // DRAW 2 (answered compile): pl-submit-answers is the UI's own re-POST.
+        // The replay producer serves the frozen scientist-intent draw; the spine
+        // bars on the planted facts -> the held-422 bundle folds into cards.
+        const submitBtn = page.getByTestId('pl-submit-answers')
+        await expect(submitBtn, 'Apply & compile enables once every axis is answered').toBeEnabled({ timeout: 20000 })
+        const heldResPromise = page.waitForResponse((r) => r.url().includes('/intent/compile-from-prompt')
+          && r.request().method() === 'POST'
+          && (r.request().postData() ?? '').includes(fx.cohortNonce), { timeout: 180000 })
+        await submitBtn.click()
+        const heldRes = await heldResPromise
+        console.log(`[G1 draw2 attempt ${attempt}] answered compile -> HTTP ${heldRes.status()}`)
+        expect(heldRes.status(), 'the planted ambiguity + unknown-noun bar the answered draw (held-422, foldHeldBundle-reachable — STEP 0 OUTCOME A)').toBe(422)
+        const body = await heldRes.json()
+
+        // VERIFY the chain survived the fold: cards on screen AND the fixture
+        // nonce still in the textarea (a late key flip resets both).
+        const cardsNow = page.getByTestId('pl-clarification-cards')
+        const cardsUp = await cardsNow.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
+        const kept = await textArea.inputValue().catch(() => '')
+        if (!cardsUp || !kept.includes(fx.cohortNonce)) {
+          console.log(`[G1 attempt ${attempt}] late thread remount wiped the chain (cards=${cardsUp} nonceKept=${kept.includes(fx.cohortNonce)}) — re-settling and re-driving`)
+          continue
+        }
+        heldBody = body
+      } catch (err) {
+        chainError = err
+        console.log(`[G1 attempt ${attempt}] chain failed: ${String(err).slice(0, 200)} — re-settling`)
+      }
+    }
+    if (heldBody === null && chainError !== null) throw chainError
+    expect(heldBody, 'the answered draw must bar with the held-422 bundle on a settled thread').toBeTruthy()
+    await page.screenshot({ path: goldenReceiptPath('g1-01-ask-axes.png'), fullPage: true })
+
+    // Obligation-shape evidence from the held bundle itself (the wire facts):
+    const facts = heldBody?.clarifications ?? []
+    const factFor = (label) => facts.find((c) => String(c.label ?? '').trim() === label)
+    const bFact = factFor(fx.plantedFacts.find((p) => p.obligation === 'b-ambiguous-labware-slot').wire.label)
+    const cFact = factFor(fx.plantedFacts.find((p) => p.obligation === 'c-unknown-material-noun').wire.label)
+    expect(bFact, 'the (b) ambiguous-noun fact is in the held bundle').toBeTruthy()
+    expect(bFact.actionLocation?.argument, 'the (b) fact bites a labware-semantic slot').toBe('labware')
+    expect(bFact.actionLocation?.action, 'the (b) fact names its verb').toBe('bead_beat')
+    expect(cFact, 'the (c) unknown-noun fact is in the held bundle').toBeTruthy()
+    expect(cFact.actionLocation?.argument, 'the (c) fact bites a material-semantic slot').toBe('material')
+    const aNoun = fx.obligations.find((o) => o.class === 'role-uniquely-resolvable-noun').noun
+    expect(facts.some((c) => String(c.label ?? '').includes(aNoun)), `class-(a): NO fact may name '${aNoun}' (unique in-band bind, OQ3-adopted)`).toBe(false)
+    writeFileSync(goldenReceiptPath('g1-draw2-held422.json'), JSON.stringify({ status: 422, body: heldBody }, null, 1))
+
+    // --- CARDS RENDER (the browser-gate surfaces, asserted headlessly too):
+    // pl-clarification-cards carries one card per answerable fact; the card
+    // head shows its menuProvider (ANSWER-SURFACE-1: '/l' for (b), '/m' for (c)).
+    const cards = page.getByTestId('pl-clarification-cards')
+    await expect(cards, 'the held-422 facts render as answerable cards').toBeVisible({ timeout: 30000 })
+    const cardList = cards.locator('[data-testid="pl-clarification-card"]')
+    await expect(cardList, 'both planted noun facts get a card').toHaveCount(2)
+    const bCard = cardList.filter({ hasText: 'Bead Beating Plate' }).first()
+    const cCard = cardList.filter({ hasText: 'MagBinding Beads v211g1' }).first()
+    await expect(bCard.locator('.pl-held-clarification-menu'), "the (b) card routes '/l' (ANSWER-SURFACE-1)").toHaveText('/l')
+    await expect(cCard.locator('.pl-held-clarification-menu'), "the (c) card routes '/m'").toHaveText('/m')
+    await page.screenshot({ path: goldenReceiptPath('g1-02-held-cards-l-and-m.png'), fullPage: true })
+
+    // --- CLASS-(b) ANSWER: the REAL ClarificationPicker on the '/l' card.
+    // NO mint floor exists on '/l' (resolveLabware emits none — ANSWER-SURFACE-1
+    // FIX1 D1): the picker's empty-state copy says plain 'No matches' when a
+    // search misses. Pick candidate A from the picker rows (the pick emits
+    // [[labware:<id>|label]] and the UI re-POSTs through handleClarificationPick).
+    const bSearch = bCard.locator('.message-log__clarification-search')
+    await expect(bSearch, "the '/l' card mounts the real ClarificationPicker").toBeVisible({ timeout: 15000 })
+    await bSearch.fill('Bead Beating Plate')
+    const bRows = bCard.locator('[data-slash-row]')
+    await expect(bRows.filter({ hasText: 'Bead Beating Plate A' }).first(), 'the picker lists seeded candidate A').toBeVisible({ timeout: 20000 })
+    await expect(bRows.filter({ hasText: 'Bead Beating Plate B' }).first(), 'the picker lists seeded candidate B (ambiguity non-vacuous)').toBeVisible({ timeout: 10000 })
+    const mintRowB = bCard.locator('[data-slash-row]', { hasText: /Create local term/i })
+    expect(await mintRowB.count(), "the '/l' card has NO mint floor row (material-only mint posture)").toBe(0)
+    const bPickResPromise = page.waitForResponse((r) => r.url().includes('/intent/compile-from-prompt') && r.request().method() === 'POST', { timeout: 180000 })
+    await bRows.filter({ hasText: 'Bead Beating Plate A' }).first().click()
+    const bPickRes = await bPickResPromise
+    console.log(`[G1 pick-b] answered re-POST -> HTTP ${bPickRes.status()}`)
+    await page.screenshot({ path: goldenReceiptPath('g1-03-picked-labware-a.png'), fullPage: true })
+
+    // ANSWER-BIND-1 shrink: the re-bar carries ONLY the (c) fact — the answered
+    // (b) label is deterministically GONE (verified in the wire body, not just a 200).
+    expect(bPickRes.status(), 'the re-draw still bars on the unanswered (c) fact').toBe(422)
+    const bPickBody = await bPickRes.json()
+    const factsAfterB = bPickBody?.clarifications ?? []
+    expect(factsAfterB.some((c) => String(c.label ?? '').trim() === 'Bead Beating Plate'), 'ANSWER-BIND-1: the answered (b) fact is GONE on the next draw').toBe(false)
+    expect(factsAfterB.some((c) => String(c.label ?? '').trim() === 'MagBinding Beads v211g1'), 'the (c) fact survives until answered').toBe(true)
+    writeFileSync(goldenReceiptPath('g1-after-b-pick-held422.json'), JSON.stringify({ status: 422, body: bPickBody }, null, 1))
+
+    // --- CLASS-(c) ANSWER: the REAL mint floor row on the '/m' card. The
+    // picker's floor row ('Create local term "<q>"') fires the same POST
+    // /vocab/mint {refKind:'material'} ClarificationPicker uses; the minted id
+    // is read from the mint response the UI itself makes (never fixture-pinned).
+    const cSearch = cCard.locator('.message-log__clarification-search')
+    await expect(cSearch, "the '/m' card mounts the real ClarificationPicker").toBeVisible({ timeout: 15000 })
+    await expect(cSearch, 'the picker search seeds from the fact label').toHaveValue('MagBinding Beads v211g1')
+    const mintRow = cCard.locator('[data-slash-row]', { hasText: /Create local term/i })
+    await expect(mintRow.first(), "the '/m' card shows the mint floor row").toBeVisible({ timeout: 20000 })
+    const mintReqPromise = page.waitForRequest((r) => r.url().includes('/vocab/mint') && r.method() === 'POST', { timeout: 60000 })
+    const cPickResPromise = page.waitForResponse((r) => r.url().includes('/intent/compile-from-prompt') && r.request().method() === 'POST', { timeout: 180000 })
+    await mintRow.first().click()
+    const mintReq = await mintReqPromise
+    const mintRes = await mintReq.response().then((r) => r.json()).catch(() => null)
+    const mintedRecordId = String(mintRes?.recordId ?? '')
+    expect(mintRes?.success, 'the real UI mint act minted the term').toBe(true)
+    expect(mintedRecordId.startsWith('MAT-'), 'the minted record is a MAT- material (dynamic id, never pinned)').toBe(true)
+    console.log(`[G1 mint-c] POST /vocab/mint (fired by the UI) -> recordId ${mintedRecordId}`)
+    const cPickRes = await cPickResPromise
+    console.log(`[G1 pick-c] answered re-POST -> HTTP ${cPickRes.status()}`)
+    await page.screenshot({ path: goldenReceiptPath('g1-04-minted-material.png'), fullPage: true })
+
+    // The minted record is a governed material (material-only, status proposed).
+    const minted = await getRecordEnvelope(mintedRecordId)
+    expect(minted.payload.kind, 'the minted noun is kind material').toBe('material')
+    expect(minted.payload.name, 'the minted record carries the noun').toBe('MagBinding Beads v211g1')
+    expect(minted.payload.status, 'minted terms enter as governed proposals').toBe('proposed')
+
+    // --- COMPLETING DRAW: the (c) fact clears; the compile completes (200,
+    // clarifications ABSENT — zero surviving blockers, the spec's blocker bar).
+    expect(cPickRes.status(), 'the final draw COMPLETES (200) once both cards are answered').toBe(200)
+    const finalBody = await cPickRes.json()
+    expect(finalBody?.outcome, 'zero surviving blockers: outcome complete').toBe('complete')
+    expect(finalBody?.clarifications ?? [], 'zero surviving blockers: clarifications empty').toHaveLength(0)
+    writeFileSync(goldenReceiptPath('g1-final-200.json'), JSON.stringify({ status: 200, body: finalBody }, null, 1))
+    const events = finalBody?.terminalArtifacts?.events ?? []
+    // Byte-stability receipts (spec: md5 of deck-review content + final compile
+    // body across the 3 green runs). Named instability (eventId suffixes) is
+    // recorded, never averaged: the canonical sha strips ONLY eventId keys.
+    const eventIds = events.map((e) => String(e.eventId ?? ''))
+    const volatileIds = eventIds.filter((id) => !/^evt-[a-z_]+-[a-z0-9]{8}$/.test(id))
+    writeFileSync(goldenReceiptPath('g1-final-compile-sha.json'), JSON.stringify({
+      canonicalCompileSha: canonicalCompileSha(finalBody),
+      rawCompileSha: createHash('sha256').update(JSON.stringify(finalBody)).digest('hex'),
+      eventIds,
+      unexpectedIdShapes: volatileIds,
+    }, null, 1))
+
+    // --- FIDELITY IN THE RECOMPUTED INTENT (not just a 200): the (b) pick
+    // landed in the bead_beat slot (resolvedLabwares carries the PICKED record
+    // id); the (c) mint landed in the add_material slot; the class-(a) noun
+    // bound silently; the declared parameters survived.
+    // SOURCE OF TRUTH (advc-W211MACH1-c1 D3): every fidelity bar below reads
+    // fx.fidelity (fixture's expected block) — the harness carries NO inline
+    // fidelity literals. Integrity test 8 pins that block against the frozen
+    // macro, so harness and fixture cannot drift apart.
+    const resolved = finalBody?.terminalArtifacts?.resolvedLabwares ?? []
+    const resolvedIds = resolved.map((r) => r.recordId)
+    expect(resolvedIds, 'the (b) pick bound the bead_beat slot to the PICKED record').toContain('LAB-w211-golden-beadplate-a')
+    expect(resolvedIds, 'class-(a): Sample Plate bound with no card').toContain('LAB-w211-sample-plate')
+    expect(resolvedIds, 'the supporting nouns bound').toEqual(expect.arrayContaining(['LAB-w211-golden-lysisplate', 'LAB-w211-golden-magplate']))
+    expect(resolvedIds, 'the (b) loser B is NOT bound').not.toContain('LAB-w211-golden-beadplate-b')
+    const macroActions = finalBody?.localMacro?.actions ?? []
+    const expectedMacro = fx.fidelity.expectedMacro
+    expect(macroActions.length, `no action silently discarded (${fx.fidelity.expectedActionCount} planted actions)`).toBe(fx.fidelity.expectedActionCount)
+    for (let i = 0; i < expectedMacro.length; i += 1) {
+      const exp = expectedMacro[i]
+      const act = macroActions[i]
+      expect(act?.action, `fidelity: recomputed macro action ${i} is '${exp.action}' (fixture expectedMacro)`).toBe(exp.action)
+      for (const [key, want] of Object.entries(exp.params ?? {})) {
+        expect(act?.[key], `fidelity: '${exp.action}' param '${key}' survived as the fixture's expected value`).toEqual(want)
+      }
+    }
+    expect(events.length, 'the compile emitted the run graph').toBeGreaterThan(0)
+
+    // --- DECK REVIEW: label-correspondence, NOT boxCount>0. The completing
+    // compile's resolvedLabwares fold into pl-deck-review; the checkbox labels
+    // must include the PICKED (b) record's real title (the strongest fidelity
+    // link: the deck shows what the scientist picked) plus the other bound nouns.
+    const deckReview = page.getByTestId('pl-deck-review')
+    await expect(deckReview, 'the completing compile routes through the deck review gate').toBeVisible({ timeout: 30000 })
+    const boxes = deckReview.locator('input[type="checkbox"]')
+    const boxCount = await boxes.count()
+    expect(boxCount, 'the deck offers the resolved placements').toBe(fx.expectedDeck.exactCheckboxCount)
+    const deckLabels = await deckReview.locator('.pl-deckreview-item__label').allInnerTexts()
+    for (const want of fx.expectedDeck.mustIncludeLabels) {
+      expect(deckLabels, `deck label-correspondence: '${want}' must be offered`).toContain(want)
+    }
+    const pickedBox = deckReview.locator(`[data-testid="deck-labware-${fx.seedPlan.seededLabware.find((r) => r.name === fx.expectedDeck.pickedCheckboxLabel).recordId}"]`)
+    await expect(pickedBox, 'the PICKED (b) record has its own deck checkbox').toBeVisible()
+    // Byte-stability receipt: the deck-review content captured for the md5
+    // comparison across the >=3 consecutive green runs.
+    writeFileSync(goldenReceiptPath('g1-deck-content.json'), JSON.stringify({ labels: deckLabels, boxCount }, null, 1))
+    await page.screenshot({ path: goldenReceiptPath('g1-05-deck-review-labels.png'), fullPage: true })
+
+    // --- LOAD DECK -> ACCEPT -> LPR (the accept gate + rereadable lineage).
+    await pickedBox.check()
+    await page.getByTestId('pl-load-deck').click()
+    const accept = page.getByTestId('pl-accept')
+    await expect(accept, 'accept enables after the deck gate').toBeEnabled({ timeout: 20000 })
+    await accept.click()
+    await expect(page.getByTestId('pl-msg'), 'the accept message shows Accepted').toContainText('Accepted', { timeout: 30000 })
+    await page.screenshot({ path: goldenReceiptPath('g1-06-accepted.png'), fullPage: true })
+
+    // LPR reread (GET receipt, reused D4 lineage shape + fidelity fields):
+    const list = await apiGet(`/records?kind=local-protocol&limit=50`)
+    const records = list.body?.records ?? []
+    const lpr = records.find((r) => String(r.recordId).startsWith('LPR-') && r.payload?.inherits_from?.id === familyId)
+    expect(lpr, 'the accept minted an LPR inheriting from the promoted family').toBeTruthy()
+    const resolution = lpr.payload.branch_resolution ?? []
+    expect(resolution.length, 'the answered family axis rides branch_resolution').toBeGreaterThan(0)
+    const overrides = lpr.payload.overrides?.parameters ?? []
+    expect(overrides.length, `the accepted macro rides overrides.parameters verbatim (${fx.fidelity.expectedActionCount} actions)`).toBe(fx.fidelity.expectedActionCount)
+    const lprBeadBeat = overrides.find((a) => a.action === 'bead_beat')
+    expect(lprBeadBeat?.labware, 'the LPR carries the (b) noun').toBe('Bead Beating Plate')
+    const lprBeads = overrides.find((a) => a.action === 'add_material' && String(a.material ?? '').includes('MagBinding Beads'))
+    expect(lprBeads?.material, 'the LPR carries the minted noun label').toBe('MagBinding Beads v211g1')
+    // D3 (fixture-sourced): the accepted macro rides the fixture's expected
+    // block verbatim — same bar as the recomputed intent, asserted on the LPR.
+    for (let i = 0; i < expectedMacro.length; i += 1) {
+      const exp = expectedMacro[i]
+      const act = overrides[i]
+      expect(act?.action, `LPR fidelity: overrides.parameters[${i}] is '${exp.action}' (fixture expectedMacro)`).toBe(exp.action)
+      for (const [key, want] of Object.entries(exp.params ?? {})) {
+        expect(act?.[key], `LPR fidelity: '${exp.action}' param '${key}' rode overrides verbatim`).toEqual(want)
+      }
+    }
+    writeFileSync(goldenReceiptPath('g1-lpr-reread.json'), JSON.stringify({ recordId: lpr.recordId, payload: lpr.payload }, null, 1))
+    console.log(`[G1 paste] LPR ${lpr.recordId} inherits_from=${lpr.payload.inherits_from.id} overrides=${overrides.length} branch_resolution=${JSON.stringify(resolution).slice(0, 200)}`)
+
+    // --- SEAM A proof (read-back): the replay server's request log grew during
+    // the leg — the producer calls landed on the harness's replay process at
+    // its wire boundary (branch-questions + intent-draw kinds), NOT on a model.
+    const replayLogAfter = readFileSync(replayLogPath, 'utf8').split('\n').filter(Boolean)
+    const newRecords = replayLogAfter.slice(replayLogBefore)
+    const kinds = newRecords.map((l) => JSON.parse(l).kind)
+    expect(newRecords.length, 'the leg drove at least one branch-questions + one intent-draw call through the replay producer').toBeGreaterThanOrEqual(2)
+    expect(kinds.filter((k) => k === 'branch-questions').length, 'the branch-questions call rode the wire boundary').toBeGreaterThanOrEqual(1)
+    expect(kinds.filter((k) => k === 'intent-draw-tool').length, 'the scientist-intent draw rode the wire boundary').toBeGreaterThanOrEqual(1)
+    writeFileSync(goldenReceiptPath('g1-replay-seam-log.jsonl'), newRecords.join('\n') + '\n')
+    console.log(`[G1 seam-a proof] replay log grew ${newRecords.length} entries during the leg: [${kinds.join(', ')}]`)
+
+    // UI work is DONE — flush the staged receipts to the contract dir now. The
+    // write lands under the vite watch root and reloads the page, but no live
+    // UI state remains to lose (l2t1740: mid-leg writes there reloaded the
+    // page and wiped the folded cards — the exact run-1/run-2 failure).
+    flushGoldenReceipts()
+
+    // --- CLASS-(d) honesty (BLOCKED-ON-FIX, named fix task W211-GAPCARD-1):
+    // the gap fact's deck-surface answerability is NOT asserted here — STEP 0
+    // proved a non-noun gap fact reaches NO answerable card surface on either
+    // arm (held-422: adapter maps it to null; 200-gap: the client arms never
+    // fold clarifications). The fixture pins that as expectedCard:false
+    // (integrity test pin 5d) and the deck-surface fidelity bar transferred to
+    // the (b)-picked placement offer asserted above. NOT weakened, NOT absorbed.
+    console.log('[G1 class-(d)] gap-fact deck-surface answerability is BLOCKED-ON-FIX (W211-GAPCARD-1) — legs a/b/c stand; see report §STEP0 + fixture obligations[3]')
+  })
+
   test('D5: robot realization — merged lowerRealization/realizeAndCompile headless leg (honestly named)', async () => {
     // SPEC §4 D5 OPERATIVE BRANCH (C27): no server route exposes
     // realizeAndCompile; the leg runs the MERGED functions in the server
@@ -1110,6 +1673,10 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // + createResolveSpineFromContext) over the seeded family + committed
     // fixtures. Receipt: the LPR payload + the emitted scientist-intent
     // document. No invented surface, no faked gate.
+    // Resume-3: promotion + run seeding rode the retired D4 arm; G1 now owns
+    // the rider. The idempotent ensureFamilySeeded() keeps D5/D6 runnable
+    // standalone (-g "D5") as well as in the serial full run.
+    await ensureFamilySeeded()
     const famPayload = await seededFamilyPayload()
     const answers = parseBlockYaml(fixtures().answersText)
     const result = runServerLeg('compile', famPayload, fixtures().answersText, SEED_ROWS)
@@ -1131,6 +1698,7 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // Drive the ONE merged UI entry (AiTabPanel shorthand recompile,
     // AiTabPanel.tsx:602 -> client.ts '/intent/compile' :4003) if the seeded
     // run surfaces it; the API-paste leg (spec §4 D6 fallback) always runs.
+    await ensureFamilySeeded()
     const famPayload = await seededFamilyPayload()
     const lowered = runServerLeg('lower', famPayload, fixtures().answersText, SEED_ROWS)
     if (!lowered.ok) {

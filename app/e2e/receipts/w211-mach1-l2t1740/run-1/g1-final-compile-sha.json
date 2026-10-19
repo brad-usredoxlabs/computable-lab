@@ -1,0 +1,22 @@
+{
+ "canonicalCompileSha": "41500602713bde26345e2eb013ad3f336af26c80c02c48b6ccca6c6b81880d2b",
+ "rawCompileSha": "f8509edb28cf5bf7c57bcaaed76f056d6d8f6177724ea3bef72c453855772833",
+ "eventIds": [
+  "evt-transfer-wvzj2bf3",
+  "evt-add_material-h3282zoz",
+  "evt-bead_beat-1qwf8w1m",
+  "evt-spin-o9fppfg2",
+  "evt-transfer-uftecbqs",
+  "evt-add_material-w4gijpyj",
+  "evt-add_material-eypjx1v7",
+  "evt-wash-add-ac9g3am1",
+  "evt-wash-remove-xfdkli54",
+  "evt-transfer-vnexv8l5",
+  "evt-incubate-lyh73dvo",
+  "evt-read-hbhvx98q"
+ ],
+ "unexpectedIdShapes": [
+  "evt-wash-add-ac9g3am1",
+  "evt-wash-remove-xfdkli54"
+ ]
+}

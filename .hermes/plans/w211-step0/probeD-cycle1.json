@@ -1,0 +1,330 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "MagBinding Beads v211g1",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Beads v211g1\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 6,
+     "action": "add_material",
+     "argument": "material"
+    }
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "zymobiomics-96-magbead-dna-prep",
+   "actions": [
+    {
+     "action": "create_container",
+     "labware": "Sample Plate",
+     "source_name": "stool sample",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Lysis Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "labware": "Lysis Plate",
+     "material": "Lysis Solution",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bead Beating Plate A",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Lysis Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "transfer",
+     "source": "Lysis Plate",
+     "target": "MagBinding Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "labware": "MagBinding Plate",
+     "material": "MagBinding Beads v211g1",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "labware": "MagBinding Plate",
+     "material": "MagBinding Buffer",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 800
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "cycles": 1
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "material": "DNase/RNase Free Water",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": []
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "zymobiomics-96-magbead-dna-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Lysis Plate",
+       "labwareHint": "Lysis Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bead Beating Plate A",
+       "labwareHint": "Bead Beating Plate A",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": []
+   }
+  }
+ }
+}

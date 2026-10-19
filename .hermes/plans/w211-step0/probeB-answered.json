@@ -1,0 +1,384 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "Bead Beating Plate",
+    "reason": "ambiguous-noun",
+    "candidates": [
+     {
+      "label": "Bead Beating Plate A",
+      "confidence": 1
+     },
+     {
+      "label": "Bead Beating Plate B",
+      "confidence": 1
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 5,
+     "action": "bead_beat",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "Bead Beating Plate vs Lysis Plate",
+    "reason": "The protocol transfers to the Lysis Plate and adds Lysis Solution there, but bead-beats in the Bead Beating Plate; it is unclear whether the bead-beating occurs on the same physical plate (Lysis Plate) or a separate Bead Beating Plate."
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "zymobiomics-96-magbead-dna-prep",
+   "actions": [
+    {
+     "action": "create_container",
+     "labware": "Sample Plate"
+    },
+    {
+     "action": "add_material",
+     "target": "Sample Plate",
+     "source_name": "stool sample",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "create_container",
+     "labware": "Lysis Plate"
+    },
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Lysis Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "target": "Lysis Plate",
+     "material": "Lysis Solution",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bead Beating Plate",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Lysis Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "create_container",
+     "labware": "MagBinding Plate"
+    },
+    {
+     "action": "transfer",
+     "source": "Lysis Plate",
+     "target": "MagBinding Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Beads",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Buffer",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 800
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "cycles": 1
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 100
+    },
+    {
+     "action": "add_material",
+     "target": "Sample Plate",
+     "material": "DNase/RNase Free Water",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": [
+    {
+     "label": "Bead Beating Plate vs Lysis Plate",
+     "reason": "The protocol transfers to the Lysis Plate and adds Lysis Solution there, but bead-beats in the Bead Beating Plate; it is unclear whether the bead-beating occurs on the same physical plate (Lysis Plate) or a separate Bead Beating Plate."
+    }
+   ]
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "zymobiomics-96-magbead-dna-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Lysis Plate",
+       "labwareHint": "Lysis Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bead Beating Plate",
+       "labwareHint": "Bead Beating Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": [
+     {
+      "id": "unresolved-Bead Beating Plate vs Lysis Plate",
+      "kind": "operation",
+      "label": "Bead Beating Plate vs Lysis Plate",
+      "reason": "The protocol transfers to the Lysis Plate and adds Lysis Solution there, but bead-beats in the Bead Beating Plate; it is unclear whether the bead-beating occurs on the same physical plate (Lysis Plate) or a separate Bead Beating Plate.",
+      "blocksLowering": false
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,510 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "stool samples",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cstool samples\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 1,
+     "action": "add_material",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 2,
+     "action": "create_container",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 3,
+     "action": "transfer",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 4,
+     "action": "add_material",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 5,
+     "action": "bead_beat",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 6,
+     "action": "spin",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "MagBinding Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 7,
+     "action": "create_container",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "Bashing Bead Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBashing Bead Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 8,
+     "action": "transfer",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "MagBinding Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 8,
+     "action": "transfer",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "MagBinding Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 9,
+     "action": "add_material",
+     "argument": "target"
+    }
+   },
+   {
+    "label": "MagBinding Beads v211g1",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Beads v211g1\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 9,
+     "action": "add_material",
+     "argument": "material"
+    }
+   },
+   {
+    "label": "MagBinding Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 10,
+     "action": "wash",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "Binding Buffer",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cBinding Buffer\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 10,
+     "action": "wash",
+     "argument": "material"
+    }
+   },
+   {
+    "label": "MagBinding Plate",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cMagBinding Plate\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 11,
+     "action": "transfer",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "MagBinding Beads v211g1",
+    "reason": "Inventory lists 'MagBinding Beads' without the v211g1 lot designation; bound to the closest match."
+   },
+   {
+    "label": "Binding Buffer",
+    "reason": "Inventory lists 'MagBinding Buffer' and 'MagWash 1/2'; scientist said 'Binding Buffer' for the wash step \u2014 bound to MagBinding Buffer."
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "zymobiomics-96-magbead-dna-prep",
+   "actions": [
+    {
+     "action": "create_container",
+     "labware": "Sample Plate"
+    },
+    {
+     "action": "add_material",
+     "source": "stool samples",
+     "target": "Sample Plate",
+     "source_name": "stool sample",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "create_container",
+     "labware": "Bashing Bead Plate"
+    },
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Bashing Bead Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "target": "Bashing Bead Plate",
+     "material": "Lysis Solution",
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bashing Bead Plate",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Bashing Bead Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "create_container",
+     "labware": "MagBinding Plate"
+    },
+    {
+     "action": "transfer",
+     "source": "Bashing Bead Plate",
+     "target": "MagBinding Plate",
+     "sourceWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Beads v211g1",
+     "targetWells": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+     ],
+     "volumeUl": 500
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "material": "Binding Buffer",
+     "volumeUl": 800
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "material": "DNase/RNase Free Water",
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": [
+    {
+     "label": "MagBinding Beads v211g1",
+     "reason": "Inventory lists 'MagBinding Beads' without the v211g1 lot designation; bound to the closest match."
+    },
+    {
+     "label": "Binding Buffer",
+     "reason": "Inventory lists 'MagBinding Buffer' and 'MagWash 1/2'; scientist said 'Binding Buffer' for the wash step \u2014 bound to MagBinding Buffer."
+    }
+   ]
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "zymobiomics-96-magbead-dna-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "stool samples",
+       "labwareHint": "stool samples",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bashing Bead Plate",
+       "labwareHint": "Bashing Bead Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": [
+     {
+      "id": "unresolved-MagBinding Beads v211g1",
+      "kind": "operation",
+      "label": "MagBinding Beads v211g1",
+      "reason": "Inventory lists 'MagBinding Beads' without the v211g1 lot designation; bound to the closest match.",
+      "blocksLowering": false
+     },
+     {
+      "id": "unresolved-Binding Buffer",
+      "kind": "operation",
+      "label": "Binding Buffer",
+      "reason": "Inventory lists 'MagBinding Buffer' and 'MagWash 1/2'; scientist said 'Binding Buffer' for the wash step \u2014 bound to MagBinding Buffer.",
+      "blocksLowering": false
+     }
+    ]
+   }
+  }
+ }
+}

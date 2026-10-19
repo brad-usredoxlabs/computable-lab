@@ -1,0 +1,35 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W211-MACH-1-lane2-l2t1210/app
+
+(node:3854970) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts  (7 tests | 1 failed) 8ms
+   ❯ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts > W211-MACH-1 golden fixture integrity (zymo-intent.frozen.yaml v1) > 5. each planted fact reaches the answer surface the fixture claims — the PRODUCT ADAPTER decides
+     → obligation b-ambiguous-labware-slot menu surface: expected '/m' to be '/l' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts > W211-MACH-1 golden fixture integrity (zymo-intent.frozen.yaml v1) > 5. each planted fact reaches the answer surface the fixture claims — the PRODUCT ADAPTER decides
+AssertionError: obligation b-ambiguous-labware-slot menu surface: expected '/m' to be '/l' // Object.is equality
+
+- Expected
++ Received
+
+- /l
++ /m
+
+ ❯ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts:171:84
+    169| 
+    170|       expect(request, `fact '${wire.label}' must get an answerable car…
+    171|       expect(request!.menuProvider, `obligation ${entry.obligation} me…
+       |                                                                                    ^
+    172|       expect(request!.prompt, 'the card names the fact itself').toBe(w…
+    173|       expect(request!.query, 'the picker search seeds from the fact la…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  16:58:50
+   Duration  1.03s (transform 71ms, setup 43ms, collect 86ms, tests 8ms, environment 360ms, prepare 162ms)
+

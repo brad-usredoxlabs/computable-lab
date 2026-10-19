@@ -1,0 +1,12 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W211-MACH-1-lane2-l2t1210/app
+
+(node:94244) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ e2e/fixtures/w211-golden/zymo-intent.integrity.test.ts  (7 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  19:49:18
+   Duration  7.08s (transform 68ms, setup 899ms, collect 85ms, tests 7ms, environment 5.02s, prepare 546ms)
+

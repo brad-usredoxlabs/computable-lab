@@ -1,0 +1,99 @@
+{
+ "recordId": "LPR-zymobiomics-96-magbead-dna-kit-semantic--mvekt2q7",
+ "payload": {
+  "recordId": "LPR-zymobiomics-96-magbead-dna-kit-semantic--mvekt2q7",
+  "protocolLayer": "lab",
+  "kind": "local-protocol",
+  "title": "ZymoBIOMICS 96 MagBead DNA Kit — semantic family draft: w211-golden-bench-prep",
+  "inherits_from": {
+   "kind": "record",
+   "id": "CAN-protocol-1792373300447",
+   "type": "protocol"
+  },
+  "status": "active",
+  "overrides": {
+   "parameters": [
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Lysis Plate",
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "target": "Lysis Plate",
+     "material": "Lysis Solution",
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bead Beating Plate",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Lysis Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "transfer",
+     "source": "Lysis Plate",
+     "target": "MagBinding Plate",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Beads v211g1",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Buffer",
+     "volumeUl": 800
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "cycles": 1
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "material": "nuclease-free water",
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ]
+  },
+  "branch_resolution": [
+   {
+    "axisId": "branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead-lysis-tubes",
+    "matched": true,
+    "branchIds": [
+     "branch-1"
+    ],
+    "choices": {
+     "branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead-lysis-tubes": "branch-1"
+    }
+   }
+  ],
+  "links": {
+   "studyId": "STU-scratch"
+  }
+ }
+}
