@@ -319,6 +319,44 @@ describe('staghedge-1.model-hedge label-divergence consume (resolve_nouns)', () 
     expect(output.bindings).toEqual([]);
   });
 
+  it('SH10 negative guard (4) mirror: an answered key that is a PROPER SUPERSTRING of the fact label at the SAME declared-resolvable slot SH1 drops — fact KEPT (exact-label identity, never containment; pins the a.label.includes(fact.label) join arm SH9 leaves unpinned)', async () => {
+    // Mirror of SH9: the answers map carries 'variant b extended' — a proper
+    // SUPERSTRING of the fact's label HEDGE_LABEL ('variant b') — at the very
+    // slot SH1's drop case uses. Guard (4) is an EXACT-key equality: an answer
+    // keyed by a longer mention is NOT an answer for THIS mention, so the card
+    // stays visible. The mirror containment arm a.label.includes(fact.label)
+    // (cycle-2 defect: SH9 alone passes it) would consume the fact here — the
+    // cycle-1 remediation named 'substring OR superstring'; this case pins the
+    // superstring half of the discipline the source states (resolveNounsPass.ts
+    // guard (4) comment, 'exact-label identity, never containment').
+    const superstringAnswer: AnsweredNounAnswer = {
+      label: `${HEDGE_LABEL} extended`,
+      recordId: 'LAB-staghedge-superstring',
+      recordLabel: 'Longer mention record',
+    };
+    const intent = intentOf(
+      [{ action: stageVerb, [firstResolvable.name]: DIVERGENT_VALUE } as ScientistIntent['actions'][number]],
+      [hedge(firstResolvable.name, stageVerb, 0)],
+    );
+
+    const result = await runPass(intent, { answeredSlots: [superstringAnswer] });
+    const output = result.output as ResolveNounsOutput;
+
+    expect(result.ok).toBe(false);
+    expect(output.blocked).toBe(true);
+    expect(output.clarifications).toHaveLength(1);
+    expect(output.clarifications[0]!.label).toBe(HEDGE_LABEL);
+    expect(output.clarifications[0]!.reason).toBe(NOT_STATED);
+    expect(output.clarifications[0]!.actionLocation).toEqual({
+      actionIndex: 0,
+      action: stageVerb,
+      argument: firstResolvable.name,
+    });
+    // Same as SH9: the containment join would mint nothing here — the failure
+    // it catches is the consumed QUESTION, pinned by the assertions above.
+    expect(output.bindings).toEqual([]);
+  });
+
   it('SH6 negative guard (1): a not-stated fact WITHOUT actionLocation is KEPT even when its label is answered (slot-less facts stay visible defects)', async () => {
     const slotless: ScientistIntentUnresolvedFact = { label: HEDGE_LABEL, reason: NOT_STATED };
     const intent = intentOf(
