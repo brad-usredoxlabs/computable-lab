@@ -652,6 +652,18 @@ async function seededFamilyPayload() {
   return fam.payload
 }
 
+// Resume-3 (l2t1740): promotion + run seeding rode the RETIRED D4 arm (orch
+// l2t1735 moved them out of beforeAll). G1 now owns the rider; D5/D6 call the
+// same idempotent ensure so every leg is runnable standalone (-g "<leg>") as
+// well as in the serial full run. promoteFamily()/seedRun() are GET-first and
+// repoint the PLR at THIS run's family (orch l2t2230), so re-calling is safe.
+async function ensureFamilySeeded() {
+  if (!familyId) {
+    familyId = await promoteFamily()
+    await seedRun(familyId)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // W211-MACH-1 golden-leg helpers (l2t1330). The golden fixture is harness DATA
 // (app/e2e/fixtures/w211-golden/zymo-intent.frozen.yaml, self-pinned above);
@@ -785,6 +797,14 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // the UN-promoted record. Promotion + run seeding now happen in D4, the
     // first leg that needs a family. D2/D3 run against the live un-promoted
     // MEANT path — which is exactly what they claim to gate.
+  })
+
+  test.afterAll(async () => {
+    // Receipts are STAGED outside the vite watch root during legs (see
+    // goldenReceiptPath comment); flush them to the contract dir here so a
+    // FAILED leg still leaves its RED evidence on disk (the reload this flush
+    // triggers lands after all legs finished — nothing live to lose).
+    flushGoldenReceipts()
   })
 
   test('PRECHECK: seeded SAID + MEANT present (family/run arrive with D4)', async () => {
@@ -1278,10 +1298,7 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // --- Store-state rider: seed the fixture's seedPlan rows GET-first
     // (409 already-exists tolerated) and clear any prior-run minted nonce so
     // the class-(c) noun starts ZERO-MATCH every run.
-    if (!familyId) {
-      familyId = await promoteFamily()
-      await seedRun(familyId)
-    }
+    await ensureFamilySeeded()
     await seedGoldenRows(fx)
     await clearGoldenNonce(fx)
 
@@ -1635,6 +1652,10 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // + createResolveSpineFromContext) over the seeded family + committed
     // fixtures. Receipt: the LPR payload + the emitted scientist-intent
     // document. No invented surface, no faked gate.
+    // Resume-3: promotion + run seeding rode the retired D4 arm; G1 now owns
+    // the rider. The idempotent ensureFamilySeeded() keeps D5/D6 runnable
+    // standalone (-g "D5") as well as in the serial full run.
+    await ensureFamilySeeded()
     const famPayload = await seededFamilyPayload()
     const answers = parseBlockYaml(fixtures().answersText)
     const result = runServerLeg('compile', famPayload, fixtures().answersText, SEED_ROWS)
@@ -1656,6 +1677,7 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     // Drive the ONE merged UI entry (AiTabPanel shorthand recompile,
     // AiTabPanel.tsx:602 -> client.ts '/intent/compile' :4003) if the seeded
     // run surfaces it; the API-paste leg (spec §4 D6 fallback) always runs.
+    await ensureFamilySeeded()
     const famPayload = await seededFamilyPayload()
     const lowered = runServerLeg('lower', famPayload, fixtures().answersText, SEED_ROWS)
     if (!lowered.ok) {
