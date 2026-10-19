@@ -62,9 +62,15 @@ describe('golden.intent-to-clarification.ambiguous-material', () => {
     const item = clarifications[0]!;
     expect(item['label']).toBe('standard plate');
     expect(item['reason']).toBe('ambiguous-noun');
+    // W28-OPTIONBIND-1 DELIBERATE PIN UPDATE (sanctioned pin+row pattern,
+    // W28-A5n Q1): the two in-band tier-1 candidates now carry the additive
+    // optional `ref` — the engine's own store-backed record ids from the
+    // fixture store (LAB-plate-alpha / LAB-plate-beta). Labels, confidence,
+    // and the declared stable order are unchanged; the blessed record was
+    // re-hashed ONCE in the same commit (manifest records entry).
     expect(item['candidates']).toEqual([
-      { label: 'standard plate alpha', confidence: 1 },
-      { label: 'standard plate beta', confidence: 1 },
+      { label: 'standard plate alpha', confidence: 1, ref: 'LAB-plate-alpha' },
+      { label: 'standard plate beta', confidence: 1, ref: 'LAB-plate-beta' },
     ]);
     expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'transfer', argument: 'source' });
 

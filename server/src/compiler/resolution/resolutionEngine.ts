@@ -74,8 +74,37 @@ function dedupeMintsByLabel(candidates: readonly RankedCandidate[]): RankedCandi
   return [...byMintLabel.values()];
 }
 
-function candidateFact(candidate: RankedCandidate): { label: string; confidence: number } {
-  return { label: candidate.label, confidence: confidenceOf(candidate) };
+/** W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1) — the candidate's OWN
+ *  store-backed record identity, as the SPINE-1 candidate entry's optional
+ *  `ref`. Anti-fabrication is the whole rule (A5n verbatim: "the handle is
+ *  the engine's existing gathered evidence, never a minted value"):
+ *  - tier > 1 (ontology/vendor hits) and the tier-5 mint affordance: NO ref;
+ *  - the spine's declared local-CURIE convention is `local:<recordId>`
+ *    (providers/records.ts, terms.ts) — a suffix that still carries ':' is
+ *    NOT a record id (the role-address arm's `local:well:<address>` names a
+ *    WELL, not a record), so it gets NO ref;
+ *  - the labware-hint/registry adapters already carry the bare recordId as
+ *    the curie (adapters.ts) — that rides verbatim.
+ *  The unwrap mirrors resolveNounsPass.ts recordIdFromCurie exactly (the same
+ *  declared prefix), so the ref is the id store.get() accepts and the
+ *  ClarificationPicker answerFromMention idiom already carries. */
+function candidateRecordRef(candidate: RankedCandidate): string | undefined {
+  if (candidate.tier > 1) return undefined;
+  const curie = candidate.curie;
+  if (!curie) return undefined; // the mint affordance carries no curie
+  const prefix = 'local:';
+  const recordId = curie.startsWith(prefix) ? curie.slice(prefix.length) : curie;
+  if (!recordId || recordId.includes(':')) return undefined; // not a record id
+  return recordId;
+}
+
+function candidateFact(candidate: RankedCandidate): { label: string; confidence: number; ref?: string } {
+  const ref = candidateRecordRef(candidate);
+  return {
+    label: candidate.label,
+    confidence: confidenceOf(candidate),
+    ...(ref !== undefined ? { ref } : {}),
+  };
 }
 
 function clarificationFor(

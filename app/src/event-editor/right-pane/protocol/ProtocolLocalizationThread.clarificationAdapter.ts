@@ -188,14 +188,25 @@ export function heldFactToClarificationRequest(
 
   const rawCandidates = Array.isArray(fact.candidates) ? fact.candidates : []
   const options: AiClarificationOption[] = rawCandidates
-    .filter((c): c is { label: string } =>
+    .filter((c): c is { label: string; ref?: unknown } =>
       typeof c === 'object' && c !== null && typeof (c as { label?: unknown }).label === 'string'
       && !!(c as { label: string }).label.trim())
     // MINT-FLOOR-UI-1: the mint offer for THIS fact's own label is the
     // picker's floor row already — drop the duplicate dead-end option button.
     // Mint offers for a DIFFERENT term survive (keyed rule, not a blanket).
     .filter((c) => !isMintOfferForLabel(c.label.trim(), label))
-    .map((c, i) => ({ id: `held-candidate-${index}-${i}`, label: c.label.trim() }))
+    .map((c, i) => ({
+      id: `held-candidate-${index}-${i}`,
+      label: c.label.trim(),
+      // W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1): ride the wire
+      // candidate's store-backed record handle (the SPINE-1 candidate entry's
+      // additive optional `ref`, emitted by the engine for tier <= 1 record
+      // candidates only — mint affordances and tier > 1 hits carry none) onto
+      // the EXISTING AiClarificationOption.ref? field (types/ai.ts), with the
+      // id semantics MessageLog.optionRefId already reads. A candidate without
+      // a handle keeps the option shape byte-unchanged.
+      ...(typeof c.ref === 'string' && c.ref.trim() ? { ref: { id: c.ref.trim() } } : {}),
+    }))
 
   return {
     id: `held-fact-${index}`,
