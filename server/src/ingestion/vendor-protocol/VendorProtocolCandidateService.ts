@@ -14,6 +14,8 @@ export interface ExtractVendorProtocolCandidateInput {
   contentBase64?: string;
   text?: string;
   fileName?: string;
+  /** The vendor-pdf record's own title, when the caller has the record. */
+  title?: string;
   documentId?: string;
   vendor?: string;
   persist?: boolean;
@@ -45,11 +47,13 @@ export async function extractVendorProtocolCandidateFromInput(
   const document = loaded.inputKind === 'text'
     ? createVendorProtocolDocumentFromText(loaded.text, {
         filename: loaded.fileName,
+        ...(input.title ? { title: input.title } : {}),
         ...(input.documentId ? { documentId: input.documentId } : {}),
         ...(input.vendor ? { vendor: input.vendor } : {}),
       })
     : await decodeVendorProtocolPdf(loaded.buffer, {
         filename: loaded.fileName,
+        ...(input.title ? { title: input.title } : {}),
         ...(input.documentId ? { documentId: input.documentId } : {}),
         ...(input.vendor ? { vendor: input.vendor } : {}),
       });

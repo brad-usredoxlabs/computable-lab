@@ -771,6 +771,7 @@ export class ProtocolExtractionService {
         text: joinedText,
         documentId,
         fileName: typeof vendorPdfPayload.title === 'string' ? vendorPdfPayload.title : vendorPdfId,
+        ...(typeof vendorPdfPayload.title === 'string' ? { title: vendorPdfPayload.title } : {}),
         persist: true,
       });
       candidate = extractionResult.candidate;
@@ -795,6 +796,7 @@ export class ProtocolExtractionService {
           text: joinedText,
           documentId,
           fileName: typeof vendorPdfPayload.title === 'string' ? vendorPdfPayload.title : vendorPdfId,
+          ...(typeof vendorPdfPayload.title === 'string' ? { title: vendorPdfPayload.title } : {}),
           persist: true,
         });
         candidate = extractionResult.candidate;
