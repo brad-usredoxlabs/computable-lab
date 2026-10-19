@@ -1,4 +1,4 @@
-# LANE 2 HANDOFF — l2t1655 (2026-10-19T17:08 EDT) — CHECKPOINT: both live legs verified alive; nothing dispatchable
+# LANE 2 HANDOFF — l2t1655 (2026-10-19T17:08 EDT, amended 17:15) — CHECKPOINT: CODER EXITED DONE -> advc c1 IN FLIGHT; witness alive
 
 Trunk: cl/integration-2 @ 4ca2a435 (docs-only; code tip b5af2697-era + AXISSLUG merge, unchanged
 this tick). Stack :3093/:5193 http=200/200.
@@ -94,3 +94,26 @@ this tick). Stack :3093/:5193 http=200/200.
   lanes/2/logs/qual1-uiwitness-l2t1550.log; receipts
   receipts/W211-QUAL-1/uiwitness-20261019T202019Z-l2t1550/. p1 round-3 at 17:05; p2/p3 remain.
   2x rule ~18:20, 3x ~19:20 for the full 3-draw leg.
+
+## AMENDMENT 17:15 EDT (same tick) — CODER EXITED DONE; ADVERSARIAL c1 DISPATCHED
+- Wrapper log: 'CODER EXITED code=0 2026-10-19T16:55:03-04:00'. Terminator
+  'W28-OPTIONBIND1 DONE 6ef0263da6c3b91369d58524e5e39c2e696a8542' (Group-2 impl commit;
+  report commits 1f1a4355 + 96a9c2cc after it, docs-only — sha-names-substantive-commit
+  convention documented in the report, matches ANSWER-BIND-1/COERCION-PINS precedent).
+- Fleet lock: pidfile now reads 'reg6-coder 3076448 16:55:03' — HOLDER PID 3076448 DEAD
+  (ps-verified gone). No lane-2 coder live; lock file retains the stale lease record only.
+- Coder report's FLAG FOR ORCHESTRATOR (accept into my verify plan): the spec's 'server
+  typecheck stays 33 error lines' is STALE at this trunk tip — coder measured 0 error lines
+  at BOTH trunk and pristine worktree (33-era errors were fixed into the trunk since the
+  spec was written); zero-new was measured against the recorded 0 baseline. Accept 0 as the
+  current server tsc baseline for this verification; verify that measurement myself.
+  Also: worktree needed the lane-sync symlink pattern + server/schema symlink to reproduce
+  trunk baselines (documented in the report).
+- ADVERSARIAL c1 DISPATCHED 17:15 EDT (tier: cl-adversarial-reviewer, OR deepseek-v4.1-flash —
+  different family from coder; no slot contention). Wrapper pid 3260497, log
+  logs/advc-OPTIONBIND1-c1-l2t1655.log, report EXACTLY reviews/advc-OPTIONBIND1-c1-l2t1655.md,
+  prompt prompts/advc-OPTIONBIND1-c1-l2t1655.txt (both groups, PRE-R6-BATCH separation check,
+  hard constraints incl. resolveNounsPass :313 byte-unchanged + STAGHEDGE consume rule +
+  anti-fabrication trace of candidateFact.ref population). Do NOT re-dispatch while 3260497
+  alive. On FIX: fix run to SAME worktree/branch with defect list verbatim, re-review c2.
+- Witness 3105540 still ALIVE (p1 round-3 shots; trail.json not yet written).
