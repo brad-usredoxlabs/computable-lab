@@ -104,3 +104,32 @@ Lane stack healthy (:3092 200 / :5192 200), no YAML touched, no restart owed.
    AS-ORCH-L1-187). Remove merged VPDF-2 worktree only after merge.
 4. decisions/ md5 sweep. After VPDF-2 closes, wave 5 is COMPLETE — do not invent wave 6;
    log no-work entries and await architect/Brad intake.
+
+## POST-CHECKPOINT (same tick, 00:50) — coder EXITED CLEAN, adv-gate LIVE
+
+- queue pid 741768 EXITED code=0 at 00:43:50; fleet lock RELEASED (free for lane 2 or
+  any next coder). Coder ran ~22 min. Report end-line verified on disk:
+  'VPDF-2 DONE e9513c81' (full e9513c819f90a75d2626f5b687a5b901cd2e593d).
+- Commits on wt/VPDF-2-lane1-l1t2245: RED 595cde75 (test only; raw on disk shows the
+  honest base failure 'expected Quick Reference to contain CellROX') -> IMPL e9513c81.
+  Diff 93ba050c..HEAD = 4 files, +138/-4: test +105, VendorProtocolCandidateService +4,
+  VendorProtocolPdf +31 (vocabulary tables), ProtocolExtractionService +2 (title thread).
+  Scope exactly per spec; no adapter rewrite, no app/, no YAML (checked via diff --stat).
+- Self-reported gates (worker claims, NOT yet orch-verified): GREEN 5/5, six W4 files
+  32/32, suite fail-comm EMPTY, tsc base=head=0 errors, no Zymo drift.
+- OQ-3 outcome reported: concentration lands via existing machinery but the range
+  '500–1000 nM' collapses to upper bound (1000 nM) — recorded finding, not fixed (per
+  spec OQ-3 observe-and-report).
+- Worker disclosure AS-L1T2245-VPDF2-002: pre-linked wiring missed root node_modules
+  symlink; coder added root + server/schema symlinks (untracked, lane-exclude covered) —
+  adopt into the sync helper next time.
+- ADVERSARIAL GATE auto-fired 00:43:59 (ADVW-FIRE; OpenRouter deepseek-v4.1-flash;
+  reviews/vpdf2-advreview-l1t2245.md; wrapper proc_0c451b2a8977 pid 751161). NEXT TICK:
+  read verdict -> ACCEPT: orch verify (own fixture+six-file re-run, own tsc, own
+  base/head suite comm against my own base capture, open the diff) -> merge --no-ff ->
+  LIVE PROOF (POST regenerate on VPDF-651F03789D80: title contains CellROX, materials
+  include CellROX Deep Red/Green + SYTOX + complete medium, equipment flow cytometer) ->
+  mark done -> close-out handoff (wave 5 complete). FIX: defect list verbatim to a fix
+  run on the same worktree (cycle 1/2).
+- The orch soft budget expired ~23:26; this post-checkpoint note is bookkeeping only —
+  no new dispatches. Fleet lock is currently FREE.
