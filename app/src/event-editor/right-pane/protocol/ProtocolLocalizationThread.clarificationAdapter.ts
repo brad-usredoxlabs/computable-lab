@@ -111,7 +111,16 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   // SAMPLE-CARD-1 (W28-A5i Q2): a labware-semantic not-stated fact answers by
   // PICKING '/l' (resolveLabware — no mint floor, resolvers.ts:67-92), exactly
   // the ANSWER-SURFACE-1 pattern; every other argument falls to '/m'.
-  'not-stated': { labware: '/l' },
+  // W28-SOURCEROW-1 (ARCHITECT DECISION W28-A5n Q2, DATA-AMENDMENT): 'source'
+  // IS labware-semantic by the declared data — EVERY declared `source`
+  // argument in scientist-intent-vocabulary.yaml (all 23 verbs that declare
+  // it) is `kind: resolvable` + `domain: labware`; the vocabulary NEVER
+  // declares a material-domain `source` (material semantics are the separately
+  // declared `material`/`source_name` args). A source-argument not-stated fact
+  // answered on the '/m' material funnel is the same domain misroute
+  // SAMPLE-CARD-1 cured for `labware`. One row added; the (reason,'*')
+  // fallback row stays '/m' — a SOURCE-LESS not-stated hedge keeps '/m'.
+  'not-stated': { labware: '/l', source: '/l' },
   // GAPCARD-1: same pattern for the two prompt-declared model reasons.
   'ambiguous': { labware: '/l' },
   'contradicts-the-text': { labware: '/l' },
