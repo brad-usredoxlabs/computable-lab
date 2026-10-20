@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-plate-reader-gyp4
+kind: material
+id: MAT-plate-reader-gyp4
+name: Plate Reader
+domain: other
+status: proposed

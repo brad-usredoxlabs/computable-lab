@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-PR9-TEST-CLO
+kind: material
+id: MAT-PR9-TEST-CLO
+name: Clofibrate
+domain: chemical
+molecular_weight:
+  value: 242.27
+  unit: g/mol

@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-lysis-reagent-1dkp
+kind: material
+id: MAT-lysis-reagent-1dkp
+name: lysis-reagent
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "lysis-reagent").

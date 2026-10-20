@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-low-temp-18o5
+kind: condition
+id: TERM-low-temp-18o5
+preferredLabel: low-temp
+aliases:
+  - cold
+  - refrigerated culture
+status: proposed
+lifecycleId: lab-vocabulary-control

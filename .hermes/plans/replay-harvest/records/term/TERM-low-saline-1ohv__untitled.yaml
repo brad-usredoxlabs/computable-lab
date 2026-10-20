@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-low-saline-1ohv
+kind: condition
+id: TERM-low-saline-1ohv
+preferredLabel: low-saline
+aliases:
+  - hypotonic
+  - low salt
+status: proposed
+lifecycleId: lab-vocabulary-control

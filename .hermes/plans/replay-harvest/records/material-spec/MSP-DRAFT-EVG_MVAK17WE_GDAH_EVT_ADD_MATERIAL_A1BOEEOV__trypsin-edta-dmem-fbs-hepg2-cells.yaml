@@ -1,0 +1,53 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV
+kind: material-spec
+id: MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV
+name: Trypsin-EDTA + DMEM + FBS + HepG2 cells
+material_ref:
+  kind: record
+  id: MAT-trypsin-edta-dmem-fbs-he-1om4
+  type: material
+  label: Trypsin-EDTA + DMEM + FBS + HepG2 cells
+formulation_kind: complex_composition
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Trypsin-EDTA + DMEM + FBS + HepG2 cells
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-16T05:56:32.802Z
+  note: Created as a proposed local formulation record from accepted add-material
+    composition snapshot EVG-mvak17we-gdah:evt-add_material-a1boeeov.
+formulation:
+  composition:
+    - component_ref:
+        kind: record
+        id: MAT-trypsin-edta-100w
+        type: material
+        label: Trypsin-EDTA
+      role: solvent
+      source: 50% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-dmem-ykg0
+        type: material
+        label: DMEM
+      role: buffer_component
+      source: 50% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-fbs-3776
+        type: material
+        label: FBS
+      role: additive
+      source: 10% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-hepg2-cells-4oys
+        type: material
+        label: HepG2 cells
+      role: cells
+  notes: Draft formulation inferred from an add-material event composition snapshot.
+tags:
+  - ai-draft
+  - composition_snapshot

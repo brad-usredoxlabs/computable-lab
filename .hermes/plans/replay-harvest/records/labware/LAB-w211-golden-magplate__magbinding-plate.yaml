@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LAB-w211-golden-magplate
+kind: labware
+name: MagBinding Plate
+labwareType: plate
+aliases:
+  - magbinding_plate
+  - magbinding plate
+createdAt: 2026-10-18T19:49:13.769Z
+updatedAt: 2026-10-18T19:49:13.769Z
+createdBy: USR-BRAD

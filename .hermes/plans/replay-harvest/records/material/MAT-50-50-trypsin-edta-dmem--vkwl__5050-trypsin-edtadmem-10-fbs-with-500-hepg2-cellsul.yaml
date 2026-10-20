@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-50-50-trypsin-edta-dmem--vkwl
+kind: material
+id: MAT-50-50-trypsin-edta-dmem--vkwl
+name: 50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "50/50
+  Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul").

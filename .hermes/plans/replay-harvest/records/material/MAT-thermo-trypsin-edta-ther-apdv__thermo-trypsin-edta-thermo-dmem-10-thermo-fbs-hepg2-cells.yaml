@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-thermo-trypsin-edta-ther-apdv
+kind: material
+id: MAT-thermo-trypsin-edta-ther-apdv
+name: Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "Thermo
+  trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells").

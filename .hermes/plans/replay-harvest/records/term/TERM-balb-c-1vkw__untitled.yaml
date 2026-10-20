@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-balb-c-1vkw
+kind: organism
+id: TERM-balb-c-1vkw
+preferredLabel: BALB/c
+aliases:
+  - BALB/c mouse
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: BALB/c
+strain_of:
+  kind: record
+  id: TERM-mus-musculus-q1al
+  type: term
+  label: Mus musculus

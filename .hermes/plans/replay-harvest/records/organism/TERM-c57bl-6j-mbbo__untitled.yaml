@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-c57bl-6j-mbbo
+kind: organism
+id: TERM-c57bl-6j-mbbo
+preferredLabel: C57BL/6J
+aliases:
+  - C57BL/6J mouse
+  - B6
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: C57BL/6J
+strain_of:
+  kind: record
+  id: TERM-mus-musculus-q1al
+  type: term
+  label: Mus musculus

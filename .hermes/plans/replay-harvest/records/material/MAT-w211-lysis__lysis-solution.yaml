@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-w211-lysis
+kind: material
+id: MAT-w211-lysis
+domain: reagent
+name: Lysis Solution
+synonyms:
+  - lysis_solution
+createdAt: 2026-10-12T20:42:20.786Z
+updatedAt: 2026-10-12T20:42:20.786Z
+createdBy: USR-BRAD

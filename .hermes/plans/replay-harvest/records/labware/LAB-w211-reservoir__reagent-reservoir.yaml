@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LAB-w211-reservoir
+kind: labware
+name: Reagent Reservoir
+labwareType: reservoir
+aliases:
+  - reagent_reservoir
+  - reagent reservoir
+createdAt: 2026-10-12T20:41:50.119Z
+updatedAt: 2026-10-12T20:41:50.119Z
+createdBy: USR-BRAD

@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-e-coli-bl21-3ykz
+kind: organism
+id: TERM-e-coli-bl21-3ykz
+preferredLabel: E. coli BL21
+aliases:
+  - BL21
+  - BL21(DE3)
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: BL21
+strain_of:
+  kind: record
+  id: TERM-escherichia-coli-1sz6
+  type: term
+  label: Escherichia coli

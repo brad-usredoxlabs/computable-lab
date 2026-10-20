@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-tissue-culture-in-a-tube-lq4p
+kind: condition
+id: TERM-tissue-culture-in-a-tube-lq4p
+preferredLabel: tissue-culture-in-a-tube
+aliases:
+  - tube culture
+  - TC in a tube
+status: proposed
+lifecycleId: lab-vocabulary-control

@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-2d-plate-9tws
+kind: condition
+id: TERM-2d-plate-9tws
+preferredLabel: 2D-plate
+aliases:
+  - 2D culture
+  - monolayer plate
+  - standard culture
+status: proposed
+lifecycleId: lab-vocabulary-control

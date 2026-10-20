@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml
+recordId: ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR
+kind: aliquot
+id: ALQ-IMPLICIT-EVG_API_MU7UZGNR_EVT_API_MU7UZGNR
+name: Ad hoc instance of 1 mM Clofibrate in DMSO
+description: Implicit add-material instance for EVG-API-mu7uzgnr:evt-api-mu7uzgnr
+material_spec_ref:
+  kind: record
+  id: MSP-API-mu7uzgnr
+  type: material-spec
+  label: 1 mM Clofibrate in DMSO
+tags:
+  - implicit
+  - ad_hoc
+  - event_graph_usage
+volume:
+  value: 10
+  unit: uL
+lot:
+  vendor: Sigma
+  lot_number: L123

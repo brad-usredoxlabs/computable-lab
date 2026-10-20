@@ -1,0 +1,4 @@
+# panel T1-unobtainium — noun “unobtainium” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+

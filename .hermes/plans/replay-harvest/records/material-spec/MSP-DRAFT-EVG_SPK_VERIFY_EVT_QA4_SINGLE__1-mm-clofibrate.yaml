@@ -1,0 +1,32 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-DRAFT-EVG_SPK_VERIFY_EVT_QA4_SINGLE
+kind: material-spec
+id: MSP-DRAFT-EVG_SPK_VERIFY_EVT_QA4_SINGLE
+name: 1 mM Clofibrate
+material_ref: &a1
+  kind: record
+  id: MAT-PR9-TEST-CLO
+  type: material
+  label: Clofibrate
+formulation_kind: single_active
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: 1 mM Clofibrate
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-16T14:46:04.090Z
+  note: Created as a proposed single-active formulation from accepted add-material
+    EVG-SPK-VERIFY:evt-qa4-single.
+formulation:
+  concentration: &a2
+    value: 1
+    unit: mM
+    basis: molar
+  composition:
+    - component_ref: *a1
+      role: solute
+      concentration: *a2
+tags:
+  - ai-draft
+  - single_active

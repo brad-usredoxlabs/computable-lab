@@ -1,0 +1,135 @@
+$schema: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+recordId: EVG-mvajokf5-5err
+id: EVG-mvajokf5-5err
+kind: event-graph
+events:
+  - eventId: evt-add_material-i7c53nl3
+    event_type: add_material
+    details:
+      material: 50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul
+      volumeUl: 300
+      volume:
+        value: 300
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-XCO-0000988
+            type: material
+            label: Dulbecco's Modified Eagle's Medium
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fetal-bovine-serum-1s1s
+            type: material
+            label: Fetal bovine serum
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-50-50-trypsin-edta-dmem--vkwl
+        type: material
+        label: 50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129476132-awv1sa
+      wells:
+        - A2
+        - B2
+        - C2
+        - D2
+        - E2
+        - F2
+        - G2
+        - H2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3
+        type: material-spec
+        label: Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum +
+          HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3
+          type: material-spec
+          label: Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum +
+            HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129476132-awv1sa
+labwares:
+  - labwareId: lw-1792129476132-awv1sa
+    labwareType: plate_96
+    name: plate1
+    addressing:
+      type: grid
+      rows: 8
+      columns: 12
+      rowLabels:
+        - A
+        - B
+        - C
+        - D
+        - E
+        - F
+        - G
+        - H
+      columnLabels:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+        - "11"
+        - "12"
+    geometry:
+      maxVolume_uL: 200
+      minVolume_uL: 1
+      wellShape: round
+    layoutFamily: sbs_plate
+    wellPitch_mm: 9
+    orientationPolicy: rotatable
+    definitionId: opentrons/nest_96_wellplate_200ul_flat@v1
+    definitionSource: registry
+    renderProfile: plate
+    linearAxis: x
+runId: EXR-LANE2-AI10
+name: Event Graph for EXR-LANE2-AI10
+links:
+  runId: EXR-LANE2-AI10
+status: filed
+editorLayout:
+  surface: event-editor/v1
+  placements:
+    - placementId: pl-mvajm9t3-2
+      labwareId: lw-1792129476132-awv1sa
+      location:
+        kind: slot
+        slotId: PLATE
+      orientation: landscape
+createdAt: 2026-10-16T05:46:38.424Z
+updatedAt: 2026-10-16T05:46:38.424Z

@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-rotenone-crystalline-r88-1uzt
+kind: material
+id: MAT-rotenone-crystalline-r88-1uzt
+name: Rotenone, crystalline, R8875 Sigma-Aldrich
+domain: chemical
+status: proposed
+provenance:
+  source: import
+  sourceLabel: Exa web search
+  note: "Imported from Exa vendor product search:
+    https://www.sigmaaldrich.com/AL/en/product/sigma/r8875"

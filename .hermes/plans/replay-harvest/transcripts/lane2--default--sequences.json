@@ -1,0 +1,488 @@
+{
+  "endpoint": "sequences",
+  "userId": "default",
+  "messages": [
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T17:03:07.865Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nTerm \"Analysis\" did not resolve to any local term or workspace record. Nothing was focused; name a term the lab already has, or author it as a local term first.\nNo events generated.",
+      "createdAt": "2026-10-15T17:03:11.543Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record SEQ-827c4175a52a4ef65916eca5",
+      "createdAt": "2026-10-15T17:03:15.530Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nFocused on pUC19 probe — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:03:19.451Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Billing tab",
+      "createdAt": "2026-10-15T17:03:23.172Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened sequences — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:03:29.734Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record ANR-000001",
+      "createdAt": "2026-10-15T17:03:33.807Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nFocused on PB-CH-5 review revision — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:03:35.939Z"
+    },
+    {
+      "role": "user",
+      "content": "save this sequence GGATGCCATAG",
+      "createdAt": "2026-10-15T17:03:40.824Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "save-seq-ggatgccatag-001",
+          "sequence": {
+            "label": "Untitled sequence",
+            "alphabet": "dna",
+            "residues": "GGATGCCATAG",
+            "topology": "linear"
+          }
+        },
+        "sequenceProposalRequest": "save this sequence GGATGCCATAG"
+      },
+      "createdAt": "2026-10-15T17:03:47.036Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record SEQ-827c4175a52a4ef65916eca5",
+      "createdAt": "2026-10-15T17:03:51.459Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nFocused on pUC19 probe — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:03:53.502Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T17:06:44.700Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened Analysis — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:06:46.875Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T17:06:50.955Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened Analysis — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T17:06:55.670Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T18:21:44.674Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "seq-tab-1763000000001",
+          "sequence": {
+            "label": "pUC19 probe",
+            "alphabet": "iupac_dna",
+            "topology": "linear",
+            "residues": "GAAATTGTTATCCGCTCACAACC+GTGAATCGCTCAGAATGATGTTCTGTTTGAATGCCTTAAACCTTCTTGTGGGCGTTTCCGGTGTCAAACAAAGCGGTTTGCAGTGCACCCTTCCAGCAGTATTAAGCGGCTGGATGATGCGGGCATGCACATCGCAGATTTCGTGTTGAGCGTCATGGGTCAAAGAAGTGTACATTGCGCCAGCTTACATTTGCCGTCTT"
+          }
+        },
+        "sequenceProposalRequest": "switch to the Analysis tab"
+      },
+      "createdAt": "2026-10-15T18:24:00.049Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record ANR-000001",
+      "createdAt": "2026-10-15T18:24:05.786Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "req-puc19-probe-1",
+          "sequence": {
+            "label": "pUC19 probe",
+            "alphabet": "iupac_dna",
+            "topology": "linear",
+            "residues": "GAAATTGTTATCCGCTCACAACCGTGAATCGCTCAGAATGATGTTCTGTTTGAATGCCTTAAACCTTCTTGTGGGCGTTTCCGGTGTCAAACAAAGCGGTTTGCAGTGCACCCTTCCAGCAGTATTAAGCGGCTGGATGATGCGGGCATGCACATCGCAGATTTCGTGTTGAGCGTCATGGGTCAAAGAAGTGTACATTGCGCCAGCTTACATTTGCCGTCTT",
+            "source": {
+              "text": "pUC19 probe sequence as supplied in the working draft; the '+' at base 24 was removed as an unrecognized symbol (it is not an IUPAC nucleotide code). No parentRevisionRef claimed - no grounded immutable revision reference was available in context."
+            }
+          }
+        },
+        "sequenceProposalRequest": "focus on record ANR-000001"
+      },
+      "createdAt": "2026-10-15T18:25:04.437Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record SEQ-827c4175a52a4ef65916eca5",
+      "createdAt": "2026-10-15T18:25:10.362Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "req-uc19-probe-001",
+          "sequence": {
+            "label": "pUC19 probe",
+            "alphabet": "iupac_dna",
+            "topology": "linear",
+            "residues": "GAAATTGTTATCCGCTCACAACCGTGAATCGCTCAGAATGATGTTCTGTTTGAATGCCTTAAACCTTCTTGTGGGCGTTTCCGGTGTCAAACAAAGCGGTTTGCAGTGCACCCTTCCAGCAGTATTAAGCGGCTGGATGATGCGGGCATGCACATCGCAGATTTCGTGTTGAGCGTCATGGGTCAAAGAAGTGTACATTGCGCCAGCTTACATTTGCCGTCTT",
+            "source": {
+              "text": "pUC19 probe sequence as supplied in the working draft; the '+' at base 24 was removed as an unrecognized symbol (it is not an IUPAC nucleotide code). No parentRevisionRef claimed - no grounded immutable revision reference was available in context."
+            }
+          }
+        },
+        "sequenceProposalRequest": "focus on record SEQ-827c4175a52a4ef65916eca5"
+      },
+      "createdAt": "2026-10-15T18:28:19.583Z"
+    },
+    {
+      "role": "user",
+      "content": "save this sequence GGATGCCATAG",
+      "createdAt": "2026-10-15T18:28:25.340Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "save-seq-ggatgccatag-001",
+          "sequence": {
+            "label": "Unnamed sequence GGATGCCATAG",
+            "alphabet": "dna",
+            "residues": "GGATGCCATAG",
+            "topology": "linear",
+            "source": {
+              "text": "Bases supplied verbatim by the user in the request 'save this sequence GGATGCCATAG'; no name, target, or provenance was provided."
+            }
+          }
+        },
+        "sequenceProposalRequest": "save this sequence GGATGCCATAG"
+      },
+      "createdAt": "2026-10-15T18:29:05.824Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record ANR-000001",
+      "createdAt": "2026-10-15T18:33:12.757Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for compile_event_graph_draft…\nAI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.\nAI stream resumed from thunderbeast.\nDrafting on thunderbeast…\nDrafting on thunderbeast…\nFocused on PB-CH-5 review revision — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T18:33:38.528Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record SEQ-827c4175a52a4ef65916eca5",
+      "createdAt": "2026-10-15T18:33:44.582Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "create_oligo",
+          "requestId": "seq-827c4175a52a4ef65916eca5-copy",
+          "sequence": {
+            "label": "pUC19 probe",
+            "residues": "GTCGACCTGCAGGCATGCAAGCTTGGCGTAATCATGGTCATAGCTGTTTCCTGTGTGAAATTGTTATCCGCTCACAATTCCACACAACATACGAGCCGGAAGCATAAAGTGTAAAGCCTGGGGTGCCTAATGAGTGAGCTAACTCACATTAATTGCGTTGCGCTCACTGCCCGCTTTCCAGTCGGGAAACCTGTCGTGCCAGCTGCATTAATGAATCGGCCAACGCGCGGGGAGAGGCGGTTTGCGTATTGGGCGCTCTTCCGCTTCCTCGCTCACTGACTCGCTGCGCTCGGTCGTTCGGCTGCGGCGAGCGGTATCAGCTCACTCAAAGGCGGTAATACGGTTATCCACAGAATCAGGGGATAACGCAGGAAAGAACATGTGAGCAAAAGGCCAGCAAAAGGCCAGGAACCGTAAAAAGGCCGCGTTGCTGGCGTTTTTCCATAGGCTCCGCCCCCCTGACGAGCATCACAAAAATCGACGCTCAAGTCAGAGGTGGCGAAACCCGACAGGACTATAAAGATACCAGGCGTTTCCCCCTGGAAGCTCCCTCGTGCGCTCTCCTGTTCCGACCCTGCCGCTTACCGGATACCTGTCCGCCTTTCTCCCTTCGGGAAGCGTGGCGCTTTCTCATAGCTCACGCTGTAGGTATCTCAGTTCGGTGTAGGTCGTTCGCTCCAAGCTGGGCTGTGTGCACGAACCCCCCGTTCAGCCCGACCGCTGCGCCTTATCCGGTAACTATCGTCTTGAGTCCAACCCGGTAAGACACGACTTATCGCCACTGGCAGCAGCCACTGGTAACAGGATTAGCAGAGCGAGGTATGTAGGCGGTGCTACAGAGTTCTTGAAGTGGTGGCCTAACTACGGCTACACTAGAAGAACAGTATTTGGTATCTGCGCTCTGCTGAAGCCAGTTACCTTCGGAAAAAGAGTTGGTAGCTCTTGATCCGGCAAACAAACCACCGCTGGTAGCGGTGGTTTTTTTGTTTGCAAGCAGCAGATTACGCGCAGAAAAAAAGGATCTCAAGAAGATCCTTTGATCTTTTCTACGGGGTCTGACGCTCAGTGGAACGAAAACTCACGTTAAGGGATTTTGGTCATGAGATTATCAAAAAGGATCTTCACCTAGATCCTTTTAAATTAAAAATGAAGTTTTAAATCAATCTAAAGTATATATGAGTAAACTTGGTCTGACAGTTACCAATGCTTAATCAGTGAGGCACCTATCTCAGCGATCTGTCTATTTCGTTCATCCATAGTTGCCTGACTCCCCGTCGTGTAGATAACTACGATACGGGAGGGCTTACCATCTGGCCCCAGTGCTGCAATGATACCGCGAGACCCACGCTCACCGGCTCCAGATTTATCAGCAATAAACCAGCCAGCCGGAAGGGCCGAGCGCAGAAGTGGTCCTGCAACTTTATCCGCCTCCATCCAGTCTATTAATTTTTGCGCCGTCTAGGAGTTTGGACCDCAGTAATACGGAGGGGGCTTACCCGGTAAGAAACGCTGGAGTGGTTCGAAAGCGTAAAGGCGTCCCTTCCGGGAAACTGTGGCGGAACCGCTATTACGCCAACTGTTCCGTTGTACGCACTTAACGCTTTCGCCTTTGATCGCTCACGTCAAGCACGAGGTAAAGTACCGCAAGAAAGAGCTTAAATACCGCACAGATGCGTAAGGAGAAAATACCGCATCAGGCGCTCTTCCGCTTCCTCGCTCACTGACTCGCTGCGCTCGGTCGTTCGGCTGCGGCGAGCGGTATCAGCTCACTCAAAGGCGGTAATACGGTTATCCACAGAATCAGGGGATAACGCAGGAAAGAACATGTGAGCAAAAGGCCAGCAAAAGGCCAGGAACCGTAAAAAGGCCGCGTTGCTGGCGTTTTTCCATAGGCTCCGCCCCCCTGACGAGCATCACAAAAATCGACGCTCAAGTCAGAGGTGGCGAAACCCGACAGGACTATAAAGATACCAGGCGTTTCCCCCTGGAAGCTCCCTCGTGCGCTCTCCTGTTCCGACCCTGCCGCTTACCGGATACCTGTCCGCCTTTCTCCCTTCGGGAAGCGTGGCGCTTTCTCATAGCTCACGCTGTAGGTATCTCAGTTCGGTGTAGGTCGTTCGCTCCAAGCTGGGCTGTGTGCACGAACCCCCCGTTCAGCCCGACCGCTGCGCCTTATCCGGTAACTATCGTCTTGAGTCCAACCCGGTAAGACACGACTTATCGCCACTGGCAGCAGCCACTGGTAACAGGATTAGCAGAGCGAGGTATGTAGGCGGTGCTACAGAGTTCTTGAAGTGGTGGCCTAACTACGGCTACACTAGAAGAACAGTATTTGGTATCTGCGCTCTGCTGAAGCCAGTTACCTTCGGAAAAAGAGTTGGTAGCTCTTGATCCGGCAAACAAACCACCGCTGGTAGCGGTGGTTTTTTTGTTTGCAAGCAGCAGATTACGCGCAGAAAAAAAGGATCTCAAGAAGATCCTTTGATCTTTTCTACGGGGTCTGACGCTCAGTGGAACGAAAACTCACGTTAAGGGATTTTGGTCATGAGATTATCAAAAAGGATCTTCACCTAGATCCTTTTAAATTAAAAATGAAGTTTTAAATCAATCTAAAGTATATATGAGTAAACTTGGTCTGACAG",
+            "alphabet": "iupac_dna",
+            "topology": "linear",
+            "source": {
+              "sourceRef": {
+                "kind": "record",
+                "id": "SEQ-827c4175a52a4ef65916eca5",
+                "label": "pUC19 probe",
+                "type": "sequence"
+              }
+            }
+          },
+          "modifications": [],
+          "vendor": ""
+        },
+        "sequenceProposalRequest": "focus on record SEQ-827c4175a52a4ef65916eca5"
+      },
+      "createdAt": "2026-10-15T18:36:07.630Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T18:36:13.633Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "seq-tab-analysis-001",
+          "sequence": {
+            "label": "pUC19 probe",
+            "residues": "GTCGACCTGCAGGCATGCAAGCTTGGCGTAATCATGGTCATAGCTGTTTCCTGTGTGAAATTGTTATCCGCTCACAATTCCACACAACATACGAGCCGGAAGCATAAAGTGTAAAGCCTGGGGTGCCTAATGAGTGAGCTAACTCACATTAATTGCGTTGCGCTCACTGCCCGCTTTCCAGTCGGGAAACCTGTCGTGCCAGCTGCATTAATGAATCGGCCAACGCGCGGGGAGAGGCGGTTTGCGTATTGGGCGCTCTTCCGCTTCCTCGCTCACTGACTCGCTGCGCTCGGTCGTTCGGCTGCGGCGAGCGGTATCAGCTCACTCAAAGGCGGTAATACGGTTATCCACAGAATCAGGGGATAACGCAGGAAAGAACATGTGAGCAAAAGGCCAGCAAAAGGCCAGGAACCGTAAAAAGGCCGCGTTGCTGGCGTTTTTCCATAGGCTCCGCCCCCCTGACGAGCATCACAAAAATCGACGCTCAAGTCAGAGGTGGCGAAACCCGACAGGACTATAAAGATACCAGGCGTTTCCCCCTGGAAGCTCCCTCGTGCGCTCTCCTGTTCCGACCCTGCCGCTTACCGGATACCTGTCCGCCTTTCTCCCTTCGGGAAGCGTGGCGCTTTCTCATAGCTCACGCTGTAGGTATCTCAGTTCGGTGTAGGTCGTTCGCTCCAAGCTGGGCTGTGTGCACGAACCCCCCGTTCAGCCCGACCGCTGCGCCTTATCCGGTAACTATCGTCTTGAGTCCAACCCGGTAAGACACGACTTATCGCCACTGGCAGCAGCCACTGGTAACAGGATTAGCAGAGCGAGGTATGTAGGCGGTGCTACAGAGTTCTTGAAGTGGTGGCCTAACTACGGCTACACTAGAAGAACAGTATTTGGTATCTGCGCTCTGCTGAAGCCAGTTACCTTCGGAAAAAGAGTTGGTAGCTCTTGATCCGGCAAACAAACCACCGCTGGTAGCGGTGGTTTTTTTGTTTGCAAGCAGCAGATTACGCGCAGAAAAAAAGGATCTCAAGAAGATCCTTTGATCTTTTCTACGGGGTCTGACGCTCAGTGGAACGAAAACTCACGTTAAGGGATTTTGGTCATGAGATTATCAAAAAGGATCTTCACCTAGATCCTTTTAAATTAAAAATGAAGTTTTAAATCAATCTAAAGTATATATGAGTAAACTTGGTCTGACAGTTACCAATGCTTAATCAGTGAGGCACCTATCTCAGCGATCTGTCTATTTCGTTCATCCATAGTTGCCTGACTCCCCGTCGTGTAGATAACTACGATACGGGAGGGCTTACCATCTGGCCCCAGTGCTGCAATGATACCGCGAGACCCACGCTCACCGGCTCCAGATTTATCAGCAATAAACCAGCCAGCCGGAAGGGCCGAGCGCAGAAGTGGTCCTGCAACTTTATCCGCCTCCATCCAGTCTATTAATTTTTGCGCCGTCTAGGAGTTTGGACCDCAGTAATACGGAGGGGGCTTACCCGGTAAGAAACGCTGGAGTGGTTCGAAAGCGTAAAGGCGTCCCTTCCGGGAAACTGTGGCGGAACCGCTATTACGCCAACTGTTCCGTTGTACGCACTTAACGCTTTCGCCTTTGATCGCTCACGTCAAGCACGAGGTAAAGTACCGCAAGAAAGAGCTTAAATACCGCACAGATGCGTAAGGAGAAAATACCGCATCAGGCGCTCTTCCGCTTCCTCGCTCACTGACTCGCTGCGCTCGGTCGTTCGGCTGCGGCGAGCGGTATCAGCTCACTCAAAGGCGGTAATACGGTTATCCACAGAATCAGGGGATAACGCAGGAAAGAACATGTGAGCAAAAGGCCAGCAAAAGGCCAGGAACCGTAAAAAGGCCGCGTTGCTGGCGTTTTTCCATAGGCTCCGCCCCCCTGACGAGCATCACAAAAATCGACGCTCAAGTCAGAGGTGGCGAAACCCGACAGGACTATAAAGATACCAGGCGTTTCCCCCTGGAAGCTCCCTCGTGCGCTCTCCTGTTCCGACCCTGCCGCTTACCGGATACCTGTCCGCCTTTCTCCCTTCGGGAAGCGTGGCGCTTTCTCATAGCTCACGCTGTAGGTATCTCAGTTCGGTGTAGGTCGTTCGCTCCAAGCTGGGCTGTGTGCACGAACCCCCCGTTCAGCCCGACCGCTGCGCCTTATCCGGTAACTATCGTCTTGAGTCCAACCCGGTAAGACACGACTTATCGCCACTGGCAGCAGCCACTGGTAACAGGATTAGCAGAGCGAGGTATGTAGGCGGTGCTACAGAGTTCTTGAAGTGGTGGCCTAACTACGGCTACACTAGAAGAACAGTATTTGGTATCTGCGCTCTGCTGAAGCCAGTTACCTTCGGAAAAAGAGTTGGTAGCTCTTGATCCGGCAAACAAACCACCGCTGGTAGCGGTGGTTTTTTTGTTTGCAAGCAGCAGATTACGCGCAGAAAAAAAGGATCTCAAGAAGATCCTTTGATCTTTTCTACGGGGTCTGACGCTCAGTGGAACGAAAACTCACGTTAAGGGATTTTGGTCATGAGATTATCAAAAAGGATCTTCACCTAGATCCTTTTAAATTAAAAATGAAGTTTTAAATCAATCTAAAGTATATATGAGTAAACTTGGTCTGACAG",
+            "alphabet": "iupac_dna",
+            "topology": "linear",
+            "source": {
+              "sourceRef": {
+                "kind": "record",
+                "id": "SEQ-827c4175a52a4ef65916eca5",
+                "label": "pUC19 probe",
+                "type": "sequence"
+              }
+            }
+          }
+        },
+        "sequenceProposalRequest": "switch to the Analysis tab"
+      },
+      "createdAt": "2026-10-15T18:37:43.333Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Analysis tab",
+      "createdAt": "2026-10-15T18:38:13.741Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for compile_event_graph_draft…\nDrafting on thunderbeast…\nDrafting on thunderbeast…\nagent-action envelope rejected by the registered agent-action schema: /: Expected type: object\nNo events generated.",
+      "createdAt": "2026-10-15T18:38:18.300Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to the analysis tab\n",
+      "createdAt": "2026-10-15T23:03:28.114Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to the analysis tab",
+      "createdAt": "2026-10-15T23:05:52.324Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened Analysis — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T23:05:54.465Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the analysis tab",
+      "createdAt": "2026-10-15T23:06:46.055Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened sequences — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T23:06:48.852Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to the assay tab\n",
+      "createdAt": "2026-10-15T23:07:09.560Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nOpened sequences — nothing was written.\nNo events generated.",
+      "createdAt": "2026-10-15T23:07:12.289Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to tab: assay",
+      "createdAt": "2026-10-16T07:24:57.156Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nAI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.\n\n(Cancelled)",
+      "createdAt": "2026-10-16T07:25:18.593Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to tab: assay",
+      "createdAt": "2026-10-16T07:28:06.509Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The model did not return a structured sequence proposal. Nothing was saved.",
+      "createdAt": "2026-10-16T07:28:13.281Z"
+    },
+    {
+      "role": "user",
+      "content": "switch to the Assay tab",
+      "createdAt": "2026-10-16T08:51:08.690Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nAI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.\nAI stream resumed from thunderbeast.\nDrafting on thunderbeast…\nDrafting on thunderbeast…\nAction sent — see the workspace.\nNo events generated.",
+      "createdAt": "2026-10-16T08:51:35.602Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record ANR-000001",
+      "createdAt": "2026-10-16T08:51:42.082Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The model did not return a structured sequence proposal. Nothing was saved.",
+      "createdAt": "2026-10-16T08:52:01.120Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record SEQ-827c4175a52a4ef65916eca5",
+      "createdAt": "2026-10-16T08:52:07.614Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nAI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.\nAI stream resumed from thunderbeast.\nRequesting the structured sequence emission…\nTurn 2...\nAI request sent to thunderbeast; waiting for agent_intent…\nRequesting the structured sequence emission…\nTurn 3...\nAI request sent to thunderbeast; waiting for agent_intent…\nDrafting on thunderbeast…\nAI drafting on thunderbeast… 7s elapsed, waiting for next model chunk.\nAI stream resumed from thunderbeast.\nDrafting on thunderbeast…\nAction sent — see the workspace.\nNo events generated.",
+      "createdAt": "2026-10-16T08:52:25.729Z"
+    },
+    {
+      "role": "user",
+      "content": "propose a new DNA sequence labeled GateProbe with the residues ATCGATCGATCGATCG",
+      "createdAt": "2026-10-16T08:52:32.984Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The model did not return a structured sequence proposal. Nothing was saved.",
+      "createdAt": "2026-10-16T08:52:46.716Z"
+    },
+    {
+      "role": "user",
+      "content": "focus on record ANR-000001",
+      "createdAt": "2026-10-16T08:55:05.652Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The model did not return a structured sequence proposal. Nothing was saved.",
+      "createdAt": "2026-10-16T08:55:35.694Z"
+    },
+    {
+      "role": "user",
+      "content": "propose a new DNA sequence labeled GateProbe with the residues ATCGATCGATCGATCG",
+      "createdAt": "2026-10-16T08:55:41.957Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "save_sequence",
+          "requestId": "req-gateprobe-001",
+          "sequence": {
+            "label": "GateProbe",
+            "residues": "ATCGATCGATCGATCG",
+            "alphabet": "dna",
+            "topology": "linear"
+          }
+        },
+        "sequenceProposalRequest": "propose a new DNA sequence labeled GateProbe with the residues ATCGATCGATCGATCG"
+      },
+      "createdAt": "2026-10-16T08:55:59.014Z"
+    },
+    {
+      "role": "user",
+      "content": "Switch to the Assay tab.",
+      "createdAt": "2026-10-16T12:49:34.063Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nAI drafting on thunderbeast… 3s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 6s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 9s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 12s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 15s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 18s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 21s elapsed, waiting for first model chunk.\nAI drafting on thunderbeast… 24s elapsed, waiting for first model chunk.\nAI stream resumed from thunderbeast.\nRequesting the structured sequence emission…\nTurn 2...\nAI request sent to thunderbeast; waiting for agent_intent…\nDrafting on thunderbeast…\nDrafting on thunderbeast…\nAction sent — see the workspace.\nNo events generated.",
+      "createdAt": "2026-10-16T12:50:06.102Z"
+    },
+    {
+      "role": "user",
+      "content": "Focus on record ANR-000001.",
+      "createdAt": "2026-10-16T12:50:08.559Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Record \"ANR-000001\" (kind analysis-run) is not a kind Sequences can select (it declares sequence, sequence_interval, oligo-spec). Nothing was changed.",
+      "createdAt": "2026-10-16T12:50:08.597Z"
+    },
+    {
+      "role": "user",
+      "content": "Focus on record SEQ-827c4175a52a4ef65916eca5.",
+      "createdAt": "2026-10-16T12:50:12.878Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nRequesting the structured sequence emission…\nTurn 2...\nAI request sent to thunderbeast; waiting for agent_intent…\nDrafting on thunderbeast…\nAI drafting on thunderbeast… 7s elapsed, waiting for next model chunk.\nAI stream resumed from thunderbeast.\nDrafting on thunderbeast…\nagent-action envelope rejected by the registered agent-action schema: /target: Missing required property: protocolId (Add the \"protocolId\" field.); /target: Missing required property: stepId (Add the \"stepId\" field.); /target: Unknown property: recordId (\"recordId\" is not a recognized field — check for a typo or remove it.); /target: Unknown property: type (\"type\" is not a recognized field — check for a typo or remove it.); /target/kind: Must equal: protocol-step (Expected \"protocol-step\".); /target/kind: Must be one of: record, ontology (\"sequence-record\" is not allowed here; choose one of: record, ontology.); +7 more\nNo events generated.",
+      "createdAt": "2026-10-16T12:50:26.304Z"
+    },
+    {
+      "role": "user",
+      "content": "Focus on record SEQ-827c4175a52a4ef65916eca5.",
+      "createdAt": "2026-10-16T12:50:28.807Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing sequences request...\nSkipping compiler preflight; asking AI to call agent_intent directly…\nTurn 1...\nAI request sent to thunderbeast; waiting for agent_intent…\nDrafting on thunderbeast…\nAI drafting on thunderbeast… 7s elapsed, waiting for next model chunk.\nAI stream resumed from thunderbeast.\nDrafting on thunderbeast…\nAction sent — see the workspace.\nNo events generated.",
+      "createdAt": "2026-10-16T12:50:36.747Z"
+    },
+    {
+      "role": "user",
+      "content": "Create a new oligo named \"gate2 probe\" with residues ACGTACGTACGTACGT.",
+      "createdAt": "2026-10-16T12:50:39.528Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The model (qwen3.8-flash-next) did not emit the required agent_intent tool call after 2 attempts (the retry was requested once). Nothing was saved.",
+      "createdAt": "2026-10-16T12:51:06.734Z"
+    },
+    {
+      "role": "user",
+      "content": "Create a new oligo named \"gate2 probe\" with residues ACGTACGTACGTACGT.",
+      "createdAt": "2026-10-16T12:51:09.511Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "create_oligo",
+          "requestId": "gate2-probe-001",
+          "sequence": {
+            "label": "gate2 probe",
+            "residues": "ACGTACGTACGTACGT",
+            "alphabet": "dna",
+            "topology": "linear"
+          },
+          "modifications": []
+        },
+        "sequenceProposalRequest": "Create a new oligo named \"gate2 probe\" with residues ACGTACGTACGTACGT."
+      },
+      "createdAt": "2026-10-16T12:51:18.981Z"
+    }
+  ],
+  "mentions": [],
+  "updatedAt": "2026-10-16T12:51:18.981Z"
+}

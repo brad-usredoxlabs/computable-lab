@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-trypsin-edta-thermo-dmem-tnru
+kind: material
+id: MAT-trypsin-edta-thermo-dmem-tnru
+name: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-16T05:51:31.207Z
+  note: Created as a proposed local material record from an accepted add-material
+    event graph.

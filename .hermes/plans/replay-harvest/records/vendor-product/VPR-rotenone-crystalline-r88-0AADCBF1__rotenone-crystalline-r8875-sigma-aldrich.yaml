@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml
+recordId: VPR-rotenone-crystalline-r88-0AADCBF1
+kind: vendor-product
+id: VPR-rotenone-crystalline-r88-0AADCBF1
+name: Rotenone, crystalline, R8875 Sigma-Aldrich
+vendor: Unknown
+catalog_number: N/A
+material_ref:
+  kind: record
+  id: MAT-rotenone-crystalline-r88-1uzt
+  type: material
+  label: Rotenone, crystalline, R8875 Sigma-Aldrich
+product_url: https://www.sigmaaldrich.com/AL/en/product/sigma/r8875
+composition_provenance:
+  source_type: vendor_page
+  vendor: Unknown
+  source_url: https://www.sigmaaldrich.com/AL/en/product/sigma/r8875
+  captured_at: 2026-09-07T19:52:18.597Z

@@ -1,0 +1,15 @@
+journalVersion: 1
+seq: 233
+capturedAt: 2026-10-11T09:11:17.596Z
+actor: USR-BRAD
+contentHash: ae66113d35e9aeb73292a41081db13a5f18549ec884db5426dafad92e654bd62
+snapshot:
+  version: 1
+  userId: USR-BRAD
+  tabs:
+    - kind: run
+      runId: EXR-LANE2-AI10
+      title: Run EXR-LANE2-AI10
+      activeRightPaneMode: ai
+  activeTabId: run:EXR-LANE2-AI10
+  updatedAt: 2026-10-11T09:11:17.432Z

@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-acetonitrile-dl1b
+kind: material
+id: MAT-acetonitrile-dl1b
+name: acetonitrile
+domain: chemical
+class:
+  - kind: ontology
+    id: CHEBI:38472
+    namespace: CHEBI
+    label: acetonitrile
+    uri: http://purl.obolibrary.org/obo/CHEBI_38472
+createdAt: 2026-09-07T17:45:24.786Z
+updatedAt: 2026-09-07T17:45:24.786Z
+createdBy: USR-BRAD

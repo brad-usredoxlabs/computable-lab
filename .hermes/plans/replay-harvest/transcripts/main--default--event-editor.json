@@ -1,0 +1,109 @@
+{
+  "endpoint": "event-editor",
+  "userId": "default",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Reply with exactly: ok",
+      "createdAt": "2026-10-18T13:06:29.870Z"
+    },
+    {
+      "role": "assistant",
+      "content": "deck_layout intent requires a variantId (e.g. \"manual_freeform\" = the freeform bench).",
+      "createdAt": "2026-10-18T13:06:32.559Z"
+    },
+    {
+      "role": "user",
+      "content": "add material to wells A1:C3",
+      "createdAt": "2026-10-18T13:24:58.317Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Prompt received. Starting compiler pipeline...\nProcessing run-workspace request...\nSkipping compiler preflight; asking AI to call compile_event_graph_draft directly…\nTurn 1...\nAI request sent to openrouter.ai; waiting for compile_event_graph_draft…\nDrafting on openrouter.ai…\nI dropped the model’s “which material?” question — the system asks that itself when a material is ungrounded.\nNo events generated.",
+      "metadata": {
+        "usage": {
+          "promptTokens": 0,
+          "completionTokens": 0,
+          "totalTokens": 0,
+          "turns": 1,
+          "toolCalls": 0
+        }
+      },
+      "createdAt": "2026-10-18T13:25:03.906Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100 uL of unobtainium to wells A1:C3",
+      "createdAt": "2026-10-18T13:27:04.219Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The draft names \"unobtainium\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "metadata": {
+        "clarification": {
+          "id": "unresolved-c-0a91336f09",
+          "prompt": "The draft names \"unobtainium\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+          "entityType": "material",
+          "options": [],
+          "menuProvider": "/m",
+          "query": "unobtainium",
+          "allowCreateLocal": true
+        }
+      },
+      "createdAt": "2026-10-18T13:27:09.442Z"
+    },
+    {
+      "role": "user",
+      "content": "add 50 uL of phlogiston to A1",
+      "createdAt": "2026-10-18T13:35:22.692Z"
+    },
+    {
+      "role": "assistant",
+      "content": "The draft names \"phlogiston\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "metadata": {
+        "clarification": {
+          "id": "unresolved-c-eae68133f0",
+          "prompt": "The draft names \"phlogiston\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+          "entityType": "material",
+          "options": [],
+          "menuProvider": "/m",
+          "query": "phlogiston",
+          "allowCreateLocal": true
+        }
+      },
+      "createdAt": "2026-10-18T13:35:25.618Z"
+    },
+    {
+      "role": "user",
+      "content": "persist check",
+      "createdAt": "2026-10-19T01:39:06.558Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Error: Cannot read properties of undefined (reading 'length')",
+      "createdAt": "2026-10-19T01:39:06.592Z"
+    },
+    {
+      "role": "user",
+      "content": "what deck is this?",
+      "createdAt": "2026-10-19T01:40:06.935Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Error: Cannot read properties of undefined (reading 'length')",
+      "createdAt": "2026-10-19T01:40:06.968Z"
+    },
+    {
+      "role": "user",
+      "content": "Draft semantic protocol (MEANT)\nXDR-000007 · candidates[0].draft · edits save to the draft record, never to the SAID\nProtocol\nTitle\nQuick Reference\nVersion\n—\nAuthor\nbrad\nPurpose\n\nMaterials\nNo materials\n\nAdd\nConsumables / Labware\nNo labware or consumables\n\nAdd\nEquipment\nNo equipment\n\nAdd\nSteps\nNo actionable steps were extracted from the vendor protocol.\n\nx\n\nAdd\nNotes\n\nIntent\nSemantic verb\nMaterial needs\nEmpty array\nConstraints\nEmpty array\nProvenance\nProvenance (DERIVED)\nCandidate id (DERIVED — never another kind's id)\nPage (DERIVED — candidate-anchored)\n",
+      "createdAt": "2026-10-19T01:43:38.384Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Error: Cannot read properties of undefined (reading 'length')",
+      "createdAt": "2026-10-19T01:43:38.574Z"
+    }
+  ],
+  "mentions": [],
+  "updatedAt": "2026-10-19T01:43:38.574Z"
+}

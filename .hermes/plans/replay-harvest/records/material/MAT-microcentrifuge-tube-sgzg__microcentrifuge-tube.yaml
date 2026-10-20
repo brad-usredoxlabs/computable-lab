@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-microcentrifuge-tube-sgzg
+kind: material
+id: MAT-microcentrifuge-tube-sgzg
+name: microcentrifuge tube
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "microcentrifuge tube").
