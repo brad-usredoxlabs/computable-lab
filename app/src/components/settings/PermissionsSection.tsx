@@ -17,7 +17,12 @@
  *
  * Error law (OwnershipPolicySection precedent): a server refusal renders as a
  * row ABOVE the controls and the Refresh control stays operable — never dead
- * chrome. Coverage/bundle nulls degrade honestly, not crash.
+ * chrome. A refusal is ALSO not a data source: while `response` is null the
+ * section renders NO data claims — neither the "no grants: …" empty state nor
+ * the governance panel's "no lifecycle coverage loaded" / "no policy bundle
+ * configured" fallbacks. Those assertions are truthful only when a response
+ * was actually received (loaded-and-empty vs load-failed are distinct).
+ * Coverage/bundle nulls from a real response degrade honestly, not crash.
  *
  * No kind/role/lifecycle/user literals in this file (D9) — every rendered
  * value comes from the aggregate or the user records.
@@ -97,6 +102,11 @@ export function PermissionsSection() {
   }
 
   const grants = response?.grants ?? []
+  // "Loaded and empty" vs "load failed" (adv review defect 1): the empty
+  // state and the governance fallback rows are data claims and only render
+  // when a response was actually received. On a refusal `response` stays
+  // null and the error row is the ONLY content claim on the page.
+  const loaded = response !== null
   const lifecycles: PermissionsLifecycleView[] = response?.lifecycles ?? []
   const coverage = response?.coverage ?? null
   const bundle = response?.bundle ?? null
@@ -143,13 +153,15 @@ export function PermissionsSection() {
       </div>
 
       {visibleGrants.length === 0 ? (
-        <div className="info-row" data-testid="permissions-empty">
-          <span className="info-row__value">
-            {grants.length === 0
-              ? 'no grants: everyone resolves to no-role; drafts-only is the only power'
-              : 'no grants match this filter'}
-          </span>
-        </div>
+        loaded ? (
+          <div className="info-row" data-testid="permissions-empty">
+            <span className="info-row__value">
+              {grants.length === 0
+                ? 'no grants: everyone resolves to no-role; drafts-only is the only power'
+                : 'no grants match this filter'}
+            </span>
+          </div>
+        ) : null
       ) : (
         <table className="permissions-table" data-testid="permissions-table">
           <thead>
@@ -197,6 +209,9 @@ export function PermissionsSection() {
         </table>
       )}
 
+      {/* Governance rows are data claims too: they echo the loaded
+          registry/coverage/bundle and only render when a response arrived. */}
+      {loaded && (
       <div className="permissions-governance" data-testid="permissions-governance">
         <table className="permissions-governance-table">
           <thead>
@@ -233,6 +248,7 @@ export function PermissionsSection() {
           </span>
         </div>
       </div>
+      )}
     </div>
   )
 }

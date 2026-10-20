@@ -81,11 +81,16 @@ describe('PermissionsSection', () => {
     expect(rowA).toHaveTextContent('demo grant')
   })
 
-  it('renders an unscoped grant (no lifecycleId) honestly as "all lifecycles"', async () => {
+  it('renders an unscoped grant (no lifecycleId) honestly as "all lifecycles" and never inert', async () => {
     render(<PermissionsSection />)
 
     const rowC = await screen.findByTestId('permissions-grant-row-GRANT-TEST-C')
     expect(rowC).toHaveTextContent('all lifecycles')
+    // Directional pin (adv review defect 2): the inert rule applies ONLY to
+    // grants bound to a lifecycle. An unscoped role must NEVER be flagged
+    // inert — a substring check on "all lifecycles" alone would let a
+    // regression that flags unscoped roles inert pass.
+    expect(screen.queryByTestId('permissions-role-inert-GRANT-TEST-C-author')).toBeNull()
   })
 
   it('flags a role that the bound lifecycle does not declare as inert', async () => {
@@ -139,6 +144,12 @@ describe('PermissionsSection', () => {
 
     const errorRow = await screen.findByTestId('permissions-load-error')
     expect(errorRow).toHaveTextContent('500 boom')
+    // No data claims on a refusal (adv review defect 1/2): the aggregate
+    // never loaded, so the section must not assert "no grants: everyone
+    // resolves to no-role", nor "no lifecycle coverage loaded" / "no policy
+    // bundle configured" — those are only truthful when a response arrived.
+    expect(screen.queryByTestId('permissions-empty')).toBeNull()
+    expect(screen.queryByTestId('permissions-governance')).toBeNull()
     const refresh = screen.getByTestId('permissions-refresh')
     expect(refresh).not.toBeDisabled()
     // Controls are not dead chrome: Refresh re-fetches and clears the error.
