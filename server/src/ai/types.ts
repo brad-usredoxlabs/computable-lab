@@ -949,6 +949,21 @@ export type AgentEvent =
    */
   | { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }
   /**
+   * MATRES-RECV (OQ-2 ratified) — the model's receiving-attestation INTENT,
+   * retained verbatim (compose_receiving, case 4 retrospective chat). This is
+   * NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — the 'receiving' adapter: the
+   * envelope compiles through receiving/MaterialReceivingDraft.ts, TWO staged
+   * creates (the immutable material-receiving receipt + the material-instance
+   * it brings into custody) through the REAL validate + lint, canAccept),
+   * NOT this stream, is the trust boundary. Accept writes the receipt AND
+   * the instance; nothing here writes a record, attests, or invents an
+   * arrival date, a receiver, or a duplicate arrival (thin-event design —
+   * same shape as workstate_proposal / analysis_proposal /
+   * record_draft_proposal).
+   */
+  | { type: 'receiving_proposal'; receiving: Record<string, unknown> }
+  /**
    * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
    * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors
    * ledgerQuery.ts LedgerAnswerEnvelope field-for-field (status, asOf,
