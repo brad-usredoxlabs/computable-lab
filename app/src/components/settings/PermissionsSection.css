@@ -1,0 +1,174 @@
+/*
+ * PermissionsSection — the Settings "Permissions & roles" surface (QMS8-A).
+ *
+ * QMS8-A FIX RUN 2 (browser gate): this surface previously had ZERO CSS —
+ * grep found the permissions-* classes only in the TSX — so inside the
+ * ~384px settings-grid card the grants table and the governance table
+ * rendered as jammed vertical text, every cell wrapping character-by-
+ * character ("qms-\nadmin"). Following the repo precedent for unstyled
+ * surfaces (ChangesPanel.css, PROTO-AI-14 F1, itself following commit
+ * 8e14b061 "theme-token the settings surfaces"), every color/border here
+ * reads a --cl-* design token from shared/styles/tokens.css: no hex, no
+ * rgba, no theme-specific palette. The .cl-app[data-theme='light'] block
+ * re-skins the section automatically, so it is legible in dark AND light.
+ *
+ * The section header itself is the shared settings-section card chrome
+ * (SettingsPage's Section wrapper) — this file styles only what lives
+ * inside the card content.
+ */
+
+.permissions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--cl-text);
+}
+
+/* ── refusal row — danger status row above the controls ─────────────────── */
+
+.permissions-load-error {
+  padding: 8px 10px;
+  border: 1px solid var(--cl-danger-border);
+  border-radius: 6px;
+  background: var(--cl-danger-soft);
+}
+
+.permissions-load-error .info-row__value {
+  color: var(--cl-danger);
+}
+
+/* ── controls — filter input reads the sibling .edit-row__input grammar ─── */
+
+.permissions-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permissions-user-filter {
+  flex: 1 1 auto;
+  max-width: 320px;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+.permissions-user-filter::placeholder {
+  color: var(--cl-text-faint);
+  opacity: 1;
+}
+
+.permissions-user-filter:focus {
+  outline: none;
+  border-color: var(--cl-accent);
+  box-shadow: 0 0 0 2px var(--cl-focus-ring);
+}
+
+/* ── grants table — legible header row, word-boundary wrapping ──────────── */
+
+.permissions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.permissions-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  border-bottom: 1px solid var(--cl-border-strong);
+  /* Header labels are short; let them wrap freely rather than widen columns. */
+  overflow-wrap: anywhere;
+}
+
+.permissions-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  vertical-align: top;
+  /* break-word wraps at WORD boundaries and only breaks inside a word when
+     the word alone cannot fit the column — never the character-by-character
+     jam the gate measured. */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.permissions-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── role chips — distinct status pills ─────────────────────────────────── */
+
+.permissions-role {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 2px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 0.75rem;
+  overflow-wrap: break-word;
+}
+
+/* The inert flag is a WARNING status (a mis-bound grant, not a danger
+   event): warn-soft fill + warn hairline + warn ink, per the brief — not
+   red danger. */
+.permissions-role--inert {
+  border-color: var(--cl-warn-border);
+  background: var(--cl-warn-soft);
+  color: var(--cl-warn);
+}
+
+/* ── governance panel — compact echo table + status rows ────────────────── */
+
+.permissions-governance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.permissions-governance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.permissions-governance-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  border-bottom: 1px solid var(--cl-border-strong);
+  overflow-wrap: anywhere;
+}
+
+.permissions-governance-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  vertical-align: top;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.permissions-governance-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── card width — the anti-jam placement rule ───────────────────────────── */
+
+/* The grants table (5 columns) and the governance table (3 columns) cannot
+   read inside a 350px-min auto-fit card: the permissions card spans the
+   full settings-grid so the tables get the page width they need at 1440px.
+   Scoped via :has so no sibling card changes. */
+.settings-grid > .settings-section:has(.permissions-section) {
+  grid-column: 1 / -1;
+}
