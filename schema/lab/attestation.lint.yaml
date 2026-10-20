@@ -178,23 +178,38 @@ rules:
     paths: [ "correction.changedFacts.consumedRef" ]
 
 # --- Q4 fulfillment re-evaluation OBLIGATION (declared, queryable) --------
+# Standing info finding on EVERY correction record, expressed honestly: the
+# assert is ALWAYS-FALSE-BY-CONSTRUCTION on a legal path. The inner equals
+# is true for every attestation (attestation.schema.yaml pins
+# `kind: const "attestation"`), so its negation can never pass — the rule
+# always fires as info whenever `supersedes` is present. The obligation is
+# therefore STANDING: no record state can clear it (completion lives in
+# FULFIL's fulfillment-review fact, never on the correction).
+# (The previous shape — `assert: exists` on correction.fulfillmentReviewCompleted
+# — was a dead assert on a path the closed correction object forbids
+# (additionalProperties: false): it fired only by accident and would have
+# silently STOPPED firing if the schema ever allowed the property. advc1
+# defect 5.)
 - id: attestation-correction-triggers-reevaluation-review
   title: "a correction declares a fulfillment re-evaluation obligation"
   description: >
     Standing info finding on every correction record: fulfillment facts citing
     the superseded evidence must be re-evaluated (r2: supersession is an audit
     pattern, not yet a fulfillment review). This item ships the OBLIGATION as
-    a queryable fact (CurrentAssertionView.reevaluationObligations reads it);
-    the re-evaluation MECHANICS belong to FULFIL's fulfillment-review fact.
-    Info severity: it never blocks acceptance.
+    a queryable fact (CurrentAssertionView.reevaluationObligations reads it,
+    live only for supersessions a claim actually cites); the re-evaluation
+    MECHANICS belong to FULFIL's fulfillment-review fact. Info severity: it
+    never blocks acceptance.
   severity: info
   scope: record
   when:
     op: exists
     path: supersedes
   assert:
-    op: exists
-    path: correction.fulfillmentReviewCompleted
+    # Intentionally always-firing: kind is const "attestation" in the schema,
+    # so the inner equals always passes and this negation always fails.
+    op: not
+    not: { op: equals, path: kind, value: attestation }
   message:
     template: "correction supersedes {{supersedes}} — fulfillment facts citing the superseded evidence require re-evaluation (FULFIL hook)"
     paths: [ "supersedes" ]

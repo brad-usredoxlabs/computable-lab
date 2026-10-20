@@ -51,11 +51,17 @@ async function buildWorld() {
   for (const { name, spec } of lintLoad.specs) {
     try {
       engine.addSpec(name, spec);
-    } catch {
-      // Pre-existing repo-wide specs may collide on rule ids; the attestation
-      // spec's own rules are asserted individually below.
+    } catch (err) {
+      // Pre-existing repo-wide specs may collide on rule ids; a collision
+      // involving the ATTESTATION spec (its name or its rule ids) is NOT
+      // swallowed — rethrow so a spec-load regression surfaces (advc1 obs).
+      const message = err instanceof Error ? err.message : String(err);
+      if (/attestation/i.test(name) || /attestation/i.test(message)) throw err;
     }
   }
+  // The attestation spec itself must be registered (loader fact: empty-rule
+  // specs load silently; the firing assertions below also cover this).
+  expect(engine.getRule('attestation-occurred-known-needs-occurred-at')).toBeDefined();
   return { validator, engine, lintLoad };
 }
 
@@ -197,7 +203,6 @@ describe('attestation envelope schema (§2a)', () => {
     expect(envelopeResult.valid).toBe(false);
     // Ajv names the offending location (unevaluatedProperties reports the path).
     const envelopeErrors = envelopeResult.errors ?? [];
-    console.log('ENVELOPE_ERRORS', JSON.stringify(envelopeErrors));
     expect(envelopeErrors.length).toBeGreaterThan(0);
     expect(envelopeErrors.some(e => /notAField|unevaluated|additional/i.test(`${e.path} ${e.message} ${e.keyword ?? ''}`))).toBe(true);
 
@@ -205,7 +210,6 @@ describe('attestation envelope schema (§2a)', () => {
     const claimResult = validator.validate(withExtraClaim, ATTESTATION_SCHEMA_ID);
     expect(claimResult.valid).toBe(false);
     const claimErrors = claimResult.errors ?? [];
-    console.log('CLAIM_ERRORS', JSON.stringify(claimErrors));
     expect(claimErrors.some(e => /smuggled|claims\/0|unevaluated|additional/i.test(`${e.path} ${e.message} ${e.keyword ?? ''}`))).toBe(true);
   });
 

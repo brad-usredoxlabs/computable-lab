@@ -219,6 +219,31 @@ describe('AttestationAcceptService (§2b)', () => {
     expect(await ctx.store.get(review.recordId)).toBeNull();
   });
 
+  it('a content-identical correction resubmitted under a FRESH draftId lands on the SAME record id (Q4e, §2c)', async () => {
+    const supersedes = { kind: 'record', type: 'attestation', id: 'ATT-TARGET-0001' };
+    const correction = {
+      claimTarget: { mode: 'same-entity-reattribute' },
+      changedFacts: { lot: '09213' },
+    };
+    const envelope = { kind: 'attestation', artifactKind: 'attestation-chain', claims: [claim()], supersedes, correction };
+    const firstDraft: AttestationDraft = { draftId: 'ATT-DRAFT-CORR-1', revision: 1, envelope };
+    const firstReview = service.compile(firstDraft);
+    expect(firstReview.canAccept).toBe(true);
+    const first = await service.accept({ draft: firstDraft, draftId: firstReview.draftId, revision: firstReview.revision, reviewHash: firstReview.reviewHash });
+
+    // SAME correction content (supersedes + changedFacts + claimTarget.mode),
+    // FRESH draftId + revision: content-scoped identity (Q4e) mints the SAME
+    // record id — a draft-scoped id would mint a duplicate correction record.
+    const freshDraft: AttestationDraft = { draftId: 'ATT-DRAFT-CORR-2', revision: 9, envelope: { ...envelope } };
+    const freshReview = service.compile(freshDraft);
+    expect(freshReview.recordId).toBe(first.recordId);
+    const fresh = await service.accept({ draft: freshDraft, draftId: freshReview.draftId, revision: freshReview.revision, reviewHash: freshReview.reviewHash });
+    expect(fresh.recordId).toBe(first.recordId);
+    // Exactly ONE correction record, proven by count, not response equality.
+    const mine = (await attestationRecords()).filter(r => r.recordId === first.recordId);
+    expect(mine).toHaveLength(1);
+  });
+
   it('a lint-invalid envelope (chain carrying a proposed claim) is refused before any write', async () => {
     const draft = draftFixture({ draftId: 'ATT-DRAFT-lint', envelope: {
       kind: 'attestation', artifactKind: 'attestation-chain',

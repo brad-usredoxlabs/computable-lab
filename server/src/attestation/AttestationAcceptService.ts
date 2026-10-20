@@ -20,10 +20,16 @@
  * - attestedAt is server-stamped from an INJECTABLE clock (the
  *   lab-sync/outbound/mint.ts:38 precedent) — tests pin it. occurredAt is
  *   NEVER written or synthesized here (Q5 honesty ceiling).
- * - recordId is a deterministic content-hash over the payload revision (the
- *   termId.ts discipline, Q4e): same (draftId, revision, envelope) -> same id.
+ * - recordId is a deterministic content hash (the termId.ts discipline, Q4e):
  *   NEVER Date.now(), NEVER randomUUID in an id path (analysisCompile.ts:337
- *   warning). Double submission therefore lands on the SAME record.
+ *   warning). CORRECTIONS are CONTENT-scoped per spec §2c: a draft carrying
+ *   supersedes + correction gets id = ATT-hash(supersedes + changedFacts +
+ *   claimTarget.mode), so a content-identical correction resubmitted under a
+ *   FRESH draftId/revision lands on the SAME record (draft-scoped identity
+ *   would mint a duplicate correction record — exactly what Q4e forbids).
+ *   Non-correction envelopes stay draft-scoped (draftId + revision +
+ *   envelope): §2b pins the payload revision of a draft; §2c's content
+ *   formula is the correction-identity rule specifically.
  * - exactOptionalPropertyTypes (server/tsconfig.json:13): every optional field
  *   is absent-or-value via the conditional-spread idiom (FormDraftService.ts:73-77).
  */
@@ -74,20 +80,40 @@ export class AttestationAcceptService {
   constructor(private readonly ctx: AppContext, private readonly deps: AttestationClock) {}
 
   /**
-   * Deterministic idempotent id (termId law): a pure content hash over the
-   * payload revision. Same input -> same id; a double-submitted correction
-   * lands on the SAME record (Q4e). No clock, no randomness.
+   * Draft-scoped stable core: the payload revision the reviewHash pins (§2b).
    */
   private stableCore(draft: AttestationDraft): { draftId: string; revision: number; envelope: Record<string, unknown> } {
     return { draftId: draft.draftId, revision: draft.revision, envelope: draft.envelope };
+  }
+
+  /**
+   * Correction identity (spec §2c formula, Q4e): supersedes ref +
+   * changedFacts + claimTarget.mode. Present iff the draft carries BOTH
+   * supersedes and correction (a draft missing correction is lint-invalid
+   * anyway — attestation-supersedes-needs-correction).
+   */
+  private correctionIdentity(draft: AttestationDraft): { supersedes: unknown; changedFacts: unknown; mode: unknown } | null {
+    const supersedes = draft.envelope.supersedes;
+    const correction = draft.envelope.correction;
+    if (supersedes === undefined || correction === undefined) return null;
+    const c = object(correction);
+    return { supersedes, changedFacts: c.changedFacts, mode: object(c.claimTarget).mode };
   }
 
   private reviewHashOf(draft: AttestationDraft): string {
     return contentHash(this.stableCore(draft));
   }
 
+  /**
+   * Deterministic idempotent id (termId law): a pure content hash, no clock,
+   * no randomness. Corrections hash their CONTENT (supersedes + changedFacts +
+   * claimTarget.mode) so a content-identical correction under a FRESH draftId
+   * lands on the SAME record (Q4e); non-corrections hash the draft revision.
+   */
   private recordIdOf(draft: AttestationDraft): string {
-    return `ATT-${contentHash(this.stableCore(draft)).slice(0, 32).toUpperCase()}`;
+    const identity = this.correctionIdentity(draft);
+    const core = identity !== null ? identity : this.stableCore(draft);
+    return `ATT-${contentHash(core).slice(0, 32).toUpperCase()}`;
   }
 
   /** Ajv is the structural authority; the LintEngine is the business-rule authority. */
