@@ -6,6 +6,8 @@ import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity
 import { compileWorkstateIntent, workstateDepsFromContext } from './workstateCompile.js';
 import { compileAnalysisIntent, analysisDepsFromContext } from './analysisCompile.js';
 import { compileRecordDraftIntent, recordDraftDepsFromContext } from './recordDraftCompile.js';
+import { compileReceivingIntent, receivingDepsFromContext } from '../receiving/MaterialReceivingDraft.js';
+import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID } from '../receiving/MaterialReceivingAcceptService.js';
 
 export interface DraftAdapter {
   checkRequest?(intent: Record<string,unknown>, userRequest?: string): Array<{path:string; message:string}>;
@@ -91,6 +93,40 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
     project(projection) {
       // The projection is the intent echo; the card document rides in `result`
       // and the single staged record create rides in `writes`.
+      return projection;
+    },
+  },
+  // MATRES-RECV (OQ-2 ratified): receiving proposals compile the elicited
+  // intent into the attestation envelope + TWO staged creates (the immutable
+  // material-receiving receipt + the material-instance it brings into
+  // custody) through the staging store — the real schema validate + lint run
+  // at compile time (StagingStore.ts:22-30), nothing durable before the
+  // reviewHash-verified accept. A blocked business wall (the lot-requires-
+  // product lint ERROR, the already-received gate) surfaces as a stage
+  // failure, which the pipeline records as needs-missing-fact with
+  // canAccept:false — the generic gate, not an adapter-name branch. The
+  // scientist's reported lot inscription survives VERBATIM in the stored
+  // draft input while blocked (r2 discard boundary). The accept write rides
+  // the EXISTING accept loop; the append-only wall (appendOnlyKinds DATA)
+  // keeps the stored receipt immutable.
+  'receiving': {
+    async stage(context,_actor,intent,_targetId,now) {
+      const compiled = await compileReceivingIntent(intent, receivingDepsFromContext(context, now));
+      if(!compiled.ok)throw new Error(compiled.diagnostics.join('; '));
+      const receipt = await context.store.create({ envelope:{ recordId:compiled.recordId!, schemaId:MATERIAL_RECEIVING_SCHEMA_ID, payload:compiled.envelope }, message:`Receiving draft staged create` });
+      if(!receipt.success)throw new Error(`staged receipt create blocked: ${receipt.error ?? 'validation/lint failure'}`);
+      // A correction NEVER stages the instance write: supersession is not a
+      // second arrival — the entity already exists (§7 bait 9; the §5.3 suite
+      // asserts instance/aliquot id lists byte-equal across a correction).
+      if(!compiled.isCorrection){
+        const instance = await context.store.create({ envelope:{ recordId:compiled.instanceRecordId!, schemaId:MATERIAL_INSTANCE_SCHEMA_ID, payload:compiled.instancePayload }, message:`Receiving draft staged instance create` });
+        if(!instance.success)throw new Error(`staged instance create blocked: ${instance.error ?? 'validation/lint failure'}`);
+      }
+      return { recordId:compiled.recordId, instanceRecordId:compiled.instanceRecordId, envelope:compiled.envelope, instancePayload:compiled.instancePayload };
+    },
+    project(projection) {
+      // The projection is the intent echo; the card document rides in `result`
+      // and the two staged creates (receipt + instance) ride in `writes`.
       return projection;
     },
   },

@@ -60,3 +60,22 @@ adapters:
     # exactly as before; the material/protocol auto-deposition paths are
     # untouched.
     humanReviewedCreate: true
+  # MATRES-RECV (OQ-2 ratified): the receiving attestation adapter. ONE
+  # elicited intent (compose_receiving on the ONE forced agent_intent tool)
+  # compiles into the attestation envelope + TWO staged creates — the
+  # immutable material-receiving receipt AND the material-instance it brings
+  # into custody — through the staging store (the REAL schema validate + lint
+  # run at compile; nothing durable before the reviewHash-verified accept).
+  # Business walls (lot-requires-product, receivedBy pairing, chain wall) are
+  # material-receiving.lint.yaml DATA — the staging create refuses a blocked
+  # payload and the pipeline records it as needs-missing-fact with
+  # canAccept:false (the generic gate, not an adapter-name branch). The
+  # staged creates are HUMAN-REVIEWED like record-drafting: nothing is
+  # durable until a scientist reads the card and clicks Accept. A correction
+  # stages ONLY the corrected receipt (supersession is never a second
+  # arrival).
+  receiving:
+    domain: receiving
+    operations: [compose-receiving]
+    projection: {}
+    humanReviewedCreate: true
