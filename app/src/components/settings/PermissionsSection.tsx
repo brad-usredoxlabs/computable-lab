@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import './PermissionsSection.css'
 import { apiClient, type PermissionsLifecycleView, type PermissionsResponse, type UserSummary } from '../../shared/api/client'
 
 export function PermissionsSection() {
@@ -123,8 +124,8 @@ export function PermissionsSection() {
       {/* Error law: the refusal row sits ABOVE the controls; controls stay
           operable so a retry can succeed on the same page. */}
       {loadError && (
-        <div className="info-row" data-testid="permissions-load-error" role="alert">
-          <span className="info-row__value" style={{ color: '#c92a2a' }}>{loadError}</span>
+        <div className="info-row permissions-load-error" data-testid="permissions-load-error" role="alert">
+          <span className="info-row__value">{loadError}</span>
         </div>
       )}
 
@@ -138,6 +139,7 @@ export function PermissionsSection() {
       <div className="permissions-controls">
         <input
           type="text"
+          className="permissions-user-filter"
           data-testid="permissions-user-filter"
           placeholder="Filter by user"
           value={userFilter}
@@ -188,7 +190,6 @@ export function PermissionsSection() {
                           key={role}
                           className="permissions-role permissions-role--inert"
                           data-testid={`permissions-role-inert-${grant.recordId}-${role}`}
-                          style={{ color: '#c92a2a' }}
                         >
                           {role} — not declared by {binding} (inert)
                         </span>
