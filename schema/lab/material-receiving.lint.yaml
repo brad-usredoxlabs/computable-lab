@@ -1,0 +1,286 @@
+# Lint rules for Material Receiving records (MATRES-RECV §2a).
+#
+# BUSINESS RULES as data (never TypeScript branches, §4). The schema
+# (material-receiving.schema.yaml) owns structure; this file owns the
+# CONDITIONAL pairings and walls, in the SAME vocabulary as
+# schema/lab/attestation.lint.yaml — the merged LintEngine binds rules per
+# schemaId (LintEngine.ts:66-67, :110-118), so a composing kind carries its
+# OWN rule instances of the envelope pairing vocabulary. That is data
+# instantiation of one vocabulary, not a second vocabulary: no rule here
+# invents a term the envelope does not already define, and no TS site
+# mentions 'material-receiving'.
+#
+# THE LOT RULE GATES ACCEPTANCE ONLY (r2 audit §1, last paragraph): a lint
+# ERROR blocks canAccept (blocked review card) — it NEVER discards an
+# honestly reported, not-yet-resolved lot inscription. The inscription lives
+# verbatim in the stored draft payload until vendor lookup resolves catalog
+# identity (proven by receiving/ReceiveElicitation.test.ts).
+#
+# Vendor-scoped lot (task block, binding): lot identity is
+# (vendorProductRef, lot_number). NO rule here (or in the schema, or in any
+# TS) implies global lot-number uniqueness: two different products may carry
+# the same lot_number and both are valid.
+#
+# Time vocabulary (Q8/Q5) and identity honesty (P3) are inherited from the
+# envelope: no rule infers a time or any identity equality; 'unknown' is a
+# complete answer.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material-receiving.schema.yaml"
+
+rules:
+# --- lot requires vendor-product (AC-1, the named rule) -------------------
+- id: material-receiving-lot-requires-product
+  title: "a receipt lot requires a vendorProductRef (vendor-scoped lot)"
+  description: >
+    A lot is vendor-scoped: identity is (vendorProductRef, lot_number),
+    never lot_number alone. Every receipt claim that carries
+    assertion.lot must also carry assertion.vendorProductRef. The error
+    names the offending lot path. This gates ACCEPTANCE only — the draft
+    keeps the lot inscription verbatim while blocked (r2 discard boundary).
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.lot }
+      - op: exists
+        path: assertion.vendorProductRef
+  message:
+    template: "vendor-scoped lot: a receipt claim carries assertion.lot without assertion.vendorProductRef — the lot at claims[*].assertion.lot is not vendor-scoped (resolve the vendor-product; the draft keeps the reported lot while blocked) ({{claims}})"
+    paths: [ "claims" ]
+
+# --- occurredAtStatus pairing (envelope vocabulary, per-kind instances) ---
+- id: material-receiving-occurred-known-needs-occurred-at
+  title: "known occurrence requires occurredAt"
+  description: >
+    Every claim with occurredAtStatus: known must carry occurredAt (the
+    envelope pairing rule, instantiated for this kind).
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: known }
+      - op: exists
+        path: occurredAt
+  message:
+    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims}})"
+    paths: [ "claims" ]
+
+- id: material-receiving-occurred-approximate-needs-approximation
+  title: "approximate occurrence requires occurredAt + approximation"
+  description: >
+    Every claim with occurredAtStatus: approximate must carry BOTH occurredAt
+    and the human approximation string (e.g. "last week").
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: approximate }
+      - op: all
+        predicates:
+        - { op: exists, path: occurredAt }
+        - { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims}})"
+    paths: [ "claims" ]
+
+- id: material-receiving-occurred-unknown-is-terminal
+  title: "unknown occurrence carries no time fields (terminal honesty, Q5)"
+  description: >
+    Every claim with occurredAtStatus: unknown must carry NEITHER occurredAt
+    NOR approximation. "I don't know" is a complete answer — no
+    manufacturing (r2 §1).
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: unknown }
+      - op: all
+        predicates:
+        - op: not
+          not: { op: exists, path: occurredAt }
+        - op: not
+          not: { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims}})"
+    paths: [ "claims" ]
+
+# --- receivedByStatus pairing (Q5 pattern, RECV's own vocabulary) ---------
+- id: material-receiving-receivedby-known-needs-receivedby
+  title: "known receiver requires receivedBy"
+  description: >
+    A claim whose assertion.receivedByStatus is known must carry
+    assertion.receivedBy. Absent never defaults to the attestor (P3:
+    performer/receiver != attestor presumption).
+    [DEFAULT-PENDING-RATIFICATION: Q5]
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: assertion.receivedByStatus, value: known }
+      - op: exists
+        path: assertion.receivedBy
+  message:
+    template: "claims pairing: a claim with assertion.receivedByStatus known is missing assertion.receivedBy ({{claims}})"
+    paths: [ "claims" ]
+
+- id: material-receiving-receivedby-unknown-is-terminal
+  title: "unknown receiver carries no receivedBy (terminal honesty, Q5)"
+  description: >
+    A claim whose assertion.receivedByStatus is unknown must NOT carry
+    assertion.receivedBy — an honestly unknown receiver is a complete
+    answer, never a manufactured actor. [DEFAULT-PENDING-RATIFICATION: Q5]
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: assertion.receivedByStatus, value: unknown }
+      - op: all
+        predicates:
+        - op: not
+          not: { op: exists, path: assertion.receivedBy }
+  message:
+    template: "claims pairing: a claim with assertion.receivedByStatus unknown must not carry assertion.receivedBy ({{claims}})"
+    paths: [ "claims" ]
+
+# --- supersedes / correction pairing (envelope vocabulary, per-kind) ------
+- id: material-receiving-supersedes-needs-correction
+  title: "supersedes requires correction"
+  description: >
+    A receipt that supersedes another attestation/receipt must carry the
+    correction payload (claimTarget + changedFacts). One generic correction
+    mechanism (orch ruling OQ-2): no material-receiving-correction kind.
+  severity: error
+  scope: record
+  assert:
+    op: any
+    predicates:
+    - op: not
+      not: { op: exists, path: supersedes }
+    - op: exists
+      path: correction
+  message:
+    template: "supersedes present without correction payload ({{supersedes}})"
+    paths: [ "supersedes" ]
+
+- id: material-receiving-correction-needs-supersedes
+  title: "correction requires supersedes"
+  description: >
+    A correction payload without a supersedes ref is an orphan: nothing is
+    being corrected, so it is not a legal receiving shape.
+  severity: error
+  scope: record
+  assert:
+    op: any
+    predicates:
+    - op: not
+      not: { op: exists, path: correction }
+    - op: exists
+      path: supersedes
+  message:
+    template: "correction present without supersedes ref ({{correction}})"
+    paths: [ "correction" ]
+
+# --- P2 chain wall (per-kind instance) -------------------------------------
+- id: material-receiving-chain-no-proposed-claims
+  title: "an attestation-chain receipt may not carry proposed claims"
+  description: >
+    "Acceptance of a plan or instruction attests NOTHING physical" (P2/r2):
+    a receipt declares artifactKind attestation-chain, so its claims must
+    be completed, unknown, or reported-by-other. A not-yet-resolved vendor
+    keeps the DRAFT blocked (canAccept false) with its proposed claim and
+    its lot inscription intact — the draft never reaches accepted state as
+    a chain.
+  severity: error
+  scope: record
+  when:
+    op: equals
+    path: artifactKind
+    value: attestation-chain
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: in
+      path: claimStatus
+      values: [ completed, unknown, reported-by-other ]
+  message:
+    template: "attestation-chain carries a claim outside [completed, unknown, reported-by-other] ({{artifactKind}})"
+    paths: [ "artifactKind" ]
+
+# --- Q4b deviation gate (per-kind instance) --------------------------------
+- id: material-receiving-entity-substitution-needs-deviation-resolution
+  title: "entity-substitution over a consumed ref requires a deviation resolution"
+  description: >
+    Substitutions touching an already-CONSUMED reference require an explicit
+    deviation resolution before the correction can reach accepted state
+    (Q4b). The deviation FACT is an attestation claim with claimStatus
+    unknown + about = the consumed ref (OQ-3 ruling: zero new kinds); the
+    correction record must carry the resolutionNote naming that resolution.
+  severity: error
+  scope: record
+  when:
+    op: all
+    predicates:
+    - { op: equals, path: correction.claimTarget.mode, value: entity-substitution }
+    - { op: exists, path: correction.changedFacts.consumedRef }
+  assert:
+    op: exists
+    path: correction.resolutionNote
+  message:
+    template: "entity-substitution correction touches consumed ref {{correction.changedFacts.consumedRef}} without a deviation resolutionNote"
+    paths: [ "correction.changedFacts.consumedRef" ]
+
+# --- Q4 fulfillment re-evaluation OBLIGATION (per-kind instance) ----------
+- id: material-receiving-correction-triggers-reevaluation-review
+  title: "a corrected receipt declares a fulfillment re-evaluation obligation"
+  description: >
+    Standing info finding on every corrected receipt: fulfillment facts
+    citing the superseded evidence must be re-evaluated (r2: supersession
+    is an audit pattern, not yet a fulfillment review; mechanics belong to
+    FULFIL). Always-firing-by-construction on a legal path (kind is const
+    "material-receiving" in the schema, so the inner equals always passes
+    and this negation always fails). Info severity: never blocks acceptance.
+  severity: info
+  scope: record
+  when:
+    op: exists
+    path: supersedes
+  assert:
+    # Intentionally always-firing: kind is const "material-receiving" in
+    # the schema, so the inner equals always passes and this negation
+    # always fails.
+    op: not
+    not: { op: equals, path: kind, value: material-receiving }
+  message:
+    template: "corrected receipt supersedes {{supersedes}} — fulfillment facts citing the superseded evidence require re-evaluation (FULFIL hook)"
+    paths: [ "supersedes" ]
