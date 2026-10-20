@@ -112,3 +112,79 @@ describe('ChangesPanel styling hooks (PROTO-AI-14 F1)', () => {
     expect(alert.className).toContain('changes-panel__apply-error')
   })
 })
+
+// ── CHANGES-UI-1 (D): the changes list must scroll INSIDE the pane ──────────
+// Same 2026-09-20 incident as the questions tab: `.ai-tab__section`'s base rule
+// is `flex-shrink: 0` and there was NO `.ai-tab__section--changes` rule, so a
+// long change list (40+ rows under a shorthand draft) grew the section past the
+// pane and pushed the Apply/Discard bar off-screen. The fix mirrors the
+// `.ai-tab__section--questions` / `.questions-panel__list` precedent in the
+// same file: the section flexes, `.changes-panel` fills it, and
+// `.changes-panel__diff` is the single scrolling region with the actions bar
+// pinned outside it.
+describe('ChangesPanel scroll containment (CHANGES-UI-1 D)', () => {
+  const aiCssSource = readFileSync(resolve(surfaceDir, 'ai.css'), 'utf8')
+
+  /** Pull one rule's declaration block out of a CSS source by selector. */
+  function ruleBlock(css: string, selector: string): string {
+    const at = css.indexOf(selector)
+    expect(at, `missing rule for ${selector}`).toBeGreaterThanOrEqual(0)
+    const open = css.indexOf('{', at)
+    const close = css.indexOf('}', open)
+    return css.slice(open + 1, close)
+  }
+
+  it('ai.css gives the changes section the --questions flex treatment (flex:1, min-height:0)', () => {
+    const block = ruleBlock(aiCssSource, '.ai-tab__section--changes')
+    expect(block).toMatch(/flex:\s*1/)
+    expect(block).toMatch(/min-height:\s*0/)
+    expect(block).toMatch(/display:\s*flex/)
+    expect(block).toMatch(/flex-direction:\s*column/)
+  })
+
+  it('.changes-panel fills its section as a flex column (mirrors .questions-panel)', () => {
+    const block = ruleBlock(cssSource, '.changes-panel')
+    expect(block).toMatch(/display:\s*flex/)
+    expect(block).toMatch(/flex-direction:\s*column/)
+    expect(block).toMatch(/min-height:\s*0/)
+    expect(block).toMatch(/height:\s*100%/)
+  })
+
+  it('.changes-panel__diff is THE scrolling region (overflow-y auto, overscroll contained)', () => {
+    const block = ruleBlock(cssSource, '.changes-panel__diff')
+    expect(block).toMatch(/flex:\s*1\s+1\s+auto/)
+    expect(block).toMatch(/min-height:\s*0/)
+    expect(block).toMatch(/overflow-y:\s*auto/)
+    expect(block).toMatch(/overscroll-behavior:\s*contain/)
+  })
+
+  it('the actions bar stays pinned outside the scroll region (flex:0 0 auto)', () => {
+    const block = ruleBlock(cssSource, '.changes-panel__actions')
+    expect(block).toMatch(/flex:\s*0\s*0\s*auto/)
+  })
+
+  it('renders a 40+ row draft without dropping rows, and the diff container is the scroll region', () => {
+    const rows = Array.from({ length: 42 }, (_, i) => ({
+      op: 'add' as const,
+      description: `add_material · A${i + 1} · compound ${i + 1} · 100 uL`,
+    }))
+    render(
+      <ChangesPanel
+        changes={rows}
+        warnings={[]}
+        onApply={() => undefined}
+        onDiscard={() => undefined}
+      />,
+    )
+    const diff = document.querySelector('.changes-panel__diff')
+    expect(diff).not.toBeNull()
+    expect(diff!.querySelectorAll('.changes-panel__change')).toHaveLength(42)
+    // The actions bar is a SIBLING of the diff (outside the scrolling region),
+    // not inside it — it can never be scrolled/pushed away.
+    const actions = screen.getByTestId('changes-apply').closest('.changes-panel__actions')
+    expect(actions).not.toBeNull()
+    expect(actions!.parentElement).toBe(diff!.parentElement)
+    expect(actions!.parentElement?.querySelector('.changes-panel__diff')?.contains(actions!)).toBe(false)
+    cleanup()
+  })
+})
