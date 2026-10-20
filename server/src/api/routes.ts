@@ -35,6 +35,7 @@ import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
 import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers.js';
+import type { InventoryShelfHandlers } from './handlers/InventoryShelfHandlers.js';
 import type { EquipmentHandlers } from './handlers/EquipmentHandlers.js';
 import type { VendorExaHandlers } from './handlers/VendorExaHandlers.js';
 import type { ExtractProtocolHandlers } from './handlers/ExtractProtocolHandler.js';
@@ -122,6 +123,7 @@ export interface RouteOptions {
   materialPrepHandlers?: MaterialPrepHandlers;
   materialLifecycleHandlers?: MaterialLifecycleHandlers;
   materialProfileHandlers?: MaterialProfileHandlers;
+  inventoryShelfHandlers?: InventoryShelfHandlers;
   equipmentHandlers?: EquipmentHandlers;
   vendorExaHandlers?: VendorExaHandlers;
   extractProtocolHandlers?: ExtractProtocolHandlers;
@@ -576,6 +578,12 @@ export function registerRoutes(
     fastify.get('/materials/profiles', materialProfileHandlers.listProfiles.bind(materialProfileHandlers));
     fastify.get('/materials/profiles/:profileId', materialProfileHandlers.getProfile.bind(materialProfileHandlers));
     fastify.post('/materials/ground-ontology', materialProfileHandlers.groundOntology.bind(materialProfileHandlers));
+  }
+
+  // MATRES-SHELF: read-only concept-keyed inventory shelf (side lookup).
+  const { inventoryShelfHandlers } = options;
+  if (inventoryShelfHandlers) {
+    fastify.get('/inventory/shelf', inventoryShelfHandlers.getShelf.bind(inventoryShelfHandlers));
   }
 
   const { materialLifecycleHandlers } = options;
