@@ -1,4 +1,25 @@
-# Lint rules for Instrument records
+# Authoring policy for Instrument records (QMS8-B, draft-gated authoring).
+# Interpreted by server/src/lint/AuthoringGuard.ts at create/update time.
+# gateOnPolicySetting: the gate fires only when the ACTIVE policy bundle declares
+# authoringGate: deny (schema/core/policy-bundles/*.policy-bundle.yaml).
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/instrument.schema.yaml"
 rules: []
+authoring:
+  denyCode: INSTRUMENT_AUTHORING_FORBIDDEN
+  gateOnPolicySetting: authoringGate        # fires only when active bundle says deny
+  require:
+    anyOf:
+      - systemActor: true
+      - localAdmin: true
+      - role: author
+  guardWhenChanged:
+    - name
+    - domain
+    - class
+    - manufacturer
+    - model
+    - serial
+    - equipmentRef
+    - location
+    - capabilities
