@@ -178,7 +178,7 @@ rules:
   description: >
     A receipt that supersedes another attestation/receipt must carry the
     correction payload (claimTarget + changedFacts). One generic correction
-    mechanism (orch ruling OQ-2): no material-receiving-correction kind.
+    mechanism (orch ruling OQ-2): no separate correction kind for receiving.
   severity: error
   scope: record
   assert:
@@ -192,7 +192,7 @@ rules:
     template: "supersedes present without correction payload ({{supersedes}})"
     paths: [ "supersedes" ]
 
-- id: material-receiving-correction-needs-supersedes
+- id: material-receiving-needs-supersedes-for-correction
   title: "correction requires supersedes"
   description: >
     A correction payload without a supersedes ref is an orphan: nothing is
@@ -261,7 +261,7 @@ rules:
     paths: [ "correction.changedFacts.consumedRef" ]
 
 # --- Q4 fulfillment re-evaluation OBLIGATION (per-kind instance) ----------
-- id: material-receiving-correction-triggers-reevaluation-review
+- id: material-receiving-supersession-triggers-reevaluation-review
   title: "a corrected receipt declares a fulfillment re-evaluation obligation"
   description: >
     Standing info finding on every corrected receipt: fulfillment facts

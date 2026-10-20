@@ -237,7 +237,7 @@ describe('material-receiving schema triplet (§5.1)', () => {
 
     const onlyCorrection = receiptRecord({ recordId: 'RECV-TEST-corrsolo2', correction });
     const lint2 = lintEngine.lint(onlyCorrection, RECEIVING_SCHEMA_ID);
-    expect(lint2.violations.some(v => v.ruleId === 'material-receiving-correction-needs-supersedes')).toBe(true);
+    expect(lint2.violations.some(v => v.ruleId === 'material-receiving-needs-supersedes-for-correction')).toBe(true);
   });
 
   it('an unevaluated property anywhere is rejected naming the path', async () => {

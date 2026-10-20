@@ -224,7 +224,7 @@ describe('corrected receipt keeps descendants discoverable (§5.3, case 5)', () 
     expect(await receipts()).toEqual(before);
   });
 
-  it('correction kind audit: no material-receiving-correction kind exists anywhere in the corpus or the diff', async () => {
+  it('correction kind audit: no separate receiving correction kind exists anywhere in the corpus or the diff', async () => {
     const kinds = new Set((await ctx.store.list()).map(r => String(object(r.payload).kind)));
     expect([...kinds].some(k => k.includes('-correction'))).toBe(false);
     // The correction rode the SAME kind + supersedes + correction (one generic

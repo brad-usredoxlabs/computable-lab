@@ -14,7 +14,7 @@ description: >
   OQ-1 sanctioned $defs extraction, never a re-declaration here, which is
   the canonical OQ-2 violation). Corrections ride the SAME mechanism
   (supersedes + correction, orch ruling OQ-2): there is no
-  material-receiving-correction kind and no second envelope.
+  separate correction kind for receiving and no second envelope.
 
   Vendor-scoped lot (task block, binding): identity of a lot is
   (vendorProductRef, lot_number), NEVER lot_number alone. A bare lot number
