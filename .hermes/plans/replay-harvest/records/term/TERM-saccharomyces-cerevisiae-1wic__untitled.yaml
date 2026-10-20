@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-saccharomyces-cerevisiae-1wic
+kind: organism
+id: TERM-saccharomyces-cerevisiae-1wic
+preferredLabel: Saccharomyces cerevisiae
+aliases:
+  - yeast
+  - S. cerevisiae
+  - baker's yeast
+status: proposed
+lifecycleId: lab-vocabulary-control
+linkouts:
+  - kind: ontology
+    curie: NCBITaxon:4932
+    namespace: NCBITaxon
+    label: NCBITaxon:4932

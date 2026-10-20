@@ -1,0 +1,155 @@
+{
+  "turn": "T7-expanded-names",
+  "utterance": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+  "noun": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+  "source": "derived: MSP-DRAFT-EVG_MVAJOKF5_5ERR_* provenance.sourceLabel (accepted EVG-mvajokf5-5err)",
+  "spine_ranked": [
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3",
+      "label": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "",
+      "label": "Create local term “Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells”",
+      "namespace": "local",
+      "tier": 5,
+      "level": "concept",
+      "score": 0.05,
+      "source": "mint",
+      "mint": {
+        "label": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells"
+      }
+    }
+  ],
+  "stage_fate": [
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3",
+      "label": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    }
+  ],
+  "engine": [
+    {
+      "arm": "add_material.material",
+      "declared_level": null,
+      "wantLevel_fires": false,
+      "bindings": [
+        {
+          "verb": "add_material",
+          "argument": "material",
+          "label": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+          "curie": "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3",
+          "resolvedLabel": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+          "tier": 1,
+          "level": "spec",
+          "confidence": 1,
+          "source": "local-record",
+          "actionIndex": 0
+        }
+      ],
+      "clarifications": [],
+      "traces": [],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [
+          "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+        ],
+        "returned_ranked_in_clarification": [],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "clarification_reasons": [],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts:34-36)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4
+          ],
+          "note": "tiers 0-2 saturate to 1.0 AFTER clamp — the USER-visible candidate fact (candidateFact.confidence) is identical 1.0 for a tier-0 alias hit and a tier-1 substring hit: tier ranking is INVISIBLE in the clarification payload (the panel-relocates-the-questions failure surface)."
+        }
+      }
+    },
+    {
+      "arm": "wash.material",
+      "declared_level": "aliquot",
+      "wantLevel_fires": true,
+      "bindings": [
+        {
+          "verb": "wash",
+          "argument": "material",
+          "label": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+          "curie": "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3",
+          "resolvedLabel": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+          "tier": 1,
+          "level": "spec",
+          "confidence": 1,
+          "source": "local-record",
+          "actionIndex": 0
+        }
+      ],
+      "clarifications": [],
+      "traces": [],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [
+          "local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3"
+        ],
+        "returned_ranked_in_clarification": [],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "clarification_reasons": [],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts:34-36)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4
+          ],
+          "note": "tiers 0-2 saturate to 1.0 AFTER clamp — the USER-visible candidate fact (candidateFact.confidence) is identical 1.0 for a tier-0 alias hit and a tier-1 substring hit: tier ranking is INVISIBLE in the clarification payload (the panel-relocates-the-questions failure surface)."
+        }
+      }
+    }
+  ],
+  "offline": {
+    "fetch_blocked": 0,
+    "fetch_blocked_note": "global fetch stubbed to throw; any stray remote call recorded here",
+    "localOnly": true,
+    "oak": "not built (no service URL)",
+    "vendor": "not wired"
+  }
+}

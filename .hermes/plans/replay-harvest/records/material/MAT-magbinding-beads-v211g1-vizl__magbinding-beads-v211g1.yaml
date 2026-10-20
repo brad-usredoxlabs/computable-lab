@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-magbinding-beads-v211g1-vizl
+kind: material
+id: MAT-magbinding-beads-v211g1-vizl
+name: MagBinding Beads v211g1
+domain: other
+status: proposed

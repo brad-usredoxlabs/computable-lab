@@ -1,0 +1,53 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9
+kind: material-spec
+id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9
+name: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+material_ref:
+  kind: record
+  id: MAT-thermo-trypsin-edta-ther-1tuz
+  type: material
+  label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+formulation_kind: complex_composition
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-14T07:50:07.767Z
+  note: Created as a proposed local formulation record from accepted add-material
+    composition snapshot EVG-mv7q7f5i-el9g:evt-add_material-mkzyt7e9.
+formulation:
+  composition:
+    - component_ref:
+        kind: record
+        id: MAT-thermo-trypsin-edta-1fqu
+        type: material
+        label: Thermo trypsin-EDTA
+      role: solvent
+      source: 50% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-thermo-dmem-1vq1
+        type: material
+        label: Thermo DMEM
+      role: buffer_component
+      source: 50% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-thermo-fbs-1qbj
+        type: material
+        label: Thermo FBS
+      role: additive
+      source: 10% of the mixture
+    - component_ref:
+        kind: record
+        id: MAT-hepg2-cells-4oys
+        type: material
+        label: HepG2 cells
+      role: cells
+  notes: Draft formulation inferred from an add-material event composition snapshot.
+tags:
+  - ai-draft
+  - composition_snapshot

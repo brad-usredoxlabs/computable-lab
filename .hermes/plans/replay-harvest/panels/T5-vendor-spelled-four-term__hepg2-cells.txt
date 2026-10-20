@@ -1,0 +1,28 @@
+# panel T5-vendor-spelled-four-term — noun “HepG2 cells” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+  tier 1:
+    HepG2 cells  [local:MAT-hepg2-cells-4oys]  score=1.150
+    50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul  [local:MAT-50-50-trypsin-edta-dmem--vkwl]  score=1.020
+    Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells  [local:MAT-thermo-trypsin-edta-ther-1lj9]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MAT-thermo-trypsin-edta-ther-1tuz]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells  [local:MAT-thermo-trypsin-edta-ther-apdv]  score=1.020
+    Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells  [local:MAT-trypsin-edta-dmem-10-fbs-v511]  score=1.020
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MAT-trypsin-edta-dmem-fbs-he-1om4]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MAT-trypsin-edta-thermo-dmem-tnru]  score=1.020
+
+level: spec
+  tier 1:
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY]  score=1.020
+    Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM]  score=1.020
+    Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC]  score=1.020
+

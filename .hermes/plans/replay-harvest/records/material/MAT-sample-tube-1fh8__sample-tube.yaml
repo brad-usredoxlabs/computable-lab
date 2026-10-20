@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-sample-tube-1fh8
+kind: material
+id: MAT-sample-tube-1fh8
+name: sample tube
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "sample tube").

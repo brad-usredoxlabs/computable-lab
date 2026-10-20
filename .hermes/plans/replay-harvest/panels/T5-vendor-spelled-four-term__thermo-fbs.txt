@@ -1,0 +1,15 @@
+# panel T5-vendor-spelled-four-term — noun “Thermo FBS” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+  tier 1:
+    Thermo FBS  [local:MAT-thermo-fbs-1qbj]  score=1.150
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MAT-thermo-trypsin-edta-ther-1tuz]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells  [local:MAT-thermo-trypsin-edta-ther-apdv]  score=1.020
+
+level: spec
+  tier 1:
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9]  score=1.020
+    Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY]  score=1.020
+

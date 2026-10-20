@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-XCO-0000988
+kind: material
+id: MAT-XCO-0000988
+name: Dulbecco's Modified Eagle's Medium
+domain: media
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: human
+  sourceCurie: XCO:0000988
+  sourceLabel: Dulbecco's Modified Eagle's Medium
+  createdBy: material-profile-api
+  createdAt: 2026-10-11T09:43:52.361Z
+  note: Created as a proposed local material record from the material grounding API.
+class:
+  - kind: ontology
+    id: XCO:0000988
+    namespace: XCO
+    label: Dulbecco's Modified Eagle's Medium

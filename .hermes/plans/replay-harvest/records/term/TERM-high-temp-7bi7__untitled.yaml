@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-high-temp-7bi7
+kind: condition
+id: TERM-high-temp-7bi7
+preferredLabel: high-temp
+aliases:
+  - heat stress
+  - elevated temperature
+status: proposed
+lifecycleId: lab-vocabulary-control

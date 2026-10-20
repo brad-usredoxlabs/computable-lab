@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-thermo-fbs-1qbj
+kind: material
+id: MAT-thermo-fbs-1qbj
+name: Thermo FBS
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Thermo FBS
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-14T06:25:44.429Z
+  note: Created as a proposed local material record from an accepted add-material
+    event graph.

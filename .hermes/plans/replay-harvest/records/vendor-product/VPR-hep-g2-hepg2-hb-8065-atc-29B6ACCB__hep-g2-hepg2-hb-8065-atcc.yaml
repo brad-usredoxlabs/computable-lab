@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml
+recordId: VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB
+kind: vendor-product
+id: VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB
+name: Hep G2 [HEPG2] - HB-8065 | ATCC
+vendor: Unknown
+catalog_number: N/A
+material_ref:
+  kind: record
+  id: MAT-hep-g2-hepg2-hb-8065-atc-7hdl
+  type: material
+  label: Hep G2 [HEPG2] - HB-8065 | ATCC
+product_url: https://www.atcc.org/products/hb-8065
+composition_provenance:
+  source_type: vendor_page
+  vendor: Unknown
+  source_url: https://www.atcc.org/products/hb-8065
+  captured_at: 2026-09-19T23:08:22.553Z

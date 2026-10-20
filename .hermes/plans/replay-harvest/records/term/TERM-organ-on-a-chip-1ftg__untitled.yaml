@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-organ-on-a-chip-1ftg
+kind: condition
+id: TERM-organ-on-a-chip-1ftg
+preferredLabel: organ-on-a-chip
+aliases:
+  - OoC
+  - organ chip
+  - microfluidic tissue culture
+status: proposed
+lifecycleId: lab-vocabulary-control

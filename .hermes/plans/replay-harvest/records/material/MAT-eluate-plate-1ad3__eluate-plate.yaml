@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-eluate-plate-1ad3
+kind: material
+id: MAT-eluate-plate-1ad3
+name: Eluate Plate
+domain: other
+status: proposed

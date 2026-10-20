@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-clofibrate-1mm-10tf
+kind: material
+id: MAT-clofibrate-1mm-10tf
+name: clofibrate 1mM
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "clofibrate 1mM").

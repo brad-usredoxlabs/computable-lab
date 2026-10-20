@@ -1,0 +1,165 @@
+{
+  "endpoint": "sequences",
+  "userId": "USR-BRAD",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Can you add a probe sequence AATGGCATGACTGAGTCGATG with a FAM reporter dye using Thermo's QSY primers?\n",
+      "createdAt": "2026-10-04T13:22:11.568Z"
+    },
+    {
+      "role": "assistant",
+      "content": "/: Missing required property: sequence; /: Unknown property: oligo; /operation: Must equal: save_sequence; /oligo: Missing required property: kind; /oligo: Missing required property: id; /oligo: Missing required property: sequenceRef; /oligo/modifications/0: Missing required property: position; /oligo/modifications/0: Missing required property: label; /oligo/modifications/0: Missing required property: role; /oligo/modifications/0: Unknown property: type; /oligo/modifications/0: Unknown property: dye; /oligo/modifications/1: Missing required property: position; /oligo/modifications/1: Missing required property: label; /oligo/modifications/1: Missing required property: role; /oligo/modifications/1: Unknown property: type; /oligo/modifications/1: Unknown property: dye; /oligo: must NOT have unevaluated properties; /oligo: must NOT have unevaluated properties; /oligo: must NOT have unevaluated properties; /: Missing required property: label; /: Missing required property: members; /: Unknown property: oligo; /operation: Must equal: save_collection; /: Missing required property: readout; /: Unknown property: oligo; /operation: Must equal: save_readout; /: Missing required property: assay; /: Unknown property: oligo; /operation: Must equal: save_assay; /: Missing required property: endpoint; /: Unknown property: oligo; /operation: Must equal: configure_endpoint; /: Missing required property: endpointRef; /: Missing required property: inputs; /: Missing required property: parameters; /: Missing required property: label; /: Unknown property: oligo; /operation: Must equal: run_virtual_pcr; /: Missing required property: endpointRef; /: Missing required property: inputs; /: Missing required property: parameters; /: Missing required property: label; /: Unknown property: oligo; /operation: Must equal: run_mafft; /: Missing required property: endpointRef; /: Missing required property: inputs; /: Missing required property: parameters; /: Missing required property: label; /: Unknown property: oligo; /operation: Must equal: run_blastn; /: Missing required property: ruleRef; /: Missing required property: claimRef; /: Missing required property: contextRef; /: Missing required property: resultRef; /: Missing required property: statement; /: Missing required property: controls; /: Unknown property: oligo; /operation: Must equal: interpret; /: Missing required property: candidateRef; /: Missing required property: sequence; /: Missing required property: modifications; /: Unknown property: oligo; /operation: Must equal: promote_oligo; /: Missing required property: label; /: Missing required property: sequenceRef; /: Missing required property: start; /: Missing required property: end; /: Missing required property: strand; /: Unknown property: oligo; /operation: Must equal: save_interval; /: Missing required property: rule; /: Unknown property: oligo; /operation: Must equal: save_interpretation_rule; /: Missing required property: sequenceRef; /: Unknown property: oligo; /operation: Must equal: pin_sequence; /: Unknown property: oligo; /operation: Must equal: discover_endpoints; /: Missing required property: endpoint; /: Unknown property: oligo; /operation: Must equal: deploy_endpoint; /: must match exactly one schema in oneOf",
+      "createdAt": "2026-10-04T13:22:26.016Z"
+    },
+    {
+      "role": "user",
+      "content": "Can you add a probe sequence AATGGCATGACTGAGTCGATG with a FAM reporter dye using Thermo's QSY primers?",
+      "createdAt": "2026-10-04T14:00:18.890Z"
+    },
+    {
+      "role": "assistant",
+      "content": "no proposal: the model’s tool call carried no usable draft arguments. Nothing was applied — try rephrasing, or name the material explicitly.",
+      "metadata": {
+        "usage": {
+          "promptTokens": 8238,
+          "completionTokens": 199,
+          "totalTokens": 8437,
+          "turns": 1,
+          "toolCalls": 0
+        }
+      },
+      "createdAt": "2026-10-04T14:02:21.010Z"
+    },
+    {
+      "role": "user",
+      "content": "Can you add a probe sequence AATGGCATGACTGAGTCGATG with a FAM reporter dye using Thermo's QSY primers?\n",
+      "createdAt": "2026-10-04T14:03:48.014Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Inference error on turn 1: Inference error 400: {\"error\":{\"message\":\"Provider returned error\",\"code\":400,\"metadata\":{\"raw\":\"data: {\\\"error\\\":{\\\"code\\\":\\\"invalid_parameter_error\\\",\\\"param\\\":null,\\\"message\\\":\\\"The tool_choice parameter does not support being set to required or object in thinking mode\\\",\\\"type\\\":\\\"invalid_request_error\\\"},\\\"id\\\":\\\"chatcmpl-3795ac88-9149-9970-9b0d-80413dc2430f\\\"}\\n\\n\",\"provider_name\":\"Alibaba\",\"is_byok\":false}},\"user_id\":\"org_3HCX958erqKhkANoYSYo7YDpycH\"}",
+      "metadata": {
+        "usage": {
+          "promptTokens": 0,
+          "completionTokens": 0,
+          "totalTokens": 0,
+          "turns": 1,
+          "toolCalls": 0
+        }
+      },
+      "createdAt": "2026-10-04T14:03:49.266Z"
+    },
+    {
+      "role": "user",
+      "content": "Can you add a probe sequence AATGGCATGACTGAGTCGATG with a FAM reporter dye using Thermo's QSY primers?\n",
+      "createdAt": "2026-10-04T14:52:23.744Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Sequence action proposed. Review and apply it in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "create_oligo",
+          "requestId": "oligo-probe-fam-qsy-001",
+          "vendor": "Thermo Fisher Scientific",
+          "modifications": [
+            {
+              "position": "5-prime",
+              "label": "FAM",
+              "role": "reporter"
+            },
+            {
+              "position": "3-prime",
+              "label": "QSY",
+              "role": "quencher"
+            }
+          ],
+          "sequence": {
+            "label": "FAM-QSY probe",
+            "residues": "AATGGCATGACTGAGTCGATG",
+            "alphabet": "dna",
+            "topology": "linear"
+          }
+        }
+      },
+      "createdAt": "2026-10-04T14:52:30.312Z"
+    },
+    {
+      "role": "user",
+      "content": "Can you add a probe sequence AATGGCATGACTGAGTCGATG with a FAM reporter dye using Thermo's QSY primers?",
+      "createdAt": "2026-10-04T21:28:32.850Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "create_oligo",
+          "requestId": "req-probe-fam-qsy-001",
+          "sequence": {
+            "label": "FAM-QSY probe",
+            "residues": "AATGGCATGACTGAGTCGATG",
+            "alphabet": "dna",
+            "topology": "linear"
+          },
+          "vendor": "Thermo Fisher Scientific",
+          "modifications": [
+            {
+              "position": "5-prime",
+              "label": "FAM",
+              "role": "reporter"
+            },
+            {
+              "position": "3-prime",
+              "label": "QSY",
+              "role": "quencher"
+            }
+          ]
+        }
+      },
+      "createdAt": "2026-10-04T21:28:40.755Z"
+    },
+    {
+      "role": "user",
+      "content": "Add a primer sequence ATGCGCGTAGGTCTGATGCTAGT that is a forwadr primer for F prausnitzii DNA gyrase that starts at BP 1146\n ",
+      "createdAt": "2026-10-04T22:09:03.621Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Proposal ready for review in the sequence workspace.",
+      "metadata": {
+        "sequenceProposal": {
+          "operation": "create_oligo",
+          "requestId": "probe-fam-qsy-21bp-001",
+          "sequence": {
+            "label": "FAM-QSY probe",
+            "residues": "AATGGCATGACTGAGTCGATG",
+            "alphabet": "dna",
+            "topology": "linear",
+            "parentRevisionRef": {
+              "kind": "record",
+              "type": "record-revision",
+              "id": "REV-EC5CD8DC9E099F6C3EEEACCA87D85BAE"
+            }
+          },
+          "modifications": [
+            {
+              "position": "5-prime",
+              "label": "FAM",
+              "role": "reporter"
+            },
+            {
+              "position": "3-prime",
+              "label": "QSY",
+              "role": "quencher"
+            }
+          ]
+        }
+      },
+      "createdAt": "2026-10-04T22:09:14.678Z"
+    }
+  ],
+  "mentions": [],
+  "updatedAt": "2026-10-04T22:09:14.678Z"
+}

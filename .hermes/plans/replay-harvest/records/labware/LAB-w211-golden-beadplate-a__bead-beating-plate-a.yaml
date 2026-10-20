@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LAB-w211-golden-beadplate-a
+kind: labware
+name: Bead Beating Plate A
+labwareType: plate
+aliases:
+  - bead beating plate
+  - bead_beating_plate
+createdAt: 2026-10-18T19:49:10.405Z
+updatedAt: 2026-10-18T19:49:10.405Z
+createdBy: USR-BRAD

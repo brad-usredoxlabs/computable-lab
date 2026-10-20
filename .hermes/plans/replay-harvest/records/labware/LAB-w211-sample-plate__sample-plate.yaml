@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LAB-w211-sample-plate
+kind: labware
+name: Sample Plate
+labwareType: plate
+aliases:
+  - sample_plate
+  - sample plate
+createdAt: 2026-10-12T20:41:48.759Z
+updatedAt: 2026-10-12T20:41:48.759Z
+createdBy: USR-BRAD

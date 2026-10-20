@@ -1,0 +1,17 @@
+# panel T4-canonical-four-term — noun “Trypsin-EDTA + DMEM + FBS + HepG2 cells” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+  tier 1:
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MAT-trypsin-edta-dmem-fbs-he-1om4]  score=1.150
+
+level: spec
+  tier 1:
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_0KSKKEEO]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_6TOT75YH]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_EJ67JFWP]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_G84WQATF]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_K4CKSPYJ]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_LMBG587E]  score=1.150
+    Trypsin-EDTA + DMEM + FBS + HepG2 cells  [local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_Y5SKR9BX]  score=1.150
+

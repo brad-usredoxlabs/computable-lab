@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-e-coli-k-12-3yqf
+kind: organism
+id: TERM-e-coli-k-12-3yqf
+preferredLabel: E. coli K-12
+aliases:
+  - K-12
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: K-12
+strain_of:
+  kind: record
+  id: TERM-escherichia-coli-1sz6
+  type: term
+  label: Escherichia coli

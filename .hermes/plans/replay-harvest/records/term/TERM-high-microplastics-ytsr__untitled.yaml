@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-high-microplastics-ytsr
+kind: condition
+id: TERM-high-microplastics-ytsr
+preferredLabel: high-microplastics
+aliases:
+  - microplastic exposure
+  - microplastics stressor
+status: proposed
+lifecycleId: lab-vocabulary-control

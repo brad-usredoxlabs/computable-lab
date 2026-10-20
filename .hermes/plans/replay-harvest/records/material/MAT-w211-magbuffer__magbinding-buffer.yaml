@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-w211-magbuffer
+kind: material
+id: MAT-w211-magbuffer
+domain: reagent
+name: MagBinding Buffer
+synonyms:
+  - magbinding_buffer
+createdAt: 2026-10-12T20:42:23.379Z
+updatedAt: 2026-10-12T20:42:23.379Z
+createdBy: USR-BRAD

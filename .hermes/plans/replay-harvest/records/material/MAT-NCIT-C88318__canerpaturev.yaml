@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-NCIT-C88318
+kind: material
+id: MAT-NCIT-C88318
+name: Canerpaturev
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: human
+  sourceCurie: NCIT:C88318
+  sourceLabel: Canerpaturev
+  createdBy: material-profile-api
+  createdAt: 2026-10-19T10:11:35.227Z
+  note: Created as a proposed local material record from the material grounding API.
+class:
+  - kind: ontology
+    id: NCIT:C88318
+    namespace: NCIT
+    label: Canerpaturev

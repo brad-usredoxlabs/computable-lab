@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-escherichia-coli-1sz6
+kind: organism
+id: TERM-escherichia-coli-1sz6
+preferredLabel: Escherichia coli
+aliases:
+  - E. coli
+  - E coli
+status: proposed
+lifecycleId: lab-vocabulary-control
+linkouts:
+  - kind: ontology
+    curie: NCBITaxon:562
+    namespace: NCBITaxon
+    label: NCBITaxon:562

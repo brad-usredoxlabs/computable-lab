@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-caenorhabditis-elegans-vyv4
+kind: organism
+id: TERM-caenorhabditis-elegans-vyv4
+preferredLabel: Caenorhabditis elegans
+aliases:
+  - C. elegans
+  - C elegans
+status: proposed
+lifecycleId: lab-vocabulary-control
+linkouts:
+  - kind: ontology
+    curie: NCBITaxon:6239
+    namespace: NCBITaxon
+    label: NCBITaxon:6239

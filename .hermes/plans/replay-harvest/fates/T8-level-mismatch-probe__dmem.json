@@ -1,0 +1,531 @@
+{
+  "turn": "T8-level-mismatch-probe",
+  "utterance": "(wash arm of: Trypsin-EDTA + DMEM + FBS + HepG2 cells)",
+  "noun": "DMEM",
+  "source": "NOT a transcript — declared DATA probe: wash.material carries the shipped vocabulary's only `level: aliquot` declaration; replaying the canonical nouns under the wash verb exercises the engine's levelFilter against the SAME harvested store.",
+  "spine_ranked": [
+    {
+      "curie": "local:MAT-dmem-ykg0",
+      "label": "DMEM",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-50-50-trypsin-edta-dmem--vkwl",
+      "label": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul\")."
+    },
+    {
+      "curie": "local:MAT-thermo-dmem-1vq1",
+      "label": "Thermo DMEM",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1lj9",
+      "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells\")."
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1tuz",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-thermo-trypsin-edta-ther-apdv",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells\")."
+    },
+    {
+      "curie": "local:MAT-trypsin-edta-dmem-10-fbs-v511",
+      "label": "Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells\")."
+    },
+    {
+      "curie": "local:MAT-trypsin-edta-dmem-50-50-12i0",
+      "label": "Trypsin-EDTA/DMEM (50:50)",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record",
+      "definition": "Locally minted term (no records/ontology match for \"Trypsin-EDTA/DMEM (50:50)\")."
+    },
+    {
+      "curie": "local:MAT-trypsin-edta-dmem-fbs-he-1om4",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MAT-trypsin-edta-thermo-dmem-tnru",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.02,
+      "source": "local-record"
+    },
+    {
+      "curie": "",
+      "label": "Create local term “DMEM”",
+      "namespace": "local",
+      "tier": 5,
+      "level": "concept",
+      "score": 0.05,
+      "source": "mint",
+      "mint": {
+        "label": "DMEM"
+      }
+    }
+  ],
+  "stage_fate": [
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-50-50-trypsin-edta-dmem--vkwl",
+      "label": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-dmem-ykg0",
+      "label": "DMEM",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-thermo-dmem-1vq1",
+      "label": "Thermo DMEM",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1lj9",
+      "label": "Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-1tuz",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-thermo-trypsin-edta-ther-apdv",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + 10% Thermo FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-trypsin-edta-dmem-10-fbs-v511",
+      "label": "Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-trypsin-edta-dmem-50-50-12i0",
+      "label": "Trypsin-EDTA/DMEM (50:50)",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-trypsin-edta-dmem-fbs-he-1om4",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MAT-trypsin-edta-thermo-dmem-tnru",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY",
+      "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "DMEM",
+      "curie": "local:MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM",
+      "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.02
+    }
+  ],
+  "engine": [
+    {
+      "arm": "wash.material",
+      "declared_level": "aliquot",
+      "wantLevel_fires": true,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "DMEM",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9"
+            },
+            {
+              "label": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6"
+            },
+            {
+              "label": "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "wash",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "level-mismatch: local:MAT-dmem-ykg0 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-50-50-trypsin-edta-dmem--vkwl (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-dmem-1vq1 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1lj9 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-1tuz (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-thermo-trypsin-edta-ther-apdv (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-dmem-10-fbs-v511 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-dmem-50-50-12i0 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-dmem-fbs-he-1om4 (level concept) ineligible for wantLevel aliquot",
+        "level-mismatch: local:MAT-trypsin-edta-thermo-dmem-tnru (level concept) ineligible for wantLevel aliquot"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [
+          "local:MAT-dmem-ykg0",
+          "local:MAT-50-50-trypsin-edta-dmem--vkwl",
+          "local:MAT-thermo-dmem-1vq1",
+          "local:MAT-thermo-trypsin-edta-ther-1lj9",
+          "local:MAT-thermo-trypsin-edta-ther-1tuz",
+          "local:MAT-thermo-trypsin-edta-ther-apdv",
+          "local:MAT-trypsin-edta-dmem-10-fbs-v511",
+          "local:MAT-trypsin-edta-dmem-50-50-12i0",
+          "local:MAT-trypsin-edta-dmem-fbs-he-1om4",
+          "local:MAT-trypsin-edta-thermo-dmem-tnru"
+        ],
+        "domain_filtered": [],
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts:34-36)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4
+          ],
+          "note": "tiers 0-2 saturate to 1.0 AFTER clamp — the USER-visible candidate fact (candidateFact.confidence) is identical 1.0 for a tier-0 alias hit and a tier-1 substring hit: tier ranking is INVISIBLE in the clarification payload (the panel-relocates-the-questions failure surface)."
+        }
+      }
+    }
+  ],
+  "offline": {
+    "fetch_blocked": 0,
+    "fetch_blocked_note": "global fetch stubbed to throw; any stray remote call recorded here",
+    "localOnly": true,
+    "oak": "not built (no service URL)",
+    "vendor": "not wired"
+  }
+}

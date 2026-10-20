@@ -1,0 +1,36 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-MTRJ71N2-V0516Y
+kind: material-spec
+id: MSP-MTRJ71N2-V0516Y
+name: 100 % v/v acetonitrile
+material_ref:
+  kind: record
+  id: MAT-acetonitrile-dl1b
+  type: material
+  label: MAT-acetonitrile-dl1b
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: 100 % v/v acetonitrile
+  createdBy: formulation-api
+  createdAt: 2026-09-07T17:45:26.032Z
+  note: Created as a proposed local material/formulation record from a formulation
+    draft.
+formulation_kind: single_active
+formulation:
+  concentration:
+    value: 100
+    unit: "% v/v"
+    basis: volume_fraction
+  composition:
+    - component_ref:
+        kind: record
+        id: MAT-acetonitrile-dl1b
+        type: material
+        label: MAT-acetonitrile-dl1b
+      role: solute
+      concentration:
+        value: 100
+        unit: "% v/v"
+        basis: volume_fraction

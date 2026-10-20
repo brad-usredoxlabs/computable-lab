@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-high-saline-euzi
+kind: condition
+id: TERM-high-saline-euzi
+preferredLabel: high-saline
+aliases:
+  - hypertonic
+  - high salt
+status: proposed
+lifecycleId: lab-vocabulary-control

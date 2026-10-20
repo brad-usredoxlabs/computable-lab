@@ -1,0 +1,13 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-API-mu50x5z7
+kind: material-spec
+id: MSP-API-mu50x5z7
+name: 1 mM Clofibrate in DMSO
+material_ref:
+  kind: record
+  id: MAT-001
+  type: material
+  label: Clofibrate
+createdAt: 2026-09-17T04:22:38.469Z
+updatedAt: 2026-09-17T04:22:38.469Z
+createdBy: USR-BRAD

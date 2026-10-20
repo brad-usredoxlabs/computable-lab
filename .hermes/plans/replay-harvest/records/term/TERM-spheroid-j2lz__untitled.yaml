@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-spheroid-j2lz
+kind: condition
+id: TERM-spheroid-j2lz
+preferredLabel: spheroid
+aliases:
+  - 3D spheroid
+  - spheroid culture
+status: proposed
+lifecycleId: lab-vocabulary-control
