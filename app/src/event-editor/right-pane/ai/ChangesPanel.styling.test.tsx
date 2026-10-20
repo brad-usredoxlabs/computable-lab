@@ -113,6 +113,68 @@ describe('ChangesPanel styling hooks (PROTO-AI-14 F1)', () => {
   })
 })
 
+// ── CHANGES-UI-1 FIX RUN DEFECT 1 (browser gate, criterion E): the pinned ──
+// shorthand must be BOUNDED so it never starves the questions list.
+// Measured in-page by the reviewer: `.changes-panel__shorthand` is
+// `flex: 0 0 auto` with NO max-height, so the verbatim <pre> pins at its full
+// content height (~300-400px) inside a 439-527px section and leaves the
+// questions list a 20-106px scroll window over 243-1516px of cards — the
+// prompts and the answer controls fall below the window and the page itself
+// cannot scroll (documentElement.scrollHeight == innerHeight == 900). The
+// reviewer's A/B: flex-shrink:1 does NOT help (min-content floor); ONLY
+// bounding the shorthand (max-height + overflow-y:auto) lifted the list to
+// 215px. The shorthand stays VISIBLE (spec'd affordance: the verbatim document
+// above the proposal) — capped and internally scrollable, never hidden.
+describe('Shorthand containment on the clarification pane (CHANGES-UI-1 DEFECT 1)', () => {
+  const aiCssSource = readFileSync(resolve(surfaceDir, 'ai.css'), 'utf8')
+
+  /** Pull one rule's declaration block out of a CSS source by selector. */
+  function ruleBlock(css: string, selector: string): string {
+    const at = css.indexOf(selector)
+    expect(at, `missing rule for ${selector}`).toBeGreaterThanOrEqual(0)
+    const open = css.indexOf('{', at)
+    const close = css.indexOf('}', open)
+    return css.slice(open + 1, close)
+  }
+
+  it('.changes-panel__shorthand is BOUNDED: a max-height cap with internal scroll', () => {
+    const block = ruleBlock(cssSource, '.changes-panel__shorthand')
+    // The cap is what lifts the questions list off its 20-106px sliver.
+    // Accepts a plain length or a min() cap (viewport-relative guard).
+    expect(block, 'shorthand needs a max-height cap').toMatch(/max-height:\s*(?:\d|min\(\s*\d)/)
+    // The capped block must scroll its own overflow, not clip it away.
+    expect(block, 'shorthand needs internal scroll').toMatch(/overflow-y:\s*auto/)
+    expect(block).toMatch(/overscroll-behavior:\s*contain/)
+  })
+
+  it('the shorthand stays a VISIBLE pinned block (still flex:0 0 auto, never hidden/collapsed)', () => {
+    const block = ruleBlock(cssSource, '.changes-panel__shorthand')
+    // Spec'd affordance: the verbatim document stays above the proposal.
+    expect(block).toMatch(/flex:\s*0\s*0\s*auto/)
+    expect(block).not.toMatch(/display:\s*none/)
+    expect(block).not.toMatch(/visibility:\s*hidden/)
+    expect(block).not.toMatch(/max-height:\s*0/)
+    expect(block).not.toMatch(/overflow:\s*hidden/)
+  })
+
+  it('the questions list keeps its own scroll region (unchanged — its sibling was the problem)', () => {
+    const block = ruleBlock(aiCssSource, '.questions-panel__list')
+    expect(block).toMatch(/flex:\s*1\s*1\s*auto/)
+    expect(block).toMatch(/min-height:\s*0/)
+    expect(block).toMatch(/overflow-y:\s*auto/)
+  })
+
+  it('the clarification view renders the SAME bounded shorthand component (one rendering home)', () => {
+    // DEFECT 1 lives in the shared block, so the fix must land on the shared
+    // component — QuestionsPanel renders ChangesPanel's ShorthandView, it does
+    // not grow a second shorthand grammar with its own sizing.
+    const questionsSource = readFileSync(resolve(surfaceDir, 'QuestionsPanel.tsx'), 'utf8')
+    expect(questionsSource).toContain('ShorthandView')
+    expect(questionsSource).toContain("from './ChangesPanel'")
+    expect(questionsSource).not.toMatch(/questions-panel__shorthand/)
+  })
+})
+
 // ── CHANGES-UI-1 (D): the changes list must scroll INSIDE the pane ──────────
 // Same 2026-09-20 incident as the questions tab: `.ai-tab__section`'s base rule
 // is `flex-shrink: 0` and there was NO `.ai-tab__section--changes` rule, so a
