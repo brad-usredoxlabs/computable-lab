@@ -28,23 +28,33 @@ const RECEIVING_SCHEMA_ID = `${BASE}/material-receiving.schema.yaml`;
 
 const schemaDir = fileURLToPath(new URL('../../../schema', import.meta.url));
 
-async function loadCorpus() {
-  const registry = createSchemaRegistry();
-  const loaded = await loadAllSchemas({ basePath: schemaDir, recursive: true });
-  expect(loaded.errors.map(e => `${e.path}: ${e.error}`)).toEqual([]);
-  registry.addSchemas(loaded.entries);
-  const validator = createValidator();
-  for (const id of registry.getTopologicalOrder()) {
-    const entry = registry.getById(id);
-    if (entry) validator.addSchema(entry.schema, id);
+// ONE corpus load per file (the full-suite load on NFS is heavy; a per-test
+// reload of the whole schema corpus timed out under parallel load). Cached
+// promise = same registry/validator/lint semantics, loaded once.
+let corpusPromise: Promise<{ registry: ReturnType<typeof createSchemaRegistry>; validator: ReturnType<typeof createValidator>; lintEngine: LintEngine; uiLoader: ReturnType<typeof createUISpecLoader> }> | null = null;
+
+function loadCorpus() {
+  if (!corpusPromise) {
+    corpusPromise = (async () => {
+      const registry = createSchemaRegistry();
+      const loaded = await loadAllSchemas({ basePath: schemaDir, recursive: true });
+      expect(loaded.errors.map(e => `${e.path}: ${e.error}`)).toEqual([]);
+      registry.addSchemas(loaded.entries);
+      const validator = createValidator();
+      for (const id of registry.getTopologicalOrder()) {
+        const entry = registry.getById(id);
+        if (entry) validator.addSchema(entry.schema, id);
+      }
+      const lintEngine = new LintEngine();
+      const lintLoad = await loadAllLintSpecs({ basePath: schemaDir, recursive: true });
+      expect(lintLoad.errors.filter(e => /material-receiving/.test(e.path))).toEqual([]);
+      for (const { name, spec } of lintLoad.specs) lintEngine.addSpec(name, spec);
+      const uiLoader = createUISpecLoader();
+      await loadAllUISpecs(uiLoader, schemaDir);
+      return { registry, validator, lintEngine, uiLoader };
+    })();
   }
-  const lintEngine = new LintEngine();
-  const lintLoad = await loadAllLintSpecs({ basePath: schemaDir, recursive: true });
-  expect(lintLoad.errors.filter(e => /material-receiving/.test(e.path))).toEqual([]);
-  for (const { name, spec } of lintLoad.specs) lintEngine.addSpec(name, spec);
-  const uiLoader = createUISpecLoader();
-  await loadAllUISpecs(uiLoader, schemaDir);
-  return { registry, validator, lintEngine, uiLoader };
+  return corpusPromise;
 }
 
 const ref = (id: string, type: string) => ({ kind: 'record', id, type });

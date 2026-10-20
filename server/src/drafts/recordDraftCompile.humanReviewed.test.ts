@@ -154,14 +154,18 @@ describe('record-drafting humanReviewedCreate — DATA switch (QMS7-7 FIX-2, RUL
     expect(raw.adapters['record-drafting']?.humanReviewedCreate).toBe(true);
   });
 
-  it('the flag is adapter-scoped: the shipped config flags ONLY the record-drafting block', async () => {
+  it('the flag is adapter-scoped: the shipped config flags ONLY the human-reviewed blocks (record-drafting, receiving)', async () => {
     const raw = parse(await readFile(adaptersPath, 'utf8')) as {
       adapters: Record<string, { humanReviewedCreate?: unknown }>;
     };
     const flagged = Object.entries(raw.adapters)
       .filter(([, block]) => block.humanReviewedCreate === true)
       .map(([name]) => name);
-    expect(flagged).toEqual(['record-drafting']);
+    // MATRES-RECV (spec §2c, DELIBERATE golden diff): the `receiving` adapter
+    // joins the human-reviewed set — a staged receipt create is HUMAN-REVIEWED
+    // at the draft card, never auto-created (same semantics as record-drafting).
+    // Adapter-scoped means: only blocks that DECLARE the flag, never a global.
+    expect(flagged).toEqual(['record-drafting', 'receiving']);
   });
 
   it('T1: a flagged adapter compiles under POL-REGULATED with NO auto-create decision, NO POLICY_BLOCKED, canAccept:true', async () => {
