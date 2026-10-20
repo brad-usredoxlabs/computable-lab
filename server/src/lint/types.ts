@@ -377,6 +377,13 @@ export interface AuthoringPolicy {
   guardWhenChanged?: string[];
   /** On an accepted create, stamp the resolved actor's user id into this payload field. */
   stampActorAs?: string;
+  /**
+   * Name of a compiler policy setting (resolved from the ACTIVE policy bundle).
+   * The gate fires only when that setting resolves to 'deny'. Undeclared ⇒
+   * the gate always fires (bundle-blind) — privilege guards like role-grant
+   * must never sleep under a permissive bundle.
+   */
+  gateOnPolicySetting?: string;
 }
 
 /**

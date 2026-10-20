@@ -37,6 +37,14 @@ export interface CompilerPolicySettings {
    * 'confirm' is valid data, but current consumers only distinguish deny vs not-deny.
    */
   enforceTransitionRoles: PolicyDisposition;
+  /**
+   * 'deny' = lint-declared authoring gates that opt in via
+   * `authoring.gateOnPolicySetting: authoringGate` enforce their role
+   * requirement for this bundle. 'allow' = those gates stand down (research
+   * mode). Authoring blocks that declare NO gateOnPolicySetting ignore this
+   * setting entirely — the privilege-escalation guard never sleeps.
+   */
+  authoringGate?: PolicyDisposition;
   approvalAuthority: ApprovalAuthority;
 }
 
@@ -127,5 +135,6 @@ export const DEFAULT_COMPILER_POLICY_SETTINGS: CompilerPolicySettings = {
   allowOutOfCalibrationEquipment: 'deny',
   allowUnqualifiedEquipment: 'deny',
   enforceTransitionRoles: 'allow',
+  authoringGate: 'allow',
   approvalAuthority: 'project-owner',
 };

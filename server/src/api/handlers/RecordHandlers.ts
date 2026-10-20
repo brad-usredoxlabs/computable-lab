@@ -34,7 +34,7 @@ import type { OwnershipPolicyService } from '../../security/OwnershipPolicyServi
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
 import type { AuthoringPolicy } from '../../lint/types.js';
-import { authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
+import { authoringGateActive, authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
@@ -44,7 +44,7 @@ interface RecordHandlerSecurityOptions {
   authorizationService?: AuthorizationService;
   ownershipPolicyService?: OwnershipPolicyService;
   roleResolver?: RoleResolver;
-  getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition };
+  getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition; authoringGate?: PolicyDisposition };
   /** Best-effort audit trail; appends never fail the business operation. */
   auditService?: AuditEventService;
   /**
@@ -347,11 +347,17 @@ export function createRecordHandlers(
    * policy is declared); otherwise the reply is set to 403 and the deny
    * code is returned. Values come from YAML; nothing here is kind- or
    * role-specific.
+   *
+   * `lifecycleId` scopes the role lookup exactly like the lifecycle-transition
+   * leg does (rolesFor(userId, nextLifecycleId)): a grant bound to another
+   * lifecycle is inert here, while an unscoped grant stays a superset
+   * (RoleResolver's declared semantics). Absent scope ⇒ today's unscoped call.
    */
   const checkAuthoringPolicy = async (
     policy: AuthoringPolicy,
     user: ResolvedRequestUser,
     reply: FastifyReply,
+    lifecycleId?: string,
   ): Promise<string | null> => {
     const actorContext = {
       userId: user.userId,
@@ -359,7 +365,7 @@ export function createRecordHandlers(
       isLocalAdmin: user.userId === LOCAL_ADMIN_USER_ID,
       roles:
         security?.roleResolver && user.userId
-          ? await security.roleResolver.rolesFor(user.userId)
+          ? await security.roleResolver.rolesFor(user.userId, lifecycleId)
           : [],
     };
     if (authoringPolicyPasses(policy, actorContext)) return null;
@@ -608,10 +614,25 @@ export function createRecordHandlers(
 
         // Declarative authoring gate (from *.lint.yaml `authoring:`): the
         // actor must satisfy the declared policy before the record is
-        // authored at all. Absent policy/accessor -> no gate.
+        // authored at all. Absent policy/accessor -> no gate. A policy that
+        // names a `gateOnPolicySetting` fires only when the ACTIVE bundle
+        // resolves that setting to 'deny' (bundle semantics are data).
+        // Role lookup is scoped to the lifecycle that GOVERNS the kind — the
+        // coverage entry's lifecycleId, never the payload's own declaration:
+        // letting a payload pick its own scope would let an actor self-select a
+        // lifecycle where they hold a grant (the demo-grant leak again).
+        // Kinds with no coverage entry (e.g. role-grant) resolve to no scope,
+        // i.e. today's unscoped call — byte-identical. NO kind or lifecycle
+        // names here; the coverage data decides.
         const authoringPolicy = security?.getAuthoringPolicy?.(schemaId);
-        if (authoringPolicy) {
-          const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+        if (
+          authoringPolicy &&
+          authoringGateActive(authoringPolicy, security?.getPolicySettings?.())
+        ) {
+          const authoringScope = security
+            ?.getKindLifecycleCoverage?.()
+            ?.entryFor(String(payloadKind(request.body.payload) ?? ''))?.lifecycleId;
+          const deny = await checkAuthoringPolicy(authoringPolicy, user, reply, authoringScope);
           if (deny) return { error: deny, message: `Authoring a ${schemaId} record is forbidden for this actor` };
         }
 
@@ -989,18 +1010,27 @@ export function createRecordHandlers(
         }
 
         // Declarative authoring gate on UPDATE: fires only when one of the
-        // policy's guardWhenChanged payload paths actually changes.
+        // policy's guardWhenChanged payload paths actually changes, and (for
+        // policies that name a `gateOnPolicySetting`) only when the ACTIVE
+        // bundle resolves that setting to 'deny'. Role lookup is scoped to the
+        // lifecycle that GOVERNS the stored record's kind (coverage data —
+        // same source as the create leg), so a non-covered kind (e.g.
+        // role-grant) stays unscoped and byte-identical.
         {
           const authoringPolicy = security?.getAuthoringPolicy?.(existing.schemaId);
           if (
             authoringPolicy &&
+            authoringGateActive(authoringPolicy, security?.getPolicySettings?.()) &&
             authoringGuardFiresOnUpdate(
               authoringPolicy,
               existing.payload as Record<string, unknown>,
               request.body.payload as Record<string, unknown>,
             )
           ) {
-            const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+            const authoringScope = security
+              ?.getKindLifecycleCoverage?.()
+              ?.entryFor(String(payloadKind(existing.payload) ?? ''))?.lifecycleId;
+            const deny = await checkAuthoringPolicy(authoringPolicy, user, reply, authoringScope);
             if (deny) return { error: deny, message: `Updating ${id} is forbidden for this actor` };
           }
         }
