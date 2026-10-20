@@ -19,6 +19,11 @@
   border: 1px solid var(--cl-border);
   border-radius: 8px;
   color: var(--cl-text);
+  /* CHANGES-UI-1 (D): fill the flexed `.ai-tab__section--changes` exactly like
+     `.questions-panel` does — min-height:0 so the flex chain can actually
+     shrink, height:100% so the diff region has a bounded box to scroll in. */
+  min-height: 0;
+  height: 100%;
 }
 
 /* ── validation warnings — severity-tinted status rows ─────────────────── */
@@ -27,6 +32,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Status rows are pinned above the scroll region (CHANGES-UI-1 D). */
+  flex: 0 0 auto;
 }
 
 .changes-panel__warning {
@@ -66,6 +73,8 @@
   background: var(--cl-bg-elev-2);
   border: 1px solid var(--cl-border);
   border-radius: 6px;
+  /* Pinned above the scroll region (CHANGES-UI-1 D). */
+  flex: 0 0 auto;
 }
 
 .changes-panel__protocol-target {
@@ -75,10 +84,21 @@
 
 /* ── diff rows — one readable row per op, tinted by op kind ─────────────── */
 
+/*
+ * CHANGES-UI-1 (D): THE scrolling region, mirroring `.questions-panel__list`
+ * (ai.css — the 2026-09-20 fix for the identical overflow incident).
+ * `min-height: 0` is what lets a flex-column child shrink instead of pushing
+ * the Apply/Discard bar out of the pane; `overscroll-behavior: contain` stops
+ * the inner scroll chaining to the page.
+ */
 .changes-panel__diff {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .changes-panel__change {
@@ -139,6 +159,8 @@
   background: var(--cl-info-soft);
   color: var(--cl-info);
   font-size: 13px;
+  /* Pinned outside the scroll region (CHANGES-UI-1 D). */
+  flex: 0 0 auto;
 }
 
 /* role=alert: must READ as an alert — danger soft fill + hairline danger
@@ -158,6 +180,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  /* CHANGES-UI-1 (D): the Apply/Discard bar is OUTSIDE the scroll region and
+     pinned — it can never be pushed off the pane by a long change list. */
+  flex: 0 0 auto;
 }
 
 .changes-panel__btn {
@@ -207,13 +232,16 @@
 }
 
 /* SHORTHAND-CHAT — the verbatim scientist-intent document above the changes
-   list. Render-only: the bytes shown are the bytes the compiler ran. */
+   list. Render-only: the bytes shown are the bytes the compiler ran.
+   CHANGES-UI-1 (D): pinned above the scroll region — the long verbatim <pre>
+   never eats the pane; only the change rows scroll. */
 .changes-panel__shorthand {
   margin-bottom: 0.75rem;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--cl-border);
   border-radius: 6px;
   background: var(--cl-bg-elev-2);
+  flex: 0 0 auto;
 }
 
 .changes-panel__shorthand-label {
