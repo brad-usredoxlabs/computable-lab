@@ -875,6 +875,47 @@ export interface OwnershipPolicyResponse {
   defaults?: null   // present-null only on the handler's not-found branch (:78-79)
 }
 
+/**
+ * QMS8-A — GET /settings/permissions aggregate (read-only org-chart view).
+ * Mirrors the server PermissionsHandlers views exactly: grants come from the
+ * same store read RoleResolver uses; lifecycles echo the LOADED lifecycle
+ * specs (declaredRoles = distinct transition roles); coverage/bundle echo the
+ * loaded registry + config and may be null (honest degradation).
+ */
+export interface PermissionsGrantView {
+  recordId: string
+  userId: string
+  roles: string[]
+  lifecycleId?: string
+  grantedBy?: string
+  notes?: string
+  label?: string
+}
+
+export interface PermissionsLifecycleView {
+  id: string
+  declaredRoles: string[]
+  kinds: string[]
+}
+
+export interface PermissionsCoverageView {
+  lifecycleId: string
+  kinds: string[]
+}
+
+export interface PermissionsBundleView {
+  policyBundleId: string
+  label?: string
+  level?: number
+}
+
+export interface PermissionsResponse {
+  grants: PermissionsGrantView[]
+  lifecycles: PermissionsLifecycleView[]
+  coverage: PermissionsCoverageView | null
+  bundle: PermissionsBundleView | null
+}
+
 export interface FormulationSummary {
   recipeId: string
   recipeName: string
@@ -2965,6 +3006,16 @@ export const apiClient = {
 
   async getOwnershipPolicy(): Promise<OwnershipPolicyResponse> {
     return request<OwnershipPolicyResponse>('/settings/ownership-policy')
+  },
+
+  /**
+   * QMS8-A: read the permissions & roles aggregate (grants + declared roles +
+   * coverage + bundle) for the Settings "Permissions & roles" section. Any
+   * authenticated local user may read it; server refusals surface as ApiError
+   * so the section can render the error law (row above the controls).
+   */
+  async getPermissions(): Promise<PermissionsResponse> {
+    return request<PermissionsResponse>('/settings/permissions')
   },
 
   /**

@@ -171,6 +171,7 @@ import { StorageService } from './storage/StorageService.js';
 import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
 import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
 import { createOwnershipPolicyHandlers } from './api/handlers/OwnershipPolicyHandlers.js';
+import { createPermissionsHandlers } from './api/handlers/PermissionsHandlers.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -922,6 +923,17 @@ export async function createServer(
     roleResolver,
     resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
   });
+  // QMS8-A: read-only permissions & roles aggregate for the Settings section.
+  // Grants use the same store read path RoleResolver uses; coverage/bundle are
+  // LIVE accessor echoes (coverage may be undefined when its load failed).
+  const permissionsHandlers = createPermissionsHandlers({
+    store: ctx.store,
+    engine: ctx.lifecycleEngine,
+    getKindLifecycleRegistry: () => ctx.kindLifecycleRegistry,
+    getAppConfig: () => ctx.appConfig,
+    bundleService: ctx.policyBundleService,
+    resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
+  });
   const signatureHandlers = createSignatureHandlers({
     store: ctx.store,
     credentialStore: ctx.credentialStore,
@@ -1591,6 +1603,7 @@ export async function createServer(
       platformHandlers,
       labSettingsHandlers,
       ownershipPolicyHandlers,
+      permissionsHandlers,
       lifecycleHandlers,
       signatureHandlers,
       metaHandlers,
