@@ -244,3 +244,13 @@ EXIT SUMMARY
 - Path: /home/brad/.hermes/cl/lanes/2/specs-draft/2026-10-20_0155-MATRES-ELIG-acceptability-policy-spec-DRAFT.l2t0115.md
 - Sections: 15
 - Open questions: OQ-1 referentLevel source for vendor-product candidates (derive via materialLayerOf alias table; spine enum untouched); OQ-2 campaign mode = policy-data key with default 'planning', no mode system; OQ-3 whether REPLAY harvest-merged state discharges ELIG's dep (recommendation: yes; orchestrator's call per handoff); OQ-4 clarification payload additive-shape risk to app-side option-bind goldens (coder runs app unit suite scoped; halt if a strict-shape reader exists).
+
+---
+
+## §16 ORCHESTRATOR PROMOTION RULINGS (l2t0210, 2026-10-20T02:30 EDT — binding for the coder)
+
+- OQ-1 RULED AS STANCED: derive candidate.referentLevel through materialRefFields' existing alias table when a local ref exists; remote-no-ref ⇒ unknown ⇒ bind predicates INCOMPLETE (honest). No MaterialLevel union extension, no tier-as-truth.
+- OQ-2 RULED AS STANCED (D5): campaignMode is a policy-data key, single default `planning`; no surface-inference.
+- OQ-3 RULED: YES — REPLAY's harvest-merged state DISCHARGES ELIG's dep. ELIG consumes exactly the harvest report (merged ff95f15d/036210a7); the worksheet legs are MATRES-0-deferred and feed PANEL/ratification, not ELIG's substrate. Recorded in the task block and handoff as the dep-discharge ruling; REPLAY stays in-progress for its own remaining legs.
+- OQ-4 RULED AS STANCED: additive conditional spread; coder runs the scoped app option-bind/answer-bind goldens as a HALT-GATE; if a reader validates payload shape exactly, STOP and route back — do not widen scope.
+- Fleet sequencing: ELIG is CODER-READY but the fleet coder lock is HELD by MATRES-RECV (live). The orchestrator dispatches ELIG only when the lock releases; the coder never waits on or contends with RECV.
