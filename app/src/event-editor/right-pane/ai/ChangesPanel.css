@@ -234,7 +234,22 @@
 /* SHORTHAND-CHAT — the verbatim scientist-intent document above the changes
    list. Render-only: the bytes shown are the bytes the compiler ran.
    CHANGES-UI-1 (D): pinned above the scroll region — the long verbatim <pre>
-   never eats the pane; only the change rows scroll. */
+   never eats the pane; only the change rows scroll.
+
+   CHANGES-UI-1 FIX RUN DEFECT 1 (browser gate, criterion E): `flex: 0 0 auto`
+   alone does NOT bound this block. Measured in-page: the verbatim <pre> pinned
+   at its full content height (~300-400px) inside a 439-527px section, leaving
+   the questions list a 20-106px window over 243-1516px of cards — prompts and
+   answer controls fell below the window and the page could not scroll
+   (documentElement.scrollHeight == innerHeight == 900). The reviewer's A/B:
+   flex-shrink:1 does not help (the block's min-content floor holds); only a
+   max-height cap + internal scroll lifted the list to 215px.
+   So the block is CAPPED and scrolls its own overflow. Same grammar as the
+   diff-region rules above: the block stays readable, scrolls internally, and
+   never eats the pane. The cap is viewport-relative so the shorthand stays
+   proportional on short panes. The block REMAINS VISIBLE — it is a spec'd
+   affordance (the verbatim document above the proposal): capped and internally
+   scrollable, never hidden, never collapsed by default. */
 .changes-panel__shorthand {
   margin-bottom: 0.75rem;
   padding: 0.5rem 0.6rem;
@@ -242,6 +257,9 @@
   border-radius: 6px;
   background: var(--cl-bg-elev-2);
   flex: 0 0 auto;
+  max-height: min(24vh, 200px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .changes-panel__shorthand-label {
