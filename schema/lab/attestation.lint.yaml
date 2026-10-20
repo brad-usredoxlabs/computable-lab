@@ -1,0 +1,200 @@
+# Lint rules for Attestation records (MATRES-ATTEST §2a/§2c/§2d).
+#
+# These are the BUSINESS RULES of the attestation layer — they live here as
+# data, never as TypeScript branches (§4 negative commitments). The schema
+# (attestation.schema.yaml) owns structure (enums, required, closed objects);
+# this file owns the CONDITIONAL pairings and walls.
+#
+# Time vocabulary (Q8/Q5): occurredAtStatus known|approximate|unknown is the
+# terminal-honest triple — "I don't know" is a complete answer. No rule here
+# ever infers a time; the server never synthesizes occurredAt from now().
+#
+# Identity honesty (P3): there is deliberately NO rule inferring
+# performer = attestor (or any other identity equality). Absence means
+# unknown, never presumed.
+#
+# Plate-event note (§2e): plate events are editor content inside an
+# event-graph, not records — the append-only wall does NOT apply to them.
+# The immutability that matters (Q4 "never rewrite history") lives on the
+# attestation RECORD. Mutating a graph event after an attestation pinned it
+# means the pin (against.graphRevision) no longer matches — the accept-time
+# re-check surfaces that as a conflict (Q3d reference-copy semantics).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/attestation.schema.yaml"
+
+rules:
+# --- occurredAtStatus pairing (three rules, §2a rule 1) -------------------
+- id: attestation-occurred-known-needs-occurred-at
+  title: "known occurrence requires occurredAt"
+  description: >
+    Every claim with occurredAtStatus: known must carry occurredAt. The
+    quantifier names the failing item index inside the claims collection.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: known }
+      - op: exists
+        path: occurredAt
+  message:
+    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims}})"
+    paths: [ "claims" ]
+
+- id: attestation-occurred-approximate-needs-approximation
+  title: "approximate occurrence requires occurredAt + approximation"
+  description: >
+    Every claim with occurredAtStatus: approximate must carry BOTH occurredAt
+    and the human approximation string (e.g. "morning", "~last week").
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: approximate }
+      - op: all
+        predicates:
+        - { op: exists, path: occurredAt }
+        - { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims}})"
+    paths: [ "claims" ]
+
+- id: attestation-occurred-unknown-is-terminal
+  title: "unknown occurrence carries no time fields (terminal honesty, Q5)"
+  description: >
+    Every claim with occurredAtStatus: unknown must carry NEITHER occurredAt
+    NOR approximation. "I don't know" is a complete answer — no manufacturing.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: unknown }
+      - op: all
+        predicates:
+        - op: not
+          not: { op: exists, path: occurredAt }
+        - op: not
+          not: { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims}})"
+    paths: [ "claims" ]
+
+# --- supersedes / correction pairing (§2c) --------------------------------
+- id: attestation-supersedes-needs-correction
+  title: "supersedes requires correction"
+  description: >
+    A record that supersedes another attestation must carry the correction
+    payload (claimTarget + changedFacts). A claim-carrying attestation with
+    supersedes present IS a correction record.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: supersedes
+  assert:
+    op: exists
+    path: correction
+  message:
+    template: "supersedes present without correction payload ({{supersedes}})"
+    paths: [ "supersedes" ]
+
+- id: attestation-correction-needs-supersedes
+  title: "correction requires supersedes"
+  description: >
+    A correction payload without a supersedes ref is an orphan: nothing is
+    being corrected, so it is not a legal attestation shape.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: correction
+  assert:
+    op: exists
+    path: supersedes
+  message:
+    template: "correction present without supersedes ref ({{correction}})"
+    paths: [ "correction" ]
+
+# --- P2 chain wall (§2a lint rule 3) --------------------------------------
+- id: attestation-chain-no-proposed-claims
+  title: "an attestation-chain may not carry proposed claims"
+  description: >
+    "Acceptance of a plan or instruction attests NOTHING physical" (P2/r2):
+    artifactKind attestation-chain claims must be completed, unknown, or
+    reported-by-other. Plan-side artifactKinds (plan-slot-reference,
+    planned-run-binding, candidate-protocol) may carry proposed claims.
+  severity: error
+  scope: record
+  when:
+    op: equals
+    path: artifactKind
+    value: attestation-chain
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: in
+      path: claimStatus
+      values: [ completed, unknown, reported-by-other ]
+  message:
+    template: "attestation-chain carries a claim outside [completed, unknown, reported-by-other] ({{artifactKind}})"
+    paths: [ "artifactKind" ]
+
+# --- Q4b deviation gate (§2c) ----------------------------------------------
+- id: attestation-entity-substitution-needs-deviation-resolution
+  title: "entity-substitution over a consumed ref requires a deviation resolution"
+  description: >
+    Substitutions touching an already-CONSUMED reference require an explicit
+    deviation resolution before the correction can reach accepted state (Q4b).
+    The deviation FACT is an `attestation` claim with claimStatus unknown +
+    about = the consumed ref (OQ-3 ruling: zero new kinds); the correction
+    record itself must carry the resolutionNote naming that resolution.
+  severity: error
+  scope: record
+  when:
+    op: all
+    predicates:
+    - { op: equals, path: correction.claimTarget.mode, value: entity-substitution }
+    - { op: exists, path: correction.changedFacts.consumedRef }
+  assert:
+    op: exists
+    path: correction.resolutionNote
+  message:
+    template: "entity-substitution correction touches consumed ref {{correction.changedFacts.consumedRef}} without a deviation resolutionNote"
+    paths: [ "correction.changedFacts.consumedRef" ]
+
+# --- Q4 fulfillment re-evaluation OBLIGATION (declared, queryable) --------
+- id: attestation-correction-triggers-reevaluation-review
+  title: "a correction declares a fulfillment re-evaluation obligation"
+  description: >
+    Standing info finding on every correction record: fulfillment facts citing
+    the superseded evidence must be re-evaluated (r2: supersession is an audit
+    pattern, not yet a fulfillment review). This item ships the OBLIGATION as
+    a queryable fact (CurrentAssertionView.reevaluationObligations reads it);
+    the re-evaluation MECHANICS belong to FULFIL's fulfillment-review fact.
+    Info severity: it never blocks acceptance.
+  severity: info
+  scope: record
+  when:
+    op: exists
+    path: supersedes
+  assert:
+    op: exists
+    path: correction.fulfillmentReviewCompleted
+  message:
+    template: "correction supersedes {{supersedes}} — fulfillment facts citing the superseded evidence require re-evaluation (FULFIL hook)"
+    paths: [ "supersedes" ]

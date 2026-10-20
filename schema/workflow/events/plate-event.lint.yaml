@@ -1,0 +1,61 @@
+# Lint rules for PlateEvent (MATRES-ATTEST §2e — retrospective occurrence time).
+#
+# WHY THIS FILE EXISTS: plate-event.schema.yaml gained the optional
+# occurredAtStatus / occurredAt pair (the same terminal-honest triple as the
+# attestation envelope, Q5/Q8). The PAIRING is a business rule, so it lives
+# here as data — the schema stays purely additive (byte-stable for every
+# existing graph fixture: `at:` and `t_offset` and the anyOf at the foot of
+# plate-event.schema.yaml are untouched, bait 7).
+#
+# IMMUTABILITY NOTE for reviewers: plate events are editor content inside an
+# event-graph record, NOT records themselves — the append-only wall does not
+# apply to them, and this file is not a mutable-history loophole. The
+# immutability that matters (Q4 "never rewrite history") lives on the
+# `attestation` RECORD. Mutating a graph event after an attestation pinned it
+# means the pin (attestation.against.graphRevision) no longer matches — the
+# accept-time re-check surfaces that as a conflict (Q3d reference-copy
+# semantics).
+#
+# Present-tense chains default occurredAtStatus known=today at DRAFT time;
+# the DEFAULTING happens in the drafting layer (CHAIN/RECV), never in
+# validation. [DEFAULT-PENDING-RATIFICATION: Q8]
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.schema.yaml"
+
+rules:
+- id: plate-event-occurred-at-needs-status
+  title: "occurredAt requires occurredAtStatus known or approximate"
+  description: >
+    An event carrying occurredAt must declare occurredAtStatus known or
+    approximate. occurredAt with status unknown (or absent status) is a
+    dishonest time: the time is asserted without an occurrence claim.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: occurredAt
+  assert:
+    op: in
+    path: occurredAtStatus
+    values: [ known, approximate ]
+  message:
+    template: "event {{eventId}} carries occurredAt without occurredAtStatus known|approximate"
+    paths: [ "eventId" ]
+
+- id: plate-event-occurred-status-known-needs-occurred-at
+  title: "occurredAtStatus known requires occurredAt"
+  description: >
+    Declaring the occurrence known without giving the time is a contradiction;
+    use approximate or unknown instead.
+  severity: error
+  scope: record
+  when:
+    op: equals
+    path: occurredAtStatus
+    value: known
+  assert:
+    op: exists
+    path: occurredAt
+  message:
+    template: "event {{eventId}} declares occurredAtStatus known without occurredAt"
+    paths: [ "eventId" ]
