@@ -525,7 +525,12 @@ export const DEFAULT_CONFIG: AppConfig = {
       enabled: true,
       origins: ['*'],
     },
-    appendOnlyKinds: ['audit-event', 'signature', 'vendor-protocol-candidate'],
+    // MATRES-ATTEST §2b: 'attestation' joins the append-only DATA knob — the
+    // wall at RecordStoreImpl.ts:273 is already generic (no domain branches).
+    // 'sample-receipt' is deliberately NOT added here: tightening an existing
+    // unenforced kind is a scope+audit decision for its own item (its lint
+    // sample-receipt-truth-recorded stays untouched).
+    appendOnlyKinds: ['audit-event', 'signature', 'vendor-protocol-candidate', 'attestation'],
     revisionOnEditKinds: ['extraction-draft'],
   },
   schemas: {
