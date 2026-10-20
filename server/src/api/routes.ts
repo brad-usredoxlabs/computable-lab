@@ -43,6 +43,7 @@ import type { CheckinHandlers } from './handlers/CheckinHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { OwnershipPolicyHandlers } from './handlers/OwnershipPolicyHandlers.js';
+import type { PermissionsHandlers } from './handlers/PermissionsHandlers.js';
 import type { LifecycleHandlers } from './handlers/LifecycleHandlers.js';
 import type { SignatureHandlers } from './handlers/SignatureHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -134,6 +135,8 @@ export interface RouteOptions {
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   ownershipPolicyHandlers?: OwnershipPolicyHandlers;
+  /** QMS8-A: read-only GET /settings/permissions aggregate. */
+  permissionsHandlers?: PermissionsHandlers;
   lifecycleHandlers?: LifecycleHandlers;
   signatureHandlers?: SignatureHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -602,6 +605,12 @@ export function registerRoutes(
   if (ownershipPolicyHandlers) {
     fastify.get('/settings/ownership-policy', ownershipPolicyHandlers.getOwnershipPolicy.bind(ownershipPolicyHandlers));
     fastify.put('/settings/ownership-policy', ownershipPolicyHandlers.putOwnershipPolicy.bind(ownershipPolicyHandlers));
+  }
+
+  // QMS8-A: the read-only permissions & roles aggregate (Settings section).
+  const { permissionsHandlers } = options;
+  if (permissionsHandlers) {
+    fastify.get('/settings/permissions', permissionsHandlers.getPermissions.bind(permissionsHandlers));
   }
 
   const { lifecycleHandlers } = options;
