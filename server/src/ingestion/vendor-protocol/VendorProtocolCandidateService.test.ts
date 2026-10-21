@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   adaptAiChunkCandidateToRecordPayload,
+  AI_CHUNK_ANCHORS_APPROXIMATE,
   candidateRecordIdForDocument,
   extractVendorProtocolCandidateFromInput,
   upsertVendorProtocolCandidateRecord,
@@ -142,5 +143,135 @@ describe('upsertVendorProtocolCandidateRecord: concurrent first-mint race', () =
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('Validation failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// VPDF-3 fix run 2: real-model diagnostics are BARE STRINGS (live defect).
+// The deepseek model emits top-level `diagnostics` as an array of strings;
+// mergeChunkResults copies them verbatim and the adapter used to spread them
+// straight into the payload — every real-model extraction then failed the
+// persist leg with /diagnostics/N "must be object" (Ajv2020 vs
+// vendor-protocol-candidate.schema.yaml). The adapter owns candidate-shape
+// normalization, so it normalizes every entry into a schema-legal diagnostic
+// object. No schema loosening, no kind-branching.
+// ---------------------------------------------------------------------------
+
+describe('adaptAiChunkCandidateToRecordPayload: diagnostics normalization (fix2)', () => {
+  const DOC_ID = 'VPDF-DIAG-NORM-DOC';
+  const meta = {
+    documentId: DOC_ID,
+    filename: 'purelink.pdf',
+    pageCount: 2,
+    vendor: 'thermo',
+    fallbackTitle: 'Thermo PureLink RNA Mini Kit',
+  };
+
+  /** The REAL schema's diagnostics item contract (Ajv2020,
+   *  vendor-protocol-candidate.schema.yaml): object with severity enum,
+   *  code string, message string; additionalProperties:true. */
+  function assertSchemaLegalDiagnostic(d: unknown, label: string): asserts d is { severity: string; code: string; message: string } {
+    expect(typeof d, label).toBe('object');
+    expect(d, label).not.toBeNull();
+    const obj = d as Record<string, unknown>;
+    expect(['error', 'warning', 'info'], `${label} severity`).toContain(obj.severity);
+    expect(typeof obj.code, `${label} code`).toBe('string');
+    expect(obj.code.length, `${label} code non-empty`).toBeGreaterThan(0);
+    expect(typeof obj.message, `${label} message`).toBe('string');
+    expect(obj.message.length, `${label} message non-empty`).toBeGreaterThan(0);
+  }
+
+  it('normalizes bare-string, object, and null diagnostics entries into schema-legal objects', () => {
+    const summary = {
+      kind: 'vendor-protocol-candidate',
+      title: 'PureLink RNA Mini Kit',
+      steps: [{ stepNumber: 1, text: 'Lyse the sample.' }],
+      // Exactly what the real model emits: bare strings, plus a well-formed
+      // object, a partial object, a number, and a null entry.
+      diagnostics: [
+        'PBS is listed under materials but is not used in the purification procedure.',
+        'Incubation equipment for the 55 degrees C step is not specified.',
+        { severity: 'error', code: 'MISSING_STEP', message: 'Step 7 has no action verb.' },
+        { code: 'PARTIAL_DIAG', message: 'Missing severity — adapter fills warning.' },
+        { severity: 'bogus-severity', code: 'BAD_ENUM', message: 'Invalid enum severity.' },
+        42,
+        null,
+      ],
+    } as unknown as Parameters<typeof adaptAiChunkCandidateToRecordPayload>[0];
+
+    const payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    const diagnostics = payload.diagnostics as Array<Record<string, unknown>>;
+    expect(Array.isArray(diagnostics)).toBe(true);
+
+    // Every single entry — normalized or passed through — is schema-legal.
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `diagnostics[${i}]`));
+
+    // Bare strings survive VERBATIM as message, with the shape-filler defaults.
+    const byMessage = new Map(diagnostics.map((d) => [d.message, d]));
+    const first = byMessage.get('PBS is listed under materials but is not used in the purification procedure.');
+    expect(first, 'bare string 1 must survive verbatim as message').toBeDefined();
+    expect(first!.severity).toBe('warning');
+    expect(first!.code).toBe('MODEL_DIAGNOSTIC');
+    const second = byMessage.get('Incubation equipment for the 55 degrees C step is not specified.');
+    expect(second, 'bare string 2 must survive verbatim as message').toBeDefined();
+    expect(second!.severity).toBe('warning');
+    expect(second!.code).toBe('MODEL_DIAGNOSTIC');
+
+    // Well-formed object passes through as-is (identity of its three fields).
+    const passthrough = byMessage.get('Step 7 has no action verb.');
+    expect(passthrough).toBeDefined();
+    expect(passthrough!.severity).toBe('error');
+    expect(passthrough!.code).toBe('MISSING_STEP');
+
+    // Partial object: missing severity filled with warning, own code kept.
+    const partial = byMessage.get('Missing severity — adapter fills warning.');
+    expect(partial).toBeDefined();
+    expect(partial!.severity).toBe('warning');
+    expect(partial!.code).toBe('PARTIAL_DIAG');
+
+    // Invalid enum severity: filled honestly to warning, code/message kept.
+    const badEnum = byMessage.get('Invalid enum severity.');
+    expect(badEnum).toBeDefined();
+    expect(badEnum!.severity).toBe('warning');
+    expect(badEnum!.code).toBe('BAD_ENUM');
+
+    // Number primitive: stringified into message with the default code/severity.
+    const num = byMessage.get('42');
+    expect(num, 'number primitive must stringify into message').toBeDefined();
+    expect(num!.severity).toBe('warning');
+    expect(num!.code).toBe('MODEL_DIAGNOSTIC');
+
+    // null entry: dropped — no null survives into the payload.
+    expect(diagnostics.some((d) => d === null)).toBe(false);
+
+    // The honesty marker is still there (fix1 behavior preserved).
+    expect(diagnostics.some((d) => d.code === AI_CHUNK_ANCHORS_APPROXIMATE)).toBe(true);
+  });
+
+  it('object entry with no usable message gets an honest non-empty fallback (never fabricated protocol truth)', () => {
+    const summary = {
+      kind: 'vendor-protocol-candidate',
+      title: 'T',
+      steps: [{ stepNumber: 1, text: 'Mix.' }],
+      diagnostics: [
+        { severity: 'info', code: 'CODE_ONLY_DIAG' },
+        { severity: 'warning' },
+      ],
+    } as unknown as Parameters<typeof adaptAiChunkCandidateToRecordPayload>[0];
+
+    const payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    const diagnostics = payload.diagnostics as Array<Record<string, unknown>>;
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `diagnostics[${i}]`));
+
+    // code-only object: message falls back to a rendering that names its code.
+    const codeOnly = diagnostics.find((d) => d.code === 'CODE_ONLY_DIAG');
+    expect(codeOnly).toBeDefined();
+    expect(codeOnly!.severity).toBe('info');
+    expect(String(codeOnly!.message)).toContain('CODE_ONLY_DIAG');
+
+    // No code, no message: fixed honest filler, default code.
+    const bare = diagnostics.find((d) => d.code === 'MODEL_DIAGNOSTIC' && d.severity === 'warning' && d.code !== AI_CHUNK_ANCHORS_APPROXIMATE);
+    expect(bare, 'code-less object must get the default code').toBeDefined();
+    expect(String(bare!.message).length).toBeGreaterThan(0);
   });
 });

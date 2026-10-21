@@ -215,6 +215,13 @@ export function candidateRecordIdForDocument(documentId: string): string {
 
 /** Structural mirror of the stream handler's merged AI chunk summary (the
  *  adapter's input; kept here so the service owns the candidate shape). */
+export type AiChunkDiagnosticEntry =
+  | { code?: string; severity?: string; message?: string }
+  | string
+  | number
+  | boolean
+  | null;
+
 export interface AiChunkCandidateSummary {
   kind?: string;
   title?: string;
@@ -231,7 +238,7 @@ export interface AiChunkCandidateSummary {
     notes?: string[];
     confidence?: number;
   }>;
-  diagnostics?: Array<{ code: string; severity: 'info' | 'warning' | 'error'; message: string }>;
+  diagnostics?: AiChunkDiagnosticEntry[];
 }
 
 export interface CandidateRecordSourceMeta {
@@ -249,6 +256,56 @@ export const AI_CHUNK_ANCHORS_APPROXIMATE = 'AI_CHUNK_ANCHORS_APPROXIMATE';
 
 function clampConfidence(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
+}
+
+/** Shape-filler constant (NOT domain policy): the code the adapter gives a
+ *  diagnostic the model emitted without one. */
+const MODEL_DIAGNOSTIC_CODE = 'MODEL_DIAGNOSTIC';
+
+/**
+ * VPDF-3 fix2: the real inference model emits top-level `diagnostics` as an
+ * array of BARE STRINGS (live defect: chunk parsed cleanly, persist died with
+ * /diagnostics/N "must be object" under Ajv2020 vs the schema's object-item
+ * contract). mergeChunkResults copies them verbatim, so the adapter — which
+ * owns candidate-shape normalization — normalizes every entry into a
+ * schema-legal {severity, code, message} object. No schema loosening, no
+ * kind-branching. Honesty rule: fillers describe the SHAPE failure only;
+ * protocol truth is never fabricated, and the model's own strings survive
+ * verbatim as message.
+ */
+function normalizeDiagnosticEntry(
+  entry: AiChunkDiagnosticEntry,
+): { severity: 'info' | 'warning' | 'error'; code: string; message: string } | null {
+  if (entry === null || entry === undefined) return null;
+  if (typeof entry === 'string') {
+    return entry.trim()
+      ? { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: entry }
+      : null;
+  }
+  if (typeof entry === 'number' || typeof entry === 'boolean') {
+    return { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: String(entry) };
+  }
+  if (typeof entry !== 'object' || Array.isArray(entry)) {
+    return { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: 'Model diagnostic (malformed)' };
+  }
+  const raw = entry as Record<string, unknown>;
+  const severity = raw.severity === 'error' || raw.severity === 'warning' || raw.severity === 'info'
+    ? raw.severity
+    : 'warning';
+  const code = typeof raw.code === 'string' && raw.code.trim() ? raw.code : MODEL_DIAGNOSTIC_CODE;
+  const message = typeof raw.message === 'string' && raw.message.trim()
+    ? raw.message
+    : (code !== MODEL_DIAGNOSTIC_CODE ? `Model diagnostic (${code})` : 'Model diagnostic (malformed)');
+  // Well-formed entries pass through as-is — extra properties the schema
+  // allows (additionalProperties: true, e.g. details) are preserved.
+  if (
+    raw.severity === severity &&
+    raw.code === code &&
+    raw.message === message
+  ) {
+    return entry as { severity: 'info' | 'warning' | 'error'; code: string; message: string };
+  }
+  return { ...raw, severity, code, message };
 }
 
 /**
@@ -317,7 +374,9 @@ export function adaptAiChunkCandidateToRecordPayload(
     notes: [],
     outputs: [],
     diagnostics: [
-      ...(summary.diagnostics ?? []),
+      ...(summary.diagnostics ?? [])
+        .map(normalizeDiagnosticEntry)
+        .filter((d): d is { severity: 'info' | 'warning' | 'error'; code: string; message: string } => d !== null),
       {
         severity: 'warning' as const,
         code: AI_CHUNK_ANCHORS_APPROXIMATE,
