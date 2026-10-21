@@ -14,4 +14,5 @@ settings:
   allowOutOfCalibrationEquipment: deny
   allowUnqualifiedEquipment: deny
   enforceTransitionRoles: deny
+  authoringGate: deny
   approvalAuthority: qa-reviewer

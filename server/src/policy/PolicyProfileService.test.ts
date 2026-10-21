@@ -69,6 +69,7 @@ describe('PolicyProfileService', () => {
       allowOutOfCalibrationEquipment: 'deny',
       allowUnqualifiedEquipment: 'deny',
       enforceTransitionRoles: 'allow',
+      authoringGate: 'allow',
       approvalAuthority: 'project-owner',
     });
     expect(resolved.origins.allowAutoCreate.profileId).toBe('run-override');
