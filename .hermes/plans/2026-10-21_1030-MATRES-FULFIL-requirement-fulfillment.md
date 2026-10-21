@@ -284,3 +284,13 @@ correction, never rewrite) matches §7.6 exactly.
 DISPATCH GATE: post-RECV-merge tip (RECV coder EXITED 2026-10-20 ~04:33 with full GREEN report;
 adversarial gate c1 live l2t1015; merge on ACCEPT+orch-verify). Worker contract §11 stands;
 deliverable .hermes/plans/MATRES-FULFIL-report.<tickid>.md. NO browser gate (zero app surface).
+
+AMENDMENT BINDING (l2t1550, 2026-10-21T16:15 EDT): post-RECV re-verify returned READY-WITH-PATCHES.
+Read .hermes/plans/MATRES-FULFIL-postrecv-reverify-amendment.md FIRST — its deviation table D-1..D-10
+SUPERSEDES the corresponding cites/counts in this spec (rule count 8 not 9; ReevaluationObligation
+:45-61; LintEngine dup-id throw :62; appendOnlyKinds config/types.ts:535; re-eval rule full id
+material-receiving-supersession-triggers-reevaluation-review; $defs extraction LANDED — FULFIL must
+$ref $defs/Claim/Correction/AttestedAt/Against and NEVER re-declare inline; MaterialReceivingSchemas.test.ts
+is an on-trunk harness precedent). §5 RECV bullet is replaced by the amendment's paste-ready OQ-2
+resolution. OQ-1 stance (a) RE-AFFIRMED; OQ-2 CLOSED; OQ-3 ruling stands. Dispatch base: post-ELIG-merge
+tip (fleet queue serial). Prompt additions P1-P5 in the amendment section (5) go into the coder prompt verbatim.
