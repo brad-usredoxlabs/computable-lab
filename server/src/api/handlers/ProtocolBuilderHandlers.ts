@@ -9,7 +9,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { ApiError } from '../types.js';
-import type { AgentOrchestrator, AgentResult } from '../../ai/types.js';
+import type { AgentOrchestrator, AgentResult, ChatMessage, InferenceClient } from '../../ai/types.js';
 import type { EditorContext } from '../../ai/types.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
 import {
@@ -51,7 +51,7 @@ type ExtractProtocolStreamEvent =
   | { type: 'reasoning'; index: number; text: string }
   | { type: 'content'; index: number; chars: number }
   | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
-  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
+  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number; preview?: string }
   | { type: 'done'; candidate: AiProtocolCandidateSummary; source: ProtocolBuilderExtractResponse['source']; document: ProtocolBuilderExtractResponse['document']; elapsedMs: number; candidateRecordId?: string }
   | { type: 'error'; message: string; index?: number };
 
@@ -311,6 +311,106 @@ function coerceChunkCandidate(responseText: string): AiProtocolCandidateSummary 
   } catch {
     return null;
   }
+}
+
+/**
+ * VPDF-4 (D2-1/D2-2): the shared chunk-call shape, reusing the semantic
+ * pass's force-JSON mechanism (SemanticFamilyPass.ts: `response_format:
+ * { type: 'json_object' }` + a DATA-sourced token budget — no literal).
+ * The budget comes from settings (ai.inference.maxTokens); a thinking
+ * level's own DATA `max_tokens` still wins because the level params are
+ * spread last (InferenceClient's "request-level values win" idiom).
+ */
+function chunkExtractionRequest(
+  inferenceConfig: { model: string; temperature?: number; maxTokens?: number },
+  messages: ChatMessage[],
+  levelParams: Record<string, unknown>,
+) {
+  return {
+    model: inferenceConfig.model,
+    messages,
+    response_format: { type: 'json_object' } as const,
+    ...(inferenceConfig.maxTokens !== undefined ? { max_tokens: inferenceConfig.maxTokens } : {}),
+    temperature: inferenceConfig.temperature ?? 0.1,
+    ...levelParams,
+  };
+}
+
+/**
+ * VPDF-4 (D2-4, OQ-1): the ONE follow-up turn a failed chunk gets. It carries
+ * ONLY this chunk's original prompt + the assistant's CONTENT tail (truncated;
+ * OMITTED when content was empty — reasoning never rides a new channel,
+ * W2-89) + the emit-JSON-now instruction. No other chunks' content, no loops.
+ */
+const CHUNK_RETRY_INSTRUCTION =
+  'Output the JSON object in full now. No further analysis, no reasoning prose — ONLY the JSON object.';
+const RETRY_ASSISTANT_TAIL_CHARS = 300;
+
+function chunkRetryMessages(chunkPrompt: string, content: string): ChatMessage[] {
+  return [
+    { role: 'user' as const, content: chunkPrompt },
+    ...(content.trim()
+      ? [{ role: 'assistant' as const, content: content.slice(-RETRY_ASSISTANT_TAIL_CHARS) }]
+      : []),
+    { role: 'user' as const, content: CHUNK_RETRY_INSTRUCTION },
+  ];
+}
+
+/** First/last N chars of an unparseable raw tail (D3: diagnostics survive). */
+function rawTailPreview(text: string): string {
+  if (text.length <= 320) return text;
+  return `${text.slice(0, 160)} … ${text.slice(-160)}`;
+}
+
+/**
+ * Truncation honesty BEFORE parse (the extractor convention,
+ * SemanticFamilyPass.ts): a budget-eaten answer reads as "raise maxTokens",
+ * never as garbage and never as a partial draft.
+ */
+function chunkTruncationNote(maxTokens: number | undefined): string {
+  return (
+    `chunk answer was truncated (finish_reason 'length'). Raise the configured maxTokens ` +
+    `(ai.inference.maxTokens; current: ${String(maxTokens ?? 'unset')}) or the thinking level's max_tokens ` +
+    `and re-extract.`
+  );
+}
+
+/**
+ * Stream one chunk attempt: reasoning stays on the reasoning channel, content
+ * on the content channel (W2-89), and `finish_reason` is READ — a
+ * budget-exhausted 'length' is no longer indistinguishable from a refusal.
+ */
+async function streamChunkAnswer(
+  inferenceClient: InferenceClient,
+  request: ReturnType<typeof chunkExtractionRequest>,
+  emit: ExtractStreamEmitter,
+  chunkIndex: number,
+  live: { reasoningChars: number; contentChars: number },
+): Promise<{ content: string; reasoning: string; truncated: boolean }> {
+  let content = '';
+  let reasoning = '';
+  let truncated = false;
+  for await (const chunk of inferenceClient.completeStream(request)) {
+    const delta = (chunk.choices?.[0]?.delta ?? {}) as Record<string, unknown>;
+    const reasoningDelta = [delta.reasoning, delta.reasoning_content].find(
+      (v): v is string => typeof v === 'string' && v.length > 0,
+    );
+    if (reasoningDelta) {
+      reasoning += reasoningDelta;
+      live.reasoningChars = reasoning.length;
+      emit({ type: 'reasoning', index: chunkIndex, text: reasoningDelta });
+      // The inference client FOLDS a reasoning delta into `content` when
+      // the frame carries no content of its own (so blocking callers see
+      // text). Reporting that echo as answer content would double-count
+      // the reasoning, so it is skipped here.
+    } else if (typeof delta.content === 'string' && delta.content.length > 0) {
+      content += delta.content;
+      live.contentChars = content.length;
+      emit({ type: 'content', index: chunkIndex, chars: content.length });
+    }
+    if (chunk.choices?.[0]?.finish_reason === 'length') truncated = true;
+  }
+  return { content, reasoning, truncated };
 }
 
 /**
@@ -613,6 +713,14 @@ export function createProtocolBuilderHandlers(
      */
     thinkingLevels?: Record<string, ThinkingLevelDefinition>;
     defaultThinkingLevel?: string;
+    /**
+     * VPDF-4 (D2-1): the settings-declared per-completion budget
+     * (ai.inference.maxTokens). The chunk call's token budget is DATA —
+     * this replaced the hardcoded `max_tokens: 8192` that a thinking model
+     * spent entirely on reasoning and never emitted its JSON (the PureLink
+     * failure: finish_reason 'length' at 8192 reasoning tokens).
+     */
+    maxTokens?: number;
   },
   orchestratorRef?: { current?: AgentOrchestrator | undefined },
   /**
@@ -657,7 +765,7 @@ export function createProtocolBuilderHandlers(
         };
       }
 
-      if (inferenceClient) {
+      if (inferenceClient && inferenceConfig) {
         // "How hard should the model think" comes from config, never from a
         // literal here; an unknown level is refused rather than downgraded.
         const level = resolveThinkingLevel(thinkingLevels, thinkingLevel, defaultThinkingLevel);
@@ -675,13 +783,13 @@ export function createProtocolBuilderHandlers(
         const chunkResults: AiProtocolCandidateSummary[] = [];
         for (let i = 0; i < chunks.length; i++) {
           const chunkPrompt = buildChunkExtractionPrompt(chunks[i]!, i, chunks.length, documentId, vendor);
-          const chunkResult = await inferenceClient.complete({
-            model: inferenceConfig!.model,
-            messages: [{ role: 'user' as const, content: chunkPrompt }],
-            max_tokens: 8192,
-            temperature: inferenceConfig?.temperature ?? 0.1,
-            ...level.resolved.params,
-          });
+          const chunkResult = await inferenceClient.complete(
+            chunkExtractionRequest(
+              inferenceConfig,
+              [{ role: 'user' as const, content: chunkPrompt }],
+              level.resolved.params,
+            ),
+          );
 
           const chunkResponseText = chunkResult.choices?.[0]?.message?.content ?? '';
           const candidate = coerceChunkCandidate(chunkResponseText);
@@ -754,8 +862,9 @@ export function createProtocolBuilderHandlers(
       const chunks = chunkText(text.trim());
       const startedAt = Date.now();
       let currentIndex = 0;
-      let reasoningChars = 0;
-      let contentChars = 0;
+      // Live counters the heartbeat reports; the chunk attempt writes them as
+      // the answer streams in (the UI's "still working" signal).
+      const live = { reasoningChars: 0, contentChars: 0 };
 
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -775,8 +884,8 @@ export function createProtocolBuilderHandlers(
           type: 'progress',
           index: currentIndex,
           elapsedMs: Date.now() - startedAt,
-          reasoningChars,
-          contentChars,
+          reasoningChars: live.reasoningChars,
+          contentChars: live.contentChars,
         });
       }, 4000);
 
@@ -791,10 +900,15 @@ export function createProtocolBuilderHandlers(
         });
 
         const chunkResults: AiProtocolCandidateSummary[] = [];
+        // D3: every chunk that failed to parse leaves a witness — the raw tail
+        // preview and whether the endpoint truncated the answer. These become
+        // CHUNK_NO_JSON diagnostics on a merged candidate and the greppable
+        // server-side warn.
+        const failedChunks: Array<{ index: number; preview: string; truncated: boolean }> = [];
         for (let i = 0; i < chunks.length; i++) {
           currentIndex = i + 1;
-          reasoningChars = 0;
-          contentChars = 0;
+          live.reasoningChars = 0;
+          live.contentChars = 0;
           emit({
             type: 'stage',
             index: i + 1,
@@ -804,51 +918,129 @@ export function createProtocolBuilderHandlers(
 
           const chunkPrompt = buildChunkExtractionPrompt(chunks[i]!, i, chunks.length, documentId, vendor);
           const chunkStartedAt = Date.now();
-          let content = '';
-          let reasoning = '';
 
-          for await (const chunk of inferenceClient.completeStream({
-            model: inferenceConfig.model,
-            messages: [{ role: 'user' as const, content: chunkPrompt }],
-            max_tokens: 8192,
-            temperature: inferenceConfig.temperature ?? 0.1,
-            ...level.resolved.params,
-          })) {
-            const delta = (chunk.choices?.[0]?.delta ?? {}) as Record<string, unknown>;
-            const reasoningDelta = [delta.reasoning, delta.reasoning_content].find(
-              (v): v is string => typeof v === 'string' && v.length > 0,
-            );
-            if (reasoningDelta) {
-              reasoning += reasoningDelta;
-              reasoningChars = reasoning.length;
-              emit({ type: 'reasoning', index: i + 1, text: reasoningDelta });
-              // The inference client FOLDS a reasoning delta into `content` when
-              // the frame carries no content of its own (so blocking callers see
-              // text). Reporting that echo as answer content would double-count
-              // the reasoning, so it is skipped here.
-            } else if (typeof delta.content === 'string' && delta.content.length > 0) {
-              content += delta.content;
-              contentChars = content.length;
-              emit({ type: 'content', index: i + 1, chars: content.length });
-            }
-          }
+          const attempt = await streamChunkAnswer(
+            inferenceClient,
+            chunkExtractionRequest(inferenceConfig, [{ role: 'user' as const, content: chunkPrompt }], level.resolved.params),
+            emit,
+            i + 1,
+            live,
+          );
 
           // When a thinking model returns only reasoning, the client normally
           // folds it into content; do the same here so a level that thinks is
           // still usable for extraction.
-          const effective = content.trim() ? content : reasoning;
-          const candidate = coerceChunkCandidate(effective);
-          if (candidate) chunkResults.push(candidate);
+          let effective = attempt.content.trim() ? attempt.content : attempt.reasoning;
+          let truncated = attempt.truncated;
+          let candidate = coerceChunkCandidate(effective);
+
+          // D2-4 (OQ-1 adopted): ONE follow-up turn per failed chunk — the
+          // emit-JSON-now retry carrying ONLY this chunk's prompt + its
+          // CONTENT tail + the instruction. Budget is exactly one; no loops.
+          if (!candidate) {
+            emit({
+              type: 'stage',
+              index: i + 1,
+              total: chunks.length,
+              message: `Retrying chunk ${i + 1} once — asking for the JSON artifact only`,
+            });
+            const retry = await streamChunkAnswer(
+              inferenceClient,
+              chunkExtractionRequest(
+                inferenceConfig,
+                chunkRetryMessages(chunkPrompt, attempt.content),
+                level.resolved.params,
+              ),
+              emit,
+              i + 1,
+              live,
+            );
+            const retryEffective = retry.content.trim() ? retry.content : retry.reasoning;
+            truncated = truncated || retry.truncated;
+            if (retryEffective.trim()) effective = retryEffective;
+            candidate = coerceChunkCandidate(effective);
+          }
+
+          let preview: string | undefined;
+          if (candidate) {
+            chunkResults.push(candidate);
+          } else {
+            // D3: the unparseable tail survives — in the log line (preview)
+            // and in the server log (the warn the blocking path already had).
+            preview = `${effective.trim() ? rawTailPreview(effective) : '(no answer text)'}${truncated ? ` — ${chunkTruncationNote(inferenceConfig.maxTokens)}` : ''}`;
+            failedChunks.push({ index: i + 1, preview, truncated });
+            request.log.warn(
+              { chunkIndex: i, responsePreview: effective.slice(0, 200), truncated },
+              'Chunk extraction produced no usable candidate',
+            );
+          }
           emit({
             type: 'chunk-done',
             index: i + 1,
             parsed: Boolean(candidate),
             steps: candidate?.steps?.length ?? 0,
             elapsedMs: Date.now() - chunkStartedAt,
+            // exactOptionalPropertyTypes: absent on a parsed chunk — never
+            // `preview: undefined`.
+            ...(candidate || !preview ? {} : { preview }),
           });
         }
 
+        // D1 (task (1)): the terminal stage tells the truth. A text-bearing
+        // run (empty text 400s above) that parsed NOTHING never reaches
+        // merge/persist/done — a zero-parsed run creating a record is the
+        // seam's forbidden case, so this branch returns BEFORE them.
+        if (chunkResults.length === 0) {
+          const message = `Extraction failed: no parseable candidate in ${chunks.length} chunk(s)`;
+          emit({ type: 'stage', index: currentIndex, total: chunks.length, message });
+          emit({
+            type: 'error',
+            message: `${message} — every chunk produced reasoning or text without a parseable JSON candidate; see the raw-tail previews above.`,
+            index: currentIndex,
+          });
+          request.log.warn({ chunks: chunks.length, failedChunks: failedChunks.map((f) => f.index) }, message);
+          return;
+        }
+
         const candidate = mergeChunkResults(chunkResults);
+
+        // A zero-step merge on a text-bearing source is a failure, not an
+        // empty success (the case VPDF-3's seam deliberately leaves here).
+        // Still BEFORE the persist leg: nothing is stored, no `done` is sent.
+        if ((candidate.steps?.length ?? 0) === 0) {
+          const message = `Extraction failed: merged candidate has zero steps from ${chunks.length} chunk(s)`;
+          emit({ type: 'stage', index: currentIndex, total: chunks.length, message });
+          emit({ type: 'error', message, index: currentIndex });
+          request.log.warn({ chunks: chunks.length }, message);
+          return;
+        }
+
+        // Partial success states its coverage honestly (existing stage kind +
+        // the existing diagnostic-code family — no new event kind, no new
+        // done field; the `done` emit lines stay VPDF-3's alone).
+        if (chunkResults.length < chunks.length) {
+          const parsedCount = chunkResults.length;
+          const total = chunks.length;
+          emit({
+            type: 'stage',
+            index: currentIndex,
+            total: chunks.length,
+            message: `Parsed ${parsedCount} of ${total} chunks`,
+          });
+          candidate.diagnostics = [
+            ...(candidate.diagnostics ?? []),
+            ...failedChunks.map((f) => ({
+              severity: 'warning' as const,
+              code: 'CHUNK_NO_JSON',
+              message: `chunk ${f.index} produced no parseable JSON; tail: ${f.preview}`,
+            })),
+            {
+              severity: 'warning' as const,
+              code: 'PARTIAL_CHUNK_COVERAGE',
+              message: `Parsed ${parsedCount} of ${total} chunks — ${total - parsedCount} chunk(s) produced no JSON and contributed no steps`,
+            },
+          ];
+        }
 
         // VPDF-3 (D1): the stream persists its candidate server-side. The
         // persist leg keys off documentId resolving to a real vendor-pdf

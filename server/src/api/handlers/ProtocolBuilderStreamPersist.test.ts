@@ -405,13 +405,15 @@ describe('VPDF-3 D1: the extract stream persists its candidate server-side', () 
     expect((await ctx.store.list({ kind: 'vendor-protocol-candidate' })).length).toBe(before);
   });
 
-  it('zero-step merge: no candidate is persisted and done claims no record (VPDF-4 seam)', async () => {
+  it('zero-step merge: FAILED terminal, no done, no candidate persisted (VPDF-4 seam landed)', async () => {
     stubInferenceStream(JSON.stringify({ kind: 'vendor-protocol-candidate', title: 'Nothing', steps: [] }));
     const before = (await ctx.store.list({ kind: 'vendor-protocol-candidate' })).length;
     const events = await runStream({ text: 'Unparseable-ish text.', documentId: VPDF_ID });
-    const done = events[events.length - 1];
-    expect(done.type).toBe('done');
-    expect(done.candidateRecordId).toBeUndefined();
+    // VPDF-4 (D1): a zero-step merge on a text-bearing source is a failure —
+    // the stream ends with stage-FAILED + error and NEVER reaches persist/done.
+    expect(events.some((e) => e.type === 'done')).toBe(false);
+    expect(events.some((e) => e.type === 'error')).toBe(true);
+    expect(events.some((e) => e.type === 'stage' && String(e.message).includes('Extraction failed: merged candidate has zero steps'))).toBe(true);
     expect((await ctx.store.list({ kind: 'vendor-protocol-candidate' })).length).toBe(before);
   });
 });
