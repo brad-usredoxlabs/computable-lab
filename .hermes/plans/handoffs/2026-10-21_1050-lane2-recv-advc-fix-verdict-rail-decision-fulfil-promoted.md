@@ -98,7 +98,9 @@ full deliverable landed). ONE live worker fleet-wide: architect (thunderbeast, n
   half tracked by AS-FULFIL-OQ1-FORMULA-QUEUED.)
 
 ## live-worker checkpoint at exit (~10:50 EDT; ~45 min soft budget respected)
-- Architect rail decision: bash 690671 (thunderbeast architect; log
+- Architect rail decision: bash 690671 wrapper EXITED at launch; true worker = hermes python
+  pid 690731 (pgrep-confirmed LIVE at 10:50, state in progress, log 0 B buffered until exit).
+  Reconcile against 690731, not 690671 (thunderbeast architect; log
   logs/architect-MATRESRECV-rail-l2t1015.log 0 B until exit; decision path
   decisions/MATRESRECV-accept-rail-decision-l2t1015.md; NOT killed, NOT re-dispatched; 3x
   ~12:00 escalation plan recorded above).
