@@ -254,12 +254,32 @@ describe('VPDF-4 (2): the one retry can save a chunk', () => {
     const events = eventsOf(res.body);
     const done = events.find((e) => e.type === 'done');
     expect(done).toBeTruthy();
-    const candidate = done?.candidate as { steps: unknown[] };
-    expect(candidate.steps.length).toBeGreaterThanOrEqual(1);
     expect(events.some((e) => e.type === 'error')).toBe(false);
     // a retry note is a stage event (existing kind), not a new event kind
     expect(events.some((e) => e.type === 'stage' && String(e.message).includes('Retrying chunk 1 once'))).toBe(true);
     expect(captured.length).toBe(3);
+
+    // D1 fix: the retry's JSON must have BECOME chunk 1's candidate. Without
+    // these pins the arm passes even when the retry result is discarded and
+    // chunk 1 falls to the partial-coverage arm (which also emits `done`,
+    // zero `error` events, and keeps captured.length === 3). Mutant proof
+    // (deleting `effective = retryEffective`, handlers:960) is in the report.
+    const chunkDone1 = events.find((e) => e.type === 'chunk-done' && e.index === 1);
+    expect(chunkDone1?.parsed).toBe(true);
+    expect(chunkDone1?.steps).toBe(1);
+    // exactOptionalPropertyTypes: a parsed chunk-done carries NO preview field
+    expect(chunkDone1).not.toHaveProperty('preview');
+    const chunkDone2 = events.find((e) => e.type === 'chunk-done' && e.index === 2);
+    expect(chunkDone2?.parsed).toBe(true);
+
+    // The merged candidate carries BOTH chunks: 1 step from the retry-saved
+    // chunk 1 + 1 step from chunk 2 (mergeChunkResults concatenates and
+    // renumbers), and full coverage means NO partial-coverage diagnostics.
+    const candidate = done?.candidate as { steps: unknown[]; diagnostics?: Array<{ code: string }> };
+    expect(candidate.steps.length).toBe(2);
+    const codes = (candidate.diagnostics ?? []).map((d) => d.code);
+    expect(codes).not.toContain('PARTIAL_CHUNK_COVERAGE');
+    expect(codes).not.toContain('CHUNK_NO_JSON');
   });
 });
 
