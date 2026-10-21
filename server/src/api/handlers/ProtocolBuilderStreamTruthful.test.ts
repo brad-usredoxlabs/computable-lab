@@ -174,7 +174,7 @@ const CANDIDATE_JSON = JSON.stringify({
 
 /** Two chunks: >10,000 chars forces chunkText into 2 sections (N=2 in the message). */
 const TWO_CHUNK_TEXT =
-  'Protocol A\n1. Add sample to tube A.\n\n'.repeat(130) + '\n\n' + 'Protocol B\n2. Read plate B.\n\n'.repeat(130);
+  'Protocol A\n1. Add sample to tube A.\n\n'.repeat(200) + '\n\n' + 'Protocol B\n2. Read plate B.\n\n'.repeat(200);
 
 /** Reasoning prose with distinctive head and tail fragments for the preview pin. */
 function reasoningWithHeadTail(): string {
@@ -304,11 +304,11 @@ describe('VPDF-4 (3): exactly ONE retry per failed chunk (verified-by 3)', () =>
     // the assistant turn carries the CONTENT channel only:
     // chunk 1 had empty content (reasoning-only) -> the assistant turn is OMITTED
     expect(retry1.length).toBe(2);
-    // chunk 2 had content -> a truncated assistant turn rides the retry
+    // chunk 2 had content -> a truncated assistant TAIL rides the retry
     expect(retry2.length).toBe(3);
     expect(retry2[1]?.role).toBe('assistant');
     expect(retry2[1]?.content.length).toBeLessThanOrEqual(400);
-    expect(retry2[1]?.content.startsWith('PROSEHEAD')).toBe(true);
+    expect(retry2[1]?.content).toContain('PROSETAIL');
     // reasoning never rides the assistant turn (channel discipline, bait 5)
     expect(retry2[1]?.content).not.toContain('HEADFRAGMENT');
   });
@@ -321,7 +321,7 @@ describe('VPDF-4 (4): partial coverage states itself honestly', () => {
       [
         { content: CANDIDATE_JSON },             // chunk 1 parses
         { reasoning: reasoningWithHeadTail() },  // chunk 2 first try: no JSON
-        { reasoning: 'no JSON on retry either.' }, // chunk 2 retry: still no JSON
+        { reasoning: 'RETRYHEAD ' + 'z'.repeat(400) + ' RETRYTAIL no JSON either.' }, // chunk 2 retry: still no JSON
       ],
       captured,
     );
@@ -348,12 +348,13 @@ describe('VPDF-4 (4): partial coverage states itself honestly', () => {
     expect(codes).toContain('PARTIAL_CHUNK_COVERAGE');
     expect(codes).toContain('CHUNK_NO_JSON');
 
-    // the failed chunk-done carries the raw tail preview (head … tail)
+    // the failed chunk-done carries the raw tail preview (head … tail) of the
+    // final unparseable answer (the retry's, which replaced the first try)
     const failedChunkDone = events.find((e) => e.type === 'chunk-done' && e.parsed === false);
     expect(failedChunkDone).toBeTruthy();
     const preview = String(failedChunkDone?.preview ?? '');
-    expect(preview).toContain('HEADFRAGMENT');
-    expect(preview).toContain('TAILFRAGMENT');
+    expect(preview).toContain('RETRYHEAD');
+    expect(preview).toContain('RETRYTAIL');
   });
 });
 
