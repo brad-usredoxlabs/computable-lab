@@ -222,6 +222,10 @@ export type AiChunkDiagnosticEntry =
   | boolean
   | null;
 
+/** Raw model shape for a step's notes: the real model emits a bare string
+ *  (or null) where the schema requires an array of strings. */
+export type AiChunkStepNotes = string[] | string | null;
+
 export interface AiChunkCandidateSummary {
   kind?: string;
   title?: string;
@@ -235,7 +239,7 @@ export interface AiChunkCandidateSummary {
     materials?: string[];
     labware?: string[];
     equipment?: string[];
-    notes?: string[];
+    notes?: AiChunkStepNotes;
     confidence?: number;
   }>;
   diagnostics?: AiChunkDiagnosticEntry[];
@@ -256,6 +260,20 @@ export const AI_CHUNK_ANCHORS_APPROXIMATE = 'AI_CHUNK_ANCHORS_APPROXIMATE';
 
 function clampConfidence(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
+}
+
+/**
+ * VPDF-3 fix2 (live-lap finding): the real model emits a step's `notes` as a
+ * BARE STRING where the schema requires an array of strings (Ajv2020:
+ * /steps/N notes "must be array" for every real step). Same adapter seam as
+ * normalizeDiagnosticEntry: a non-empty string becomes a one-element array
+ * with the model's text verbatim; empty/null/missing becomes [] (no fabricated
+ * content); a real array passes through.
+ */
+function normalizeStepNotes(notes: AiChunkStepNotes | undefined): string[] {
+  if (Array.isArray(notes)) return notes.filter((n): n is string => typeof n === 'string' && n.trim() !== '');
+  if (typeof notes === 'string') return notes.trim() ? [notes] : [];
+  return [];
 }
 
 /** Shape-filler constant (NOT domain policy): the code the adapter gives a
@@ -337,7 +355,7 @@ export function adaptAiChunkCandidateToRecordPayload(
       materials: step.materials ?? [],
       labware: step.labware ?? [],
       equipment: step.equipment ?? [],
-      notes: step.notes ?? [],
+      notes: normalizeStepNotes(step.notes),
       branches: [],
       provenance: { ...provenance },
       confidence: clampConfidence(step.confidence),
