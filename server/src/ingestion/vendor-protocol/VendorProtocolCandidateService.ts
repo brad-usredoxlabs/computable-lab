@@ -222,9 +222,16 @@ export type AiChunkDiagnosticEntry =
   | boolean
   | null;
 
+/** fix3 D3: `diagnostics` is widened — mergeChunkResults always builds a real
+ *  array, but the adapter is exported and must degrade (not throw) on a
+ *  malformed non-array upstream value. */
+export type AiChunkDiagnosticsInput = AiChunkDiagnosticEntry[] | AiChunkDiagnosticEntry | Record<string, unknown> | null;
+
 /** Raw model shape for a step's notes: the real model emits a bare string
- *  (or null) where the schema requires an array of strings. */
-export type AiChunkStepNotes = string[] | string | null;
+ *  (or null) where the schema requires an array of strings. unknown[] keeps
+ *  the type honest for exotic arrays (fix3 D1: entries may be primitives or
+ *  objects — the adapter must not silently drop them). */
+export type AiChunkStepNotes = unknown[] | string[] | string | null;
 
 export interface AiChunkCandidateSummary {
   kind?: string;
@@ -242,7 +249,7 @@ export interface AiChunkCandidateSummary {
     notes?: AiChunkStepNotes;
     confidence?: number;
   }>;
-  diagnostics?: AiChunkDiagnosticEntry[];
+  diagnostics?: AiChunkDiagnosticsInput;
 }
 
 export interface CandidateRecordSourceMeta {
@@ -269,11 +276,42 @@ function clampConfidence(value: unknown): number {
  * normalizeDiagnosticEntry: a non-empty string becomes a one-element array
  * with the model's text verbatim; empty/null/missing becomes [] (no fabricated
  * content); a real array passes through.
+ *
+ * VPDF-3 fix3 D1 (adv-review): the array path must be LOSSLESS for present
+ * data — dropping is legal only for null/undefined entries. Primitive entries
+ * stringify with parity to normalizeDiagnosticEntry (String(n)); object/array
+ * entries JSON-stringify into a note so the model's content survives instead
+ * of vanishing. An object-typed `notes` (not an array at all) JSON-stringifies
+ * into a single note for the same no-silent-drop reason.
  */
+function normalizeNoteValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value.trim() === '' ? null : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function normalizeStepNotes(notes: AiChunkStepNotes | undefined): string[] {
-  if (Array.isArray(notes)) return notes.filter((n): n is string => typeof n === 'string' && n.trim() !== '');
+  if (Array.isArray(notes)) {
+    return notes.map(normalizeNoteValue).filter((n): n is string => n !== null);
+  }
   if (typeof notes === 'string') return notes.trim() ? [notes] : [];
-  return [];
+  const rendered = normalizeNoteValue(notes);
+  return rendered === null ? [] : [rendered];
+}
+
+/** fix3 D3: coerce the (possibly malformed) diagnostics input into an array
+ *  of entries. A present non-array value (bare string, single object) is
+ *  wrapped into a one-entry array so its content survives honestly; only
+ *  null/undefined produce an empty array. Never throws. */
+function diagnosticsInputToEntries(diagnostics: AiChunkDiagnosticsInput | undefined): AiChunkDiagnosticEntry[] {
+  if (diagnostics === null || diagnostics === undefined) return [];
+  if (Array.isArray(diagnostics)) return diagnostics;
+  return [diagnostics];
 }
 
 /** Shape-filler constant (NOT domain policy): the code the adapter gives a
@@ -311,8 +349,23 @@ function normalizeDiagnosticEntry(
     ? raw.severity
     : 'warning';
   const code = typeof raw.code === 'string' && raw.code.trim() ? raw.code : MODEL_DIAGNOSTIC_CODE;
-  const message = typeof raw.message === 'string' && raw.message.trim()
-    ? raw.message
+  // VPDF-3 fix3 D2 (adv-review): a message that IS present but not a string
+  // (e.g. ['part one','part two']) must render honestly BEFORE falling back
+  // to the code/malformed rendering — a supplied message's content survives.
+  // VPDF-3 fix4 D2 residual (adv-review): the object branch routes through
+  // normalizeNoteValue, whose try/catch String() fallback (:291-295) keeps
+  // the exported adapter non-throwing for NON-serializable messages
+  // (circular structure, BigInt) instead of dying inside JSON.stringify.
+  // Serializable objects keep the same JSON rendering as before.
+  const renderedMessage = Array.isArray(raw.message)
+    ? (raw.message.length > 0 ? raw.message.map((m) => String(m)).join(' … ') : '')
+    : raw.message !== null && raw.message !== undefined && typeof raw.message !== 'object'
+      ? String(raw.message)
+      : raw.message && typeof raw.message === 'object'
+        ? normalizeNoteValue(raw.message) ?? ''
+        : '';
+  const message = (typeof raw.message === 'string' && raw.message.trim()) || renderedMessage.trim()
+    ? (typeof raw.message === 'string' && raw.message.trim() ? raw.message : renderedMessage)
     : (code !== MODEL_DIAGNOSTIC_CODE ? `Model diagnostic (${code})` : 'Model diagnostic (malformed)');
   // Well-formed entries pass through as-is — extra properties the schema
   // allows (additionalProperties: true, e.g. details) are preserved.
@@ -392,7 +445,7 @@ export function adaptAiChunkCandidateToRecordPayload(
     notes: [],
     outputs: [],
     diagnostics: [
-      ...(summary.diagnostics ?? [])
+      ...diagnosticsInputToEntries(summary.diagnostics)
         .map(normalizeDiagnosticEntry)
         .filter((d): d is { severity: 'info' | 'warning' | 'error'; code: string; message: string } => d !== null),
       {

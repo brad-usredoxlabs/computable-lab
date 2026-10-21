@@ -320,3 +320,156 @@ describe('adaptAiChunkCandidateToRecordPayload: step notes normalization (fix2)'
     expect(steps[4]!.notes).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// VPDF-3 fix run 3 (adversarial review D1/D2/D3): the normalization seam must
+// be LOSSLESS for present data — dropping is legal only for null/undefined.
+// D1: normalizeStepNotes filtered out non-string array entries and returned
+//     [] for object-typed notes (probed: ['keep me',42] -> ['keep me'],
+//     [{k:1}] -> [], {a:1} -> [] — silent data loss, no diagnostic).
+// D2: a present non-string `message` (e.g. ['part one','part two']) was
+//     replaced by the code rendering — the model's content was discarded.
+// D3: the exported adapter threw on a non-array summary.diagnostics
+//     ('a single diagnostic string'.map is not a function).
+// ---------------------------------------------------------------------------
+
+describe('adaptAiChunkCandidateToRecordPayload: lossless notes/diagnostics (fix3 D1/D2/D3)', () => {
+  const meta = {
+    documentId: 'VPDF-LOSSLESS-DOC',
+    filename: 'purelink.pdf',
+    pageCount: 1,
+    fallbackTitle: 'PureLink',
+  };
+
+  /** Same item contract as the fix2 suite: the REAL schema's diagnostics item
+   *  (Ajv2020, vendor-protocol-candidate.schema.yaml). */
+  function assertSchemaLegalDiagnostic(d: unknown, label: string): asserts d is { severity: string; code: string; message: string } {
+    expect(typeof d, label).toBe('object');
+    expect(d, label).not.toBeNull();
+    const obj = d as Record<string, unknown>;
+    expect(['error', 'warning', 'info'], `${label} severity`).toContain(obj.severity);
+    expect(typeof obj.code, `${label} code`).toBe('string');
+    expect(obj.code.length, `${label} code non-empty`).toBeGreaterThan(0);
+    expect(typeof obj.message, `${label} message`).toBe('string');
+    expect(obj.message.length, `${label} message non-empty`).toBeGreaterThan(0);
+  }
+
+  const summaryWith = (overrides: Record<string, unknown>): Parameters<typeof adaptAiChunkCandidateToRecordPayload>[0] =>
+    ({
+      kind: 'vendor-protocol-candidate',
+      title: 'T',
+      steps: [{ stepNumber: 1, text: 's1' }],
+      ...overrides,
+    }) as unknown as Parameters<typeof adaptAiChunkCandidateToRecordPayload>[0];
+
+  // --- D1 (major): step notes must be lossless for present data ---
+  it('D1: mixed notes entries and object-typed notes survive with no silent drop', () => {
+    const summary = summaryWith({
+      steps: [
+        { stepNumber: 1, text: 's1', notes: ['a', 42, { k: 1 }] },
+        { stepNumber: 2, text: 's2', notes: { a: 1, b: 'two' } },
+        { stepNumber: 3, text: 's3', notes: [null, 'keep', undefined, true] },
+        { stepNumber: 4, text: 's4', notes: ['already an array'] },
+        { stepNumber: 5, text: 's5', notes: null },
+      ],
+    });
+
+    const payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    const steps = payload.steps as Array<Record<string, unknown>>;
+    const notesOf = (n: number): string[] => {
+      const notes = steps[n - 1]!.notes;
+      expect(Array.isArray(notes), `step ${n} notes must be an array`).toBe(true);
+      (notes as unknown[]).forEach((x) => expect(typeof x).toBe('string'));
+      return notes as string[];
+    };
+
+    // Primitive entries stringify with parity to the diagnostics path.
+    expect(notesOf(1)).toEqual(['a', '42', '{"k":1}']);
+    // Object-typed notes: JSON-stringified into a note — content survives.
+    expect(notesOf(2)).toEqual(['{"a":1,"b":"two"}']);
+    // Only null/undefined entries are legal drops.
+    expect(notesOf(3)).toEqual(['keep', 'true']);
+    // Plain string arrays still pass through verbatim.
+    expect(notesOf(4)).toEqual(['already an array']);
+    // null notes stay an empty array (no fabricated content).
+    expect(notesOf(5)).toEqual([]);
+
+    // No silent drop: every present entry is accounted for in the notes.
+    const allNotes = steps.flatMap((s) => s.notes as string[]);
+    expect(allNotes).toContain('42');
+    expect(allNotes.some((n) => n.includes('"k":1'))).toBe(true);
+    expect(allNotes.some((n) => n.includes('"a":1'))).toBe(true);
+  });
+
+  // --- D2 (minor): present non-string message content must survive ---
+  it('D2: array-valued message renders honestly instead of being replaced by the code rendering', () => {
+    const summary = summaryWith({
+      diagnostics: [
+        { code: 'ARRAY_MSG', severity: 'warning', message: ['part one', 'part two'] },
+        { code: 'OBJ_MSG', severity: 'info', message: { detail: 'nested' } },
+      ],
+    });
+
+    const payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    const diagnostics = payload.diagnostics as Array<Record<string, unknown>>;
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `diagnostics[${i}]`));
+
+    const arrayMsg = diagnostics.find((d) => d.code === 'ARRAY_MSG');
+    expect(arrayMsg, 'array-valued message must survive').toBeDefined();
+    expect(String(arrayMsg!.message)).toContain('part one');
+    expect(String(arrayMsg!.message)).toContain('part two');
+    expect(String(arrayMsg!.message)).not.toBe('Model diagnostic (ARRAY_MSG)');
+
+    const objMsg = diagnostics.find((d) => d.code === 'OBJ_MSG');
+    expect(objMsg, 'object-valued message must survive').toBeDefined();
+    expect(String(objMsg!.message)).toContain('nested');
+  });
+
+  // --- D3 (minor): malformed non-array diagnostics must degrade, not throw ---
+  it('D3: non-array summary.diagnostics degrades without throwing and without silent drop', () => {
+    const stringDiag = summaryWith({ diagnostics: 'a single diagnostic string' });
+    let payload: Record<string, unknown>;
+    expect(() => {
+      payload = adaptAiChunkCandidateToRecordPayload(stringDiag, meta);
+    }).not.toThrow();
+
+    const diagnostics = payload!.diagnostics as Array<Record<string, unknown>>;
+    expect(Array.isArray(diagnostics)).toBe(true);
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `diagnostics[${i}]`));
+    const survived = diagnostics.find((d) => d.message === 'a single diagnostic string');
+    expect(survived, 'the present string diagnostic must survive as one entry').toBeDefined();
+    expect(survived!.code).toBe('MODEL_DIAGNOSTIC');
+
+    // Object-valued malformed diagnostics: content survives via JSON rendering.
+    const objDiag = summaryWith({ diagnostics: { code: 'UPSTREAM_OBJ', message: 'kept' } });
+    expect(() => adaptAiChunkCandidateToRecordPayload(objDiag, meta)).not.toThrow();
+    const objDiags = (adaptAiChunkCandidateToRecordPayload(objDiag, meta).diagnostics as Array<Record<string, unknown>>);
+    objDiags.forEach((d, i) => assertSchemaLegalDiagnostic(d, `obj diagnostics[${i}]`));
+    expect(objDiags.some((d) => JSON.stringify(d).includes('kept')), 'object diagnostics content must survive').toBe(true);
+  });
+
+  // --- fix4 D2 residual (minor): the object-message JSON.stringify must not
+  // throw on a NON-serializable message (circular / BigInt). The D3 remedy
+  // declares the exported adapter never throws, and normalizeNoteValue
+  // (:291-295) already honours that with a try/catch String() fallback; the
+  // object-message branch must share the same guard. ---
+  it('fix4: a non-serializable (circular) object message degrades without throwing and keeps a non-empty message', () => {
+    const circular: Record<string, unknown> = { detail: 'loop' };
+    circular.self = circular;
+    const summary = summaryWith({
+      diagnostics: [{ code: 'CIRC_MSG', severity: 'warning', message: circular }],
+    });
+
+    let payload: Record<string, unknown> | undefined;
+    expect(() => {
+      payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    }).not.toThrow();
+
+    const diagnostics = payload!.diagnostics as Array<Record<string, unknown>>;
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `fix4 diagnostics[${i}]`));
+    const circ = diagnostics.find((d) => d.code === 'CIRC_MSG');
+    expect(circ, 'the circular-message entry must survive as a diagnostic').toBeDefined();
+    expect(typeof circ!.message, 'message must be a string').toBe('string');
+    expect(circ!.message.length, 'message must be non-empty').toBeGreaterThan(0);
+  });
+});
