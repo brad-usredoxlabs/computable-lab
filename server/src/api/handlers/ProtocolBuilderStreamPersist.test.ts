@@ -540,3 +540,56 @@ describe('VPDF-3 D2: re-extract flags the joined non-promoted XDR exactly once',
     expect(res.json().success).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// VPDF-3 fix run 2 (regression pin): REAL-model diagnostics are bare strings.
+// The live deepseek run emitted top-level `diagnostics` as an array of strings
+// (chunk parsed cleanly, steps:9) and the persist leg died with
+// /diagnostics/N "must be object" (Ajv2020 vs the REAL schema tree). Every
+// unit stub before this pinned object-shaped diagnostics, so the suites missed
+// it. This arm rides the REAL route against the REAL store + REAL schema tree
+// with a stubbed inference stream whose diagnostics are BARE STRINGS — the
+// exact live shape. RED at HEAD e6cb5e90 (Validation failed), GREEN after the
+// adapter normalization.
+// ---------------------------------------------------------------------------
+
+describe('VPDF-3 fix2: bare-string model diagnostics persist (real store + real schema tree)', () => {
+  it('stream with string diagnostics -> done event, CAN-* record exists, stored diagnostics all objects', async () => {
+    const content = JSON.stringify({
+      kind: 'vendor-protocol-candidate',
+      title: 'PureLink RNA Mini Kit',
+      steps: [
+        { stepNumber: 1, text: '1. Lyse the sample.' },
+        { stepNumber: 2, text: '2. Bind the lysate to the column.' },
+      ],
+      materials: [{ label: 'PBS' }],
+      // The real model's shape: bare strings, NOT objects.
+      diagnostics: [
+        'PBS is listed under materials but is not used in the purification procedure.',
+        'Incubation equipment for the 55 degrees C step is not specified.',
+      ],
+    });
+    stubInferenceStream(content);
+    const events = await runStream({ text: '1. Lyse the sample.\n2. Bind the lysate to the column.', documentId: VPDF_ID });
+
+    const last = events[events.length - 1];
+    expect(last.type, `expected done, got: ${JSON.stringify(last)}`).toBe('done');
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+
+    const candidates = await candidatesForDocument();
+    expect(candidates.length).toBe(1);
+    const payload = candidates[0]!.payload as Record<string, unknown>;
+    const diagnostics = payload.diagnostics as Array<Record<string, unknown>>;
+    expect(Array.isArray(diagnostics)).toBe(true);
+    for (const d of diagnostics) {
+      expect(typeof d, 'every stored diagnostic must be an object').toBe('object');
+      expect(d).not.toBeNull();
+      expect(['error', 'warning', 'info']).toContain(d.severity);
+      expect(typeof d.code).toBe('string');
+      expect(typeof d.message).toBe('string');
+    }
+    // The model's strings survive verbatim as messages.
+    expect(diagnostics.some((d) => d.message === 'PBS is listed under materials but is not used in the purification procedure.')).toBe(true);
+    expect(diagnostics.some((d) => d.message === 'Incubation equipment for the 55 degrees C step is not specified.')).toBe(true);
+  });
+});
