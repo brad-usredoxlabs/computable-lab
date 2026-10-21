@@ -5526,7 +5526,7 @@ export type ExtractionStreamEvent =
   | { type: 'reasoning'; index: number; text: string }
   | { type: 'content'; index: number; chars: number }
   | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
-  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
+  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number; preview?: string }
   | { type: 'done'; candidate: Record<string, unknown>; source: Record<string, unknown>; document: Record<string, unknown>; elapsedMs: number; candidateRecordId?: string }
   | { type: 'error'; message: string; index?: number }
 

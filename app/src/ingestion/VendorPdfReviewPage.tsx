@@ -672,11 +672,25 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                     kind: 'note',
                     text: `\nchunk ${event.index}: ${event.parsed ? `${event.steps} step(s) parsed` : 'no JSON parsed'} in ${Math.round(event.elapsedMs / 1000)}s\n`,
                   },
+                  // VPDF-4 (D3): an unparseable chunk's raw tail (head … tail)
+                  // survives in the log so the failure is debuggable without
+                  // re-running. Additive — the server only sends it on failure.
+                  ...(event.preview
+                    ? [{ kind: 'note' as const, text: `  raw tail: ${event.preview}\n` }]
+                    : []),
                 ])
                 break
               case 'done':
                 setExtractElapsedMs(event.elapsedMs)
-                setExtractStage('Extraction complete')
+                // VPDF-4 (1): belt against a zero-step candidate — the server
+                // only sends `done` for genuinely parsed runs now, but the
+                // panel never paints "complete" over an empty candidate.
+                setExtractStage(
+                  Array.isArray((event.candidate as { steps?: unknown[] })?.steps) &&
+                  (event.candidate as { steps: unknown[] }).steps.length === 0
+                    ? 'Extraction failed: candidate has zero steps'
+                    : 'Extraction complete',
+                )
                 if (event.candidateRecordId) {
                   // VPDF-3 (D4): the stream persisted its candidate server-side.
                   // The note names the stored record, and the draftToken bump
