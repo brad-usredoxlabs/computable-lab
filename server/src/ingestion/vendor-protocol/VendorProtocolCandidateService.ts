@@ -352,12 +352,17 @@ function normalizeDiagnosticEntry(
   // VPDF-3 fix3 D2 (adv-review): a message that IS present but not a string
   // (e.g. ['part one','part two']) must render honestly BEFORE falling back
   // to the code/malformed rendering — a supplied message's content survives.
+  // VPDF-3 fix4 D2 residual (adv-review): the object branch routes through
+  // normalizeNoteValue, whose try/catch String() fallback (:291-295) keeps
+  // the exported adapter non-throwing for NON-serializable messages
+  // (circular structure, BigInt) instead of dying inside JSON.stringify.
+  // Serializable objects keep the same JSON rendering as before.
   const renderedMessage = Array.isArray(raw.message)
     ? (raw.message.length > 0 ? raw.message.map((m) => String(m)).join(' … ') : '')
     : raw.message !== null && raw.message !== undefined && typeof raw.message !== 'object'
       ? String(raw.message)
       : raw.message && typeof raw.message === 'object'
-        ? JSON.stringify(raw.message) ?? String(raw.message)
+        ? normalizeNoteValue(raw.message) ?? ''
         : '';
   const message = (typeof raw.message === 'string' && raw.message.trim()) || renderedMessage.trim()
     ? (typeof raw.message === 'string' && raw.message.trim() ? raw.message : renderedMessage)

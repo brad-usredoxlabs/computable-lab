@@ -447,4 +447,29 @@ describe('adaptAiChunkCandidateToRecordPayload: lossless notes/diagnostics (fix3
     objDiags.forEach((d, i) => assertSchemaLegalDiagnostic(d, `obj diagnostics[${i}]`));
     expect(objDiags.some((d) => JSON.stringify(d).includes('kept')), 'object diagnostics content must survive').toBe(true);
   });
+
+  // --- fix4 D2 residual (minor): the object-message JSON.stringify must not
+  // throw on a NON-serializable message (circular / BigInt). The D3 remedy
+  // declares the exported adapter never throws, and normalizeNoteValue
+  // (:291-295) already honours that with a try/catch String() fallback; the
+  // object-message branch must share the same guard. ---
+  it('fix4: a non-serializable (circular) object message degrades without throwing and keeps a non-empty message', () => {
+    const circular: Record<string, unknown> = { detail: 'loop' };
+    circular.self = circular;
+    const summary = summaryWith({
+      diagnostics: [{ code: 'CIRC_MSG', severity: 'warning', message: circular }],
+    });
+
+    let payload: Record<string, unknown> | undefined;
+    expect(() => {
+      payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    }).not.toThrow();
+
+    const diagnostics = payload!.diagnostics as Array<Record<string, unknown>>;
+    diagnostics.forEach((d, i) => assertSchemaLegalDiagnostic(d, `fix4 diagnostics[${i}]`));
+    const circ = diagnostics.find((d) => d.code === 'CIRC_MSG');
+    expect(circ, 'the circular-message entry must survive as a diagnostic').toBeDefined();
+    expect(typeof circ!.message, 'message must be a string').toBe('string');
+    expect(circ!.message.length, 'message must be non-empty').toBeGreaterThan(0);
+  });
 });
