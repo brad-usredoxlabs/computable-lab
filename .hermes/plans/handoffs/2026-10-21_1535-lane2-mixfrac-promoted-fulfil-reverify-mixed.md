@@ -87,7 +87,7 @@ cl/integration-2 (no YAML changes this tick — no restart needed).
 ## live-worker checkpoint at exit (~15:40 EDT; ~30 min used)
 - MATRES-ELIG CODER: cl-coder hermes pid 1311956 alive, 46 min elapsed (within window).
   Log 0 B until exit. Fleet lock HELD. NOT killed, NOT re-dispatched.
-- FULFIL composer: bash pid 1377769 (thunderbeast), log lanes/2/logs/
-  composer-FULFIL-reverify-l2t1510.log. NOT killed.
+- FULFIL composer: hermes pid 1377872 (bash wrapper 1377769 gone at launch, usual), log
+  lanes/2/logs/composer-FULFIL-reverify-l2t1510.log (0 B until exit). NOT killed.
 - Thunderbeast: 2/4 sessions (self + composer). Fleet coder slot: 1 live (ELIG). Vision slot
   unused.
