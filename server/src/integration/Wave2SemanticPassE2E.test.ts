@@ -22,9 +22,11 @@
  *      are {extraction-draft}.
  *  T4c promotion leg (A2, W2-5 merged): promote candidates[0] through
  *      routes.ts:632 -> output kind 'protocol', born draft.
- *  T5-e immutability: the vendor-protocol-candidate contentSha is
- *      byte-identical across the full pass+promote flow; a PUT against it
- *      405s (W2-5's appendOnlyKinds wall).
+ *  T5-e: the vendor-protocol-candidate contentSha is byte-identical across
+ *      the full pass+promote flow (the pass never rewrites its SAID). A PUT
+ *      against the candidate answers 422 (FAIR-stamping vs closed schema),
+ *      no longer 405 — post-VPDF-3 the kind left the appendOnlyKinds DATA
+ *      list; the sanctioned rewrite path is service-level store.update.
  *  health: /api/health lintRules count recorded (report §0).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -240,7 +242,7 @@ describe('W2-6 T4: config-only model swap + store-level E2E (A4/A5/A2)', () => {
     expect(body.diagnostics.axesCount).toBe(1);
   });
 
-  it('only NEW record kinds in the store == {extraction-draft}; candidate sha byte-identical; PUT on the candidate 405s', async () => {
+  it('only NEW record kinds in the store == {extraction-draft}; candidate sha byte-identical across the pass; PUT on the candidate answers 422 (stamping), no longer 405 (VPDF-3 OQ-1)', async () => {
     const before = new Set((await bootB.ctx.store.list({})).map(r => r.recordId));
     const beforeKinds = new Map<string, string>();
     for (const r of await bootB.ctx.store.list({})) beforeKinds.set(r.recordId, String((r.payload as Record<string, unknown>).kind));
@@ -259,15 +261,22 @@ describe('W2-6 T4: config-only model swap + store-level E2E (A4/A5/A2)', () => {
     const candidateRecord = await bootB.ctx.store.get(CANDIDATE_ID);
     expect(typeof candidateRecord!.meta?.contentSha).toBe('string');
 
-    // W2-5's append-only wall: PUT on the candidate is 405 APPEND_ONLY.
+    // VPDF-3 (OQ-1, Brad 2026-10-20 ruling, flipped IN THIS COMMIT): the
+    // appendOnlyKinds DATA list no longer names vendor-protocol-candidate, so
+    // the wall no longer answers 405 — but the API PUT still cannot rewrite
+    // this kind: the record handler stamps createdAt/updatedAt/createdBy and
+    // the closed schema rejects them (422, the same stamping collision that
+    // blocks POST /records — recorded finding above). The sanctioned rewrite
+    // path is service-level store.update (the extract-stream persist leg),
+    // pinned by ProtocolBuilderStreamPersist's update arm.
     const put = await bootB.app.inject({
       method: 'PUT',
       url: `/api/records/${CANDIDATE_ID}`,
       headers: { 'x-user-id': 'USR-W26-TESTER' },
       payload: { payload: mintableCandidatePayload() },
     });
-    if (put.statusCode !== 405) console.log('PUT_BODY', put.statusCode, put.body);
-    expect(put.statusCode).toBe(405);
+    if (put.statusCode !== 422) console.log('PUT_BODY', put.statusCode, put.body);
+    expect(put.statusCode, put.body).toBe(422);
     const afterCandidate = await bootB.ctx.store.get(CANDIDATE_ID);
     expect(afterCandidate!.meta?.contentSha).toBe(candidateRecord!.meta?.contentSha);
   });

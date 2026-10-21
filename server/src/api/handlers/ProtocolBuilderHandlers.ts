@@ -19,6 +19,12 @@ import {
 } from '../../ai/thinkingLevels.js';
 import { promoteVendorProtocolEventGraph } from '../../ingestion/vendor-protocol/VendorProtocolEventGraphPromotionService.js';
 import type { VendorProtocolEventGraphDraftResult } from '../../ingestion/vendor-protocol/VendorProtocolEventGraphDraftService.js';
+import {
+  flagDraftsSupersededByReextract,
+  upsertVendorProtocolCandidateRecord,
+} from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
+import type { AiChunkCandidateSummary } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
+import type { RecordStore } from '../../store/types.js';
 import type { PlateEventPrimitive } from '../../compiler/biology/BiologyVerbExpander.js';
 
 /**
@@ -46,7 +52,7 @@ type ExtractProtocolStreamEvent =
   | { type: 'content'; index: number; chars: number }
   | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
   | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
-  | { type: 'done'; candidate: AiProtocolCandidateSummary; source: ProtocolBuilderExtractResponse['source']; document: ProtocolBuilderExtractResponse['document']; elapsedMs: number }
+  | { type: 'done'; candidate: AiProtocolCandidateSummary; source: ProtocolBuilderExtractResponse['source']; document: ProtocolBuilderExtractResponse['document']; elapsedMs: number; candidateRecordId?: string }
   | { type: 'error'; message: string; index?: number };
 
 /** Invoked for each SSE event (tests inject a collector). */
@@ -609,6 +615,13 @@ export function createProtocolBuilderHandlers(
     defaultThinkingLevel?: string;
   },
   orchestratorRef?: { current?: AgentOrchestrator | undefined },
+  /**
+   * VPDF-3 (D1): the record store the streaming extraction persists its
+   * candidate into. Optional so the legacy blocking `extractProtocol` caller
+   * and every non-review caller keep today's emit-only behavior; the review
+   * route wires ctx.store (server.ts).
+   */
+  store?: RecordStore,
 ): ProtocolBuilderHandlers {
   const inferenceClient = inferenceConfig?.baseUrl
     ? createInferenceClient(inferenceConfig)
@@ -836,12 +849,96 @@ export function createProtocolBuilderHandlers(
         }
 
         const candidate = mergeChunkResults(chunkResults);
+
+        // VPDF-3 (D1): the stream persists its candidate server-side. The
+        // persist leg keys off documentId resolving to a real vendor-pdf
+        // record; every other caller keeps today's emit-only behavior. The
+        // chunk loop above and the terminal-stage semantics are untouched
+        // (VPDF-4 seam): persist ONLY when at least one chunk parsed AND the
+        // merged candidate has >=1 step (aligns with the schema's minItems:1).
+        let candidateRecordId: string | undefined;
+        if (store && documentId && (candidate.steps?.length ?? 0) > 0) {
+          const vpdf = await store.get(documentId);
+          const vpdfPayload = vpdf?.payload as Record<string, unknown> | undefined;
+          if (vpdf && vpdfPayload?.kind === 'vendor-pdf') {
+            const extractedText = Array.isArray(vpdfPayload.extractedText)
+              ? (vpdfPayload.extractedText as Array<Record<string, unknown>>)
+              : [];
+            const upsert = await upsertVendorProtocolCandidateRecord({
+              store,
+              documentId,
+              summary: candidate as AiChunkCandidateSummary,
+              sourceMeta: {
+                documentId,
+                filename: typeof vpdfPayload.title === 'string' && vpdfPayload.title.trim()
+                  ? vpdfPayload.title.trim()
+                  : `${documentId}.pdf`,
+                pageCount: extractedText.length,
+                ...(typeof vendor === 'string' && vendor.trim() ? { vendor: vendor.trim() } : {}),
+                fallbackTitle: typeof vpdfPayload.title === 'string' && vpdfPayload.title.trim()
+                  ? vpdfPayload.title.trim()
+                  : documentId,
+              },
+              message: `VPDF-3: extract-stream candidate for ${documentId}`,
+            });
+            if (!upsert.ok) {
+              // Honesty (D3): never a `done` that claims a record it did not
+              // write, and never a silent fall-through to emit-only for a
+              // document that DID resolve.
+              emit({
+                type: 'error',
+                message: `Extraction succeeded but the candidate could not be persisted: ${upsert.error}`,
+                index: currentIndex,
+              });
+              return;
+            }
+            candidateRecordId = upsert.recordId;
+
+            // Heal the ref (task (5)): the VPDF names the candidate it now has.
+            // vendor-pdf is neither append-only nor revisionOnEditKinds.
+            const refWrite = await store.update({
+              envelope: {
+                recordId: documentId,
+                schemaId: vpdf.schemaId,
+                payload: {
+                  ...vpdfPayload,
+                  vendorProtocolCandidateRef: { kind: 'record', type: 'vendor-protocol-candidate', id: upsert.recordId },
+                },
+              },
+              message: `VPDF-3: ${documentId} vendorProtocolCandidateRef -> ${upsert.recordId}`,
+            });
+            if (!refWrite.success) {
+              emit({
+                type: 'error',
+                message: `Extraction succeeded but the candidate could not be persisted: ${refWrite.error ?? 'vendor-pdf ref update failed'}`,
+                index: currentIndex,
+              });
+              return;
+            }
+
+            // D2: an UPDATE-in-place supersedes what the joined non-promoted
+            // semantic drafts were built from — flag them in data (deduped).
+            // A first mint supersedes nothing.
+            if (upsert.updatedExisting) {
+              await flagDraftsSupersededByReextract(
+                store,
+                documentId,
+                upsert.recordId,
+                new Date().toISOString(),
+              );
+            }
+          }
+        }
+
         emit({
           type: 'done',
           candidate,
           source: { inputKind: 'text', fileName: 'pasted-text.txt', sha256: '' },
           document: { pageCount: 0, sectionCount: 0, tableCount: 0 },
           elapsedMs: Date.now() - startedAt,
+          // exactOptionalPropertyTypes: absent when nothing was persisted —
+          // never `candidateRecordId: undefined`.
+          ...(candidateRecordId !== undefined ? { candidateRecordId } : {}),
         });
         return;
       } catch (err) {
