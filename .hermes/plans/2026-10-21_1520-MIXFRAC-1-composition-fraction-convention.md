@@ -13,17 +13,43 @@
   output, NOT the ledger (the "<fraction> of the mixture" source form is consumed verbatim by the app —
   eventGraph.ts:315 shape parser, wellStateProjection.test.ts:24-27; composition-entry.schema.yaml is
   additionalProperties:false). No composition-entry schema change.
-- OQ-1 = BRAD RULING PENDING (recorded, not picked): GOLDEN-A (the canonical 50/50 + 10% utterance) expected
-  fractions are BLOCKED on Brad (50/45/5 preceding-attachment vs 45/45/10 re-base vs 50/50/10 on-top). Every
-  OTHER deliverable is independent of the ruling: the sum check, LOUD-off, cells exclusion, one-clarification
-  shape, GOLDEN-B/C, and the blessed-fixture pin update (unresolvable-mixture-component fixture carries a real
-  110% — the new clarification fires there too; blessed record re-hash is deliberate, once, same commit).
-  DISPATCH SHAPE: the worker builds everything EXCEPT GOLDEN-A pinned expectations; where GOLDEN-A would
-  encode a reading, the fixture stays blocked-on-Brad in the report (do NOT invent fractions, do NOT pick a
-  default parse for the ambiguous case — the ambiguous case clarifies, per (c)). The convention file names
-  per-parse behavior but the canonical-utterance expectation is not blessed until Brad rules.
-- Dispatch collision: fleet lock currently held by MATRES-ELIG coder (pid 1311956, dispatched 14:45). MIXFRAC-1
-  dispatches the moment the lock frees with a clean advc/merge chain — do not preempt.
+- OQ-1 RULED BY BRAD 2026-10-21T20:00 EDT (interactive, supersedes the three stanced options):
+  > NEITHER 45/45/10 NOR 50/50/10 NOR a fraction-convention rebase. The reading is ATTACHMENT TO
+  > PRECEDING NOUN: "DMEM + 10% FBS" is a UNIT — DMEM-with-10%-FBS is an in-house RECIPE (complete
+  > medium the lab makes), NOT a supplement sprinkled on the whole mixture. The utterance is a
+  > 50/50 combination of TWO things: (1) Trypsin-EDTA (purchased, Thermo) and (2) that in-house
+  > medium. Final mix: Trypsin-EDTA 50%, and the medium 50% of final which itself splits 90:10 ->
+  > flat fractions DMEM 45% / FBS 5% / Trypsin-EDTA 50% (sum 100). GOLDEN-A pins exactly this.
+  > DEEPER IMPLICATION for (a)/(c), coder+spec must honor: the correct modeling is a NESTED/
+  > RECIPE component — the composition entry for the medium may carry its OWN composition
+  > (DMEM 90% + FBS 10%) and/or point at the in-house recipe as a material; flattening to 45/5 is
+  > a DERIVED view, not the declared truth (materials provenance hierarchy: a formulation is not
+  > a concept). The clarification for the ambiguous utterance should ask WHICH PARSE (FBS attaches
+  > to the whole mix vs to DMEM), with the in-house-recipe reading presentable; a lab that makes
+  > DMEM+10%FBS in-house has a record-shaped answer to that question. If schema expressibility of
+  > nested composition is missing, that is in-scope small-schema-extension per the block's own
+  > audit-first mandate — STOP AND REPORT only if it exceeds it.
+  Harvest note: ruling ACCEPTED as the dispatch-gate ruling 2026-10-21 16:05 EDT (recorded
+  interactively in the task block). GOLDEN-A pins Trypsin-EDTA 50 / DMEM 45 / FBS 5 flat; the
+  medium's declared truth is NESTED 90:10 DMEM:FBS; flat = derived view. GOLDEN-B/C keep their
+  whole-mixture / on-top phrasings as the OTHER candidate readings.
+- DISPATCH SHAPE (AMENDED l2t1635, supersedes the blocked-on-Brad shape): **GOLDEN-A is LIFTED and
+  BLESSED** per the ruling above — the worker dispatches with all four goldens; nothing is blocked.
+  Ambiguity handling: the ambiguous canonical utterance STILL CLARIFIES (the ruling keeps the
+  clarification — it asks WHICH PARSE), and the readings list is now THREE candidates:
+  (1) whole-mixture supplement re-base (45/45/10), (2) PRECEDING-NOUN / in-house-recipe
+  (Trypsin-EDTA 50 + medium 50 nested 90:10, flat-derived 50/45/5), (3) explicit on-top
+  (50/50/10-of-mixture + sum note). Readings (1) and (3) are what ratified OQ-3 already carries;
+  the ruling ADDS reading (2) — a change to the readings enumeration only; the ratified OQ-3 ride
+  (optional `readings`, conditional spread) is unchanged.
+  DEFAULT-PARSE RULE: when a RECIPE-SHAPED COMPONENT READING EXISTS (store evidence, §14.2),
+  preceding-noun is the DEFAULT candidate — presented FIRST and named as matching the lab's
+  in-house record — but a genuinely ambiguous utterance still emits the clarification. Genuine
+  ambiguity is NEVER resolved by confidence (ratified OQ-3 stands). [ORCH DECISION l2t1635: keep
+  still-clarify — composer default held; do NOT silent-resolve even on exact record match.]
+- Dispatch collision: fleet lock held by MATRES-ELIG coder. MIXFRAC-1 dispatches the moment the
+  lock frees with a clean advc/merge chain — do not preempt. Fleet order: ELIG-merge -> MIXFRAC-1
+  -> FULFIL -> PANEL -> CHAIN gate.
 
 
 Draft: l2t1315 composer (cl-spec-composer), 2026-10-21 13:30 EDT. DRAFT — orchestrator reviews, rules OQs, promotes.
@@ -133,21 +159,34 @@ Explicitly OUT of scope:
   on-top sum note on a DIFFERENT surface (OQ-4).
 - server/src/lint/** and schema/lint/lint-v1.schema.yaml — NO DSL extension in this item (CHAIN precedent).
 - config/drafting/mixture-material-cues.yaml — do not edit; the fraction convention is a NEW sibling file.
-- schema/core/datatypes/composition-entry.schema.yaml, materials/AddMaterialSupport.ts, server/src/receiving/**,
-  drafts/** — untouched.
+- materials/AddMaterialSupport.ts, server/src/receiving/**, drafts/** — untouched.
+- schema/core/datatypes/composition-entry.schema.yaml moves INTO scope for exactly ONE additive
+  change per Brad's OQ-1 ruling's small-schema-extension mandate: the optional `composition`
+  property prescribed in §14.1. Everything else about the file stays out of scope. This does NOT
+  reopen ratified OQ-4 (no sum-note/ledger field; the "<fraction> of the mixture" source form stays
+  byte-stable); the new property carries NO sum note.
 
-## 4. Acceptance criteria (verbatim from the task's 'verified by')
-> RED-first vitest: 110% draft -> clarification with reason code + both candidate
-> readings; 45/45/10 re-base golden compiles to expected snapshot; "on top" golden
-> keeps 50/50/10 as fractions-of-mixture with the sum note; cells never counted in
-> the sum; absent config file -> feature LOUD-off (console.warn naming the path),
-> never silent. Golden suite + realization pins updated, not pinned around.
-> npm run test:run -w server + typecheck at baseline. Compiler-path task: no browser
-> gate in scope (panel rendering of the clarification rides MATRES-PANEL).
+## 4. Acceptance criteria (AMENDED l2t1635 per Brad's OQ-1 ruling — this restatement SUPERSEDES the
+##    original verified-by text and is pasted verbatim into the task block at dispatch)
+> RED-first vitest: 110% draft -> ONE clarification, reason code composition-fraction-sum, with the
+> three candidate readings per Brad's OQ-1 ruling (whole-mixture re-base, preceding-noun in-house-
+> recipe presented first when a recipe-shaped store reading exists, explicit on-top), each carrying
+> computed final fractions; GOLDEN-A pins Trypsin-EDTA 50 / DMEM 45 / FBS 5 flat (preceding-noun
+> attachment; the medium's declared composition 90:10 DMEM:FBS lands as nested composition-entry
+> data at the record layer via the composition-entry `composition` extension or its
+> defined_composition material-spec; flat view byte-stable per OQ-4); the "bring to 10% final"
+> golden re-bases to 45/45/10; the "on top" golden keeps 50/50/10 as fractions-of-mixture with the
+> sum note; cells never counted in the sum; absent config file -> feature LOUD-off (console.warn
+> naming the path), never silent; composition-entry schema extension is ONE optional `composition`
+> property ($ref "#", additive — all existing payloads validate unchanged, registry dependency pin
+> unchanged); no reagent nouns outside fixtures/goldens. Golden suite + realization pins updated,
+> not pinned around. npm run test:run -w server + typecheck at baseline. Compiler-path task: no
+> browser gate in scope (panel rendering of the clarification rides MATRES-PANEL).
 
-NOTE the tension the worker must NOT resolve alone: the criteria sentence pre-names 45/45/10 for the re-base
-golden while the description says the canonical fixture's expected fractions are Brad's ruling (OQ-1). If Brad
-rules the preceding-attachment reading, the golden's expected fractions are HIS numbers, full stop.
+RESOLVED (was a tension; now settled by Brad's ruling): "45/45/10 re-base golden" refers to
+GOLDEN-B ("bring to 10% final" whole-mixture supplement with an explicit final-volume phrase — the
+ONE-SIDED-EVIDENCE arm that re-bases to 45/45/10), NOT GOLDEN-A. GOLDEN-A pins the blessed
+50/45/5 preceding-noun flat derived view.
 
 ## 5. The convention file (deliverable (a)) — shape guidance
 config/drafting/composition-fraction-convention.yaml, mirroring the cues file's header discipline verbatim
@@ -162,8 +201,10 @@ mixtureCuesPath :429). Sections (all thresholds/patterns/phrases DATA, zero lite
 - `attachmentEvidence` — firesOn-idiom utterance-shape data: `supplementConnectors` (e.g. " + ", " with ",
   " plus " — cue-token style), `finalVolumePhrases` (e.g. "bring to ... final", "to a final of"),
   `onTopPhrases` (e.g. "on top", "v/v on top"), adjacency patterns reusing the cues file's ratioPatterns idiom.
-- `convention` — the re-base/on-top resolution per OQ-1's ruling, as DATA (which parse is the default when the
-  evidence is one-sided; the ambiguous case ALWAYS clarifies, never resolves by default).
+- `convention` — the re-base/on-top resolution per OQ-1's ruling, as DATA (which parse is the
+  default when the evidence is one-sided; the ambiguous case ALWAYS clarifies, never resolves by
+  default). AMENDED l2t1635: this section gains the parse-precedence data and the
+  `recipeShapedReadingEvidence` section — exact prescription in §14.3.
 
 ## 6. Reviewer bait (anticipating the adversarial review — pre-empt each)
 1. exactOptionalPropertyTypes (CLAUDE.md rule 6; ProducerClarification precedent :410-417): any new optional
@@ -322,3 +363,106 @@ Expected at base: the RED leg fails (no clarifications emitted); existing
 ## 13. Open questions the composer could NOT resolve locally
 (All in §8; restated for the orchestrator: OQ-1 Brad's fractions ruling [dispatch gate], OQ-3/OQ-2 stances
 above need ratification at promotion, OQ-4 sum-note placement default.)
+
+## 14. NESTED-COMPOSITION AMENDMENT (l2t1635, from the l2t1550 amendment composer; every load-bearing
+##     claim below re-verified FIRST-HAND by the orchestrator at trunk ff319585 / code tip 6f8fb519)
+
+### 14.1 THE ONE schema change (exact prescription — nothing more)
+Audit facts (orch-verified): `schema/core/datatypes/composition-entry.schema.yaml` (40 lines) is
+`additionalProperties: false` (:8), `required: [component_ref, role]` (:9), props `component_ref`
+($ref ./ref.schema.yaml), `role` enum (:13-22), `concentration` (:23-24), `concentration_range`
+(:25-38), `source: string` (:39-40) — NO sub-composition field. That is the expressibility gap
+Brad's ruling names. In the file, append under `properties:` (sibling of `source`):
+
+    composition:
+      type: array
+      minItems: 1
+      items:
+        $ref: "#"
+
+EXACTLY this and NOTHING else: `$ref: "#"` (root self-ref — each item IS a composition-entry), NOT
+`./composition-entry.schema.yaml`, and NO `recipe_ref` property — pointing at an in-house material
+is already expressible via the existing `component_ref` (ref.schema.yaml record refs), so a second
+ref field would be redundant vocabulary (rule 7). Recursion legality (orch-verified in source, do
+not re-litigate at review): SchemaRegistry treats a ref starting `#` as local and skips it for the
+graph (isLocalRef :65-66, skip :139-141) and never adds a self-ref dependency (:151-152); Ajv is
+draft 2020-12 (`AjvValidator.ts:18` Ajv2020, `strict: true` :28) — a self-resource `$ref: "#"` is
+core 2020-12 semantics and compiles. The dependency pin `SchemaRegistry.test.ts:233-237`
+(`toEqual([ref.schema, concentration.schema])`) stays GREEN — the `#` ref is skipped. The
+`SchemaRegistry.test.ts:209-237` / `BiologicalTypesSchema.test.ts:25` /
+`ProcurementSchemaContracts.test.ts:28` pins, and consumers vendor-product.schema.yaml:55,
+recipe.schema.yaml:71-74/:117-120, material-spec.schema.yaml:80-83, plate-event.add-material:114-118
+(ALL orch-verified) validate old payloads unchanged. FIRST targeted check for the extension leg:
+`npx vitest run src/schema/SchemaRegistry.test.ts src/schema/BiologicalTypesSchema.test.ts
+src/schema/ProcurementSchemaContracts.test.ts` green with the dependency pin unchanged.
+
+The in-house medium record itself = **material-spec (MSP-*), formulation_kind: defined_composition**
+(enum member material-spec.schema.yaml:34, orch-verified), `formulation.composition` (:80-83)
+carrying the 90:10 entries — expressible TODAY. A recipe (RCP-*) requires `input_roles`+`steps`
+(recipe.schema.yaml:13, orch-verified) and is the WRONG target for a bare formulation; do not force one.
+
+### 14.2 Where the nested form lands / does NOT land (coder must not fumble this)
+- LANDS IN: the clarification `readings` data (reading 2 carries nested shape + flat view); the
+  goldens' expected RECORD layer (the medium's material-spec `formulation.composition` 90:10, and
+  optionally ONE inline `composition` on GOLDEN-A's medium snapshot entry — blessed numbers
+  identical either way; coder chooses ONE encoding, flat view must be present and correct regardless).
+- DOES NOT LAND IN: the shorthand WIRE slot scientist-intent.schema.yaml composition items
+  (:182-215, additionalProperties:false — the model emits flat entries; no wire change; §3 B
+  ratified ride unchanged); and NOT as an unconditional new field on event snapshot entries —
+  `compositionSnapshotFromParams` (simpleVerbs.ts:357-408, orch-verified emission :381-386) keeps
+  emitting exactly `{component_ref, role, concentration?, source?}`; the snapshot/app form stays
+  the FLAT 50/45/5 derived view with byte-stable OQ-4 source strings. If the inline nested medium
+  entry appears on the GOLDEN-A snapshot at all, the ONLY path permitted to introduce it is the
+  answer-driven declared-parse path applying the ruling.
+- GOLDEN-A legs: BAR leg = clarification, reason `composition-fraction-sum`, ONE clarification,
+  THREE readings, preceding-noun-recipe presented FIRST, each reading carrying computed final
+  fractions. RECORD leg (request.answer selects the in-house-recipe reading; fixtures support
+  `answers`, §7) = expected composition_snapshot FLAT entries with ratified source strings:
+  Trypsin-EDTA `source: "50% of the mixture"`, DMEM `"45% of the mixture"`, FBS
+  `"5% of the mixture"`; cells entry unchanged (roles are MIXROLE-1's ground — pin roles as the
+  current pipeline emits).
+- GOLDEN-B / GOLDEN-C wording confirmed unchanged by the ruling (B = one-sided finalVolumePhrases
+  arm re-based 45/45/10; C = explicit-on-top 50/50/10 + sum note, reading 3 of three).
+
+### 14.3 Convention-file additions (all DATA, zero reagent literals)
+- `convention:` gains: `defaultParse: preceding-noun` + `defaultParseCondition:
+  recipeShapedReadingExists` + `onGenuineAmbiguity: clarify` + `readings:
+  [whole-mixture-supplement, preceding-noun-recipe, explicit-on-top]` (ordered presentation;
+  the condition name is a KEY the TS evaluator interprets generically against the store).
+- NEW `recipeShapedReadingEvidence:` section, firesOn idiom per mixture-material-cues.yaml
+  precedent (per-cue firesOn :33-42, ratioPatterns/adjacency :44-62, zero-literals header
+  :30-32, exempt-name-matching idiom :64-93): `storeKinds: [material-spec]` +
+  `formulationKinds: [defined_composition]` (+ recipes carrying a composition, optional), a
+  `phraseMatch` rule reusing the cues whole-word-containment idiom for the component-name phrase
+  on the LEFT flank of the supplement connector, `ratioPatterns` reuse. "Recipe-shaped reading
+  exists" = a formulation-shaped STORE record whose name matches the preceding-noun phrase AND
+  that record declares its own composition — the record IS the datum; no reagent word is ever
+  written in the file. Genuine ambiguity = evidence does NOT single out one recipe-shaped record
+  -> clarify with all three readings; the default label is presentational only; resolution stays
+  with the scientist, never by confidence (a reviewer WILL grep for confidence in the new path).
+
+### 14.4 Reviewer-bait additions (extend §6)
+(i) Any reagent noun (DMEM/FBS/Trypsin/HepG2) in the convention YAML or TS is an instant fail —
+record match must be phrase-vs-store exactly like the cues `exempt:` arm. (ii) The `readings`
+enumeration is THREE; any surviving "both candidate readings" phrasing in code comments/tests is
+stale. (iii) The schema touch is ONE optional property with `$ref: "#"` — a coder who writes
+`$ref: "./composition-entry.schema.yaml"` or adds `recipe_ref` has exceeded the ruling. (iv) It IS
+a schema YAML change: §6 bait 2's background=true stack-restart note APPLIES.
+
+### 14.5 Collision re-check (composer-run, orch-endorsed)
+`git -c core.fileMode=false log --oneline -- schema/core/datatypes/composition-entry.schema.yaml`
+= exactly TWO commits ever (0b44a15b, e79406f1; orch re-ran at HEAD — confirmed). ELIG owns
+compiler/resolution + resolve + vocabulary — disjoint. FULFIL CONSUMES composition-entry via
+plate-event.add-material but does not own the datatype; an optional additive property cannot break
+FULFIL payloads. MIXROLE-1 (`deps: MIXFRAC-1`) may later touch the same file's role ENUM —
+disjoint property, sequenced behind by dependency. Collision-safe as the next coder once the
+fleet lock frees.
+
+### 14.6 Amendment composer open questions — orch rulings at promotion (l2t1635)
+1. Silent-resolve vs still-clarify on exact recipe-record match: RULED still-clarify (per the
+   ruling's own "should ask WHICH PARSE" + ambiguity-is-a-clarification doctrine; §0 lever closed).
+2. Inline nested form on GOLDEN-A snapshot vs record-layer only: RULED flat-view-always + coder
+   chooses ONE encoding of the nested form (§14.2).
+3. Vendor_product_ref record for purchased Trypsin-EDTA in GOLDEN-A's fixture: RULED fixture-
+   optional garnish, NOT required (task clauses never name vendor records; component_ref already
+   supports it). No MANIFEST garnish required.
