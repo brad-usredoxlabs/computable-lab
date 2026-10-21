@@ -866,6 +866,9 @@ export async function createServer(
       model: aiProfile.inference.model,
       ...(aiProfile.inference.apiKey ? { apiKey: aiProfile.inference.apiKey } : {}),
       ...(aiProfile.inference.temperature ? { temperature: aiProfile.inference.temperature } : {}),
+      // VPDF-4 (D2-1): the settings-declared token budget rides the chunk
+      // call — the hardcoded 8192 is gone; the budget is DATA.
+      ...(aiProfile.inference.maxTokens !== undefined ? { maxTokens: aiProfile.inference.maxTokens } : {}),
       // Thinking presets are config (data): what a level means is the serving
       // stack's business (chat_template_kwargs vs reasoning_effort).
       ...(aiProfile.inference.thinkingLevels ? { thinkingLevels: aiProfile.inference.thinkingLevels } : {}),
