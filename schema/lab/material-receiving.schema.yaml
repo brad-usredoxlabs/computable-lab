@@ -121,25 +121,18 @@ properties:
     $ref: "./attestation.schema.yaml#/$defs/AttestedAt"
 
   supersedes:
-    allOf:
-    - $ref: "./datatypes/ref.schema.yaml"
-    - type: object
-      properties:
-        kind: { const: record }
-        type: { enum: [ attestation, material-receiving ] }
-        id:
-          type: string
-          pattern: "^(ATT|RECV)-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    $ref: "./attestation.schema.yaml#/$defs/AttestationRefWidened"
     description: >
-      Q4: this receipt corrects THAT attestation/receipt. The ref shape is
-      the envelope's AttestationRef $ref (vocabulary declared once); the
-      narrowing here only widens the id pattern to RECV- so a receipt can
-      supersede a receipt OR an envelope record — a specialization of the
-      SAME ref, not a second ref vocabulary. The superseded record is never
-      rewritten or deleted (audit pattern). Supersession is NEVER a second
-      arrival: the corrected receipt replaces the superseded one 1:1 in the
-      current view (CurrentAssertionView), and the planned instance write is
-      NOT re-run by a correction. [DEFAULT-PENDING-RATIFICATION: Q4]
+      Q4: this receipt corrects THAT attestation/receipt. The widened ref
+      vocabulary (type attestation|material-receiving, id pattern covering
+      both prefixes) is declared ONCE in the envelope's
+      $defs/AttestationRefWidened and $ref'd here — never re-declared
+      inline (D3 fix: the inline allOf re-declaration was the bait-3
+      OQ-2 violation). The superseded record is never rewritten or deleted
+      (audit pattern). Supersession is NEVER a second arrival: the corrected
+      receipt replaces the superseded one 1:1 in the current view
+      (CurrentAssertionView), and the planned instance write is NOT re-run
+      by a correction. [DEFAULT-PENDING-RATIFICATION: Q4]
 
   correction:
     $ref: "./attestation.schema.yaml#/$defs/Correction"

@@ -283,5 +283,22 @@ describe('material-receiving schema triplet (§5.1)', () => {
     expect(schema).toContain('$ref: "./attestation.schema.yaml#/$defs/Correction"');
     expect(schema).toContain('$ref: "./attestation.schema.yaml#/$defs/AttestedAt"');
     expect(schema).toContain('$ref: "./attestation.schema.yaml#/$defs/Against"');
+    // D3 pin (fix-run): the WIDENED supersedes ref is declared exactly ONCE
+    // (attestation.schema.yaml $defs/AttestationRefWidened) and $ref'd from
+    // BOTH sites — envelope.supersedes AND the RECV kind. The RECV file must
+    // never re-declare the widened shape inline (the bait-3 OQ-2 violation
+    // this fix removes: no inline enum/type widening, no inline id pattern).
+    expect(schema).toContain('$ref: "./attestation.schema.yaml#/$defs/AttestationRefWidened"');
+    expect(schema).not.toMatch(/supersedes[\s\S]{0,200}enum: \[ attestation, material-receiving \]/);
+    expect(schema).not.toMatch(/supersedes[\s\S]{0,200}\^\(ATT\|RECV\)/);
+    const envelope = await readFile(join(schemaDir, 'lab/attestation.schema.yaml'), 'utf8');
+    // Declared once: the widened def exists in the envelope file exactly once
+    // and envelope.supersedes $refs it (the existing AttestationRef def stays
+    // untouched — the entry is additive-only).
+    const widenedDefHits = envelope.match(/AttestationRefWidened:/g) ?? [];
+    expect(widenedDefHits).toHaveLength(1);
+    expect(envelope).toMatch(/supersedes:\s*\$ref: "#\/\$defs\/AttestationRefWidened"/);
+    expect(envelope).toContain('AttestationRef:');
+    void lint;
   });
 });

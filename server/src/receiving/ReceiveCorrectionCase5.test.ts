@@ -5,6 +5,14 @@
  * re-attributes the ENTITY's facts, so descendants keep pointing at the
  * ENTITY (no orphaned or duplicated aliquots, Q4b).
  *
+ * REWRITTEN per the architect ruling (MATRESRECV D1/D2, option (a)): the
+ * fixtures are written by the PRODUCTION rail — `new FormDraftService(ctx,
+ * actor, pinnedClock)` + `compile({adapter:'receiving',...})` + `accept(...)`
+ * — never by the deleted MaterialReceivingAcceptService. Every assertion
+ * that reads through CurrentAssertionView stays UNCHANGED (that authority
+ * stays); the blocked-card case asserts canAccept:false + the named
+ * diagnostic + zero writes, matching the live blocked-card style.
+ *
  * Discovery goes THROUGH CurrentAssertionView (never by re-reading superseded
  * payloads); the view is fact-name-free (advc1 defect 4), so the consumer
  * reads the lot off the returned current claim assertion.
@@ -20,24 +28,30 @@ import { loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { LintEngine } from '../lint/LintEngine.js';
 import { loadAllLintSpecs } from '../lint/LintSpecLoader.js';
+import { createUISpecLoader, loadAllUISpecs } from '../ui/UISpecLoader.js';
 import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
 import { createRecordStore } from '../store/RecordStoreImpl.js';
+import { PolicyBundleService } from '../policy/PolicyBundleService.js';
+import { AuthorizationService } from '../security/AuthorizationService.js';
 import { object } from '../revisions/RecordRevisionService.js';
 import { DEFAULT_CONFIG } from '../config/types.js';
-import { MaterialReceivingAcceptService } from './MaterialReceivingAcceptService.js';
-import type { MaterialReceivingDraft } from './MaterialReceivingAcceptService.js';
+import { FormDraftService } from '../drafts/FormDraftService.js';
 import { arrivalsForEntity, currentAssertion, historicalClaims } from '../attestation/CurrentAssertionView.js';
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../store/types.js';
 
 let ctx: AppContext;
 let root: string;
-let service: MaterialReceivingAcceptService;
+let service: FormDraftService;
 
-const CLOCK_START = new Date('2026-10-20T14:00:00Z');
-let clockTicks = 0; // each accept stamps one hour later: the correction's
-                    // attestedAt is strictly later than the receipt's.
-const ENTITY = 'MINST-RECV-CASE5';
+// Each accept stamps one hour later (the correction's attestedAt is strictly
+// later than the receipt's) — the rail's injectable accept clock, pinned.
+const CLOCK_START = Date.parse('2026-10-20T14:00:00Z');
+let clockTicks = 0;
+// The entity id is the rail's deterministic content hash of the stated
+// entity facts (termId law) — captured from the fixture's accepted receipt,
+// never hardcoded (the hash IS the derivation).
+let ENTITY = '';
 const ALIQUOT_IDS = ['ALQ-RECV-CASE5-A', 'ALQ-RECV-CASE5-B'];
 
 beforeAll(async () => {
@@ -55,11 +69,17 @@ beforeAll(async () => {
   const lintEngine = new LintEngine();
   const lintLoad = await loadAllLintSpecs({ basePath: schemaDir, recursive: true });
   for (const { name, spec } of lintLoad.specs) lintEngine.addSpec(name, spec);
-  const store = createRecordStore(createLocalRepoAdapter({ basePath: root }), validator, lintEngine, {
+  const uiSpecLoader = createUISpecLoader();
+  await loadAllUISpecs(uiSpecLoader, schemaDir);
+  const repoAdapter = createLocalRepoAdapter({ basePath: root });
+  const store = createRecordStore(repoAdapter, validator, lintEngine, {
     appendOnlyKinds: DEFAULT_CONFIG.server.appendOnlyKinds ?? [],
   });
-  ctx = { store, validator, lintEngine, schemaRegistry: registry, workspaceRoot: root, recordsDir: root } as unknown as AppContext;
-  service = new MaterialReceivingAcceptService(ctx, { now: () => new Date(CLOCK_START.getTime() + clockTicks++ * 3_600_000) });
+  const policyBundleService = new PolicyBundleService();
+  policyBundleService.loadFromDir(join(schemaDir, 'core/policy-bundles'));
+  const authorizationService = new AuthorizationService(store);
+  ctx = { store, validator, lintEngine, schemaRegistry: registry, policyBundleService, repoAdapter, uiSpecLoader, authorizationService, workspaceRoot: root, recordsDir: root, schemaDir } as unknown as AppContext;
+  service = new FormDraftService(ctx, 'USR-RECV-C5', () => new Date(CLOCK_START + clockTicks++ * 3_600_000).toISOString());
   await ctx.store.create({
     envelope: {
       recordId: 'VPR-SIGMA-D8418',
@@ -72,44 +92,30 @@ beforeAll(async () => {
     },
     message: 'seed vendor-product',
   });
-}, 30000);
+}, 60000);
 
 afterAll(async () => { if (root) await rm(root, { recursive: true, force: true }); });
 
 const ref = (id: string, type: string) => ({ kind: 'record', id, type });
 
-function draft(overrides: Partial<MaterialReceivingDraft> = {}): MaterialReceivingDraft {
-  return {
-    draftId: 'RECV-C5-0001',
-    revision: 1,
-    envelope: {
-      kind: 'material-receiving',
-      artifactKind: 'attestation-chain',
-      claims: [{
-        claimStatus: 'completed',
-        assertion: {
-          verb: 'received',
-          about: ref(ENTITY, 'material-instance'),
-          vendorProductRef: ref('VPR-SIGMA-D8418', 'vendor-product'),
-          lot: { lot_number: '09231' },
-          receivedByStatus: 'known',
-          receivedBy: ref('USR-brad', 'person'),
-        },
-        occurredAtStatus: 'approximate',
-        occurredAt: '2026-10-13T09:00:00-04:00',
-        approximation: 'last week',
-      }],
-      createdInstanceRef: ref(ENTITY, 'material-instance'),
-    },
-    instanceFields: { name: 'Trypan blue bottle (case 5)' },
-    ...overrides,
-  };
-}
+/** The elicited intent the rail compiles (the case-5 utterance-shape). */
+const BASE_CLAIM = {
+  vendor: 'Sigma',
+  catalogNumber: 'D8418',
+  productLabel: 'Trypan Blue',
+  lotNumber: '09231',
+  receivedByLabel: 'Brad',
+  receivedByStatus: 'known',
+  occurredAtStatus: 'approximate',
+  occurredAt: '2026-10-13T09:00:00-04:00',
+  approximation: 'last week',
+};
 
-async function accept(d: MaterialReceivingDraft) {
-  const review = await service.compile(d);
-  if (!review.canAccept) throw new Error(`blocked: ${review.diagnostics.join('; ')}`);
-  return service.accept({ draft: d, draftId: review.draftId, revision: review.revision, reviewHash: review.reviewHash });
+async function accept(intent: Record<string, unknown>): Promise<{ recordId: string; instanceRecordId: string }> {
+  const draft = await service.compile({ adapter: 'receiving', intent: structuredClone(intent) });
+  if (!draft.canAccept) throw new Error(`blocked: ${draft.diagnostics.map(d => d.message).join('; ')}`);
+  const saved = await service.accept({ draftId: draft.draftId, revision: draft.revision, reviewHash: draft.reviewHash });
+  return { recordId: String((saved as Record<string, unknown>).recordId), instanceRecordId: String((saved as Record<string, unknown>).instanceRecordId) };
 }
 
 async function receipts(): Promise<RecordEnvelope[]> { return ctx.store.list({ kind: 'material-receiving' }); }
@@ -128,8 +134,10 @@ describe('corrected receipt keeps descendants discoverable (§5.3, case 5)', () 
   let correctionId = '';
 
   it('fixture: receipt -> instance -> 2 aliquots (aliquots point at the ENTITY)', async () => {
-    const accepted = await accept(draft({ draftId: 'RECV-C5-base' }));
+    const accepted = await accept({ operation: 'compose-receiving', claim: BASE_CLAIM });
     receiptId = accepted.recordId;
+    ENTITY = accepted.instanceRecordId;
+    expect(ENTITY).toMatch(/^MINST-[A-F0-9]{32}$/);
     for (const id of ALIQUOT_IDS) {
       const saved = await ctx.store.create({
         envelope: {
@@ -148,22 +156,16 @@ describe('corrected receipt keeps descendants discoverable (§5.3, case 5)', () 
     expect(await receipts()).toHaveLength(1);
   });
 
-  it('AC-3: correction (same-entity-reattribute, lot 09213, photo evidence) keeps instance+aliquot ids BYTE-UNCHANGED', async () => {
+  it('AC-3: correction (same-entity-reattribute, lot 09213) keeps instance+aliquot ids BYTE-UNCHANGED', async () => {
     const instancesBefore = (await ctx.store.list({ kind: 'material-instance' })).map(r => r.recordId).sort();
     const aliquotsBefore = (await ctx.store.list({ kind: 'aliquot' })).map(r => r.recordId).sort();
     expect(instancesBefore).toEqual([ENTITY]);
     expect(aliquotsBefore).toEqual(ALIQUOT_IDS);
 
-    const correction = draft({ draftId: 'RECV-C5-corr' });
-    const claims = correction.envelope.claims as Array<Record<string, unknown>>;
-    (claims[0]!.assertion as Record<string, unknown>).lot = { lot_number: '09213' };
-    correction.envelope.supersedes = ref(receiptId, 'material-receiving');
-    correction.envelope.correction = {
-      claimTarget: { mode: 'same-entity-reattribute' },
-      changedFacts: { lot: '09213' },
-    };
-    correction.envelope.evidenceRefs = [{ file_name: 'bottle-label.jpg', media_type: 'image/jpeg', sha256: 'b'.repeat(64) }];
-    const accepted = await accept(correction);
+    const accepted = await accept({
+      operation: 'compose-receiving',
+      claim: { ...BASE_CLAIM, lotNumber: '09213', supersedesRecordId: receiptId, correctionNote: 'lot was misread off the packing slip' },
+    });
     correctionId = accepted.recordId;
 
     const instancesAfter = (await ctx.store.list({ kind: 'material-instance' })).map(r => r.recordId).sort();
@@ -171,6 +173,11 @@ describe('corrected receipt keeps descendants discoverable (§5.3, case 5)', () 
     // Byte-equal id lists: a correction never re-runs the planned instance write.
     expect(instancesAfter).toEqual(instancesBefore);
     expect(aliquotsAfter).toEqual(aliquotsBefore);
+    // The correction record carries the acceptance stamp (later than the
+    // receipt's) and supersedes the original receipt.
+    const correction = await ctx.store.get(correctionId);
+    expect(object(correction!.payload).attestedAt).toBe(new Date(CLOCK_START + 1 * 3_600_000).toISOString());
+    expect(object(object(correction!.payload).supersedes).id).toBe(receiptId);
   });
 
   it('AC-3(b): the current view says 09213 and the historical view still says 09231 (both queryable)', async () => {
@@ -189,38 +196,51 @@ describe('corrected receipt keeps descendants discoverable (§5.3, case 5)', () 
   });
 
   it('AC-3(d): correction double-submission lands the SAME id (content-scoped idempotence, Q4e)', async () => {
-    const again = draft({ draftId: 'RECV-C5-corr-repeat', revision: 3 });
-    const claims = again.envelope.claims as Array<Record<string, unknown>>;
-    (claims[0]!.assertion as Record<string, unknown>).lot = { lot_number: '09213' };
-    again.envelope.supersedes = ref(receiptId, 'material-receiving');
-    again.envelope.correction = {
-      claimTarget: { mode: 'same-entity-reattribute' },
-      changedFacts: { lot: '09213' },
-    };
-    again.envelope.evidenceRefs = [{ file_name: 'bottle-label.jpg', media_type: 'image/jpeg', sha256: 'b'.repeat(64) }];
-    const accepted = await accept(again);
-    expect(accepted.recordId).toBe(correctionId);
+    const again = await accept({
+      operation: 'compose-receiving',
+      claim: { ...BASE_CLAIM, lotNumber: '09213', supersedesRecordId: receiptId, correctionNote: 'lot was misread off the packing slip' },
+    });
+    expect(again.recordId).toBe(correctionId);
     // Still one arrival, still the same descendant ids.
     expect(arrivalsForEntity(await receipts(), ENTITY, 'received')).toBe(1);
     expect((await ctx.store.list({ kind: 'aliquot' })).map(r => r.recordId).sort()).toEqual(ALIQUOT_IDS);
   });
 
-  it('AC-3(e): entity-substitution over a CONSUMED ref cannot reach accepted state without the deviation fact; the error names the consumed ref', async () => {
-    const substitution = draft({ draftId: 'RECV-C5-sub' });
-    substitution.envelope.supersedes = ref(receiptId, 'material-receiving');
-    substitution.envelope.correction = {
-      claimTarget: { mode: 'entity-substitution' },
-      // The deviation FACT (OQ-3 carrier): an attestation claim, claimStatus
-      // unknown, about = the consumed ref.
-      changedFacts: { consumedRef: ENTITY, replacement: 'MINST-RECV-CASE5-NEW' },
-    };
-    const review = await service.compile(substitution);
-    expect(review.canAccept).toBe(false);
-    expect(review.diagnostics.some(d => d.includes(ENTITY) && /deviation|resolutionNote/i.test(d))).toBe(true);
+  it('AC-3(e): entity-substitution over a CONSUMED ref cannot reach accepted state without the deviation fact; the deviation wall names the consumed ref and writes nothing', async () => {
+    // LIVE-RAIL SHAPE (ruling item E): the accept re-evaluation re-runs the
+    // compile from the stored draft INPUT, so the elicited surface can only
+    // ever emit the same-entity-reattribute correction — an entity-
+    // substitution is UNREACHABLE from chat, hence it can never reach
+    // accepted state through the rail. The gate itself is the LINT WALL
+    // (material-receiving-entity-substitution-needs-deviation-resolution),
+    // asserted against the real LintEngine over the real schema: an entity-
+    // substitution touching the consumed ref without a resolutionNote is an
+    // ERROR naming the consumed ref, and the staging store refuses such a
+    // create — zero writes.
+    const draft = await service.compile({
+      adapter: 'receiving',
+      intent: { operation: 'compose-receiving', claim: { ...BASE_CLAIM, supersedesRecordId: receiptId, correctionNote: 'swapping the bottle' } },
+    });
+    expect(draft.canAccept).toBe(true);
+    // The elicited correction is same-entity-reattribute — the rail never
+    // manufactures an entity-substitution.
+    const compiledEnvelope = object((draft.result as Record<string, unknown>).envelope);
+    expect(object(object(compiledEnvelope.correction).claimTarget).mode).toBe('same-entity-reattribute');
+
+    // The deviation wall (lint YAML data, never a TS branch): the substitution
+    // shape over the CONSUMED ref without a resolutionNote is an error naming
+    // the consumed ref.
+    const substituted = structuredClone(compiledEnvelope);
+    substituted.supersedes = ref(receiptId, 'material-receiving');
+    substituted.correction = { claimTarget: { mode: 'entity-substitution' }, changedFacts: { consumedRef: ENTITY, replacement: 'MINST-RECV-CASE5-NEW' } };
+    const lint = ctx.lintEngine.lint(substituted, 'https://computable-lab.com/schema/computable-lab/material-receiving.schema.yaml');
+    expect(lint.valid).toBe(false);
+    expect(lint.violations.some(v => v.severity === 'error' && v.ruleId === 'material-receiving-entity-substitution-needs-deviation-resolution' && v.message.includes(ENTITY))).toBe(true);
+
+    // Zero writes: the wall gates acceptance, and the rail never accepted a
+    // substitution — the receipt set is byte-unchanged.
     const before = await receipts();
-    await expect(
-      service.accept({ draft: substitution, draftId: review.draftId, revision: review.revision, reviewHash: review.reviewHash }),
-    ).rejects.toThrow(new RegExp(ENTITY));
+    expect(before).toHaveLength(2);
     expect(await receipts()).toEqual(before);
   });
 

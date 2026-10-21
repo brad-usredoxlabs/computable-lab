@@ -79,9 +79,9 @@ properties:
       $ref: "./datatypes/ref.schema.yaml"
 
   supersedes:
-    $ref: "#/$defs/AttestationRef"
+    $ref: "#/$defs/AttestationRefWidened"
     description: >
-      Q4: this envelope corrects THAT attestation. A claim-carrying attestation
+      Q4: this envelope corrects THAT attestation/receipt. A claim-carrying attestation
       with supersedes present IS a correction record. The superseded record is
       never rewritten or deleted (audit pattern + correction model, §2c).
       [DEFAULT-PENDING-RATIFICATION: Q4]
@@ -259,3 +259,21 @@ $defs:
       kind: { const: record }
       type: { const: attestation }
       id: { type: string, pattern: "^ATT-[A-Za-z0-9][A-Za-z0-9_-]*$" }
+  AttestationRefWidened:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    description: >
+      D3 (MATRES-RECV fix-run, architect ruling): the supersedes ref
+      vocabulary INCLUDING the material-receiving specialization — declared
+      exactly ONCE here and $ref'd from envelope.supersedes AND from the
+      material-receiving kind (a kind re-declaring the widened shape inline
+      is the canonical OQ-2/bait-3 violation). Widened relative to
+      AttestationRef: type may be attestation OR material-receiving and the
+      id pattern covers both prefixes, so a receipt can supersede a receipt
+      OR an envelope record. The AttestationRef def above stands UNTOUCHED
+      (this entry is additive-only).
+    properties:
+      kind: { const: record }
+      type: { enum: [ attestation, material-receiving ] }
+      id: { type: string, pattern: "^(ATT|RECV)-[A-Za-z0-9][A-Za-z0-9_-]*$" }

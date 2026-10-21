@@ -30,9 +30,12 @@
  *   (supersedesRecordId) reads the entity id from the SUPERSEDED receipt:
  *   a correction never mints a second instance (never a second arrival).
  * - occurredAt is ONLY ever the date the scientist stated; the server never
- *   synthesizes it (r2 §1). attestedAt is server-stamped from the draft's
- *   audit clock (the FormDraftService `now` callback — deterministic, so the
- *   reviewHash reproduces at the accept re-evaluation).
+ *   synthesizes it (r2 §1). RATIFIED posture (architect ruling MATRESRECV
+ *   D1/D2, option (a)): ABSENT-BEFORE-ACCEPT — the compile output (the draft
+ *   envelope) carries NO attestedAt at all; the accepted receipt's attestedAt
+ *   is the server's ACCEPTANCE time, stamped by the receiving adapter's
+ *   onAccept hook from the rail's accept clock (attestedAt is when the
+ *   acceptance happened; occurredAt is when the fact occurred, Q8).
  * - exactOptionalPropertyTypes (server/tsconfig.json:13): optional fields are
  *   absent-or-value via the conditional-spread idiom.
  */
@@ -41,7 +44,7 @@ import type { RecordStore, RecordEnvelope } from '../store/types.js';
 import { contentHash, object } from '../revisions/RecordRevisionService.js';
 import { canonicalReadStore } from '../drafts/workstateCompile.js';
 import type { AppContext } from '../server.js';
-import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID, alreadyReceivedDiagnostic, receivingRecordIdOf } from './MaterialReceivingAcceptService.js';
+import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID, alreadyReceivedDiagnostic, receivingRecordIdOf } from './receivingIdentity.js';
 
 // ============================================================================
 // The compile-side authority for the elicited receiving envelope — the twin
@@ -116,27 +119,23 @@ export interface ReceivingCompileDeps {
    *  product) instead of only the structural diagnostic. The same walls fire
    *  again at the staging create and at the accept re-evaluation. */
   lint: (payload: Record<string, unknown>, schemaId: string) => { valid: boolean; violations: Array<{ ruleId: string; severity: string; message: string }> };
-  /** The server audit clock for attestedAt (the FormDraftService `now`
-   *  callback = draft.createdAt: deterministic, so the accept-time
-   *  re-evaluation reproduces the same staged writes and reviewHash). */
-  clock: () => string;
 }
 
-export function receivingDepsFromContext(ctx: AppContext, clock: () => string): ReceivingCompileDeps {
+export function receivingDepsFromContext(ctx: AppContext): ReceivingCompileDeps {
   return {
     canonical: canonicalReadStore(ctx),
     validate: (doc, schemaId) => ctx.validator.validate(doc, schemaId),
     validateWithSchema: (doc, schema) => ctx.validator.validateWithSchema(doc, schema as never),
     lint: (payload, schemaId) => ctx.lintEngine.lint(payload, schemaId),
-    clock,
   };
 }
 
 export interface CompiledReceivingDraft {
   ok: boolean;
   diagnostics: string[];
-  /** The draft-state attestation envelope (schema-shaped; attestedAt is the
-   *  server audit stamp, occurredAt is ONLY the scientist's stated date). */
+  /** The draft-state attestation envelope (schema-shaped; NO attestedAt —
+   *  absent-before-accept is ratified: the accept hook stamps the acceptance
+   *  time; occurredAt is ONLY the scientist's stated date). */
   envelope?: Record<string, unknown>;
   /** The planned material-instance payload (rides the EXISTING schema —
    *  material-instance.schema.yaml is NOT touched by this item). */
@@ -150,6 +149,20 @@ export interface CompiledReceivingDraft {
    *  instance write is NOT staged (supersession is never a second arrival —
    *  the entity already exists; §7 bait 9). */
   isCorrection: boolean;
+  /** True when the deterministic id names a record the durable store ALREADY
+   *  holds with content equal modulo the server's acceptance stamp (ruling
+   *  item B: "if a store lookup shows the receipt already exists with content
+   *  equal modulo attestedAt, that IS the accepted form"). The adapter then
+   *  skips the staged receipt create; the rail's volatile-field prior-
+   *  comparison treats the prior as already accepted (no second gate, no
+   *  second record — AC-2(ii)). Read via the canonical LIST view (the repo
+   *  scan, never the staging proxy's get) so it pins nothing in the
+   *  reviewHash's read set and the accept re-evaluation reproduces it. */
+  alreadyAcceptedForm?: boolean;
+  /** True when the entity record the receipt would create already exists
+   *  durably (create-if-absent identity: a re-draft never re-mints the
+   *  instance; the entity already arrived). */
+  durableInstanceExists?: boolean;
 }
 
 function trimmed(v: unknown): string | undefined {
@@ -329,12 +342,14 @@ export async function compileReceivingIntent(
     artifactKind: 'attestation-chain',
     claims: [claimObj],
     createdInstanceRef: { kind: 'record', type: 'material-instance', id: instanceRecordId },
-    // attestedAt: server-stamped from the draft audit clock (never model-
-    // supplied, never derived from occurredAt). AC-4's shape: attestedAt is
-    // the server's stamp; occurredAt is the scientist's stated date (or
+    // ABSENT-BEFORE-ACCEPT (ratified, architect ruling MATRESRECV D1/D2):
+    // the draft envelope carries NO attestedAt — the compile output is the
+    // scientist's claim content only. The accepted receipt's attestedAt is
+    // the server's ACCEPTANCE stamp, added by the receiving adapter's
+    // onAccept hook at accept time (never model-supplied, never derived
+    // from occurredAt). occurredAt remains the scientist's stated date (or
     // ABSENT with status unknown) — presence-shape + value-inequality-when-
-    // present, never an accident.
-    attestedAt: deps.clock(),
+    // present on the ACCEPTED record, never an accident.
     ...(claim.supersedesRecordId !== undefined
       ? {
           supersedes: { kind: 'record', type: 'material-receiving', id: claim.supersedesRecordId },
@@ -364,13 +379,25 @@ export async function compileReceivingIntent(
 
   const isCorrection = claim.supersedesRecordId !== undefined;
 
-  // The SAME exported id formula the accept service uses (one derivation,
+  // The SAME exported id formula the accept rail uses (one derivation,
   // never two): content-scoped, attestedAt- and recordId-excluded (an id
   // never hashes itself). Embedded in the payload BEFORE validation: the
   // schema declares recordId as required (the recordDraftCompile precedent
   // embeds the derived id the same way).
   const recordId = receivingRecordIdOf(envelope);
   envelope.recordId = recordId;
+
+  // Idempotence lookup (ruling item B): "if a store lookup shows the receipt
+  // already exists with content equal modulo attestedAt, that IS the accepted
+  // form". Read through the canonical LIST view (the repo scan) — never the
+  // staging proxy's get — so the lookup pins NOTHING in the reviewHash's
+  // read set and the accept re-evaluation reproduces the same flags.
+  const durableReceipts = await deps.canonical.list({ kind: 'material-receiving' });
+  const durableReceipt = durableReceipts.find(r => r.recordId === recordId);
+  const alreadyAcceptedForm = durableReceipt !== undefined
+    && durableReceipt.schemaId === MATERIAL_RECEIVING_SCHEMA_ID
+    && contentHash(Object.fromEntries(Object.entries(object(durableReceipt.payload)).filter(([key]) => key !== 'attestedAt'))) === contentHash(envelope);
+  const durableInstanceExists = (await deps.canonical.list({ kind: 'material-instance' })).some(r => r.recordId === instanceRecordId);
 
   // Structural authority (Ajv) on both planned payloads. The lint walls fire
   // at the staging-store create (the REAL validate + lint run there); a
@@ -391,18 +418,22 @@ export async function compileReceivingIntent(
     if (violation.severity === 'error') diagnostics.push(`${violation.ruleId}: ${violation.message}`);
   }
 
-  // The SHARED already-received gate (one implementation with the accept
-  // service, never a second copy): a fresh elicitation about an entity that
-  // already has a CURRENT receipt is refused with the named correction-or-
-  // distinct-arrival diagnostic — idempotent-or-supersession at the card.
-  const already = await alreadyReceivedDiagnostic(deps.canonical, instanceRecordId, claim.supersedesRecordId !== undefined);
+  // The SHARED already-received gate (one implementation, never a second
+  // copy): a fresh elicitation about an entity that already has a CURRENT
+  // receipt is refused with the named correction-or-distinct-arrival
+  // diagnostic — idempotent-or-supersession at the card. The gate routes
+  // through CurrentAssertionView (D4: one fold, one authority) and exempts
+  // the idempotent case: this draft's own deterministic id IS the current
+  // receipt's id when the content is identical (a re-draft lands the SAME
+  // record, never a second arrival).
+  const already = await alreadyReceivedDiagnostic(deps.canonical, instanceRecordId, claim.supersedesRecordId !== undefined, recordId);
   if (already !== null) diagnostics.push(already);
 
   if (diagnostics.length > 0) {
     // Structural failure: the card is blocked; the scientist's words survive
     // verbatim in the stored draft input (FormDraftService stores
     // input.intent untouched).
-    return { ok: false, diagnostics, envelope, instancePayload, recordId, instanceRecordId, reads, isCorrection };
+    return { ok: false, diagnostics, envelope, instancePayload, recordId, instanceRecordId, reads, isCorrection, alreadyAcceptedForm, durableInstanceExists };
   }
-  return { ok: true, diagnostics, envelope, instancePayload, recordId, instanceRecordId, reads, isCorrection };
+  return { ok: true, diagnostics, envelope, instancePayload, recordId, instanceRecordId, reads, isCorrection, alreadyAcceptedForm, durableInstanceExists };
 }
