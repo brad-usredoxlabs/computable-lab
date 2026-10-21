@@ -525,7 +525,12 @@ export const DEFAULT_CONFIG: AppConfig = {
       enabled: true,
       origins: ['*'],
     },
-    appendOnlyKinds: ['audit-event', 'signature', 'vendor-protocol-candidate'],
+    // VPDF-3 (OQ-1, Brad 2026-10-20 ruling): re-extraction UPDATES the candidate
+    // in place, so the candidate kind leaves the append-only DATA list — the wall
+    // changes through this list, never through a kind-branch in TypeScript.
+    // Governance kinds (audit-event, signature) stay walled. Extraction remains
+    // the SOLE writer of vendor-protocol-candidate records.
+    appendOnlyKinds: ['audit-event', 'signature'],
     revisionOnEditKinds: ['extraction-draft'],
   },
   schemas: {
