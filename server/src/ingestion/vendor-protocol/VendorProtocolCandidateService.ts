@@ -7,6 +7,7 @@ import {
   extractVendorProtocolCandidate,
 } from './VendorProtocolPdf.js';
 import type { ProtocolCandidate, VendorProtocolDocument } from './types.js';
+import type { RecordStore } from '../../store/types.js';
 
 export interface ExtractVendorProtocolCandidateInput {
   workspaceRoot: string;
@@ -186,4 +187,249 @@ function safeFileName(value: string): string {
   const key = artifactKey(value);
   if (key.length <= 100) return key;
   return `${key.slice(0, 80)}-${createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
+}
+
+// ---------------------------------------------------------------------------
+// VPDF-3 — the RECORD side of the candidate (store upsert-by-documentId).
+//
+// The filesystem artifact above is the intake runner's read path; the record
+// is the SAID the review surface joins on. Extraction remains the SOLE writer
+// of vendor-protocol-candidate records (rung-vocabulary VENDOR mints_on): the
+// mint goes through store.create with validation ON — POST /records cannot
+// mint this kind (the handler's FAIR stamping collides with the closed
+// schema; recorded finding in Wave2SemanticPassE2E). Re-extract UPDATES the
+// existing record in place (Brad 2026-10-20 ruling; the append-only wall
+// dropped this kind through its DATA list, OQ-1).
+// ---------------------------------------------------------------------------
+
+export const VPC_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml';
+
+/**
+ * Deterministic candidate record id: sha256 over the documentId — one candidate
+ * per document BY CONSTRUCTION. Never Date.now(): a retry must not accumulate.
+ * Matches the semantic-draft route's `^CAN-[A-Za-z0-9_-]+$` gate.
+ */
+export function candidateRecordIdForDocument(documentId: string): string {
+  return `CAN-vendorpdf-${createHash('sha256').update(documentId).digest('hex').slice(0, 16)}`;
+}
+
+/** Structural mirror of the stream handler's merged AI chunk summary (the
+ *  adapter's input; kept here so the service owns the candidate shape). */
+export interface AiChunkCandidateSummary {
+  kind?: string;
+  title?: string;
+  scope?: string;
+  materials?: Array<{ label: string; role?: string; confidence?: number }>;
+  labware?: Array<{ label: string; role?: string }>;
+  equipment?: Array<{ label: string }>;
+  steps?: Array<{
+    stepNumber?: number;
+    text: string;
+    materials?: string[];
+    labware?: string[];
+    equipment?: string[];
+    notes?: string[];
+    confidence?: number;
+  }>;
+  diagnostics?: Array<{ code: string; severity: 'info' | 'warning' | 'error'; message: string }>;
+}
+
+export interface CandidateRecordSourceMeta {
+  documentId: string;
+  filename: string;
+  pageCount: number;
+  vendor?: string;
+  /** Title fallback: the VPDF record's own title, never 'Untitled Protocol'. */
+  fallbackTitle: string;
+}
+
+/** Declared honesty marker (OQ-2): AI chunk extraction anchors facts at the
+ *  document level; pageStart:1 is a conservative floor, not an observed page. */
+export const AI_CHUNK_ANCHORS_APPROXIMATE = 'AI_CHUNK_ANCHORS_APPROXIMATE';
+
+function clampConfidence(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
+}
+
+/**
+ * Pure adapter: AI chunk summary → schema-legal vendor-protocol-candidate
+ * payload (vendor-protocol-candidate.schema.yaml, additionalProperties:false,
+ * steps minItems 1). The schema is NOT loosened for the adapter.
+ *
+ * OQ-2 (adopted): every fact carries the document-level anchor the VENDOR
+ * rung's lineage requires (provenance.documentId = the real VPDF documentId)
+ * plus pageStart:1 as a DECLARED conservative floor — the chunk stream merges
+ * per-chunk JSON with no per-page offsets, so no page is ever fabricated
+ * beyond that floor. The floor is announced by the AI_CHUNK_ANCHORS_APPROXIMATE
+ * diagnostic, which SaidFactsPane renders honestly.
+ */
+export function adaptAiChunkCandidateToRecordPayload(
+  summary: AiChunkCandidateSummary,
+  meta: CandidateRecordSourceMeta,
+): Record<string, unknown> {
+  const provenance = { documentId: meta.documentId, pageStart: 1 };
+  const steps = (summary.steps ?? []).map((step, i) => {
+    const stepNumber = typeof step.stepNumber === 'number' && step.stepNumber >= 1 ? step.stepNumber : i + 1;
+    const sourceText = step.text ?? '';
+    return {
+      id: `step-${stepNumber}`,
+      stepNumber,
+      sourceText,
+      actions: [{ actionKind: 'other' as const, sourceText, provenance: { ...provenance } }],
+      conditions: {},
+      materials: step.materials ?? [],
+      labware: step.labware ?? [],
+      equipment: step.equipment ?? [],
+      notes: step.notes ?? [],
+      branches: [],
+      provenance: { ...provenance },
+      confidence: clampConfidence(step.confidence),
+    };
+  });
+  const extractedItems = (
+    items: Array<{ label: string; role?: string; confidence?: number }> | undefined,
+    prefix: string,
+  ) => (items ?? []).map((item, i) => ({
+    id: `${prefix}-${i + 1}`,
+    label: item.label,
+    // The model's label IS the extracted text for a chunk candidate.
+    sourceText: item.label,
+    provenance: { ...provenance },
+    confidence: clampConfidence(item.confidence),
+    ...(item.role ? { role: item.role } : {}),
+  }));
+  return {
+    kind: 'vendor-protocol-candidate',
+    source: {
+      documentId: meta.documentId,
+      filename: meta.filename,
+      ...(meta.vendor ? { vendor: meta.vendor } : {}),
+      pageCount: meta.pageCount,
+    },
+    title: summary.title?.trim() || meta.fallbackTitle,
+    ...(summary.scope?.trim() ? { scope: summary.scope } : {}),
+    sections: [],
+    materials: extractedItems(summary.materials, 'mat'),
+    equipment: extractedItems(summary.equipment, 'eq'),
+    labware: extractedItems(summary.labware, 'lw'),
+    steps,
+    tables: [],
+    notes: [],
+    outputs: [],
+    diagnostics: [
+      ...(summary.diagnostics ?? []),
+      {
+        severity: 'warning' as const,
+        code: AI_CHUNK_ANCHORS_APPROXIMATE,
+        message: 'Page anchors are document-level under AI chunk extraction: provenance.pageStart is a conservative floor (1), not an observed page.',
+      },
+    ],
+  };
+}
+
+async function findCandidateRecordForDocument(
+  store: RecordStore,
+  documentId: string,
+): Promise<{ recordId: string; schemaId: string } | null> {
+  const candidates = await store.list({ kind: 'vendor-protocol-candidate' });
+  for (const env of candidates) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    const source = payload?.source as Record<string, unknown> | undefined;
+    if (source?.documentId === documentId) return { recordId: env.recordId, schemaId: env.schemaId };
+  }
+  return null;
+}
+
+export interface UpsertCandidateRecordInput {
+  store: RecordStore;
+  documentId: string;
+  summary: AiChunkCandidateSummary;
+  sourceMeta: CandidateRecordSourceMeta;
+  message: string;
+}
+
+export type UpsertCandidateRecordResult =
+  | { ok: true; recordId: string; updatedExisting: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Upsert-by-documentId (built new — VendorProtocolCandidateService had no
+ * store persist to reuse, Recon §d). None → store.create the deterministic
+ * CAN-vendorpdf-<hash> id; existing → store.update the SAME recordId with the
+ * new payload. Validation/lint stay ON (skipValidation is banned in this leg:
+ * a candidate that fails validation must fail honestly).
+ */
+export async function upsertVendorProtocolCandidateRecord(
+  input: UpsertCandidateRecordInput,
+): Promise<UpsertCandidateRecordResult> {
+  const payload = adaptAiChunkCandidateToRecordPayload(input.summary, input.sourceMeta);
+  const existing = await findCandidateRecordForDocument(input.store, input.documentId);
+  if (existing) {
+    const result = await input.store.update({
+      envelope: { recordId: existing.recordId, schemaId: existing.schemaId, payload },
+      message: input.message,
+    });
+    if (!result.success) return { ok: false, error: result.error ?? 'candidate update failed' };
+    return { ok: true, recordId: existing.recordId, updatedExisting: true };
+  }
+  const recordId = candidateRecordIdForDocument(input.documentId);
+  const result = await input.store.create({
+    envelope: { recordId, schemaId: VPC_SCHEMA_ID, payload },
+    message: input.message,
+  });
+  if (!result.success) return { ok: false, error: result.error ?? 'candidate create failed' };
+  return { ok: true, recordId, updatedExisting: false };
+}
+
+/** The ONE staleness mechanism (D2): a data flag written at re-extract time.
+ *  The UI only READS it — no recomputation, no timestamps to disagree. */
+export const CANDIDATE_SUPERSEDED_BY_REEXTRACT = 'CANDIDATE_SUPERSEDED_BY_REEXTRACT';
+
+/**
+ * Flag every non-promoted extraction-draft joined to this document that its
+ * candidate was superseded by a re-extract. Dedupe by code: two re-extracts
+ * against one XDR yield ONE diagnostic, never accumulated copies.
+ *
+ * Honesty note (spec D2): this is a service-level store.update, so it does
+ * NOT capture a record-revision — revisionOnEditKinds fires in the API handler
+ * layer. That is acceptable for an append-only diagnostic; no second revision
+ * path is invented.
+ */
+export async function flagDraftsSupersededByReextract(
+  store: RecordStore,
+  documentId: string,
+  candidateRecordId: string,
+  supersededAt: string,
+): Promise<number> {
+  const drafts = await store.list({ kind: 'extraction-draft' });
+  let flagged = 0;
+  for (const env of drafts) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    if (!payload || payload.kind !== 'extraction-draft') continue;
+    if (payload.status === 'promoted') continue;
+    const source = payload.source_artifact as Record<string, unknown> | undefined;
+    if (!source || source.id !== documentId) continue;
+    const diagnostics = Array.isArray(payload.diagnostics)
+      ? (payload.diagnostics as Array<Record<string, unknown>>)
+      : [];
+    if (diagnostics.some((d) => d?.code === CANDIDATE_SUPERSEDED_BY_REEXTRACT)) continue;
+    const nextPayload = {
+      ...payload,
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: 'warning' as const,
+          code: CANDIDATE_SUPERSEDED_BY_REEXTRACT,
+          message: 'The candidate this draft was built from was re-extracted — re-run the semantic pass to refresh it.',
+          details: { candidateRecordId, supersededAt },
+        },
+      ],
+    };
+    const result = await store.update({
+      envelope: { recordId: env.recordId, schemaId: env.schemaId, payload: nextPayload },
+      message: `VPDF-3: candidate ${candidateRecordId} re-extracted — flagged draft ${env.recordId} as built from a superseded candidate`,
+    });
+    if (result.success) flagged++;
+  }
+  return flagged;
 }

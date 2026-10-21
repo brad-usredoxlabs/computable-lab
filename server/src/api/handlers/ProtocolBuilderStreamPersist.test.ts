@@ -247,7 +247,7 @@ describe('VPDF-3 probe: the mint path and the append-only wall (R1/R2)', () => {
       message: 'probe: update-in-place (Brad 2026-10-20 ruling)',
     });
     expect(updated.success, updated.error).toBe(true);
-    const stored = await ctx.store.get('CAN-vpdf3-probe');
+    const stored = await ctx.store.get('CAN-vpdf3-probe-update');
     expect((stored!.payload as Record<string, unknown>).title).toBe('Probe candidate v2');
   });
 

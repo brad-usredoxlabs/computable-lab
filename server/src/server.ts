@@ -872,6 +872,9 @@ export async function createServer(
       ...(aiProfile.inference.defaultThinkingLevel ? { defaultThinkingLevel: aiProfile.inference.defaultThinkingLevel } : {}),
     } : undefined,
     pbOrchestratorRef,
+    // VPDF-3 (D1): the review route's stream persists its candidate through
+    // the same store the record API walls read.
+    ctx.store,
   );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
