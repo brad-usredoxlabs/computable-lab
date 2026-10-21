@@ -49,6 +49,8 @@ import type { RecordStore } from '../../store/types.js';
 const VPC_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml';
 const XDR_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml';
 const VPDF_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml';
+const AUDIT_EVENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/audit-event.schema.yaml';
+const SIGNATURE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/signature.schema.yaml';
 
 const VPDF_ID = 'VPDF-VPDF3-DEMO';
 const CAN_ID = `CAN-vendorpdf-${createHash('sha256').update(VPDF_ID).digest('hex').slice(0, 16)}`;
@@ -252,14 +254,71 @@ describe('VPDF-3 probe: the mint path and the append-only wall (R1/R2)', () => {
   });
 
   it('governance kinds stay walled: audit-event and signature answer APPEND_ONLY (the pair beside the dropped kind)', async () => {
-    const auditKind = await ctx.store.list({ kind: 'audit-event' });
-    // Mint nothing new — the wall is evaluated from the DATA list; assert the
-    // list itself (the knob is data, bait 4).
+    // The knob is DATA (bait 4): the wall's config-injected half is the list.
     const { DEFAULT_CONFIG } = await import('../../config/types.js');
     expect(DEFAULT_CONFIG.server.appendOnlyKinds).toContain('audit-event');
     expect(DEFAULT_CONFIG.server.appendOnlyKinds).toContain('signature');
     expect(DEFAULT_CONFIG.server.appendOnlyKinds).not.toContain('vendor-protocol-candidate');
-    expect(auditKind.length).toBeGreaterThanOrEqual(0);
+
+    // OQ-1 regression pin: the wall is EXERCISED, not merely listed. Both
+    // governance records are minted through the REAL store (create has no
+    // append-only wall — only update/delete do), then a real update AND a real
+    // delete are attempted against them on the same store the persist arms use.
+    // If the governance pair ever leaves the wall (the DATA list or the
+    // store-level backstop), these arms go RED.
+    const auditEnv = {
+      recordId: 'EVT-VPDF3-GOVERNANCE',
+      schemaId: AUDIT_EVENT_SCHEMA_ID,
+      payload: {
+        kind: 'audit-event',
+        recordId: 'EVT-VPDF3-GOVERNANCE',
+        actor: 'USR-VPDF3-TESTER',
+        action: 'record_created',
+        subjectType: 'vendor-pdf',
+        subjectId: VPDF_ID,
+        occurredAt: '2026-10-20T00:00:00.000Z',
+        data: { note: 'VPDF-3 governance wall pin' },
+      },
+    };
+    const signatureEnv = {
+      recordId: 'SIG-VPDF3-GOVERNANCE',
+      schemaId: SIGNATURE_SCHEMA_ID,
+      payload: {
+        kind: 'signature',
+        recordId: 'SIG-VPDF3-GOVERNANCE',
+        signedBy: 'USR-VPDF3-TESTER',
+        action: 'approved',
+        meaning: { code: 'approved', statement: 'VPDF-3 governance wall pin' },
+        subject: { recordId: VPDF_ID },
+        signedAt: '2026-10-20T00:00:00.000Z',
+        authentication: { method: 'password_reauthentication' },
+      },
+    };
+    for (const env of [auditEnv, signatureEnv]) {
+      const minted = await ctx.store.create({ envelope: env, message: `seed ${env.recordId} for the governance wall arm` });
+      expect(minted.success, minted.error).toBe(true);
+    }
+
+    for (const env of [auditEnv, signatureEnv]) {
+      const tampered = await ctx.store.update({
+        envelope: { ...env, payload: { ...env.payload, ...(env.payload.kind === 'audit-event' ? { action: 'record_updated' } : {}) } },
+        message: `tamper attempt on ${env.recordId} (must be refused)`,
+      });
+      expect(tampered.success, `${env.payload.kind} update must be refused`).toBe(false);
+      expect(String(tampered.error)).toContain('APPEND_ONLY');
+
+      const removed = await ctx.store.delete({ recordId: env.recordId, message: `delete attempt on ${env.recordId} (must be refused)` });
+      expect(removed.success, `${env.payload.kind} delete must be refused`).toBe(false);
+      expect(String(removed.error)).toContain('APPEND_ONLY');
+
+      // Append-only means the record is still there, unchanged.
+      const stored = await ctx.store.get(env.recordId);
+      expect(stored, `${env.recordId} must survive the refused write`).not.toBeNull();
+      expect((stored!.payload as Record<string, unknown>).kind).toBe(env.payload.kind);
+    }
+
+    expect((await ctx.store.list({ kind: 'audit-event' })).some((r) => r.recordId === auditEnv.recordId)).toBe(true);
+    expect((await ctx.store.list({ kind: 'signature' })).some((r) => r.recordId === signatureEnv.recordId)).toBe(true);
   });
 });
 

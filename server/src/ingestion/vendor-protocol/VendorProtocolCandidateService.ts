@@ -377,7 +377,26 @@ export async function upsertVendorProtocolCandidateRecord(
     envelope: { recordId, schemaId: VPC_SCHEMA_ID, payload },
     message: input.message,
   });
-  if (!result.success) return { ok: false, error: result.error ?? 'candidate create failed' };
+  if (!result.success) {
+    // Concurrent first-mint race: two extracts both missed the list and both
+    // reached store.create for the SAME deterministic id; the loser gets
+    // 'Record already exists'. That is not a persist failure — the winner's
+    // record IS the candidate for this document. Re-list and update the
+    // winner in place (updatedExisting: true, so the supersede/staleness leg
+    // fires honestly). Deterministic id and the sole-writer contract are kept.
+    if (/already exists/i.test(result.error ?? '')) {
+      const winner = await findCandidateRecordForDocument(input.store, input.documentId);
+      if (winner) {
+        const retry = await input.store.update({
+          envelope: { recordId: winner.recordId, schemaId: winner.schemaId, payload },
+          message: input.message,
+        });
+        if (!retry.success) return { ok: false, error: retry.error ?? 'candidate update failed' };
+        return { ok: true, recordId: winner.recordId, updatedExisting: true };
+      }
+    }
+    return { ok: false, error: result.error ?? 'candidate create failed' };
+  }
   return { ok: true, recordId, updatedExisting: false };
 }
 
