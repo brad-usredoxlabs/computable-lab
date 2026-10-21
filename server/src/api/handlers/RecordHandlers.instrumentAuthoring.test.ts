@@ -423,7 +423,7 @@ describe('QMS8-B update leg fires only on declared guardWhenChanged keys', () =>
 
 describe('QMS8-B role-grant guard stays bundle-blind (no gateOnPolicySetting)', () => {
   it('role-grant lint declares NO gateOnPolicySetting (privilege guard never sleeps)', () => {
-    expect(roleGrantLint.authoring.guardOnPolicySetting).toBeUndefined();
+    expect(roleGrantLint.authoring.gateOnPolicySetting).toBeUndefined();
   });
 
   it('under authoringGate:allow, a non-admin create of a role-grant STILL 403s GRANT_FORBIDDEN', async () => {
