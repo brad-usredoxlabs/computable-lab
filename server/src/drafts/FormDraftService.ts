@@ -32,7 +32,13 @@ export interface CompiledDraft extends CompilationResult {
 const adapters = () => (parse(readFileSync(new URL('../../../config/drafting/adapters.yaml', import.meta.url),'utf8')) as {adapters:Record<string,AdapterSpec>}).adapters;
 
 export class FormDraftService {
-  constructor(private ctx: AppContext, private actor: string) {}
+  // The accept clock (architect ruling MATRESRECV D1/D2, item A.3): passed
+  // to an adapter's onAccept hook as ONE value per accept, so an accept-time
+  // stamp (attestedAt) is the acceptance time, not a compile artifact. The
+  // injectable-clock precedent is lab-sync/outbound/mint.ts:38. The default
+  // preserves today's behavior byte-for-byte for every adapter WITHOUT the
+  // hook (no adapter without onAccept ever reads this clock).
+  constructor(private ctx: AppContext, private actor: string, private clock: () => string = () => new Date().toISOString()) {}
   private async authorizedRead(id:string) {
     const record=await this.ctx.store.get(id);
     if(!record)throw new DraftError(`Source ${id} changed or was removed.`,409);
@@ -178,17 +184,47 @@ export class FormDraftService {
       if(!adapter || !adapter.operations.includes(String(draft.input.intent.operation))) throw new DraftError('Draft adapter is no longer available.');
       const compiled=await this.evaluate(draft,adapter,new Set(draft.compiled.writes.map(w=>w.recordId)));
       if(!compiled.canAccept || compiled.reviewHash!==body.reviewHash) throw new DraftError('Draft or policy changed. Recompile and review before accepting.',409);
-      for(const write of compiled.writes){
+      // Adapter-level accept-time composition (architect ruling MATRESRECV
+      // D1/D2 option (a)): the generic loop ASKS the adapter — invoked iff
+      // the adapter declares the hook; no `adapter ===` or `kind ===` branch
+      // participates. acceptNow is ONE clock value per accept (the injectable
+      // ctor clock), so an accept-time stamp (attestedAt) is the acceptance
+      // time, never a compile artifact. The hook returns the plan the loop
+      // writes plus the per-record volatile-field exemptions (payload keys
+      // exempt from the prior-content comparison — the exemption set comes
+      // FROM the hook, never inferred generically). Adapters WITHOUT the
+      // hook keep byte-identical behavior (writes unchanged, exemptions
+      // empty, the clock never read).
+      const authoring = draftAdapters[draft.input.adapter]!;
+      let writes = compiled.writes;
+      let volatile: Record<string,string[]> = {};
+      if(authoring.onAccept){
+        const outcome = await authoring.onAccept(compiled.writes,this.clock(),this.ctx.store);
+        writes = outcome.writes;
+        volatile = outcome.volatileFields ?? {};
+      }
+      // Prior-content comparison over each record's payload with its
+      // volatileFields keys stripped from BOTH sides: prior-exists-equal-
+      // modulo-volatile => already accepted (the create is skipped below,
+      // the owner policy is kept) — idempotence, AC-2(ii).
+      const comparable=(payload:unknown,recordId:string)=>{
+        const exempt=volatile[recordId];
+        const copy={...object(payload)};
+        if(!exempt || exempt.length===0)return copy;
+        for(const key of exempt)delete copy[key];
+        return copy;
+      };
+      for(const write of writes){
         const prior=await this.ctx.store.get(write.recordId);
-        if(prior && (prior.schemaId!==write.schemaId || contentHash(prior.payload)!==contentHash(write.payload)))throw new DraftError(`Record ${write.recordId} changed during save.`,409);
+        if(prior && (prior.schemaId!==write.schemaId || contentHash(comparable(prior.payload,write.recordId))!==contentHash(comparable(write.payload,write.recordId))))throw new DraftError(`Record ${write.recordId} changed during save.`,409);
       }
       // No writes until the entire plan has passed schema/lint/policy validation again.
       await this.persist({...draft,status:'incomplete'},env);
       ({env,draft}=await this.read(id));
       try {
-        for(const write of compiled.writes){
+        for(const write of writes){
           const prior=await this.ctx.store.get(write.recordId);
-          if(prior && (prior.schemaId!==write.schemaId || contentHash(prior.payload)!==contentHash(write.payload))) throw new DraftError(`Record ${write.recordId} changed during save.`,409);
+          if(prior && (prior.schemaId!==write.schemaId || contentHash(comparable(prior.payload,write.recordId))!==contentHash(comparable(write.payload,write.recordId)))) throw new DraftError(`Record ${write.recordId} changed during save.`,409);
           if(!prior){
             const saved=await this.ctx.store.create({envelope:write,message:`Accept draft ${id}`});
             if(!saved.success) throw new DraftError(saved.error??`Could not save ${write.recordId}`);

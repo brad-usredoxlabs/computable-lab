@@ -601,7 +601,9 @@ actions:
       'workspace_action', 'compose_workstate', 'compose_analysis',
       'query_workstate_history', 'event_shorthand',
       // QMS7-7 (DELIBERATE golden diff): compose_record_draft on the ONE forced tool.
+      // MATRES-RECV (OQ-2 RATIFIED): compose_receiving on the SAME forced tool.
       'compose_record_draft',
+      'compose_receiving',
     ]);
     expect(params.properties.shorthand?.type).toBe('string');
     const parsed = parseAgentIntentArgs({ intent: 'event_shorthand', shorthand: ADD_DMEM_YAML });

@@ -1,0 +1,130 @@
+# UI specification for Material Receiving records (MATRES-RECV §2a).
+# The review-card field projection is read from THIS file, never TS literals
+# (recordDraftCompile.ts: UI_SPEC_MISSING is the named diagnostic). Field
+# labels + select option vocabulary as DATA (ui-v1 conventions, cf.
+# schema/lab/material.ui.yaml). No new UI component ships here: the review
+# card rides the EXISTING draft-card render rails; the review-wall claim
+# label pixels are MATRES-CHAIN's browser gate.
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material-receiving.schema.yaml"
+
+display:
+  titleField: "$.recordId"
+  icon: "material"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Receipt"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Receipt ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.artifactKind"
+      widget: "select"
+      label: "Attestation Chain"
+      readonly: true
+      options:
+      - value: "attestation-chain"
+        label: "Attestation chain (physical fact attested)"
+    - path: "$.createdInstanceRef"
+      widget: "ref"
+      label: "Instance brought into custody"
+      required: true
+      props:
+        refSchema: "https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml"
+  - title: "Claims"
+    fields:
+    - path: "$.claims[*].claimStatus"
+      widget: "select"
+      label: "Claim status"
+      options:
+      - value: "proposed"
+        label: "Proposed"
+      - value: "completed"
+        label: "Completed"
+      - value: "unknown"
+        label: "Unknown"
+      - value: "reported-by-other"
+        label: "Reported by other"
+    - path: "$.claims[*].assertion.verb"
+      widget: "text"
+      label: "Assertion"
+    - path: "$.claims[*].assertion.about"
+      widget: "ref"
+      label: "About (entity)"
+      props:
+        refSchema: "https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml"
+    - path: "$.claims[*].assertion.vendorProductRef"
+      widget: "ref"
+      label: "Vendor product"
+      props:
+        refSchema: "https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml"
+    - path: "$.claims[*].assertion.lot.lot_number"
+      widget: "text"
+      label: "Lot number (vendor-scoped)"
+    - path: "$.claims[*].assertion.lot.expirationDate"
+      widget: "date"
+      label: "Lot expiration"
+    - path: "$.claims[*].assertion.receivedByStatus"
+      widget: "select"
+      label: "Received by (status)"
+      options:
+      - value: "known"
+        label: "Known"
+      - value: "approximate"
+        label: "Approximate"
+      - value: "unknown"
+        label: "Unknown (terminal-honest)"
+    - path: "$.claims[*].assertion.receivedBy"
+      widget: "ref"
+      label: "Received by"
+      props:
+        refSchema: "https://computable-lab.com/schema/computable-lab/person.schema.yaml"
+    - path: "$.claims[*].occurredAtStatus"
+      widget: "select"
+      label: "Arrival time (status)"
+      options:
+      - value: "known"
+        label: "Known"
+      - value: "approximate"
+        label: "Approximate"
+      - value: "unknown"
+        label: "Unknown (terminal-honest)"
+    - path: "$.claims[*].occurredAt"
+      widget: "datetime"
+      label: "Arrival time"
+    - path: "$.claims[*].approximation"
+      widget: "text"
+      label: "Approximation (e.g. \"last week\")"
+  - title: "Attestation"
+    fields:
+    - path: "$.attestedAt"
+      widget: "datetime"
+      label: "Attested at (server-stamped at acceptance)"
+      readonly: true
+    - path: "$.evidenceRefs"
+      widget: "array"
+      label: "Evidence (data references — packing slip, photo)"
+  - title: "Correction"
+    fields:
+    - path: "$.supersedes"
+      widget: "ref"
+      label: "Supersedes (receipt or attestation corrected)"
+    - path: "$.correction.claimTarget.mode"
+      widget: "select"
+      label: "Correction mode"
+      options:
+      - value: "same-entity-reattribute"
+        label: "Same entity, corrected facts"
+      - value: "entity-substitution"
+        label: "Entity substitution (consumed refs need a deviation resolution)"
+    - path: "$.correction.resolutionNote"
+      widget: "textarea"
+      label: "Resolution note"

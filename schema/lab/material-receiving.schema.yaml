@@ -1,0 +1,138 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-receiving.schema.yaml"
+title: "Material Receiving"
+description: >
+  MATRES-RECV: the lab-domain receiving attestation — an immutable record
+  that a physical thing entered lab custody (lab twin of sample-receipt,
+  schema/services/sample-receipt.schema.yaml, whose "Immutable after creation
+  — corrections are new receipts" pattern this kind enforces through the
+  append-only wall + supersession instead of prose).
+
+  This record IS an attestation record in its own kind: it COMPOSES the
+  MATRES-ATTEST envelope defs via $ref (claims, attestedAt, against,
+  supersedes, correction — declared ONCE in attestation.schema.yaml; the
+  OQ-1 sanctioned $defs extraction, never a re-declaration here, which is
+  the canonical OQ-2 violation). Corrections ride the SAME mechanism
+  (supersedes + correction, orch ruling OQ-2): there is no
+  separate correction kind for receiving and no second envelope.
+
+  Vendor-scoped lot (task block, binding): identity of a lot is
+  (vendorProductRef, lot_number), NEVER lot_number alone. A bare lot number
+  never mints an id and never keys a lookup. The lot-without-product rule
+  and the receivedByStatus pairing are BUSINESS rules and live in
+  material-receiving.lint.yaml, never here and never in TypeScript.
+
+  Occurrence time rides the envelope triple (occurredAtStatus
+  known|approximate|unknown): an unknown arrival date is terminal-honest
+  (Q5) — occurredAt is ABSENT and valid, never synthesized from now().
+  attestedAt is server-stamped at accept (Q8): attestedAt != occurredAt is
+  the retrospective-honesty shape. [DEFAULT-PENDING-RATIFICATION: Q5]
+
+  A receipt brings a material-instance into custody: createdInstanceRef is
+  REQUIRED on an accepted receipt and the instance create is a PLANNED WRITE
+  inside the receipt accept (server/src/receiving) — the instance is never
+  free-standing from a chat noun. The receipt<->instance link lives on the
+  receipt side; the instance schema is NOT touched (provenance resolves
+  THROUGH CurrentAssertionView over receipts about it).
+
+  Triplet convention holds here (schema + lint + ui, cf.
+  schema/lab/material.{schema,lint,ui}.yaml): the review-card field
+  projection is read from material-receiving.ui.yaml, never TS literals
+  (recordDraftCompile.ts UI_SPEC_MISSING is the named diagnostic).
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, artifactKind, claims, createdInstanceRef ]
+
+properties:
+  kind:
+    const: "material-receiving"
+
+  recordId:
+    type: string
+    pattern: "^RECV-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: >
+      Stable local identifier (pattern-style precedent: sample-receipt
+      ^RCPT-...$). On accepted records it is a deterministic content-hash id
+      minted by the accept service over the payload revision (termId
+      discipline, Q4e): same payload revision -> same id, so a double-
+      submitted receipt or a content-identical correction lands on the SAME
+      record. NEVER Date.now() or randomUUID. NEVER derived from a lot
+      number (vendor-scoped lot: a bare lot never mints an id).
+
+  artifactKind:
+    type: string
+    enum: [ attestation-chain ]
+    description: >
+      A receiving attestation asserts a PHYSICAL fact, so it declares
+      artifactKind: attestation-chain (Q2: declared, never inferred — the
+      minimum emission-side declaration ATTEST deliberately left unbuilt,
+      built here ONLY for this one kind). The envelope-side enum stays the
+      superset; this specializing kind narrows it to the value its own
+      action needs. The lint wall (material-receiving-chain-no-proposed-
+      claims) keeps proposed claims off an accepted chain (P2).
+
+  claims:
+    type: array
+    minItems: 1
+    description: >
+      The receipt claims, in the envelope's claim shape ($ref, not a
+      re-declaration). The receipt assertion payload (verb "received" +
+      about = the instance entity + vendorProductRef + lot + receivedBy
+      triple) is RECV's vocabulary on top of the envelope's loose-shape
+      assertion (attestation.schema.yaml $defs/Claim.assertion).
+    items:
+      $ref: "./attestation.schema.yaml#/$defs/Claim"
+
+  createdInstanceRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: material-instance }
+    description: >
+      The material-instance this receipt brought into custody. REQUIRED on
+      an accepted receipt: a receipt names the instance it created (the
+      instance create is a planned write of the same accept — never a
+      separate free-standing mint). Arrival identity is THIS entity ref:
+      two bottles of the same product/lot are two distinct instance refs =
+      two legal arrivals; one entity never receives twice (idempotent-or-
+      supersession, never 2 arrivals).
+
+  evidenceRefs:
+    type: array
+    description: >
+      Data references to evidence (packing slip, photo) — the file-ref
+      datatype (file_name/media_type/sha256/stored_path/source_url), NEVER
+      inline blobs (no base64, no byte payloads; additionalProperties:false
+      on the datatype forecloses it). Precedent: vendor-product
+      documents[].file_ref.
+    items:
+      $ref: "./datatypes/file-ref.schema.yaml"
+
+  against:
+    $ref: "./attestation.schema.yaml#/$defs/Against"
+
+  attestedAt:
+    $ref: "./attestation.schema.yaml#/$defs/AttestedAt"
+
+  supersedes:
+    $ref: "./attestation.schema.yaml#/$defs/AttestationRefWidened"
+    description: >
+      Q4: this receipt corrects THAT attestation/receipt. The widened ref
+      vocabulary (type attestation|material-receiving, id pattern covering
+      both prefixes) is declared ONCE in the envelope's
+      $defs/AttestationRefWidened and $ref'd here — never re-declared
+      inline (D3 fix: the inline allOf re-declaration was the bait-3
+      OQ-2 violation). The superseded record is never rewritten or deleted
+      (audit pattern). Supersession is NEVER a second arrival: the corrected
+      receipt replaces the superseded one 1:1 in the current view
+      (CurrentAssertionView), and the planned instance write is NOT re-run
+      by a correction. [DEFAULT-PENDING-RATIFICATION: Q4]
+
+  correction:
+    $ref: "./attestation.schema.yaml#/$defs/Correction"

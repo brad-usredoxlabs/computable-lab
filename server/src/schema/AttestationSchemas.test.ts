@@ -276,13 +276,21 @@ describe('attestation envelope schema (§2a)', () => {
   it('claimStatus enum is EXACTLY proposed|completed|unknown|reported-by-other (bait 3)', async () => {
     const schemaRoot = join(process.cwd(), 'schema');
     const schema = parseYaml(await readFile(join(schemaRoot, ATTESTATION_SCHEMA_PATH), 'utf8')) as Record<string, unknown>;
-    const claims = (schema.properties as Record<string, unknown>).claims as Record<string, unknown>;
-    const items = claims.items as Record<string, unknown>;
-    const claimProps = (items.properties as Record<string, unknown>).claimStatus as Record<string, unknown>;
+    // MATRES-RECV OQ-1 extraction (additive, behavior-preserving): the claim
+    // shape moved to $defs/Claim so a specializing kind can $ref it. The enum
+    // VALUES are unchanged — the pin now reads the def (DELIBERATE golden diff
+    // of the STRUCTURE access only; bait 3 semantics intact).
+    const defs = (schema.$defs as Record<string, unknown>);
+    const claim = defs.Claim as Record<string, unknown>;
+    const claimProps = (claim.properties as Record<string, unknown>).claimStatus as Record<string, unknown>;
     // The enum is EXACTLY the four P2 labels (hyphen, lowercase — bait 3).
     expect(claimProps.enum).toEqual(['proposed', 'completed', 'unknown', 'reported-by-other']);
-    const occurred = (items.properties as Record<string, unknown>).occurredAtStatus as Record<string, unknown>;
+    const occurred = (claim.properties as Record<string, unknown>).occurredAtStatus as Record<string, unknown>;
     expect(occurred.enum).toEqual(['known', 'approximate', 'unknown']);
+    // The claims array ITEMS are the $ref (no inline re-declaration — OQ-1).
+    const claims = (schema.properties as Record<string, unknown>).claims as Record<string, unknown>;
+    const items = claims.items as Record<string, unknown>;
+    expect(items.$ref).toBe('#/$defs/Claim');
   });
 });
 

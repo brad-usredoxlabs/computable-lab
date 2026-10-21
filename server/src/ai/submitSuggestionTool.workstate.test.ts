@@ -43,7 +43,11 @@ describe('agent_intent — compose_workstate intent (PB-CH-4)', () => {
       'query_workstate_history',
       'event_shorthand',
       // QMS7-7 (DELIBERATE golden diff): compose_record_draft on the ONE forced tool.
+      // MATRES-RECV (OQ-2 RATIFIED): compose_receiving on the SAME forced tool —
+      // the one-tool lock is about the tool, not a frozen enum; the drafts
+      // compile endpoint remains the trust boundary.
       'compose_record_draft',
+      'compose_receiving',
     ]);
   });
 

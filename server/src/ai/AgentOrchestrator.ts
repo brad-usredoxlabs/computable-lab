@@ -3244,6 +3244,87 @@ export function createAgentOrchestrator(
               return recordDraftProposalResult;
             }
 
+            // intent=compose_receiving (MATRES-RECV, OQ-2 ratified): the ELICITED
+            // receiving attestation on the ONE forced tool (case 4 — "the Sigma
+            // bottle that arrived last week, lot 09231"). THE SAME thin-event
+            // design as the record-drafting arm above: emit the model's
+            // receiving INTENT VERBATIM as ONE `receiving_proposal` event and
+            // run NOTHING else — no compile, no store write, no accept. The
+            // drafts compile endpoint (POST /api/drafts/compile — the
+            // 'receiving' adapter declared in config/drafting/adapters.yaml:
+            // the envelope compiles through receiving/MaterialReceivingDraft.ts,
+            // TWO staged creates (the immutable material-receiving receipt +
+            // the material-instance it brings into custody) run the REAL
+            // validate + lint, canAccept), NOT this stream, is the trust
+            // boundary. Accept writes the receipt AND the instance; nothing
+            // here writes a record, attests, or invents an arrival date, a
+            // receiver, or a duplicate arrival. An invalid envelope is NOT
+            // rejected or rewritten here — the compile endpoint owns the
+            // diagnostic (canAccept:false + path-named diagnostics).
+            if (agentIntent.intent === 'compose_receiving') {
+              const receiving = agentIntent.receiving;
+              const elapsed = Date.now() - t0;
+              if (!receiving) {
+                // The existing error channel (compose_record_draft's
+                // no-envelope precedent): success:false with a corrective
+                // `error` string, and NO receiving_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const receivingEnvelopeError = 'compose_receiving requires a `receiving` envelope: {operation:"compose-receiving", claim:{vendor, receivedByStatus, occurredAtStatus, ...the scientist\'s stated facts only}} — the server compiles it into a review card via POST /api/drafts/compile, resolves the vendor-product for catalog identity only, and writes nothing until you accept.';
+                const emptyReceivingResult: AgentResult = {
+                  success: false,
+                  error: receivingEnvelopeError,
+                };
+                const emptyReceivingSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: receivingEnvelopeError,
+                };
+                logAgentSummary(tid, emptyReceivingSummary);
+                console.log(`[agent ${tid}] done compose_receiving no-envelope elapsedMs=${elapsed}`);
+                return emptyReceivingResult;
+              }
+              onEvent?.({ type: 'receiving_proposal', receiving });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const receivingProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed a receiving attestation — review the card; nothing was written.'],
+              };
+              const receivingProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, receivingProposalSummary);
+              console.log(`[agent ${tid}] done compose_receiving emitted elapsedMs=${elapsed}`);
+              return receivingProposalResult;
+            }
+
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding
             // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
             // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the

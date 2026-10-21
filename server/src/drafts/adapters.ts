@@ -1,16 +1,33 @@
 import type { AppContext } from '../server.js';
-import type { RecordEnvelope } from '../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { object } from '../revisions/RecordRevisionService.js';
 import { SequenceService } from '../sequences/SequenceService.js';
 import { sequenceRequestDiagnostics } from '../sequences/sequenceRequestFidelity.js';
 import { compileWorkstateIntent, workstateDepsFromContext } from './workstateCompile.js';
 import { compileAnalysisIntent, analysisDepsFromContext } from './analysisCompile.js';
 import { compileRecordDraftIntent, recordDraftDepsFromContext } from './recordDraftCompile.js';
+import { compileReceivingIntent, receivingDepsFromContext } from '../receiving/MaterialReceivingDraft.js';
+import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID } from '../receiving/receivingIdentity.js';
 
+/** What an adapter's onAccept hook returns: the plan the generic accept loop
+ *  writes, plus the per-record volatile-field exemptions (recordId -> payload
+ *  field names exempt from the prior-content comparison). */
+export interface AcceptOutcome {
+  writes: RecordEnvelope[];
+  volatileFields?: Record<string, string[]>;
+}
 export interface DraftAdapter {
   checkRequest?(intent: Record<string,unknown>, userRequest?: string): Array<{path:string; message:string}>;
   stage(context: AppContext, actor: string, intent: Record<string,unknown>, targetId: string|undefined, now: ()=>string): Promise<Record<string,unknown>>;
   project(projection: Record<string,unknown>, writes: RecordEnvelope[]): Record<string,unknown>;
+  // Adapter-level accept-time composition (architect ruling MATRESRECV D1/D2
+  // option (a)): an adapter MAY declare accept-time mechanics (stamping the
+  // server's acceptance time into its staged writes) and FormDraftService's
+  // generic accept loop invokes the hook iff the adapter declares it — the
+  // same class of seam as stage/project/checkRequest. The loop NEVER
+  // dispatches on an adapter name or a kind; an adapter without the hook is
+  // byte-identical to before.
+  onAccept?(writes: RecordEnvelope[], acceptNow: string, store: RecordStore): Promise<AcceptOutcome>;
 }
 /** Registration attaches mechanics to YAML contracts, without schema-name dispatch. */
 export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
@@ -91,6 +108,70 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
     project(projection) {
       // The projection is the intent echo; the card document rides in `result`
       // and the single staged record create rides in `writes`.
+      return projection;
+    },
+  },
+  // MATRES-RECV (OQ-2 ratified): receiving proposals compile the elicited
+  // intent into the attestation envelope + TWO staged creates (the immutable
+  // material-receiving receipt + the material-instance it brings into
+  // custody) through the staging store — the real schema validate + lint run
+  // at compile time (StagingStore.ts:22-30), nothing durable before the
+  // reviewHash-verified accept. A blocked business wall (the lot-requires-
+  // product lint ERROR, the already-received gate) surfaces as a stage
+  // failure, which the pipeline records as needs-missing-fact with
+  // canAccept:false — the generic gate, not an adapter-name branch. The
+  // scientist's reported lot inscription survives VERBATIM in the stored
+  // draft input while blocked (r2 discard boundary). The accept write rides
+  // the EXISTING accept loop; the append-only wall (appendOnlyKinds DATA)
+  // keeps the stored receipt immutable.
+  //
+  // RATIFIED (architect ruling MATRESRECV D1/D2, option (a)): ABSENT-BEFORE-
+  // ACCEPT. The draft envelope carries NO attestedAt (the compile output is
+  // attestedAt-free); the receipt's attestedAt is the server's ACCEPTANCE
+  // time, stamped by this adapter's onAccept hook from the rail's accept
+  // clock — attestedAt is when the acceptance happened, occurredAt is when
+  // the fact occurred (Q8). The volatileFields exemption the hook declares
+  // is what makes a content-identical re-draft land the SAME record
+  // idempotently (AC-2(ii)) instead of 409-ing on the accept-stamp delta.
+  'receiving': {
+    async stage(context,_actor,intent,_targetId,_now) {
+      const compiled = await compileReceivingIntent(intent, receivingDepsFromContext(context));
+      if(!compiled.ok)throw new Error(compiled.diagnostics.join('; '));
+      const receipt = await context.store.create({ envelope:{ recordId:compiled.recordId!, schemaId:MATERIAL_RECEIVING_SCHEMA_ID, payload:compiled.envelope }, message:`Receiving draft staged create` });
+      // Idempotence (ruling item B): if the compile's canonical lookup shows
+      // the receipt already exists durably with content equal modulo
+      // attestedAt, that IS the accepted form — a content-identical re-draft
+      // derives the SAME deterministic id, and the already-accepted record is
+      // the plan's outcome (no second gate, no second record — AC-2(ii)). A
+      // DIFFERENT payload under the same id is a real collision and stays a
+      // stage failure (blocked card).
+      if(!receipt.success && compiled.alreadyAcceptedForm !== true)throw new Error(`staged receipt create blocked: ${receipt.error ?? 'validation/lint failure'}`);
+      // A correction NEVER stages the instance write: supersession is not a
+      // second arrival — the entity already exists (§7 bait 9; the §5.3 suite
+      // asserts instance/aliquot id lists byte-equal across a correction).
+      if(!compiled.isCorrection){
+        const instance = await context.store.create({ envelope:{ recordId:compiled.instanceRecordId!, schemaId:MATERIAL_INSTANCE_SCHEMA_ID, payload:compiled.instancePayload }, message:`Receiving draft staged instance create` });
+        // Create-if-absent identity: the entity the deterministic id names
+        // already arrived durably => the same accepted form, never a re-mint.
+        if(!instance.success && compiled.durableInstanceExists !== true)throw new Error(`staged instance create blocked: ${instance.error ?? 'validation/lint failure'}`);
+      }
+      return { recordId:compiled.recordId, instanceRecordId:compiled.instanceRecordId, envelope:compiled.envelope, instancePayload:compiled.instancePayload };
+    },
+    async onAccept(writes,acceptNow) {
+      // Accept-time composition for THIS adapter's own plan: the receipt
+      // envelope (identified by the schema id its staged create rode — never
+      // a kind branch) gains the server's acceptance stamp. occurredAt is
+      // byte-untouched (r2 §1: the server never writes a time the scientist
+      // stated). The exemption map names exactly the stamped key.
+      const stamped = writes.map(w => w.schemaId === MATERIAL_RECEIVING_SCHEMA_ID
+        ? { ...w, payload: { ...object(w.payload), attestedAt: acceptNow } }
+        : w);
+      const receipt = stamped.find(w => w.schemaId === MATERIAL_RECEIVING_SCHEMA_ID);
+      return { writes: stamped, ...(receipt ? { volatileFields: { [receipt.recordId]: ['attestedAt'] } } : {}) };
+    },
+    project(projection) {
+      // The projection is the intent echo; the card document rides in `result`
+      // and the two staged creates (receipt + instance) ride in `writes`.
       return projection;
     },
   },
