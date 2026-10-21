@@ -275,3 +275,48 @@ describe('adaptAiChunkCandidateToRecordPayload: diagnostics normalization (fix2)
     expect(String(bare!.message).length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// VPDF-3 fix2 (live-lap finding): the SAME shape defect class hits per-step
+// `notes`. The real model emits notes as a BARE STRING (e.g. "Two temperature
+// devices are set to 55°C and 70°C.") where the schema requires an array of
+// strings — Ajv2020 answered /steps/N notes "must be array" for all 16 real
+// steps. Same adapter seam, same normalization principle.
+// ---------------------------------------------------------------------------
+
+describe('adaptAiChunkCandidateToRecordPayload: step notes normalization (fix2)', () => {
+  const meta = {
+    documentId: 'VPDF-NOTES-DOC',
+    filename: 'purelink.pdf',
+    pageCount: 1,
+    fallbackTitle: 'PureLink',
+  };
+
+  it('bare-string, empty-string, null, and array notes all become string arrays', () => {
+    const summary = {
+      kind: 'vendor-protocol-candidate',
+      title: 'T',
+      steps: [
+        { stepNumber: 1, text: 's1', notes: 'Two temperature devices are set to 55 degrees C and 70 degrees C.' },
+        { stepNumber: 2, text: 's2', notes: '' },
+        { stepNumber: 3, text: 's3', notes: null },
+        { stepNumber: 4, text: 's4', notes: ['already an array'] },
+        { stepNumber: 5, text: 's5' },
+      ],
+    } as unknown as Parameters<typeof adaptAiChunkCandidateToRecordPayload>[0];
+
+    const payload = adaptAiChunkCandidateToRecordPayload(summary, meta);
+    const steps = payload.steps as Array<Record<string, unknown>>;
+    for (const step of steps) {
+      expect(Array.isArray(step.notes), `step ${step.stepNumber} notes must be an array`).toBe(true);
+      (step.notes as unknown[]).forEach((n) => expect(typeof n).toBe('string'));
+    }
+    // The model's note survives verbatim as the single array entry.
+    expect(steps[0]!.notes).toEqual(['Two temperature devices are set to 55 degrees C and 70 degrees C.']);
+    // Empty string / null / missing -> empty array (no fabricated content).
+    expect(steps[1]!.notes).toEqual([]);
+    expect(steps[2]!.notes).toEqual([]);
+    expect(steps[3]!.notes).toEqual(['already an array']);
+    expect(steps[4]!.notes).toEqual([]);
+  });
+});

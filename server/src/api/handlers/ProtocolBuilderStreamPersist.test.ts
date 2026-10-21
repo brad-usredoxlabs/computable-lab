@@ -593,3 +593,30 @@ describe('VPDF-3 fix2: bare-string model diagnostics persist (real store + real 
     expect(diagnostics.some((d) => d.message === 'Incubation equipment for the 55 degrees C step is not specified.')).toBe(true);
   });
 });
+
+describe('VPDF-3 fix2: bare-string step notes persist (real store + real schema tree)', () => {
+  it('stream with string-shaped step notes -> done event, stored step notes are arrays', async () => {
+    const content = JSON.stringify({
+      kind: 'vendor-protocol-candidate',
+      title: 'PureLink RNA Mini Kit',
+      steps: [
+        { stepNumber: 1, text: '1. Lyse the sample.', notes: 'Lysis is optional for cultured cells.' },
+        { stepNumber: 2, text: '2. Bind the lysate.', notes: null },
+      ],
+      diagnostics: ['Centrifugation speed is not numerically specified.'],
+    });
+    stubInferenceStream(content);
+    const events = await runStream({ text: '1. Lyse the sample.\n2. Bind the lysate.', documentId: VPDF_ID });
+    const last = events[events.length - 1];
+    expect(last.type, `expected done, got: ${JSON.stringify(last)}`).toBe('done');
+
+    const candidates = await candidatesForDocument();
+    expect(candidates.length).toBe(1);
+    const steps = (candidates[0]!.payload as Record<string, unknown>).steps as Array<Record<string, unknown>>;
+    for (const step of steps) {
+      expect(Array.isArray(step.notes), `step ${step.stepNumber} notes must be stored as an array`).toBe(true);
+    }
+    expect(steps[0]!.notes).toEqual(['Lysis is optional for cultured cells.']);
+    expect(steps[1]!.notes).toEqual([]);
+  });
+});
