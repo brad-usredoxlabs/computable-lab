@@ -82,6 +82,8 @@ import {
   malformedShorthandRepairPrompt,
   parseShorthandForChat,
   shorthandResultFromCompile,
+  acceptedShorthandBindingsFor,
+  rememberAcceptedShorthandBindings,
 } from './shorthandChat.js';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
@@ -1288,6 +1290,21 @@ export function createAgentOrchestrator(
        * everything else falls through to the store lookup byte-identically.
        */
       const shorthandDeckLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      // REVISE-GHOST-1 (OQ-1 ruling): the conversation's accepted {label, ref}
+      // bindings ride the NEXT compile as an EXACT-MATCH reuse hint (applied
+      // at the ai/ seam inside compileShorthandDeterministically, BEFORE
+      // resolution — compiler/resolution/** and server/src/resolve/** are
+      // untouched). ACTIVE-PROPOSAL marker: `draftRevision` rides the request
+      // only while a ghost preview is mounted (the client context builder's
+      // previewDraft leg), and a clarification-answer turn continues the
+      // proposal it is answering. Any OTHER turn is a fresh start — the read
+      // itself drops the bindings (Accept/Discard/fresh-start never cross the
+      // proposal boundary, bait 7).
+      const shorthandReuseBindings = acceptedShorthandBindingsFor(
+        conversationKey,
+        context?.draftRevision !== undefined
+          || (Array.isArray(clarificationAnswers) && clarificationAnswers.length > 0),
+      );
       const shorthandSearchLabwareByHint = composeLabwareHintLookupWithDeck(
         shorthandDeckLabwares,
         deps.searchLabwareByHint,
@@ -1325,9 +1342,18 @@ export function createAgentOrchestrator(
         if (held) {
           const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
           if (folded) {
+            // REVISE-GHOST-1 (OQ-1 ruling): the fold's accepted {label, ref}
+            // bindings join the conversation's active-proposal bindings (the
+            // read above returned the prior ones — a second answer turn in
+            // the same proposal reuses the first card's binding) and ride
+            // this recompile AND the next turn's compile. Recorded here —
+            // the answer fold is where a binding becomes ACCEPTED.
+            const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
+            rememberAcceptedShorthandBindings(conversationKey, foldBindings);
             const compiledFold = await compileShorthandDeterministically(folded.doc, {
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
+              ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
             });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
@@ -2565,6 +2591,11 @@ export function createAgentOrchestrator(
               const compiledSh = await compileShorthandDeterministically(shorthandDoc, {
                 ...(deps.store ? { store: deps.store } : {}),
                 ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
+                // REVISE-GHOST-1: the active proposal's accepted bindings ride
+                // the compile as the reuse hint (exact-label narrowing at the
+                // ai/ seam, BEFORE resolution — bait 5: the chosen ref binds,
+                // nothing is minted for an already-bound label).
+                ...(shorthandReuseBindings.length > 0 ? { reuseBindings: shorthandReuseBindings } : {}),
               });
               if (!compiledSh) {
                 onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
