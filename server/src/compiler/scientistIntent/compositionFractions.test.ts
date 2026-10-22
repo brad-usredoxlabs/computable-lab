@@ -19,6 +19,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { parseScientistIntent } from './parseScientistIntent.js';
+import { createIntentCompileFromPromptHandlers } from '../../api/handlers/IntentCompileFromPromptHandlers.js';
 
 const FRACTION_REASON = 'composition-fraction-sum';
 
@@ -201,7 +202,7 @@ actions:
     expect(clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
   });
 
-  it('onTopPhrases evidence ("v/v on top") resolves to the on-top parse — NO clarification', () => {
+  it('onTopPhrases evidence ("v/v on top") does NOT resolve silently: the bar stands and the on-top reading carries 50/50/10 + the sum note (OQ-4)', async () => {
     const doc = `
 intentId: mixfrac-ontop
 sourcePrompt: "50/50 Trypsin-EDTA/DMEM, add 10% FBS v/v on top"
@@ -216,7 +217,20 @@ actions:
         - { material: "DMEM", role: buffer_component, fraction: "50%" }
         - { material: "FBS", role: additive, fraction: "10%" }
 `;
-    expect(clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
+    // On-top evidence is one-sided for the ON-TOP parse, but the declared
+    // fractions still break the total — the bar stands (silentResolution
+    // names ONLY the final-volume arm) and the explicit-on-top reading keeps
+    // the declared fractions-of-mixture WITH the sum note (OQ-4: the note
+    // rides the reading data, never the ledger, never the source form).
+    const fact = clarificationsFor(doc).find((c) => c.reason === FRACTION_REASON)!;
+    const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    const onTop = readings.find((r) => String(r['id']) === 'explicit-on-top')!;
+    const onTopFractions = (onTop['finalFractions'] as Array<Record<string, unknown>>)
+      .map((f) => Number(f['percent'])).sort((a, b) => a - b);
+    expect(onTopFractions).toEqual([10, 50, 50]);
+    expect(typeof onTop['note'], 'the on-top reading carries the sum note').toBe('string');
+    expect(String(onTop['note'])).toContain('110');
   });
 });
 
@@ -224,7 +238,15 @@ describe('MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST 
   it('an injected recipe-shaped record (name matches the preceding-noun phrase, declares its own composition) reorders the readings', () => {
     const fact = clarificationsFor(CANONICAL_110, {
       recipeShapedRecords: [
-        { name: 'DMEM + 10% FBS', kind: 'material-spec', formulationKind: 'defined_composition', declaresComposition: true },
+        {
+          name: 'DMEM + 10% FBS',
+          kind: 'material-spec',
+          formulationKind: 'defined_composition',
+          composition: [
+            { material: 'DMEM', role: 'buffer_component', fraction: '90%' },
+            { material: 'FBS', role: 'additive', fraction: '10%' },
+          ],
+        },
       ],
     }).find((c) => c.reason === FRACTION_REASON)!;
     const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
@@ -241,11 +263,60 @@ describe('MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST 
   it('a store record that does NOT declare its own composition is not recipe-shaped evidence', () => {
     const fact = clarificationsFor(CANONICAL_110, {
       recipeShapedRecords: [
-        { name: 'DMEM + 10% FBS', kind: 'material-spec', formulationKind: 'complex_composition', declaresComposition: false },
+        { name: 'DMEM + 10% FBS', kind: 'material-spec', formulationKind: 'complex_composition' },
       ],
     }).find((c) => c.reason === FRACTION_REASON)!;
     const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
     expect(String(readings[0]!['id'])).toBe('whole-mixture-supplement');
+  });
+
+  it('document-side arm (§14.1 expressibility): the preceding entry declaring its OWN composition presents preceding-noun FIRST, quotes the declared inner split, and expands it into the flat derived view', () => {
+    // The medium entry carries its own declared composition (the ONE additive
+    // composition-entry property) — an in-house formulation stated in the
+    // document itself is a recipe-shaped component reading. The declared
+    // top-level fractions still break the total, so the bar stands.
+    const doc = `
+intentId: mixfrac-nested-doc
+sourcePrompt: "50/50 Trypsin-EDTA/complete medium + 10% FBS with 200 HepG2 cells/uL"
+actions:
+  - action: add_material
+    labware: plate
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+        - material: "complete medium"
+          role: buffer_component
+          fraction: "50%"
+          composition:
+            - { material: "DMEM", role: buffer_component, fraction: "90%" }
+            - { material: "FBS", role: additive, fraction: "10%" }
+        - { material: "FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000 }
+`;
+    const fact = clarificationsFor(doc).find((c) => c.reason === FRACTION_REASON)!;
+    const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    expect(String(readings[0]!['id']), 'the document-side recipe reading is presented FIRST').toBe('preceding-noun-recipe');
+    // The preceding entry's DECLARED inner composition is quoted VERBATIM as
+    // the nested fractions (never re-inferred when the document states it).
+    const nested = (readings[0]!['nestedFractions'] as Array<Record<string, unknown>>)
+      .map((f) => [String(f['label']), Number(f['percent'])] as const);
+    expect(new Map(nested)).toEqual(new Map([
+      ['DMEM', 90],
+      ['FBS', 10],
+    ]));
+    // The flat DERIVED view expands the declared children (parentShare x
+    // childShare / total) and absorbs the top-level supplement entry — the
+    // ruling's blessed numbers: Trypsin-EDTA 50 / DMEM 45 / FBS 5, sum 100.
+    const flat = (readings[0]!['finalFractions'] as Array<Record<string, unknown>>)
+      .map((f) => [String(f['label']), Number(f['percent'])] as const);
+    expect(new Map(flat)).toEqual(new Map([
+      ['Trypsin-EDTA', 50],
+      ['DMEM', 45],
+      ['FBS', 5],
+    ]));
   });
 });
 
@@ -266,5 +337,113 @@ actions:
         - { material: "FBS", role: additive, fraction: "5%" }
 `;
     expect(clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §5 (spec §3 B): the readings ride the REAL 422 wire slot VERIFIED by a real
+// 422 capture BEFORE any schema amendment. The route sends
+// `clarifications: compile.clarifications` verbatim (SPINE-4 bar); the
+// readings ride that producer-side clarification object — the wire
+// `unresolved` slot (additionalProperties:false) carries NOTHING new, so no
+// schema change is needed. This test drives the REAL
+// createIntentCompileFromPromptHandlers route (only the model client and the
+// store are stubbed — the vocabulary, Ajv parse, lift, normalize, resolve_nouns
+// and compile all run real, the SPINE-5 harness idiom) and asserts the 422
+// body carries the composition-fraction-sum fact WITH its three readings.
+// ---------------------------------------------------------------------------
+describe('MIXFRAC-1: the readings ride the real 422 body (no schema amendment)', () => {
+  it('the route bars 422 NEEDS_CLARIFICATION with the composition-fraction-sum fact carrying readings + computed finalFractions', async () => {
+    const store = {
+      get: vi.fn(async () => null),
+      getRecord: vi.fn(async () => null),
+      list: vi.fn(async (filter?: { kind?: string }) =>
+        filter?.kind === 'labware'
+          ? [{ recordId: 'LAB-plate-1', schemaId: 's', payload: { kind: 'labware', name: 'plate', title: 'Plate' } }]
+          : [],
+      ),
+      create: vi.fn(async () => { throw new Error('422 capture store must never write'); }),
+      update: vi.fn(async () => { throw new Error('422 capture store must never write'); }),
+      delete: vi.fn(async () => { throw new Error('422 capture store must never write'); }),
+      history: vi.fn(async () => { throw new Error('422 capture store must never read history'); }),
+    };
+    const stubLlm = {
+      complete: vi.fn(async (req: { tools?: Array<{ function?: { name?: string } }> }) => {
+        const toolName = Array.isArray(req.tools) ? req.tools[0]?.function?.name : undefined;
+        if (toolName === 'emit_branch_questions') {
+          return { choices: [{ message: { content: null, tool_calls: [{ function: { name: 'emit_branch_questions', arguments: JSON.stringify({ axes: [] }) } }] } }] };
+        }
+        return {
+          choices: [{
+            message: {
+              content: null,
+              tool_calls: [{
+                function: {
+                  name: 'emit_scientist_intent',
+                  arguments: JSON.stringify({
+                    intentId: 'mixfrac-422-capture',
+                    sourcePrompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL',
+                    actions: [{
+                      action: 'add_material',
+                      labware: 'plate',
+                      volumeUl: 50,
+                      targetWells: ['A1'],
+                      params: {
+                        composition: [
+                          { material: 'Trypsin-EDTA', role: 'solvent', fraction: '50%' },
+                          { material: 'DMEM', role: 'buffer_component', fraction: '50%' },
+                          { material: 'FBS', role: 'additive', fraction: '10%' },
+                          { material: 'HepG2 cells', role: 'cells', count: 10000, counterDensity: { value: 200, unit: 'cells/uL' } },
+                        ],
+                      },
+                    }],
+                  }),
+                },
+              }],
+            },
+          }],
+        };
+      }),
+    };
+    const handlers = createIntentCompileFromPromptHandlers(
+      { store, appConfig: { ai: { inference: { baseUrl: 'http://mock:8899/v1', model: 'lfm2.5-2.6b' } } } } as never,
+      { llmClient: stubLlm as never },
+    );
+    const calls: Array<{ status?: number; payload?: unknown }> = [];
+    let currentStatus: number | undefined;
+    const reply = {
+      status(code: number) { currentStatus = code; return reply; },
+      send(payload: unknown) { calls.push({ status: currentStatus, payload }); return reply; },
+    };
+    await handlers.compileFromPrompt(
+      { body: { protocolText: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL', answers: { sample_type: 'bacterial' } }, log: { error: vi.fn() } } as never,
+      reply as never,
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.status, 'the 110% sum bars the route at 422').toBe(422);
+    const payload = calls[0]!.payload as Record<string, unknown>;
+    expect(payload.error).toBe('NEEDS_CLARIFICATION');
+    const clarifications = payload.clarifications as Array<Record<string, unknown>>;
+    const sumFacts = clarifications.filter((c) => c.reason === FRACTION_REASON);
+    expect(sumFacts).toHaveLength(1);
+    const fact = sumFacts[0]!;
+    expect(fact.actionLocation).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+    // The readings ride the 422 body verbatim — three candidate readings,
+    // each with COMPUTED final fractions (the OQ-1 ruling's data).
+    const readings = fact['readings'] as Array<Record<string, unknown>>;
+    expect(Array.isArray(readings)).toBe(true);
+    expect(readings.length).toBe(3);
+    for (const reading of readings) {
+      expect(Array.isArray(reading.finalFractions)).toBe(true);
+      expect((reading.finalFractions as Array<Record<string, unknown>>).length).toBeGreaterThan(0);
+    }
+    // The wire `unresolved` slot of the held localMacro carries NOTHING new
+    // (no schema amendment was needed): the readings ride the clarification
+    // object only.
+    const localMacro = payload.localMacro as { unresolved: unknown[] };
+    expect(localMacro.unresolved).toEqual([]);
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
   });
 });

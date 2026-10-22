@@ -42,7 +42,7 @@ import {
   COMPOSITION_FRACTION_SUM_REASON as COMPOSITION_FRACTION_SUM_CODE,
   evaluateCompositionFractions,
   loadFractionConvention,
-  formatFractionPercent,
+  formatFractionString,
   FRACTION_CONVENTION_PATH,
   type CompositionReading,
   type FractionConventionConfig,
@@ -868,14 +868,12 @@ function applyCompositionFractionConvention(
   }
 
   if (outcome.resolvedFractions && candidateEvent) {
-    const byLabel = new Map(outcome.resolvedFractions.map((f) => [f.label, f.percent]));
-    const rewritten = composition.map((raw) => {
+    const byIndex = new Map(outcome.resolvedFractions.map((f) => [f.index, f.percent]));
+    const rewritten = composition.map((raw, index) => {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-      const entry = raw as Record<string, unknown>;
-      const label = typeof entry.material === 'string' ? entry.material.trim() : '';
-      const percent = byLabel.get(label);
+      const percent = byIndex.get(index);
       if (percent === undefined) return raw;
-      return { ...entry, fraction: `${formatFractionPercent(percent)}%` };
+      return { ...(raw as Record<string, unknown>), fraction: formatFractionString(percent, config) };
     });
     candidateEvent['composition'] = rewritten;
   }
@@ -970,7 +968,19 @@ export function normalizeScientistIntent(
       if (pattern.targetLabware) updateSymbol(symbolicLabels, pattern.targetLabware, 'target');
       patterns.push(pattern);
     } else {
-      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized, gated, mixtureCues));
+      const candidateEvent = toCandidateEvent(rec, index, vocabulary, unrealized, gated, mixtureCues);
+      candidateEvents.push(candidateEvent);
+      // MIXFRAC-1: the composition-fraction bar, beside the cue bar (same
+      // envelope, same channel). A declared composition whose non-excluded
+      // fractions break the convention total raises ONE clarification with
+      // the candidate readings; one-sided final-volume evidence rewrites the
+      // carried composition entries' fractions instead.
+      if (fractionConvention) {
+        applyCompositionFractionConvention(
+          rec, index, verb, candidateEvent, vocabulary,
+          fractionConvention, intent.sourcePrompt, options?.recipeShapedRecords, unrealized,
+        );
+      }
     }
   });
 

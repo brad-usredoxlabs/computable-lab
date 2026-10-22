@@ -1,0 +1,43 @@
+# MIXFRAC-1 GOLDEN-A (bar leg) — Brad's live defect phrasing, blessed per the
+# OQ-1 ruling (spec §7.1 + §0 amendment + §14.2 BAR leg).
+# The canned modelOutput carries the declared nested composition on the medium
+# entry (the §14.1 expressibility, riding the OPEN params.composition slot —
+# the wire composition items stay untouched per §14.2). The declared top-level
+# fractions (50/50/10) sum to 110, not the convention total, so the compile
+# bars with ONE composition-fraction-sum clarification carrying THREE candidate
+# readings; the preceding-noun-recipe reading is presented FIRST (the document
+# declares the recipe-shaped reading) and carries the ruling's blessed flat
+# derived view Trypsin-EDTA 50 / DMEM 45 / FBS 5 with the nested 90:10 quoted
+# from the declaration. Cells never join the sum.
+name: golden.intent-to-clarification.mixfrac-canonical-ambiguous
+request:
+  protocolText: >-
+    50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-mixfrac-plate-1
+      payload:
+        kind: labware
+        title: Plate
+        synonyms: [plate]
+modelOutput:
+  intentId: golden-mixfrac-canonical-ambiguous
+  sourcePrompt: "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL"
+  actions:
+    - action: add_material
+      labware: plate
+      volumeUl: 50
+      targetWells: [A1]
+      params:
+        composition:
+          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - material: "DMEM"
+            role: buffer_component
+            fraction: "50%"
+            composition:
+              - { material: "DMEM", role: buffer_component, fraction: "90%" }
+              - { material: "FBS", role: additive, fraction: "10%" }
+          - { material: "FBS", role: additive, fraction: "10%" }
+          - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }

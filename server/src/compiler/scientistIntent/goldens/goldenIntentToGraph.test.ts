@@ -135,6 +135,87 @@ describe('golden.intent-to-graph.labware-hint-regression', () => {
   });
 });
 
+describe('golden.intent-to-graph.mixfrac-canonical-flat', () => {
+  it('golden.intent-to-graph.mixfrac-canonical-flat', async () => {
+    // MIXFRAC-1 GOLDEN-A RECORD leg (§14.2): the ruling's FLAT DERIVED view
+    // compiled clean — Trypsin-EDTA 50 / DMEM 45 / FBS 5 (sum 100) with the
+    // ratified source strings "50% of the mixture" / "45% of the mixture" /
+    // "5% of the mixture" byte-stable (OQ-4: the app's shape parser consumes
+    // this form verbatim), cells entry unchanged (roles are MIXROLE-1's
+    // ground — pinned as the pipeline emits). The nested declared truth
+    // (DMEM 90:10 FBS) lives in the BAR-leg fixture's readings data.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-graph.mixfrac-canonical-flat');
+    const run = await runGolden(fixture);
+
+    expect(run.status).toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-graph.mixfrac-canonical-flat');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+
+    const ta = run.payload['terminalArtifacts'] as Record<string, unknown>;
+    const events = ta['events'] as Array<Record<string, unknown>>;
+    expect(events).toHaveLength(1);
+    const details = events[0]!['details'] as Record<string, unknown>;
+    const snapshot = details['composition_snapshot'] as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(4);
+    const byLabel = new Map(snapshot.map((entry) => [
+      String((entry['component_ref'] as Record<string, unknown>)['label']),
+      entry,
+    ]));
+    expect((byLabel.get('Trypsin-EDTA')!['source'] as string)).toBe('50% of the mixture');
+    expect((byLabel.get('DMEM')!['source'] as string)).toBe('45% of the mixture');
+    expect((byLabel.get('FBS')!['source'] as string)).toBe('5% of the mixture');
+    // The cells entry carries no fraction source (count stays a count).
+    expect(Object.keys(byLabel.get('HepG2 cells')!)).not.toContain('source');
+    // The nested form NEVER rides a snapshot entry (§14.2).
+    for (const entry of snapshot) expect(Object.keys(entry)).not.toContain('composition');
+
+    expect(run.spies.writeCalls).toBe(0);
+  });
+});
+
+describe('golden.intent-to-graph.mixfrac-final-volume', () => {
+  it('golden.intent-to-graph.mixfrac-final-volume', async () => {
+    // MIXFRAC-1 GOLDEN-B compiled leg (spec §7.2 + §14.2): the one-sided
+    // finalVolumePhrases arm ("bring to 10% FBS final") settles the parse to
+    // the whole-mixture supplement reading WITHOUT a clarification — the
+    // carried composition fractions are REWRITTEN to the computed re-base
+    // (45/45/10, sum 100 by construction) and the snapshot emits the ratified
+    // source form byte-stably.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-graph.mixfrac-final-volume');
+    const run = await runGolden(fixture);
+
+    expect(run.status).toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-graph.mixfrac-final-volume');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+
+    const ta = run.payload['terminalArtifacts'] as Record<string, unknown>;
+    const events = ta['events'] as Array<Record<string, unknown>>;
+    expect(events).toHaveLength(1);
+    const details = events[0]!['details'] as Record<string, unknown>;
+    const snapshot = details['composition_snapshot'] as Array<Record<string, unknown>>;
+    expect(snapshot).toHaveLength(3);
+    const byLabel = new Map(snapshot.map((entry) => [
+      String((entry['component_ref'] as Record<string, unknown>)['label']),
+      entry,
+    ]));
+    expect((byLabel.get('Trypsin-EDTA')!['source'] as string)).toBe('45% of the mixture');
+    expect((byLabel.get('DMEM')!['source'] as string)).toBe('45% of the mixture');
+    expect((byLabel.get('FBS')!['source'] as string)).toBe('10% of the mixture');
+
+    expect(run.spies.writeCalls).toBe(0);
+  });
+});
+
 describe('golden.manifest.versions-current', () => {
   it('golden.manifest.versions-current', () => {
     // Spec §4.2/§4.3 (bait §11.5): rule/spec drift fails CI LOUD instead of

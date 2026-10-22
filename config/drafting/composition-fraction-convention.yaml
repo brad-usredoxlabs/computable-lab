@@ -24,6 +24,10 @@
 basis: percent-of-final-volume
 total: 100
 tolerance: 0.0001
+# Rounding factor used when a computed fraction is rendered for display or for
+# a rewritten fraction string (1/100 => two decimal places). The TS derives
+# every rounding from this DATA value — it carries no rounding literal.
+displayRoundingFactor: 100
 
 # Roles whose entries never join the fraction sum (count components — a cells
 # entry carries a count, never a volume). The role names ride DATA and must
@@ -123,6 +127,14 @@ messages:
   clarification: "The declared composition fractions sum to {sum} percent, not the declared {total} percent ({basis}). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions."
   sumNote: "Declared fractions sum to {sum} percent of the mixture, not {total} percent — the fractions are kept as declared fractions-of-mixture."
   malformedNote: "The declared fraction \"{fraction}\" parses to no number and is excluded from the sum (never guessed)."
+  # Appended when the utterance-shape evidence (supplementConnectors +
+  # adjacencyWindowChars + ratioPatterns) shows a quantity attached to a
+  # supplement connector — the attachment ambiguity is then named explicitly.
+  attachmentNote: "The utterance also carries a quantity adjacent to a supplement connector — the attachment (whole-mixture vs preceding-noun) is one of the candidate parses."
+  # Canonical rendering of a parsed fraction when it is rewritten onto the
+  # composition entry / snapshot source (the snapshot emission applies this
+  # form; an unparseable declared fraction is NEVER rewritten).
+  fractionFormat: "{value}%"
 
 # ---- recipe-shaped reading evidence (§14.3, firesOn idiom) ----
 # "Recipe-shaped reading exists" = a formulation-shaped STORE record whose
@@ -144,3 +156,9 @@ recipeShapedReadingEvidence:
   ratioPatterns:
     - "\\d+\\s*[:/xX×]\\s*\\d+"
     - "\\d+\\s*%"
+  # Document-side arm: a recipe-shaped component reading is ALSO present when
+  # the composition entry on the LEFT flank of the supplement declares its OWN
+  # composition (the §14.1 expressibility — an in-house formulation stated in
+  # the document itself). The evaluator treats the declared sub-composition as
+  # the datum; no reagent word is consulted.
+  documentSideReading: precedingEntryDeclaresOwnComposition

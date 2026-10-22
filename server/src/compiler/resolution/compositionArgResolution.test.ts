@@ -163,16 +163,32 @@ describe('comp4.t1-declared-composition-bar', () => {
 
     expect(compiled.outcome).toBe('needs-clarification');
 
+    // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4 item 4 + §6 bait 5 principle:
+    // "any affected reason-set pins ... are DELIBERATE updates"; updated, not
+    // pinned around). This fixture's declared fractions are 50/50/10 = 110% —
+    // the SAME 110% shape bait 5 names on the blessed fixture — so the new
+    // composition-fraction-sum bar fires here too (that is the feature). The
+    // noun-resolution pins below are UNCHANGED, just reason-filtered.
     const compositionItems = compiled.clarifications.filter(
       (c) => c.actionLocation?.argument === 'composition',
     );
-    expect(compositionItems).toHaveLength(1);
-    const item = compositionItems[0]!;
+    expect(compositionItems).toHaveLength(2);
+    const unknownNounItems = compositionItems.filter((c) => c.reason === 'unknown-noun');
+    expect(unknownNounItems).toHaveLength(1);
+    const item = unknownNounItems[0]!;
     // The 422 names the COMPONENT: label is the unresolvable component name,
     // NOT the argument name.
     expect(item.label).toBe('Equine Serum');
     expect(item.reason).toBe('unknown-noun');
     expect(item.actionLocation).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+
+    // The sum bar is the SECOND composition-argument clarification: ONE fact
+    // (not one per component), reason composition-fraction-sum, carrying the
+    // candidate readings with their computed final fractions.
+    const sumItems = compositionItems.filter((c) => c.reason === 'composition-fraction-sum');
+    expect(sumItems).toHaveLength(1);
+    const readings = (sumItems[0] as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+    expect(Array.isArray(readings) && readings.length).toBeGreaterThan(0);
 
     // The pass diagnostic carries the clarification verbatim (the bar shape).
     const bar = compiled.diagnostics.find((d) => d.code === 'unresolved_arguments');
@@ -210,12 +226,23 @@ describe('comp4.t2-declared-composition-binds', () => {
     expect(outcome.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
   });
 
-  it('T2b: full pipeline — a fully resolvable mixture compiles with zero composition clarifications', async () => {
+  it('T2b: full pipeline — a fully resolvable mixture compiles with zero NOUN clarifications', async () => {
+    // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4 item 4 + §6 bait 5; updated,
+    // not pinned around). BEFORE: zero composition clarifications + outcome not
+    // needs-clarification. AFTER: this fixture's declared fractions are
+    // 50/50/10 = 110%, so the composition-fraction-sum bar fires (the feature)
+    // and the doc bars atomically. The NOUN-resolution behavior this test
+    // exists to pin is UNCHANGED: zero unknown-noun clarifications on the
+    // composition arg.
     const { compiled } = await compileReal(ACTION_LEVEL_ALL_RESOLVABLE);
-    expect(compiled.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
-    // The mixture itself compiles through the real chain (labware 'plate' is
-    // seeded; the compile outcome must not bar on the composition arg).
-    expect(compiled.outcome).not.toBe('needs-clarification');
+    const compositionItems = compiled.clarifications.filter(
+      (c) => c.actionLocation?.argument === 'composition',
+    );
+    expect(compositionItems.filter((c) => c.reason === 'unknown-noun')).toHaveLength(0);
+    expect(compositionItems.filter((c) => c.reason === 'composition-fraction-sum')).toHaveLength(1);
+    // The mixture's noun resolution passes through the real chain (labware
+    // 'plate' is seeded); only the declared 110% sum bars.
+    expect(compiled.outcome).toBe('needs-clarification');
   });
 });
 

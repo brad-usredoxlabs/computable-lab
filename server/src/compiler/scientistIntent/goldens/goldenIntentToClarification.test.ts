@@ -294,12 +294,20 @@ describe('golden.intent-to-clarification.unresolvable-mixture-component', () => 
     // clarifies naming the COMPONENT (label is the component name, NOT the
     // argument), the pass bars atomically, and the cascade barrier skips every
     // downstream pass: zero events, zero writes, no partial mint.
+    // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4/bait 5, updated not pinned
+    // around): this fixture ALREADY carries 50/50+50/50+10/10 = a 110% declared
+    // sum — the new composition-fraction-sum bar fires HERE TOO (that is the
+    // feature). The bar fact appends after the engine fact (compileScientist-
+    // Intent producer-append order), so the unknown-noun leg keeps its exact
+    // verbatim shape at index 0 and the fraction fact rides at index 1 with
+    // THREE candidate readings. The blessed record was re-hashed ONCE in the
+    // same commit (manifest records entry; before/after hashes in the report).
     const fixture = fixtureFromManifest(manifest, 'golden.intent-to-clarification.unresolvable-mixture-component');
     const run = await runGolden(fixture);
     const payload = assertBar(run);
 
     const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
-    expect(clarifications).toHaveLength(1);
+    expect(clarifications).toHaveLength(2);
     const item = clarifications[0]!;
     expect(item['label']).toBe('Equine Serum');
     expect(item['reason']).toBe('unknown-noun');
@@ -311,10 +319,136 @@ describe('golden.intent-to-clarification.unresolvable-mixture-component', () => 
     // (RED at baseline: two identical copies accumulate).
     expect(candidates.filter((c) => String(c['label']).startsWith('Create local term'))).toHaveLength(1);
 
+    // MIXFRAC-1 bar fact (verbatim 422 ride — OQ-3 proof at the wire level):
+    // ONE clarification for the whole composition, reason composition-fraction-
+    // sum, THREE candidate readings each carrying computed final fractions,
+    // the on-top reading carrying the sum note. No confidence anywhere.
+    const fractionFact = clarifications[1]!;
+    expect(fractionFact['reason']).toBe('composition-fraction-sum');
+    expect(fractionFact['actionLocation']).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+    const readings = fractionFact['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    expect(readings.map((r) => String(r['id']))).toEqual([
+      'whole-mixture-supplement',
+      'preceding-noun-recipe',
+      'explicit-on-top',
+    ]);
+    for (const reading of readings) {
+      expect(Array.isArray(reading['finalFractions'])).toBe(true);
+      expect((reading['finalFractions'] as Array<Record<string, unknown>>).length).toBeGreaterThan(0);
+      expect(Object.keys(reading)).not.toContain('confidence');
+    }
+    const onTop = readings[2]!;
+    expect(new Map(((onTop['finalFractions'] as Array<Record<string, unknown>>).map(
+      (f) => [String(f['label']), Number(f['percent'])] as const,
+    )))).toEqual(new Map([
+      ['trypsin-EDTA', 50],
+      ['DMEM', 50],
+      ['Equine Serum', 10],
+    ]));
+    expect(typeof onTop['note']).toBe('string');
+
     assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
     expect(run.spies.writeCalls).toBe(0);
 
     const record = recordFromManifest(manifest, 'golden.intent-to-clarification.unresolvable-mixture-component');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+  });
+});
+
+describe('golden.intent-to-clarification.mixfrac-canonical-ambiguous', () => {
+  it('golden.intent-to-clarification.mixfrac-canonical-ambiguous', async () => {
+    // MIXFRAC-1 GOLDEN-A BAR leg (spec §7.1 + §14.2, blessed per Brad's OQ-1
+    // ruling): the canonical defect utterance with the declared NESTED medium
+    // entry (the §14.1 expressibility riding the open params.composition slot
+    // — the wire composition items stay untouched). ONE clarification, reason
+    // composition-fraction-sum, THREE readings, the preceding-noun-recipe
+    // reading presented FIRST (the document declares the recipe-shaped
+    // reading), carrying the ruling's blessed flat derived view
+    // Trypsin-EDTA 50 / DMEM 45 / FBS 5 + the nested 90:10 quoted from the
+    // declaration. Cells never join the sum. Zero writes, zero events.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-clarification.mixfrac-canonical-ambiguous');
+    const run = await runGolden(fixture);
+    const payload = assertBar(run);
+
+    const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
+    expect(clarifications).toHaveLength(1);
+    const item = clarifications[0]!;
+    expect(item['reason']).toBe('composition-fraction-sum');
+    expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+    const readings = item['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    expect(String(readings[0]!['id']), 'the recipe-shaped reading is presented FIRST').toBe('preceding-noun-recipe');
+    expect(new Map(((readings[0]!['finalFractions'] as Array<Record<string, unknown>>).map(
+      (f) => [String(f['label']), Number(f['percent'])] as const,
+    )))).toEqual(new Map([
+      ['Trypsin-EDTA', 50],
+      ['DMEM', 45],
+      ['FBS', 5],
+    ]));
+    expect(new Map(((readings[0]!['nestedFractions'] as Array<Record<string, unknown>>).map(
+      (f) => [String(f['label']), Number(f['percent'])] as const,
+    )))).toEqual(new Map([
+      ['DMEM', 90],
+      ['FBS', 10],
+    ]));
+    // exactOptionalPropertyTypes: key ABSENCE via Object.keys, never
+    // toEqual-with-undefined.
+    expect(Object.keys(readings[0]!)).not.toContain('confidence');
+    expect(Object.keys(readings[1]!)).not.toContain('note');
+    expect(Object.keys(readings[1]!)).not.toContain('nestedFractions');
+    expect(typeof readings[2]!['note']).toBe('string');
+
+    assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
+    expect(run.spies.writeCalls).toBe(0);
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-clarification.mixfrac-canonical-ambiguous');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+  });
+});
+
+describe('golden.intent-to-clarification.mixfrac-on-top', () => {
+  it('golden.intent-to-clarification.mixfrac-on-top', async () => {
+    // MIXFRAC-1 GOLDEN-C bar leg (spec §7.3 + §14.2): the explicit on-top
+    // phrasing. On-top evidence does NOT resolve silently (OQ-4): the declared
+    // fractions still break the total, so the bar STANDS with THREE readings
+    // and the explicit-on-top reading (3 of 3 — no recipe-shaped evidence on
+    // this document, so the shipped order stands) keeps 50/50/10 as
+    // fractions-of-mixture WITH the sum note riding the reading data.
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-clarification.mixfrac-on-top');
+    const run = await runGolden(fixture);
+    const payload = assertBar(run);
+
+    const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
+    expect(clarifications).toHaveLength(1);
+    const item = clarifications[0]!;
+    expect(item['reason']).toBe('composition-fraction-sum');
+    const readings = item['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    expect(readings.map((r) => String(r['id']))).toEqual([
+      'whole-mixture-supplement',
+      'preceding-noun-recipe',
+      'explicit-on-top',
+    ]);
+    const onTop = readings[2]!;
+    expect(new Map(((onTop['finalFractions'] as Array<Record<string, unknown>>).map(
+      (f) => [String(f['label']), Number(f['percent'])] as const,
+    )))).toEqual(new Map([
+      ['Trypsin-EDTA', 50],
+      ['DMEM', 50],
+      ['FBS', 10],
+    ]));
+    expect(typeof onTop['note']).toBe('string');
+    expect(String(onTop['note'])).toContain('110');
+
+    assertBarZeroArtifact(payload['terminalArtifacts'] as Record<string, unknown>);
+    expect(run.spies.writeCalls).toBe(0);
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-clarification.mixfrac-on-top');
     const eq = deepEqualGolden(run, record);
     expect(eq.diff ?? '').toBe('');
     expect(eq.ok).toBe(true);

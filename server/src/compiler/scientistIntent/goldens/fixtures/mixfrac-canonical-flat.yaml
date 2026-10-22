@@ -1,0 +1,29 @@
+# MIXFRAC-1 GOLDEN-A (record leg) — the ruling's FLAT DERIVED view compiled
+# clean (spec §14.2 RECORD leg numbers): Trypsin-EDTA 50 / DMEM 45 / FBS 5
+# (sum 100) with the ratified source strings "50% of the mixture" /
+# "45% of the mixture" / "5% of the mixture" byte-stable (OQ-4), cells entry
+# unchanged (roles are MIXROLE-1's ground — pinned as the pipeline emits).
+# This is the shape the scientist lands on once the preceding-noun reading is
+# chosen; the declared nested truth (DMEM 90:10 FBS) lives in the BAR-leg
+# fixture (mixfrac-canonical-ambiguous.yaml) readings data.
+name: golden.intent-to-graph.mixfrac-canonical-flat
+request:
+  protocolText: >-
+    50% Trypsin-EDTA, 45% DMEM, 5% FBS with 200 HepG2 cells/uL
+  answers:
+    sample_type: bacterial
+store:
+  records: []
+modelOutput:
+  intentId: golden-mixfrac-canonical-flat
+  sourcePrompt: "50% Trypsin-EDTA, 45% DMEM, 5% FBS with 200 HepG2 cells/uL"
+  actions:
+    - action: add_material
+      volumeUl: 50
+      targetWells: [A1]
+      params:
+        composition:
+          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - { material: "DMEM", role: buffer_component, fraction: "45%" }
+          - { material: "FBS", role: additive, fraction: "5%" }
+          - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }

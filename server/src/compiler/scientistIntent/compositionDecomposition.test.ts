@@ -409,13 +409,16 @@ describe('both Brad prompts, headless end-to-end (task 4 acceptance proof)', () 
   };
 
   it('prompt 1 (the ratio sentence) yields four component materials + one complex_composition spec', async () => {
-    // Single target well: the existing chain upserts ONE spec per add_material
-    // EVENT (implicitMaterialSpecId = MSP-DRAFT-<graphId>_<eventId>,
-    // AddMaterialSupport.ts:164-168), so the headless pin of "exactly 1
-    // composition spec" runs one event. A multi-well fan-out (Brad's "each
-    // well") is the chain's per-event idiom — noted for the live leg.
-    const { store, details } = await runPrompt(`
-intentId: seed-hepg2-prompt-1
+    // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4/bait 5, updated not pinned
+    // around): the canonical 50/50/10 ratio sentence is a 110% declared sum —
+    // it now BARS with the composition-fraction-sum clarification (three
+    // candidate readings, each with computed final fractions). That IS the
+    // feature. The four-component + one-spec proof runs on the ruling's FLAT
+    // derived view (Trypsin-EDTA 50 / DMEM 45 / FBS 5, sum 100) — the shape
+    // the scientist lands on after choosing the preceding-noun reading.
+    const ambiguous = await compileShorthandDeterministically(parseScientistIntent(`
+intentId: seed-hepg2-prompt-1-ambiguous
+sourcePrompt: "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL"
 actions:
   - action: add_material
     volumeUl: 50
@@ -425,6 +428,25 @@ actions:
         - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
         - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
         - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`), { store: new MemoryRecordStore() });
+    expect(ambiguous, 'compile ran').not.toBeNull();
+    expect(ambiguous!.outcome).toBe('needs-clarification');
+    const fractionFacts = ambiguous!.clarifications.filter((c) => c.reason === 'composition-fraction-sum');
+    expect(fractionFacts, 'the 110% ratio sentence bars with the fraction reason').toHaveLength(1);
+    expect((fractionFacts[0] as unknown as Record<string, unknown>)['readings'], 'three candidate readings').toHaveLength(3);
+
+    const { store, details } = await runPrompt(`
+intentId: seed-hepg2-prompt-1
+actions:
+  - action: add_material
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "45%" }
+        - { material: "Thermo FBS", role: additive, fraction: "5%" }
         - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `, 'EG-PROMPT-1');
 

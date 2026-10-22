@@ -41,6 +41,7 @@ export interface FractionConventionConfig {
   basis: string;
   total: number;
   tolerance: number;
+  displayRoundingFactor: number;
   excludeRoles: readonly string[];
   fractionPatterns: readonly RegExp[];
   malformedFractionBehavior: string;
@@ -65,11 +66,16 @@ export interface FractionConventionConfig {
     formulationKinds: readonly string[];
     phraseMatch: string;
     ratioPatterns: readonly RegExp[];
+    /** Optional document-side arm name (e.g. `precedingEntryDeclaresOwnComposition`);
+     *  absent ⇒ the store-record arm alone decides. */
+    documentSideReading?: string;
   };
   messages: {
     clarification: string;
     sumNote: string;
     malformedNote: string;
+    attachmentNote: string;
+    fractionFormat: string;
   };
 }
 
@@ -168,6 +174,7 @@ export function loadFractionConvention(path: URL | string = FRACTION_CONVENTION_
 
   const total = requireNumber(doc.total, 'total', displayPath);
   const tolerance = requireNumber(doc.tolerance, 'tolerance', displayPath);
+  const displayRoundingFactor = requireNumber(doc.displayRoundingFactor, 'displayRoundingFactor', displayPath);
   const excludeRoles = requireStringList(doc.excludeRoles, 'excludeRoles', displayPath);
   const fractionPatterns = requirePatternList(doc.fractionPatterns, 'fractionPatterns', displayPath);
 
@@ -191,6 +198,7 @@ export function loadFractionConvention(path: URL | string = FRACTION_CONVENTION_
     basis: requireString(doc.basis, 'basis', displayPath),
     total,
     tolerance,
+    displayRoundingFactor,
     excludeRoles,
     fractionPatterns,
     malformedFractionBehavior: requireString(doc.malformedFractionBehavior, 'malformedFractionBehavior', displayPath),
@@ -218,11 +226,17 @@ export function loadFractionConvention(path: URL | string = FRACTION_CONVENTION_
       formulationKinds: requireStringList(recipeRaw.formulationKinds, 'recipeShapedReadingEvidence.formulationKinds', displayPath),
       phraseMatch: requireString(recipeRaw.phraseMatch, 'recipeShapedReadingEvidence.phraseMatch', displayPath),
       ratioPatterns: requirePatternList(recipeRaw.ratioPatterns, 'recipeShapedReadingEvidence.ratioPatterns', displayPath),
+      // exactOptionalPropertyTypes: the document-side arm is absent-or-value.
+      ...(typeof recipeRaw.documentSideReading === 'string' && recipeRaw.documentSideReading.length
+        ? { documentSideReading: recipeRaw.documentSideReading }
+        : {}),
     },
     messages: {
       clarification: requireString(messagesRaw.clarification, 'messages.clarification', displayPath),
       sumNote: requireString(messagesRaw.sumNote, 'messages.sumNote', displayPath),
       malformedNote: requireString(messagesRaw.malformedNote, 'messages.malformedNote', displayPath),
+      attachmentNote: requireString(messagesRaw.attachmentNote, 'messages.attachmentNote', displayPath),
+      fractionFormat: requireString(messagesRaw.fractionFormat, 'messages.fractionFormat', displayPath),
     },
   };
 }
@@ -263,12 +277,26 @@ export function parseFractionValue(value: string, patterns: readonly RegExp[]): 
   return undefined;
 }
 
-export function formatFractionPercent(value: number): string {
-  const rounded = Math.round(value * 100) / 100;
+/** Render a computed percent for display / for a rewritten fraction string.
+ *  The rounding factor is the DATA `displayRoundingFactor` — the TS carries no
+ *  rounding literal. */
+export function formatFractionPercent(value: number, roundingFactor: number): string {
+  const rounded = Math.round(value * roundingFactor) / roundingFactor;
   return String(rounded);
 }
 
+/** Canonical rendering of a parsed fraction when it is rewritten onto a
+ *  composition entry / snapshot source (the `messages.fractionFormat` DATA
+ *  template — the TS never hardcodes the suffix form). */
+export function formatFractionString(value: number, config: FractionConventionConfig): string {
+  return interpolate(config.messages.fractionFormat, {
+    value: formatFractionPercent(value, config.displayRoundingFactor),
+  });
+}
+
 interface DeclaredEntry {
+  /** Position in the declared composition array (index-aligned rewrite). */
+  index: number;
   label: string;
   role: string;
   /** The declared fraction string exactly as the document carries it. */
@@ -282,21 +310,22 @@ interface DeclaredEntry {
 
 function readComposition(composition: readonly unknown[], config: FractionConventionConfig): DeclaredEntry[] {
   const entries: DeclaredEntry[] = [];
-  for (const raw of composition) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+  composition.forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
     const entry = raw as Record<string, unknown>;
     const label = typeof entry.material === 'string' ? entry.material.trim() : '';
-    if (!label) continue;
+    if (!label) return;
     const role = typeof entry.role === 'string' && entry.role.trim() ? entry.role.trim() : 'other';
     const declared = typeof entry.fraction === 'string' ? entry.fraction.trim() : '';
     entries.push({
+      index,
       label,
       role,
       declared,
       parsed: declared ? parseFractionValue(declared, config.fractionPatterns) : undefined,
       ...(Array.isArray(entry.composition) && entry.composition.length > 0 ? { nested: entry.composition as readonly unknown[] } : {}),
     });
-  }
+  });
   return entries;
 }
 
@@ -313,17 +342,38 @@ export interface CompositionReading {
   id: string;
   label: string;
   finalFractions: ComputedFraction[];
+  /** §14.2: the preceding entry's OWN declared composition (the nested/recipe
+   *  split) for the attach-to-preceding reading. Absent-or-value via
+   *  conditional spread only (exactOptionalPropertyTypes). */
+  nestedFractions?: ComputedFraction[];
   note?: string;
+}
+
+/** A computed fraction that also names the declared entry it rewrites
+ *  (index-aligned: the rewrite never keys on a label, which a model could
+ *  duplicate). */
+export interface ResolvedFraction {
+  index: number;
+  label: string;
+  percent: number;
+}
+
+/** Internal strategy output: every computed share keeps its source entry's
+ *  declared-array index. */
+interface StrategyFraction {
+  index: number;
+  label: string;
+  percent: number;
 }
 
 function applyStrategy(
   strategy: string,
   entries: readonly DeclaredEntry[],
   config: FractionConventionConfig,
-): ComputedFraction[] {
+): StrategyFraction[] {
   const counted = entries.filter((e) => !config.excludeRoles.includes(e.role) && e.parsed !== undefined);
   if (strategy === 'keep-declared') {
-    return counted.map((e) => ({ label: e.label, percent: e.parsed as number }));
+    return counted.map((e) => ({ index: e.index, label: e.label, percent: e.parsed as number }));
   }
   if (strategy === 'rebase-to-total') {
     const supplement = counted[counted.length - 1]!;
@@ -332,8 +382,8 @@ function applyStrategy(
     const supplementShare = supplement.parsed as number;
     const scale = baseSum > 0 ? (config.total - supplementShare) / baseSum : 0;
     return [
-      ...bases.map((e) => ({ label: e.label, percent: (e.parsed as number) * scale })),
-      { label: supplement.label, percent: supplementShare },
+      ...bases.map((e) => ({ index: e.index, label: e.label, percent: (e.parsed as number) * scale })),
+      { index: supplement.index, label: supplement.label, percent: supplementShare },
     ];
   }
   if (strategy === 'attach-to-preceding') {
@@ -341,13 +391,31 @@ function applyStrategy(
     const preceding = counted[counted.length - 2];
     const others = counted.slice(0, -2);
     const supplementShare = supplement.parsed as number;
-    const precedingShare = preceding ? (preceding.parsed as number) : 0;
-    const out: ComputedFraction[] = others.map((e) => ({ label: e.label, percent: e.parsed as number }));
+    const out: StrategyFraction[] = others.map((e) => ({ index: e.index, label: e.label, percent: e.parsed as number }));
     if (preceding) {
-      out.push({ label: preceding.label, percent: precedingShare * (1 - supplementShare / config.total) });
-      out.push({ label: supplement.label, percent: precedingShare * (supplementShare / config.total) });
+      const precedingShare = preceding.parsed as number;
+      // §14.2: when the preceding entry carries a DECLARED nested composition
+      // (the §14.1 expressibility), the flat derived view EXPANDS it: each
+      // child takes parentShare x childShare / total and the top-level
+      // supplement entry is ABSORBED (it IS the child — the attachment reading
+      // says the supplement is part of the recipe, not a separate component).
+      const declaredChildren = preceding.nested ? readComposition(preceding.nested, config) : undefined;
+      const expandDeclared = declaredChildren !== undefined
+        && declaredChildren.length > 0
+        && declaredChildren.every((c) => c.parsed !== undefined && !config.excludeRoles.includes(c.role));
+      if (expandDeclared && declaredChildren) {
+        for (const child of declaredChildren) {
+          out.push({ index: preceding.index, label: child.label, percent: precedingShare * (child.parsed as number) / config.total });
+        }
+      } else {
+        // The preceding entry's declared share p splits: the preceding noun keeps
+        // p*(1 - f/total), the supplement takes p*(f/total) — the flat derived
+        // view of the nested recipe (Brad's OQ-1 arithmetic).
+        out.push({ index: preceding.index, label: preceding.label, percent: precedingShare * (1 - supplementShare / config.total) });
+        out.push({ index: supplement.index, label: supplement.label, percent: precedingShare * (supplementShare / config.total) });
+      }
     } else {
-      out.push({ label: supplement.label, percent: supplementShare });
+      out.push({ index: supplement.index, label: supplement.label, percent: supplementShare });
     }
     return out;
   }
@@ -361,6 +429,11 @@ function applyStrategy(
 interface AttachmentEvidenceVerdict {
   finalVolumeHits: number;
   onTopHits: number;
+  /** A ratio/quantity match whose span sits within `adjacencyWindowChars` of a
+   *  `supplementConnectors` occurrence — the firesOn-idiom attachment evidence
+   *  (the cues file's ratioPatterns/adjacency arm). Zero when the utterance
+   *  carries no quantity attached to a supplement connector. */
+  attachmentHits: number;
 }
 
 function scanAttachmentEvidence(utterance: string, config: FractionConventionConfig): AttachmentEvidenceVerdict {
@@ -368,35 +441,85 @@ function scanAttachmentEvidence(utterance: string, config: FractionConventionCon
   const evidence = config.attachmentEvidence;
   const count = (phrases: readonly string[]) =>
     phrases.reduce((hits, phrase) => (haystack.includes(normalizePhrase(phrase)) ? hits + 1 : hits), 0);
-  void evidence.supplementConnectors;
-  void evidence.adjacencyWindowChars;
-  void evidence.ratioPatterns;
+
+  // Adjacency arm (DATA): every connector occurrence, every ratio/quantity
+  // match; a match whose span reaches within adjacencyWindowChars of a
+  // connector is attachment evidence. No connector or no quantity => zero.
+  // Global copies of the DATA patterns drive the scan (the loader's patterns
+  // are non-global; exec on a non-global regex never advances).
+  const window = evidence.adjacencyWindowChars;
+  const globalPatterns = evidence.ratioPatterns.map((p) => new RegExp(p.source, 'g'));
+  let attachmentHits = 0;
+  for (const connector of evidence.supplementConnectors) {
+    const needle = normalizePhrase(connector);
+    if (!needle.length) continue;
+    let from = 0;
+    for (;;) {
+      const at = haystack.indexOf(needle, from);
+      if (at < 0) break;
+      const connectorStart = at;
+      const connectorEnd = at + needle.length;
+      for (const pattern of globalPatterns) {
+        pattern.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(haystack)) !== null) {
+          const matchStart = match.index;
+          const matchEnd = match.index + match[0].length;
+          const gap = Math.max(connectorStart - matchEnd, matchStart - connectorEnd);
+          if (gap <= window) attachmentHits += 1;
+          if (match[0].length === 0) break;
+        }
+      }
+      from = at + needle.length;
+    }
+  }
   return {
     finalVolumeHits: count(evidence.finalVolumePhrases),
     onTopHits: count(evidence.onTopPhrases),
+    attachmentHits,
   };
 }
 
 /** §14.3: "recipe-shaped reading exists" = a formulation-shaped store record
  *  (kind ∈ storeKinds, formulationKind ∈ formulationKinds) that declares its
- *  own composition AND whose name holds inside the utterance as a whole-word
- *  run. The record IS the datum; no reagent word is written in the file. */
+ *  own composition AND whose NAME matches the preceding-noun phrase — the
+ *  component name on the LEFT flank of the supplement connector, derived from
+ *  the composition entries (never a reagent word written in the file). The
+ *  match is the cues whole-word-containment idiom: the phrase holds inside the
+ *  record name as a whole-word run. The record IS the datum. */
 function recipeShapedReadingExists(
   records: readonly RecipeShapedRecordEvidence[] | undefined,
-  utterance: string,
+  entries: readonly DeclaredEntry[],
   config: FractionConventionConfig,
 ): boolean {
-  if (!records || records.length === 0) return false;
-  const haystack = normalizePhrase(utterance);
+  const counted = entries.filter((e) => !config.excludeRoles.includes(e.role) && e.parsed !== undefined);
+  const preceding = counted[counted.length - 2];
+  if (!preceding) return false;
   const rules = config.recipeShapedReadingEvidence;
-  return records.some((record) =>
-    rules.storeKinds.includes(record.kind)
-    && record.formulationKind !== undefined
-    && rules.formulationKinds.includes(record.formulationKind)
-    && Array.isArray(record.composition)
-    && record.composition.length > 0
-    && (rules.phraseMatch !== 'whole-word-containment' || wholeWordContains(haystack, normalizePhrase(record.name))),
-  );
+
+  // Store arm (§14.3): a formulation-shaped STORE record whose name matches
+  // the preceding-noun phrase AND that declares its own composition.
+  if (records && records.length > 0) {
+    const phrase = normalizePhrase(preceding.label);
+    if (phrase.length && records.some((record) =>
+      rules.storeKinds.includes(record.kind)
+      && record.formulationKind !== undefined
+      && rules.formulationKinds.includes(record.formulationKind)
+      && Array.isArray(record.composition)
+      && record.composition.length > 0
+      && (rules.phraseMatch !== 'whole-word-containment' || wholeWordContains(normalizePhrase(record.name), phrase)),
+    )) return true;
+  }
+
+  // Document-side arm (the §14.1 expressibility, named by DATA
+  // `documentSideReading`): the composition entry on the LEFT flank of the
+  // supplement declares its OWN composition — an in-house formulation stated
+  // in the document itself is a recipe-shaped component reading. The declared
+  // sub-composition IS the datum; no reagent word is consulted.
+  if (rules.documentSideReading === 'precedingEntryDeclaresOwnComposition') {
+    return preceding.nested !== undefined && preceding.nested.length > 0;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -416,7 +539,7 @@ export interface FractionCheckClarification {
  *  index-aligned with these percents). */
 export interface FractionCheckOutcome {
   clarification?: FractionCheckClarification;
-  resolvedFractions?: Array<{ label: string; percent: number }>;
+  resolvedFractions?: ResolvedFraction[];
 }
 
 function interpolate(template: string, values: Record<string, string>): string {
@@ -443,18 +566,54 @@ function buildReadings(
   return order.map((id) => {
     const strategy = config.convention.readingArithmetic[id]!;
     const fractions = applyStrategy(strategy, entries, config).map(
-      (f) => ({ label: f.label, percent: Number(formatFractionPercent(f.percent)) }),
+      (f) => ({ label: f.label, percent: Number(formatFractionPercent(f.percent, config.displayRoundingFactor)) }),
     );
     const note = strategy === 'keep-declared'
-      ? interpolate(config.messages.sumNote, { sum: formatFractionPercent(sum), total: formatFractionPercent(config.total) })
+      ? interpolate(config.messages.sumNote, { sum: formatFractionPercent(sum, config.displayRoundingFactor), total: formatFractionPercent(config.total, config.displayRoundingFactor) })
+      : undefined;
+    // §14.2: the ONE encoding of the nested/recipe form. The attach-to-preceding
+    // reading carries the preceding entry's OWN declared composition — the
+    // declared (total - supplement):(supplement) split the in-house recipe
+    // states — as nested fractions, alongside the flat derived view. Both are
+    // COMPUTED from the DATA convention; neither is a reagent table.
+    const nestedFractions = strategy === 'attach-to-preceding'
+      ? nestedSplit(entries, config)
       : undefined;
     return {
       id,
       label: config.convention.readingLabels[id]!,
       finalFractions: fractions,
+      ...(nestedFractions !== undefined ? { nestedFractions } : {}),
       ...(note !== undefined ? { note } : {}),
     };
   });
+}
+
+/** The preceding entry's own declared sub-composition as fractions of ITSELF:
+ *  the supplement's declared share of the total is the recipe's declared
+ *  inner share, the rest belongs to the preceding noun (the DATA total minus
+ *  the declared supplement share). When the preceding entry carries an explicit
+ *  nested composition (the §14.1 expressibility), its declared fractions are
+ *  quoted instead of inferred. */
+function nestedSplit(entries: readonly DeclaredEntry[], config: FractionConventionConfig): ComputedFraction[] | undefined {
+  const counted = entries.filter((e) => !config.excludeRoles.includes(e.role) && e.parsed !== undefined);
+  const supplement = counted[counted.length - 1];
+  const preceding = counted[counted.length - 2];
+  if (!supplement || !preceding) return undefined;
+  const declaredNested = preceding.nested;
+  if (declaredNested && declaredNested.length > 0) {
+    const nested = readComposition(declaredNested, config)
+      .filter((e) => e.parsed !== undefined)
+      .map((e) => ({ label: e.label, percent: Number(formatFractionPercent(e.parsed as number, config.displayRoundingFactor)) }));
+    if (nested.length > 0) return nested;
+  }
+  const innerSupplement = supplement.parsed as number;
+  const innerPreceding = config.total - innerSupplement;
+  if (innerPreceding <= 0) return undefined;
+  return [
+    { label: preceding.label, percent: Number(formatFractionPercent(innerPreceding, config.displayRoundingFactor)) },
+    { label: supplement.label, percent: Number(formatFractionPercent(innerSupplement, config.displayRoundingFactor)) },
+  ];
 }
 
 /**
@@ -496,8 +655,8 @@ export function evaluateCompositionFractions(
   if (silentArmFires) {
     const strategy = config.convention.readingArithmetic[silent.reading];
     if (strategy === 'rebase-to-total') {
-      const resolved = applyStrategy(strategy, entries, config).map(
-        (f) => ({ label: f.label, percent: Number(formatFractionPercent(f.percent)) }),
+      const resolved: ResolvedFraction[] = applyStrategy(strategy, entries, config).map(
+        (f) => ({ index: f.index, label: f.label, percent: Number(formatFractionPercent(f.percent, config.displayRoundingFactor)) }),
       );
       // A silent resolution must produce a self-consistent composition: if the
       // computed fractions still break the total, the bar stands instead.
@@ -510,13 +669,14 @@ export function evaluateCompositionFractions(
 
   // Genuine ambiguity (or an unresolvable one-sided claim): clarify with every
   // reading, never pick, never rank.
-  const readings = buildReadings(entries, config, recipeShapedReadingExists(recipeRecords, utterance ?? '', config), sum);
+  const readings = buildReadings(entries, config, recipeShapedReadingExists(recipeRecords, entries, config), sum);
   const label = parseable.map((e) => e.label).join(', ');
+  const attachmentNote = evidence.attachmentHits > 0 ? ` ${config.messages.attachmentNote}` : '';
   const message = interpolate(config.messages.clarification, {
-    sum: formatFractionPercent(sum),
-    total: formatFractionPercent(config.total),
+    sum: formatFractionPercent(sum, config.displayRoundingFactor),
+    total: formatFractionPercent(config.total, config.displayRoundingFactor),
     basis: config.basis,
-  }) + malformedNote;
+  }) + attachmentNote + malformedNote;
   return {
     clarification: {
       label,
