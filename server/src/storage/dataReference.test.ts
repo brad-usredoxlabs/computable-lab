@@ -62,7 +62,7 @@ describe('data-reference schema', () => {
       dataKind: 'signal',
       format: 'fcs',
       readerVersion: '0.1.0',
-      acquisitionContext: { instrument: 'QuantStudio-5', note: 'after heat' },
+      acquisitionContext: { equipment_ref: { kind: 'record', type: 'equipment', id: 'EQP-QUANTSTUDIO5' }, note: 'after heat' },
       sourceRunRef: { kind: 'record', id: 'EXR-000123', type: 'execution-run' },
       acquiredAt: '2026-09-05T15:00:00Z',
     };

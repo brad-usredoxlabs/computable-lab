@@ -21,7 +21,7 @@ type RoleFamily = 'sample' | 'control' | 'calibration';
 type MeasurementContextBody = {
   name?: string;
   sourceRef?: RefShape;
-  instrumentRef?: RefShape;
+  equipmentRef?: RefShape;
   assayDefRef?: RefShape;
   readoutDefRefs?: RefShape[];
   timepoint?: string;
@@ -141,9 +141,9 @@ function filterDefinitions<T extends { instrument_type?: string }>(items: T[], i
 
 function friendlyNameFromContext(body: MeasurementContextBody): string {
   const assay = body.assayDefRef?.label ?? body.assayDefRef?.id;
-  const instrument = body.instrumentRef?.label ?? body.instrumentRef?.id;
+  const equipment = body.equipmentRef?.label ?? body.equipmentRef?.id;
   const timepoint = stringValue(body.timepoint);
-  return [assay, instrument, timepoint].filter(Boolean).join(' · ') || 'Measurement Context';
+  return [assay, equipment, timepoint].filter(Boolean).join(' · ') || 'Measurement Context';
 }
 
 function roleAssignmentsForContext(assignments: RecordEnvelope[], measurementContextRef: string): RecordEnvelope[] {
@@ -485,14 +485,14 @@ export function createSemanticsHandlers(ctx: AppContext) {
     ): Promise<{ success: true; measurementContextId: string } | ApiError> {
       await ensureSeedDefinitions(ctx.store);
       const sourceRef = refValue(request.body.sourceRef);
-      const instrumentRef = refValue(request.body.instrumentRef);
+      const equipmentRef = refValue(request.body.equipmentRef);
       const readoutDefRefs = refList(request.body.readoutDefRefs);
       const assayDefRef = refValue(request.body.assayDefRef);
-      if (!sourceRef || !instrumentRef || readoutDefRefs.length === 0) {
+      if (!sourceRef || !equipmentRef || readoutDefRefs.length === 0) {
         reply.status(400);
         return {
           error: 'BAD_REQUEST',
-          message: 'sourceRef, instrumentRef, and at least one readoutDefRef are required',
+          message: 'sourceRef, equipmentRef, and at least one readoutDefRef are required',
         };
       }
       const recordId = token('MCTX');
@@ -502,7 +502,7 @@ export function createSemanticsHandlers(ctx: AppContext) {
         name: stringValue(request.body.name) ?? friendlyNameFromContext(request.body),
         title: stringValue(request.body.name) ?? friendlyNameFromContext(request.body),
         source_ref: sourceRef,
-        instrument_ref: instrumentRef,
+        equipment_ref: equipmentRef,
         readout_def_refs: readoutDefRefs,
         ...(assayDefRef ? { assay_def_ref: assayDefRef } : {}),
         ...(stringValue(request.body.timepoint) ? { timepoint: stringValue(request.body.timepoint) } : {}),

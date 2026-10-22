@@ -103,7 +103,7 @@ export function ReadoutContextPanel({
             <div className="mt-2 text-sm text-slate-800">
               <span className="font-medium">{activeContext.assay_def_ref?.label || 'Custom readout'}</span>
               {' · '}
-              {activeContext.instrument_ref.label || activeContext.instrument_ref.id}
+              {activeContext.equipment_ref.label || activeContext.equipment_ref.id}
               {' · '}
               {activeContext.readout_def_refs.map((ref) => ref.label || ref.id).join(', ')}
             </div>

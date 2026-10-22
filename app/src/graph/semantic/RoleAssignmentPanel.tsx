@@ -211,7 +211,7 @@ export function RoleAssignmentPanel({
       {!hideContextSummary ? (
         <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
           <div><span className="font-medium">Assay:</span> {activeContext.assay_def_ref?.label || 'Custom measurement'}</div>
-          <div><span className="font-medium">Instrument:</span> {activeContext.instrument_ref.label || activeContext.instrument_ref.id}</div>
+          <div><span className="font-medium">Equipment:</span> {activeContext.equipment_ref.label || activeContext.equipment_ref.id}</div>
           <div><span className="font-medium">Readouts:</span> {activeContext.readout_def_refs.map((ref) => ref.label || ref.id).join(', ')}</div>
           {typeof activeContext.measurement_count === 'number' ? <div><span className="font-medium">Linked reads:</span> {activeContext.measurement_count}</div> : null}
         </div>

@@ -83,7 +83,7 @@ describe('MeasurementActiveControlService', () => {
     const service = new MeasurementActiveControlService(ctx, fakeSidecar as never);
     const result = await service.performActiveRead({
       adapterId: 'molecular_devices_gemini',
-      instrumentRef: { kind: 'record', id: 'INSTR-GEMINI', type: 'instrument' },
+      instrumentRef: { kind: 'record', id: 'EQP-GEMINI', type: 'equipment' },
     });
 
     expect(result.measurementId).toBe('MSR-000001');

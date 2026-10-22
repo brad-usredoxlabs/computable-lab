@@ -537,7 +537,7 @@ export function useResultsMode(args: {
       const measurementContext = activeContext
       const measurementLabwareId = measurementContext?.payload.source_ref?.id || targetLabwareId || sourceLabwareId
       const response = await apiClient.ingestMeasurement({
-        ...(measurementContext?.payload.instrument_ref ? { instrumentRef: measurementContext.payload.instrument_ref } : {}),
+        ...(measurementContext?.payload.equipment_ref ? { equipmentRef: measurementContext.payload.equipment_ref } : {}),
         ...(measurementLabwareId ? { labwareInstanceRef: { kind: 'record', id: measurementLabwareId, type: 'labware' } } : {}),
         eventGraphRef: { kind: 'record', id: eventGraphId, type: 'event-graph' },
         ...(measurementContext ? { measurementContextRef: { kind: 'record', id: measurementContext.recordId, type: 'measurement-context', label: measurementContext.payload.name } } : {}),

@@ -53,7 +53,13 @@ function recordRef(id: string, type: string, label?: string): Ref {
 }
 
 function instrumentRef(): Ref {
-  return recordRef('instrument/gemini-em', 'instrument', 'Gemini EM')
+  // Active-read/appliance contract ref (field NAME retained; blob-path-style id stays).
+  return recordRef('instrument/gemini-em', 'equipment', 'Gemini EM')
+}
+
+function equipmentRef(): Ref {
+  // measurement-context.equipment_ref (INSTR-COLLAPSE-1 C1): the physical source is an equipment record.
+  return recordRef('EQP-GEMINI-EM', 'equipment', 'Gemini EM')
 }
 
 function readoutRefForChannel(channel: ChannelDraft): Ref {
@@ -143,7 +149,7 @@ async function ensureMeasurementContext(placementId: string, labware: Labware, p
     id,
     name: plan.channel.label + ' read on ' + labware.name,
     source_ref: recordRef(placementId, 'labware', labware.name),
-    instrument_ref: instrumentRef(),
+    equipment_ref: equipmentRef(),
     readout_def_refs: [readoutRefForChannel(plan.channel)],
     notes: channelLabel(plan.channel),
     tags: ['single-plate', 'active-read'],

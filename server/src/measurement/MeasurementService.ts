@@ -19,7 +19,7 @@ type MeasurementPayload = {
   assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
   eventGraphRef?: Ref;
   readEventRef?: string;
-  instrumentRef?: Ref;
+  equipmentRef?: Ref;
   labwareInstanceRef?: Ref;
   measurementContextRef?: Ref;
   timepoint?: string;
@@ -99,7 +99,7 @@ export class MeasurementService {
   }
 
   async ingest(input: {
-    instrumentRef?: unknown;
+    equipmentRef?: unknown;
     labwareInstanceRef?: unknown;
     eventGraphRef?: unknown;
     measurementContextRef?: unknown;
@@ -130,7 +130,7 @@ export class MeasurementService {
     const wells = new Set(data.map((d) => d.well));
     const channels = new Set(parsed.channels);
     const eventGraphRef = parseRef(input.eventGraphRef);
-    const instrumentRef = parseRef(input.instrumentRef);
+    const equipmentRef = parseRef(input.equipmentRef);
     const labwareInstanceRef = parseRef(input.labwareInstanceRef);
     const measurementContextRef = parseRef(input.measurementContextRef);
 
@@ -143,7 +143,7 @@ export class MeasurementService {
       assayType: parsed.assayType,
       ...(eventGraphRef ? { eventGraphRef } : {}),
       ...(typeof input.readEventRef === 'string' ? { readEventRef: input.readEventRef } : {}),
-      ...(instrumentRef ? { instrumentRef } : {}),
+      ...(equipmentRef ? { equipmentRef } : {}),
       ...(labwareInstanceRef ? { labwareInstanceRef } : {}),
       ...(measurementContextRef ? { measurementContextRef } : {}),
       ...(typeof input.timepoint === 'string' && input.timepoint.length > 0 ? { timepoint: input.timepoint } : {}),

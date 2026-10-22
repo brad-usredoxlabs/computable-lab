@@ -45,7 +45,7 @@ export function MeasurementContextList({
               <div>
                 <div className="text-sm font-semibold text-slate-900">{context.name}</div>
                 <div className="mt-1 text-xs text-slate-600">
-                  {(context.assay_def_ref?.label || 'Custom measurement')} · {context.instrument_ref.label || context.instrument_ref.id}
+                  {(context.assay_def_ref?.label || 'Custom measurement')} · {context.equipment_ref.label || context.equipment_ref.id}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{summarizeReadouts(context)}</div>
                 {metadata.readEventIds.length > 0 ? (

@@ -36,8 +36,13 @@ export function MeasurementSetupPanel({
   const [instruments, setInstruments] = useState<InstrumentDefinition[]>([])
   const [assays, setAssays] = useState<AssayDefinition[]>([])
   const [readouts, setReadouts] = useState<ReadoutDefinition[]>([])
+  // INSTR-COLLAPSE-1 C1: measurement-context.equipment_ref targets an EQUIPMENT
+  // record (the retired instrument kind is not a ref target). The instrument-
+  // definition list below stays as the readout/assay FILTER vocabulary (blessed
+  // keep, OQ-2/OQ-3) — it is no longer the physical-source ref.
+  const [equipment, setEquipment] = useState<Array<{ id: string; name: string }>>([])
+  const [equipmentId, setEquipmentId] = useState('')
   const [instrumentType, setInstrumentType] = useState<InstrumentDefinition['instrument_type']>('plate_reader')
-  const [instrumentId, setInstrumentId] = useState('')
   const [assayId, setAssayId] = useState('')
   const [readoutIds, setReadoutIds] = useState<string[]>([])
   const [seriesId, setSeriesId] = useState('')
@@ -51,14 +56,21 @@ export function MeasurementSetupPanel({
 
   useEffect(() => {
     void (async () => {
-      const [instrumentResponse, assayResponse, readoutResponse] = await Promise.all([
+      const [instrumentResponse, assayResponse, readoutResponse, equipmentResponse] = await Promise.all([
         apiClient.listSemanticsInstruments(),
         apiClient.listSemanticsAssays(),
         apiClient.listSemanticsReadouts(),
+        apiClient.listRecordsByKind('equipment'),
       ])
       setInstruments(instrumentResponse.items)
       setAssays(assayResponse.items)
       setReadouts(readoutResponse.items)
+      setEquipment(equipmentResponse.records
+        .map((record) => {
+          const payload = record.payload as { id?: string; name?: string }
+          return { id: payload.id || record.recordId, name: payload.name || payload.id || record.recordId }
+        })
+        .filter((item) => item.id))
     })().catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to load measurement setup options')
     })
@@ -69,10 +81,6 @@ export function MeasurementSetupPanel({
     setInstrumentType(suggestedInstrumentType)
   }, [activeContext, suggestedInstrumentType])
 
-  const filteredInstruments = useMemo(
-    () => instruments.filter((item) => item.instrument_type === instrumentType),
-    [instruments, instrumentType],
-  )
   const filteredReadouts = useMemo(
     () => readouts.filter((item) => item.instrument_type === instrumentType),
     [readouts, instrumentType],
@@ -83,12 +91,14 @@ export function MeasurementSetupPanel({
   )
 
   useEffect(() => {
-    if (!filteredInstruments.some((item) => item.id === instrumentId)) {
-      setInstrumentId(filteredInstruments[0]?.id || '')
+    if (!equipment.some((item) => item.id === equipmentId)) {
+      setEquipmentId(equipment[0]?.id || '')
     }
-  }, [filteredInstruments, instrumentId])
+  }, [equipment, equipmentId])
 
-  const selectedAssay = useMemo(() => assays.find((item) => item.id === assayId) || null, [assays, assayId])
+  const selectedEquipment = useMemo(() => equipment.find((item) => item.id === equipmentId) || null, [equipment, equipmentId])
+
+  const selectedAssay = useMemo(() => assays.find((item) => item.id === assayId) || null, [assays])
   const selectedReadEvent = useMemo(
     () => readEvents.find((item) => item.eventId === activeReadEventId) || null,
     [readEvents, activeReadEventId],
@@ -105,7 +115,9 @@ export function MeasurementSetupPanel({
       return
     }
     const parsedNotes = parseReadoutNotes(activeContext.notes)
-    const activeInstrument = instruments.find((item) => item.id === activeContext.instrument_ref.id)
+    // The context's equipment ref may name an instrument-definition-style id from
+    // older setups; keep the readout filter aligned when a definition matches.
+    const activeInstrument = instruments.find((item) => item.id === activeContext.equipment_ref.id)
     setContextName(activeContext.name || '')
     setSeriesId(activeContext.series_id || '')
     setGeneralNotes(parsedNotes.generalNotes)
@@ -115,7 +127,7 @@ export function MeasurementSetupPanel({
     if (activeInstrument) {
       setInstrumentType(activeInstrument.instrument_type)
     }
-    setInstrumentId(activeContext.instrument_ref.id)
+    setEquipmentId(activeContext.equipment_ref.id)
     setAssayId(activeContext.assay_def_ref?.id || '')
     setReadoutIds(activeContext.readout_def_refs.map((item) => item.id))
   }, [activeContext, instruments])
@@ -161,10 +173,9 @@ export function MeasurementSetupPanel({
   }
 
   const handleSubmit = async () => {
-    const instrument = instruments.find((item) => item.id === instrumentId)
     const selectedReadouts = readouts.filter((item) => readoutIds.includes(item.id))
-    if (!instrument || selectedReadouts.length === 0) {
-      setError('Instrument and at least one readout are required')
+    if (!selectedEquipment || selectedReadouts.length === 0) {
+      setError('Equipment and at least one readout are required')
       return
     }
     setSaving(true)
@@ -191,7 +202,7 @@ export function MeasurementSetupPanel({
         name: contextName.trim() || generatedName || undefined,
         title: contextName.trim() || generatedName || undefined,
         source_ref: sourceRef,
-        instrument_ref: toRecordRef(instrument.id, 'instrument-definition', instrument.name),
+        equipment_ref: toRecordRef(selectedEquipment.id, 'equipment', selectedEquipment.name),
         assay_def_ref: selectedAssay ? toRecordRef(selectedAssay.id, 'assay-definition', selectedAssay.name) : undefined,
         readout_def_refs: selectedReadouts.map((item) => toRecordRef(item.id, 'readout-definition', item.name)),
         series_id: seriesId.trim() || undefined,
@@ -209,7 +220,7 @@ export function MeasurementSetupPanel({
         const response = await apiClient.createMeasurementContext({
           name: payload.name,
           sourceRef,
-          instrumentRef: payload.instrument_ref,
+          equipmentRef: payload.equipment_ref,
           assayDefRef: payload.assay_def_ref,
           readoutDefRefs: payload.readout_def_refs,
           seriesId: payload.series_id,
@@ -291,10 +302,10 @@ export function MeasurementSetupPanel({
         </label>
 
         <label className="text-xs font-medium text-slate-700">
-          Instrument
-          <select value={instrumentId} onChange={(e) => setInstrumentId(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-            {filteredInstruments.map((instrument) => (
-              <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+          Equipment
+          <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+            {equipment.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
         </label>

@@ -30,7 +30,7 @@ type MeasurementContextPayload = {
   id: string;
   name: string;
   source_ref?: RefShape;
-  instrument_ref?: RefShape;
+  equipment_ref?: RefShape;
   assay_def_ref?: RefShape;
   readout_def_refs?: RefShape[];
   timepoint?: string;
@@ -550,13 +550,13 @@ export class RunWorkspaceService {
       },
       readouts: {
         contexts: workspace.measurementContexts.map((context) => {
-          const instrument = refSummary(context.payload.instrument_ref);
+          const equipment = refSummary(context.payload.equipment_ref);
           const assay = refSummary(context.payload.assay_def_ref);
           return {
             recordId: context.recordId,
             name: context.payload.name,
             ...(context.payload.source_ref?.id ? { sourceRefId: context.payload.source_ref.id } : {}),
-            ...(instrument ? { instrument } : {}),
+            ...(equipment ? { equipment } : {}),
             ...(assay ? { assay } : {}),
             readouts: (context.payload.readout_def_refs ?? []).map((readout) => ({
               id: readout.id || '',
@@ -695,11 +695,11 @@ export class RunWorkspaceService {
 
       case 'readouts':
         tabContext = {
-          emphasis: 'measurement contexts, instruments, channels, assay definitions',
+          emphasis: 'measurement contexts, equipment, channels, assay definitions',
           contexts: workspace.measurementContexts.map((context) => ({
             recordId: context.recordId,
             name: context.payload.name,
-            instrument: context.payload.instrument_ref,
+            equipment: context.payload.equipment_ref,
             assay: context.payload.assay_def_ref,
             readoutDefs: context.payload.readout_def_refs,
             timepoint: context.payload.timepoint,

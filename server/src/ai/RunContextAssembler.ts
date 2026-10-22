@@ -38,7 +38,7 @@ type MeasurementContextPayload = {
   id: string;
   name: string;
   source_ref?: RefShape;
-  instrument_ref?: RefShape;
+  equipment_ref?: RefShape;
   assay_def_ref?: RefShape;
   readout_def_refs?: RefShape[];
   timepoint?: string;
@@ -122,7 +122,7 @@ export interface ReadoutsContext {
   measurementContexts: Array<{
     recordId: string;
     name: string;
-    instrumentRef?: RefShape;
+    equipmentRef?: RefShape;
     assayRef?: RefShape;
     readoutDefs: RefShape[];
     timepoint?: string;
@@ -312,7 +312,7 @@ export class RunContextAssembler {
         return {
           recordId: c.recordId,
           name: c.payload.name,
-          ...(c.payload.instrument_ref ? { instrumentRef: c.payload.instrument_ref } : {}),
+          ...(c.payload.equipment_ref ? { equipmentRef: c.payload.equipment_ref } : {}),
           ...(c.payload.assay_def_ref ? { assayRef: c.payload.assay_def_ref } : {}),
           readoutDefs: c.payload.readout_def_refs ?? [],
           ...(typeof c.payload.timepoint === 'string' ? { timepoint: c.payload.timepoint } : {}),
