@@ -43,8 +43,11 @@ const LINT_RULE_IDS = [
   'material-eligibility-bind-policies-carry-custody-guard',
   // FIX-RUN 2 D1 (adversarial review l2t2215): E7 pinned the guard's PRESENCE
   // only — probe K/L substituted a trivially-true guard and the custody-never
-  // tier bound PASS. E12 pins the guard's SHAPE (the exact noneIn
-  // candidate.tier/demanded.custodyNeverTiers disjointness).
+  // tier bound PASS. E12 pins the guard's FULL SHAPE (the exact noneIn
+  // candidate.tier/demanded.custodyNeverTiers disjointness and NO itemField —
+  // FIX-RUN 3 D1, review l2t2335 probe N1: a pinned guard + the DECLARED
+  // itemField projection key passed an empty member set and neutered the
+  // disjointness vacuously).
   'material-eligibility-bind-custody-guard-shape-pinned',
   // FIX-RUN 1 D1 (adversarial review l2t2050): the SHAPE-forbidding half of
   // spec §7.3 P4 — an authorized-to-bind assert may never use a custody
@@ -208,6 +211,45 @@ describe('material-eligibility triplet (schema + lint contract)', () => {
     const policies = doc['policies'] as Array<Record<string, unknown>>;
     const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
     bindPolicy['custodyGuard'] = pinned;
+    expect(lintViolations(engine, doc)).toEqual([]);
+  });
+
+  it('mutation (FIX-RUN 3 D1, review l2t2335 probe N1): the FULL guard shape is pinned — a guard that is the pinned three keys PLUS itemField (a DECLARED noneIn projection key the scalar tier collection lacks) is REJECTED by E12 (RED at 48d9c023: lint violations were [] and the tier-4 bind evaluated PASS — the projected member set is EMPTY, so the pinned disjointness passed vacuously and the equals-tier-4 assert closed the verdict)', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['custodyGuard'] = { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers', itemField: 'tier' };
+    bindPolicy['assert'] = { op: 'all', predicates: [{ op: 'equals', path: 'candidate.tier', value: 4 }] };
+    expect(lintViolations(engine, doc)).toContain('material-eligibility-bind-custody-guard-shape-pinned');
+  });
+
+  it('mutation (FIX-RUN 3 D1, review l2t2335 probe N3): the extra-key neutraliser alone — pinned guard + itemField on the SHIPPED assert (no leak assert) — is REJECTED by E12', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['custodyGuard'] = { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers', itemField: 'x' };
+    expect(lintViolations(engine, doc)).toContain('material-eligibility-bind-custody-guard-shape-pinned');
+  });
+
+  it('no over-rejection (FIX-RUN 3 D1): itemField stays legal OUTSIDE an authorized-to-bind custodyGuard — a DISPLAY policy legitimately projects a membership set via itemField, and a bind policy may use itemField in its requires arm (the pin covers the custodyGuard slot only)', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const displayPolicy = policies.find((p) => p['id'] === 'display-tier-legal')!;
+    displayPolicy['assert'] = {
+      op: 'all',
+      predicates: [{ op: 'allIn', path: 'candidate.referentLevel', collectionPath: 'tierLegality', itemField: 'demandedLevel' }],
+    };
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['requires'] = {
+      op: 'all',
+      predicates: [
+        { op: 'exists', path: 'candidate.curie' },
+        { op: 'allIn', path: 'candidate.verdictClass', collectionPath: 'policies', itemField: 'verdict' },
+      ],
+    };
     expect(lintViolations(engine, doc)).toEqual([]);
   });
 

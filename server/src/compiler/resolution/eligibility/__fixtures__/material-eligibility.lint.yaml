@@ -164,15 +164,27 @@ rules:
     template: "an authorized-to-bind policy must declare a custodyGuard (P4: catalog tiers never satisfy a bind)"
 
 # E12 (P4, spec §7.3 "the lint forbids the shape" — FIX-RUN 2 D1, adversarial
-# review l2t2215): E7 pinned the guard's PRESENCE only, so the evaluator half's
-# guarantee was contingent on a FREE-FORM guard — probe K/L substituted the
-# custodyGuard with any trivially-true predicate and the custody-never tier
-# bound PASS. This rule pins the guard's SHAPE: every authorized-to-bind
-# custodyGuard must be EXACTLY the noneIn disjointness of the candidate tier
-# against demanded.custodyNeverTiers. The meta-schema types the slot the same
-# way (structural half); this rule is the named lint half. With the shape
-# pinned, the evaluator's disjointness decides BEFORE any assert at ANY depth
-# can produce a bind PASS — the guardrail is no longer data-fakeable.
+# review l2t2215; FULL-SHAPE pin FIX-RUN 3 D1, adversarial review l2t2335):
+# E7 pinned the guard's PRESENCE only, so the evaluator half's guarantee was
+# contingent on a FREE-FORM guard — probe K/L substituted the custodyGuard with
+# any trivially-true predicate and the custody-never tier bound PASS. This rule
+# pins the guard's FULL SHAPE: every authorized-to-bind custodyGuard must be
+# EXACTLY the noneIn disjointness of the candidate tier against
+# demanded.custodyNeverTiers and NOTHING ELSE — the three pinned keys PLUS the
+# ABSENCE of `itemField`, the only other key the meta-schema's noneIn/allIn
+# predicate branches declare. Without that fourth leg a guard carrying
+# `itemField: <field the collection items lack>` projects an empty member set,
+# so the pinned disjointness PASSES VACUOUSLY (PredicateEvaluator.ts
+# resolveMembershipOperands: an itemField that resolves on no item adds nothing
+# to the allowed set) and the guardrail is neutered by a DECLARED key — the
+# extra-key neutraliser cycle 2 left open (probe N1/N3).
+# THERE IS NO STRUCTURAL HALF: the meta-schema types custodyGuard as the
+# generic #/definitions/predicate $ref — no op/path/collectionPath constraint,
+# and the noneIn/allIn branches declare itemField without
+# additionalProperties:false — so Ajv accepts every guard shape these probes
+# mutate. THIS RULE IS THE ONLY HALF that pins the guard shape.
+# With the FULL shape pinned (three keys + no itemField), the evaluator's
+# disjointness decides BEFORE any assert at any depth can produce a bind PASS.
 # Shape: item-relative everyItem (the shipped P2/P5/E7 idiom).
 - id: material-eligibility-bind-custody-guard-shape-pinned
   title: "authorized-to-bind custodyGuards are the pinned custodyNeverTiers disjointness"
@@ -203,8 +215,12 @@ rules:
         - op: equals
           path: custodyGuard.collectionPath
           value: demanded.custodyNeverTiers
+        - op: not
+          not:
+            op: exists
+            path: custodyGuard.itemField
   message:
-    template: "an authorized-to-bind policy's custodyGuard must be exactly {op: noneIn, path: candidate.tier, collectionPath: demanded.custodyNeverTiers} (P4: the evaluator's custody guarantee is only as strong as the declared guard — its shape is pinned, never free-form)"
+    template: "an authorized-to-bind policy's custodyGuard must be exactly {op: noneIn, path: candidate.tier, collectionPath: demanded.custodyNeverTiers} with no other key (itemField included — a projection key on a scalar tier collection neuters the disjointness) (P4: the evaluator's custody guarantee is only as strong as the declared guard — its full shape is pinned, never free-form)"
 
 # E8 (P4, spec §7.3 "the lint forbids the shape" — FIX-RUN 1 D1, adversarial
 # review l2t2050; WIDENED FIX-RUN 2 D1, adversarial review l2t2215): an
