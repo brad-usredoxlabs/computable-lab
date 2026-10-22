@@ -102,3 +102,23 @@ verbatim: "we are not protecting any legacy data." Consequences binding:
   - no tolerated-legacy lint rule anywhere.
 HONEST-CREATE sub-ruling (i|ii|iii): still pending from Brad — promote the spec
 with everything else and carry this as the one open OQ; do NOT let a worker pick.
+
+HONEST-CREATE sub-ruling RESOLVED BY SUPERSESSION 2026-10-21T19:15 EDT: Brad
+accepted "B-prime" after the one-shot gpt-6-astra third opinion (packet + memo:
+~/.hermes/specs/intake/2026-10-21_instrument-vs-equipment/ ; model openai/gpt-6-astra,
+93.5s, 4,648 tok, $0.185). RULING: COLLAPSE the instrument record kind into
+equipment + equipment-class + equipment-capability. "Instrument" survives as an
+ontology classification on equipment-class (derivable measurement-capability via a
+VERB-READ capability binding) and as a UI filter view — NEVER a parallel asset
+registry with its own serial numbers. The measurement/output distinction Brad
+intuited is declared at the OPERATION + ACQUISITION-CONTEXT layer (which produced
+these bytes, with which configuration — per the memo's §2), not the asset layer.
+Consequence for this decision file: the (i|ii|iii) honest-create OQ is answered by
+(i) in the interim — rename the label to truth — and permanently resolved by the
+collapse task (INSTR-COLLAPSE-1), which retires the instrument kind and its create
+entry entirely. Do NOT have QMS8-C's coder touch instrument.schema.yaml beyond
+status-retirement scope; the collapse task owns that schema's DELETION.
+Sequencing gate from the ruling (binding): the collapse's step 2 is DEFINE THE
+MEASUREMENT/ACQUISITION-CONTEXT CONTRACT AS DATA BEFORE removing the kind —
+retiring instrument while acquisition context is loose strands the data-output
+expectation the collapse exists to protect.
