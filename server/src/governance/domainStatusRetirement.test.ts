@@ -282,11 +282,25 @@ describe('QMS8-C: the lifecycle gate never resolves state from domain status', (
 
   it('a domain status can no longer drive a real draft->active transition (the EQP-NEW-7LS1 leak class)', () => {
     // The exact lane defect: a governed DRAFT record whose payload carries
-    // status:'active' while its lifecycle state is 'draft'. Pre-fix the
+    // status:'active' while its lifecycle state is 'draft'. Pre-QMS8-C the
     // middleware read `state ?? status`, so a PUT that carried only the domain
     // status resolved previous='draft' -> next='active' and the engine RAN the
-    // draft->active transition: the domain word activated the record. Post-fix
-    // the domain status is not a lifecycle state, so no transition is proposed.
+    // draft->active transition: the domain word activated the record.
+    //
+    // RE-POINTED in adv-cycle1 per the orchestrator's binding ruling on the
+    // spec ambiguity (reviewer option (i), narrowed): this shape's next payload
+    // OMITS `state` while the previous payload CARRIES state:'draft' — that is
+    // a state ERASURE, and because the handler REPLACES the payload on PUT
+    // (RecordHandlers.ts:1223 builds the stored payload from
+    // request.body.payload), omitting state DELETES it. Allowing it was the
+    // fail-open (A1-4 class): the record would be left governed-but-state-less,
+    // skipping the archive guard and the admissibility terminal check. State
+    // changes only via a declared transition — never silently — so this now
+    // DENIES with an explicit erasure error. The leak-class claim is intact on
+    // the other half: the DOMAIN status still never drives a transition — no
+    // draft->active transition is proposed, and 'active' never becomes a target
+    // state. The app's editor serializer round-trips `state`, so the deny path
+    // never fires for real edits.
     const engine = loadEngine()
     const result = checkLifecycleTransition(engine, {
       previousPayload: { kind: 'equipment', id: 'EQP-QMS8C-DRAFT', lifecycleId: 'registry-ops', state: 'draft', status: 'active' },
@@ -295,10 +309,10 @@ describe('QMS8-C: the lifecycle gate never resolves state from domain status', (
       actorRoles: ['author'],
       enforceTransitionRoles: false,
     })
-    // Allowed, but as a content edit: NO transition happened, and nothing was
-    // activated. Pre-fix this returned transition {from:'draft', to:'active'}.
-    expect(result.allowed).toBe(true)
-    expect(result.transition).toBeUndefined()
+    expect(result.allowed).toBe(false)
+    expect(result.transition, 'no draft->active transition may be proposed — the domain status is not a lifecycle state').toBeUndefined()
+    expect(String(result.error)).toMatch(/state/i)
+    expect(String(result.error)).not.toMatch(/to 'active'/)
   })
 
   it('GET /lifecycle/:id/transitions never derives the record state from domain status (LifecycleHandlers leak site)', async () => {

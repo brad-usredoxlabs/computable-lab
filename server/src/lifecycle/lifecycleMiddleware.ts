@@ -41,11 +41,31 @@ export function checkLifecycleTransition(
   const nextState = nextPayload.state as string | undefined
   const previousState = previousPayload.state as string | undefined
 
-  // A payload that declares no lifecycle state proposes no state change, so
-  // there is no transition to gate: it is a content edit, not a lifecycle move.
-  // (Pre-QMS8-C this slot was filled from `status`, which is exactly how a
-  // domain status invented a transition that nobody asked for.)
-  if (nextState === undefined) return { allowed: true }
+  // A payload that declares no lifecycle state on EITHER side proposes no state
+  // change, so there is no transition to gate: it is a content edit, not a
+  // lifecycle move. (Pre-QMS8-C this slot was filled from `status`, which is
+  // exactly how a domain status invented a transition that nobody asked for.)
+  //
+  // QMS8-C adv-cycle1 ruling (reviewer option (i), narrowed): the early-allow
+  // fires ONLY when BOTH previousState and nextState are absent. A governed
+  // update whose previous payload CARRIED a state and whose next payload OMITS
+  // it is a state ERASURE — and because the handler REPLACES the payload on
+  // PUT (RecordHandlers.ts:1223 builds the stored payload from
+  // request.body.payload), omitting `state` DELETES the stored state. Lifecycle
+  // state is the single truth: losing it is a lifecycle change and state
+  // changes only via a declared transition — never silently. The base refused
+  // exactly this shape (via the fallback-derived transition error); re-allowing
+  // it was the fail-open A1-4 names: a governed record without a state has
+  // nothing for the gate to read, and it then skips the archive guard
+  // (RecordHandlers.ts:289-291) and the admissibility terminal check
+  // (OperationalAdmissibilityService.ts:186-193) outright.
+  if (nextState === undefined) {
+    if (previousState === undefined) return { allowed: true }
+    return {
+      allowed: false,
+      error: `A record governed by the ${lifecycleId} lifecycle cannot drop its lifecycle state '${previousState}': state changes only via a declared transition, and a payload that omits the state would erase it.`,
+    }
+  }
 
   // No state change - allow
   if (previousState === nextState) return { allowed: true }

@@ -364,7 +364,7 @@ describe('QMS8-C fix: a PUT cannot leave a governed record state-less (end-to-en
     expect(result.error).toBe('LIFECYCLE_TRANSITION_DENIED')
     expect(String(result.message)).toMatch(/state/i)
     // The store was never reached with a state-less payload.
-    expect((world.store.update as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+    expect((world.fake.store.update as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
     const stored = storedPayload(world, 'EQP-QMS8CF-ERASE')
     expect(stored.state, 'a governed record must not be left without a lifecycle state').toBe('active')
     expect(stored.name).toBe('QMS8-C fix probe pump')
