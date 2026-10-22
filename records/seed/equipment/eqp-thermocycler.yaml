@@ -4,7 +4,6 @@ id: EQP-THERMOCYCLER
 name: Thermal Cycler
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - thermal cycler
   - PCR machine

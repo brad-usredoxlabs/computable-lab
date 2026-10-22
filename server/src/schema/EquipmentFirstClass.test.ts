@@ -68,19 +68,24 @@ describe('first-class equipment model', () => {
       kind: 'equipment',
       id: 'EQP-WATER-BATH',
       name: 'Water Bath',
-      status: 'active',
+      // QMS8-C (D3): no domain status — the lifecycle state carries the truth.
       equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-WATER-BATH' },
       settings: { temperature_c: 55 },
     }, EQUIPMENT_SCHEMA);
     expect(out.valid).toBe(true);
   });
 
-  it('rejects a malformed equipment instance (missing status)', async () => {
+  it('rejects an equipment instance carrying the retired domain status (QMS8-C D3)', async () => {
+    // The pin's original premise ("missing status") died with the field: status
+    // is no longer declared at all, so its ABSENCE is now correct. The pin is
+    // re-pointed at the new schema truth rather than dropped: the retired key
+    // is refused outright by unevaluatedProperties:false.
     const validator = await loadEquipmentSchemas();
     const out = validator.validate({
       kind: 'equipment',
       id: 'EQP-X',
-      name: 'Broken',
+      name: 'Carries a retired field',
+      status: 'active',
       settings: { temperature_c: 99 },
     }, EQUIPMENT_SCHEMA);
     expect(out.valid).toBe(false);

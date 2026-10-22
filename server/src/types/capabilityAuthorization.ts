@@ -2,7 +2,6 @@ import type { PolicyDecisionDisposition, PolicySettingOrigin, ResolvedPolicyProf
 import type { RecordRef, Ref } from './ref.js';
 
 export type PersonStatus = 'active' | 'inactive' | 'contractor' | 'suspended';
-export type EquipmentStatus = 'active' | 'out_of_service' | 'retired' | 'maintenance';
 export type TrainingRecordStatus = 'passed' | 'completed' | 'failed' | 'in_progress';
 export type AuthorizationStatus = 'active' | 'suspended' | 'revoked';
 export type CapabilityRecordStatus = 'active' | 'draft' | 'deprecated';
@@ -103,7 +102,14 @@ export interface EquipmentPayload {
   serialNumber?: string;
   assetTag?: string;
   location?: string;
-  status: EquipmentStatus;
+  /**
+   * QMS8-C (D3/D6): the DOMAIN `status` field is retired for equipment — the
+   * lifecycle fields below are the single operational truth. Admissibility now
+   * reads terminal-ness from the lifecycle YAML (LifecycleEngine.terminalStates),
+   * never a status word.
+   */
+  lifecycleId?: string;
+  state?: string;
   executionBackends?: string[];
   readiness?: {
     calibrationRequired?: boolean;

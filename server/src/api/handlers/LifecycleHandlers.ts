@@ -50,7 +50,12 @@ export function createLifecycleHandlers(options: LifecycleHandlerOptions) {
           return { error: 'NOT_FOUND', message: `Record not found: ${request.query.recordId}` };
         }
         payload = (record.payload ?? {}) as Record<string, unknown>;
-        state = String(payload.state ?? payload.status ?? 'draft');
+        // QMS8-C (BRAD-A1): the preview computes transitions from the record's
+        // lifecycle state ONLY. The old `?? payload.status` read is how a
+        // domain status silently drove which transition buttons the UI offered.
+        // A record with no declared state previews from the lifecycle's initial
+        // state — never from a domain word.
+        state = String(payload.state ?? 'draft');
       }
 
       const roleAssignments: Record<string, string> = {};

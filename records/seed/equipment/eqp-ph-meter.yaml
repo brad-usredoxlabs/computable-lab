@@ -4,7 +4,6 @@ id: EQP-PH-METER
 name: pH Meter
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - pH meter
   - pH probe

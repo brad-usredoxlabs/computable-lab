@@ -4,7 +4,6 @@ id: EQP-INCUBATOR
 name: Incubator
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - incubator
   - CO2 incubator

@@ -52,7 +52,11 @@ describe('KindLifecycleRegistry (QMS7-3 loader)', () => {
     expect([...registry.kinds()].sort()).toEqual([...KINDS].sort())
     expect(registry.lifecycle).toBe('registry-ops')
     const entry = registry.entryFor('equipment-class')
-    expect(entry).toEqual({ kind: 'equipment-class', lifecycleId: 'registry-ops', defaultState: 'draft' })
+    // QMS8-C (D4): every entry now carries the declared retirement flag. A
+    // kind with no flag in the DATA reads false — the flag is never inferred.
+    expect(entry).toEqual({ kind: 'equipment-class', lifecycleId: 'registry-ops', defaultState: 'draft', stripDomainStatus: false })
+    expect(registry.entryFor('equipment')?.stripDomainStatus).toBe(true)
+    expect(registry.kindsRetiringDomainStatus().sort()).toEqual(['equipment', 'instrument'])
     // Undeclared kinds get nothing.
     expect(registry.entryFor('training-material')).toBeUndefined()
     expect(registry.entryFor('protocol')).toBeUndefined()

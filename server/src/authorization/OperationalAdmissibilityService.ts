@@ -1,5 +1,6 @@
 import { PolicyProfileService } from '../policy/PolicyProfileService.js';
 import type { PolicyDecisionDisposition, PolicyDisposition, PolicyProfile } from '../policy/types.js';
+import type { LifecycleEngine } from '../lifecycle/LifecycleEngine.js';
 import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type {
@@ -76,7 +77,19 @@ export class OperationalAdmissibilityService {
   private readonly policyProfiles = new PolicyProfileService();
   private readonly capabilityService: EquipmentCapabilityService;
 
-  constructor(private readonly store: Pick<RecordStore, 'list'>) {
+  /**
+   * QMS8-C (D6): equipment admissibility no longer reads the retired DOMAIN
+   * `status` field — it consults the lifecycle YAML's declared terminal states
+   * through the LifecycleEngine (the same data-driven posture the QMS7-4 archive
+   * guard uses: `LifecycleEngine.terminalStates`, no terminal-state list in TS).
+   * Absent engine → the terminal check is SKIPPED, exactly as the archive guard
+   * skips when its coverage data is absent; inventing a fallback state list in
+   * TS is the defect class this item exists to remove.
+   */
+  constructor(
+    private readonly store: Pick<RecordStore, 'list'>,
+    private readonly lifecycleEngine?: LifecycleEngine,
+  ) {
     this.capabilityService = new EquipmentCapabilityService(store);
   }
 
@@ -166,14 +179,25 @@ export class OperationalAdmissibilityService {
       });
     }
 
-    if (equipment && equipment.status !== 'active') {
-      findings.push({
-        code: 'EQUIPMENT_NOT_ACTIVE',
-        disposition: 'blocked',
-        message: `Equipment ${equipment.id} is ${equipment.status}.`,
-        subject: 'equipment',
-        recordIds: [equipment.id],
-      });
+    // QMS8-C (D6): terminal-ness comes from the lifecycle YAML, not from the
+    // retired domain status field. A record whose lifecycle declares its current
+    // state terminal is not admissible; the finding names the STATE and the
+    // LIFECYCLE so the reader can see which declared data decided it.
+    if (equipment && this.lifecycleEngine) {
+      const lifecycleId = equipment.lifecycleId;
+      const state = equipment.state;
+      const terminal = lifecycleId !== undefined && state !== undefined
+        ? this.lifecycleEngine.terminalStates(lifecycleId)
+        : undefined;
+      if (terminal !== undefined && state !== undefined && terminal.has(state)) {
+        findings.push({
+          code: 'EQUIPMENT_LIFECYCLE_TERMINAL',
+          disposition: 'blocked',
+          message: `Equipment ${equipment.id} is ${state} under the ${lifecycleId} lifecycle and is not admissible.`,
+          subject: 'equipment',
+          recordIds: [equipment.id],
+        });
+      }
     }
 
     if (capability && !capability.supported) {

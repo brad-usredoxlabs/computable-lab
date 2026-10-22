@@ -4,7 +4,6 @@ id: EQP-BIOSAFETY-CABINET
 name: Biosafety Cabinet
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - biosafety cabinet
   - BSC

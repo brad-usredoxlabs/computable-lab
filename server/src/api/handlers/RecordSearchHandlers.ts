@@ -235,7 +235,6 @@ Rules:
 - Generate an appropriate ID with the correct prefix for this record type
 - Fill in all fields you can determine from the search context
 - Omit fields you cannot determine
-- Set status to 'active' if the schema has a status field
 - Respond with ONLY a valid JSON object, no markdown fencing`;
 
     // Prepare headers

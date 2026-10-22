@@ -13,7 +13,6 @@ required:
 - kind
 - id
 - name
-- status
 
 properties:
   kind:
@@ -70,9 +69,15 @@ properties:
   location:
     type: string
 
-  status:
-    type: string
-    enum: [ active, out_of_service, retired, maintenance ]
+  # QMS8-C (D3, BRAD-A1 full clean break): this kind's DOMAIN operational field
+  # is RETIRED. Its vocabulary duplicated what the record's lifecycle state
+  # already says, and the two were independently writable — that is the defect
+  # EQP-NEW-7LS1 shows on the lane (the domain field said one thing while the
+  # lifecycle state said another). The lifecycle `state` declared below is now
+  # the single operational truth, and `unevaluatedProperties: false` at the top
+  # of this schema REFUSES any payload that still carries the retired key.
+  # Existing records were carried over by the migration runner's strip leg
+  # (schema/registry/registry-kinds.registry.yaml, stripDomainStatus).
 
   # Concrete configuration for this instance, keyed by the linked class's
   # settingsDefinition (e.g. `{ temperature_c: 55 }` for a water bath). Structural

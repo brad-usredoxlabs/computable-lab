@@ -4,7 +4,6 @@ id: EQP-MICROSCOPE
 name: Microscope
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - microscope
   - inverted microscope

@@ -8,10 +8,21 @@ defaultState: draft
 kinds:
   - kind: person
   - kind: equipment
+    # QMS8-C (D4): this kind's DOMAIN `status` is retired — its vocabulary
+    # duplicates what the lifecycle state now says, so the migration runner
+    # strips the key from already-governed records. The flag is DATA: the
+    # runner holds no kind literal. Kinds WITHOUT this flag keep their domain
+    # status untouched (their status is an orthogonal domain vocabulary with
+    # live admissibility consumers — spec §g / stop boundary 2).
+    stripDomainStatus: true
   - kind: equipment-class
   - kind: training-record
   - kind: competency-authorization
   - kind: instrument
+    # QMS8-C (D4): same operational vocabulary as equipment (active /
+    # out_of_service / retired / maintenance) and the same lifecycle, so the
+    # same retirement applies. (The kind's own DELETION is a separate item.)
+    stripDomainStatus: true
   - kind: calibration-record
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
@@ -22,11 +33,30 @@ kinds:
 archiveGuard:
   exemptKinds: [audit-event, signature, record-revision]
 
-# QMS7-4 OQ2 (ruled): the migration runner's domain-status -> lifecycle-state
-# mapping is DATA. A covered record whose domain status is named here lands
-# the mapped state; anything else (status-less or unmapped status) lands the
-# declared default. The runner never guesses per-kind in TS.
-migration:
-  stateByDomainStatus:
-    active: active
-  default: draft
+# QMS8-C (D5): the QMS7-4 OQ2 `migration:` block (the domain-status -> state
+# map + its default) is RETIRED here — whole block, not partial (partial
+# deletion throws at the loader, bait #3). That map became dead code the moment
+# the strip leg shipped: post-retirement a covered create cannot carry a domain
+# status at all (the schema refuses it), and every governed record's state is
+# its own. An ungoverned record that still carries a domain status has NO
+# declared mapping — the runner reports it, never guesses. The coverage entry's
+# top-level `defaultState` above remains the declared initial state for creates
+# and for ungoverned status-less records.
+
+# QMS8-C (A1-3): lifecycle-scoped migration instructions. The retired
+# covered-kind mapping could only speak for kinds this file LISTS;
+# lifecycle-GOVERNED kinds (material / material-spec / term declare their
+# lifecycleId per-schema and are deliberately NOT listed in `kinds:`) need
+# their own declared instruction.
+# Keyed by LIFECYCLE — this file names no kind here, and the runner holds no
+# kind literal. `stampStateFromDomainStatus: true` means: for a record that
+# declares this lifecycle, carries a domain status and carries NO lifecycle
+# state, stamp state := status. The stamp is legal because the schema's status
+# enum and the lifecycle's declared states are the SAME vocabulary (see
+# schema/lab/material.schema.yaml); an unmapped status is reported, never
+# guessed. This is the sibling leg that closes the fail-open window created by
+# retiring the middleware's `state ?? status` read (BRAD-A1: the fallback is
+# gone, so a governed record without a state has nothing for the gate to read).
+lifecycleMigrations:
+- lifecycleId: lab-vocabulary-control
+  stampStateFromDomainStatus: true
