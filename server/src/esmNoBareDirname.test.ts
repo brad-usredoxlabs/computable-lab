@@ -52,90 +52,129 @@ function listNonTestTsFiles(dir: string): string[] {
  * - a stray unterminated quote swallows the rest of its line;
  * - regex literals are recognised only when a `/` in CODE state is preceded
  *   by an operator/punctuation token (division after an identifier or `)`
- *   is not mistaken for a regex), so `/*` inside a regex literal is stripped.
+ *   is not mistaken for a regex), so `/*` inside a regex literal is stripped;
+ * - `${ ... }` inside a template literal is CODE state: the scanner recurses
+ *   into it up to the balanced `}`, so block/line comments inside a template
+ *   EXPRESSION are stripped while the literal spans stay verbatim (a comment
+ *   mention inside `${}` must not flag the file).
  */
 function stripComments(source: string): string {
   const out: string[] = [];
-  let i = 0;
-  let prevCode = '';
-  while (i < source.length) {
-    const c = source[i];
-    const next = i + 1 < source.length ? source[i + 1] : '';
+  scanCode(source, out, { i: 0, prevCode: '' }, false);
+  return out.join('');
+}
+
+/**
+ * CODE-state scanner: appends every kept character to `out`, advancing `st`.
+ *
+ * When `inTemplateExpr` is true the scan stops at the `}` that closes a
+ * template expression (that `}` is kept), tracking brace depth so an object
+ * literal inside the expression does not end it early. `scanCode` calls
+ * itself for `${ ... }` seen inside a template literal: the expression runs
+ * in CODE state, so a `/*` or `//` inside it opens a real comment.
+ */
+function scanCode(
+  source: string,
+  out: string[],
+  st: { i: number; prevCode: string },
+  inTemplateExpr: boolean,
+): void {
+  let braceDepth = 0;
+  while (st.i < source.length) {
+    const c = source[st.i];
+    const next = st.i + 1 < source.length ? source[st.i + 1] : '';
+    if (inTemplateExpr && c === '}' && braceDepth === 0) {
+      out.push(c);
+      st.i += 1;
+      st.prevCode = c;
+      return;
+    }
+    if (c === '{') braceDepth += 1;
+    else if (c === '}') braceDepth -= 1;
     if (c === '/' && next === '*') {
-      const end = source.indexOf('*/', i + 2);
+      const end = source.indexOf('*/', st.i + 2);
       if (end >= 0) {
-        i = end + 2;
+        st.i = end + 2;
         continue;
       }
       out.push(c);
-      i += 1;
+      st.i += 1;
       continue;
     }
     if (c === '/' && next === '/') {
-      const end = source.indexOf('\n', i);
-      i = end >= 0 ? end : source.length;
+      const end = source.indexOf('\n', st.i);
+      st.i = end >= 0 ? end : source.length;
       continue;
     }
     if (c === '"' || c === "'") {
       out.push(c);
-      i += 1;
-      while (i < source.length) {
-        const s = source[i];
+      st.i += 1;
+      while (st.i < source.length) {
+        const s = source[st.i];
         if (s === '\\') {
-          out.push(s, source[i + 1] ?? '');
-          i += 2;
+          out.push(s, source[st.i + 1] ?? '');
+          st.i += 2;
           continue;
         }
         out.push(s);
-        i += 1;
+        st.i += 1;
         if (s === c || s === '\n') break;
       }
-      prevCode = c;
+      st.prevCode = c;
       continue;
     }
     if (c === '`') {
       out.push(c);
-      i += 1;
-      while (i < source.length) {
-        const s = source[i];
+      st.i += 1;
+      while (st.i < source.length) {
+        const s = source[st.i];
         if (s === '\\') {
-          out.push(s, source[i + 1] ?? '');
-          i += 2;
+          out.push(s, source[st.i + 1] ?? '');
+          st.i += 2;
+          continue;
+        }
+        if (s === '`') {
+          out.push(s);
+          st.i += 1;
+          break;
+        }
+        if (s === '$' && source[st.i + 1] === '{') {
+          out.push(s, '{');
+          st.i += 2;
+          scanCode(source, out, st, true);
           continue;
         }
         out.push(s);
-        i += 1;
-        if (s === '`') break;
+        st.i += 1;
       }
-      prevCode = '`';
+      st.prevCode = '`';
       continue;
     }
-    if (c === '/' && isRegexPosition(prevCode) && hasClosingSlash(source, i)) {
+    if (c === '/' && isRegexPosition(st.prevCode) && hasClosingSlash(source, st.i)) {
       out.push(c);
-      i += 1;
+      st.i += 1;
       let inClass = false;
-      while (i < source.length) {
-        const s = source[i];
+      while (st.i < source.length) {
+        const s = source[st.i];
         if (s === '\\') {
-          out.push(s, source[i + 1] ?? '');
-          i += 2;
+          out.push(s, source[st.i + 1] ?? '');
+          st.i += 2;
           continue;
         }
         if (s === '\n') break;
         out.push(s);
-        i += 1;
+        st.i += 1;
         if (s === '[') inClass = true;
         else if (s === ']') inClass = false;
         else if (s === '/' && !inClass) break;
       }
-      prevCode = '/';
+      st.prevCode = '/';
       continue;
     }
     out.push(c);
-    if (!/\s/.test(c)) prevCode = c;
-    i += 1;
+    if (!/\s/.test(c)) st.prevCode = c;
+    st.i += 1;
   }
-  return out.join('');
 }
 
 /**
@@ -190,10 +229,23 @@ const HAS_DIRNAME_BINDING =
  * legal. Any OTHER bare `__dirname` in such a file is not.
  */
 const DIRNAME_FALLBACK = /import\.meta\.dirname\s*(?:\?\?|\|\|)\s*__dirname/g;
+/**
+ * `__dirname` bound DIRECTLY from `import.meta` (node >= 20.11 defines
+ * `import.meta.dirname`): the plain `const __dirname = import.meta.dirname`
+ * binding or the `const { dirname: __dirname } = import.meta` destructure.
+ * Both are shapes the spec names as legal, and both genuinely define
+ * `__dirname`, so — exactly like the fileURLToPath shim — every later bare
+ * use in the file is legal. Without this arm the guard rejects a legal file
+ * whose only binding is the import.meta one (adversarial review
+ * ESM-DIRNAME-1 cycle-2 defect 2; the pre-fix guard accepted shape (a)).
+ */
+const HAS_IMPORT_META_DIRNAME_BINDING =
+  /(?:const|let|var)\s+__dirname\s*=\s*import\.meta\.dirname|(?:const|let|var)\s*\{\s*dirname\s*:\s*__dirname\s*\}\s*=\s*import\.meta\b/;
 
 /** Legality rule for a file that uses `__dirname` (stripped code only). */
 export function isLegalDirnameUse(code: string): boolean {
   if (HAS_SHIM.test(code) && HAS_DIRNAME_BINDING.test(code)) return true;
+  if (HAS_IMPORT_META_DIRNAME_BINDING.test(code)) return true;
   if (HAS_IMPORT_META_DIRNAME.test(code)) {
     const residual = code.replace(DIRNAME_FALLBACK, 'import.meta.dirname');
     return !USES_DIRNAME.test(residual);
