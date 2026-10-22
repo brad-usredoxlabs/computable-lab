@@ -714,8 +714,11 @@ export function createRecordHandlers(
                 message: `Create ${kind} as ${coverageEntry.defaultState}, then use lifecycle transitions.`,
               };
             }
-            // Always stamp BOTH: the lifecycle middleware's `state ?? status`
-            // fallback would otherwise read the DOMAIN status as the lifecycle state.
+            // Always stamp BOTH: the create must land in the coverage file's
+            // declared initial lifecycle state, and the state is the ONLY
+            // lifecycle state the gate reads (QMS8-C retired the middleware's
+            // `state ?? status` read — a domain status is never a lifecycle
+            // state, so the stamp is what makes a governed record governable).
             stamped.lifecycleId = coverageEntry.lifecycleId;
             stamped.state = coverageEntry.defaultState;
           }

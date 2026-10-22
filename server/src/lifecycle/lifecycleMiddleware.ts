@@ -34,9 +34,18 @@ export function checkLifecycleTransition(
   // Graceful degradation if lifecycle not loaded
   if (!engine.isLoaded(lifecycleId)) return { allowed: true }
 
-  // Determine state field
-  const nextState = (nextPayload.state ?? nextPayload.status) as string | undefined
-  const previousState = (previousPayload.state ?? previousPayload.status) as string | undefined
+  // Determine state field. QMS8-C (BRAD-A1, full clean break): the lifecycle
+  // `state` is the ONLY lifecycle state source. The domain `status` field is a
+  // domain fact and is never consulted here — reading it let a domain word
+  // ('active', 'contractor', 'completed') silently pose as a lifecycle state.
+  const nextState = nextPayload.state as string | undefined
+  const previousState = previousPayload.state as string | undefined
+
+  // A payload that declares no lifecycle state proposes no state change, so
+  // there is no transition to gate: it is a content edit, not a lifecycle move.
+  // (Pre-QMS8-C this slot was filled from `status`, which is exactly how a
+  // domain status invented a transition that nobody asked for.)
+  if (nextState === undefined) return { allowed: true }
 
   // No state change - allow
   if (previousState === nextState) return { allowed: true }

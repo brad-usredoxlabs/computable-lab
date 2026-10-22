@@ -32,6 +32,17 @@ properties:
     description: "Vocabulary curation state for this material concept."
     enum: [ proposed, in_review, active, rejected, deprecated ]
 
+  # QMS8-C (A1-2): the lifecycle state, declared so the lab-vocabulary-control
+  # gate has a field to read. The domain `status` above is NOT a lifecycle
+  # state and is never consulted by the gate. Enum is the lab-vocabulary-control
+  # lifecycle YAML's declared states (schema/core/lifecycles/), mirroring
+  # equipment.schema.yaml's state block. Optional: existing records are
+  # state-stamped by the migration runner, not by a required-field flip.
+  state:
+    type: string
+    enum: [ proposed, in_review, active, rejected, deprecated ]
+    description: "Lifecycle state (lab-vocabulary-control). DISTINCT from domain status."
+
   lifecycleId:
     type: string
     const: "lab-vocabulary-control"

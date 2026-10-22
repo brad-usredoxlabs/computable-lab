@@ -38,6 +38,13 @@ properties:
     description: "Curation state for this formulation/specification."
     enum: [ proposed, in_review, active, rejected, deprecated ]
 
+  # QMS8-C (A1-2): the lifecycle state, declared so the lab-vocabulary-control
+  # gate has a field to read (see material.schema.yaml for the full rationale).
+  state:
+    type: string
+    enum: [ proposed, in_review, active, rejected, deprecated ]
+    description: "Lifecycle state (lab-vocabulary-control). DISTINCT from domain status."
+
   lifecycleId:
     type: string
     const: "lab-vocabulary-control"

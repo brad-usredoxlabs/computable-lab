@@ -51,6 +51,22 @@ export interface MigrationData {
   default: string;
 }
 
+/**
+ * QMS8-C (A1-3) lifecycle-declared migration instructions. The covered-kind
+ * `migration:` block above can only speak for kinds the coverage file lists;
+ * lifecycle-GOVERNED kinds (material/term/material-spec — their lifecycleId is
+ * declared per-schema, never in `kinds:`) need their own declared instruction.
+ * DATA, keyed by LIFECYCLE (the file names no kind here): the runner obeys the
+ * flag and never infers one in TS.
+ */
+export interface LifecycleMigrationInstruction {
+  lifecycleId: string;
+  /** Stamp `state := status` for records of this lifecycle that carry a domain
+   *  status and no lifecycle state (the enums are 1:1 — an identity, which is
+   *  why this is a stamp and not a mapping). */
+  stampStateFromDomainStatus: boolean;
+}
+
 export interface KindLifecycleRegistryData {
   registryVersion: number;
   lifecycleId: string;
@@ -58,6 +74,7 @@ export interface KindLifecycleRegistryData {
   kinds: Array<{ kind: string }>;
   archiveGuard?: { exemptKinds?: unknown };
   migration?: { stateByDomainStatus?: unknown; default?: unknown };
+  lifecycleMigrations?: Array<{ lifecycleId?: unknown; stampStateFromDomainStatus?: unknown }>;
 }
 
 /**
@@ -109,6 +126,38 @@ function parseMigration(raw: KindLifecycleRegistryData['migration'], stateIds: s
   return { stateByDomainStatus: map, default: raw.default };
 }
 
+/**
+ * QMS8-C (A1-3): parse the lifecycle-scoped migration instructions. Absent ->
+ * undefined (the runner runs no lifecycle leg, every pre-QMS8-C path identical).
+ * Present-but-malformed -> fail the load. A referenced lifecycle must actually
+ * be loaded — the loader checks the data against declared facts and holds no
+ * policy of its own.
+ */
+function parseLifecycleMigrations(
+  raw: KindLifecycleRegistryData['lifecycleMigrations'],
+  lifecycle: LifecycleCoverageSource,
+): LifecycleMigrationInstruction[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error('Registry-kind coverage lifecycleMigrations must be a list of { lifecycleId, stampStateFromDomainStatus }');
+  }
+  const instructions: LifecycleMigrationInstruction[] = [];
+  for (const entry of raw) {
+    const lifecycleId = typeof entry?.lifecycleId === 'string' && entry.lifecycleId.length > 0 ? entry.lifecycleId : undefined;
+    if (lifecycleId === undefined) {
+      throw new Error('Registry-kind coverage lifecycleMigrations entry is missing its lifecycleId');
+    }
+    if (!lifecycle.isLoaded(lifecycleId)) {
+      throw new Error(`Registry-kind coverage lifecycleMigrations references a lifecycle that is not loaded: ${lifecycleId}`);
+    }
+    if (typeof entry.stampStateFromDomainStatus !== 'boolean') {
+      throw new Error(`Registry-kind coverage lifecycleMigrations entry for "${lifecycleId}" must declare stampStateFromDomainStatus as a boolean`);
+    }
+    instructions.push({ lifecycleId, stampStateFromDomainStatus: entry.stampStateFromDomainStatus });
+  }
+  return instructions;
+}
+
 // ============================================================================
 // Registry class
 // ============================================================================
@@ -120,6 +169,7 @@ export class KindLifecycleRegistry {
   private readonly defaultState: string;
   private readonly archiveGuardData: ArchiveGuardData | undefined;
   private readonly migrationData: MigrationData | undefined;
+  private readonly lifecycleMigrationData: LifecycleMigrationInstruction[] | undefined;
 
   constructor(data: KindLifecycleRegistryData, deps: KindLifecycleRegistryDeps) {
     if (!data || typeof data.lifecycleId !== 'string' || data.lifecycleId.length === 0 || !Array.isArray(data.kinds)) {
@@ -183,6 +233,7 @@ export class KindLifecycleRegistry {
     // Present-but-malformed → fail the load, same discipline as above.
     this.archiveGuardData = parseArchiveGuard(data.archiveGuard);
     this.migrationData = parseMigration(data.migration, stateIds);
+    this.lifecycleMigrationData = parseLifecycleMigrations(data.lifecycleMigrations, deps.lifecycle);
   }
 
   /**
@@ -200,6 +251,15 @@ export class KindLifecycleRegistry {
    */
   get migration(): MigrationData | undefined {
     return this.migrationData;
+  }
+
+  /**
+   * QMS8-C (A1-3) lifecycle-scoped migration instructions (DATA, keyed by
+   * lifecycle — never a kind name). Undefined when the file declares no
+   * lifecycleMigrations block: the runner then runs no lifecycle leg.
+   */
+  get lifecycleMigrations(): LifecycleMigrationInstruction[] | undefined {
+    return this.lifecycleMigrationData;
   }
 
   /** Coverage entry for a payload kind; undefined for every undeclared kind. */

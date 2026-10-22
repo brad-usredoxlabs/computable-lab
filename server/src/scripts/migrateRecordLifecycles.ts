@@ -63,8 +63,11 @@ export interface LifecycleMigrationChange {
   kind: string;
   /** The lifecycle state the record will carry (from the DATA mapping). */
   toState: string;
-  /** Which declared mapping arm decided toState. */
-  basis: 'status-map' | 'default';
+  /** Which declared mapping arm decided toState. QMS8-C (A1-3) adds
+   *  'status-stamp': the lifecycle-declared leg stamps state := status (the
+   *  schema's status enum and the lifecycle's declared states are the same
+   *  vocabulary, so the mapping is the identity — a stamp, not a mapping). */
+  basis: 'status-map' | 'default' | 'status-stamp';
 }
 
 /** One already-governed record deliberately left untouched. */
@@ -246,12 +249,102 @@ export async function migrateRecordLifecycles(input: LifecycleMigrationInput): P
     }
   }
 
-  if (report.planned.length === 0) {
+  // QMS8-C (A1-3): the lifecycle-stamp leg. Keyed by the coverage file's
+  // `lifecycleMigrations:` DATA — keyed by LIFECYCLE, never by kind name, so
+  // lifecycle-GOVERNED kinds (whose lifecycleId is declared per-schema, not in
+  // `kinds:`) are reachable without a single kind literal in TS. A record is
+  // stamped only when it (a) declares this lifecycle, (b) carries a domain
+  // status, (c) carries NO lifecycle state, and (d) that status is a declared
+  // state of the lifecycle. The stamp is the identity the schema enums declare
+  // (status enum == lifecycle state enum), which is why this is a stamp and not
+  // a mapping. Anything else is reported, never guessed.
+  for (const instruction of input.coverage.lifecycleMigrations ?? []) {
+    if (!instruction.stampStateFromDomainStatus) continue
+
+    const spec = input.engine.specFor(instruction.lifecycleId)
+    const declaredStates = new Set((spec?.states ?? []).map(s => s.id))
+
+    // Enumerated by lifecycle, not by kind: every record is inspected, only the
+    // ones declaring THIS lifecycle are ever listed or touched.
+    const envelopes = await input.store.list({ limit: 10000 })
+    for (const env of envelopes) {
+      const payload = asRecord(env.payload)
+      const recordId = env.recordId
+      const kind = asString(payload.kind) ?? '(unknown)'
+      if (asString(payload.lifecycleId) !== instruction.lifecycleId) continue
+
+      const status = asString(payload.status)
+      const state = asString(payload.state)
+
+      // Idempotency key is PAYLOAD CONTENT: a state is already present -> SKIP.
+      if (state !== undefined) continue
+
+      if (status === undefined) {
+        report.skipped.push({
+          recordId,
+          kind,
+          reason: `governed by ${instruction.lifecycleId} with neither state nor domain status — nothing to stamp, never guessed`,
+        })
+        log(`SKIP ${recordId}: governed by ${instruction.lifecycleId} but carries no domain status to stamp from — not touched, never guessed`)
+        continue
+      }
+
+      if (!declaredStates.has(status)) {
+        report.skipped.push({
+          recordId,
+          kind,
+          reason: `domain status "${status}" is not a declared state of the ${instruction.lifecycleId} lifecycle — never guessed`,
+        })
+        log(`SKIP ${recordId}: domain status "${status}" is not a declared state of ${instruction.lifecycleId} — not touched, never guessed`)
+        continue
+      }
+
+      const change: LifecycleMigrationChange = {
+        recordId, kind, toState: status, basis: 'status-stamp',
+      }
+      report.planned.push(change)
+      log(`VOCAB-STATE ${recordId}: state stamped from status ${status} (${instruction.lifecycleId}, kind ${kind})`)
+
+      // Writes ONLY with --apply, through the normal walls.
+      if (input.apply) {
+        const nextPayload: Record<string, unknown> = { ...payload, state: status }
+        const envelope: RecordEnvelope = { ...env, payload: nextPayload }
+        const result = await input.store.update({
+          envelope,
+          ...(env.meta?.contentSha !== undefined ? { expectedSha: env.meta.contentSha } : {}),
+          message: `Stamp ${recordId} lifecycle state from domain status (${instruction.lifecycleId}, QMS8-C migration)`,
+          viaLifecycleApi: true,
+          ...(input.actor !== undefined ? { actor: input.actor } : {}),
+        })
+        if (!result.success) {
+          const reason = result.error ?? 'unknown store refusal'
+          report.blocked.push({ recordId, kind, reason })
+          log(`BLOCKED ${recordId}: store refused (${reason}) — left untouched, never forced`)
+          continue
+        }
+        report.applied.push(change)
+      }
+    }
+  }
+
+  // Report lines keep the QMS7-4 wording for the covered-kind leg (its existing
+  // consumers and tests read them verbatim); the QMS8-C stamp leg reports its
+  // own count on its own line so neither leg's number is conflated (bait #9).
+  const stampCount = (rows: LifecycleMigrationChange[]) => rows.filter(r => r.basis === 'status-stamp').length
+  const governedCount = report.planned.length - stampCount(report.planned)
+  const governedApplied = report.applied.length - stampCount(report.applied)
+
+  if (governedCount === 0) {
     log('No planned changes: every covered-kind record already carries its declared lifecycle (idempotent).')
   } else if (!input.apply) {
-    log(`DRY RUN: ${report.planned.length} planned change(s). Nothing written. Re-run with --apply to write.`)
+    log(`DRY RUN: ${governedCount} planned change(s). Nothing written. Re-run with --apply to write.`)
   } else {
-    log(`APPLIED: ${report.applied.length} record(s) governed under ${lifecycleId}.`)
+    log(`APPLIED: ${governedApplied} record(s) governed under ${lifecycleId}.`)
+  }
+  if (stampCount(report.planned) > 0 || stampCount(report.applied) > 0) {
+    log(input.apply
+      ? `STAMPED: ${stampCount(report.applied)} record(s) state-stamped from domain status.`
+      : `DRY RUN: ${stampCount(report.planned)} state stamp(s) planned. Nothing written. Re-run with --apply to write.`)
   }
   if (report.blocked.length > 0) {
     log(`BLOCKED: ${report.blocked.length} record(s) refused by the store walls — reported, never forced.`)

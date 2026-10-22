@@ -30,3 +30,20 @@ migration:
   stateByDomainStatus:
     active: active
   default: draft
+
+# QMS8-C (A1-3): lifecycle-scoped migration instructions. The `migration:`
+# block above can only speak for kinds this file LISTS; lifecycle-GOVERNED kinds
+# (material / material-spec / term declare their lifecycleId per-schema and are
+# deliberately NOT listed in `kinds:`) need their own declared instruction.
+# Keyed by LIFECYCLE — this file names no kind here, and the runner holds no
+# kind literal. `stampStateFromDomainStatus: true` means: for a record that
+# declares this lifecycle, carries a domain status and carries NO lifecycle
+# state, stamp state := status. The stamp is legal because the schema's status
+# enum and the lifecycle's declared states are the SAME vocabulary (see
+# schema/lab/material.schema.yaml); an unmapped status is reported, never
+# guessed. This is the sibling leg that closes the fail-open window created by
+# retiring the middleware's `state ?? status` read (BRAD-A1: the fallback is
+# gone, so a governed record without a state has nothing for the gate to read).
+lifecycleMigrations:
+- lifecycleId: lab-vocabulary-control
+  stampStateFromDomainStatus: true
