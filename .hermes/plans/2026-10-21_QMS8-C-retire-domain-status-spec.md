@@ -339,9 +339,13 @@ D7 — Server hardcode: EquipmentHandlers.ts:117 `status:'active'` in createFrom
     the record arrives draft-stamped by the coverage stamp like any create). Under BRAD-A the
     field would also fail validation once C3 ships — the deletion is required under both.
 
-D8 — Honest-create label (rides C3, pending Brad's (i)/(ii)/(iii) ruling; recommended (i)):
+D8 — Honest-create label (rides C3; Brad's answer ARRIVED 2026-10-21T19:15 EDT by
+    supersession — interim (i) is binding; see A1-9):
     LabCollectionView.tsx:32 label 'Instruments & Equipment' → 'Equipment'. Grep-proof line
     (verified-by 3): `grep -rn "Instruments & Equipment" app/src` → 0 hits.
+    HARD CONSTRAINT from the ruling: do NOT touch instrument.schema.yaml beyond this item's
+    status-retirement scope (the kind's DELETION belongs to the follow-up INSTR-COLLAPSE-1);
+    do NOT add an instrument-kind create route — the collapse retires the entry entirely.
 
 ## Explicitly OUT of scope
 - person/training-record/calibration-record/competency-authorization status FIELDS (orthogonal
@@ -615,18 +619,16 @@ A1-5 (vocab-regression test is mandatory, unchanged from reviewer-bait #4): the
      unauthorized vocab transition on a STAMPED record (state present) — proving
      global deletion did not disarm the gate.
 
-A1-6 (honest-create D8 remains HELD): Brad ruled A1 on the clean-break axis; the
-     honest-create (i|ii|iii) sub-ruling is STILL PENDING (watch path, do not
-     re-ask until changed). The coder MUST NOT pick label wording: skip D8's
-     LabCollectionView.tsx edit; the `Instruments & Equipment` grep-proof line
-     does NOT apply this item. The pending sub-ruling rides a follow-up.
+A1-6 (SUPERSEDED by A1-9 2026-10-21T19:15): honest-create D8 IS NO LONGER HELD —
+     Brad answered by supersession (see A1-9). D8-(i) label rename is IN SCOPE.
 
 A1-7 (OQ ratifications by the orch, per the draft's recommendations):
      OQ-1 accept (keep the instrument-create pin honest, follow-up item).
      OQ-2 accept (terminal-based refusal; report the draft-equipment admissibility
        question for Brad's next dogfood).
-     OQ-3 narrowed: with D8 held, the affordance pin reduces to the coder's
-       read-only GET + grep noted in the draft; report only.
+     OQ-3 narrowed (updated by A1-9: D8 is now IN): with D8-(i) in scope, the
+       affordance pin is the label rename + the coder's read-only GET + grep noted
+       in the draft; report only.
      OQ-4 accept (spec inventory is operative).
 
 A1-8 (counts to reconcile, do not conflate): covered lane corpus 51 (equipment 39
@@ -634,6 +636,20 @@ A1-8 (counts to reconcile, do not conflate): covered lane corpus 51 (equipment 3
      first-targeted-check) vs 25 seed files vs the vocab-control lane corpus
      (2 governed records today, live-measured). Strip leg covers the first; the
      seed edits are C3 data; the stamp leg covers the third.
+
+A1-9 (honest-create ANSWERED BY SUPERSESSION 2026-10-21T19:15 EDT — watch-path
+     addendum, Brad interactive, after the gpt-6-astra third opinion; memo:
+     ~/.hermes/specs/intake/2026-10-21_instrument-vs-equipment/answer.md): Brad
+     COLLAPSES the instrument record kind into equipment + equipment-class +
+     equipment-capability; 'instrument' survives only as an ontology
+     classification and a UI filter view, never a parallel asset registry.
+     Consequences for THIS item: (a) D8 interim answer (i) is binding — rename the
+     conflated label(s) to truth, grep-proof applies; (b) the coder must NOT touch
+     instrument.schema.yaml beyond status-retirement scope and must NOT build an
+     instrument-kind create route — the deletion belongs to the follow-up task
+     INSTR-COLLAPSE-1 (now on the list); (c) INSTR-COLLAPSE-1 carries Brad's
+     binding sequencing gate: define the measurement/acquisition-context contract
+     AS DATA before removing the kind.
 
 ### STATUS: PROMOTED — spec is execution-ready for the fleet coder. Fleet order:
 ### ESM-DIRNAME-1 fix-run-2 (staged) fires first when the appliance-2 slot frees;
