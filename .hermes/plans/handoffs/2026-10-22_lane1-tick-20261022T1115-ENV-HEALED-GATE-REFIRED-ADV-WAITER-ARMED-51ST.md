@@ -120,3 +120,53 @@ un-blocked); 250 (Brad's stack state unchanged by me); 251.
 - WAITER: cl-l1-wait-adv-instrcol1-l1t1100 armed (survives this tick via systemd).
 - Lane stack :3092/:5192 200/200 (mine). Brad's :3001/:5174 not touched.
 - Trunk HEAD e5caebe5; clean except M pnpm-lock.yaml.
+
+## ADDENDUM (same tick l1t1100, 11:30) — both lanes of work moved again; run-2 accept VOIDED; fix run queued
+
+Between writing the handoff above and tick end, THREE more first-hand facts landed:
+
+1. INSTR-COLLAPSE-1 coder COMPLETED (queue 3885824 exited 11:08; report
+   instr-collapse-1-report-l1t0755.md STATUS: complete, 6 commits ending 940ef3bd;
+   my earlier "alive" read was a snapshot before exit — the waiter fired correctly and
+   the cycle-1 adversarial reviewer completed at 11:19: advreview-instrcollapse1-
+   l1t1100.md VERDICT: fix (1 BLOCKER: C2 ref-pins leave the Gemini active-read
+   producer emitting retired type:instrument -> live flow violates its own newly-pinned
+   schemas, hidden by a baseline-red covering file; 1 MAJOR: gate write-path wirings
+   untested at the service level; 1 MINOR: report file-list error). The reviewer's
+   evidence is strong: it ran real probes (sidecar contract + store.create both fail on
+   the job payload) and re-ran suites itself.
+2. FIX RUN 1 DISPATCHED with the orchestrator's binding ruling on the blocker
+   (retype the producer ref to equipment IN THIS item; no defer; kind-deletion
+   boundary preserved) — prompt coder-instr-collapse-1-fix1-l1t1130.txt, queue
+   queue-instr-collapse-1-fix1-l1t1130.sh as unit cl-l1-coder-instrcol1-fix1-l1t1130,
+   QUEUED behind lane-2's MIXFRAC1-RESUME3 (pid 3900290 holds the fleet lock since
+   11:07 — fleet-single rule respected; ours fires on release). Report path
+   instr-collapse-1-fix1-report-l1t1130.md. Cycle-2 adv review fires next tick on
+   completion.
+3. QMS8-C gate run-2 (the one fired at 11:15 above) exited 11:18 with VERDICT: accept
+   but is VOIDED by me: report.md cites registry_search.png / detail_form.png /
+   lab_equipment.png — NONE exist in the receipts dir (only report.md + trail.json),
+   and the run consumed 26 CPU-seconds. This matches the campaign's false-accept
+   failure class exactly (wave-2 standing rule). I did deterministic orch spot-checks
+   first-hand (API: state:draft + no status key; editor projection: no Status label —
+   both consistent with the merge), but the GATE stands: RUN-3 fired with hard evidence
+   enforcement (real Playwright chromium, every cited .png must exist nonzero on disk,
+   unit cl-l1-browergate-qms8c-run3-l1t1135, receipts RUN3-2026-10-22T15-45-00/
+   [UTC-named], active, writing evidence as of 11:33). If run-3 dies or false-accepts
+   AGAIN: per SOUL 6c the harness is the suspect -> orchestrator-authored Playwright
+   script + artifact judging, recording that the orch judged the artifacts.
+
+## Assumption delta (supersedes the block above)
+
+New: AS-ORCH-L1-254 (run-2 accept voided, evidence-enforced run-3), AS-ORCH-L1-255
+(blocker ruling: retype-now, no interim-broken trunk). AS-ORCH-L1-252 stands.
+
+## Checkpoint state at tick end (~11:35)
+
+- Gate RUN-3 live (unit cl-l1-browergate-qms8c-run3-l1t1135, cwd /home/brad; expected
+  ~30min, 2x ~12:15 -> per 6c re-shot at tier-2 IF no trail).
+- Coder fix-run QUEUED (unit cl-l1-coder-instrcol1-fix1-l1t1130 waiting on fleet lock;
+  lane-2 MIXFRAC1-RESUME3 live since 11:07, 3h33m at 11:41 — lane 2's watch, not mine).
+- Fleet lock: lane 2 holds; our pid-file marker fires on acquisition.
+- Trunk dad1e9b6 + uncommitted docs (this addendum); QMS8-C and INSTR-COLLAPSE-1 both
+  in-progress with the above evidence states.
