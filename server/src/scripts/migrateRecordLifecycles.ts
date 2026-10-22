@@ -17,13 +17,25 @@
  *   did not name.
  * - Coverage-driven: the covered kinds come from KindLifecycleRegistry.kinds();
  *   records of other kinds are never listed, never touched. NO kind names in TS.
- * - The domain-status -> lifecycle-state mapping is DATA (the coverage file's
- *   `migration:` block, OQ2 ruling); the runner never guesses per-kind in TS.
- * - Idempotent: a payload already carrying lifecycleId is SKIPPED with a
- *   printed line; the second run's dry report plans ZERO changes (keyed on
- *   payload content, not mtimes).
- * - Writes preserve ids/refs/domain statuses/authorship: the payload copy ADDS
- *   only lifecycleId + state.
+ * - The state sources are DATA, never TS guesses. QMS8-C (D5 / D4 tail) RETIRED
+ *   the QMS7-4 `migration:` status-map block WITH its data: the only declared
+ *   sources left are the coverage entry's `defaultState` (ungoverned records)
+ *   and the `lifecycleMigrations:` stamp instruction keyed by LIFECYCLE (A1-3).
+ *   A record whose state the data cannot decide is REPORTED, never guessed.
+ * - Idempotent, keyed on PAYLOAD CONTENT (not mtimes). QMS8-C (D4) CHANGED the
+ *   skip key: for kinds the coverage DATA declares retired (`stripDomainStatus:
+ *   true`), "already governed" is no longer terminal — a governed record that
+ *   still carries the retired domain status is exactly what the strip leg
+ *   processes. Such a record is terminal only when governed AND status-less;
+ *   the second run's dry report plans ZERO changes.
+ * - Writes preserve ids/refs/authorship. The legs differ in what they do to
+ *   `status`/`state`: the govern leg ADDS lifecycleId + state (and omits the
+ *   retired status for strip-flagged kinds so the migration converges in one
+ *   run); the strip leg DELETES the retired `status` from a clone (the key is
+ *   deleted, never assigned undefined) and leaves the record's state untouched;
+ *   the stamp leg ADDS only state := status. Kinds whose domain status the data
+ *   does NOT declare retired (orthogonal vocabularies, spec §g) keep their
+ *   status untouched.
  * - ONE store.update per record with expectedSha + viaLifecycleApi + actor —
  *   NEVER skipValidation/skipLint. Validation, lint, the append-only wall, the
  *   content lock, git-backed durability and the audit path all run. A store
