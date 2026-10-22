@@ -126,3 +126,23 @@ posture); 042; 082; 087 PARTIAL; 088; 089; 096; 097; 099; 101; 119; 137 residual
 - No browser gate live; no new dispatches this tick.
 - Lane stack :3092/:5192 200/200 (mine). Brad's :3001/:5174 not touched.
 - Trunk 12d2e422 + this handoff commit; clean except M pnpm-lock.yaml.
+
+## ADDENDUM (same tick, 16:23 — budget checkpoint)
+
+- CODER STILL ALIVE (691973, 2h28m, CPU 13:40, state.db 16:15). REPORT STILL WRITING.
+- FIX COMMIT LANDED + AMENDED: reflog shows commit 2083c314 then `reset: moving to
+  0430bd71` then re-landing 2083c314 (same hash) by ~16:07 — the coder squashed/amended
+  its own fix. THE FIX IS COMMITTED: producer retarget + write-path gate tests per OQ-1
+  items 1/3/5, AND the commit message states the seed gained equipmentClassRef
+  CL:plate_reader so ECP-PLATE-READER/VERB-READ resolves — i.e. the coder found and is
+  resolving the AS-260 seed-blindness DECLARATIVELY (seed class binding), not by
+  stubbing. InstrumentApplianceJobContract.test.ts was absent at 16:07 (between reset
+  and re-land); the re-landed commit re-includes it. At self-verify: confirm the
+  ACCEPT test green via the seed-declared binding (my earlier failing witness predates
+  the seed edit).
+- Trunk untouched by the coder; worktree M only .hermes/plans/worker-reports/...
+  (report drafting in progress — report file itself may be written there instead of
+  the briefed path; waiter watches the briefed path instr-collapse-1-fix1-report-
+  l1t1130.md — if the coder exits with the report ONLY in the worktree path, the next
+  tick fires the cycle-2 gate manually with the same staged prompt).
+- Handoff_latest stamp + no-work.log + decision request all committed (13eaccfd).
