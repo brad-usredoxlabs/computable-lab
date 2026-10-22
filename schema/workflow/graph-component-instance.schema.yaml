@@ -73,7 +73,14 @@ properties:
           required: [ roleId ]
           properties:
             roleId: { type: string }
-            instrumentRef: { type: object, additionalProperties: true }
+            # INSTR-COLLAPSE-1 C2: NAME retained, TARGET pinned to equipment (H3).
+            instrumentRef:
+              allOf:
+              - $ref: "./datatypes/ref.schema.yaml"
+              - type: object
+                properties:
+                  kind: { const: record }
+                  type: { const: equipment }
       parameters:
         type: array
         items:

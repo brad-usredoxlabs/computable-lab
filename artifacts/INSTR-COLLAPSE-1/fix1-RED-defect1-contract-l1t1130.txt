@@ -1,0 +1,89 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+ ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts  (5 tests | 4 failed) 1233ms
+   ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > job.request validates against the REAL gemini-active-read-request contract (equipment-pinned instrumentRef)
+     → sidecar contract rejected the producer ref: [{"path":"/instrumentRef/type","message":"Must equal: equipment","keyword":"const","params":{"allowedValue":"equipment"},"suggestion":"Expected \"equipment\"."}]: expected false to be true // Object.is equality
+   ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > the measurement payload built from the job ref validates against the REAL measurement schema (equipment-pinned equipmentRef)
+     → expected 'instrument' to be 'equipment' // Object.is equality
+   ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > store.create (the write-path authority, real validator + lint wall) accepts the measurement the flow writes
+     → store.create rejected the appliance measurement: Validation failed [{"path":"/equipmentRef/type","message":"Must equal: equipment","keyword":"const","params":{"allowedValue":"equipment"},"suggestion":"Expected \"equipment\"."}]: expected false to be true // Object.is equality
+   ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > the declared capability gate ACCEPTS the appliance equipment when the read event chain is present (ECP-PLATE-READER VERB-READ)
+     → gate rejected the corpus plate reader: {"code":"capability_gate_verb_unresolvable","equipmentId":"instrument/gemini-em-plate-reader","message":"capability gate: no verb-definition could be resolved from the payload data for equipment instrument/gemini-em-plate-reader (fail closed)"}: expected { …(3) } to be null
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > job.request validates against the REAL gemini-active-read-request contract (equipment-pinned instrumentRef)
+AssertionError: sidecar contract rejected the producer ref: [{"path":"/instrumentRef/type","message":"Must equal: equipment","keyword":"const","params":{"allowedValue":"equipment"},"suggestion":"Expected \"equipment\"."}]: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts:115:112
+    113|     const job = geminiJob();
+    114|     const result = validator.validate(job.request, GEMINI_REQUEST_SCHE…
+    115|     expect(result.valid, `sidecar contract rejected the producer ref: …
+       |                                                                                                                ^
+    116|   });
+    117| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > the measurement payload built from the job ref validates against the REAL measurement schema (equipment-pinned equipmentRef)
+AssertionError: expected 'instrument' to be 'equipment' // Object.is equality
+
+- Expected
++ Received
+
+- equipment
++ instrument
+
+ ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts:123:33
+    121|     expect(instrumentRef, 'producer must emit an instrumentRef').toBeD…
+    122|     // The ref TARGET is equipment (H3 floor) and names a corpus-decla…
+    123|     expect(instrumentRef!.type).toBe('equipment');
+       |                                 ^
+    124|     expect(instrumentRef!.id).toBe('EQP-PLATE-READER');
+    125| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > store.create (the write-path authority, real validator + lint wall) accepts the measurement the flow writes
+AssertionError: store.create rejected the appliance measurement: Validation failed [{"path":"/equipmentRef/type","message":"Must equal: equipment","keyword":"const","params":{"allowedValue":"equipment"},"suggestion":"Expected \"equipment\"."}]: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts:144:7
+    142|       result.success,
+    143|       `store.create rejected the appliance measurement: ${result.error…
+    144|     ).toBe(true);
+       |       ^
+    145|   });
+    146| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/compiler/artifacts/InstrumentApplianceJobContract.test.ts > FIX-1 defect 1: the Gemini appliance producer satisfies the retargeted contracts end-to-end > the declared capability gate ACCEPTS the appliance equipment when the read event chain is present (ECP-PLATE-READER VERB-READ)
+AssertionError: gate rejected the corpus plate reader: {"code":"capability_gate_verb_unresolvable","equipmentId":"instrument/gemini-em-plate-reader","message":"capability gate: no verb-definition could be resolved from the payload data for equipment instrument/gemini-em-plate-reader (fail closed)"}: expected { …(3) } to be null
+ ❯ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts:181:102
+    179|       store,
+    180|     });
+    181|     expect(violation, `gate rejected the corpus plate reader: ${JSON.s…
+       |                                                                                                      ^
+    182|   });
+    183| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  15:20:04
+   Duration  4.15s (transform 250ms, setup 0ms, collect 1.44s, tests 1.23s, environment 0ms, prepare 434ms)
+

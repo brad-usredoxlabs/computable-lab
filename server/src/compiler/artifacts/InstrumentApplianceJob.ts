@@ -89,15 +89,30 @@ const GEMINI_EM_INSTRUMENT_ALIASES = new Set([
   'molecular devices gemini em',
 ]);
 
+// INSTR-COLLAPSE-1 FIX-1 (adv defect 1): the active-read ref TARGET is an
+// EQUIPMENT record (gemini-active-read-request.schema.yaml pins
+// instrumentRef type: const equipment; measurement.equipmentRef likewise).
+// The id names the equipment record the git corpus actually declares for a
+// Gemini EM plate reader: records/seed/equipment/eqp-plate-reader.yaml
+// (EQP-PLATE-READER, keywords include "plate reader"/"fluorescence
+// reader"), whose read capability is declared by records/seed/
+// equipment-capability/ecp-plate-reader.yaml (ECP-PLATE-READER -> VERB-READ).
+// The retired `instrument/<slug>` path-style id is gone: the slug no longer
+// has to match a retired kind's record — it resolves to the seed-declared
+// plate-reader equipment record (spec hard rule 6: slug style was fine for
+// the retired kind; the TARGET record must exist in the corpus).
+const GEMINI_EM_EQUIPMENT_RECORD_ID = 'EQP-PLATE-READER';
+
 function normalizeInstrumentName(instrument: string): string {
   return instrument.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function instrumentRecordId(instrument: string): string {
+function equipmentRecordId(instrument: string): string {
+  if (isGeminiEmInstrument(instrument)) return GEMINI_EM_EQUIPMENT_RECORD_ID;
   const slug = normalizeInstrumentName(instrument)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `instrument/${slug || 'gemini-em'}`;
+  return `EQP-${(slug || 'gemini-em').toUpperCase()}`;
 }
 
 export function isGeminiEmInstrument(instrument: string): boolean {
@@ -122,8 +137,8 @@ export function createGeminiEmActiveReadJob(
       adapterId: GEMINI_EM_ADAPTER_ID,
       instrumentRef: {
         kind: 'record',
-        id: instrumentRecordId(runFile.instrument),
-        type: 'instrument',
+        id: equipmentRecordId(runFile.instrument),
+        type: 'equipment',
       },
       outputPath: `records/inbox/${jobId}.csv`,
       parameters: requestParameters,

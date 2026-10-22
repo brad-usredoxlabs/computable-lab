@@ -5,6 +5,7 @@ import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { FileOperationResult } from '../repo/types.js';
 import { ProtocolCompiler, type ProtocolCompilerContext, type ProtocolCompilerResult } from '../compiler/protocol/ProtocolCompiler.js';
 import { compileOpentronsPlan } from './compilers/opentronsCompiler.js';
+import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { ExecutionPlanningValidator, type PlanningValidationResult } from './planning/ExecutionPlanningValidator.js';
 import { createAssistPlusEmitter, type AssistPlusEmitter, type AssistEmitterMode } from './emitters/assist/AssistPlusEmitter.js';
 import {
@@ -298,6 +299,21 @@ export class ExecutionOrchestrator {
       schemaId: PLANNED_RUN_SCHEMA_ID,
       payload,
     };
+
+    // INSTR-COLLAPSE-1 C2 (OQ-1): this is the single service that persists a
+    // planned run carrying compiled steps (payload.protocolCompilation.steps —
+    // R3 checked: it exists, so the planned-run leg of the gate ships here).
+    // The schema's CompiledProtocolStep.equipmentRef declares x-capability-gate
+    // with the sibling verbRef as its verb source; this call site interprets it.
+    const gateViolation = await evaluateDeclaredCapabilityGate({
+      payload: payload as unknown as Record<string, unknown>,
+      schemaId: PLANNED_RUN_SCHEMA_ID,
+      validator: this.ctx.validator,
+      store: this.ctx.store,
+    });
+    if (gateViolation) {
+      throw new ExecutionError(gateViolation.code, gateViolation.message, 400);
+    }
 
     const result = await this.ctx.store.create({
       envelope,

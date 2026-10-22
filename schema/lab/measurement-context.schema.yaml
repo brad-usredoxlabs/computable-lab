@@ -15,7 +15,7 @@ required:
 - id
 - name
 - source_ref
-- instrument_ref
+- equipment_ref
 - readout_def_refs
 
 properties:
@@ -33,8 +33,40 @@ properties:
   source_ref:
     $ref: "./datatypes/ref.schema.yaml"
 
-  instrument_ref:
-    $ref: "./datatypes/ref.schema.yaml"
+  # INSTR-COLLAPSE-1 C1: the physical source of a measurement context is an
+  # EQUIPMENT record (was instrument_ref, a bare ref). Target pinned to
+  # type: equipment — the retired instrument kind is not a ref target.
+  equipment_ref:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+    description: "Which equipment this context measures on."
+
+  # INSTR-COLLAPSE-1 C1: QMS-at-acquisition context (memo §3). Each item is a
+  # datatypes/ref.schema.yaml so a revisionRef pin is legal at every element —
+  # the acquisition keeps naming the calibration/authorization context in force
+  # AT acquisition even after the live record changes. additionalProperties:false
+  # keeps smugglers out.
+  acquisition_context:
+    type: object
+    additionalProperties: false
+    properties:
+      calibration_refs:
+        type: array
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+      authorization_refs:
+        type: array
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+      note:
+        type: string
+    description: >-
+      QMS context captured at acquisition time (calibration / competency
+      authorization refs, revision-pinnable, plus a free note).
 
   assay_def_ref:
     $ref: "./datatypes/ref.schema.yaml"

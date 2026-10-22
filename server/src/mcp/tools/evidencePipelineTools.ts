@@ -46,7 +46,7 @@ export function registerEvidencePipelineTools(server: McpServer, ctx: AppContext
           contexts: contexts.map((c) => ({
             recordId: c.recordId,
             name: c.payload.name,
-            instrument: c.payload.instrument_ref,
+            equipment: c.payload.equipment_ref,
             assay: c.payload.assay_def_ref,
           })),
           measurements: measurements.map((m) => {
@@ -108,7 +108,7 @@ export function registerEvidencePipelineTools(server: McpServer, ctx: AppContext
           contexts: contexts.map((c) => ({
             recordId: c.recordId,
             name: c.payload.name,
-            instrument: c.payload.instrument_ref,
+            equipment: c.payload.equipment_ref,
             assay: c.payload.assay_def_ref,
           })),
           measurements: measurements.map((m) => {

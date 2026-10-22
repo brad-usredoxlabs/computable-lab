@@ -228,6 +228,7 @@ $defs:
         items: { type: string }
       instrument:
         type: string
+        description: "Free-text display field (INSTR-COLLAPSE-1 C2: the word names the machine; the resolution target is an equipment record)."
       labware:
         $ref: "#/$defs/labware_ref"
       mode:

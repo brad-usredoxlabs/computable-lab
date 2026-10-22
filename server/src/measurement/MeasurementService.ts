@@ -1,5 +1,6 @@
 import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
+import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { basename } from 'node:path';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
@@ -19,7 +20,7 @@ type MeasurementPayload = {
   assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
   eventGraphRef?: Ref;
   readEventRef?: string;
-  instrumentRef?: Ref;
+  equipmentRef?: Ref;
   labwareInstanceRef?: Ref;
   measurementContextRef?: Ref;
   timepoint?: string;
@@ -99,7 +100,7 @@ export class MeasurementService {
   }
 
   async ingest(input: {
-    instrumentRef?: unknown;
+    equipmentRef?: unknown;
     labwareInstanceRef?: unknown;
     eventGraphRef?: unknown;
     measurementContextRef?: unknown;
@@ -130,7 +131,7 @@ export class MeasurementService {
     const wells = new Set(data.map((d) => d.well));
     const channels = new Set(parsed.channels);
     const eventGraphRef = parseRef(input.eventGraphRef);
-    const instrumentRef = parseRef(input.instrumentRef);
+    const equipmentRef = parseRef(input.equipmentRef);
     const labwareInstanceRef = parseRef(input.labwareInstanceRef);
     const measurementContextRef = parseRef(input.measurementContextRef);
 
@@ -143,7 +144,7 @@ export class MeasurementService {
       assayType: parsed.assayType,
       ...(eventGraphRef ? { eventGraphRef } : {}),
       ...(typeof input.readEventRef === 'string' ? { readEventRef: input.readEventRef } : {}),
-      ...(instrumentRef ? { instrumentRef } : {}),
+      ...(equipmentRef ? { equipmentRef } : {}),
       ...(labwareInstanceRef ? { labwareInstanceRef } : {}),
       ...(measurementContextRef ? { measurementContextRef } : {}),
       ...(typeof input.timepoint === 'string' && input.timepoint.length > 0 ? { timepoint: input.timepoint } : {}),
@@ -170,6 +171,21 @@ export class MeasurementService {
         parsedAt,
       },
     };
+
+    // INSTR-COLLAPSE-1 C2 (OQ-1): the declared capability gate. The measurement
+    // schema's equipmentRef slot declares x-capability-gate; this call site is
+    // the policy-free interpreter — it rejects the write when the equipment
+    // does not declare the verb the producing read event names. With an
+    // unannotated schema (e.g. a test fixture) the gate is inert by design.
+    const gateViolation = await evaluateDeclaredCapabilityGate({
+      payload: payload as unknown as Record<string, unknown>,
+      schemaId: MEASUREMENT_SCHEMA_ID,
+      validator: this.ctx.validator,
+      store: this.ctx.store,
+    });
+    if (gateViolation) {
+      throw new MeasurementServiceError(gateViolation.code, gateViolation.message, 400);
+    }
 
     const result = await this.ctx.store.create({
       envelope: {

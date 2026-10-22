@@ -30,6 +30,9 @@ import {
 
 type ActiveReadRequestBody = {
   adapterId: 'molecular_devices_gemini' | 'abi_7500_qpcr' | 'agilent_6890n_gc' | 'metrohm_761_ic';
+  // Sidecar active-read contract field NAME (gemini-active-read-request.schema.yaml);
+  // INSTR-COLLAPSE-1 C2 pins its TARGET to equipment. The measurement PAYLOAD field is
+  // `equipmentRef` (measurement.schema.yaml).
   instrumentRef?: unknown;
   labwareInstanceRef?: unknown;
   eventGraphRef?: unknown;
@@ -209,7 +212,7 @@ export function createMeasurementHandlers(ctx: AppContext) {
     async ingestMeasurement(
       request: FastifyRequest<{
         Body: {
-          instrumentRef?: unknown;
+          equipmentRef?: unknown;
           labwareInstanceRef?: unknown;
           eventGraphRef?: unknown;
           measurementContextRef?: unknown;

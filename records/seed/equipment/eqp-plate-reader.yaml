@@ -11,3 +11,16 @@ keywords:
   - fluorescence reader
   - multi-mode reader
 notes: common lab equipment starter set
+# INSTR-COLLAPSE-1 FIX-1 (adv defect 1): the seed plate reader is an instance
+# of the declared generic kind CL:plate_reader (schema/registry/equipment-kinds/
+# plate-reader.yaml), the same class ECP-PLATE-READER binds its VERB-READ
+# capability to (records/seed/equipment-capability/ecp-plate-reader.yaml).
+# Without the class link the declared capability cannot resolve to this
+# instance and the Gemini active-read flow (which names this record) would
+# fail the declared capability gate. Seed-data consistency, same shape as
+# eqp-heat-block.yaml / eqp-clamshell-heater-shaker.yaml (ontology classRef).
+equipmentClassRef:
+  kind: ontology
+  id: CL:plate_reader
+  namespace: CL
+  label: Plate reader

@@ -16,6 +16,8 @@ type ActiveReadAdapterId =
 
 type ActiveReadRequest = {
   adapterId: ActiveReadAdapterId;
+  // Sidecar active-read contract field NAME (gemini-active-read-request.schema.yaml);
+  // C2 pins its TARGET to equipment. Feeds measurement.equipmentRef on ingest.
   instrumentRef?: unknown;
   labwareInstanceRef?: unknown;
   eventGraphRef?: unknown;
@@ -235,7 +237,8 @@ export class MeasurementActiveControlService {
     }
 
     const measurement = await this.measurements.ingest({
-      ...(input.instrumentRef !== undefined ? { instrumentRef: input.instrumentRef } : {}),
+      // The active-read contract ref (name retained) becomes the measurement's equipmentRef.
+      ...(input.instrumentRef !== undefined ? { equipmentRef: input.instrumentRef } : {}),
       ...(input.labwareInstanceRef !== undefined ? { labwareInstanceRef: input.labwareInstanceRef } : {}),
       ...(input.eventGraphRef !== undefined ? { eventGraphRef: input.eventGraphRef } : {}),
       ...(input.measurementContextRef !== undefined ? { measurementContextRef: input.measurementContextRef } : {}),
@@ -255,6 +258,7 @@ export class MeasurementActiveControlService {
           id: logId,
           logType: 'instrument_readout',
           status: 'completed',
+          // instrument-log keeps its audit-retained property NAME; the ref TARGET is equipment.
           ...(input.instrumentRef ? { instrumentRef: input.instrumentRef } : {}),
           ...(input.eventGraphRef ? { eventGraphRef: input.eventGraphRef } : {}),
           startedAt,

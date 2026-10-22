@@ -87,7 +87,7 @@ describe('MeasurementService', () => {
     const result = await service.ingest({
       parserId: 'gemini_csv',
       rawData: { path: 'records/inbox/gemini.csv' },
-      instrumentRef: { kind: 'record', id: 'INSTR-GEMINI', type: 'instrument' },
+      equipmentRef: { kind: 'record', id: 'EQP-GEMINI', type: 'equipment' },
     });
 
     expect(result.recordId).toBe('MSR-000001');

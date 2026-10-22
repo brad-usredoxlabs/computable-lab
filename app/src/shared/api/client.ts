@@ -435,7 +435,7 @@ export interface MeasurementContextRecord {
   name: string
   title?: string
   source_ref: MaterialRefInput
-  instrument_ref: MaterialRefInput
+  equipment_ref: MaterialRefInput
   assay_def_ref?: MaterialRefInput
   readout_def_refs: MaterialRefInput[]
   timepoint?: string
@@ -500,7 +500,7 @@ export interface MeasurementRecordPayload {
   assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other'
   eventGraphRef?: MaterialRefInput
   readEventRef?: string
-  instrumentRef?: MaterialRefInput
+  equipmentRef?: MaterialRefInput
   labwareInstanceRef?: MaterialRefInput
   measurementContextRef?: MaterialRefInput
   timepoint?: string
@@ -723,7 +723,7 @@ export interface RunAnalysisBundle {
 export interface CreateMeasurementContextRequest {
   name?: string
   sourceRef: MaterialRefInput
-  instrumentRef: MaterialRefInput
+  equipmentRef: MaterialRefInput
   assayDefRef?: MaterialRefInput
   readoutDefRefs: MaterialRefInput[]
   timepoint?: string
@@ -757,7 +757,7 @@ export interface CreateWellGroupRequest {
 }
 
 export interface MeasurementIngestRequest {
-  instrumentRef?: MaterialRefInput
+  equipmentRef?: MaterialRefInput
   labwareInstanceRef?: MaterialRefInput
   eventGraphRef?: MaterialRefInput
   measurementContextRef?: MaterialRefInput

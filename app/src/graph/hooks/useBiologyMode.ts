@@ -102,11 +102,11 @@ export function useBiologyMode(args: {
           await apiClient.createMeasurementContext({
             name: `Biology Layer · ${sourceLabwareId}`,
             sourceRef: { kind: 'record', id: sourceLabwareId, type: 'labware', label: `Plate ${sourceLabwareId}` },
-            instrumentRef: {
+            equipmentRef: {
               kind: 'record',
-              id: 'INSTDEF-GENERIC-PLATE_READER',
-              type: 'instrument-definition',
-              label: 'Generic Plate Reader',
+              id: 'EQP-PLATE-READER',
+              type: 'equipment',
+              label: 'Plate Reader',
             },
             readoutDefRefs: [{
               kind: 'record',

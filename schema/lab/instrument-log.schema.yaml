@@ -23,8 +23,16 @@ properties:
     description: "Identifier (e.g., ILOG-PLR000001-001)."
 
   instrumentRef:
-    $ref: "./datatypes/ref.schema.yaml"
-    description: "Which instrument produced this log."
+    # INSTR-COLLAPSE-1 C2: instrument-log keeps its audit-retained KIND and
+    # property NAME (an execution log of a machine is not a measurement); the
+    # ref TARGET is pinned to equipment (H3).
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+    description: "Which equipment produced this log."
 
   plannedRunRef:
     $ref: "./datatypes/ref.schema.yaml"

@@ -1218,7 +1218,7 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
     'measurement_ingest',
     'Ingest instrument output and create a measurement record from parser-ready raw files.',
     {
-      instrumentRef: z.record(z.string(), z.unknown()).optional().describe('Instrument reference'),
+      equipmentRef: z.record(z.string(), z.unknown()).optional().describe('Equipment reference'),
       labwareInstanceRef: z.record(z.string(), z.unknown()).optional().describe('Labware instance reference'),
       eventGraphRef: z.record(z.string(), z.unknown()).optional().describe('Event graph reference'),
       readEventRef: z.string().optional().describe('Read event ID within the event graph'),
@@ -1228,14 +1228,14 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
     async (args) => {
       try {
         const ingestArgs: {
-          instrumentRef?: unknown;
+          equipmentRef?: unknown;
           labwareInstanceRef?: unknown;
           eventGraphRef?: unknown;
           readEventRef?: string;
           parserId?: string;
           rawData?: unknown;
         } = {
-          ...(args.instrumentRef !== undefined ? { instrumentRef: args.instrumentRef } : {}),
+          ...(args.equipmentRef !== undefined ? { equipmentRef: args.equipmentRef } : {}),
           ...(args.labwareInstanceRef !== undefined ? { labwareInstanceRef: args.labwareInstanceRef } : {}),
           ...(args.eventGraphRef !== undefined ? { eventGraphRef: args.eventGraphRef } : {}),
           ...(args.readEventRef !== undefined ? { readEventRef: args.readEventRef } : {}),
@@ -1259,7 +1259,7 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
     'Run an active instrument read via sidecar (Gemini/ABI/GC/IC) and ingest output into a measurement record.',
     {
       adapterId: z.enum(['molecular_devices_gemini', 'abi_7500_qpcr', 'agilent_6890n_gc', 'metrohm_761_ic']).describe('Active-read adapter identifier'),
-      instrumentRef: z.record(z.string(), z.unknown()).optional().describe('Instrument reference'),
+      instrumentRef: z.record(z.string(), z.unknown()).optional().describe('Equipment reference (active-read contract field name)'),
       labwareInstanceRef: z.record(z.string(), z.unknown()).optional().describe('Labware instance reference'),
       eventGraphRef: z.record(z.string(), z.unknown()).optional().describe('Event graph reference'),
       readEventRef: z.string().optional().describe('Read event ID within event graph'),

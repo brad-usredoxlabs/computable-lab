@@ -6,6 +6,12 @@ lifecycleId: registry-ops
 state: active
 manufacturer: Thermo Fisher Scientific
 modelFamily: QuantStudio 5
+# INSTR-COLLAPSE-1 C1: ontology classification migrated from the instrument
+# kind. OBI:0001110 = "real-time PCR machine" (OBI, verified via EMBL-EBI OLS4
+# 2026-10-22) — a measuring-device class, the data the derived
+# measurement-capable view (C5) filters on.
+class:
+  - OBI:0001110
 settingsDefinition:
   - key: anneal_temperature_c
     label: Anneal temperature
