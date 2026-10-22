@@ -38,6 +38,7 @@ import {
   type ScientistIntentCompileDeps,
 } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
+import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
 import type { RecordStore } from '../store/types.js';
 import type {
   ScientistIntent,
@@ -64,9 +65,33 @@ export interface DeckLabwareSummary {
   name?: string;
 }
 
+/**
+ * REVISE-GHOST-1 (OQ-1 ruling): one accepted clarification binding — the
+ * scientist's ALREADY-CHOSEN record for one label, inside the ACTIVE proposal.
+ * Generic `{label, ref}` strings: zero reagent nouns, zero domain branches —
+ * TS sees strings (the shorthandDeckLabwares shape precedent).
+ */
+export interface AcceptedShorthandBinding {
+  /** The label the scientist answered (the card's own label, and separately
+   *  the label they chose — both spellings join the revise document). */
+  label: string;
+  /** The record identity they chose (the answer's ref — never a mint). */
+  ref: string;
+}
+
 export interface ShorthandCompileDeps {
   store?: RecordStore;
   searchLabwareByHint?: ScientistIntentCompileDeps['searchLabwareByHint'];
+  /**
+   * REVISE-GHOST-1: the conversation's accepted {label, ref} bindings, applied
+   * at the ai/ seam BEFORE resolution — the spine is COMPOSED so an exact
+   * label match narrows to the candidate the scientist already chose (the
+   * composeLabwareHintLookupWithDeck deck-first precedent). Resolution itself
+   * (compiler/resolution/**, server/src/resolve/**) is untouched: the reuse
+   * never re-asks a label this proposal already bound, and never invents —
+   * the chosen ref must be one the spine itself surfaced for that label.
+   */
+  reuseBindings?: readonly AcceptedShorthandBinding[];
   /**
    * The editor's DECK labware (context.labwares — the plates the scientist
    * is looking at). Deck plates are editor state, not store records, so the
@@ -240,6 +265,51 @@ export function bindShorthandEventsToDeck<T extends object>(
 }
 
 /**
+ * REVISE-GHOST-1: compose the candidate spine with the conversation's accepted
+ * {label, ref} bindings (the composeLabwareHintLookupWithDeck deck-first
+ * precedent, applied to the spine instead). An EXACT label match (trim +
+ * case-insensitive — the same normalization the deck match uses) narrows the
+ * spine's OWN candidate set to the record the scientist already chose:
+ * "settled, do not re-ask". NEVER invents — if the chosen ref is not among
+ * the spine's candidates for that label, the spine result rides untouched.
+ * Resolution itself (compiler/resolution/**, server/src/resolve/**) is
+ * untouched: this wraps the injected spine at the ai/ seam BEFORE the compile.
+ * Zero reagent nouns, zero domain branches — TS sees strings.
+ */
+export function composeSpineWithReuseBindings(
+  spine: EngineSpineLike,
+  bindings: readonly AcceptedShorthandBinding[],
+): EngineSpineLike {
+  if (bindings.length === 0) return spine;
+  const refsByLabel = new Map<string, Set<string>>();
+  for (const b of bindings) {
+    const key = b.label.trim().toLowerCase();
+    if (!key || !b.ref.trim()) continue;
+    const set = refsByLabel.get(key) ?? new Set<string>();
+    set.add(b.ref.trim());
+    refsByLabel.set(key, set);
+  }
+  if (refsByLabel.size === 0) return spine;
+  return {
+    async resolve(term: string, opts?: Parameters<EngineSpineLike['resolve']>[1]) {
+      const candidates = await spine.resolve(term, opts);
+      const refs = refsByLabel.get(term.trim().toLowerCase());
+      if (!refs || candidates.length === 0) return candidates;
+      const chosen = candidates.filter((c) => refs.has(recordIdFromCurie(c.curie)));
+      return chosen.length > 0 ? chosen : candidates;
+    },
+  };
+}
+
+/** Unwrap the spine's declared local CURIE ('local:<recordId>',
+ *  resolve/providers/records.ts:77) into the record identity. Generic CURIE
+ *  plumbing, the resolveNounsPass precedent — not a local invention. */
+function recordIdFromCurie(curie: string): string {
+  const prefix = 'local:';
+  return curie.startsWith(prefix) ? curie.slice(prefix.length) : curie;
+}
+
+/**
  * Compile a VALIDATED shorthand document through the FROZEN deterministic
  * pipeline with the SAME production deps the intent-compile routes build
  * (IntentCompileHandlers.ts:59-62, the server.ts:733 composition): a
@@ -247,6 +317,9 @@ export function bindShorthandEventsToDeck<T extends object>(
  * COMPILE_INTERNAL precedent — never a provider-less spine that false-bars
  * every store-resolvable noun). This module is the chat-side seam's single
  * declared consumer of the pipeline (the W2-7 no-bypass closure allow-list).
+ * REVISE-GHOST-1: when the conversation carries accepted bindings for the
+ * ACTIVE proposal, the spine is composed with the reuse hint BEFORE the
+ * compile (exact-label narrowing, never invention).
  */
 export async function compileShorthandDeterministically(
   doc: ScientistIntent,
@@ -254,8 +327,11 @@ export async function compileShorthandDeterministically(
 ): Promise<ScientistIntentCompileResult | null> {
   if (!deps.store) return null;
   const spine = createResolveSpineFromContext({ store: deps.store });
+  const reuseBindings = deps.reuseBindings ?? [];
   return compileScientistIntent(doc, {
-    spine,
+    spine: reuseBindings.length > 0
+      ? composeSpineWithReuseBindings(spine, reuseBindings)
+      : spine,
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
   });
 }
@@ -323,6 +399,55 @@ export interface AnsweredSlot {
 
 const MAX_HELD_CONVERSATIONS = 64;
 const heldIntents = new Map<string, HeldShorthandIntent>();
+
+/**
+ * REVISE-GHOST-1 (OQ-1 ruling): the ACTIVE proposal's accepted label->ref
+ * bindings, held per conversationKey (the heldIntents precedent, same eviction
+ * bound). The leak this closes: the answer fold consumed the held intent and
+ * the accepted binding died with it, so a LATER revise turn re-resolved every
+ * label from prose and re-asked questions the scientist had already answered
+ * (the swallowed-events leg, spec §5). Lifecycle: recorded by the fold, read
+ * by a revise turn (draftRevision context present), CLEARED by a fresh-start
+ * turn (no mounted preview) — bindings never cross a proposal boundary
+ * (Accept/Discard/fresh-start all land the next turn without draftRevision).
+ */
+const acceptedBindings = new Map<string, readonly AcceptedShorthandBinding[]>();
+
+export function rememberAcceptedShorthandBindings(
+  key: string,
+  bindings: readonly AcceptedShorthandBinding[],
+): void {
+  if (bindings.length === 0) return;
+  if (acceptedBindings.size >= MAX_HELD_CONVERSATIONS) {
+    const oldest = acceptedBindings.keys().next();
+    if (!oldest.done) acceptedBindings.delete(oldest.value);
+  }
+  acceptedBindings.set(key, bindings);
+}
+
+/**
+ * Read the conversation's accepted bindings for THIS turn. `activeProposal`
+ * is the client's mounted-preview marker (context.draftRevision present):
+ * a revise turn continues the proposal and reuses the bindings; a fresh-start
+ * turn ends it — the bindings are dropped (idempotent) and the turn resolves
+ * from scratch exactly as before the fix.
+ */
+export function acceptedShorthandBindingsFor(
+  key: string,
+  activeProposal: boolean,
+): readonly AcceptedShorthandBinding[] {
+  if (!activeProposal) {
+    acceptedBindings.delete(key);
+    return [];
+  }
+  return acceptedBindings.get(key) ?? [];
+}
+
+/** Drop the conversation's accepted bindings (the Cancel-leg clear the
+ *  held-intent clearHeldShorthandIntent mirrors). Idempotent. */
+export function clearAcceptedShorthandBindings(key: string): boolean {
+  return acceptedBindings.delete(key);
+}
 
 export function holdShorthandIntent(key: string, held: HeldShorthandIntent): void {
   if (heldIntents.size >= MAX_HELD_CONVERSATIONS) {
@@ -453,7 +578,7 @@ export function clarificationsFromUnresolvedFacts(
 export function foldAnswersIntoShorthand(
   held: HeldShorthandIntent,
   answers: readonly AgentClarificationAnswer[],
-): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[] } | null {
+): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[]; bindings: AcceptedShorthandBinding[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
   // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
@@ -463,6 +588,17 @@ export function foldAnswersIntoShorthand(
   for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
   const answered = new Set<ScientistIntentUnresolvedFact>();
   const answeredSlots: AnsweredSlot[] = [];
+  // REVISE-GHOST-1: the accepted {label, ref} bindings this fold records. The
+  // bar's OWN label and the label the scientist chose BOTH join the chosen
+  // record — a later revise turn re-emits the scientist's phrasing, not the
+  // record it was shown. The ref is the answer's own record identity (a
+  // generic `id` read — never a mint, never invented): an answer that carries
+  // no record ref records no binding.
+  const bindings: AcceptedShorthandBinding[] = [];
+  const refIdOf = (answer: AgentClarificationAnswer): string | null => {
+    const id = (answer.ref as { id?: unknown } | undefined)?.id;
+    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+  };
   for (const answer of answers) {
     const requestId = answer.requestId ?? '';
     let fact = factByKey.get(requestId);
@@ -488,6 +624,11 @@ export function foldAnswersIntoShorthand(
     action[loc.argument] = label;
     answered.add(fact);
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
+    const refId = refIdOf(answer);
+    if (refId) {
+      bindings.push({ label: fact.label, ref: refId });
+      if (label !== fact.label) bindings.push({ label, ref: refId });
+    }
   }
   if (answered.size === 0) return null;
   // Drop any document-declared unresolved entry that names the same noun slot
@@ -516,7 +657,7 @@ export function foldAnswersIntoShorthand(
     // unchanged: the lift makes strictly MORE documents parse, and a genuinely
     // invalid folded document still returns null (the caller's permitted
     // extraction-only fallback).
-    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots };
+    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots, bindings };
   } catch (error) {
     if (error instanceof ScientistIntentValidationError) return null;
     throw error;

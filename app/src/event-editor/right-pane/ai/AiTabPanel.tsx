@@ -368,6 +368,13 @@ export function AiTabPanel() {
     recompiling?: boolean
     error?: string
   } | null>(null)
+  // REVISE-GHOST-1 (OQ-2 ruling): the honest wall's REPORTED failure. A chat
+  // draft turn that claims success but mounts NOTHING and asks nothing is a
+  // failure, not an empty review — the text renders in the chat section (the
+  // only surface a PB-CH-4 D1 reset leaves mounted), reusing the
+  // shorthandError verbatim-error pattern's wording discipline. Cleared with
+  // the recompile state on every new draft and every fresh send.
+  const [honestWall, setHonestWall] = useState<string | null>(null)
 
   // SHORTHAND-CORPUS WS6 D2 (gate r4 OBS-1): the pair's prompt is the user
   // TURNS of the current proposal (binding spec shape: prompt (user turns +
@@ -404,6 +411,7 @@ export function AiTabPanel() {
       lastShorthandDraftRef.current =
         typeof result.shorthand === 'string' ? { prompt } : null
       setShorthandApply(null)
+      setHonestWall(null)
 
       // PB-CH-4 D1: consume the turn flags FIRST, on every path, so a stale
       // flag can never leak into a later turn (a no-envelope compose_workstate
@@ -507,6 +515,38 @@ export function AiTabPanel() {
           // An unmappable envelope falls through to the event-graph path
           // unchanged rather than opening an empty protocol review.
         }
+      }
+
+      // REVISE-GHOST-1 (OQ-2 ruling) — the HONEST WALL on the chat draft leg.
+      // A `success:true` done result that mounts NOTHING (zero events) and
+      // asks NOTHING (zero clarification cards) with no error is a REPORTED
+      // failure, never an actionable review: the swallowed-events leg (spec §5)
+      // landed exactly this shape — a proposal-bearing turn whose compile
+      // produced zero mountable events. Same PB-CH-4 D1 discipline as the
+      // error/workstate/ledger guards above: sidebar reset (no 'reviewing', no
+      // empty actionable 'Apply to run'), the chat section stays mounted, and
+      // the failure text NAMES what the turn delivered (shorthand-only? notes?
+      // nothing?) — never a silent empty plate under a happy panel. The
+      // clarifications-needed arm below stays as-is (a legitimate hold keeps
+      // its cards). A result WITHOUT the success key (a hand-authored/legacy
+      // empty draft, the R-Defect-2 pin) is untouched.
+      if (
+        result.success === true
+        && draftedEvents.length === 0
+        && !(result.clarificationRequests?.length ?? 0)
+        && !result.error
+      ) {
+        const delivered = [
+          typeof result.shorthand === 'string' ? 'the shorthand document' : null,
+          (result.notes?.length ?? 0) > 0 ? 'notes' : null,
+        ].filter((part): part is string => part !== null)
+        setHonestWall(
+          `Draft produced no events${delivered.length > 0 ? ` — it delivered only ${delivered.join(' and ')}` : ''} and asked no questions. Nothing was proposed on the deck; nothing was applied.`,
+        )
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+        return
       }
 
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
@@ -1059,6 +1099,9 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // REVISE-GHOST-1: a fresh send clears the honest-wall line — a reported
+      // failure belongs to its turn, never to the next one.
+      setHonestWall(null)
       // WS6 D2: a send with NO mounted preview starts a FRESH proposal — the
       // pair's user-turn chain begins at this turn. A send while a preview is
       // mounted is a Revise (the UI says so) and CONTINUES the current
@@ -1334,6 +1377,15 @@ export function AiTabPanel() {
       {activeSubTab === 'chat' ? (
         <section className="ai-tab__section ai-tab__section--log">
           <MessageLog state={chat.state} />
+          {honestWall ? (
+            // REVISE-GHOST-1 (OQ-2): the reported failure rides the chat
+            // section — the ONLY surface a PB-CH-4 D1 reset leaves mounted.
+            // Same verbatim-error discipline as the recompile's shorthandError
+            // slot: the server turn's shortfall, named, never a silent plate.
+            <div className="ai-tab__honest-wall" role="alert" data-testid="ai-tab-honest-wall">
+              {honestWall}
+            </div>
+          ) : null}
           {flow.card ? (
             // PB-CH-4 tier-2: the review card rides the chat itself. While a
             // card is pending NO proposed tab is rendered anywhere (no ghosted
