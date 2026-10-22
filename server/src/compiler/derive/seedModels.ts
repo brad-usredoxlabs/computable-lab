@@ -16,7 +16,11 @@
 import { parse as parseYaml } from 'yaml';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import type { DerivationModel } from './DerivationEngine.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Load and structurally validate a derivation model from a YAML file.
