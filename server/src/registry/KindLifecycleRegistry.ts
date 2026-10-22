@@ -30,6 +30,16 @@ export interface KindLifecycleEntry {
   kind: string;
   lifecycleId: string;
   defaultState: string;
+  /**
+   * QMS8-C (D4): this kind's DOMAIN `status` field is retired — its vocabulary
+   * duplicates the lifecycle's own states, so governed records carry the state
+   * and the status key is stripped. Declared per kind in the coverage DATA:
+   * kinds whose status is an ORTHOGONAL domain vocabulary (person's
+   * contractor/suspended, training-record's passed/failed, calibration-record's
+   * pass/fail — all live admissibility consumers) declare nothing here and are
+   * never stripped. Absent -> false.
+   */
+  stripDomainStatus: boolean;
 }
 
 /**
@@ -71,7 +81,7 @@ export interface KindLifecycleRegistryData {
   registryVersion: number;
   lifecycleId: string;
   defaultState: string;
-  kinds: Array<{ kind: string }>;
+  kinds: Array<{ kind: string; stripDomainStatus?: unknown }>;
   archiveGuard?: { exemptKinds?: unknown };
   migration?: { stateByDomainStatus?: unknown; default?: unknown };
   lifecycleMigrations?: Array<{ lifecycleId?: unknown; stampStateFromDomainStatus?: unknown }>;
@@ -223,7 +233,18 @@ export class KindLifecycleRegistry {
       if (!deps.knownKinds.has(kind)) {
         throw new Error(`Unknown kind in registry-kind coverage: ${kind}`);
       }
-      const entry: KindLifecycleEntry = { kind, lifecycleId: this.lifecycleId, defaultState: this.defaultState };
+      // QMS8-C (D4): the retirement flag is per-kind DATA. Present-but-not-a-
+      // boolean fails the load (same discipline as every other block); absent
+      // means the kind's domain status is NOT retired.
+      if (raw.stripDomainStatus !== undefined && typeof raw.stripDomainStatus !== 'boolean') {
+        throw new Error(`Registry-kind coverage kind "${kind}" declares stripDomainStatus as a non-boolean: it must be true or false`);
+      }
+      const entry: KindLifecycleEntry = {
+        kind,
+        lifecycleId: this.lifecycleId,
+        defaultState: this.defaultState,
+        stripDomainStatus: raw.stripDomainStatus === true,
+      };
       this.byKind.set(kind, entry);
       this.entries.push(entry);
     }
@@ -270,6 +291,15 @@ export class KindLifecycleRegistry {
   /** All covered kinds, in file order. */
   kinds(): string[] {
     return this.entries.map(e => e.kind);
+  }
+
+  /**
+   * QMS8-C (D4): the covered kinds whose DOMAIN status the coverage DATA
+   * declares retired. A plain read-only report of declared facts — the runner
+   * never names a kind, it obeys this answer. Empty when no kind declares it.
+   */
+  kindsRetiringDomainStatus(): string[] {
+    return this.entries.filter(e => e.stripDomainStatus).map(e => e.kind);
   }
 
   get lifecycle(): string {

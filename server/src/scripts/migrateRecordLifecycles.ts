@@ -67,7 +67,7 @@ export interface LifecycleMigrationChange {
    *  'status-stamp': the lifecycle-declared leg stamps state := status (the
    *  schema's status enum and the lifecycle's declared states are the same
    *  vocabulary, so the mapping is the identity — a stamp, not a mapping). */
-  basis: 'status-map' | 'default' | 'status-stamp';
+  basis: 'status-map' | 'default' | 'status-stamp' | 'status-strip';
 }
 
 /** One already-governed record deliberately left untouched. */
@@ -189,16 +189,73 @@ export async function migrateRecordLifecycles(input: LifecycleMigrationInput): P
       const payload = asRecord(env.payload)
       const recordId = env.recordId
 
-      // Idempotency key is PAYLOAD CONTENT: already governed -> SKIP.
+      // Idempotency key is PAYLOAD CONTENT. QMS8-C (D4) CHANGES that key for
+      // kinds the coverage DATA declares retired: "already governed" is no
+      // longer terminal, because a governed record that still carries the
+      // retired domain status is exactly what the strip leg must process.
+      // A governed record is terminal only when it is governed AND status-less
+      // (or its kind's status is not retired — an orthogonal domain vocabulary
+      // the coverage data does not declare dead, spec §g / stop boundary 2).
       const existingLifecycle = asString(payload.lifecycleId)
       if (existingLifecycle !== undefined) {
-        const existingState = asString(payload.state) ?? '(unset)'
-        report.skipped.push({
-          recordId,
-          kind,
-          reason: `already governed (${existingLifecycle}/${existingState})`,
-        })
-        log(`SKIP ${recordId}: already governed (${existingLifecycle}/${existingState})`)
+        const existingState = asString(payload.state)
+        const domainStatus = asString(payload.status)
+        const retiring = input.coverage.entryFor(kind)?.stripDomainStatus === true
+
+        if (domainStatus === undefined || !retiring) {
+          const stateLabel = existingState ?? '(unset)'
+          report.skipped.push({
+            recordId,
+            kind,
+            reason: retiring
+              ? `already governed (${existingLifecycle}/${stateLabel}) and carries no domain status to retire`
+              : `already governed (${existingLifecycle}/${stateLabel}); the coverage data does not declare this kind's domain status retired`,
+          })
+          log(`SKIP ${recordId}: already governed (${existingLifecycle}/${stateLabel})${retiring ? '' : ' — domain status not declared retired for this kind'}`)
+          continue
+        }
+
+        // Governed, carries the retired status, but carries NO lifecycle state:
+        // stripping would leave the gate with nothing to read, and the runner
+        // never synthesizes a state (BRAD-A1). Reported, never touched.
+        if (existingState === undefined) {
+          report.skipped.push({
+            recordId,
+            kind,
+            reason: `governed by ${existingLifecycle} but carries no lifecycle state — stripping the domain status would leave nothing for the gate to read, and a state is never synthesized`,
+          })
+          log(`SKIP ${recordId}: governed but state-less — cannot retire status without a state, never synthesized`)
+          continue
+        }
+
+        const change: LifecycleMigrationChange = {
+          recordId, kind, toState: existingState, basis: 'status-strip',
+        }
+        report.planned.push(change)
+        log(`STRIP ${recordId}: domain status retired (state ${existingState})`)
+
+        // Writes ONLY with --apply, through the normal walls.
+        if (input.apply) {
+          // bait #1 (exactOptionalPropertyTypes): the key is DELETED on a
+          // clone, never assigned `undefined`.
+          const nextPayload: Record<string, unknown> = { ...payload }
+          delete nextPayload.status
+          const envelope: RecordEnvelope = { ...env, payload: nextPayload }
+          const result = await input.store.update({
+            envelope,
+            ...(env.meta?.contentSha !== undefined ? { expectedSha: env.meta.contentSha } : {}),
+            message: `Retire domain status on ${recordId} (${existingLifecycle}/${existingState}, QMS8-C migration)`,
+            viaLifecycleApi: true,
+            ...(input.actor !== undefined ? { actor: input.actor } : {}),
+          })
+          if (!result.success) {
+            const reason = result.error ?? 'unknown store refusal'
+            report.blocked.push({ recordId, kind, reason })
+            log(`BLOCKED ${recordId}: store refused (${reason}) — left untouched, never forced`)
+            continue
+          }
+          report.applied.push(change)
+        }
         continue
       }
 
@@ -223,6 +280,15 @@ export async function migrateRecordLifecycles(input: LifecycleMigrationInput): P
           ...payload,
           lifecycleId,
           state: mapped.toState,
+        }
+        // QMS8-C (D4): when the coverage DATA declares this kind's domain
+        // status retired, a record being governed now must not land carrying a
+        // field the item is retiring — the status is omitted on the clone
+        // (deleted, never assigned undefined). Without this the record would be
+        // governed-but-still-status-bearing and the next pass would plan a
+        // strip, so the migration would never converge in one run.
+        if (input.coverage.entryFor(kind)?.stripDomainStatus === true) {
+          delete nextPayload.status
         }
         const envelope: RecordEnvelope = { ...env, payload: nextPayload }
         const result = await input.store.update({
@@ -330,9 +396,12 @@ export async function migrateRecordLifecycles(input: LifecycleMigrationInput): P
   // Report lines keep the QMS7-4 wording for the covered-kind leg (its existing
   // consumers and tests read them verbatim); the QMS8-C stamp leg reports its
   // own count on its own line so neither leg's number is conflated (bait #9).
-  const stampCount = (rows: LifecycleMigrationChange[]) => rows.filter(r => r.basis === 'status-stamp').length
-  const governedCount = report.planned.length - stampCount(report.planned)
-  const governedApplied = report.applied.length - stampCount(report.applied)
+  const countBasis = (rows: LifecycleMigrationChange[], basis: LifecycleMigrationChange['basis']) =>
+    rows.filter(r => r.basis === basis).length
+  const stampCount = (rows: LifecycleMigrationChange[]) => countBasis(rows, 'status-stamp')
+  const stripCount = (rows: LifecycleMigrationChange[]) => countBasis(rows, 'status-strip')
+  const governedCount = report.planned.length - stampCount(report.planned) - stripCount(report.planned)
+  const governedApplied = report.applied.length - stampCount(report.applied) - stripCount(report.applied)
 
   if (governedCount === 0) {
     log('No planned changes: every covered-kind record already carries its declared lifecycle (idempotent).')
@@ -345,6 +414,11 @@ export async function migrateRecordLifecycles(input: LifecycleMigrationInput): P
     log(input.apply
       ? `STAMPED: ${stampCount(report.applied)} record(s) state-stamped from domain status.`
       : `DRY RUN: ${stampCount(report.planned)} state stamp(s) planned. Nothing written. Re-run with --apply to write.`)
+  }
+  if (stripCount(report.planned) > 0 || stripCount(report.applied) > 0) {
+    log(input.apply
+      ? `STRIPPED: ${stripCount(report.applied)} record(s) had the retired domain status removed.`
+      : `DRY RUN: ${stripCount(report.planned)} status strip(s) planned. Nothing written. Re-run with --apply to write.`)
   }
   if (report.blocked.length > 0) {
     log(`BLOCKED: ${report.blocked.length} record(s) refused by the store walls — reported, never forced.`)

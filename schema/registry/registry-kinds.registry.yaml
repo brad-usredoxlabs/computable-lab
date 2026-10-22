@@ -8,10 +8,21 @@ defaultState: draft
 kinds:
   - kind: person
   - kind: equipment
+    # QMS8-C (D4): this kind's DOMAIN `status` is retired — its vocabulary
+    # duplicates what the lifecycle state now says, so the migration runner
+    # strips the key from already-governed records. The flag is DATA: the
+    # runner holds no kind literal. Kinds WITHOUT this flag keep their domain
+    # status untouched (their status is an orthogonal domain vocabulary with
+    # live admissibility consumers — spec §g / stop boundary 2).
+    stripDomainStatus: true
   - kind: equipment-class
   - kind: training-record
   - kind: competency-authorization
   - kind: instrument
+    # QMS8-C (D4): same operational vocabulary as equipment (active /
+    # out_of_service / retired / maintenance) and the same lifecycle, so the
+    # same retirement applies. (The kind's own DELETION is a separate item.)
+    stripDomainStatus: true
   - kind: calibration-record
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a
