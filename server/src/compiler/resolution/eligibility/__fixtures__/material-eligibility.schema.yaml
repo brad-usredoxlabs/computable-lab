@@ -336,11 +336,16 @@ properties:
             demanded.custodyNeverTiers that keeps a catalog/remote tier from
             ever satisfying a bind. THE EVALUATOR READS IT (evaluate.ts: a
             non-PASS guard makes the policy verdict FAIL/INCOMPLETE — fix-run
-            1 D1). Lint E7 requires it on every authorized-to-bind policy and
-            lint E8 forbids the leaked shape (a bind assert using a custody
-            collection as a membership evidence target) — a bind policy
-            without the declared guard is the custody-leakage shape (bait 9)
-            and is rejected at the data layer.
+            1 D1), and the evaluator's guarantee is only as strong as the
+            declared guard, so its SHAPE is pinned at the data layer too: lint
+            E7 requires the slot on every authorized-to-bind policy, lint E12
+            requires it to be EXACTLY {op: noneIn, path: candidate.tier,
+            collectionPath: demanded.custodyNeverTiers} (fix-run 2 D1 — a
+            presence-only pin let a substituted trivially-true guard fake the
+            P4 rail), and lint E8 forbids the leaked assert shape (a bind
+            assert naming a custody collection as positive evidence). A bind
+            policy without the pinned guard is the custody-leakage shape
+            (bait 9) and is rejected at the data layer.
 
 definitions:
   # The predicate shape is the SHIPPED lint-v1 predicate definition — imported

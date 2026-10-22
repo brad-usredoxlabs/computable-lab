@@ -21,7 +21,11 @@
 # AC-2); `displayTiers` = tiers eligible-to-DISPLAY; `identityOnlyTiers` =
 # tiers whose result may serve catalog IDENTITY only and never custody/use/
 # attestation evidence (P4). `custodyNeverTiers` rides the envelope and every
-# authorized-to-bind policy declares a custodyGuard the evaluator reads.
+# authorized-to-bind policy declares a custodyGuard THE EVALUATOR READS
+# (evaluate.ts: requires PASS + guard non-PASS => FAIL/INCOMPLETE) AND lint
+# pins it three times: E7 (declared), E12 (EXACTLY the noneIn
+# candidate.tier/demanded.custodyNeverTiers disjointness), E8 (no bind assert
+# may name a custody collection as positive evidence at any depth).
 #
 # Loaded PER call, never process-cached (the nounShape law, resolutionEngine
 # comment; spec §9). Malformed DATA throws naming the path.
@@ -62,7 +66,8 @@ remoteTiers: [3, 4]
 
 # Tiers whose result may NEVER serve as evidence of custody or use (P4). The
 # envelope carries this; every authorized-to-bind policy declares a
-# custodyGuard (lint E7 pins the declaration).
+# custodyGuard (lint E7 pins the declaration, lint E12 pins its SHAPE, lint
+# E8 forbids the leaked assert shape).
 custodyNeverTiers: [3, 4]
 
 # The identity role every identity-only tier verdict carries (P4, bait §9):

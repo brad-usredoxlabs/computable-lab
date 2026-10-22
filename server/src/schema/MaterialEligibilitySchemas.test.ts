@@ -41,10 +41,18 @@ const LINT_RULE_IDS = [
   'material-eligibility-levelspellings-canonical-declared',
   'material-eligibility-policy-verdicts-declared',
   'material-eligibility-bind-policies-carry-custody-guard',
+  // FIX-RUN 2 D1 (adversarial review l2t2215): E7 pinned the guard's PRESENCE
+  // only — probe K/L substituted a trivially-true guard and the custody-never
+  // tier bound PASS. E12 pins the guard's SHAPE (the exact noneIn
+  // candidate.tier/demanded.custodyNeverTiers disjointness).
+  'material-eligibility-bind-custody-guard-shape-pinned',
   // FIX-RUN 1 D1 (adversarial review l2t2050): the SHAPE-forbidding half of
   // spec §7.3 P4 — an authorized-to-bind assert may never use a custody
   // collection as a membership EVIDENCE target (the presence-only E7 was
   // decorative; the reviewer proved the mutated shape passed lint clean).
+  // WIDENED FIX-RUN 2 D1: any-op (allIn membership or in-valuesPath) at any
+  // depth down to the declared bound (the pinned E12 guard + the evaluator's
+  // guard-before-assert order close what the walk does not reach).
   'material-eligibility-bind-asserts-never-membership-on-custody-collections',
   'material-eligibility-identity-levels-are-referent-levels',
   // FIX-RUN 1 D2: the identity role tag is SINGLE-SOURCED (identityRole) and
@@ -152,6 +160,92 @@ describe('material-eligibility triplet (schema + lint contract)', () => {
     const policies = doc['policies'] as Array<Record<string, unknown>>;
     const displayPolicy = policies.find((p) => p['id'] === 'display-identity-only-role')!;
     displayPolicy['assert'] = { op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.identityOnlyTiers' }] };
+    expect(lintViolations(engine, doc)).toEqual([]);
+  });
+
+  it('mutation (FIX-RUN 2 D1, review l2t2215 probe K): a bind policy with a SUBSTITUTED trivially-true custodyGuard AND a depth-3 allIn-custody assert is REJECTED — E12 names the guard-shape pin and the widened E8 names the deep leak (RED at 172f556a: both lint violations were [] and the tier-4 bind evaluated PASS)', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['custodyGuard'] = { op: 'exists', path: 'candidate.curie' };
+    bindPolicy['assert'] = {
+      op: 'all',
+      predicates: [{ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' }] }] }],
+    };
+    const violations = lintViolations(engine, doc);
+    expect(violations).toContain('material-eligibility-bind-custody-guard-shape-pinned');
+    expect(violations).toContain('material-eligibility-bind-asserts-never-membership-on-custody-collections');
+  });
+
+  it('mutation (FIX-RUN 2 D1, review l2t2215 probe L): a bind policy with a SUBSTITUTED guard and a depth-1 non-membership assert (equals candidate.tier 4) is REJECTED by E12 — the guard SHAPE is pinned, so the evaluator half can never be disarmed by a data substitution (RED at 172f556a: lint violations were [])', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['custodyGuard'] = { op: 'exists', path: 'candidate.curie' };
+    bindPolicy['assert'] = { op: 'all', predicates: [{ op: 'equals', path: 'candidate.tier', value: 4 }] };
+    expect(lintViolations(engine, doc)).toContain('material-eligibility-bind-custody-guard-shape-pinned');
+  });
+
+  it('mutation (FIX-RUN 2 D1): guard-shape drift alone — any custodyGuard that is not the exact noneIn candidate.tier/demanded.custodyNeverTiers disjointness is REJECTED (op swap, path swap, collectionPath swap)', async () => {
+    const { engine } = await buildWorld();
+    const pinned = { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' };
+    const drifts = [
+      { op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' },
+      { op: 'noneIn', path: 'candidate.referentLevel', collectionPath: 'demanded.custodyNeverTiers' },
+      { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.identityOnlyTiers' },
+    ];
+    for (const guard of drifts) {
+      const doc = await shippedData();
+      const policies = doc['policies'] as Array<Record<string, unknown>>;
+      const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+      bindPolicy['custodyGuard'] = guard;
+      expect(lintViolations(engine, doc)).toContain('material-eligibility-bind-custody-guard-shape-pinned');
+    }
+    // The pinned shape itself stays clean.
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['custodyGuard'] = pinned;
+    expect(lintViolations(engine, doc)).toEqual([]);
+  });
+
+  it('mutation (FIX-RUN 2 D1): the widened E8 reaches deeper than cycle-1 and covers the non-allIn membership form — a depth-5 allIn-custody leak and an `in`+valuesPath custody leak (with the PINNED guard intact) are both REJECTED', async () => {
+    const { engine } = await buildWorld();
+    const forbidden = 'material-eligibility-bind-asserts-never-membership-on-custody-collections';
+    const bindAt = async (assert: unknown) => {
+      const doc = await shippedData();
+      const policies = doc['policies'] as Array<Record<string, unknown>>;
+      const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+      bindPolicy['assert'] = assert;
+      return lintViolations(engine, doc);
+    };
+    const deepLeak = { op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' }] }] }] }] }] };
+    expect(await bindAt(deepLeak)).toContain(forbidden);
+    expect(await bindAt({ op: 'in', path: 'candidate.tier', values: [1], valuesPath: 'demanded.custodyNeverTiers' })).toContain(forbidden);
+    expect(await bindAt({ op: 'all', predicates: [{ op: 'any', predicates: [{ op: 'all', predicates: [{ op: 'in', path: 'candidate.tier', values: [1], valuesPath: 'demanded.identityOnlyTiers' }] }] }] })).toContain(forbidden);
+    // Reversed operands: allIn demanded.custodyNeverTiers X asserts every
+    // custody-never tier satisfies X — the same forbidden positive-evidence claim.
+    expect(await bindAt({ op: 'allIn', path: 'demanded.custodyNeverTiers', collectionPath: 'candidate.tier' })).toContain(forbidden);
+    expect(await bindAt({ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'all', predicates: [{ op: 'allIn', path: 'demanded.identityOnlyTiers', collectionPath: 'candidate.referentLevel' }] }] }] })).toContain(forbidden);
+  });
+
+  it('no over-rejection (FIX-RUN 2 D1): the pinned noneIn disjointness stays legal in a BIND assert, and legitimate DISPLAY-policy membership on the custody collections stays legal at depth 2 (reviewer probes G/H shapes)', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+    bindPolicy['assert'] = {
+      op: 'all',
+      predicates: [
+        { op: 'allIn', path: 'candidate.referentLevel', collectionPath: 'demanded.demandedLevelSet' },
+        { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.identityOnlyTiers' },
+        { op: 'noneIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' },
+      ],
+    };
+    const displayPolicy = policies.find((p) => p['id'] === 'display-tier-legal')!;
+    displayPolicy['assert'] = { op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' }] };
     expect(lintViolations(engine, doc)).toEqual([]);
   });
 
