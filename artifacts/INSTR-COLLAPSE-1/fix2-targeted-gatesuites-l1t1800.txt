@@ -1,0 +1,315 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+ ✓ src/schema/AcquisitionContextContract.test.ts  (15 tests) 730ms
+ ✓ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts  (5 tests) 804ms
+ ✓ src/capabilities/DeclaredCapabilityGate.test.ts  (18 tests) 863ms
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 196 schemas
+Added 196 schemas to validator
+Loaded 28 predicates from registry
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Loaded 196 schemas
+Added 196 schemas to validator
+Loaded 28 predicates from registry
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Loaded 196 schemas
+Added 196 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 31 lint specs, 85 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: registry-ops from registry-ops.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 7 lifecycle specs
+Loaded 7 registry-kind lifecycle coverage entries (registry-ops)
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-ic1f1-plr-gate-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-ic1f1-plr-gate-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Loaded 31 lint specs, 85 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: registry-ops from registry-ops.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 7 lifecycle specs
+Loaded 7 registry-kind lifecycle coverage entries (registry-ops)
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-ic1f2-livegate-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-ic1f2-livegate-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Loaded 31 lint specs, 85 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: registry-ops from registry-ops.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 7 lifecycle specs
+Loaded 7 registry-kind lifecycle coverage entries (registry-ops)
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-ic1f1-meas-gate-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-ic1f1-meas-gate-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-ic1f1-plr-gate-data/worktrees/main bare=/tmp/cl-ic1f1-plr-gate-data/repos/main.git
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-ic1f2-livegate-data/worktrees/main bare=/tmp/cl-ic1f2-livegate-data/repos/main.git
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-ic1f1-meas-gate-data/worktrees/main bare=/tmp/cl-ic1f1-meas-gate-data/repos/main.git
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Loaded 56 UI specs
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Index rebuilt: 128 records
+Index built with 128 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Index rebuilt: 128 records
+Index built with 128 records
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Index rebuilt: 128 records
+Index built with 128 records
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Index rebuilt: 151 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Index rebuilt: 151 records
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Index rebuilt: 151 records
+
+stderr | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementActiveControlService.liveGate.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/measurement/MeasurementService.capabilityGate.test.ts
+<empty line>
+stdout | src/measurement/MeasurementService.capabilityGate.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+ ✓ src/measurement/MeasurementActiveControlService.liveGate.test.ts  (2 tests) 15417ms
+ ✓ src/execution/ExecutionOrchestrator.capabilityGate.test.ts  (2 tests) 15705ms
+ ✓ src/measurement/MeasurementService.capabilityGate.test.ts  (3 tests) 16034ms
+
+ Test Files  6 passed (6)
+      Tests  45 passed (45)
+   Start at  18:13:27
+   Duration  21.03s (transform 3.10s, setup 1ms, collect 14.23s, tests 49.55s, environment 1ms, prepare 457ms)
+
+TARGETED_EXIT=0
