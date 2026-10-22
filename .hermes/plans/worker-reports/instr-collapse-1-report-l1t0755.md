@@ -24,7 +24,7 @@ Branch: cl/lane1-instr-collapse-1-l1t0755 (base dad6bbdc, post-QMS8-C)
 3. `0d51bb05` feat(instr-collapse-1): C1 — TS consumers follow the renamed contract (no policy in code)
    MeasurementService, MeasurementActiveControlService, MeasurementHandlers, SemanticsHandlers,
    RunContextAssembler, RunWorkspaceService, runWorkspaceAiTools, evidencePipelineTools,
-   executionTools, app client.ts types, knowledge.ts, ReadPlateModal, MeasurementSetupPanel
+   executionTools, app client.ts types, ReadPlateModal, MeasurementSetupPanel
    (equipment picker via listRecordsByKind('equipment')), useBiologyMode, useResultsMode,
    ReadoutContextPanel, MeasurementContextList, RoleAssignmentPanel. Test fixtures follow
    (dataReference.test.ts).

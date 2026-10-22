@@ -1,0 +1,130 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 196 schemas
+Added 196 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 31 lint specs, 85 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: registry-ops from registry-ops.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 7 lifecycle specs
+Loaded 7 registry-kind lifecycle coverage entries (registry-ops)
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-ic1f1-plr-gate-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-ic1f1-plr-gate-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-ic1f1-plr-gate-data/worktrees/main bare=/tmp/cl-ic1f1-plr-gate-data/repos/main.git
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Loaded 56 UI specs
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Index rebuilt: 128 records
+Index built with 128 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Index rebuilt: 151 records
+
+stderr | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+<empty line>
+stdout | src/execution/ExecutionOrchestrator.capabilityGate.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+ ❯ src/execution/ExecutionOrchestrator.capabilityGate.test.ts  (2 tests | 1 failed) 15146ms
+   ❯ src/execution/ExecutionOrchestrator.capabilityGate.test.ts > FIX-1 defect 2: ExecutionOrchestrator.createPlannedRun enforces the declared capability gate (write path) > REJECTS a compiled step whose equipment lacks the declared verb capability: code capability_gate_unsupported, 400, nothing persisted
+     → expected 'VALIDATION_ERROR' to be 'capability_gate_unsupported' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/execution/ExecutionOrchestrator.capabilityGate.test.ts > FIX-1 defect 2: ExecutionOrchestrator.createPlannedRun enforces the declared capability gate (write path) > REJECTS a compiled step whose equipment lacks the declared verb capability: code capability_gate_unsupported, 400, nothing persisted
+AssertionError: expected 'VALIDATION_ERROR' to be 'capability_gate_unsupported' // Object.is equality
+
+- Expected
++ Received
+
+- capability_gate_unsupported
++ VALIDATION_ERROR
+
+ ❯ src/execution/ExecutionOrchestrator.capabilityGate.test.ts:185:28
+    183|     expect(error, 'createPlannedRun must reject a compiled step the ca…
+    184|     const gateError = error as ExecutionError;
+    185|     expect(gateError.code).toBe('capability_gate_unsupported');
+       |                            ^
+    186|     expect(gateError.statusCode).toBe(400);
+    187|     const after = await ctx.store.list({ kind: 'planned-run' });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  15:46:28
+   Duration  20.22s (transform 2.72s, setup 0ms, collect 4.36s, tests 15.15s, environment 0ms, prepare 135ms)
+
