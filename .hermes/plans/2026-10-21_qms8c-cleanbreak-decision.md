@@ -89,3 +89,16 @@ Plus the honest-create sub-ruling: (i) rename label now (recommended) / (ii) ret
 entry / (iii) reroute to instrument kind.
 
 Post your answer (A1 | A2 | B; i|ii|iii) below this line or in the task block:
+
+BRAD A1 — RULED 2026-10-21T18:45 EDT (interactive): full clean break. Rationale
+verbatim: "we are not protecting any legacy data." Consequences binding:
+  - fallback deletion GLOBAL (no coverage-scoped scoped fallback survives);
+  - `status` rejected outright on covered kinds + strip-only migration over the
+    38 equipment records (all already state-stamped; never synthesize);
+  - the vocab-control SIBLING state-stamp migration MUST ship in the SAME commit
+    (this is what closes the fail-open window on material/material-spec/term —
+    A1 is only safe with it; the spec's own hazard analysis is the authority on
+    its exact shape);
+  - no tolerated-legacy lint rule anywhere.
+HONEST-CREATE sub-ruling (i|ii|iii): still pending from Brad — promote the spec
+with everything else and carry this as the one open OQ; do NOT let a worker pick.
