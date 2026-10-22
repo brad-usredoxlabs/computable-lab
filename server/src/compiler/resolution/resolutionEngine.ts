@@ -117,6 +117,10 @@ function verdictFact(e: CandidateEligibility): EligibilityVerdictFact {
     bind: e.bind.state,
     policyIds: { display: e.display.policyId, suppress: e.suppress.policyId, bind: e.bind.policyId },
     ...(e.bind.role !== undefined ? { bindRole: e.bind.role } : {}),
+    // FIX-RUN 1 D3 (adversarial review l2t2050): the DISPLAY class's role tag
+    // survives into the payload too — the identity role the display policy
+    // declares must reach the panel, not only the internal verdict.
+    ...(e.display.role !== undefined ? { displayRole: e.display.role } : {}),
   };
 }
 

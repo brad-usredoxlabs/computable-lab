@@ -21,7 +21,11 @@
 # AC-2); `displayTiers` = tiers eligible-to-DISPLAY; `identityOnlyTiers` =
 # tiers whose result may serve catalog IDENTITY only and never custody/use/
 # attestation evidence (P4). `custodyNeverTiers` rides the envelope and every
-# authorized-to-bind policy declares a custodyGuard the evaluator reads.
+# authorized-to-bind policy declares a custodyGuard THE EVALUATOR READS
+# (evaluate.ts: requires PASS + guard non-PASS => FAIL/INCOMPLETE for that
+# policy — fix-run 1 D1) AND lint pins it twice: E7 (the guard must be
+# declared) and E8 (the assert may never use a custody collection as a
+# membership evidence target — the shape spec §7.3 forbids).
 #
 # Loaded PER call, never process-cached (the nounShape law, resolutionEngine
 # comment; spec §9). Malformed DATA throws naming the path.
@@ -62,12 +66,21 @@ remoteTiers: [3, 4]
 
 # Tiers whose result may NEVER serve as evidence of custody or use (P4). The
 # envelope carries this; every authorized-to-bind policy declares a
-# custodyGuard (lint E7 pins the declaration).
+# custodyGuard (lint E7 pins the declaration, lint E8 forbids the leaked
+# shape).
 custodyNeverTiers: [3, 4]
 
 # The identity role every identity-only tier verdict carries (P4, bait §9):
-# the tag survives from this data into the verdict payload.
+# the SINGLE source of the role tag. The loader (eligibility/policy.ts)
+# injects it into the verdicts of the policies named in identityRolePolicies
+# below — the per-policy data carries NO duplicate role literal (fix-run 1
+# D2: one declaration, one value). The tag survives from this data into the
+# verdict payload (displayRole/bindRole in EligibilityVerdictFact).
 identityRole: catalog-identity
+
+# The policies whose verdict carries the identityRole tag (by policy id —
+# lint E11 pins every name against the declared policy ids).
+identityRolePolicies: [display-identity-only-role, bind-accepted-identity-reference]
 
 # The clarification reason code elicited when a catalog-shaped token carries no
 # named vendor scope (AC-3: elicit scope, never fabricate product identity —
@@ -192,7 +205,6 @@ policies:
   # display policy decides.
   - id: display-identity-only-role
     verdict: eligible-to-display
-    role: catalog-identity
     when:
       op: all
       predicates:
@@ -352,7 +364,6 @@ policies:
   # §9). Tier-4 enrichment NEVER participates in compilation directly (§8.3).
   - id: bind-accepted-identity-reference
     verdict: authorized-to-bind
-    role: catalog-identity
     when:
       op: all
       predicates:

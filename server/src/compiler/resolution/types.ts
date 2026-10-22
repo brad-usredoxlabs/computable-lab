@@ -127,6 +127,13 @@ export interface EligibilityVerdictFact {
   policyIds: { display: string; suppress: string; bind: string };
   /** Role tag carried by the deciding bind policy (P4 identity role, bait §9). */
   bindRole?: string;
+  /** Role tag carried by the deciding DISPLAY policy (fix-run 1 D3, bait §9 /
+   *  §11.9: the `role: catalog-identity` tag must survive from policy data
+   *  into the verdict payload for BOTH classes — the display-identity-only-role
+   *  policy's role was previously dropped here while the panel-facing payload
+   *  is the only place the panel can read it). Absent-or-value, never
+   *  :undefined (conditional spread). */
+  displayRole?: string;
 }
 
 export interface ClarificationCandidateFact {

@@ -35,6 +35,7 @@ required:
 - remoteTiers
 - custodyNeverTiers
 - identityRole
+- identityRolePolicies
 - catalogScopeReason
 - bindIncompleteReason
 - undeclaredLevelSpelling
@@ -132,7 +133,23 @@ properties:
     description: >
       The role tag every identity-only tier verdict carries (P4: catalog lookup
       may resolve catalog identity; its result may never serve as evidence of
-      custody or use). The tag survives from this data into the verdict payload.
+      custody or use). SINGLE SOURCE (fix-run 1 D2): the loader injects this
+      tag into the verdicts of the policies named in identityRolePolicies —
+      the per-policy data carries no duplicate role literal. The tag survives
+      from this data into the verdict payload (displayRole/bindRole).
+
+  identityRolePolicies:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    description: >
+      The policy ids whose verdict carries the identityRole tag. Lint E11
+      pins every name against the declared policy ids (fix-run 1 D2: one
+      declaration of the role value, referenced by id — never two local
+      terms for one value).
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_-]*$"
 
   catalogScopeReason:
     type: string
@@ -301,9 +318,10 @@ properties:
           type: string
           minLength: 1
           description: >
-            Optional role tag carried into the verdict payload (the identity
-            role for a vendor-product bind policy — bait §9: the tag must
-            survive from policy data into the verdict).
+            Optional per-policy role override carried into the verdict payload.
+            The SHIPPED data declares no role literal: the identity role is
+            single-sourced from identityRole + identityRolePolicies (fix-run 1
+            D2, bait §9: the tag must survive from policy data into the verdict).
         when:
           $ref: "#/definitions/predicate"
           description: Optional applicability guard over the fact envelope.
@@ -316,10 +334,13 @@ properties:
           description: >-
             DECLARED custody disjointness (P4): the noneIn over
             demanded.custodyNeverTiers that keeps a catalog/remote tier from
-            ever satisfying a bind. Lint E11 requires it on every
-            authorized-to-bind policy — a bind policy without the declared
-            guard is the custody-leakage shape (bait 9) and is rejected at the
-            data layer.
+            ever satisfying a bind. THE EVALUATOR READS IT (evaluate.ts: a
+            non-PASS guard makes the policy verdict FAIL/INCOMPLETE — fix-run
+            1 D1). Lint E7 requires it on every authorized-to-bind policy and
+            lint E8 forbids the leaked shape (a bind assert using a custody
+            collection as a membership evidence target) — a bind policy
+            without the declared guard is the custody-leakage shape (bait 9)
+            and is rejected at the data layer.
 
 definitions:
   # The predicate shape is the SHIPPED lint-v1 predicate definition — imported

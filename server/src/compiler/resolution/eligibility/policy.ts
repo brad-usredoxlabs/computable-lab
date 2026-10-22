@@ -80,6 +80,10 @@ export interface MaterialEligibilityPolicy {
   remoteTiers(): readonly number[];
   custodyNeverTiers(): readonly number[];
   identityRole(): string;
+  /** The policy ids whose verdict carries the identityRole tag (fix-run 1 D2:
+   *  the role value is declared ONCE — the per-policy data carries no role
+   *  literal; the loader injects the single-sourced tag by policy id). */
+  identityRolePolicies(): readonly string[];
   catalogScopeReason(): string;
   /** The reason code for a band-passing candidate whose bind verdict is not
    *  PASS (§7.4.2 — data-named, never a TS literal). */
@@ -191,6 +195,7 @@ export function loadMaterialEligibility(
     remoteTiers: number[];
     custodyNeverTiers: number[];
     identityRole: string;
+    identityRolePolicies: string[];
     catalogScopeReason: string;
     bindIncompleteReason: string;
     undeclaredLevelSpelling: string;
@@ -243,15 +248,26 @@ export function loadMaterialEligibility(
     verdictClasses: () => Object.freeze([...raw.verdictClasses]),
     catalogShape: () => Object.freeze([...catalog]),
     tierLegality: () => Object.freeze([...tierRows]),
-    policies: () => Object.freeze(raw.policies.map((p) => ({
-      id: p.id,
-      verdict: p.verdict,
-      ...(p.role !== undefined ? { role: p.role } : {}),
-      ...(p.when !== undefined ? { when: p.when } : {}),
-      ...(p.custodyGuard !== undefined ? { custodyGuard: p.custodyGuard } : {}),
-      requires: p.requires,
-      assert: p.assert,
-    }))),
+    policies: () => Object.freeze(raw.policies.map((p) => {
+      // FIX-RUN 1 D2 (adversarial review l2t2050): the role tag is
+      // SINGLE-SOURCED — identityRole is the one declaration of the value and
+      // identityRolePolicies names (by id, lint E11-pinned) the policies whose
+      // verdict carries it. The shipped data declares NO per-policy role
+      // literal (never two local terms for one value). A per-policy `role`
+      // override stays legal for fixture experiments but the shipped triplet
+      // uses none.
+      const role = p.role ?? (raw.identityRolePolicies.includes(p.id) ? raw.identityRole : undefined);
+      return {
+        id: p.id,
+        verdict: p.verdict,
+        ...(role !== undefined ? { role } : {}),
+        ...(p.when !== undefined ? { when: p.when } : {}),
+        ...(p.custodyGuard !== undefined ? { custodyGuard: p.custodyGuard } : {}),
+        requires: p.requires,
+        assert: p.assert,
+      };
+    })),
+    identityRolePolicies: () => Object.freeze([...raw.identityRolePolicies]),
     tierLegalityRow: (demandedLevel: string, mode: string) =>
       tierRows.find((r) => r.demandedLevel === demandedLevel && r.mode === mode),
   };

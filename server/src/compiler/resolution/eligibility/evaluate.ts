@@ -8,8 +8,11 @@
  *
  *   - a policy's `requires` (evidence-completeness guard) that does not PASS
  *     ⇒ verdict INCOMPLETE (missing evidence; the evaluator's reason rides).
- *   - `requires` PASS + `assert` FAIL ⇒ FAIL.
- *   - both PASS ⇒ PASS.
+ *   - `requires` PASS + a declared `custodyGuard` (P4 disjointness) that does
+ *     not PASS ⇒ FAIL (overlap) or INCOMPLETE (guard evidence unresolved) —
+ *     the guard is EVALUATED, never decorative (fix-run 1 D1).
+ *   - `requires` PASS + guard PASS + `assert` FAIL ⇒ FAIL.
+ *   - all arms PASS ⇒ PASS.
  *   - INCOMPLETE is ABSORBING under all/any/not: a leaf whose evidence path
  *     cannot resolve is INCOMPLETE (never a silent false, never a silent pass);
  *     all ⇒ FAIL if any FAIL, else INCOMPLETE if any INCOMPLETE, else PASS;
@@ -121,7 +124,20 @@ export function evaluateTriState(predicate: unknown, data: unknown): TriState {
 }
 
 /** One policy's verdict for one envelope (null = the `when` guard made it
- *  not-applicable). */
+ *  not-applicable).
+ *
+ * FIX-RUN 1 D1 (adversarial review l2t2050, spec §7.3 P4): the declared
+ * `custodyGuard` is EVALUATED, not decorative. Evaluation order: `when`
+ * (applicability) -> `requires` (completeness) -> `custodyGuard` (the P4
+ * disjointness gate) -> `assert` (business predicate). A guard that FAILs
+ * makes the policy verdict FAIL even when the assert itself would PASS —
+ * this is exactly the reviewer's mutated shape (an assert treating a
+ * custody-never tier as positive evidence); the guard decides. A guard that
+ * is INCOMPLETE (its evidence path does not resolve) propagates the third
+ * state — never a silent pass. The three-state law applies to the guard
+ * exactly as to the other arms. Completeness still gates FIRST: a candidate
+ * with missing evidence is INCOMPLETE before the guard reads it (AC-2's
+ * unknown-level remote hit stays an incomplete possibility). */
 export function evaluateEligibilityPolicy(
   policy: EligibilityPolicy,
   envelope: EligibilityEnvelope,
@@ -139,6 +155,26 @@ export function evaluateEligibilityPolicy(
       policyId: policy.id,
       ...(policy.role !== undefined ? { role: policy.role } : {}),
     };
+  }
+
+  if (policy.custodyGuard !== undefined) {
+    const custody = evaluateTriState(policy.custodyGuard, envelope);
+    if (custody.state === 'fail') {
+      return {
+        state: 'fail',
+        reason: `custody guard unmet (${custody.reason})`,
+        policyId: policy.id,
+        ...(policy.role !== undefined ? { role: policy.role } : {}),
+      };
+    }
+    if (custody.state === 'incomplete') {
+      return {
+        state: 'incomplete',
+        reason: `custody guard unresolved (${custody.reason})`,
+        policyId: policy.id,
+        ...(policy.role !== undefined ? { role: policy.role } : {}),
+      };
+    }
   }
 
   const assertion = evaluateTriState(policy.assert, envelope);

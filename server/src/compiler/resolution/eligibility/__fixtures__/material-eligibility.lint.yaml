@@ -163,6 +163,110 @@ rules:
   message:
     template: "an authorized-to-bind policy must declare a custodyGuard (P4: catalog tiers never satisfy a bind)"
 
+# E8 (P4, spec §7.3 "the lint forbids the shape" — FIX-RUN 1 D1, adversarial
+# review l2t2050): an authorized-to-bind policy's `assert` may NEVER use a
+# custody collection (demanded.custodyNeverTiers / demanded.identityOnlyTiers)
+# as a membership EVIDENCE target (allIn). E7 pins the guard's PRESENCE; this
+# rule forbids the SHAPE: a bind assert that treats a custody-never tier as
+# positive evidence is the custody-leakage shape (the reviewer proved the
+# mutated shape {allIn candidate.tier demanded.custodyNeverTiers} passed Ajv
+# AND lint clean at the presence-only stage). Shape: item-relative everyItem
+# + nested everyItem over the assert tree (probe-verified: the nested
+# collectionPath resolves item-relatively; the root-level multi-wildcard
+# projection does NOT reach the shipped data's nesting, so the quantified
+# form is the load-bearing one). Depth-2 coverage is the declared boundary;
+# deeper nesting is disclosed in the MATRES-ELIG fix report — the evaluator
+# half (evaluate.ts reads custodyGuard) covers any depth the lint misses.
+- id: material-eligibility-bind-asserts-never-membership-on-custody-collections
+  title: "authorized-to-bind asserts never use custody collections as membership evidence"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: everyItem
+    collectionPath: policies
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: verdict
+          value: authorized-to-bind
+      - op: all
+        predicates:
+        # the assert ROOT itself
+        - op: not
+          not:
+            op: all
+            predicates:
+            - op: equals
+              path: assert.op
+              value: allIn
+            - op: any
+              predicates:
+              - op: equals
+                path: assert.collectionPath
+                value: demanded.custodyNeverTiers
+              - op: equals
+                path: assert.collectionPath
+                value: demanded.identityOnlyTiers
+        # the assert's DIRECT predicate list, and one level deeper
+        - op: any
+          predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: assert.predicates
+          - op: everyItem
+            collectionPath: assert.predicates
+            assert:
+              op: all
+              predicates:
+              - op: not
+                not:
+                  op: all
+                  predicates:
+                  - op: equals
+                    path: op
+                    value: allIn
+                  - op: any
+                    predicates:
+                    - op: equals
+                      path: collectionPath
+                      value: demanded.custodyNeverTiers
+                    - op: equals
+                      path: collectionPath
+                      value: demanded.identityOnlyTiers
+              - op: any
+                predicates:
+                - op: not
+                  not:
+                    op: nonEmpty
+                    path: predicates
+                - op: everyItem
+                  collectionPath: predicates
+                  assert:
+                    op: not
+                    not:
+                      op: all
+                      predicates:
+                      - op: equals
+                        path: op
+                        value: allIn
+                      - op: any
+                        predicates:
+                        - op: equals
+                          path: collectionPath
+                          value: demanded.custodyNeverTiers
+                        - op: equals
+                          path: collectionPath
+                          value: demanded.identityOnlyTiers
+  message:
+    template: "an authorized-to-bind policy assert must not use demanded.custodyNeverTiers/demanded.identityOnlyTiers as a membership (allIn) evidence target (P4: custody-never tiers are never positive evidence)"
+
 # E9: identityLevels members are declared referent levels (the identity-purpose
 # discriminator the fact-builder reads — no invented level nouns).
 - id: material-eligibility-identity-levels-are-referent-levels
@@ -178,6 +282,25 @@ rules:
     collectionPath: referentLevels
   message:
     template: "identityLevels members must be members of referentLevels"
+
+# E11 (fix-run 1 D2): every identityRolePolicies member names a DECLARED
+# policy id — the identity role tag is single-sourced (identityRole) and
+# attached by ID reference, so a dangling name (a role aimed at a policy that
+# does not exist) is rejected at the data layer. Shape: root allIn against
+# the policy-id wildcard projection (probe-verified).
+- id: material-eligibility-identity-role-policies-declared
+  title: "identityRolePolicies members name declared policy ids"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: identityRolePolicies
+  assert:
+    op: allIn
+    path: identityRolePolicies
+    collectionPath: policies[*].id
+  message:
+    template: "identityRolePolicies members must name declared policy ids (the role tag is attached by id — never a duplicate role literal)"
 
 # E10: every policy declares BOTH arms of the three-state law (§7.1): a
 # requires completeness guard and an assert business predicate. The meta-schema

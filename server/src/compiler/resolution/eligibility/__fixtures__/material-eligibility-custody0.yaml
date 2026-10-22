@@ -72,6 +72,10 @@ custodyNeverTiers: [0, 3, 4]
 # the tag survives from this data into the verdict payload.
 identityRole: catalog-identity
 
+# FIXTURE COPY (mirrors the shipped triplet, fix-run 1 D2): the role tag is
+# single-sourced; the loader injects it by policy id.
+identityRolePolicies: [display-identity-only-role, bind-accepted-identity-reference]
+
 # The clarification reason code elicited when a catalog-shaped token carries no
 # named vendor scope (AC-3: elicit scope, never fabricate product identity —
 # catalog numbers are vendor-scoped, never globally unique).
@@ -194,7 +198,6 @@ policies:
   # display policy decides.
   - id: display-identity-only-role
     verdict: eligible-to-display
-    role: catalog-identity
     when:
       op: all
       predicates:
@@ -354,7 +357,6 @@ policies:
   # §9). Tier-4 enrichment NEVER participates in compilation directly (§8.3).
   - id: bind-accepted-identity-reference
     verdict: authorized-to-bind
-    role: catalog-identity
     when:
       op: all
       predicates:

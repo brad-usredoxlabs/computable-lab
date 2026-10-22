@@ -41,7 +41,15 @@ const LINT_RULE_IDS = [
   'material-eligibility-levelspellings-canonical-declared',
   'material-eligibility-policy-verdicts-declared',
   'material-eligibility-bind-policies-carry-custody-guard',
+  // FIX-RUN 1 D1 (adversarial review l2t2050): the SHAPE-forbidding half of
+  // spec §7.3 P4 — an authorized-to-bind assert may never use a custody
+  // collection as a membership EVIDENCE target (the presence-only E7 was
+  // decorative; the reviewer proved the mutated shape passed lint clean).
+  'material-eligibility-bind-asserts-never-membership-on-custody-collections',
   'material-eligibility-identity-levels-are-referent-levels',
+  // FIX-RUN 1 D2: the identity role tag is SINGLE-SOURCED (identityRole) and
+  // attached by policy-id reference — a dangling role target is rejected.
+  'material-eligibility-identity-role-policies-declared',
   'material-eligibility-policies-carry-both-arms',
 ];
 
@@ -114,6 +122,39 @@ describe('material-eligibility triplet (schema + lint contract)', () => {
     expect(lintViolations(engine, doc)).toContain('material-eligibility-bind-policies-carry-custody-guard');
   });
 
+  it('mutation (FIX-RUN 1 D1, spec §7.3 "the lint forbids the shape"): a bind policy whose assert uses demanded.custodyNeverTiers as a membership (allIn) evidence target is REJECTED with the NAMED rule — at assert root, one level deep, and two levels deep', async () => {
+    // The reviewer's proven mutation: bind assert = {allIn candidate.tier
+    // demanded.custodyNeverTiers} — tier-4 evidence asserted as POSITIVE
+    // evidence. It passed Ajv AND lint at HEAD. The shape must now be
+    // forbidden by lint at every nesting depth the DSL can hide it at.
+    const { engine } = await buildWorld();
+    const forbidden = 'material-eligibility-bind-asserts-never-membership-on-custody-collections';
+
+    const bindAt = async (assert: unknown) => {
+      const doc = await shippedData();
+      const policies = doc['policies'] as Array<Record<string, unknown>>;
+      const bindPolicy = policies.find((p) => p['verdict'] === 'authorized-to-bind')!;
+      bindPolicy['assert'] = assert;
+      return lintViolations(engine, doc);
+    };
+
+    expect(await bindAt({ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' }))
+      .toContain(forbidden);
+    expect(await bindAt({ op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.custodyNeverTiers' }] }))
+      .toContain(forbidden);
+    expect(await bindAt({ op: 'all', predicates: [{ op: 'any', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.identityOnlyTiers' }] }] }))
+      .toContain(forbidden);
+  });
+
+  it('mutation (FIX-RUN 1 D1 control): the SHAPE stays legal for a non-bind policy — the display-identity-only-role policy legitimately allIns demanded.identityOnlyTiers and the shipped data must still lint CLEAN', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    const displayPolicy = policies.find((p) => p['id'] === 'display-identity-only-role')!;
+    displayPolicy['assert'] = { op: 'all', predicates: [{ op: 'allIn', path: 'candidate.tier', collectionPath: 'demanded.identityOnlyTiers' }] };
+    expect(lintViolations(engine, doc)).toEqual([]);
+  });
+
   it('mutation: a policy missing its assert arm fails with the NAMED rule', async () => {
     const { engine } = await buildWorld();
     const doc = await shippedData();
@@ -127,6 +168,23 @@ describe('material-eligibility triplet (schema + lint contract)', () => {
     const doc = await shippedData();
     doc['identityLevels'] = ['catalog-item']; // an invented level noun
     expect(lintViolations(engine, doc)).toContain('material-eligibility-identity-levels-are-referent-levels');
+  });
+
+  it('mutation (FIX-RUN 1 D2): an identityRolePolicies member that names NO declared policy id fails with the NAMED rule', async () => {
+    const { engine } = await buildWorld();
+    const doc = await shippedData();
+    (doc['identityRolePolicies'] as string[]).push('policy-that-does-not-exist');
+    expect(lintViolations(engine, doc)).toContain('material-eligibility-identity-role-policies-declared');
+  });
+
+  it('single-source (FIX-RUN 1 D2, never two local terms for one value): the shipped data declares the role value ONCE (identityRole) and carries NO per-policy role literal', async () => {
+    const doc = await shippedData();
+    const policies = doc['policies'] as Array<Record<string, unknown>>;
+    expect(policies.some((p) => 'role' in p)).toBe(false);
+    const roleDeclarations = JSON.stringify(doc).match(/catalog-identity/g) ?? [];
+    expect(roleDeclarations).toHaveLength(1);
+    // The role targets are ID references pinned by lint E11, not literals.
+    expect(doc['identityRolePolicies']).toEqual(['display-identity-only-role', 'bind-accepted-identity-reference']);
   });
 
   it('structural bait: a tier value outside the spine-tier enum is rejected by the META-SCHEMA (Ajv is the structural authority)', async () => {
