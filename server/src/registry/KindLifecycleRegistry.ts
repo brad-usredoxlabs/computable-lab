@@ -52,14 +52,14 @@ export interface ArchiveGuardData {
 }
 
 /**
- * QMS7-4 OQ2 migration mapping block: the ONLY source for mapping a covered
- * record's domain `status` to a lifecycle state. The runner interprets it; it
- * never guesses per-kind in TS.
+ * QMS8-C (D4 tail): the QMS7-4 OQ2 `MigrationData` block (stateByDomainStatus +
+ * default) is RETIRED with its data. A leg no valid record can exercise is dead
+ * code: post-retirement a covered create cannot carry a domain status (the
+ * schema refuses it) and every governed record already carries its own state.
+ * The runner resolves an ungoverned record ONLY from the coverage entry's
+ * declared defaultState and reports — never maps, never guesses — anything the
+ * declared data cannot decide.
  */
-export interface MigrationData {
-  stateByDomainStatus: Record<string, string>;
-  default: string;
-}
 
 /**
  * QMS8-C (A1-3) lifecycle-declared migration instructions. The covered-kind
@@ -116,24 +116,15 @@ function parseArchiveGuard(raw: KindLifecycleRegistryData['archiveGuard']): Arch
   return { exemptKinds: exempt as string[] };
 }
 
-function parseMigration(raw: KindLifecycleRegistryData['migration'], stateIds: string[]): MigrationData | undefined {
-  if (raw === undefined) return undefined;
-  const map: Record<string, string> = {};
-  if (raw.stateByDomainStatus !== undefined) {
-    if (typeof raw.stateByDomainStatus !== 'object' || raw.stateByDomainStatus === null || Array.isArray(raw.stateByDomainStatus)) {
-      throw new Error('Registry-kind coverage migration.stateByDomainStatus must be a mapping of domain status -> lifecycle state');
-    }
-    for (const [status, state] of Object.entries(raw.stateByDomainStatus)) {
-      if (typeof state !== 'string' || !stateIds.includes(state)) {
-        throw new Error(`Registry-kind coverage migration maps status "${status}" to "${String(state)}", which is not a declared state of the lifecycle`);
-      }
-      map[status] = state;
-    }
+function parseMigration(raw: KindLifecycleRegistryData['migration']): undefined {
+  // QMS8-C (D5): the whole `migration:` block is retired. A file that still
+  // declares it fails the load — the retired instruction must not survive as
+  // inert data a future reader might trust (bait #3: partial deletion throws;
+  // here the whole block is gone, so any presence is a stale declaration).
+  if (raw !== undefined) {
+    throw new Error('Registry-kind coverage `migration:` block is retired (QMS8-C D5): the status->state map is dead data — delete the whole block');
   }
-  if (typeof raw.default !== 'string' || !stateIds.includes(raw.default)) {
-    throw new Error(`Registry-kind coverage migration.default "${String(raw.default)}" is not a declared state of the lifecycle`);
-  }
-  return { stateByDomainStatus: map, default: raw.default };
+  return undefined;
 }
 
 /**
@@ -178,7 +169,6 @@ export class KindLifecycleRegistry {
   private readonly lifecycleId: string;
   private readonly defaultState: string;
   private readonly archiveGuardData: ArchiveGuardData | undefined;
-  private readonly migrationData: MigrationData | undefined;
   private readonly lifecycleMigrationData: LifecycleMigrationInstruction[] | undefined;
 
   constructor(data: KindLifecycleRegistryData, deps: KindLifecycleRegistryDeps) {
@@ -249,11 +239,12 @@ export class KindLifecycleRegistry {
       this.entries.push(entry);
     }
 
-    // QMS7-4 optional data blocks. Absent → undefined (the guard/migration
-    // consumers skip entirely, so every pre-QMS7-4 path stays identical).
-    // Present-but-malformed → fail the load, same discipline as above.
+    // QMS7-4 optional data blocks. Absent → undefined (the guard consumers skip
+    // entirely, so every pre-QMS7-4 path stays identical). Present-but-malformed
+    // → fail the load, same discipline as above. QMS8-C (D5): the `migration:`
+    // block is retired — its mere presence now fails the load.
     this.archiveGuardData = parseArchiveGuard(data.archiveGuard);
-    this.migrationData = parseMigration(data.migration, stateIds);
+    parseMigration(data.migration);
     this.lifecycleMigrationData = parseLifecycleMigrations(data.lifecycleMigrations, deps.lifecycle);
   }
 
@@ -264,14 +255,6 @@ export class KindLifecycleRegistry {
    */
   get archiveGuard(): ArchiveGuardData | undefined {
     return this.archiveGuardData;
-  }
-
-  /**
-   * QMS7-4 OQ2 migration mapping data. Undefined when the file declares no
-   * migration block — the runner then reports instead of guessing.
-   */
-  get migration(): MigrationData | undefined {
-    return this.migrationData;
   }
 
   /**

@@ -66,8 +66,10 @@ export interface LifecycleMigrationChange {
   /** Which declared mapping arm decided toState. QMS8-C (A1-3) adds
    *  'status-stamp': the lifecycle-declared leg stamps state := status (the
    *  schema's status enum and the lifecycle's declared states are the same
-   *  vocabulary, so the mapping is the identity — a stamp, not a mapping). */
-  basis: 'status-map' | 'default' | 'status-stamp' | 'status-strip';
+   *  vocabulary, so the mapping is the identity — a stamp, not a mapping).
+   *  QMS8-C (D4/D5): 'status-strip' retires a governed record's retired domain
+   *  status; the QMS7-4 'status-map' arm is retired WITH its data (D4 tail). */
+  basis: 'default' | 'status-stamp' | 'status-strip';
 }
 
 /** One already-governed record deliberately left untouched. */
@@ -119,43 +121,30 @@ function asString(value: unknown): string | undefined {
 }
 
 /**
- * Resolve the target lifecycle state for one ungoverned record STRICTLY from
- * the coverage file's `migration:` data block (OQ2 ruling): a domain `status`
- * named in stateByDomainStatus maps to its declared state; anything else
- * (status-less or unmapped status) lands the declared `default`. The chosen
- * state must be a declared state of the lifecycle — an undeclared mapping is
- * reported, never written. Returns undefined when the data cannot decide
- * (the runner never guesses).
+ * Resolve the target lifecycle state for one UNGOVERNED record STRICTLY from
+ * declared coverage data. QMS8-C (D5 / D4 tail): the QMS7-4 status-map block is
+ * retired with its data — a covered create can no longer carry a domain status
+ * (the schema refuses it) and every governed record carries its own state, so
+ * the ONLY declared source left is the coverage entry's `defaultState`. A
+ * record that still carries a domain status has no declared mapping: the
+ * runner reports it, never guesses (bait #5's surviving form). Returns
+ * undefined when the data cannot decide.
  */
 function mappedState(
   payload: Record<string, unknown>,
   coverage: KindLifecycleRegistry,
   engine: LifecycleEngine,
 ): { toState: string; basis: LifecycleMigrationChange['basis'] } | undefined {
-  const migration = coverage.migration
-  const status = asString(payload.status)
-  let toState: string | undefined
-  let basis: LifecycleMigrationChange['basis'] = 'default'
-  if (migration) {
-    if (status !== undefined && migration.stateByDomainStatus[status] !== undefined) {
-      toState = migration.stateByDomainStatus[status]
-      basis = 'status-map'
-    } else {
-      toState = migration.default
-    }
-  } else {
-    // No migration block: the coverage entry's declared defaultState is still
-    // data — but only the mapping block may map a domain status, so a record
-    // WITH a status is left to the mapping (absent -> undecided, never a
-    // per-kind TS guess).
-    if (status === undefined) {
-      toState = coverage.entryFor(String(payload.kind))?.defaultState
-    }
+  if (asString(payload.status) !== undefined) {
+    // No declared status->state mapping exists any more. A status-bearing
+    // ungoverned record is undecided data — reported, never guessed.
+    return undefined
   }
+  const toState = coverage.entryFor(String(payload.kind))?.defaultState
   if (toState === undefined) return undefined
   const spec = engine.specFor(coverage.lifecycle)
   if (!spec || !spec.states.some(s => s.id === toState)) return undefined
-  return { toState, basis }
+  return { toState, basis: 'default' }
 }
 
 /**

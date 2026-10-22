@@ -33,19 +33,21 @@ kinds:
 archiveGuard:
   exemptKinds: [audit-event, signature, record-revision]
 
-# QMS7-4 OQ2 (ruled): the migration runner's domain-status -> lifecycle-state
-# mapping is DATA. A covered record whose domain status is named here lands
-# the mapped state; anything else (status-less or unmapped status) lands the
-# declared default. The runner never guesses per-kind in TS.
-migration:
-  stateByDomainStatus:
-    active: active
-  default: draft
+# QMS8-C (D5): the QMS7-4 OQ2 `migration:` block (stateByDomainStatus +
+# default) is RETIRED here — whole block, not partial (partial deletion
+# throws at the loader, bait #3). The status->state map became dead code the
+# moment the strip leg shipped: post-retirement a covered create cannot carry
+# a domain status at all (the schema refuses it), and every governed record's
+# state is its own. An ungoverned record that still carries a domain status
+# has NO declared mapping — the runner reports it, never guesses. The
+# coverage entry's top-level `defaultState` above remains the declared initial
+# state for creates and for ungoverned status-less records.
 
-# QMS8-C (A1-3): lifecycle-scoped migration instructions. The `migration:`
-# block above can only speak for kinds this file LISTS; lifecycle-GOVERNED kinds
-# (material / material-spec / term declare their lifecycleId per-schema and are
-# deliberately NOT listed in `kinds:`) need their own declared instruction.
+# QMS8-C (A1-3): lifecycle-scoped migration instructions. The retired
+# covered-kind mapping could only speak for kinds this file LISTS;
+# lifecycle-GOVERNED kinds (material / material-spec / term declare their
+# lifecycleId per-schema and are deliberately NOT listed in `kinds:`) need
+# their own declared instruction.
 # Keyed by LIFECYCLE — this file names no kind here, and the runner holds no
 # kind literal. `stampStateFromDomainStatus: true` means: for a record that
 # declares this lifecycle, carries a domain status and carries NO lifecycle
