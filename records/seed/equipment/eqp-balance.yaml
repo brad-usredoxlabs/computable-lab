@@ -4,7 +4,6 @@ id: EQP-BALANCE
 name: Analytical Balance
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - balance
   - scale

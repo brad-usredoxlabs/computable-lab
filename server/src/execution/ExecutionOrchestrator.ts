@@ -233,7 +233,7 @@ export class ExecutionOrchestrator {
     this.ctx = ctx;
     this.planningValidator = new ExecutionPlanningValidator();
     this.assistEmitter = options?.assistEmitter ?? createAssistPlusEmitter(ctx);
-    this.protocolCompiler = new ProtocolCompiler(ctx.store);
+    this.protocolCompiler = new ProtocolCompiler(ctx.store, ctx.lifecycleEngine);
   }
 
   private async nextRecordId(prefix: string, kind: string): Promise<string> {

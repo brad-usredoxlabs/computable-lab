@@ -26,18 +26,8 @@ form:
       widget: "text"
       label: "Name"
       required: true
-    - path: "$.status"
-      widget: "select"
-      label: "Status"
-      options:
-      - value: "active"
-        label: "Active"
-      - value: "out_of_service"
-        label: "Out of Service"
-      - value: "retired"
-        label: "Retired"
-      - value: "maintenance"
-        label: "Maintenance"
+    # QMS8-C (D3): the Status field is retired with the domain field it edited
+    # (same retirement as equipment); the lifecycle state pill carries the truth.
     - path: "$.equipmentRef"
       widget: "record-ref"
       label: "Linked Equipment"

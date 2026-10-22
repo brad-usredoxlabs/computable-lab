@@ -4,7 +4,6 @@ id: EQP-QUANTSTUDIO5
 name: QuantStudio 5
 lifecycleId: registry-ops
 state: active
-status: active
 equipmentClassRef:
   kind: record
   type: equipment-class

@@ -51,9 +51,10 @@ describe('materializeAcceptedEquipmentAdditions', () => {
       kind: 'equipment',
       name: 'Benchmark Incu-Mixer MP4',
       id: 'EQP-BENCHMARK-INCU-MIXER-MP4',
-      status: 'active',
       settings: { rpm: 1200 },
     })
+    // QMS8-C (D7): the retired domain status must NOT be in the created payload.
+    expect('status' in payload).toBe(false)
     expect(String(payload.notes)).toContain('exa:https://benchmarkscientific.com/incu-mixer-mp4')
     expect(result.materialized).toEqual([
       { key: 'Benchmark Incu-Mixer MP4', recordId: 'EQP-BENCHMARK-INCU-MIXER-MP4', name: 'Benchmark Incu-Mixer MP4' },

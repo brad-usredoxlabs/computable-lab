@@ -72,10 +72,11 @@ properties:
     type: string
     description: Physical or logical location of the instrument
 
-  status:
-    type: string
-    description: "Operational status of the instrument."
-    enum: [ active, out_of_service, retired, maintenance ]
+  # QMS8-C (D3, BRAD-A1): this kind's DOMAIN operational field is RETIRED
+  # exactly as for equipment — same operational vocabulary, same lifecycle. The
+  # lifecycle `state` is the single operational truth and `additionalProperties:
+  # false` refuses a payload that still carries the retired key. (The kind's own
+  # DELETION is a separate item — INSTR-COLLAPSE-1 — and is not this edit.)
 
   capabilities:
     type: array

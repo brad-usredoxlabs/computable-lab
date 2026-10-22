@@ -4,7 +4,6 @@ id: EQP-STIRRER
 name: Magnetic Stirrer
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - stirrer
   - magnetic stir plate

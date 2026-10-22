@@ -114,7 +114,9 @@ export function createEquipmentHandlers(deps: {
         kind: 'equipment',
         id: recordId,
         name: title,
-        status: 'active',
+        // QMS8-C (D7): the `status: 'active'` hardcode is deleted. The record
+        // arrives carrying its coverage-declared lifecycle state like any other
+        // create; the domain status field is retired outright for this kind.
         ...(manufacturer ? { manufacturer } : {}),
         ...(model ? { model } : {}),
         notes: provenanceNotes(url, snippet),

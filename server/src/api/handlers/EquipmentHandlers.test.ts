@@ -93,10 +93,12 @@ describe('EquipmentHandlers', () => {
     expect(envelope.payload).toMatchObject({
       kind: 'equipment',
       name: 'Bio-Rad CFX96 Real-Time PCR System',
-      status: 'active',
       manufacturer: 'Bio-Rad',
       model: 'CFX96',
     });
+    // QMS8-C (D7): the createFromExa hardcode `status: 'active'` is deleted —
+    // the domain field is retired for this kind, so the payload must NOT carry it.
+    expect('status' in (envelope.payload as Record<string, unknown>)).toBe(false);
     expect(String(envelope.payload.id)).toMatch(/^EQP-/);
     expect(String(envelope.payload.notes)).toContain('https://example.com/cfx96');
   });

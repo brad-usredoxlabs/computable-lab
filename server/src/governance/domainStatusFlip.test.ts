@@ -208,11 +208,17 @@ describe('QMS8-C C3: a covered-kind write carrying the retired domain status is 
     expect(status).toBe(422)
     expect(result.error).toBe('Validation failed')
     expect((result.validation as { valid?: boolean }).valid).toBe(false)
-    // BRAD-A1: rejected outright. unevaluatedProperties:false refuses the key —
-    // no tolerated-legacy lint rule anywhere.
-    const validationErrors = (result.validation ?? {}) as { errors?: Array<{ message?: string }> }
-    const messages = (validationErrors.errors ?? []).map(e => String(e.message ?? ''))
-    expect(messages.some(m => /status/i.test(m))).toBe(true)
+    // BRAD-A1: rejected outright — the refusal NAMES the retired key. Ajv
+    // reports it as an unevaluated/additional property error (the property is
+    // no longer declared anywhere in the schema), never a tolerated-legacy rule.
+    const validationErrors = (result.validation ?? {}) as {
+      errors?: Array<{ keyword?: string; message?: string; params?: Record<string, unknown> }>
+    }
+    const errors = validationErrors.errors ?? []
+    expect(errors.some(e =>
+      (e.keyword === 'unevaluatedProperties' || e.keyword === 'additionalProperties')
+      && (e.params?.unevaluatedProperty === 'status' || e.params?.additionalProperty === 'status'),
+    ), `the refusal must name the retired key; got ${JSON.stringify(errors)}`).toBe(true)
     expect(world.fake.records.has('EQP-C3-RED-1')).toBe(false)
   })
 

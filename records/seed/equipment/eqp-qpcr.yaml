@@ -4,7 +4,6 @@ id: EQP-QPCR
 name: Real-Time qPCR Instrument
 lifecycleId: registry-ops
 state: active
-status: active
 equipmentClassRef:
   kind: record
   type: equipment-class

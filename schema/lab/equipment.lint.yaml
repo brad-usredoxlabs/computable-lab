@@ -4,8 +4,11 @@
 # authoringGate: deny (schema/core/policy-bundles/*.policy-bundle.yaml).
 # guardWhenChanged names TOP-LEVEL payload keys only (AuthoringGuard.ts semantics:
 # dotted paths never match). `notes` is deliberately excluded (annotation is not
-# re-authoring the record's spec); `status`/`state`/`lifecycleId` are excluded
+# re-authoring the record's spec); `state`/`lifecycleId` are excluded
 # because state changes are the lifecycle transition's own role check.
+# (QMS8-C D3: `status` was excluded for the same reason until the domain status
+# field was retired outright for this kind — the exclusion no longer has a field
+# to name.)
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/equipment.schema.yaml"
 rules: []

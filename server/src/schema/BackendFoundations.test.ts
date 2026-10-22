@@ -75,7 +75,8 @@ describe('Backend foundation schemas', () => {
         kind: 'equipment',
         id: 'EQP-SHAKER-1',
         name: 'Orbital Shaker 1',
-        status: 'active',
+        // QMS8-C (D3): the domain status field is retired for equipment — the
+        // lifecycle state is the single operational truth.
         equipmentClassRef: {
           kind: 'record',
           type: 'equipment-class',

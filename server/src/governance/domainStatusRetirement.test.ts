@@ -242,29 +242,42 @@ function governedDraftEquipment(id = 'EQP-QMS8C-DRAFT'): RecordEnvelope {
 
 describe('QMS8-C: the lifecycle gate never resolves state from domain status', () => {
   it('a covered update that moves ONLY domain status is NOT treated as a lifecycle transition', async () => {
-    // Stored: governed ACTIVE equipment. The PUT carries a domain status the
-    // lifecycle has never heard of and NO state. Pre-fix the middleware reads
-    // `state ?? status`, invents the target state 'out_of_service', sends it to
-    // the engine and 422s with "Transition from 'active' to 'out_of_service' is
-    // not allowed by the registry-ops lifecycle." Post-fix no state is proposed,
-    // so no transition is attempted: the edit is a content edit, not a
-    // lifecycle move, and the record's lifecycle state is untouched.
+    // Pinned on PERSON: a COVERED kind whose domain status is an ORTHOGONAL
+    // vocabulary the coverage DATA does NOT declare retired (spec §g / stop
+    // boundary 2), so its payload legitimately still carries `status`. That is
+    // the strongest form of this pin after the C3 flip: even where a status
+    // field still exists, the gate never reads it as a lifecycle state.
+    // (On equipment/instrument the retired key is now refused by the schema
+    // before it could ever reach the middleware — pinned in C3.)
+    //
+    // Pre-C1 the middleware reads `state ?? status`, invents the target state
+    // 'suspended', sends it to the engine and 422s with "Transition from
+    // 'active' to 'suspended' is not allowed by the registry-ops lifecycle."
+    // Post-C1 no state is proposed, so no transition is attempted: the edit is
+    // a content edit, not a lifecycle move, and the record's state is untouched.
     const world = makeWorld()
-    world.fake.seed(envelope('EQP-QMS8C-ACTIVE', 'equipment.schema.yaml', {
-      kind: 'equipment', id: 'EQP-QMS8C-ACTIVE', name: 'QMS8-C active pump',
+    world.fake.seed(envelope('PER-QMS8C-ACTIVE', 'person.schema.yaml', {
+      kind: 'person', id: 'PER-QMS8C-ACTIVE', displayName: 'QMS8C Active',
       status: 'active',
       lifecycleId: 'registry-ops', state: 'active',
     }))
 
     const next = {
-      kind: 'equipment', id: 'EQP-QMS8C-ACTIVE', name: 'QMS8-C active pump renamed',
-      status: 'out_of_service',
-      lifecycleId: 'registry-ops',
+      kind: 'person', id: 'PER-QMS8C-ACTIVE', displayName: 'QMS8C Active renamed',
+      status: 'suspended',
+      lifecycleId: 'registry-ops', state: 'active',
     }
-    const updated = await callUpdate(world, 'EQP-QMS8C-ACTIVE', next, 'USR-QMS8C')
+    const updated = await callUpdate(world, 'PER-QMS8C-ACTIVE', next, 'USR-QMS8C')
 
     expect(updated.status).toBe(200)
     expect(String((updated.result as Record<string, unknown>)?.error ?? '')).not.toMatch(/Transition from/)
+    // The domain status moved; the lifecycle state did NOT, and no transition
+    // was attempted. (The PUT body carries `state` exactly as the app's editor
+    // serializer round-trips it — a body that OMITS state is a full-payload
+    // replace that drops it, which is pre-existing PUT semantics outside this
+    // item's scope.)
+    expect(storedPayload(world, 'PER-QMS8C-ACTIVE').state).toBe('active')
+    expect(storedPayload(world, 'PER-QMS8C-ACTIVE').status).toBe('suspended')
   })
 
   it('a domain status can no longer drive a real draft->active transition (the EQP-NEW-7LS1 leak class)', () => {
