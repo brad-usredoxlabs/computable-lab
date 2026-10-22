@@ -73,7 +73,7 @@ records:
   # with no eligibility run keeps its pre-ELIG shape byte-identically).
   # Before/after diff recorded in MATRES-ELIG-report.l2t1445-coder1.md and
   # MATRES-ELIG-report.l2t1445-coder2-fix1.md.
-  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: b239bb00c0c5a8069e9306a956995a57ea8122db98758f0970293bcea3e1befc}
+  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: c750c1effbf3434d51f740f7728931079ebb30b05b464b8ac64d32a6399caf08}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
   - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}

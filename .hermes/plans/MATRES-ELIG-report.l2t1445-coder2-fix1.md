@@ -122,9 +122,11 @@ identityOnlyTiers and the shipped data still lints CLEAN).
   The diff vs base 6f8fb519 is now additive-only (the eligibility/tier/
   referentLevel keys inside the two candidate entries); the document-wide
   serialization churn the reviewer flagged is GONE.
-- MANIFEST.yaml record pin re-hashed: 16c38893... -> b239bb00c0c5a8069e9306a956995a57ea8122db98758f0970293bcea3e1befc,
+- MANIFEST.yaml record pin re-hashed: 16c38893... -> c750c1effbf3434d51f740f7728931079ebb30b05b464b8ac64d32a6399caf08,
   with a MANIFEST comment disclosing the re-bless and the key-order preservation.
-- sha256 on disk verified: b239bb00... matches the manifest pin; golden-replay
+  (The base record ends with a trailing newline; coder1's re-bless dropped it —
+  restored here so the byte diff vs base is additive-only in style too.)
+- sha256 on disk verified: c750c1ef... matches the manifest pin; golden-replay
   37/37 (below).
 
 ## 5. Commands run (real output, post-fix)
