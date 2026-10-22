@@ -1,0 +1,18 @@
+{ "prompt": "Actually make it 32 wells instead, keep the rest the same.",
+  "surface": "workspace.deck",
+  "context": { "studyId": "STU-revise-ghost-probe", "activeTabKind": "deck",
+    "systemPromptId": "workspace.deck",
+    "labwares": [{"labwareId":"plate-seed-1","name":"Seeding plate","labwareType":"96-well-plate"}],
+    "draftRevision": {
+      "currentPreviewDraft": { "events": [ { "eventId": "preview-e1", "event_type": "add_material",
+          "verb": "add", "labwareId": "plate-seed-1",
+          "details": { "labwareId": "plate-seed-1", "wells": ["A1","A2","A3"],
+            "material_spec_ref": { "label": "Trypsin-EDTA/DMEM/FBS mix" },
+            "composition": [
+              {"component_ref":{"label":"Trypsin-EDTA"},"fraction":"50%","role":"additive"},
+              {"component_ref":{"label":"DMEM"},"fraction":"45%","role":"buffer_component"},
+              {"component_ref":{"label":"FBS"},"fraction":"5%","role":"additive"} ] } } ],
+        "labwareRequirements": [], "labwareAdditions": [] },
+      "revisionHistory": [ { "prompt": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL across A1:A3 of the seeding plate", "createdAt": "2026-10-21T20:00:00.000Z" } ] } },
+  "history": [ { "role": "user", "content": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL across A1:A3 of the seeding plate" },
+               { "role": "assistant", "content": "Draft compiled deterministically from the scientist-intent shorthand." } ] }
