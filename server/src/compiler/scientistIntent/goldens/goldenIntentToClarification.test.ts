@@ -68,9 +68,47 @@ describe('golden.intent-to-clarification.ambiguous-material', () => {
     // fixture store (LAB-plate-alpha / LAB-plate-beta). Labels, confidence,
     // and the declared stable order are unchanged; the blessed record was
     // re-hashed ONCE in the same commit (manifest records entry).
+    // MATRES-ELIG DELIBERATE PIN UPDATE (declared, spec §7.4.4/D6): the same
+    // two candidates additionally carry the ADDITIVE eligibility disclosure —
+    // tier, referentLevel, and the verdict trio with the policy ids that
+    // decided them. Labels, confidence, ref, and the order are UNCHANGED; the
+    // mint affordance and lookup-failure arms carry NO disclosure (a candidate
+    // with no eligibility run keeps its pre-ELIG shape byte-identically).
     expect(item['candidates']).toEqual([
-      { label: 'standard plate alpha', confidence: 1, ref: 'LAB-plate-alpha' },
-      { label: 'standard plate beta', confidence: 1, ref: 'LAB-plate-beta' },
+      {
+        label: 'standard plate alpha',
+        confidence: 1,
+        ref: 'LAB-plate-alpha',
+        tier: 1,
+        referentLevel: 'unknown',
+        eligibility: {
+          display: 'pass',
+          suppress: 'pass',
+          bind: 'pass',
+          policyIds: {
+            display: 'display-tier-legal',
+            suppress: 'suppress-unconstrained-presence',
+            bind: 'bind-unconstrained-identity',
+          },
+        },
+      },
+      {
+        label: 'standard plate beta',
+        confidence: 1,
+        ref: 'LAB-plate-beta',
+        tier: 1,
+        referentLevel: 'unknown',
+        eligibility: {
+          display: 'pass',
+          suppress: 'pass',
+          bind: 'pass',
+          policyIds: {
+            display: 'display-tier-legal',
+            suppress: 'suppress-unconstrained-presence',
+            bind: 'bind-unconstrained-identity',
+          },
+        },
+      },
     ]);
     expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'transfer', argument: 'source' });
 

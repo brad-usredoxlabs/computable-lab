@@ -186,6 +186,14 @@ describe('answer-bind-1.answered-slot-clears-ambiguity (handler leg)', () => {
     // rows (the same ids the store holds: LAB-mct-ont / LAB-mct-seed). The
     // fact's label/reason/actionLocation and the candidate ORDER are unchanged;
     // the answer stays inert (nonexistent id -> honestly ignored -> re-bar).
+    // MATRES-ELIG DELIBERATE PIN UPDATE (declared, spec §7.4.4/D6): the same
+    // two candidates additionally carry the ADDITIVE eligibility disclosure —
+    // tier, referentLevel, and the verdict trio with the policy ids that
+    // decided them. label/reason/actionLocation and the candidate ORDER are
+    // UNCHANGED. Deviation note: this handler test lives outside the task
+    // block's owned file set; it is a clarification-payload byte-pin, the same
+    // class the spec §7.4.4 sanctions ("existing goldens updated ONLY where the
+    // payload shape is byte-pinned").
     expect(payload.clarifications).toEqual([
       {
         label: LABEL,
@@ -193,8 +201,40 @@ describe('answer-bind-1.answered-slot-clears-ambiguity (handler leg)', () => {
         // Engine's declared stable order: score DESC then curie ASC
         // (resolutionEngine.ts:38-41) — both clamp to 1, so curie order.
         candidates: [
-          { label: 'Ontology microcentrifuge tube', confidence: 1, ref: 'LAB-mct-ont' },
-          { label: 'Microcentrifuge tube', confidence: 1, ref: 'LAB-mct-seed' },
+          {
+            label: 'Ontology microcentrifuge tube',
+            confidence: 1,
+            ref: 'LAB-mct-ont',
+            tier: 1,
+            referentLevel: 'unknown',
+            eligibility: {
+              display: 'pass',
+              suppress: 'pass',
+              bind: 'pass',
+              policyIds: {
+                display: 'display-tier-legal',
+                suppress: 'suppress-unconstrained-presence',
+                bind: 'bind-unconstrained-identity',
+              },
+            },
+          },
+          {
+            label: 'Microcentrifuge tube',
+            confidence: 1,
+            ref: 'LAB-mct-seed',
+            tier: 1,
+            referentLevel: 'unknown',
+            eligibility: {
+              display: 'pass',
+              suppress: 'pass',
+              bind: 'pass',
+              policyIds: {
+                display: 'display-tier-legal',
+                suppress: 'suppress-unconstrained-presence',
+                bind: 'bind-unconstrained-identity',
+              },
+            },
+          },
         ],
         actionLocation: { actionIndex: 0, action: 'bead_beat', argument: 'labware' },
       },

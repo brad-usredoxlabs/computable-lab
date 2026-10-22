@@ -65,6 +65,19 @@ export interface ScientistIntentArgContract {
   /** For cardinality: many — the entry property carrying the symbolic noun
    *  the resolver binds (vocabulary-declared; lint P5 requires it). */
   itemNounField?: string;
+  /** MATRES-ELIG DECLARATION SLOT [memo Q1, RATIFIED 2026-10-20] — the ALLOWED
+   *  referent levels for binding this argument (canonical five; lint P7 pins
+   *  members against the vocabulary's declared referentLevels). Absent =
+   *  unconstrained (today's behavior, backwards-compatible). Read by the
+   *  eligibility fact envelope as demanded.allowedLevels; lint P6 pins
+   *  preferred ∈ levels. NB the vocabulary loader IS a cached singleton
+   *  (vocabulary.ts:269-280) — the eligibility FILE follows the per-call law
+   *  (eligibility/policy.ts); these declared slots ride the cached contract. */
+  levels?: readonly string[];
+  /** MATRES-ELIG DECLARATION SLOT [memo Q1] — the time-phase default hint for
+   *  the PANEL's pre-selection (P5). NEVER a filter, never suppression:
+   *  binding a non-preferred allowed level is legal without a clarification. */
+  preferred?: string;
 }
 
 export interface ScientistIntentVerbEntry {
@@ -174,7 +187,7 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
   }
 
   // --- Read the validated document into the frozen consumption API --------
-  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string }
+  interface RawArg { name: string; kind: ScientistIntentArgKind; required: boolean; domain?: string; capability?: string; hintEligible?: boolean; level?: MaterialLevel; cardinality?: 'one' | 'many'; itemNounField?: string; levels?: readonly string[]; preferred?: string }
   interface RawVerb { name: string; class: ScientistIntentVerbClass; policyRef?: string; args: RawArg[] }
   interface RawDoc { verbs: RawVerb[]; policies: ScientistIntentVocabularyPolicies }
 
@@ -200,6 +213,14 @@ function buildVocabulary(dataPath: string): ScientistIntentVocabulary {
       // per-arg branches; exactOptionalPropertyTypes: conditional spreads).
       ...(typeof a.cardinality === 'string' ? { cardinality: a.cardinality as 'one' | 'many' } : {}),
       ...(typeof a.itemNounField === 'string' ? { itemNounField: a.itemNounField } : {}),
+      // MATRES-ELIG [memo Q1, RATIFIED]: the DECLARED allowed-level set +
+      // preferred hint (same SPINE-8 idiom — the meta-schema enum is the
+      // validation authority; generic read, no per-value or per-arg branches,
+      // conditional spreads for exactOptionalPropertyTypes). The eligibility
+      // envelope consumes `levels` as demanded.allowedLevels; `preferred` is
+      // disclosure only (never a filter, never suppression).
+      ...(Array.isArray(a.levels) && a.levels.length > 0 ? { levels: a.levels } : {}),
+      ...(typeof a.preferred === 'string' ? { preferred: a.preferred } : {}),
     }));
     entries.set(verb.name, {
       name: verb.name,
