@@ -172,6 +172,56 @@ rules:
   message:
     template: "a resolvable vocabulary argument with cardinality many must declare itemNounField"
 
+# P6 (MATRES-ELIG, memo Q1 RATIFIED): an argument's `preferred` hint must be
+# a member of its own declared `levels` allowed-set (preferred ∈ levels). An
+# arg with no `preferred` passes vacuously BY DECLARATION (the hint is absent,
+# not missing evidence — this is a well-formedness rule over declared slots,
+# not the eligibility INCOMPLETE law). A `preferred` with NO `levels` slot is
+# ill-formed: the allIn collectionPath fails loudly.
+- id: vocab-preferred-member-of-levels
+  title: "arg preferred is a member of its levels allowed-set"
+  description: >-
+    A vocabulary argument that declares a `preferred` referent level must
+    declare a `levels` allowed-set containing it (memo Q1 binding rule:
+    preferred ∈ levels).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: verbs
+  assert:
+    op: everyItem
+    collectionPath: verbs
+    assert:
+      op: everyItem
+      collectionPath: args
+      assert:
+        op: any
+        predicates:
+        - op: not
+          not:
+            op: exists
+            path: preferred
+        - op: allIn
+          path: preferred
+          collectionPath: levels
+  message:
+    template: "a vocabulary argument's preferred level must be a member of its declared levels"
+
+# P7/P8 boundary note (MATRES-ELIG, probe-verified): the shipped PathResolver
+# does NOT flatten a multi-level wildcard selection — `verbs[*].args[*].levels`
+# selects NESTED arrays ([[["concept","formulation"]],[]]), and everyItem
+# evaluates its assert with the ITEM as root data, so an item-relative allIn
+# cannot reach the document-root `referentLevels` list. The canonical-five
+# membership for the vocabulary `levels`/`preferred` slots therefore rides the
+# meta-schema ENUM (Ajv is the campaign's structural validation authority —
+# scientist-intent-vocabulary.schema.yaml pins both slots to exactly the five
+# names), and the cross-document identity of the two lists (vocabulary
+# referentLevels vs eligibility referentLevels — never two local terms for one
+# entity) is pinned by the eligibility data test as a SET DIFF. The eligibility
+# lint spec's own cross-list rules (E1/E5/E9) DO ride the DSL because they are
+# single-level root wildcards over scalar slots.
+
 # P4: strategy ids referenced by ambiguity/hintAuthority are members of
 # policies.strategyOrder (precedence is data, not code).
 - id: vocab-strategy-refs-declared

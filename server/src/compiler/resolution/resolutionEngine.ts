@@ -19,11 +19,16 @@ import type { RankedCandidate } from '../../resolve/types.js';
 import { materialLayerOf, isWellReadyLayer } from '../../ai/materialRefFields.js';
 import { nearMissSuggestions } from './adapters.js';
 import { loadNounShape, isMintableLabel } from './nounShape.js';
+import { buildEligibilityEnvelope } from './eligibility/facts.js';
+import { evaluateCandidateEligibility, type CandidateEligibility } from './eligibility/evaluate.js';
+import type { MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type { ScientistIntentVocabulary, ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import type { ScientistIntent, ScientistIntentActionKind, ScientistIntentActionLocation } from '../scientistIntent/types.js';
 import type {
   BoundNoun,
   Clarification,
+  ClarificationCandidateFact,
+  EligibilityVerdictFact,
   EngineDeps,
   EngineFailure,
   EngineOutcome,
@@ -98,12 +103,45 @@ function candidateRecordRef(candidate: RankedCandidate): string | undefined {
   return recordId;
 }
 
-function candidateFact(candidate: RankedCandidate): { label: string; confidence: number; ref?: string } {
+/** MATRES-ELIG §7.4: one evaluated in-band candidate — the verdict trio plus
+ *  the envelope's derived referent level (disclosure source). */
+interface EligibilityRun {
+  eligibility: CandidateEligibility;
+  referentLevel: string;
+}
+
+function verdictFact(e: CandidateEligibility): EligibilityVerdictFact {
+  return {
+    display: e.display.state,
+    suppress: e.suppress.state,
+    bind: e.bind.state,
+    policyIds: { display: e.display.policyId, suppress: e.suppress.policyId, bind: e.bind.policyId },
+    ...(e.bind.role !== undefined ? { bindRole: e.bind.role } : {}),
+    // FIX-RUN 1 D3 (adversarial review l2t2050): the DISPLAY class's role tag
+    // survives into the payload too — the identity role the display policy
+    // declares must reach the panel, not only the internal verdict.
+    ...(e.display.role !== undefined ? { displayRole: e.display.role } : {}),
+  };
+}
+
+function candidateFact(
+  candidate: RankedCandidate,
+  run?: EligibilityRun,
+): ClarificationCandidateFact {
   const ref = candidateRecordRef(candidate);
   return {
     label: candidate.label,
     confidence: confidenceOf(candidate),
     ...(ref !== undefined ? { ref } : {}),
+    // MATRES-ELIG §7.4.4 (D6): ADDITIVE disclosure — the candidate states its
+    // own facts (tier, derived referent level, the three verdict enums + the
+    // policy ids that decided them). Conditional spread only; a candidate with
+    // no eligibility run keeps its pre-ELIG shape byte-identically.
+    ...(run !== undefined ? {
+      tier: candidate.tier,
+      referentLevel: run.referentLevel,
+      eligibility: verdictFact(run.eligibility),
+    } : {}),
   };
 }
 
@@ -111,13 +149,16 @@ function clarificationFor(
   req: ResolutionRequest,
   reason: string,
   candidates: readonly RankedCandidate[],
+  runs?: Map<RankedCandidate, EligibilityRun>,
 ): Clarification {
   const ordered = sortCandidates(candidates);
   const actionLocation = req.actionLocation;
   return {
     label: req.label,
     reason,
-    ...(ordered.length > 0 ? { candidates: ordered.map(candidateFact) } : {}),
+    ...(ordered.length > 0
+      ? { candidates: ordered.map((c) => candidateFact(c, runs?.get(c))) }
+      : {}),
     ...(actionLocation ? { actionLocation } : {}),
   };
 }
@@ -160,6 +201,29 @@ function levelFilter(
   return { eligible, traces };
 }
 
+/** MATRES-ELIG AC-3 gate (spec §7.3): a token whose SHAPE matches the policy
+ *  data's `catalogShape` patterns while the request declares NO vendor scope is
+ *  a catalog-shaped token — the utterance must say WHICH catalog. The gate
+ *  elicits the scope (the data-named reason) and carries NO candidates: shape
+ *  alone never invents vendor scope and never fabricates product identity.
+ *  Generic read: the patterns and the reason code are DATA; zero vendor-kind
+ *  literals here. Returns null when the token is not catalog-shaped or a scope
+ *  IS declared (then ordinary gathering proceeds). */
+function catalogScopeGate(
+  req: ResolutionRequest,
+  policy: MaterialEligibilityPolicy,
+): { reason: string; traces: string[] } | null {
+  const shaped = policy.catalogShape().some((pattern) => pattern.test(req.label.trim()));
+  if (!shaped) return null;
+  if (req.scopedIdentifiers !== undefined && req.scopedIdentifiers.length > 0) return null;
+  return {
+    reason: policy.catalogScopeReason(),
+    traces: [
+      `catalog-scope-gate: label "${req.label}" matches a data catalogShape pattern with no declared vendor scope — eliciting scope, fabricating no identity`,
+    ],
+  };
+}
+
 export async function resolveNoun(
   req: ResolutionRequest,
   vocab: ScientistIntentVocabulary,
@@ -197,6 +261,27 @@ export async function resolveNoun(
   const allCandidates: RankedCandidate[] = [];
   let sawFailure = false;
 
+  // --- MATRES-ELIG (§7.4) -------------------------------------------------
+  // The eligibility POLICY is data (schema/scientist-intent/material-eligibility/),
+  // loaded PER call by the caller (never process-cached — the nounShape law).
+  // Absent data ⇒ the engine runs its pre-ELIG behavior byte-identically: the
+  // eligibility arms below are inert without the document. The engine holds NO
+  // policy branch: every tier/level/verdict/reason value it consults is read
+  // from the document through the eligibility modules (no tier literal, no
+  // level name, no reason literal appears in this arm).
+  const eligibilityPolicy = deps.eligibility;
+  const catalogGate = eligibilityPolicy
+    ? catalogScopeGate(req, eligibilityPolicy)
+    : null;
+  if (catalogGate) {
+    // AC-3: a catalog-shaped token with NO declared vendor scope elicits the
+    // scope. The clarification carries NO candidates — nothing is minted or
+    // labelled with an invented vendor (shape alone never invents scope).
+    traces.push(...catalogGate.traces);
+    clarifications.push(clarificationFor(req, catalogGate.reason, []));
+    return { bindings, clarifications, failures, traces };
+  }
+
   for (const strategyId of policies.strategyOrder) {
     const strategy = deps.strategies.get(strategyId);
     if (!strategy) {
@@ -225,8 +310,49 @@ export async function resolveNoun(
       (c) => c.tier !== 5 && confidenceOf(c) >= band.min && confidenceOf(c) <= band.max,
     );
 
+    // §7.4.1: assemble the declared-fact envelope per in-band candidate and
+    // evaluate the three data-declared predicates. Verdicts ride the existing
+    // traces channel; the disclosure rides the candidate payload (§7.4.4).
+    const runs = new Map<RankedCandidate, EligibilityRun>();
+    if (eligibilityPolicy && inBand.length > 0) {
+      for (const candidate of inBand) {
+        const envelope = buildEligibilityEnvelope({
+          policy: eligibilityPolicy,
+          candidate,
+          contract: req.declared,
+          ...(req.scopedIdentifiers !== undefined ? { utteranceScopedIdentifiers: req.scopedIdentifiers } : {}),
+        });
+        const eligibility = evaluateCandidateEligibility(eligibilityPolicy, envelope);
+        runs.set(candidate, { eligibility, referentLevel: envelope.candidate.referentLevel });
+        for (const trace of eligibility.traces) {
+          traces.push(`${candidate.curie || candidate.label}: ${trace}`);
+        }
+      }
+    }
+
+    // §7.4.3 SUPPRESSION: the early-return on `inBand >= 1` is replaced by the
+    // sufficient-to-suppress VERDICT. The loop continues to the next strategy
+    // iff NO in-band candidate is sufficient-to-suppress PASS — an
+    // approximate-level local candidate can no longer suppress an exact
+    // demanded-level remote candidate (AC-1). Without the data the presence
+    // law stands byte-identically. Suppression is never a side effect of
+    // truncation or tier presence (M1).
+    const suppresses = eligibilityPolicy
+      ? inBand.some((c) => runs.get(c)!.eligibility.suppress.state === 'pass')
+      : inBand.length > 0;
+    if (!suppresses) continue;
+
     if (inBand.length === 1) {
       const winner = inBand[0]!;
+      // §7.4.2 BIND: a band-passing candidate binds only on authorized-to-bind
+      // PASS. A band-passing but bind-INCOMPLETE/FAIL candidate falls to
+      // clarification as an INCOMPLETE POSSIBILITY (the data-named reason),
+      // never a bind and never a silent pass.
+      const bindVerdict = runs.get(winner)?.eligibility.bind;
+      if (bindVerdict !== undefined && bindVerdict.state !== 'pass') {
+        clarifications.push(clarificationFor(req, eligibilityPolicy!.bindIncompleteReason(), inBand, runs));
+        return { bindings, clarifications, failures, traces };
+      }
       const binding = bindingFor(req, winner);
       if (req.declared.kind === 'wells') {
         binding.addresses = sortCandidates(inBand).map((c) => c.label);
@@ -243,7 +369,7 @@ export async function resolveNoun(
         bindings.push(bindingFor(req, top));
         traces.push(`ambiguity-accepted-top: ${top.curie} via policies.ambiguity.strategyRef ${policies.ambiguity.strategyRef}`);
       } else {
-        clarifications.push(clarificationFor(req, 'ambiguous-noun', inBand));
+        clarifications.push(clarificationFor(req, 'ambiguous-noun', inBand, runs));
       }
       return { bindings, clarifications, failures, traces };
     }

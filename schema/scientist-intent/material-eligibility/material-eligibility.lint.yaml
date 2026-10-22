@@ -1,0 +1,742 @@
+# MATRES-ELIG lint — conditional well-formedness for the material-eligibility
+# policy document (bound by schemaId to the eligibility data $id).
+# DSL-only (exists/nonEmpty/equals/in/allIn/noneIn/everyItem/all/any/not — no
+# interpreter changes, zero new predicate ops). Policy VALUES live in the data
+# (tierLegality/policies); policy WELL-FORMEDNESS lives here; NO conditional is
+# re-implemented in TypeScript.
+#
+# DSL boundary (probe-verified in the MATRES-ELIG report, and documented by the
+# shipped scientist-intent-vocabulary.lint.yaml P2 comment — "one wildcard level
+# per path"): `[*]` projections select SCALAR slot values across one level and
+# work against a ROOT collectionPath; an ARRAY-valued slot projects to NESTED
+# arrays, whose membership a membership op cannot flatten. Tier/layer VALUE
+# ranges are therefore pinned STRUCTURALLY by the meta-schema enums (Ajv is the
+# structural validation authority); the rules below cover the cross-references
+# enums cannot express.
+#
+# NB server.ts skips empty-rule specs silently at boot — the eligibility loader
+# (eligibility/policy.ts) is the backstop that the shipped spec has rules and
+# they fire (the vocabulary-loader pattern).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/scientist-intent/material-eligibility.schema.yaml"
+
+rules:
+# E1: every tierLegality row names a declared demandedLevel (the canonical
+# five + the undeclared spelling) — no invented level nouns (spec §7.3: lint
+# checks every demandedLevel value against exactly the declared set).
+# Shape: root-level wildcard projection (probe-verified firing).
+- id: material-eligibility-tierlegality-demanded-levels-declared
+  title: "tierLegality demandedLevel values are declared levels"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: tierLegality
+  assert:
+    op: allIn
+    path: tierLegality[*].demandedLevel
+    collectionPath: demandedLevelValues
+  message:
+    template: "tierLegality demandedLevel must be a member of demandedLevelValues"
+
+# E2: every tierLegality row names a declared campaign mode (D5: modes are
+# policy-data keys only).
+- id: material-eligibility-tierlegality-modes-declared
+  title: "tierLegality mode values are declared campaignModes"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: tierLegality
+  assert:
+    op: allIn
+    path: tierLegality[*].mode
+    collectionPath: campaignModes
+  message:
+    template: "tierLegality mode must be a member of campaignModes"
+
+# E3: the remote/custody-never tier lists are spine tiers (data cross-reference;
+# no TS tier literal may re-derive them). A plain root array selects its
+# ELEMENTS (probe-verified), so membership is per tier value.
+- id: material-eligibility-remote-tiers-are-spine-tiers
+  title: "remoteTiers are spine tiers"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: remoteTiers
+  assert:
+    op: allIn
+    path: remoteTiers
+    collectionPath: spineTiers
+  message:
+    template: "remoteTiers members must be spineTiers"
+
+- id: material-eligibility-custody-never-tiers-are-spine-tiers
+  title: "custodyNeverTiers are spine tiers"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: custodyNeverTiers
+  assert:
+    op: allIn
+    path: custodyNeverTiers
+    collectionPath: spineTiers
+  message:
+    template: "custodyNeverTiers members must be spineTiers"
+
+# E4: the default campaign mode is a declared mode.
+- id: material-eligibility-default-mode-declared
+  title: "defaultCampaignMode is a declared campaignMode"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: defaultCampaignMode
+  assert:
+    op: allIn
+    path: defaultCampaignMode
+    collectionPath: campaignModes
+  message:
+    template: "defaultCampaignMode must be a member of campaignModes"
+
+# E5: levelSpellings rows reference declared canonical levels (scalar slot
+# under a wildcard — probe-verified). The layer-spelling VALUES are pinned by
+# the meta-schema enum (structural authority; the DSL cannot flatten the
+# array-valued slot across two levels).
+- id: material-eligibility-levelspellings-canonical-declared
+  title: "levelSpellings canonical values are declared levels"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: levelSpellings
+  assert:
+    op: allIn
+    path: levelSpellings[*].canonical
+    collectionPath: demandedLevelValues
+  message:
+    template: "levelSpellings canonical must be a member of demandedLevelValues"
+
+# E6: every policy names a declared verdict class.
+- id: material-eligibility-policy-verdicts-declared
+  title: "policy verdict values are declared verdictClasses"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: allIn
+    path: policies[*].verdict
+    collectionPath: verdictClasses
+  message:
+    template: "policy verdict must be a member of verdictClasses"
+
+# E7 (P4, spec §7.3 "the lint forbids the shape"): every authorized-to-bind
+# policy must carry an explicit custodyGuard — the noneIn over
+# demanded.custodyNeverTiers that keeps a catalog/remote tier from ever
+# satisfying a bind. A bind policy WITHOUT the declared guard is the custody-
+# leakage shape (bait §9) and is rejected at the data layer.
+# Shape: item-relative everyItem (the shipped P2/P5 idiom).
+- id: material-eligibility-bind-policies-carry-custody-guard
+  title: "authorized-to-bind policies declare a custodyGuard"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: everyItem
+    collectionPath: policies
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: verdict
+          value: authorized-to-bind
+      - op: exists
+        path: custodyGuard
+  message:
+    template: "an authorized-to-bind policy must declare a custodyGuard (P4: catalog tiers never satisfy a bind)"
+
+# E12 (P4, spec §7.3 "the lint forbids the shape" — FIX-RUN 2 D1, adversarial
+# review l2t2215; FULL-SHAPE pin FIX-RUN 3 D1, adversarial review l2t2335):
+# E7 pinned the guard's PRESENCE only, so the evaluator half's guarantee was
+# contingent on a FREE-FORM guard — probe K/L substituted the custodyGuard with
+# any trivially-true predicate and the custody-never tier bound PASS. This rule
+# pins the guard's FULL SHAPE: every authorized-to-bind custodyGuard must be
+# EXACTLY the noneIn disjointness of the candidate tier against
+# demanded.custodyNeverTiers and NOTHING ELSE — the three pinned keys PLUS the
+# ABSENCE of `itemField`, the only other key the meta-schema's noneIn/allIn
+# predicate branches declare. Without that fourth leg a guard carrying
+# `itemField: <field the collection items lack>` projects an empty member set,
+# so the pinned disjointness PASSES VACUOUSLY (PredicateEvaluator.ts
+# resolveMembershipOperands: an itemField that resolves on no item adds nothing
+# to the allowed set) and the guardrail is neutered by a DECLARED key — the
+# extra-key neutraliser cycle 2 left open (probe N1/N3).
+# THERE IS NO STRUCTURAL HALF: the meta-schema types custodyGuard as the
+# generic #/definitions/predicate $ref — no op/path/collectionPath constraint,
+# and the noneIn/allIn branches declare itemField without
+# additionalProperties:false — so Ajv accepts every guard shape these probes
+# mutate. THIS RULE IS THE ONLY HALF that pins the guard shape.
+# With the FULL shape pinned (three keys + no itemField), the evaluator's
+# disjointness decides BEFORE any assert at any depth can produce a bind PASS.
+# Shape: item-relative everyItem (the shipped P2/P5/E7 idiom).
+- id: material-eligibility-bind-custody-guard-shape-pinned
+  title: "authorized-to-bind custodyGuards are the pinned custodyNeverTiers disjointness"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: everyItem
+    collectionPath: policies
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: verdict
+          value: authorized-to-bind
+      - op: all
+        predicates:
+        - op: equals
+          path: custodyGuard.op
+          value: noneIn
+        - op: equals
+          path: custodyGuard.path
+          value: candidate.tier
+        - op: equals
+          path: custodyGuard.collectionPath
+          value: demanded.custodyNeverTiers
+        - op: not
+          not:
+            op: exists
+            path: custodyGuard.itemField
+  message:
+    template: "an authorized-to-bind policy's custodyGuard must be exactly {op: noneIn, path: candidate.tier, collectionPath: demanded.custodyNeverTiers} with no other key (itemField included — a projection key on a scalar tier collection neuters the disjointness) (P4: the evaluator's custody guarantee is only as strong as the declared guard — its full shape is pinned, never free-form)"
+
+# E8 (P4, spec §7.3 "the lint forbids the shape" — FIX-RUN 1 D1, adversarial
+# review l2t2050; WIDENED FIX-RUN 2 D1, adversarial review l2t2215): an
+# authorized-to-bind policy's `assert` may NEVER name a custody collection
+# (demanded.custodyNeverTiers / demanded.identityOnlyTiers) as POSITIVE
+# EVIDENCE anywhere in its predicate tree, at any nesting depth down to the
+# declared bound below. The forbidden leaf shape (any op):
+#   (a) a custody collection as the membership TARGET (collectionPath) under
+#       any op except the pinned disjointness — noneIn IS the guard form and
+#       is never positive evidence, so it stays legal;
+#   (b) a custody collection as the SELECTED values (path) of a positive
+#       membership op (allIn/in with reversed operands asserts the same claim);
+#   (c) a custody collection as an `in` valuesPath.
+# Cycle-1's structural walk covered only allIn at depth <= 2; probes K/L hid
+# the leak at depth 3 and re-expressed it as a non-allIn leaf. The widened walk
+# recurses everyItem over the assert's `predicates` chains to 6 levels below
+# the assert root and rejects the shape under any op at every level it reaches.
+# DECLARED BOUNDARY: variants hidden deeper than 6 levels or wrapped in `not`
+# are closed by the pinned guard (E12) + the evaluator's guard-before-assert
+# order (evaluate.ts): with the guard SHAPE pinned, a bind PASS REQUIRES the
+# candidate tier to be disjoint from demanded.custodyNeverTiers, so a
+# custody-never tier can never bind regardless of what the assert says.
+- id: material-eligibility-bind-asserts-never-membership-on-custody-collections
+  title: "authorized-to-bind asserts never use custody collections as positive evidence at any depth"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: everyItem
+    collectionPath: policies
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not:
+          op: equals
+          path: verdict
+          value: authorized-to-bind
+      - op: all
+        predicates:
+        - op: not
+          not:
+            op: any
+            predicates:
+            - op: all
+              predicates:
+              - op: any
+                predicates:
+                - op: equals
+                  path: assert.collectionPath
+                  value: demanded.custodyNeverTiers
+                - op: equals
+                  path: assert.collectionPath
+                  value: demanded.identityOnlyTiers
+              - op: not
+                not:
+                  op: equals
+                  path: assert.op
+                  value: noneIn
+            - op: all
+              predicates:
+              - op: any
+                predicates:
+                - op: equals
+                  path: assert.path
+                  value: demanded.custodyNeverTiers
+                - op: equals
+                  path: assert.path
+                  value: demanded.identityOnlyTiers
+              - op: any
+                predicates:
+                - op: equals
+                  path: assert.op
+                  value: allIn
+                - op: equals
+                  path: assert.op
+                  value: in
+            - op: all
+              predicates:
+              - op: equals
+                path: assert.op
+                value: in
+              - op: any
+                predicates:
+                - op: equals
+                  path: assert.valuesPath
+                  value: demanded.custodyNeverTiers
+                - op: equals
+                  path: assert.valuesPath
+                  value: demanded.identityOnlyTiers
+        - op: any
+          predicates:
+          - op: not
+            not:
+              op: nonEmpty
+              path: assert.predicates
+          - op: everyItem
+            collectionPath: assert.predicates
+            assert:
+              op: all
+              predicates:
+              - op: not
+                not:
+                  op: any
+                  predicates:
+                  - op: all
+                    predicates:
+                    - op: any
+                      predicates:
+                      - op: equals
+                        path: collectionPath
+                        value: demanded.custodyNeverTiers
+                      - op: equals
+                        path: collectionPath
+                        value: demanded.identityOnlyTiers
+                    - op: not
+                      not:
+                        op: equals
+                        path: op
+                        value: noneIn
+                  - op: all
+                    predicates:
+                    - op: any
+                      predicates:
+                      - op: equals
+                        path: path
+                        value: demanded.custodyNeverTiers
+                      - op: equals
+                        path: path
+                        value: demanded.identityOnlyTiers
+                    - op: any
+                      predicates:
+                      - op: equals
+                        path: op
+                        value: allIn
+                      - op: equals
+                        path: op
+                        value: in
+                  - op: all
+                    predicates:
+                    - op: equals
+                      path: op
+                      value: in
+                    - op: any
+                      predicates:
+                      - op: equals
+                        path: valuesPath
+                        value: demanded.custodyNeverTiers
+                      - op: equals
+                        path: valuesPath
+                        value: demanded.identityOnlyTiers
+              - op: any
+                predicates:
+                - op: not
+                  not:
+                    op: nonEmpty
+                    path: predicates
+                - op: everyItem
+                  collectionPath: predicates
+                  assert:
+                    op: all
+                    predicates:
+                    - op: not
+                      not:
+                        op: any
+                        predicates:
+                        - op: all
+                          predicates:
+                          - op: any
+                            predicates:
+                            - op: equals
+                              path: collectionPath
+                              value: demanded.custodyNeverTiers
+                            - op: equals
+                              path: collectionPath
+                              value: demanded.identityOnlyTiers
+                          - op: not
+                            not:
+                              op: equals
+                              path: op
+                              value: noneIn
+                        - op: all
+                          predicates:
+                          - op: any
+                            predicates:
+                            - op: equals
+                              path: path
+                              value: demanded.custodyNeverTiers
+                            - op: equals
+                              path: path
+                              value: demanded.identityOnlyTiers
+                          - op: any
+                            predicates:
+                            - op: equals
+                              path: op
+                              value: allIn
+                            - op: equals
+                              path: op
+                              value: in
+                        - op: all
+                          predicates:
+                          - op: equals
+                            path: op
+                            value: in
+                          - op: any
+                            predicates:
+                            - op: equals
+                              path: valuesPath
+                              value: demanded.custodyNeverTiers
+                            - op: equals
+                              path: valuesPath
+                              value: demanded.identityOnlyTiers
+                    - op: any
+                      predicates:
+                      - op: not
+                        not:
+                          op: nonEmpty
+                          path: predicates
+                      - op: everyItem
+                        collectionPath: predicates
+                        assert:
+                          op: all
+                          predicates:
+                          - op: not
+                            not:
+                              op: any
+                              predicates:
+                              - op: all
+                                predicates:
+                                - op: any
+                                  predicates:
+                                  - op: equals
+                                    path: collectionPath
+                                    value: demanded.custodyNeverTiers
+                                  - op: equals
+                                    path: collectionPath
+                                    value: demanded.identityOnlyTiers
+                                - op: not
+                                  not:
+                                    op: equals
+                                    path: op
+                                    value: noneIn
+                              - op: all
+                                predicates:
+                                - op: any
+                                  predicates:
+                                  - op: equals
+                                    path: path
+                                    value: demanded.custodyNeverTiers
+                                  - op: equals
+                                    path: path
+                                    value: demanded.identityOnlyTiers
+                                - op: any
+                                  predicates:
+                                  - op: equals
+                                    path: op
+                                    value: allIn
+                                  - op: equals
+                                    path: op
+                                    value: in
+                              - op: all
+                                predicates:
+                                - op: equals
+                                  path: op
+                                  value: in
+                                - op: any
+                                  predicates:
+                                  - op: equals
+                                    path: valuesPath
+                                    value: demanded.custodyNeverTiers
+                                  - op: equals
+                                    path: valuesPath
+                                    value: demanded.identityOnlyTiers
+                          - op: any
+                            predicates:
+                            - op: not
+                              not:
+                                op: nonEmpty
+                                path: predicates
+                            - op: everyItem
+                              collectionPath: predicates
+                              assert:
+                                op: all
+                                predicates:
+                                - op: not
+                                  not:
+                                    op: any
+                                    predicates:
+                                    - op: all
+                                      predicates:
+                                      - op: any
+                                        predicates:
+                                        - op: equals
+                                          path: collectionPath
+                                          value: demanded.custodyNeverTiers
+                                        - op: equals
+                                          path: collectionPath
+                                          value: demanded.identityOnlyTiers
+                                      - op: not
+                                        not:
+                                          op: equals
+                                          path: op
+                                          value: noneIn
+                                    - op: all
+                                      predicates:
+                                      - op: any
+                                        predicates:
+                                        - op: equals
+                                          path: path
+                                          value: demanded.custodyNeverTiers
+                                        - op: equals
+                                          path: path
+                                          value: demanded.identityOnlyTiers
+                                      - op: any
+                                        predicates:
+                                        - op: equals
+                                          path: op
+                                          value: allIn
+                                        - op: equals
+                                          path: op
+                                          value: in
+                                    - op: all
+                                      predicates:
+                                      - op: equals
+                                        path: op
+                                        value: in
+                                      - op: any
+                                        predicates:
+                                        - op: equals
+                                          path: valuesPath
+                                          value: demanded.custodyNeverTiers
+                                        - op: equals
+                                          path: valuesPath
+                                          value: demanded.identityOnlyTiers
+                                - op: any
+                                  predicates:
+                                  - op: not
+                                    not:
+                                      op: nonEmpty
+                                      path: predicates
+                                  - op: everyItem
+                                    collectionPath: predicates
+                                    assert:
+                                      op: all
+                                      predicates:
+                                      - op: not
+                                        not:
+                                          op: any
+                                          predicates:
+                                          - op: all
+                                            predicates:
+                                            - op: any
+                                              predicates:
+                                              - op: equals
+                                                path: collectionPath
+                                                value: demanded.custodyNeverTiers
+                                              - op: equals
+                                                path: collectionPath
+                                                value: demanded.identityOnlyTiers
+                                            - op: not
+                                              not:
+                                                op: equals
+                                                path: op
+                                                value: noneIn
+                                          - op: all
+                                            predicates:
+                                            - op: any
+                                              predicates:
+                                              - op: equals
+                                                path: path
+                                                value: demanded.custodyNeverTiers
+                                              - op: equals
+                                                path: path
+                                                value: demanded.identityOnlyTiers
+                                            - op: any
+                                              predicates:
+                                              - op: equals
+                                                path: op
+                                                value: allIn
+                                              - op: equals
+                                                path: op
+                                                value: in
+                                          - op: all
+                                            predicates:
+                                            - op: equals
+                                              path: op
+                                              value: in
+                                            - op: any
+                                              predicates:
+                                              - op: equals
+                                                path: valuesPath
+                                                value: demanded.custodyNeverTiers
+                                              - op: equals
+                                                path: valuesPath
+                                                value: demanded.identityOnlyTiers
+                                      - op: any
+                                        predicates:
+                                        - op: not
+                                          not:
+                                            op: nonEmpty
+                                            path: predicates
+                                        - op: everyItem
+                                          collectionPath: predicates
+                                          assert:
+                                            op: all
+                                            predicates:
+                                            - op: not
+                                              not:
+                                                op: any
+                                                predicates:
+                                                - op: all
+                                                  predicates:
+                                                  - op: any
+                                                    predicates:
+                                                    - op: equals
+                                                      path: collectionPath
+                                                      value: demanded.custodyNeverTiers
+                                                    - op: equals
+                                                      path: collectionPath
+                                                      value: demanded.identityOnlyTiers
+                                                  - op: not
+                                                    not:
+                                                      op: equals
+                                                      path: op
+                                                      value: noneIn
+                                                - op: all
+                                                  predicates:
+                                                  - op: any
+                                                    predicates:
+                                                    - op: equals
+                                                      path: path
+                                                      value: demanded.custodyNeverTiers
+                                                    - op: equals
+                                                      path: path
+                                                      value: demanded.identityOnlyTiers
+                                                  - op: any
+                                                    predicates:
+                                                    - op: equals
+                                                      path: op
+                                                      value: allIn
+                                                    - op: equals
+                                                      path: op
+                                                      value: in
+                                                - op: all
+                                                  predicates:
+                                                  - op: equals
+                                                    path: op
+                                                    value: in
+                                                  - op: any
+                                                    predicates:
+                                                    - op: equals
+                                                      path: valuesPath
+                                                      value: demanded.custodyNeverTiers
+                                                    - op: equals
+                                                      path: valuesPath
+                                                      value: demanded.identityOnlyTiers
+  message:
+    template: "an authorized-to-bind policy assert must not use demanded.custodyNeverTiers/demanded.identityOnlyTiers as positive evidence (allIn membership or in-valuesPath) anywhere in its predicate tree (P4: custody-never tiers are never positive evidence; only the pinned noneIn disjointness may name them)"
+
+# E9: identityLevels members are declared referent levels (the identity-purpose
+# discriminator the fact-builder reads — no invented level nouns).
+- id: material-eligibility-identity-levels-are-referent-levels
+  title: "identityLevels members are declared referentLevels"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: identityLevels
+  assert:
+    op: allIn
+    path: identityLevels
+    collectionPath: referentLevels
+  message:
+    template: "identityLevels members must be members of referentLevels"
+
+# E11 (fix-run 1 D2): every identityRolePolicies member names a DECLARED
+# policy id — the identity role tag is single-sourced (identityRole) and
+# attached by ID reference, so a dangling name (a role aimed at a policy that
+# does not exist) is rejected at the data layer. Shape: root allIn against
+# the policy-id wildcard projection (probe-verified).
+- id: material-eligibility-identity-role-policies-declared
+  title: "identityRolePolicies members name declared policy ids"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: identityRolePolicies
+  assert:
+    op: allIn
+    path: identityRolePolicies
+    collectionPath: policies[*].id
+  message:
+    template: "identityRolePolicies members must name declared policy ids (the role tag is attached by id — never a duplicate role literal)"
+
+# E10: every policy declares BOTH arms of the three-state law (§7.1): a
+# requires completeness guard and an assert business predicate. The meta-schema
+# requires the keys; this rule makes an EMPTY/blank arm fail loudly at the
+# data layer (a policy that asserts nothing is a silent pass waiting to happen).
+- id: material-eligibility-policies-carry-both-arms
+  title: "policies declare requires and assert arms"
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: policies
+  assert:
+    op: everyItem
+    collectionPath: policies
+    assert:
+      op: all
+      predicates:
+      - op: exists
+        path: requires
+      - op: exists
+        path: assert
+  message:
+    template: "an eligibility policy must declare both a requires guard and an assert predicate"

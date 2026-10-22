@@ -15,7 +15,14 @@ treeState:
   # verbs and the wire enum (Brad ruling 2026-10-17); both pins re-hashed once.
   # Before/after diff recorded in W2-8-A5g-report.wip-l2t1710.md. Golden
   # fixtures/records unchanged — only the two treeState rule files moved.
-  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: aa57f2e3627ab828d2b7b3180ac04b303cc0989520c6ef087ba3a151ea25a73c}
+  # MATRES-ELIG REBLESS (this item): the vocabulary pin re-hashed ONCE — the
+  # delta is the MATRES-ELIG arg-contract DECLARATION SLOTS (spec §7.5 [Q1]):
+  # add_material.material gains `levels` (allowed referent set) + `preferred`
+  # (panel pre-selection hint, never a filter), and the data declares its
+  # canonical `referentLevels` list the vocabulary lint/meta-schema check
+  # against. No verb, no arg, no strategyOrder, no policy value changed.
+  # Before/after diff recorded in MATRES-ELIG-report.l2t1445-coder1.md.
+  - {path: schema/scientist-intent/scientist-intent-vocabulary.yaml, sha256: 32c5b5b17fc8f38bb8e108db61b8336887a7270bafb079cdde221bebb7af3ba5}
   # W28-OPTIONBIND-1 REBLESS (this item, W28-A5n Q1): the wire schema gained the
   # ADDITIVE optional `ref` on an unresolved candidate entry (the engine's
   # store-backed record handle for tier <= 1 candidates; mint affordances and
@@ -52,7 +59,21 @@ records:
   # in W28-OPTIONBIND1-report.wip-l2t1515.md). Fixture bytes unchanged; every
   # other record unchanged (the mint affordance and lookup-failure arms carry
   # NO ref — anti-fabrication legs 4-6 of resolutionEngine.optionRef.test.ts).
-  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: 5fc65b92754633b95a6b5b81a4803bcf3abbe6f0852a8584a82df0d2b82e5f46}
+  # MATRES-ELIG REBLESS (this item, FIX-RUN 1 D4 re-bless): ambiguous-material
+  # re-blessed for the ADDITIVE eligibility disclosure (§7.4.4, D6) — each
+  # ambiguous-noun candidate entry gained tier, referentLevel, and the
+  # eligibility verdict trio (display/suppress/bind + the policy ids that
+  # decided them). Labels, confidence, ref, and the declared stable order are
+  # UNCHANGED. FIX-RUN 1 D4: the blessed bytes preserve the PRIOR document's
+  # key ORDER (the earlier re-bless had churned serialization order
+  # document-wide — content-additive but diff-hostile); this record is the
+  # prior record with the additive keys merged IN PLACE, so the diff is
+  # additive-only. Fixture bytes unchanged; every other record unchanged (the
+  # mint affordance and lookup-failure arms carry NO disclosure — a candidate
+  # with no eligibility run keeps its pre-ELIG shape byte-identically).
+  # Before/after diff recorded in MATRES-ELIG-report.l2t1445-coder1.md and
+  # MATRES-ELIG-report.l2t1445-coder2-fix1.md.
+  - {name: golden.intent-to-clarification.ambiguous-material, path: __records__/ambiguous-material.golden.json, sha256: c750c1effbf3434d51f740f7728931079ebb30b05b464b8ac64d32a6399caf08}
   - {name: golden.intent-to-clarification.unknown-local-term, path: __records__/unknown-local-term.golden.json, sha256: 0de0df39c5d6f323347c544e78033fa2649167a623f7f983e3769ef9c6a32729}
   - {name: golden.intent-to-clarification.labware-hint-lookup-failure, path: __records__/labware-hint-lookup-failure.golden.json, sha256: 5d994a1978be8c87c88dbae577775186c035760a9a6214fdae01608a9dd86feb}
   - {name: golden.intent-to-clarification.model-unresolved-passthrough, path: __records__/model-unresolved-passthrough.golden.json, sha256: e300b984f3fd963e4cfd685e7c70b4fb860f2ad2397910704e9b8c2a6991a4ca}

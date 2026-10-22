@@ -229,6 +229,14 @@ verbs:
         kind: resolvable
         required: false
         domain: material
+        # MATRES-ELIG [memo Q1, RATIFIED 2026-10-20]: the ALLOWED referent
+        # levels for binding this argument + the time-phase default hint
+        # (preferred is a PANEL pre-selection hint — NEVER a filter, never
+        # suppression). The eligibility evaluator reads these DECLARED slots
+        # through the fact envelope; lint P6/P7 pin preferred ∈ levels and
+        # levels ⊆ referentLevels.
+        levels: [concept, formulation, vendor-product, instance]
+        preferred: concept
       - name: source_name
         kind: scalar
         required: false
@@ -832,6 +840,13 @@ verbs:
       - name: cycles
         kind: quantity
         required: false
+# MATRES-ELIG (spec §7.3, memo Q1 RATIFIED 2026-10-20): the canonical
+# referent-level list declared IN the vocabulary data as the lint authority for
+# every argument's `levels` value (lint P7 allIn against this list — no new
+# level nouns without a vocabulary amendment). The eligibility policy data
+# declares the same five in its own referentLevels slot; the eligibility data
+# test pins the two lists as a SET DIFF (never two local terms for one entity).
+referentLevels: [concept, formulation, vendor-product, instance, aliquot]
 policies:
   strategyOrder:
     - explicit_wells

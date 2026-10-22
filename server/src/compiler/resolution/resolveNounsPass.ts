@@ -54,6 +54,7 @@ export {
   NOT_STATED_REASON,
 } from './declaredOptionalHedgeFold.js';
 import type { BoundNoun, EngineDeps, EngineFailure, EngineOutcome } from './types.js';
+import { loadMaterialEligibilityIfPresent, type MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type { MaterialLevel } from '../../resolve/types.js';
 import type { Pass, PassDiagnostic, PassResult } from '../pipeline/types.js';
 
@@ -97,6 +98,12 @@ export interface ResolveNounsPassDeps {
   termsForSuggestions?: () => Promise<readonly TermLike[]>;
   /** Engine override (tests); defaults to SPINE-3's resolveScientistIntentNouns. */
   resolve?: ResolveNounsEngine;
+  /** MATRES-ELIG (spec §9): the eligibility policy document. Absent ⇒ the pass
+   *  loads the shipped triplet PER call (loadMaterialEligibilityIfPresent —
+   *  never process-cached). Explicit null ⇒ the disclosed off-state (the
+   *  engine's pre-ELIG arms stay inert). A fixture-loaded instance is the
+   *  mutation-proof injection route. */
+  eligibility?: MaterialEligibilityPolicy | null;
   /** SH-QA-1 (OQ1 ruling): producer facts whose fate depends on resolution —
    *  the pass drops a fact iff the engine BINDS its slot (the same identity
    *  join §5.1 applies to model hedges) and appends the survivors AFTER
@@ -431,10 +438,20 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // engine's wantLevel arm (resolutionEngine.ts levelFilter) consumes it.
       const levelFor = (verb: string, argument: string): MaterialLevel | undefined =>
         deps.vocabulary.argContracts(verb).find((a) => a.name === argument)?.level;
+      // MATRES-ELIG (spec §9): the eligibility POLICY document is loaded PER
+      // call, never process-cached (the nounShape law). An absent triplet is a
+      // disclosed off-state (null ⇒ the engine's pre-ELIG arms stay inert and
+      // the compile is byte-identical); a present-but-malformed triplet throws
+      // naming the path. Tests inject a fixture-loaded policy through
+      // ResolveNounsPassDeps.eligibility (the anti-hardcode mutation proof).
+      const eligibility = deps.eligibility !== undefined
+        ? deps.eligibility
+        : loadMaterialEligibilityIfPresent();
       const engineDeps: EngineDeps = {
         adapters,
         strategies: buildStrategyRegistry(),
         levelFor,
+        ...(eligibility !== null ? { eligibility } : {}),
         ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
       };
 

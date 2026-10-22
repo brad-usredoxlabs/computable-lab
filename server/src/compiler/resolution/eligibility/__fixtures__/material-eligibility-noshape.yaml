@@ -1,0 +1,393 @@
+# MATRES-ELIG — material eligibility policy data (spec §7.1/§7.2/§7.3; D1/D4/D5).
+#
+# The three-way acceptability verdicts — eligible-to-DISPLAY / sufficient-to-
+# SUPPRESS-further-search / authorized-to-BIND — as DATA-declared predicates
+# evaluated by the existing lint predicate DSL (exists/nonEmpty/equals/in/
+# allIn/noneIn/everyItem/all/any/not — zero interpreter changes, zero new ops)
+# over the adapter-exposed declared-fact envelope (eligibility/facts.ts).
+#
+# Three-state law (§7.1): a policy's `requires` (evidence-completeness guard)
+# that does not PASS yields INCOMPLETE — never a silent pass; `requires` PASS +
+# `assert` FAIL yields FAIL; both PASS yields PASS. A leaf that cannot be
+# evaluated because its evidence path is absent is INCOMPLETE, never a silent
+# false (evaluate.ts). Every `assert` that reads an evidence path is gated by a
+# `requires` guard FIRST — the allIn/noneIn vacuous-pass law (lint-v1: an empty
+# selection PASSES vacuously) is never leaned on for a missing-evidence case
+# (spec bait §3).
+#
+# Tier legality (§7.3, P4): which spine tiers are legal per (utterance-demanded
+# referent level x campaign mode). `queryTiers` = tiers a review-interaction
+# spine call may fire (physical-instance demands never fire vendor/remote —
+# AC-2); `displayTiers` = tiers eligible-to-DISPLAY; `identityOnlyTiers` =
+# tiers whose result may serve catalog IDENTITY only and never custody/use/
+# attestation evidence (P4). `custodyNeverTiers` rides the envelope and every
+# authorized-to-bind policy declares a custodyGuard THE EVALUATOR READS
+# (evaluate.ts: requires PASS + guard non-PASS => FAIL/INCOMPLETE) AND lint
+# pins it three times: E7 (declared), E12 (EXACTLY the noneIn
+# candidate.tier/demanded.custodyNeverTiers disjointness), E8 (no bind assert
+# may name a custody collection as positive evidence at any depth).
+#
+# Loaded PER call, never process-cached (the nounShape law, resolutionEngine
+# comment; spec §9). Malformed DATA throws naming the path.
+eligibilityVersion: 1
+
+# The five canonical referent levels (campaign header P5 / memo Q1, RATIFIED
+# 2026-10-20). Declared ONCE here as the lint authority for every level value
+# in this file; the vocabulary declares the same five in its own referentLevels
+# slot and the eligibility data test pins the two lists as a SET DIFF (never
+# two local terms for one entity).
+referentLevels: [concept, formulation, vendor-product, instance, aliquot]
+
+# The referent levels whose PURPOSE is catalog IDENTITY (a product-level
+# referent resolved by a vendor/catalog lookup). The fact-builder reads this to
+# decide the tier-legality purpose (identityPurpose) — a generic membership,
+# never a level literal in TS.
+identityLevels: [vendor-product]
+
+# The values a tierLegality row may name as demandedLevel: the canonical five
+# plus the spine's undeclared spelling below (a demand with no vocabulary level
+# policy is a real, honest state — it gets its own legality row).
+demandedLevelValues: [concept, formulation, vendor-product, instance, aliquot, unknown]
+
+# The spine's tier inventory (resolve/types.ts ResolveTier), as data. Tier
+# VALUES inside tierLegality arrays are enum-checked structurally by the meta-
+# schema (Ajv = structural validation authority; the DSL cannot flatten an
+# array-valued slot across two wildcard levels — probe evidence in the
+# MATRES-ELIG report); the root-level lists below are cross-checked by lint.
+spineTiers: [0, 1, 2, 3, 4, 5]
+
+# The layer spellings materialRefFields' LAYER_ALIASES table normalizes TO
+# (MaterialLayer union, as data — the meta-schema enum authority for
+# levelSpellings rows).
+spineLayerValues: [material, material-spec, material-instance, aliquot, vendor-product, unknown]
+
+# Remote tiers (ResolveSpine TierSpec.remote) — data, so no TS tier literal.
+remoteTiers: [3, 4]
+
+# Tiers whose result may NEVER serve as evidence of custody or use (P4). The
+# envelope carries this; every authorized-to-bind policy declares a
+# custodyGuard (lint E7 pins the declaration, lint E12 pins its SHAPE, lint
+# E8 forbids the leaked assert shape).
+custodyNeverTiers: [3, 4]
+
+# The identity role every identity-only tier verdict carries (P4, bait §9):
+# the tag survives from this data into the verdict payload.
+identityRole: catalog-identity
+
+# FIXTURE COPY (mirrors the shipped triplet, fix-run 1 D2): the role tag is
+# single-sourced; the loader injects it by policy id.
+identityRolePolicies: [display-identity-only-role, bind-accepted-identity-reference]
+
+# The clarification reason code elicited when a catalog-shaped token carries no
+# named vendor scope (AC-3: elicit scope, never fabricate product identity —
+# catalog numbers are vendor-scoped, never globally unique).
+catalogScopeReason: vendor-scope-unknown
+
+# The clarification reason code elicited when a band-passing candidate's
+# authorized-to-bind verdict is not PASS (§7.4.2: it falls to clarification as
+# an incomplete possibility, never a bind). Declared as DATA so the engine
+# names it from the document instead of hardcoding a reason literal.
+bindIncompleteReason: eligibility-incomplete
+
+# The spine's undeclared-level spelling (resolve/types.ts MaterialLevel
+# 'unknown'). Declared as DATA so the fact-builder and the policies read the
+# unknown-presence value instead of hardcoding a level literal (bait §5: an
+# unknown level yields INCOMPLETE on bind predicates, never PASS-by-default).
+undeclaredLevelSpelling: unknown
+
+# canonical referent level <-> the layer spellings materialRefFields'
+# LAYER_ALIASES table normalizes TO (materialLayerOf output). The fact-builder
+# derives candidate.referentLevel by composing the EXISTING alias table with
+# THIS table — no new TS level list (OQ-1 ruling: derive through
+# materialRefFields' existing alias table; remote-no-ref stays undeclared).
+levelSpellings:
+  - canonical: concept
+    layerSpellings: [material]
+  - canonical: formulation
+    layerSpellings: [material-spec]
+  - canonical: vendor-product
+    layerSpellings: [vendor-product]
+  - canonical: instance
+    layerSpellings: [material-instance]
+  - canonical: aliquot
+    layerSpellings: [aliquot]
+  - canonical: unknown
+    layerSpellings: [unknown]
+
+# Campaign mode is a policy-data KEY only (D5, OQ-2 ruled): a single ratified
+# default this task; no mode system, no surface-inference. Absent mode ⇒
+# defaultCampaignMode.
+campaignModes: [planning]
+defaultCampaignMode: planning
+
+# The three verdict classes (lint authority for policies[*].verdict).
+verdictClasses: [eligible-to-display, sufficient-to-suppress, authorized-to-bind]
+
+# Catalog-shaped token detection is DATA (the nounShape precedent — loaded per
+# call). A token matching a shape with NO named vendor scope elicits vendor
+# scope; shape alone never invents vendor scope (third-party §4).
+catalogShape:
+  - '^[A-Z]+-[0-9]{3,}$'
+
+# Purpose-based tier legality per (utterance-demanded referent level x campaign
+# mode).
+#   instance/aliquot demanded  => remote tiers {3,4} NOT legal, not even for
+#     display (case 3: a physical bottle is never answered by a catalog lookup
+#     — AC-2).
+#   vendor-product demanded    => tiers {0..4} legal, tier-3/4 output
+#     identity-role-only (never custody evidence — P4).
+#   concept/formulation demanded => query tiers {0,1,2}; tiers {3,4} legal only
+#     for identity-clarification DISPLAY (eligible-to-DISPLAY), never
+#     sufficient-to-SUPPRESS (§7.3).
+#   unknown demanded (no single demanded level declared) => today's compile
+#     legality (local tiers + mint query); remote tiers display-only.
+tierLegality:
+  - demandedLevel: instance
+    mode: planning
+    queryTiers: [0, 1, 2, 5]
+    displayTiers: [0, 1, 2, 5]
+    identityOnlyTiers: []
+  - demandedLevel: aliquot
+    mode: planning
+    queryTiers: [0, 1, 2, 5]
+    displayTiers: [0, 1, 2, 5]
+    identityOnlyTiers: []
+  - demandedLevel: vendor-product
+    mode: planning
+    queryTiers: [0, 1, 2, 3, 4, 5]
+    displayTiers: [0, 1, 2, 3, 4, 5]
+    identityOnlyTiers: [3, 4]
+  - demandedLevel: concept
+    mode: planning
+    queryTiers: [0, 1, 2]
+    displayTiers: [0, 1, 2, 3, 4]
+    identityOnlyTiers: [3, 4]
+  - demandedLevel: formulation
+    mode: planning
+    queryTiers: [0, 1, 2]
+    displayTiers: [0, 1, 2, 3, 4]
+    identityOnlyTiers: [3, 4]
+  - demandedLevel: unknown
+    mode: planning
+    queryTiers: [0, 1, 2, 5]
+    displayTiers: [0, 1, 2, 3, 4, 5]
+    identityOnlyTiers: [3, 4]
+
+# The eligibility policy registry. Each entry: verdict class, optional `when`
+# applicability guard (over the envelope), `requires` completeness guard
+# (not PASS ⇒ INCOMPLETE), `assert` business predicate (FAIL ⇒ FAIL), and for
+# every bind policy a declared `custodyGuard` (lint E7). Discriminators are
+# DECLARED envelope facts (demanded.levelDeclared / candidate.levelDeclared —
+# presence booleans the fact-builder computes against the DATA's
+# undeclaredLevelSpelling), never level literals in TS.
+policies:
+  # DISPLAY: a candidate is display-eligible when its tier is legal for the
+  # demanded level's display set. Missing display legality ⇒ INCOMPLETE.
+  - id: display-tier-legal
+    verdict: eligible-to-display
+    requires:
+      op: exists
+      path: demanded.displayTiers
+    assert:
+      op: allIn
+      path: candidate.tier
+      collectionPath: demanded.displayTiers
+
+  # DISPLAY (identity-only tiers, P4): a remote/catalog hit displayed for an
+  # identity purpose carries the identity role tag from this data into the
+  # verdict payload (bait §9). Applicable only when the candidate's tier IS an
+  # identity-only tier — otherwise it is not applicable and the ordinary
+  # display policy decides.
+  - id: display-identity-only-role
+    verdict: eligible-to-display
+    when:
+      op: all
+      predicates:
+        - op: nonEmpty
+          path: demanded.identityOnlyTiers
+        - op: allIn
+          path: candidate.tier
+          collectionPath: demanded.identityOnlyTiers
+    requires:
+      op: nonEmpty
+      path: demanded.identityOnlyTiers
+    assert:
+      op: allIn
+      path: candidate.tier
+      collectionPath: demanded.identityOnlyTiers
+
+  # SUPPRESS (no single demanded level declared — unconstrained demand):
+  # today's presence law, declared as data: a real (curie-carrying) in-band
+  # candidate is sufficient to stop further search. Backwards-compatible
+  # (memo Q1: "Absent = unconstrained (today's behavior)").
+  - id: suppress-unconstrained-presence
+    verdict: sufficient-to-suppress
+    when:
+      op: equals
+      path: demanded.levelDeclared
+      value: false
+    requires:
+      op: exists
+      path: candidate.curie
+    assert:
+      op: exists
+      path: candidate.curie
+
+  # SUPPRESS (single demanded level declared): suppression requires the
+  # candidate's OWN declared referent level to EQUAL the demanded level AND to
+  # be a member of the allowed set. An approximate-level local candidate FAILS
+  # this against an exact demanded-level demand — it can no longer suppress the
+  # search (AC-1: the observed defect's code-level root). An undeclared
+  # candidate level is MISSING EVIDENCE (requires names it), never a silent
+  # mismatch and never a pass.
+  - id: suppress-demanded-level-match
+    verdict: sufficient-to-suppress
+    when:
+      op: equals
+      path: demanded.levelDeclared
+      value: true
+    requires:
+      op: all
+      predicates:
+        - op: nonEmpty
+          path: demanded.demandedLevelSet
+        - op: equals
+          path: candidate.levelDeclared
+          value: true
+    assert:
+      op: all
+      predicates:
+        - op: allIn
+          path: candidate.referentLevel
+          collectionPath: demanded.demandedLevelSet
+        - op: any
+          predicates:
+            - op: equals
+              path: demanded.allowedDeclared
+              value: false
+            - op: allIn
+              path: candidate.referentLevel
+              collectionPath: demanded.allowedLevels
+
+  # BIND (no single demanded level declared): today's band-only bind, declared
+  # as data — a real identity (curie), never a mint, and never a custody-never
+  # tier (P4).
+  - id: bind-unconstrained-identity
+    verdict: authorized-to-bind
+    when:
+      op: equals
+      path: demanded.levelDeclared
+      value: false
+    custodyGuard:
+      op: noneIn
+      path: candidate.tier
+      collectionPath: demanded.custodyNeverTiers
+    requires:
+      op: all
+      predicates:
+        - op: exists
+          path: candidate.curie
+        - op: exists
+          path: demanded.custodyNeverTiers
+    assert:
+      op: all
+      predicates:
+        - op: exists
+          path: candidate.curie
+        - op: noneIn
+          path: candidate.tier
+          collectionPath: demanded.custodyNeverTiers
+
+  # BIND (single demanded level declared): the candidate's own DECLARED level
+  # must equal the demanded level and sit in the allowed set, and its tier must
+  # be disjoint from the demanded identity-only tiers AND from the custody-never
+  # tiers (P4: a bind is custody-adjacent evidence use; catalog tiers never
+  # satisfy it — §8.4: a raw remote hit is never bindable, only an accepted
+  # reference is). A band-passing candidate with missing evidence (undeclared
+  # level, no curie, no legality row) lands INCOMPLETE — an incomplete
+  # possibility, never a bind (§7.4.2, AC-4).
+  - id: bind-demanded-level-and-custody-guard
+    verdict: authorized-to-bind
+    when:
+      op: equals
+      path: demanded.levelDeclared
+      value: true
+    custodyGuard:
+      op: noneIn
+      path: candidate.tier
+      collectionPath: demanded.custodyNeverTiers
+    requires:
+      op: all
+      predicates:
+        - op: nonEmpty
+          path: demanded.demandedLevelSet
+        - op: equals
+          path: candidate.levelDeclared
+          value: true
+        - op: exists
+          path: candidate.curie
+        - op: nonEmpty
+          path: demanded.identityOnlyTiers
+        - op: nonEmpty
+          path: demanded.custodyNeverTiers
+    assert:
+      op: all
+      predicates:
+        - op: allIn
+          path: candidate.referentLevel
+          collectionPath: demanded.demandedLevelSet
+        - op: any
+          predicates:
+            - op: equals
+              path: demanded.allowedDeclared
+              value: false
+            - op: allIn
+              path: candidate.referentLevel
+              collectionPath: demanded.allowedLevels
+        - op: noneIn
+          path: candidate.tier
+          collectionPath: demanded.identityOnlyTiers
+        - op: noneIn
+          path: candidate.tier
+          collectionPath: demanded.custodyNeverTiers
+
+  # BIND (identity purpose, accepted-reference route, §8.3): an identity-
+  # purpose demand binds an ACCEPTED reference (the enrichment selection landed
+  # as an accepted local record, tier 1) whose declared level equals the
+  # demanded level and whose tier is disjoint from the custody-never tiers. The
+  # identity role tag survives from this data into the verdict payload (bait
+  # §9). Tier-4 enrichment NEVER participates in compilation directly (§8.3).
+  - id: bind-accepted-identity-reference
+    verdict: authorized-to-bind
+    when:
+      op: all
+      predicates:
+        - op: equals
+          path: demanded.identityPurpose
+          value: true
+        - op: equals
+          path: demanded.levelDeclared
+          value: true
+    custodyGuard:
+      op: noneIn
+      path: candidate.tier
+      collectionPath: demanded.custodyNeverTiers
+    requires:
+      op: all
+      predicates:
+        - op: exists
+          path: candidate.curie
+        - op: equals
+          path: candidate.levelDeclared
+          value: true
+        - op: exists
+          path: demanded.custodyNeverTiers
+    assert:
+      op: all
+      predicates:
+        - op: allIn
+          path: candidate.referentLevel
+          collectionPath: demanded.demandedLevelSet
+        - op: noneIn
+          path: candidate.tier
+          collectionPath: demanded.custodyNeverTiers
