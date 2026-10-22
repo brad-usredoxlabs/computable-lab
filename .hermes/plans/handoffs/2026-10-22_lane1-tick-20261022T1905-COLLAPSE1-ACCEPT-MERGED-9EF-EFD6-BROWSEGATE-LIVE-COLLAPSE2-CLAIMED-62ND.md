@@ -113,3 +113,21 @@ Carried open (unchanged): 262, 236, 258 + standing list above. CLEARED: 260, 261
   started 18:49; expected 2-4h.
 - Lane stack :3092/:5192 200/200 post-merge restart (mine). Brad's :3001/:5174 untouched.
 - Trunk 9efeffd6 + this handoff commit. No architect live. Scout slot free.
+
+## ADDENDUM (same tick, ~19:15) — browser gate RESOLVED: COLLAPSE-1 DONE
+
+- Tier-1 gate exited VERDICT: accept but wrote an EMPTY shots/ dir (trail referenced
+  screenshots that don't exist) — false-accept class (wave-2 reliability rule).
+- Per SOUL 6c: no blind re-shot. ORCH-AUTHORED Playwright probe
+  (lanes/1/scripts/orch-gate-probe-collapse1-l1t1845.cjs) re-captured every criterion at
+  9efeffd6: /runs, deck, /registry(+reload), /lab/equipment — real screenshots, 0 console
+  errors, equipment collection populated (vision-confirmed by the orchestrator). Deck's 6
+  console 404s are probe-fabricated record ids, not a page defect. Orch judged the
+  artifacts: ACCEPT. Receipts: .../2026-10-22_18-45-00/orch-verify/ (ORCH-VERDICT.md +
+  trail.json + 5 shots). AS-ORCH-L1-266 recorded (harness suspect flagged).
+- COLLAPSE-1 MARKED DONE in the task list. The open obligation pinned above is CLOSED.
+- INSTR-READCHAIN-1 spec-composer DISPATCHED (systemd cl-l1-speccomp-readchain-l1t1910,
+  thunderbeast, draft path .hermes/plans/drafts/DRAFT-2026-10-22T1915-INSTR-READCHAIN-1-
+  spec.md, log logs/speccomposer-readchain-l1t1910.log, expected ~30-60 min; scope pinned
+  to ruling §4 verbatim, minting = design-decision flag, no coder authority).
+- Remaining live at exit: COLLAPSE-2 coder (fleet lock ours), readchain composer.
