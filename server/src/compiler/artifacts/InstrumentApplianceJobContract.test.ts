@@ -39,7 +39,7 @@ import { createRecordStore, RecordStoreImpl } from '../../store/RecordStoreImpl.
 import { evaluateDeclaredCapabilityGate } from '../../capabilities/DeclaredCapabilityGate.js';
 import { createGeminiEmActiveReadJob } from './InstrumentApplianceJob.js';
 import type { InstrumentRunFile } from './InstrumentRunFile.js';
-import type { SchemaEntry } from '../../schema/SchemaLoader.js';
+import type { SchemaEntry } from '../../schema/types.js';
 
 const REPO_ROOT = join(new URL('.', import.meta.url).pathname, '..', '..', '..');
 const SCHEMA_DIR = join(REPO_ROOT, 'schema');
@@ -73,7 +73,10 @@ beforeAll(async () => {
   testDir = await mkdtemp(join(tmpdir(), `ic1f1-appliance-${randomUUID()}`));
   await mkdir(join(testDir, 'records', 'inbox'), { recursive: true });
   const repo = createLocalRepoAdapter({ basePath: testDir });
-  store = createRecordStore(repo, validator, lintEngine);
+  // The store sees the git seed corpus (equipment / equipment-capability /
+  // verb-definition): the accept leg proves the ref names a record the CORPUS
+  // declares, not a test-invented fixture.
+  store = createRecordStore(repo, validator, lintEngine, { seedDir: join(REPO_ROOT, 'records', 'seed') });
 }, 120000);
 
 afterAll(async () => {

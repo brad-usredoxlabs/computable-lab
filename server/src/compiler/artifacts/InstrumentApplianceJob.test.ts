@@ -37,8 +37,10 @@ describe('InstrumentApplianceJob', () => {
       adapterId: 'molecular_devices_gemini',
       instrumentRef: {
         kind: 'record',
-        id: 'instrument/gemini-em-plate-reader',
-        type: 'instrument',
+        // INSTR-COLLAPSE-1 FIX-1: the ref TARGET is the seed-declared
+        // equipment record (EQP-PLATE-READER), not the retired instrument kind.
+        id: 'EQP-PLATE-READER',
+        type: 'equipment',
       },
       outputPath: 'records/inbox/gemini-em-active-read-1.csv',
       parameters: {
