@@ -1,5 +1,6 @@
 import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
+import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { basename } from 'node:path';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
@@ -170,6 +171,21 @@ export class MeasurementService {
         parsedAt,
       },
     };
+
+    // INSTR-COLLAPSE-1 C2 (OQ-1): the declared capability gate. The measurement
+    // schema's equipmentRef slot declares x-capability-gate; this call site is
+    // the policy-free interpreter — it rejects the write when the equipment
+    // does not declare the verb the producing read event names. With an
+    // unannotated schema (e.g. a test fixture) the gate is inert by design.
+    const gateViolation = await evaluateDeclaredCapabilityGate({
+      payload: payload as unknown as Record<string, unknown>,
+      schemaId: MEASUREMENT_SCHEMA_ID,
+      validator: this.ctx.validator,
+      store: this.ctx.store,
+    });
+    if (gateViolation) {
+      throw new MeasurementServiceError(gateViolation.code, gateViolation.message, 400);
+    }
 
     const result = await this.ctx.store.create({
       envelope: {

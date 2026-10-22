@@ -116,6 +116,32 @@ function gateAnnotation(prop: Record<string, unknown>): Record<string, unknown> 
   return gate && typeof gate === 'object' ? (gate as Record<string, unknown>) : undefined;
 }
 
+/**
+ * Find a property definition ANYWHERE in the schema tree. The contract names
+ * the property; the test must not hardcode a brittle path that shifts with
+ * schema nesting ($defs maps are keyed by def name, not a structural key, so
+ * the walk descends every object value generically).
+ */
+function findProperty(schemaObj: Record<string, unknown>, name: string): Record<string, unknown> | undefined {
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): Record<string, unknown> | undefined => {
+    if (!node || typeof node !== 'object' || Array.isArray(node) || seen.has(node)) return undefined;
+    seen.add(node);
+    const record = node as Record<string, unknown>;
+    const properties = record.properties;
+    if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+      const direct = (properties as Record<string, unknown>)[name];
+      if (direct && typeof direct === 'object' && !Array.isArray(direct)) return direct as Record<string, unknown>;
+    }
+    for (const value of Object.values(record)) {
+      const found = walk(value);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return walk(schemaObj);
+}
+
 // ---------------------------------------------------------------------------
 // (A) the contract is DECLARED in the shipped YAML
 // ---------------------------------------------------------------------------
@@ -144,9 +170,7 @@ describe('C2 declared contract: refs are pinned to equipment and gated slots dec
   });
 
   it('graph-component-instance instruments[].instrumentRef is pinned to type equipment (H3)', () => {
-    const instruments = props(schema(GRAPH_COMPONENT_INSTANCE_SCHEMA_ID)).instruments;
-    const items = (instruments?.items ?? {}) as Record<string, unknown>;
-    expect(pinnedType(props(items).instrumentRef ?? {})).toBe('equipment');
+    expect(pinnedType(findProperty(schema(GRAPH_COMPONENT_INSTANCE_SCHEMA_ID), 'instrumentRef') ?? {})).toBe('equipment');
   });
 
   it('gemini-active-read-request instrumentRef is pinned to type equipment (H3)', () => {
@@ -158,7 +182,7 @@ describe('C2 declared contract: refs are pinned to equipment and gated slots dec
   });
 
   it('equipment.schema.yaml RETIRES its reciprocal instrumentRef (memo §5 defect)', () => {
-    expect(props(schema(EQUIPMENT_SCHEMA_ID)).instrumentRef).toBeUndefined();
+    expect(findProperty(schema(EQUIPMENT_SCHEMA_ID), 'instrumentRef')).toBeUndefined();
   });
 
   it('equipment.ui.yaml RETIRES the Linked Instrument field (refKind: instrument)', async () => {
@@ -173,18 +197,17 @@ describe('C2 declared contract: refs are pinned to equipment and gated slots dec
   });
 
   it('labware-instance location names equipment as the resolution target (word survives)', () => {
-    const location = props(schema(LABWARE_INSTANCE_SCHEMA_ID)).location as Record<string, unknown>;
-    const ref = (location?.properties as Record<string, unknown>)?.ref as Record<string, unknown>;
+    const ref = findProperty(schema(LABWARE_INSTANCE_SCHEMA_ID), 'ref') as Record<string, unknown> | undefined;
     expect(String(ref?.description ?? '')).toContain('equipment');
   });
 
   it('experiment.instruments convenience list retargets its description to equipment', () => {
-    const instruments = props(schema(EXPERIMENT_SCHEMA_ID)).instruments as Record<string, unknown>;
+    const instruments = findProperty(schema(EXPERIMENT_SCHEMA_ID), 'instruments') as Record<string, unknown> | undefined;
     expect(String(instruments?.description ?? '')).toContain('equipment');
   });
 
   it('run-timeline.instrument display field names equipment as its resolution target', () => {
-    const instrument = props(schema(RUN_TIMELINE_SCHEMA_ID)).instrument as Record<string, unknown>;
+    const instrument = findProperty(schema(RUN_TIMELINE_SCHEMA_ID), 'instrument') as Record<string, unknown> | undefined;
     expect(String(instrument?.description ?? '')).toContain('equipment');
   });
 });
@@ -372,7 +395,8 @@ describe('C2 capability gate: rejects a kind-correct equipment WITHOUT the verb 
     const { evaluateDeclaredCapabilityGate } = await gateModule();
     const stripped = structuredClone(schema(MEASUREMENT_SCHEMA_ID));
     delete (props(stripped).equipmentRef as Record<string, unknown>)['x-capability-gate'];
-    const strippedId = `${MEASUREMENT_SCHEMA_ID}#unannotated`;
+    const strippedId = `${MEASUREMENT_SCHEMA_ID}-unannotated`;
+    stripped.$id = strippedId;
     validator.addSchema(stripped as never, strippedId);
     const result = await evaluateDeclaredCapabilityGate({
       payload: measurementPayload('EQP-IC1-SHAKER'),

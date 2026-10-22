@@ -47,6 +47,16 @@ properties:
         kind: { const: record }
         type: { const: equipment }
     description: "Which equipment performed the measurement."
+    # INSTR-COLLAPSE-1 C2 (OQ-1 decision (a)): the capability requirement is
+    # DECLARED on the ref slot it governs (x-jsonld ContextBuilder.ts:154 and
+    # verb-definition derivedFrom.fn precedents — data names the resolver).
+    # Interpreted policy-free by server/src/capabilities/DeclaredCapabilityGate.ts;
+    # the verb comes from the producing READ EVENT's data, never a TS literal.
+    x-capability-gate:
+      verbFrom:
+        resolver: read-event-verb
+        path: readEventRef
+        graphPath: eventGraphRef
 
   labwareInstanceRef:
     $ref: "./datatypes/ref.schema.yaml"

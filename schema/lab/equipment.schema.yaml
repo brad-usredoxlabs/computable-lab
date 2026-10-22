@@ -45,14 +45,10 @@ properties:
             type: string
             pattern: "^CL:"
 
-  instrumentRef:
-    description: "Optional link to instrument record when this equipment is also a measuring device."
-    allOf:
-    - $ref: "./datatypes/ref.schema.yaml"
-    - type: object
-      properties:
-        kind: { const: record }
-        type: { const: instrument }
+  # INSTR-COLLAPSE-1 C2: instrumentRef RETIRED here — the reciprocal
+  # equipment->instrument link was the memo §5 defect (two asset truths for
+  # one machine). Measurement capability is declared on equipment-class +
+  # equipment-capability, not by a back-pointer.
 
   manufacturer:
     type: string

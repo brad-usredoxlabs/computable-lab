@@ -167,6 +167,31 @@ export class AjvValidator implements Validator {
     if (opts.addFormats) {
       addFormats(this.ajv);
     }
+
+    // INSTR-COLLAPSE-1 C2 (OQ-1): `x-capability-gate` is a DECLARATIVE
+    // annotation (precedent: x-jsonld read by ContextBuilder.ts). Ajv strict
+    // mode rejects unknown keywords, so the annotation keyword is registered
+    // ONCE here as startup configuration — it validates the annotation's
+    // SHAPE only and asserts nothing about data. The policy-free interpreter
+    // is server/src/capabilities/DeclaredCapabilityGate.ts.
+    this.ajv.addKeyword({
+      keyword: 'x-capability-gate',
+      metaSchema: {
+        type: 'object',
+        required: ['verbFrom'],
+        properties: {
+          verbFrom: {
+            type: 'object',
+            required: ['resolver', 'path'],
+            properties: {
+              resolver: { type: 'string' },
+              path: { type: 'string' },
+              graphPath: { type: 'string' },
+            },
+          },
+        },
+      },
+    });
   }
   
   /**

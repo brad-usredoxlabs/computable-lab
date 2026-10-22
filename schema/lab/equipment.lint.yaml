@@ -23,7 +23,8 @@ authoring:
   guardWhenChanged:
     - name
     - equipmentClassRef
-    - instrumentRef
+    # INSTR-COLLAPSE-1 C2: `instrumentRef` entry gone — the reciprocal
+    # equipment->instrument property was retired from the schema.
     - manufacturer
     - model
     - serialNumber

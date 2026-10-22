@@ -557,7 +557,7 @@ export function ReuseAuthoringPanel({
       if (instanceInstrumentRole.trim() && instanceInstrumentRefId.trim()) {
         bindings.instruments = [{
           roleId: instanceInstrumentRole.trim(),
-          instrumentRef: toRecordRef(instanceInstrumentRefId.trim(), 'instrument', instanceInstrumentRefId.trim()),
+          instrumentRef: toRecordRef(instanceInstrumentRefId.trim(), 'equipment', instanceInstrumentRefId.trim()),
         }]
       }
       if (instanceParamName.trim()) {
@@ -938,7 +938,7 @@ export function ReuseAuthoringPanel({
           </div>
           <div className="row two">
             <div><label>Instrument Role</label><input value={instanceInstrumentRole} onChange={(e) => setInstanceInstrumentRole(e.target.value)} disabled={busy} /></div>
-            <div><label>Instrument Ref ID</label><input value={instanceInstrumentRefId} onChange={(e) => setInstanceInstrumentRefId(e.target.value)} disabled={busy} placeholder="INS-..." /></div>
+            <div><label>Instrument Ref ID</label><input value={instanceInstrumentRefId} onChange={(e) => setInstanceInstrumentRefId(e.target.value)} disabled={busy} placeholder="EQP-..." /></div>
           </div>
           <div className="row two">
             <div><label>Parameter Name</label><input value={instanceParamName} onChange={(e) => setInstanceParamName(e.target.value)} disabled={busy} placeholder="incubation_min" /></div>
