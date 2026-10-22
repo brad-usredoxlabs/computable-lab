@@ -105,30 +105,43 @@ function loadCoverage(): { engine: LifecycleEngine; coverage: KindLifecycleRegis
 
 function seedRecords(): RecordEnvelope[] {
   return [
-    // Governed-skipped: already carries the lifecycle (idempotency key).
+    // Governed AND still carrying the retired status -> strip target (QMS8-C D4).
     envelope('EQP-GOVERNED', 'equipment.schema.yaml', {
       kind: 'equipment', id: 'EQP-GOVERNED', name: 'Governed pump', status: 'active',
       lifecycleId: 'registry-ops', state: 'active',
     }),
-    // Planned via the DATA status map: status active -> state active.
+    // Planned via the declared defaultState. QMS8-C (D5/D4 tail): the status-map
+    // leg is retired WITH its data — an ungoverned covered record lands the
+    // coverage entry's declared default, and post-C3 a retired-kind create
+    // cannot carry a status at all (the schema refuses it), so this is the
+    // shape such a record actually has.
     envelope('EQP-PLAIN', 'equipment.schema.yaml', {
-      kind: 'equipment', id: 'EQP-PLAIN', name: 'Plain pump', status: 'active',
+      kind: 'equipment', id: 'EQP-PLAIN', name: 'Plain pump',
     }),
-    // Planned via the DATA default: no domain status at all.
+    // Planned via the declared defaultState: no domain status at all.
     envelope('EQC-PLAIN', 'equipment-class.schema.yaml', {
       kind: 'equipment-class', id: 'EQC-PLAIN', name: 'Plain class',
     }),
-    // Planned via the DATA default: status not in the map (never guessed).
+    // Skipped, never guessed: ungoverned AND carrying a domain status. With the
+    // migration block retired there is NO declared status→state mapping — the
+    // runner reports it instead of inventing one (bait #5's surviving form).
     envelope('PER-PLAIN', 'person.schema.yaml', {
       kind: 'person', id: 'PER-PLAIN', displayName: 'Plain person', status: 'inactive',
     }),
-    // Blocked: append-only via the injected kind list (covered kind).
-    envelope('CAL-APPENDONLY', 'calibration-record.schema.yaml', {
-      kind: 'calibration-record', id: 'CAL-APPENDONLY', status: 'valid',
+    // Skipped, never guessed: same posture for an orthogonal-vocabulary kind.
+    envelope('CAL-PLAIN', 'calibration-record.schema.yaml', {
+      kind: 'calibration-record', id: 'CAL-PLAIN', status: 'valid',
     }),
-    // Blocked: content-locked store refusal (reported, never forced).
+    // Blocked: append-only via the injected kind list (covered kind, ungoverned,
+    // status-less — planned via the declared default).
+    envelope('CAL-APPENDONLY', 'calibration-record.schema.yaml', {
+      kind: 'calibration-record', id: 'CAL-APPENDONLY',
+    }),
+    // Blocked: content-locked store refusal (reported, never forced). Governed
+    // AND carrying the retired status -> a strip target (QMS8-C D4).
     envelope('EQP-LOCKED', 'equipment.schema.yaml', {
       kind: 'equipment', id: 'EQP-LOCKED', name: 'Locked pump', status: 'active',
+      lifecycleId: 'registry-ops', state: 'active',
     }),
     // Never touched: an uncovered kind must not even be listed.
     envelope('EVT-1', 'audit-event.schema.yaml', {
@@ -162,20 +175,27 @@ describe('migrateRecordLifecycles: dry-run-by-default, coverage-driven (V1)', ()
     // the old "any lifecycleId" key; the coverage DATA now declares equipment's
     // domain status retired, so a GOVERNED record still carrying it is a
     // planned strip. The ungoverned records keep planning as before.
+    // QMS8-C (D5/D4 tail): the status-map DATA is retired. An ungoverned
+    // status-LESS covered record plans via the coverage entry's declared
+    // defaultState; an ungoverned record that still CARRIES a domain status has
+    // no declared mapping any more and is SKIPPED, never guessed (bait #5).
     const plannedIds = report.planned.map(p => p.recordId).sort()
-    expect(plannedIds).toEqual(['CAL-APPENDONLY', 'EQC-PLAIN', 'EQP-GOVERNED', 'EQP-LOCKED', 'EQP-PLAIN', 'PER-PLAIN'])
+    expect(plannedIds).toEqual(['CAL-APPENDONLY', 'EQC-PLAIN', 'EQP-GOVERNED', 'EQP-LOCKED', 'EQP-PLAIN'])
     const byId = new Map(report.planned.map(p => [p.recordId, p]))
     expect(byId.get('EQP-GOVERNED')!.basis).toBe('status-strip')
     expect(byId.get('EQP-GOVERNED')!.toState).toBe('active')
     expect(lines.some(l => l.startsWith('STRIP EQP-GOVERNED: domain status retired (state active)'))).toBe(true)
-    // The status map is DATA: active-status lands active, unmapped/status-less
-    // land the declared default — the runner never guesses per-kind (bait #5).
-    expect(byId.get('EQP-PLAIN')!.toState).toBe('active')
+    // No status map exists any more: ungoverned status-less records land the
+    // declared defaultState — the runner never guesses per-kind.
+    expect(byId.get('EQP-PLAIN')!.toState).toBe('draft')
     expect(byId.get('EQC-PLAIN')!.toState).toBe('draft')
-    expect(byId.get('PER-PLAIN')!.toState).toBe('draft')
-    // Nothing skips any more: the one previously-skipped record is now a strip
-    // target, which is exactly the set the strip leg exists to process.
-    expect(report.skipped).toEqual([])
+    expect(byId.get('CAL-APPENDONLY')!.toState).toBe('draft')
+    // The never-guess pin survives in its stronger form: ungoverned records
+    // carrying a domain status are REPORTED, not mapped.
+    const skippedIds = report.skipped.map(s => s.recordId).sort()
+    expect(skippedIds).toEqual(['CAL-PLAIN', 'PER-PLAIN'])
+    expect(report.skipped.every(s => s.reason.includes('no declared mapping'))).toBe(true)
+    expect(lines.some(l => l.startsWith('SKIP PER-PLAIN: no declared mapping'))).toBe(true)
     // Uncovered kinds are never listed, never touched.
     expect(report.planned.some(p => p.kind === 'audit-event')).toBe(false)
     expect(lines.some(l => l.includes('DRY RUN'))).toBe(true)
@@ -198,14 +218,19 @@ describe('migrateRecordLifecycles: dry-run-by-default, coverage-driven (V1)', ()
     expect(report.blocked.map(b => b.recordId).sort()).toEqual(['CAL-APPENDONLY', 'EQP-LOCKED'])
     expect(report.blocked.every(b => typeof b.reason === 'string' && b.reason.length > 0)).toBe(true)
     // EQP-GOVERNED now applies too: its strip is a sanctioned write (QMS8-C D4).
-    expect(report.applied.map(a => a.recordId).sort()).toEqual(['EQC-PLAIN', 'EQP-GOVERNED', 'EQP-PLAIN', 'PER-PLAIN'])
+    // QMS8-C (D5/D4 tail): PER-PLAIN is no longer applied — with the status-map
+    // data retired there is no declared state for an ungoverned record that
+    // still carries a domain status, so it is skipped, never guessed.
+    expect(report.applied.map(a => a.recordId).sort()).toEqual(['EQC-PLAIN', 'EQP-GOVERNED', 'EQP-PLAIN'])
     expect(lines.some(l => l.startsWith('BLOCKED CAL-APPENDONLY:'))).toBe(true)
     expect(lines.some(l => l.startsWith('BLOCKED EQP-LOCKED:'))).toBe(true)
 
     // Blocked records keep their exact pre-run envelope (never forced).
+    // QMS8-C (D4): EQP-LOCKED is now a governed STRIP target — the refused
+    // write means it keeps lifecycleId, state AND its domain status verbatim.
     const locked = store.records.get('EQP-LOCKED')!.payload as Record<string, unknown>
-    expect(locked.lifecycleId).toBeUndefined()
-    expect(locked.state).toBeUndefined()
+    expect(locked.lifecycleId).toBe('registry-ops')
+    expect(locked.state).toBe('active')
     const cal = store.records.get('CAL-APPENDONLY')!.payload as Record<string, unknown>
     expect(cal.lifecycleId).toBeUndefined()
     // A BLOCKED strip keeps its domain status verbatim (bait #2).
@@ -232,20 +257,24 @@ describe('migrateRecordLifecycles: dry-run-by-default, coverage-driven (V1)', ()
     expect(write.skipValidation).toBeUndefined()
     expect(write.skipLint).toBeUndefined()
 
-    // ids/refs/domain statuses/authorship preserved: only lifecycleId+state added.
+    // ids/refs/authorship preserved: only lifecycleId+state added.
     // QMS8-C (D4): for a kind the DATA declares retired, the retired field is
     // omitted on the governed write too (a record must not land carrying a field
-    // the item is retiring). A NON-retired kind keeps its status verbatim.
+    // the item is retiring). QMS8-C (D5/D4 tail): the state comes from the
+    // coverage entry's declared defaultState — the status map is gone.
     const payload = store.records.get('EQP-PLAIN')!.payload as Record<string, unknown>
     expect(payload.id).toBe('EQP-PLAIN')
     expect('status' in payload).toBe(false)
     expect(payload.createdBy).toBe('USR-MIGRATOR')
     expect(payload.lifecycleId).toBe('registry-ops')
-    expect(payload.state).toBe('active')
+    expect(payload.state).toBe('draft')
 
+    // QMS8-C (D5/D4 tail): an ungoverned record carrying an orthogonal domain
+    // status is left EXACTLY as it was — no mapping data, no guess, no write.
     const person = store.records.get('PER-PLAIN')!.payload as Record<string, unknown>
     expect(person.status).toBe('inactive')
-    expect(person.state).toBe('draft')
+    expect('state' in person).toBe(false)
+    expect('lifecycleId' in person).toBe(false)
   })
 })
 
