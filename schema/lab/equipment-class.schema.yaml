@@ -34,6 +34,20 @@ properties:
   modelFamily:
     type: string
 
+  # INSTR-COLLAPSE-1 C1: the ontology `class` field migrates here verbatim in
+  # shape from instrument.schema.yaml (ruling: "the current instrument.schema.yaml
+  # class field migrates there"). instrument survives as ONTOLOGY CLASSIFICATION
+  # on the class — this is the data the derived measurement-capable view filters on.
+  class:
+    type: array
+    description: >
+      Optional ontology references describing what this equipment class is in
+      the universe (e.g., OBI, EFO).
+    items:
+      $ref: "#/$defs/curie"
+    minItems: 1
+    uniqueItems: true
+
   executionBackends:
     type: array
     items: { type: string }
@@ -120,3 +134,9 @@ properties:
     type: string
     enum: [draft, active, archived]
     description: "Lifecycle state (operational). DISTINCT from domain status/result fields."
+
+$defs:
+  curie:
+    type: string
+    description: Compact URI (CURIE), e.g. OBI:0001110
+    pattern: "^[A-Za-z][A-Za-z0-9_\\-]*:[^\\s]+$"

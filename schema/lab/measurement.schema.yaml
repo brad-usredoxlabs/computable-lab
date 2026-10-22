@@ -35,9 +35,18 @@ properties:
     type: string
     description: "eventId of the read event that produced this measurement."
 
-  instrumentRef:
-    $ref: "./datatypes/ref.schema.yaml"
-    description: "Which instrument performed the measurement."
+  # INSTR-COLLAPSE-1 C1: the physical source is an EQUIPMENT record. The ref
+  # target is pinned to type: equipment (schema floor; precedent:
+  # equipment.schema.yaml equipmentClassRef pins type: equipment-class inside
+  # allOf on datatypes/ref.schema.yaml). "Any ref" is not an accepted shape.
+  equipmentRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+    description: "Which equipment performed the measurement."
 
   labwareInstanceRef:
     $ref: "./datatypes/ref.schema.yaml"

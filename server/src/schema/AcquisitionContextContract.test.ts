@@ -298,7 +298,11 @@ describe('equipment-class carries the migrated ontology class (C1, spec (d))', (
     ) as { class?: string[] };
     expect(Array.isArray(doc.class)).toBe(true);
     expect(doc.class).toContain('OBI:0001110'); // OBI: real-time PCR machine
-    const res = validator.validate(doc, EQUIPMENT_CLASS_SCHEMA_ID);
+    // The seed loader strips the $schema pointer before validating the payload
+    // (same as the store's seed path); validate the payload, not the pointer.
+    const { $schema: _pointer, ...payload } = doc as Record<string, unknown>;
+    void _pointer;
+    const res = validator.validate(payload, EQUIPMENT_CLASS_SCHEMA_ID);
     expect(res.valid, JSON.stringify(res.errors)).toBe(true);
   });
 });
