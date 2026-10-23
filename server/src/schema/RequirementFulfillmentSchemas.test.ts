@@ -92,15 +92,19 @@ function fulfillmentEnvelope(claimOverrides: Record<string, unknown> = {}, envel
     fulfilledBy: 'derivation',
     evidence: ref('MDER-BATCH-7', 'material-derivation'),
     cites: 'MDER-BATCH-7',
-    requirement: { requirementId: REQUIREMENT_ID, componentRefs: ['MAT-GLU', 'MAT-NA'] },
+    requirementIds: [REQUIREMENT_ID],
+    componentRefs: ['MAT-GLU', 'MAT-NA'],
     evaluations: [{ requirementSlot: 'spec-identity', verdict: 'compatible', basis: ['spec-identity'] }],
     ...((claimOverrides.assertion as Record<string, unknown> | undefined) ?? {}),
   };
+  // `assertion` is applied AFTER the overrides spread so a partial
+  // claimOverrides.assertion MERGES into the base assertion instead of
+  // replacing it wholesale.
   const claim = {
     claimStatus: 'completed',
-    assertion,
     occurredAtStatus: 'unknown',
     ...claimOverrides,
+    assertion,
   };
   return {
     kind: 'attestation',

@@ -58,6 +58,29 @@ properties:
       status:
         type: string
         enum: [ unresolved, provided, linked ]
+      requirementId:
+        type: string
+        pattern: '^REQE-[a-z0-9-]+$'
+        description: >
+          MATRES-FULFIL D3: stable identity of THIS requirement occurrence.
+          Minted by server/src/materials/requirementId.ts from the occurrence's
+          draft-time coordinate (graph recordId + eventId + slot) via the termId
+          law — NEVER from the mutable content: editing reason/source_details or
+          swapping the bound spec never changes the id, and a re-draft at the
+          same coordinate yields the SAME id. The REQE- family deliberately
+          excludes the procurement REQ- family (one name, no two systems).
+          Fulfillment attestations reference this id (assertion.about.id) —
+          the requirement object itself is never mutated to record fulfillment.
+      requestedSource:
+        $ref: "../../datatypes/ref.schema.yaml"
+        description: >
+          MATRES-FULFIL D1 Shape A: the REQUESTED SOURCE — a ref-shaped slot
+          naming the physical referent (aliquot | material-instance) the plan
+          intends to use for this requirement on a FUTURE add_material. A
+          request, never an allocation: no decrement, no availability, no
+          reservation semantics anywhere (P7). Legal under status
+          unresolved|provided (lint add-material-requested-source-status);
+          written by the ordinary plan-editing path, never by a resolver.
       material_ref:
         $ref: "../../datatypes/ref.schema.yaml"
       material_spec_ref:
