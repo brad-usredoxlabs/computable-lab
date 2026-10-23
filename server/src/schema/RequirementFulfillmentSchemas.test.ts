@@ -323,6 +323,27 @@ describe('P8 trio (§10 5.12): INCOMPLETE is legal, mismatch blocks, never a sil
     expect(ruleIds(lint.violations)).toContain('fulfil-completed-needs-compatible-evaluations');
   });
 
+  // advc DEFECT 1 (fix cycle 1): the ABSENT-key shape above was blocked, but
+  // `evaluations: []` slipped through — pathExists() is TRUE for a present
+  // empty array and everyItem over [] holds VACUOUSLY. An empty array declares
+  // NO evaluations: same condition as the absent key, same wall.
+  it('completed claim with evaluations: [] -> BLOCKED naming both gates (an EMPTY array declares no evaluations — vacuous-pass hole closed)', async () => {
+    const { lintEngine } = await loadCorpus();
+    const env = fulfillmentEnvelope({ assertion: { evaluations: [] } });
+    const lint = lintEngine.lint(env, ATTESTATION_SCHEMA_ID);
+    expect(lint.valid).toBe(false);
+    expect(ruleIds(lint.violations)).toContain('fulfil-completed-needs-compatible-evaluations');
+    expect(ruleIds(lint.violations)).toContain('fulfil-evaluations-declared');
+  });
+
+  it('unknown claimStatus + evaluations: [] -> BLOCKED naming fulfil-evaluations-declared (a fulfillment must DECLARE at least one evaluation whatever the claim label — P8 stance)', async () => {
+    const { lintEngine } = await loadCorpus();
+    const env = fulfillmentEnvelope({ claimStatus: 'unknown', assertion: { evaluations: [] } });
+    const lint = lintEngine.lint(env, ATTESTATION_SCHEMA_ID);
+    expect(lint.valid).toBe(false);
+    expect(ruleIds(lint.violations)).toContain('fulfil-evaluations-declared');
+  });
+
   it('unknown claimStatus + incomplete verdict -> lint CLEAN (honest incompleteness is legal, Q5 analogue)', async () => {
     const { lintEngine } = await loadCorpus();
     const env = fulfillmentEnvelope({ claimStatus: 'unknown', assertion: { evaluations: [{ verdict: 'incomplete', basis: ['derivation-type'] }] } });

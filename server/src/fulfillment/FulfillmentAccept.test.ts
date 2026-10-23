@@ -620,4 +620,37 @@ describe('5.12 P8 trio at the ACCEPT wall (canAccept, not just lint)', () => {
     expect(review.canAccept).toBe(false);
     expect(review.diagnostics.join('\n')).toContain('fulfil-mismatch-blocks');
   });
+
+  // advc DEFECT 1 (fix cycle 1): the zero-check family. fulfillment-compatibility.yaml
+  // declares checks ONLY for derivation/receipt; `instance` is a spec-enumerated
+  // fulfilledBy value (§7.3), so the evaluator yields evaluations: [] through the
+  // SHIPPED seam. An empty array declares NO satisfaction evaluations — the P8
+  // stance ("satisfaction declared, never assumed") means a completed claim for a
+  // family with NO declared checks is BLOCKED, not vacuously accepted.
+  it('completed fulfilled-by-instance (zero-check family -> evaluations: [] from the shipped seam) BLOCKS acceptance naming fulfil-completed-needs-compatible-evaluations (empty array = declares nothing, never a vacuous pass)', async () => {
+    const draft = await compileFulfillmentDraft(world.store, derivationRequest({
+      draftId: 'FULFIL-I1',
+      fulfilledBy: 'instance',
+      claimStatus: 'completed',
+    }));
+    // The seam genuinely emits the empty array (no TS branch involved — the
+    // policy data declares no checks for `instance`).
+    const claims = (draft.envelope as Record<string, unknown>).claims as Array<Record<string, unknown>>;
+    expect((claims[0].assertion as Record<string, unknown>).evaluations).toEqual([]);
+
+    const review = world.service.compile(draft);
+    expect(review.canAccept).toBe(false);
+    expect(review.diagnostics.join('\n')).toContain('fulfil-completed-needs-compatible-evaluations');
+    expect(review.diagnostics.join('\n')).toContain('fulfil-evaluations-declared');
+  });
+
+  it('unknown claimStatus + zero-check family (evaluations: []) is ALSO blocked naming fulfil-evaluations-declared — a fulfillment must declare at least one evaluation whatever the label', async () => {
+    const review = world.service.compile(await compileFulfillmentDraft(world.store, derivationRequest({
+      draftId: 'FULFIL-I2',
+      fulfilledBy: 'instance',
+      claimStatus: 'unknown',
+    })));
+    expect(review.canAccept).toBe(false);
+    expect(review.diagnostics.join('\n')).toContain('fulfil-evaluations-declared');
+  });
 });
