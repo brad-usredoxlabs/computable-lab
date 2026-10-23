@@ -27,8 +27,8 @@ function rateOnlyEvent(labwareId: string): PlateEvent {
       volume: { value: 100, unit: 'uL' },
       counter_density: { value: 200, unit: 'cells/uL', basis: 'count_per_volume' },
       composition_snapshot: [
-        { component_ref: { kind: 'draft', id: 'mint:DMEM', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
-        { component_ref: { kind: 'draft', id: 'mint:HepG2 cells', label: 'HepG2 cells' }, role: 'cells' },
+        { componentRef: { kind: 'record', id: 'rec-dmem', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
+        { componentRef: { kind: 'record', id: 'rec-hepg2', label: 'HepG2 cells' }, role: 'cells' },
       ],
     },
   }
@@ -46,8 +46,8 @@ function legacyEvent(labwareId: string): PlateEvent {
       count: 50000,
       counter_density: { value: 500, unit: 'cells/uL' },
       composition_snapshot: [
-        { component_ref: { kind: 'draft', id: 'mint:DMEM', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
-        { component_ref: { kind: 'draft', id: 'mint:HepG2 cells', label: 'HepG2 cells' }, role: 'cells' },
+        { componentRef: { kind: 'record', id: 'rec-dmem', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
+        { componentRef: { kind: 'record', id: 'rec-hepg2', label: 'HepG2 cells' }, role: 'cells' },
       ],
     },
   }
