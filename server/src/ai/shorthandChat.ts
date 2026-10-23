@@ -631,22 +631,34 @@ export function foldAnswersIntoShorthand(
     if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return null;
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return null;
-    const slotValue = action[loc.argument];
+    // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
+    // 'slot-not-string' — slotType=array (action-level composition) AND
+    // slotType=undefined (composition nested under `params`; the schema
+    // declares BOTH forms valid: scientist-intent.schema.yaml `composition`
+    // items required [material, role], `material` = the symbolic material
+    // noun, and the open `params.composition` slot). Resolve WHERE the slot
+    // lives, then splice.
+    const params = action['params'] as Record<string, unknown> | undefined;
+    const slotKey = typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument])
+      ? loc.argument
+      : params && (typeof params[loc.argument] === 'string' || Array.isArray(params[loc.argument]))
+        ? loc.argument
+        : null;
+    const slotHolder: Record<string, unknown> = slotKey === loc.argument
+      ? (typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument]) ? action : params!)
+      : action;
+    const slotValue = slotKey === null ? action[loc.argument] : slotHolder[slotKey];
     if (typeof slotValue === 'string') {
-      action[loc.argument] = label;
+      slotHolder[slotKey!] = label;
     } else if (Array.isArray(slotValue)) {
-      // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
-      // 'slot-not-string' with slotType=array — a DECLARED array-valued slot
-      // (the composition mixture-component slot: scientist-intent.schema.yaml
-      // `composition` items, required [material, role], `material` = the
-      // symbolic material noun). The 1:1 splice widens to the ENTRY whose
-      // declared symbolic-noun field equals the fact's label: the FIRST
-      // entry-object carrying a string-valued property equal to fact.label
-      // (generic first-string-property match — no slot-name or field-name
-      // policy branch in TS; the entry shape is the schema's DATA). The chosen
-      // label replaces that symbolic noun (still a symbolic noun — never a
-      // record id; the spine re-binds in the recompile). NO entry match ⇒
-      // null (never guess — the null contract above survives verbatim).
+      // The 1:1 splice widens to the ENTRY whose declared symbolic-noun field
+      // equals the fact's label: the FIRST entry-object carrying a
+      // string-valued property equal to fact.label (generic first-string-
+      // property match — no slot-name or field-name policy branch in TS; the
+      // entry shape is the schema's DATA). The chosen label replaces that
+      // symbolic noun (still a symbolic noun — never a record id; the spine
+      // re-binds in the recompile). NO entry match ⇒ null (never guess — the
+      // null contract above survives verbatim).
       const entry = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label));
       if (!entry) return null;
       const entryRecord = entry as Record<string, unknown>;
@@ -774,9 +786,21 @@ export function foldNullArm(
     }
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'undefined' };
-    const slotValue = action[loc.argument];
+    // Byte-mirror of the fold's slot resolution (see foldAnswersIntoShorthand):
+    // the slot may live at action level OR nested under `params` (both forms
+    // are schema-valid — scientist-intent.schema.yaml composition + open params).
+    const params = action['params'] as Record<string, unknown> | undefined;
+    const actionSlot = action[loc.argument];
+    const paramSlot = params?.[loc.argument];
+    const slotHolder: Record<string, unknown> =
+      (typeof actionSlot === 'string' || Array.isArray(actionSlot)) ? action
+      : (typeof paramSlot === 'string' || Array.isArray(paramSlot)) ? params!
+      : action;
+    const slotValue = slotHolder === action && (typeof actionSlot === 'string' || Array.isArray(actionSlot))
+      ? actionSlot
+      : (slotHolder === params! ? paramSlot : actionSlot);
     if (typeof slotValue === 'string') {
-      action[loc.argument] = label;
+      slotHolder[loc.argument] = label;
     } else if (Array.isArray(slotValue) && slotValue.some((candidate) => entryCarriesLabel(candidate, fact.label))) {
       // ANSWER-FOLD-NULL-1 (Leg 2): the fold's widened arm — an array slot
       // WITH a matching entry folds (mirror stays byte-mirror of the fold).
