@@ -441,6 +441,13 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
             searchLabwareByHint,
             spine,
             ...(answeredSlots.length > 0 ? { answeredSlots } : {}),
+            // MIXFRAC-1 fix1/D3 (§14.2 RECORD leg): the answers map ALSO rides
+            // the producer channel as DATA, verbatim (the prompt above is
+            // byte-unchanged). The composition-fraction bar consumes only an
+            // entry whose key equals its own label and whose value is one of
+            // the reading ids it presented; every other fact is untouched.
+            // No reason/label/reading branch exists in this handler, by design.
+            scientistAnswers: answers,
           },
           labInventory,
         });

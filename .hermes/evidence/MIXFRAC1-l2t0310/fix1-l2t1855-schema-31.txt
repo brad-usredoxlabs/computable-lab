@@ -1,0 +1,11 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/schema/BiologicalTypesSchema.test.ts  (6 tests) 306ms
+ ✓ src/schema/SchemaRegistry.test.ts  (25 tests) 377ms
+
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+   Start at  20:30:32
+   Duration  1.09s (transform 138ms, setup 0ms, collect 278ms, tests 683ms, environment 0ms, prepare 164ms)
+

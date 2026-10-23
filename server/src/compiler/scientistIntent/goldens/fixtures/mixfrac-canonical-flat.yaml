@@ -1,0 +1,50 @@
+# MIXFRAC-1 GOLDEN-A (record leg, fix1/D2/D3 per adversarial review l2t1855 +
+# orchestrator ruling) — §14.2's ANSWER-DRIVEN RECORD leg: the SAME ambiguous
+# declared document as the bar leg (110% + nested 90:10 on the medium entry),
+# but the scientist's ANSWER selects the in-house-recipe reading
+# (request.answers: key = the clarification's own label, value = the declared
+# reading id `preceding-noun-recipe` — the THREAD-ASK-1 answer idiom, exact
+# identity on both sides). The answer machinery settles the bar: the selected
+# reading's computed final fractions rewrite the carried composition (the
+# declared nested children expand into the flat derived view; the top-level
+# supplement entry is ABSORBED — the attachment reading says the supplement IS
+# part of the recipe), the compile lands 200, and the snapshot emits the
+# ruling's FLAT view Trypsin-EDTA 50 / DMEM 45 / FBS 5 with the ratified
+# source strings "50% of the mixture" / "45% of the mixture" / "5% of the
+# mixture" byte-stable (OQ-4). The DECLARED nested truth (DMEM 90:10 FBS)
+# stays in the held localMacro — the record layer keeps the nested encoding
+# (§14.2); the nested form never rides a snapshot entry. Cells entry unchanged
+# (roles are MIXROLE-1's ground — pinned as the pipeline emits).
+name: golden.intent-to-graph.mixfrac-canonical-flat
+request:
+  protocolText: >-
+    50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL
+  answers:
+    sample_type: bacterial
+    "Trypsin-EDTA, DMEM, FBS": preceding-noun-recipe
+store:
+  records:
+    - recordId: LAB-mixfrac-plate-1
+      payload:
+        kind: labware
+        title: Plate
+        synonyms: [plate]
+modelOutput:
+  intentId: golden-mixfrac-canonical-flat
+  sourcePrompt: "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL"
+  actions:
+    - action: add_material
+      labware: plate
+      volumeUl: 50
+      targetWells: [A1]
+      params:
+        composition:
+          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - material: "DMEM"
+            role: buffer_component
+            fraction: "50%"
+            composition:
+              - { material: "DMEM", role: buffer_component, fraction: "90%" }
+              - { material: "FBS", role: additive, fraction: "10%" }
+          - { material: "FBS", role: additive, fraction: "10%" }
+          - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }

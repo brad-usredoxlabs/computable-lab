@@ -1,0 +1,28 @@
+# MIXFRAC-1 GOLDEN-B (compiled leg) — the unambiguous final-volume phrasing
+# (spec §7.2 + §14.2: B = the ONE-SIDED finalVolumePhrases arm, re-based
+# 45/45/10). The utterance carries final-volume evidence and NO on-top
+# evidence, so the silent-resolution arm (convention DATA) settles the parse
+# to the whole-mixture supplement reading WITHOUT a clarification: the carried
+# composition entries' fractions are REWRITTEN to the computed final-of-mixture
+# values (45/45/10 — sum 100 by construction) and the snapshot emits the
+# ratified "<fraction> of the mixture" source form byte-stably (OQ-4).
+name: golden.intent-to-graph.mixfrac-final-volume
+request:
+  protocolText: >-
+    50/50 Trypsin-EDTA/DMEM, bring to 10% FBS final
+  answers:
+    sample_type: bacterial
+store:
+  records: []
+modelOutput:
+  intentId: golden-mixfrac-final-volume
+  sourcePrompt: "50/50 Trypsin-EDTA/DMEM, bring to 10% FBS final"
+  actions:
+    - action: add_material
+      volumeUl: 50
+      targetWells: [A1]
+      params:
+        composition:
+          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - { material: "DMEM", role: buffer_component, fraction: "50%" }
+          - { material: "FBS", role: additive, fraction: "10%" }

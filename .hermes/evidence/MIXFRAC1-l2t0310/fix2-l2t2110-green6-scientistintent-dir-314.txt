@@ -1,0 +1,80 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/compiler/scientistIntent/noBypass.test.ts  (7 tests) 421ms
+ ✓ src/compiler/scientistIntent/expectedDomainLiftPin.test.ts  (4 tests) 396ms
+ ✓ src/compiler/scientistIntent/deckReviewFold.test.ts  (9 tests) 76ms
+ ✓ src/compiler/scientistIntent/vocabularyMirrorDrift.test.ts  (8 tests) 119ms
+ ✓ src/compiler/scientistIntent/clarificationContract.test.ts  (15 tests) 1344ms
+ ✓ src/compiler/scientistIntent/scientistIntentContract.test.ts  (15 tests) 781ms
+ ✓ src/compiler/scientistIntent/promptShapeParity.test.ts  (9 tests) 1609ms
+stdout | src/compiler/scientistIntent/promptShapeParity.test.ts > one-shot shape acceptance on both Brad prompts (headless) > prompt 1 (the 50uL mixture) parses on the FIRST pass — no shape rejection, no re-ask
+SH-QA-3 redundancy strip: removed the redundant top-level noun "HepG2 cells in Thermo trypsin-EDTA / Thermo DMEM + FBS" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/compositionDecomposition.test.ts  (12 tests) 2133ms
+ ✓ src/compiler/scientistIntent/vocabularyRipOut.test.ts  (8 tests) 1494ms
+ ✓ src/compiler/scientistIntent/vocabulary.test.ts  (16 tests) 3564ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (5 tests) 2503ms
+ ✓ src/compiler/scientistIntent/compositionFractions.test.ts  (24 tests) 2952ms
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 2598ms
+ ✓ src/compiler/scientistIntent/hedgeOptionality.test.ts  (17 tests) 2944ms
+ ✓ src/compiler/scientistIntent/vocabularyContractBlock.test.ts  (3 tests) 1026ms
+ ✓ src/compiler/scientistIntent/liftParamsPreservation.test.ts  (4 tests) 1543ms
+ ✓ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts  (3 tests) 2587ms
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > payload is 200 complete-shaped, clarifications ABSENT, zero writes
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the stripped compile emits the SAME events as the composition-only canned output (the paste-#3 good path)
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/rolesSeam.test.ts  (20 tests) 4246ms
+ ✓ src/compiler/scientistIntent/declaredArgumentReachability.test.ts  (41 tests) 4071ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (8 tests) 4164ms
+ ✓ src/compiler/scientistIntent/mixtureRedundancy.test.ts  (10 tests) 3964ms
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T1: redundant top-level material + composition compiles CLEAN (no noun question) > T1: outcome complete, zero clarifications, the sentence is never asked as a noun
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T2 EQUIVALENCE: the stripped compile deep-equals the composition-only good path > T2: same event count + details; the mixture material_ref is the DERIVED componentLabels.join, NOT the sentence
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T3 declared-form twin: the action-level many-arg strips identically > T3: action-level composition (vocabulary many-arg) + the sentence -> same strip, same events
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T5 idempotence / round-trip: recompiling the stripped doc strips nothing further > T5: compile(strippedDoc) events == compile(doc) events; a second strip is empty
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/scientistIntent.test.ts  (28 tests) 5118ms
+ ✓ src/compiler/scientistIntent/realizeScientistIntent.test.ts  (18 tests) 4917ms
+ ✓ src/compiler/scientistIntent/cueResolutionGate.test.ts  (13 tests) 4856ms
+ ✓ src/compiler/scientistIntent/quantityWireContract.test.ts  (4 tests) 1679ms
+ ✓ src/compiler/scientistIntent/realizationGolden.test.ts  (6 tests) 6096ms
+stdout | src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T1 golden — family + robot answers -> local-protocol -> intent YAML -> run graph > realizeAndCompile -> compileScientistIntent outcome complete + non-empty events (AC1)
+W27_CLARIFICATIONS []
+W27_DECK_OBSERVATION {
+ "deckLayoutPlan": {
+  "pinned": [],
+  "autoFilled": [
+   {
+    "slot": "A1",
+    "labwareHint": "unknown",
+    "reason": "tipRack"
+   }
+  ],
+  "conflicts": []
+ },
+ "labwareAdditions": null,
+ "labwareRequirements": null,
+ "resourceManifestTipRacks": [
+  {
+   "pipetteType": "unknown",
+   "rackCount": 1
+  }
+ ]
+}
+
+
+ Test Files  26 passed (26)
+      Tests  314 passed (314)
+   Start at  22:13:18
+   Duration  10.29s (transform 7.27s, setup 5ms, collect 46.69s, tests 67.20s, environment 18ms, prepare 8.11s)
+

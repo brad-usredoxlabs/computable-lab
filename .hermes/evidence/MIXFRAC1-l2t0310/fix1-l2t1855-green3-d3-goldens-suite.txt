@@ -1,0 +1,19 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > payload is 200 complete-shaped, clarifications ABSENT, zero writes
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the stripped compile emits the SAME events as the composition-only canned output (the paste-#3 good path)
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts  (3 tests) 248ms
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 281ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (5 tests) 292ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (8 tests) 467ms
+
+ Test Files  4 passed (4)
+      Tests  23 passed (23)
+   Start at  20:30:11
+   Duration  1.84s (transform 530ms, setup 0ms, collect 2.91s, tests 1.29s, environment 1ms, prepare 562ms)
+

@@ -46,9 +46,33 @@ fixtures:
   # leg SPINE-6 moved here). Vocabulary-declared wash.material level: aliquot
   # drives the engine's levelFilter arm through the real route.
   - {name: golden.intent-to-clarification.material-level-mismatch, path: fixtures/material-level-mismatch.yaml, sha256: 53a86fe894d62bc32bc3d0b4cf8a0df90fd2e57b15537c38b83e28985cf0307c}
-  # COMP-4 Stage B golden: the declared many-cardinality composition arg bars
-  # naming the unresolvable COMPONENT (422, zero writes, no partial mint).
+  # COMP-4 Stage B golden: the declared many-cardinality composition bar naming
+  # the unresolvable component (422, zero writes, no partial mint).
+  # MIXFRAC-1 REBLESS (this item, blessed ONCE in the same commit as the bar):
+  # the fixture ALREADY carried 50/50+50/50+10/10 = a 110% declared sum (bait 5),
+  # so the new composition-fraction-sum bar fires there too. Fixture bytes
+  # UNCHANGED (245603b1...); the ONLY divergence in the record is the appended
+  # producer bar fact (reason composition-fraction-sum, THREE candidate readings
+  # with computed final fractions) after the verbatim unknown-noun fact.
   - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 245603b100f927466cb7290656aa0056d489dbd180a1c0c67b8105c1136a3714}
+  # MIXFRAC-1 goldens (blessed ONCE on the final content — spec §7 + §14.2,
+  # Brad's OQ-1 ruling numbers): A bar leg (nested declared composition, three
+  # readings, preceding-noun FIRST, flat 50/45/5 + nested 90:10), A record leg
+  # (flat derived view compiled clean, ratified source strings byte-stable),
+  # B (one-sided final-volume arm re-based 45/45/10, no clarification), C
+  # (explicit on-top 50/50/10 + sum note riding the reading data, OQ-4).
+  # MIXFRAC-1 FIX-RUN 1 REBLESS (adversarial review l2t1855 D3, orchestrator
+  # ruling "route a real reading-selection answer through the answer machinery
+  # — canned encoding is NOT ratified"): the A record-leg fixture re-blessed
+  # ONCE. Fixture delta dbabb88f... -> 509da519...: the fixture now carries the
+  # SAME ambiguous declared document as the bar leg (110% + nested 90:10) and
+  # request.answers selects the in-house-recipe reading
+  # ("Trypsin-EDTA, DMEM, FBS": preceding-noun-recipe) instead of a canned flat
+  # modelOutput. Record delta below. All other fixtures unchanged.
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: fixtures/mixfrac-canonical-ambiguous.yaml, sha256: fe449f2fe7b9000bd0c5c52f77905802dc0c003461c385e0cc6fb630e463916d}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: fixtures/mixfrac-canonical-flat.yaml, sha256: 509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: fixtures/mixfrac-final-volume.yaml, sha256: c7dae608d5f4a7668be6b04aa807386f18289c75b2ba61bf8228d64c58882e5c}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: fixtures/mixfrac-on-top.yaml, sha256: c8f279c4b3d0f0458c057bfce139e641ed9ba948577be28831e664b4f1c7d912}
 records:
   - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
   - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
@@ -103,7 +127,25 @@ records:
   # collapsed duplicate tier-5 mint candidate per noun (2 -> 1); bless script
   # proved non-mint content byte-identical. No other record or manifest entry
   # moved. Before/after diff in MINT-FLOOR-UI-1-report.wip-l2t0015.md.
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 75ef78d867f7682b1aa0119b8735aab0fb5a1bec99899b83c7a94fa6ccaf757e}
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: fe927e73e7b3884cc4a437647cad4a48f806e819100e96802474bed27cd56ab3}
+  # MIXFRAC-1 blessed records (ONCE, same commit as the bar; bless script
+  # scripts/mixfrac-bless.mts, before/after hashes in
+  # .hermes/plans/MIXFRAC-1-report.wip-l2t0310.md). unresolvable-mixture-
+  # component re-blessed ONCE: 75ef78d8... -> fe927e73... (the ONLY divergence
+  # is the appended composition-fraction-sum bar fact; the unknown-noun fact is
+  # byte-identical). The four MIXFRAC-1 records are blessed for the first time.
+  # MIXFRAC-1 FIX-RUN 1 REBLESS (l2t1855 D3, blessed ONCE in the same commit as
+  # the answer-channel fix): mixfrac-canonical-flat record re-blessed
+  # e99f916f... -> a2d1ef36... — the ONLY divergence is the answer-driven
+  # replay: the held localMacro now carries the DECLARED nested document
+  # (110% + nested 90:10, 4 entries) instead of the canned flat one, and the
+  # event snapshot stays the FLAT derived view 50/45/5 with byte-stable
+  # ratified source strings (diff audit in MIXFRAC-1-fix1-report-l2t1855.md).
+  # Every other record unchanged (bless dry-run before/after hashes prove it).
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: __records__/mixfrac-canonical-ambiguous.golden.json, sha256: 598a4e23de741e4468247fe94c4868ddf3527433f5ff075201d3130b1c5c8e1c}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: __records__/mixfrac-canonical-flat.golden.json, sha256: a2d1ef365cddcc821f98938686c0053d2a7bbc06ae86c52313a8122752d4831d}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: __records__/mixfrac-final-volume.golden.json, sha256: 370e3f57a95af02fef60d99c2bcbf539f67b3e2c1149c6fe278358141e53fa9a}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: __records__/mixfrac-on-top.golden.json, sha256: 30b8ae98a38b7dce189c37fb9c4fb8be6239b33e3e732e77622fb8e958d892ae}
 # Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
 outcomeUnionMember: needs-clarification
 # Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):

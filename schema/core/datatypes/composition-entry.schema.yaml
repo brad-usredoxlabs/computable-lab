@@ -38,3 +38,15 @@ properties:
         enum: [ molar, mass_per_volume, activity_per_volume, count_per_volume, volume_fraction, mass_fraction ]
   source:
     type: string
+  # MIXFRAC-1 (Brad's OQ-1 ruling, spec §14.1): the ONE additive optional
+  # sub-composition — a composition entry may carry its OWN composition (an
+  # in-house formulation: the medium entry declares DMEM 90% + FBS 10%).
+  # `$ref: "#"` is the root self-resource (each item IS a composition-entry);
+  # SchemaRegistry treats a `#` ref as local and skips it for the dependency
+  # graph, so the registry dependency pin is unchanged. Additive: every
+  # existing payload validates unchanged.
+  composition:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#"

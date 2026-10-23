@@ -34,6 +34,21 @@ import { defaultScientistIntentVocabulary, type ScientistIntentVocabulary } from
 // the same truth the resolve_nouns pass reads. The leaf imports nothing from
 // scientistIntent/ values and nothing from the pass module: acyclic.
 import { foldDeclaredOptionalAbsentHedges } from '../resolution/declaredOptionalHedgeFold.js';
+// MIXFRAC-1 (OQ-2 ruling): the generic composition-fraction evaluator + its
+// convention DATA loader. The evaluator carries zero domain knowledge; every
+// threshold/pattern/phrase/label is DATA in
+// config/drafting/composition-fraction-convention.yaml.
+import {
+  COMPOSITION_FRACTION_SUM_REASON as COMPOSITION_FRACTION_SUM_CODE,
+  evaluateCompositionFractions,
+  settleCompositionFromReading,
+  loadFractionConvention,
+  formatFractionString,
+  FRACTION_CONVENTION_PATH,
+  type CompositionReading,
+  type FractionConventionConfig,
+  type RecipeShapedRecordEvidence,
+} from './compositionFractions.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { expandWellTokens } from '../../ai/wellRange.js';
 import { parse as parseYaml } from 'yaml';
@@ -402,10 +417,19 @@ export const UNREALIZED_DECLARED_ARGUMENT_REASON = 'unrealized-declared-argument
  *  form decomposes it. */
 export const MIXTURE_BLOB_MATERIAL_REASON = 'unrealized-mixture-blob-material' as const;
 
+/** MIXFRAC-1 (OQ-2 ruling): stable reason code for a declared composition
+ *  whose fractions do not sum to the declared convention total (the DATA in
+ *  config/drafting/composition-fraction-convention.yaml, interpreted by the
+ *  generic evaluator in compositionFractions.ts). The clarification carries
+ *  the candidate readings with their COMPUTED final fractions — genuine
+ *  ambiguity is never resolved by confidence. Same envelope as the cue bar:
+ *  producer clarification → atomic 422 arm, never 500. */
+export const COMPOSITION_FRACTION_SUM_REASON = COMPOSITION_FRACTION_SUM_CODE;
 export type UnrealizedProducerReason =
   | typeof UNREALIZED_WELL_LABEL_REASON
   | typeof UNREALIZED_DECLARED_ARGUMENT_REASON
-  | typeof MIXTURE_BLOB_MATERIAL_REASON;
+  | typeof MIXTURE_BLOB_MATERIAL_REASON
+  | typeof COMPOSITION_FRACTION_SUM_REASON;
 
 /** One producer clarification (exactOptionalPropertyTypes: `message` is
  *  absent-or-value, built by conditional spread only). */
@@ -414,6 +438,12 @@ export interface ProducerClarification {
   reason: UnrealizedProducerReason;
   actionLocation: ScientistIntentActionLocation;
   message?: string;
+  /** MIXFRAC-1 (OQ-3 ruling): the candidate readings for a
+   *  composition-fraction-sum bar — COMPUTED parses (id, label, final
+   *  fractions, optional sum note), NOT ranked store candidates
+   *  (candidateFact is the wrong vehicle). Absent-or-value via conditional
+   *  spread only; the 422 route carries clarifications VERBATIM. */
+  readings?: readonly CompositionReading[];
 }
 
 export interface NormalizeOptions {
@@ -427,6 +457,30 @@ export interface NormalizeOptions {
    *  bar at another cue file and lets tests pin the LOUD off-state (absent
    *  file ⇒ bar OFF + one console.warn naming the path, never silent). */
   mixtureCuesPath?: URL | string;
+  /** MIXFRAC-1: override for the composition-fraction convention DATA home
+   *  (same injection pattern as `mixtureCuesPath`). Defaults to the shipped
+   *  config/drafting/composition-fraction-convention.yaml. Absent file ⇒ the
+   *  sum check is OFF — LOUD (one console.warn naming the path), fractions
+   *  pass through unchanged. */
+  fractionConventionPath?: URL | string;
+  /** MIXFRAC-1 (§14.3): recipe-shaped reading evidence — formulation-shaped
+   *  store records (kind + formulationKind + their own declared composition)
+   *  offered to the evaluator so a genuinely ambiguous utterance can present
+   *  the preceding-noun-recipe reading FIRST (the default-parse condition).
+   *  The evaluator interprets the match rules generically; the records are
+   *  DATA, never a reagent table. Absent ⇒ no recipe-shaped evidence ⇒ the
+   *  shipped presentation order stands. */
+  recipeShapedRecords?: readonly RecipeShapedRecordEvidence[];
+  /** MIXFRAC-1 fix1/D3 (§14.2 RECORD leg): the scientist's clarification
+   *  ANSWERS as DATA (the request's answers map rides verbatim — key = a
+   *  clarification's own label, value = the scientist's choice). The fraction
+   *  bar consumes ONLY an entry whose key EXACTLY equals its label and whose
+   *  value is one of the reading ids the bar itself presented (DATA
+   *  `convention.readings`); anything else settles nothing and the bar stands.
+   *  "Settled, do not re-ask" is the same doctrine the noun-answer channel
+   *  (ANSWER-BIND-1) applies — identity matching only, no interpretation, no
+   *  confidence, no ranking. */
+  scientistAnswers?: Readonly<Record<string, string>>;
 }
 
 export interface ScientistIntentNormalized {
@@ -787,6 +841,93 @@ function toCandidateEvent(
   return event;
 }
 
+/** MIXFRAC-1: the composition-fraction bar. A declared composition whose
+ *  non-excluded fractions break the convention total raises ONE clarification
+ *  (never one per component) carrying the candidate readings with their
+ *  COMPUTED final fractions. One-sided final-volume evidence instead REWRITES
+ *  the carried composition entries' fraction strings to the computed
+ *  final-of-mixture values (a fresh array + fresh entry objects — the raw
+ *  intent document's declared values are never mutated: the resolve_nouns door
+ *  reads the RAW intent and the held localMacro keeps the scientist's words).
+ *  The utterance evidence is `sourcePrompt` when the document carries one. */
+function applyCompositionFractionConvention(
+  action: Record<string, unknown>,
+  actionIndex: number,
+  verb: string,
+  candidateEvent: Record<string, unknown> | undefined,
+  vocabulary: ScientistIntentVocabulary,
+  config: FractionConventionConfig,
+  sourcePrompt: string | undefined,
+  recipeRecords: readonly RecipeShapedRecordEvidence[] | undefined,
+  scientistAnswers: Readonly<Record<string, string>> | undefined,
+  unrealized: ProducerClarification[],
+): void {
+  const composition = declaredCompositionArray(action, candidateEvent, vocabulary);
+  if (!composition || composition.length < 2) return;
+  const outcome = evaluateCompositionFractions(composition, sourcePrompt, config, recipeRecords);
+  if (!outcome) return;
+
+  if (outcome.clarification) {
+    // §14.2 RECORD leg (fix1/D3): the scientist answered THIS bar — an answers
+    // entry whose key EXACTLY equals the clarification's label and whose value
+    // is one of the reading ids the bar presented (DATA `convention.readings`).
+    // The answer settles the parse and the carried composition becomes that
+    // reading's flat derived view. No answer / a value that is not a declared
+    // reading id: the bar stands verbatim (never a guess, never a pick).
+    const answer = scientistAnswers?.[outcome.clarification.label];
+    if (typeof answer === 'string') {
+      const settled = settleCompositionFromReading(composition, answer, config);
+      if (settled && candidateEvent) {
+        candidateEvent['composition'] = settled;
+        return;
+      }
+    }
+    unrealized.push({
+      label: outcome.clarification.label,
+      reason: outcome.clarification.reason,
+      actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: 'composition' },
+      message: outcome.clarification.message,
+      // exactOptionalPropertyTypes: the readings ride by CONDITIONAL SPREAD.
+      ...(outcome.clarification.readings.length > 0 ? { readings: outcome.clarification.readings } : {}),
+    });
+    return;
+  }
+
+  if (outcome.resolvedFractions && candidateEvent) {
+    const byIndex = new Map(outcome.resolvedFractions.map((f) => [f.index, f.percent]));
+    const rewritten = composition.map((raw, index) => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+      const percent = byIndex.get(index);
+      if (percent === undefined) return raw;
+      return { ...(raw as Record<string, unknown>), fraction: formatFractionString(percent, config) };
+    });
+    candidateEvent['composition'] = rewritten;
+  }
+}
+
+/** The composition the bar evaluates: the open `params.composition` slot or
+ *  the vocabulary-DECLARED many-cardinality composition argument (the same
+ *  DATA contract the resolve_nouns door iterates). No key literal beyond the
+ *  declared contract name. */
+function declaredCompositionArray(
+  action: Record<string, unknown>,
+  candidateEvent: Record<string, unknown> | undefined,
+  vocabulary: ScientistIntentVocabulary,
+): unknown[] | undefined {
+  const paramsRecord = action.params && typeof action.params === 'object' && !Array.isArray(action.params)
+    ? (action.params as Record<string, unknown>)
+    : undefined;
+  if (Array.isArray(paramsRecord?.composition) && paramsRecord!.composition.length >= 2) {
+    return paramsRecord!.composition as unknown[];
+  }
+  for (const contract of vocabulary.argContracts(String(action.action ?? ''))) {
+    if (contract.cardinality !== 'many') continue;
+    const value = candidateEvent?.[contract.name] ?? action[contract.name];
+    if (Array.isArray(value) && value.length >= 2) return value as unknown[];
+  }
+  return undefined;
+}
+
 export function normalizeScientistIntent(
   intent: ScientistIntent,
   options?: NormalizeOptions,
@@ -808,6 +949,11 @@ export function normalizeScientistIntent(
   // cue edit needs no stack restart). Absent file/section ⇒ undefined ⇒ the
   // interim bar is OFF — LOUD (fix1/D3: one console.warn naming the path).
   const mixtureCues = loadMixtureCues(options?.mixtureCuesPath ?? MIXTURE_CUES_PATH);
+  // MIXFRAC-1: the fraction-convention DATA, loaded PER call beside the cue
+  // bar (same drafting-config precedent — never process-cached). Absent
+  // file/section ⇒ the sum check is OFF — LOUD (one console.warn naming the
+  // path), fractions pass through unchanged.
+  const fractionConvention = loadFractionConvention(options?.fractionConventionPath ?? FRACTION_CONVENTION_PATH);
   // PARAM-FOLD-2 (W28-A5k Q1): ONE fold call over the raw parsed unresolved
   // set, at the top of the unresolved handling. The fold is pure over the
   // parsed intent + the vocabulary (both already in hand — the compile threads
@@ -848,7 +994,20 @@ export function normalizeScientistIntent(
       if (pattern.targetLabware) updateSymbol(symbolicLabels, pattern.targetLabware, 'target');
       patterns.push(pattern);
     } else {
-      candidateEvents.push(toCandidateEvent(rec, index, vocabulary, unrealized, gated, mixtureCues));
+      const candidateEvent = toCandidateEvent(rec, index, vocabulary, unrealized, gated, mixtureCues);
+      candidateEvents.push(candidateEvent);
+      // MIXFRAC-1: the composition-fraction bar, beside the cue bar (same
+      // envelope, same channel). A declared composition whose non-excluded
+      // fractions break the convention total raises ONE clarification with
+      // the candidate readings; one-sided final-volume evidence rewrites the
+      // carried composition entries' fractions instead.
+      if (fractionConvention) {
+        applyCompositionFractionConvention(
+          rec, index, verb, candidateEvent, vocabulary,
+          fractionConvention, intent.sourcePrompt, options?.recipeShapedRecords,
+          options?.scientistAnswers, unrealized,
+        );
+      }
     }
   });
 

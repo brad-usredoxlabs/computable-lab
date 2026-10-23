@@ -110,6 +110,13 @@ export interface ScientistIntentCompileDeps {
    *  module, decides slot matching (the intent only exists parsed). Absent:
    *  every other caller is byte-unchanged. */
   answeredSlots?: readonly AnsweredNounAnswer[];
+  /** MIXFRAC-1 fix1/D3 (§14.2 RECORD leg): the request's clarification ANSWERS
+   *  as DATA (key = a clarification's own label, value = the scientist's
+   *  choice). Threaded VERBATIM into normalizeScientistIntent — the producer
+   *  bar decides whether an entry settles a fact it raised (exact-label
+   *  identity + a declared reading id only). Absent: every other caller is
+   *  byte-unchanged. */
+  scientistAnswers?: Readonly<Record<string, string>>;
 }
 
 export interface ScientistIntentCompileResult {
@@ -260,7 +267,12 @@ export async function compileScientistIntent(
       + 'carries its components; the mixture label is derived from them.',
     );
   }
-  const normalized = normalizeScientistIntent(compileIntent, { vocabulary });
+  const normalized = normalizeScientistIntent(compileIntent, {
+    vocabulary,
+    // MIXFRAC-1 fix1/D3: the scientist's answers ride the producer bar as DATA
+    // (identity matching happens in normalize against the fact IT raised).
+    ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
+  });
   const registry = buildRegistry(compileIntent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);
 
