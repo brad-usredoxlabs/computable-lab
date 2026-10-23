@@ -438,6 +438,14 @@ export interface InstrumentApplianceJob {
       wavelengthNm?: number
       integrationMs?: number
     }
+    // INSTR-READCHAIN-1 (a)-exception, app-side mirror of the server's
+    // GeminiEmActiveReadRequest: declares in types what the runtime handler
+    // already accepts (ActiveReadRequestBody carries these and
+    // validateGeminiApplianceJob passes unknown request fields through), so
+    // the chatbot executor attaches the read-event chain without a cast.
+    // No schema YAML, route, or gate change.
+    eventGraphRef?: Record<string, unknown>
+    readEventRef?: string
   }
   sourceRunFile: InstrumentRunFile
   executionReadiness?: InstrumentExecutionReadiness
