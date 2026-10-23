@@ -20,6 +20,13 @@ export interface GeminiEmActiveReadRequest {
   instrumentRef?: Record<string, unknown>;
   outputPath?: string;
   parameters: GeminiEmActiveReadParameters;
+  // INSTR-READCHAIN-1 (a)-exception: these declare in TYPES what the runtime
+  // handler already accepts (MeasurementHandlers.ActiveReadRequestBody carries
+  // eventGraphRef/readEventRef and validateGeminiApplianceJob passes unknown
+  // request fields through). They let the chatbot executor attach the
+  // read-event chain without a cast. No schema YAML, route, or gate change.
+  eventGraphRef?: unknown;
+  readEventRef?: string;
 }
 
 export interface InstrumentApplianceJob {
@@ -107,13 +114,14 @@ function normalizeInstrumentName(instrument: string): string {
   return instrument.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function equipmentRecordId(instrument: string): string {
-  if (isGeminiEmInstrument(instrument)) return GEMINI_EM_EQUIPMENT_RECORD_ID;
-  const slug = normalizeInstrumentName(instrument)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return `EQP-${(slug || 'gemini-em').toUpperCase()}`;
-}
+// INSTR-READCHAIN-1 (e) / ruling O2: the slug-derived equipment-id fallback
+// branch is DELETED as unreachable code. Sole non-test caller chain:
+// createGeminiEmActiveReadJob <- ChatbotCompilePasses
+// createEmitInstrumentApplianceJobsPass, which early-returns on
+// !isGeminiEmInstrument(runFile.instrument); every test caller feeds Gemini-EM
+// alias names; zero corpus files make the slug path reachable (every seed
+// equipment id is a hand-declared record). Behavior-preserving deletion —
+// normalizeInstrumentName stays (isGeminiEmInstrument uses it).
 
 export function isGeminiEmInstrument(instrument: string): boolean {
   return GEMINI_EM_INSTRUMENT_ALIASES.has(normalizeInstrumentName(instrument));
@@ -137,7 +145,7 @@ export function createGeminiEmActiveReadJob(
       adapterId: GEMINI_EM_ADAPTER_ID,
       instrumentRef: {
         kind: 'record',
-        id: equipmentRecordId(runFile.instrument),
+        id: GEMINI_EM_EQUIPMENT_RECORD_ID,
         type: 'equipment',
       },
       outputPath: `records/inbox/${jobId}.csv`,
