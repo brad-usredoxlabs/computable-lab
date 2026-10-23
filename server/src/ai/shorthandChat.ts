@@ -786,25 +786,32 @@ export function foldNullArm(
     }
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'undefined' };
-    // Byte-mirror of the fold's slot resolution (see foldAnswersIntoShorthand):
-    // the slot may live at action level OR nested under `params` (both forms
-    // are schema-valid — scientist-intent.schema.yaml composition + open params).
+    // Byte-mirror of the fold's slot resolution (foldAnswersIntoShorthand
+    // :641-:673 — the SAME expressions verbatim, so a future edit to one path
+    // is visibly an edit to the other; advc DEFECT-2 collapse). The slot may
+    // live at action level OR nested under `params` (both forms are
+    // schema-valid — scientist-intent.schema.yaml composition + open params).
     const params = action['params'] as Record<string, unknown> | undefined;
-    const actionSlot = action[loc.argument];
-    const paramSlot = params?.[loc.argument];
-    const slotHolder: Record<string, unknown> =
-      (typeof actionSlot === 'string' || Array.isArray(actionSlot)) ? action
-      : (typeof paramSlot === 'string' || Array.isArray(paramSlot)) ? params!
+    const slotKey = typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument])
+      ? loc.argument
+      : params && (typeof params[loc.argument] === 'string' || Array.isArray(params[loc.argument]))
+        ? loc.argument
+        : null;
+    const slotHolder: Record<string, unknown> = slotKey === loc.argument
+      ? (typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument]) ? action : params!)
       : action;
-    const slotValue = slotHolder === action && (typeof actionSlot === 'string' || Array.isArray(actionSlot))
-      ? actionSlot
-      : (slotHolder === params! ? paramSlot : actionSlot);
+    const slotValue = slotKey === null ? action[loc.argument] : slotHolder[slotKey];
     if (typeof slotValue === 'string') {
-      slotHolder[loc.argument] = label;
-    } else if (Array.isArray(slotValue) && slotValue.some((candidate) => entryCarriesLabel(candidate, fact.label))) {
+      slotHolder[slotKey!] = label;
+    } else if (Array.isArray(slotValue)) {
       // ANSWER-FOLD-NULL-1 (Leg 2): the fold's widened arm — an array slot
-      // WITH a matching entry folds (mirror stays byte-mirror of the fold).
-      const entryRecord = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label)) as Record<string, unknown>;
+      // splices the FIRST entry carrying the fact's label; NO entry match ⇒
+      // the fold returns null ⇒ the mirror reports 'slot-not-string' (array tag).
+      const entry = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label));
+      if (!entry) {
+        return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'array' };
+      }
+      const entryRecord = entry as Record<string, unknown>;
       for (const key of Object.keys(entryRecord)) {
         if (typeof entryRecord[key] === 'string' && entryRecord[key] === fact.label) {
           entryRecord[key] = label;
@@ -816,7 +823,7 @@ export function foldNullArm(
         arm: 'slot-not-string',
         requestId,
         argument: loc.argument,
-        slotType: Array.isArray(slotValue) ? 'array' : typeof slotValue,
+        slotType: typeof slotValue,
       };
     }
     answered.add(fact);
