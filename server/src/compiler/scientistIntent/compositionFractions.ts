@@ -548,14 +548,13 @@ export interface FractionCheckClarification {
 /** Outcome: either a clarification (genuine ambiguity — the bar stands) or a
  *  resolved fraction rewrite (one-sided final-volume evidence settles the
  *  re-base; the carried composition entries' fraction strings are replaced
- *  index-aligned with these percents), or a settled-reading composition (the
- *  scientist ANSWERED the bar with a declared reading id — §14.2's answer-
- *  driven RECORD leg: the answer settles the parse and the carried
- *  composition becomes that reading's flat derived view). */
+ *  index-aligned with these percents). An ANSWERED bar (§14.2's answer-driven
+ *  RECORD leg) produces NEITHER: settleCompositionFromReading returns the
+ *  settled flat view directly to the caller (normalizeScientistIntent), which
+ *  writes it onto the candidate event — it never rides this outcome object. */
 export interface FractionCheckOutcome {
   clarification?: FractionCheckClarification;
   resolvedFractions?: ResolvedFraction[];
-  settledComposition?: unknown[];
 }
 
 function interpolate(template: string, values: Record<string, string>): string {
@@ -685,8 +684,25 @@ export function settleCompositionFromReading(
           });
         }
       } else {
+        // fix2/N1 (adversarial review l2t2110): the flat line is emitted
+        // FRESH from the fields the flat view is allowed to carry — the
+        // declared `composition` key is STRIPPED, exactly as the nested
+        // branch above already drops the parent line. If the settled line
+        // kept the declared sub-composition, the verb expander
+        // (compositionSnapshotFromParams, simpleVerbs.ts) would treat the
+        // settled share as a PARENT share and re-flatten the declared
+        // children over it — the parent-times-child-over-total product
+        // applied a SECOND time above the reading's own arithmetic,
+        // double-counting and emitting a duplicate component line. §14.2:
+        // the nested form NEVER rides a snapshot entry; the declared truth
+        // stays in the held document/record layer only.
+        const source = entry.source;
         settled.push({
-          ...entry.source,
+          material: entry.label,
+          role: entry.role,
+          ...(source['concentration'] !== undefined ? { concentration: source['concentration'] } : {}),
+          ...(source['count'] !== undefined ? { count: source['count'] } : {}),
+          ...(source['counterDensity'] !== undefined ? { counterDensity: source['counterDensity'] } : {}),
           fraction: formatFractionString(roundPercent(shares[0]!.percent, config), config),
         });
       }
@@ -766,6 +782,13 @@ export function evaluateCompositionFractions(
   // Genuine ambiguity (or an unresolvable one-sided claim): clarify with every
   // reading, never pick, never rank.
   const readings = buildReadings(entries, config, recipeShapedReadingExists(recipeRecords, entries, config), sum);
+  // CLIENT-VISIBLE CONTRACT (fix2/O3): this joined string IS the answer key
+  // for this bar. A scientist answering it (request.answers) must use this
+  // exact string as the KEY — the settle leg matches the answer by exact
+  // identity against this label, never containment or a partial match. The
+  // key is the parseable component labels in declared-array order, joined by
+  // ', ' (malformed-fraction entries are excluded: they never join the sum and
+  // never appear in the key).
   const label = parseable.map((e) => e.label).join(', ');
   const attachmentNote = evidence.attachmentHits > 0 ? ` ${config.messages.attachmentNote}` : '';
   const message = interpolate(config.messages.clarification, {

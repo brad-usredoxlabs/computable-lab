@@ -1,0 +1,89 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts  (24 tests | 4 failed) 454ms
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering whole-mixture-supplement compiles exactly that reading's finalFractions (45/45/10) — no duplicate line, no re-flattened nested key
+     → the answer settles the bar — 200, not 422: expected undefined to be 200 // Object.is equality
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering explicit-on-top compiles exactly that reading's finalFractions (50/50/10 fractions-of-mixture) — no duplicate line
+     → the answer settles the bar — 200, not 422: expected undefined to be 200 // Object.is equality
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering preceding-noun-recipe keeps the ruling flat view 50/45/5 (regression guard — the ratified golden path)
+     → expected undefined to be 200 // Object.is equality
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > unit leg: answering explicit-on-top settles the carried composition to the declared fractions with NO nested key on the flat line
+     → expected [ Array(4) ] to not include 'composition'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering whole-mixture-supplement compiles exactly that reading's finalFractions (45/45/10) — no duplicate line, no re-flattened nested key
+AssertionError: the answer settles the bar — 200, not 422: expected undefined to be 200 // Object.is equality
+
+- Expected: 
+200
+
++ Received: 
+undefined
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:700:69
+    698|     const readings = barReadingsById(NESTED_110_DOC);
+    699|     const run = await answeredRouteRun('whole-mixture-supplement');
+    700|     expect(run.status, 'the answer settles the bar — 200, not 422').to…
+       |                                                                     ^
+    701|     expect(run.payload['outcome']).toBe('complete');
+    702|     expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering explicit-on-top compiles exactly that reading's finalFractions (50/50/10 fractions-of-mixture) — no duplicate line
+AssertionError: the answer settles the bar — 200, not 422: expected undefined to be 200 // Object.is equality
+
+- Expected: 
+200
+
++ Received: 
+undefined
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:722:69
+    720|     const readings = barReadingsById(NESTED_110_DOC);
+    721|     const run = await answeredRouteRun('explicit-on-top');
+    722|     expect(run.status, 'the answer settles the bar — 200, not 422').to…
+       |                                                                     ^
+    723|     expect(run.payload['outcome']).toBe('complete');
+    724|     expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > answering preceding-noun-recipe keeps the ruling flat view 50/45/5 (regression guard — the ratified golden path)
+AssertionError: expected undefined to be 200 // Object.is equality
+
+- Expected: 
+200
+
++ Received: 
+undefined
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:739:24
+    737|     const readings = barReadingsById(NESTED_110_DOC);
+    738|     const run = await answeredRouteRun('preceding-noun-recipe');
+    739|     expect(run.status).toBe(200);
+       |                        ^
+    740|     expect(run.payload['outcome']).toBe('complete');
+    741|     const lines = snapshotLines(run.payload);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape) > unit leg: answering explicit-on-top settles the carried composition to the declared fractions with NO nested key on the flat line
+AssertionError: expected [ Array(4) ] to not include 'composition'
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:763:69
+    761|     expect(byLabel.get('HepG2 cells')!['count']).toBe(10000);
+    762|     // §14.2: the flat derived view never carries a nested entry.
+    763|     for (const entry of composition) expect(Object.keys(entry)).not.to…
+       |                                                                     ^
+    764|   });
+    765| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 20 passed (24)
+   Start at  22:10:00
+   Duration  3.76s (transform 901ms, setup 0ms, collect 2.37s, tests 454ms, environment 0ms, prepare 469ms)
+

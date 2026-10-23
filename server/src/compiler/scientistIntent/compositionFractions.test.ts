@@ -435,6 +435,11 @@ describe('MIXFRAC-1: a clarification answer selects a reading and drives the car
     expect(byLabel.get('Trypsin-EDTA')!['fraction']).toBe('45%');
     expect(byLabel.get('DMEM')!['fraction']).toBe('45%');
     expect(byLabel.get('FBS')!['fraction']).toBe('10%');
+    // fix2/N1 (adversarial review l2t2110): the settled FLAT line never
+    // carries the declared nested key — if it did, the verb expander
+    // (compositionSnapshotFromParams) would re-flatten the already-final
+    // share and double-count. §14.2: the flat view never carries a nested entry.
+    for (const entry of composition) expect(Object.keys(entry)).not.toContain('composition');
   });
 });
 
@@ -543,5 +548,220 @@ describe('MIXFRAC-1: the readings ride the real 422 body (no schema amendment)',
     expect(localMacro.unresolved).toEqual([]);
     expect(store.create).not.toHaveBeenCalled();
     expect(store.update).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fix2/N1 (adversarial review l2t2110): EVERY reading's settled composition
+// is self-consistent end to end. The review's §3.5 probe shape: the REAL
+// handler route (the §5 harness idiom — only the model client and the store
+// are stubbed; parse/vocabulary/normalize/resolve_nouns/compile/verb-expander
+// all run REAL) replayed with the canonical NESTED document (110% declared
+// sum + the declared 90:10 on the medium entry) and the answer selecting each
+// reading the bar itself presents. The compiled snapshot must equal THAT
+// READING'S OWN finalFractions — no duplicate component line and no stale
+// nested key the verb expander would re-flatten (compositionSnapshotFromParams
+// flattens ANY entry carrying a sub-composition: a settled flat line that kept
+// the declared 90:10 gets DOUBLE-flattened on top of the reading's own
+// arithmetic — 45% x 90/10 => 40.5/4.5 plus a duplicate supplement line, the
+// review's probe numbers). N3 coverage: one snapshot == readings[i]
+// .finalFractions leg for EACH non-nested reading.
+// ---------------------------------------------------------------------------
+const NESTED_110_DOC = `
+intentId: mixfrac-nested-answer
+sourcePrompt: "50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL"
+actions:
+  - action: add_material
+    labware: plate
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+        - material: "DMEM"
+          role: buffer_component
+          fraction: "50%"
+          composition:
+            - { material: "DMEM", role: buffer_component, fraction: "90%" }
+            - { material: "FBS", role: additive, fraction: "10%" }
+        - { material: "FBS", role: additive, fraction: "10%" }
+        - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`;
+
+/** The same document as the canned tool-call payload (the §5 harness idiom). */
+const NESTED_110_MODEL_OUTPUT = {
+  intentId: 'mixfrac-nested-answer',
+  sourcePrompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL',
+  actions: [{
+    action: 'add_material',
+    labware: 'plate',
+    volumeUl: 50,
+    targetWells: ['A1'],
+    params: {
+      composition: [
+        { material: 'Trypsin-EDTA', role: 'solvent', fraction: '50%' },
+        {
+          material: 'DMEM',
+          role: 'buffer_component',
+          fraction: '50%',
+          composition: [
+            { material: 'DMEM', role: 'buffer_component', fraction: '90%' },
+            { material: 'FBS', role: 'additive', fraction: '10%' },
+          ],
+        },
+        { material: 'FBS', role: 'additive', fraction: '10%' },
+        { material: 'HepG2 cells', role: 'cells', count: 10000, counterDensity: { value: 200, unit: 'cells/uL' } },
+      ],
+    },
+  }],
+};
+
+/** The bar's readings keyed by id (the numbers the panel shows the scientist). */
+function barReadingsById(doc: string): Map<string, Record<string, unknown>> {
+  const fact = clarificationsFor(doc).find((c) => c.reason === FRACTION_REASON)!;
+  const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+  return new Map(readings.map((r) => [String(r['id']), r]));
+}
+
+function finalFractionsMap(reading: Record<string, unknown>): Map<string, number> {
+  return new Map(
+    ((reading['finalFractions'] as Array<Record<string, unknown>>).map(
+      (f) => [String(f['label']), Number(f['percent'])] as const,
+    )),
+  );
+}
+
+/** Drive the REAL route with the answer selecting one reading (the review's
+ *  probe B shape: same fixture document, answer value varied per reading). */
+async function answeredRouteRun(answerValue: string): Promise<{ status: number | undefined; payload: Record<string, unknown> }> {
+  const store = {
+    get: vi.fn(async () => null),
+    getRecord: vi.fn(async () => null),
+    list: vi.fn(async (filter?: { kind?: string }) =>
+      filter?.kind === 'labware'
+        ? [{ recordId: 'LAB-mixfrac-plate-1', schemaId: 's', payload: { kind: 'labware', name: 'plate', title: 'Plate' } }]
+        : [],
+    ),
+    create: vi.fn(async () => { throw new Error('answered-run store must never write'); }),
+    update: vi.fn(async () => { throw new Error('answered-run store must never write'); }),
+    delete: vi.fn(async () => { throw new Error('answered-run store must never write'); }),
+    history: vi.fn(async () => { throw new Error('answered-run store must never read history'); }),
+  };
+  const stubLlm = {
+    complete: vi.fn(async () => ({
+      choices: [{
+        message: {
+          content: null,
+          tool_calls: [{
+            function: { name: 'emit_scientist_intent', arguments: JSON.stringify(NESTED_110_MODEL_OUTPUT) },
+          }],
+        },
+      }],
+    })),
+  };
+  const handlers = createIntentCompileFromPromptHandlers(
+    { store, appConfig: { ai: { inference: { baseUrl: 'http://mock:8899/v1', model: 'lfm2.5-2.6b' } } } } as never,
+    { llmClient: stubLlm as never },
+  );
+  const calls: Array<{ status?: number; payload?: unknown }> = [];
+  let currentStatus: number | undefined;
+  const reply = {
+    status(code: number) { currentStatus = code; return reply; },
+    send(payload: unknown) { calls.push({ status: currentStatus, payload }); return reply; },
+  };
+  await handlers.compileFromPrompt(
+    { body: { protocolText: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL', answers: { sample_type: 'bacterial', 'Trypsin-EDTA, DMEM, FBS': answerValue } }, log: { error: vi.fn() } } as never,
+    reply as never,
+  );
+  expect(calls).toHaveLength(1);
+  // The success path sends with no explicit status (fastify default 200) —
+  // the same normalization replayKernel applies (status ?? 200).
+  return { status: calls[0]!.status ?? 200, payload: calls[0]!.payload as Record<string, unknown> };
+}
+
+/** The compiled snapshot's component lines: label -> percent parsed from the
+ *  ratified source form (a count line has no source). */
+function snapshotLines(payload: Record<string, unknown>): Array<{ label: string; percent: number | undefined; entry: Record<string, unknown> }> {
+  const ta = payload['terminalArtifacts'] as Record<string, unknown>;
+  const events = ta['events'] as Array<Record<string, unknown>>;
+  expect(events.length).toBe(1);
+  const snapshot = (events[0]!['details'] as Record<string, unknown>)['composition_snapshot'] as Array<Record<string, unknown>>;
+  return snapshot.map((entry) => ({
+    label: String((entry['component_ref'] as Record<string, unknown>)['label']),
+    percent: entry['source'] === undefined
+      ? undefined
+      : Number(new RegExp('^(\\d+(?:\\.\\d+)?)%').exec(String(entry['source']))?.[1]),
+    entry,
+  }));
+}
+
+describe('MIXFRAC-1 fix2/N1: the settled composition is self-consistent end to end for EVERY reading (review §3.5 probe shape)', () => {
+  it('answering whole-mixture-supplement compiles exactly that reading\'s finalFractions (45/45/10) — no duplicate line, no re-flattened nested key', async () => {
+    const readings = barReadingsById(NESTED_110_DOC);
+    const run = await answeredRouteRun('whole-mixture-supplement');
+    expect(run.status, 'the answer settles the bar — 200, not 422').toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+    const lines = snapshotLines(run.payload);
+    // The snapshot's fraction lines EQUAL the reading's own computed
+    // finalFractions — the numbers the panel showed are the numbers compiled.
+    const snapshotFractions = new Map(
+      lines.filter((l) => l.percent !== undefined).map((l) => [l.label, l.percent!] as const),
+    );
+    expect(snapshotFractions, 'snapshot == readings[whole-mixture-supplement].finalFractions').toEqual(finalFractionsMap(readings.get('whole-mixture-supplement')!));
+    // No duplicate component line (the probe's DUPLICATE FBS).
+    const labels = lines.map((l) => l.label);
+    expect(new Set(labels).size, 'no duplicate component line').toBe(labels.length);
+    // The cells count line rides (count, never a fraction source).
+    expect(labels).toContain('HepG2 cells');
+    expect(lines.find((l) => l.label === 'HepG2 cells')!.percent).toBeUndefined();
+  });
+
+  it('answering explicit-on-top compiles exactly that reading\'s finalFractions (50/50/10 fractions-of-mixture) — no duplicate line', async () => {
+    const readings = barReadingsById(NESTED_110_DOC);
+    const run = await answeredRouteRun('explicit-on-top');
+    expect(run.status, 'the answer settles the bar — 200, not 422').toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+    const lines = snapshotLines(run.payload);
+    const snapshotFractions = new Map(
+      lines.filter((l) => l.percent !== undefined).map((l) => [l.label, l.percent!] as const),
+    );
+    expect(snapshotFractions, 'snapshot == readings[explicit-on-top].finalFractions').toEqual(finalFractionsMap(readings.get('explicit-on-top')!));
+    const labels = lines.map((l) => l.label);
+    expect(new Set(labels).size, 'no duplicate component line').toBe(labels.length);
+    expect(labels).toContain('HepG2 cells');
+  });
+
+  it('answering preceding-noun-recipe keeps the ruling flat view 50/45/5 (regression guard — the ratified golden path)', async () => {
+    const readings = barReadingsById(NESTED_110_DOC);
+    const run = await answeredRouteRun('preceding-noun-recipe');
+    expect(run.status).toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    const lines = snapshotLines(run.payload);
+    const snapshotFractions = new Map(
+      lines.filter((l) => l.percent !== undefined).map((l) => [l.label, l.percent!] as const),
+    );
+    expect(snapshotFractions, 'snapshot == readings[preceding-noun-recipe].finalFractions').toEqual(finalFractionsMap(readings.get('preceding-noun-recipe')!));
+    const labels = lines.map((l) => l.label);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it('unit leg: answering explicit-on-top settles the carried composition to the declared fractions with NO nested key on the flat line', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(NESTED_110_DOC), {
+      scientistAnswers: { 'Trypsin-EDTA, DMEM, FBS': 'explicit-on-top' },
+    });
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
+    const composition = (normalized.candidateEvents[0] as Record<string, unknown>)['composition'] as Array<Record<string, unknown>>;
+    const byLabel = new Map(composition.map((e) => [String(e['material']), e]));
+    expect(byLabel.get('Trypsin-EDTA')!['fraction']).toBe('50%');
+    expect(byLabel.get('DMEM')!['fraction']).toBe('50%');
+    expect(byLabel.get('FBS')!['fraction']).toBe('10%');
+    expect(composition.filter((e) => String(e['material']) === 'FBS')).toHaveLength(1);
+    expect(byLabel.get('HepG2 cells')!['count']).toBe(10000);
+    // §14.2: the flat derived view never carries a nested entry.
+    for (const entry of composition) expect(Object.keys(entry)).not.toContain('composition');
   });
 });
