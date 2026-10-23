@@ -99,10 +99,11 @@ describe('INSTR-COLLAPSE-2 C3: the instrument record kind is deleted', () => {
       refs.filter((ref) => /(^|\/)instrument\.schema\.yaml$/.test(ref)),
       'record.schema.yaml oneOf must not reference instrument.schema.yaml',
     ).toEqual([]);
-    // The sibling kinds the ruling blesses stay in the union: deletion stopped
+    // The sibling kind the ruling blesses stays in the union: deletion stopped
     // at the right line (instrument-definition is a DIFFERENT kind).
+    // instrument-log is a HISTORICAL kind that was never in this union (its
+    // kind name survives — pinned in the KEEP test below).
     expect(refs.some((ref) => /instrument-definition\.schema\.yaml$/.test(ref))).toBe(true);
-    expect(refs.some((ref) => /instrument-log\.schema\.yaml$/.test(ref))).toBe(true);
   });
 
   it('no loaded schema declares kind: instrument (instrument-definition/log keep theirs)', () => {

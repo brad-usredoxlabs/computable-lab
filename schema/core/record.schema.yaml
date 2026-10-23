@@ -14,7 +14,6 @@ oneOf:
 - $ref: "../workflow/graph-component.schema.yaml"
 - $ref: "../workflow/graph-component-version.schema.yaml"
 - $ref: "../workflow/graph-component-instance.schema.yaml"
-- $ref: "./instrument.schema.yaml"
 - $ref: "./instrument-definition.schema.yaml"
 - $ref: "./readout-definition.schema.yaml"
 - $ref: "./assay-definition.schema.yaml"
