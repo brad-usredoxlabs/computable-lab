@@ -22,6 +22,15 @@ request:
   answers:
     sample_type: bacterial
     "Trypsin-EDTA, DMEM, FBS": preceding-noun-recipe
+    # MIXROLE-1 (Brad ruling 2026-10-22, spec §5b step 4 / bait 11): the role
+    # re-pin to `other` makes the trypsin entry an honest-gap entry, so the
+    # scientist's ANSWERED recompile also carries the role-gap annotation — the
+    # answers-map entry keyed to the gap's own label, value = the intended use
+    # in the scientist's own words (opaque text; the compiler never interprets
+    # it, never infers purpose). Suppression keys on this label: without the
+    # answered gap the bar would loop forever (the honest role stays `other`
+    # after any answer) and this record leg could never compile.
+    "Trypsin-EDTA": "detaches the cells from the culture surface so they can be counted and reseeded"
 store:
   records:
     - recordId: LAB-mixfrac-plate-1
@@ -39,7 +48,7 @@ modelOutput:
       targetWells: [A1]
       params:
         composition:
-          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - { material: "Trypsin-EDTA", role: other, fraction: "50%" }
           - material: "DMEM"
             role: buffer_component
             fraction: "50%"

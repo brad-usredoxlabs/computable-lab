@@ -42,7 +42,7 @@ modelOutput:
       volumeUl: 50
       targetWells: [A1]
       composition:
-        - { material: "trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "trypsin-EDTA", role: other, fraction: "50%" }
         - { material: "DMEM", role: buffer_component, fraction: "50%" }
         - { material: "Equine Serum", role: additive, fraction: "10%" }
         - { material: "HepG2 cells", role: cells, count: 10000 }

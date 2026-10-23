@@ -1,0 +1,47 @@
+# MIXROLE-1 (Brad ruling 2026-10-22, decisions/MIXROLE1-role-axes-brad-ruling-20261022.md):
+# the composition ROLE-GAP affordance is DATA.
+#
+# "materials have identities and properties; their roles are contextual" (Brad's
+# binding principle, decisions/MIXROLE1-role-axes-brad-ruling-20261022.md). The declared
+# role enum has no member that fits every component (an enzyme that detaches cells is
+# not a base-volume carrier), and NO new member is added anywhere (ledger / wire /
+# vendor-product / recipe all unchanged). The honest emission is the CLOSEST declared
+# role, else `other` + the component's own name.
+#
+# This file declares the STRUCTURAL FINGERPRINT of an honest gap and the QUESTION the
+# scientist is asked about it. The TypeScript side
+# (server/src/compiler/scientistIntent/compositionRoles.ts, called from
+# normalizeScientistIntent beside the cue + fraction bars) interprets it generically:
+# zero role literals, zero reagent nouns, zero biology, zero inference of the
+# scientist's intent in TS (repo rule #1 / CLAUDE.md "The Hard Boundary").
+#
+# Loaded PER call (never process-cached), mirroring the mixture-cue + fraction-convention
+# discipline verbatim: an absent file or absent required section turns the check OFF —
+# LOUD (one console.warn naming the path), never silently; a present-but-malformed file
+# THROWS naming the path. Entries pass through unchanged when the check is off.
+#
+# WHAT THE AFFORDANCE DOES: an entry whose role equals `gapRole` in a composition that
+# also carries a `firesOn` sibling raises ONE clarification per entry asking the
+# SCIENTIST for the intended use in their OWN WORDS (the answer rides the existing
+# clarification-answers channel as free text — never a role pick-list, never a value
+# the compiler interprets). It NEVER infers intent from a name, synonym, or word
+# pattern, and it never resolves the gap by confidence.
+
+# The role that marks an honest gap: the enum member the emission falls to when no
+# declared role fits the component. Must match the enum in
+# schema/core/datatypes/composition-entry.schema.yaml; the TS never duplicates the enum.
+gapRole: other
+
+# Structural evidence arms (the cues `firesOn:` idiom). Each arm names an interpreter
+# arm plus its DATA; the TS knows the ARM, never a role name.
+#   siblingRole — the composition carries at least one OTHER entry whose role equals
+#   `role` (role integrity matters most where a living suspension is present).
+firesOn:
+  - arm: siblingRole
+    role: cells
+
+# The question the scientist is asked ({component} is filled with the entry's OWN
+# label). It names NO enum member: enumerating roles re-invites the force-fit the
+# ruling forbids. The answer is the scientist's stated intended use, kept as the
+# answers-map entry (label -> the scientist's words) on the 422/answered exchange.
+question: "What is {component} used for in this composition? State your intended use in your own words."

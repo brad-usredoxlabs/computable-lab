@@ -448,6 +448,15 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
             // the reading ids it presented; every other fact is untouched.
             // No reason/label/reading branch exists in this handler, by design.
             scientistAnswers: answers,
+            // MIXROLE-1 (§5b step 4): the answered clarification LABELS ride as
+            // a label SET built from Object.keys(answers) ONLY — membership,
+            // never a value read. The composition role-gap bar skips an answered
+            // gap (the honest role stays the fallback role after any answer, so
+            // without this the bar loops forever). Non-empty answers are
+            // guaranteed at this call site (the empty-answers branch returned
+            // above), so this key is always present here; every other caller of
+            // the compile deps is byte-identically unchanged.
+            answeredClarificationLabels: Object.keys(answers),
           },
           labInventory,
         });
