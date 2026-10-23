@@ -36,6 +36,101 @@ import type {
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
 let _warnedFallbackOnce = false
 
+// ---------------------------------------------------------------------------
+// INSTR-READCHAIN-1 (b): the read-event chain the chatbot executor attaches to
+// appliance executions. Resolved from RECORDS ONLY — the equipment id comes
+// from the job's own instrumentRef, and the capable-verb set comes from the
+// equipment-capability + verb-definition records. This is the read-time mirror
+// of the join the server performs: DeclaredCapabilityGate's `read-event-verb`
+// resolver (eventGraphRef -> event -> semanticKeyComponents.verb -> VERB-* by
+// canonical) plus EquipmentCapabilityService's capability inventory.
+// H1/H2: no verb literal and no equipment-id constant here — the canonical
+// verb NAME arrives as verb-definition payload data.
+// Deliberately CONSERVATIVE: the server's class<->realization closure
+// (EquipmentKindRegistry) is NOT replicated, so this may under-attach;
+// under-attachment falls through to the server's honest structured refusal,
+// never a fabricated pass. ZERO or TWO-OR-MORE applicable events attach
+// NOTHING — never "the first one" (over-attachment fabricates context).
+// ---------------------------------------------------------------------------
+
+function chainRefId(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const id = (value as Record<string, unknown>).id
+  return typeof id === 'string' && id.length > 0 ? id : undefined
+}
+
+interface ResolvedReadEventChain {
+  eventGraphId: string
+  eventId: string
+}
+
+async function resolveReadEventChain(
+  job: InstrumentApplianceJob,
+  eventGraphId: string,
+): Promise<ResolvedReadEventChain | null> {
+  try {
+    const equipmentId = chainRefId(job.request.instrumentRef)
+    if (!equipmentId) return null
+
+    const graphEnvelope = await apiClient.getRecord(eventGraphId)
+    const events = (graphEnvelope.payload as { events?: unknown }).events
+    if (!Array.isArray(events)) return null
+
+    // Declared verbs of THIS equipment: its own capability records plus those
+    // bound to its equipment class (direct join only — see the conservative
+    // note above).
+    const equipmentEnvelope = await apiClient.getRecord(equipmentId)
+    const classId = chainRefId((equipmentEnvelope.payload as { equipmentClassRef?: unknown }).equipmentClassRef)
+
+    const capabilityList = await apiClient.listRecordsByKind('equipment-capability', 200)
+    const declaredVerbIds = new Set<string>()
+    for (const envelope of capabilityList.records) {
+      const payload = envelope.payload as {
+        status?: unknown
+        equipmentRef?: unknown
+        equipmentClassRef?: unknown
+        capabilities?: unknown
+      }
+      if (payload.status !== 'active') continue
+      const matchesEquipment = chainRefId(payload.equipmentRef) === equipmentId
+      const matchesClass = classId !== undefined && chainRefId(payload.equipmentClassRef) === classId
+      if (!matchesEquipment && !matchesClass) continue
+      const capabilities = Array.isArray(payload.capabilities) ? payload.capabilities : []
+      for (const capability of capabilities) {
+        const verbId = chainRefId((capability as { verbRef?: unknown })?.verbRef)
+        if (verbId) declaredVerbIds.add(verbId)
+      }
+    }
+    if (declaredVerbIds.size === 0) return null
+
+    // VERB-* record ids -> their canonical NAME strings (data, not literals).
+    const verbList = await apiClient.listRecordsByKind('verb-definition', 200)
+    const canonicalVerbs = new Set<string>()
+    for (const envelope of verbList.records) {
+      const payload = envelope.payload as { kind?: unknown; id?: unknown; canonical?: unknown }
+      if (payload.kind !== 'verb-definition') continue
+      if (typeof payload.id !== 'string' || !declaredVerbIds.has(payload.id)) continue
+      if (typeof payload.canonical === 'string' && payload.canonical.length > 0) canonicalVerbs.add(payload.canonical)
+    }
+    if (canonicalVerbs.size === 0) return null
+
+    const candidates = events.filter((candidate) => {
+      const event = candidate as { eventId?: unknown; semanticKeyComponents?: unknown }
+      if (typeof event?.eventId !== 'string' || event.eventId.length === 0) return false
+      const verb = (event.semanticKeyComponents as { verb?: unknown } | undefined)?.verb
+      return typeof verb === 'string' && canonicalVerbs.has(verb)
+    })
+    if (candidates.length !== 1) return null
+
+    return { eventGraphId, eventId: (candidates[0] as { eventId: string }).eventId }
+  } catch {
+    // A missing graph / equipment / capability fetch is treated as
+    // no-applicable: no chain, no crash. The server's pre-flight owns the
+    // structured refusal and the chat error surface already reports it.
+    return null
+  }
+}
+
 function generateMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
 }
@@ -824,6 +919,27 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       }
     }
 
+    // INSTR-READCHAIN-1 (b): resolve the run's read-event chain BEFORE the
+    // executing-state set / dispatch. Absent graph id, zero applicable events,
+    // or an ambiguous (2+) graph attach NOTHING — the request goes out
+    // untouched and the server's pre-flight (ruling §2D) answers with its
+    // honest structured 400. exactOptionalPropertyTypes: conditional spread,
+    // never an `undefined` assignment.
+    const surfaceEventGraphId = aiContextRef.current.surfaceContext['eventGraphId']
+    const readChain = typeof surfaceEventGraphId === 'string' && surfaceEventGraphId.length > 0
+      ? await resolveReadEventChain(job, surfaceEventGraphId)
+      : null
+    const dispatchJob: InstrumentApplianceJob = readChain
+      ? {
+          ...job,
+          request: {
+            ...job.request,
+            eventGraphRef: { kind: 'record', id: readChain.eventGraphId, type: 'event-graph' },
+            readEventRef: readChain.eventId,
+          },
+        }
+      : job
+
     setExecutingApplianceJobIds((prev) => new Set(prev).add(job.jobId))
     setMessages((prev) => [
       ...prev,
@@ -835,7 +951,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       },
     ])
     try {
-      const result = await apiClient.executeInstrumentApplianceJob(job, {
+      const result = await apiClient.executeInstrumentApplianceJob(dispatchJob, {
         confirmLiveExecution: requiresConfirmation,
       })
       setMessages((prev) => [
