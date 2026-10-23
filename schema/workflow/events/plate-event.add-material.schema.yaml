@@ -81,6 +81,25 @@ properties:
           reservation semantics anywhere (P7). Legal under status
           unresolved|provided (lint add-material-requested-source-status);
           written by the ordinary plan-editing path, never by a resolver.
+      acceptedLots:
+        type: array
+        minItems: 1
+        items: { type: string, minLength: 1 }
+        description: >
+          MATRES-FULFIL §7.5 declared-fact slot: the lots this requirement
+          will accept (vendor-scoped lot semantics ride the evidence record
+          itself — RECV owns that; this is the requirement declaring what it
+          accepts). A fulfillment evaluation compares declared facts only:
+          ABSENT means the check is INCOMPLETE, never a vacuous pass.
+      expectedDerivations:
+        type: array
+        minItems: 1
+        items: { type: string, minLength: 1 }
+        description: >
+          MATRES-FULFIL §7.5 declared-fact slot: the derivation kinds
+          (material-derivation.derivation_type values) this requirement
+          expects a derivation-typed fulfillment to be. ABSENT means the
+          check is INCOMPLETE, never a vacuous pass.
       material_ref:
         $ref: "../../datatypes/ref.schema.yaml"
       material_spec_ref:

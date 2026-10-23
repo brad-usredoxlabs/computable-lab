@@ -1,0 +1,67 @@
+# MATRES-FULFIL §7.5 — the declared compatibility evaluation POLICY (DATA).
+#
+# A receipt proves CUSTODY, not SATISFACTION (P8). Whether evidence satisfies a
+# FORMULATION requirement is decided by THIS file, never by a TypeScript
+# branch: the evaluator (evaluateCompatibility.ts) is a pure read that walks
+# these declared checks over adapter-exposed declared facts and reports the
+# three-state verdict the data names. Missing declared fact => the
+# missing-*-fact outcome (INCOMPLETE by the data's own mapping) — "not known
+# to mismatch" NEVER evaluates as "known to match".
+#
+# The verdict trio here is the SAME vocabulary the attestation lint declares
+# (fulfil-evaluations-declared / fulfil-completed-needs-compatible-evaluations
+# / fulfil-mismatch-blocks); the contract tests pin both sides so they cannot
+# drift apart.
+policyVersion: 1
+
+# The declared verdict vocabulary (mirrors attestation.lint.yaml values).
+verdicts: [ compatible, mismatch, incomplete ]
+
+# Outcome -> verdict mapping. The evaluator names OUTCOMES; the verdict each
+# outcome carries is THIS data's decision, never a TS literal.
+outcomes:
+  satisfied: compatible
+  contradicted: mismatch
+  missing-requirement-fact: incomplete
+  missing-evidence-fact: incomplete
+
+# The generic comparison mechanisms the evaluator implements (interpreter
+# vocabulary; which check uses which is declared per-check below).
+operators: [ membership, ref-equality ]
+
+# Per-requirement-slot checks over declared facts.
+# - requirementPath: dot path (or [*] projection) INSIDE the pinned plan's
+#   material_source_requirement object. An absent or EMPTY value there is a
+#   missing declared fact => incomplete, never a vacuous compatible.
+# - evidencePaths: dot paths (or [*] projections) INSIDE the evidence record's
+#   payload. No path resolving to a present value => missing evidence fact.
+# - fulfilledBy: which evidence families this check applies to (the claim's
+#   own fulfilledBy value selects the checks — data, not a TS branch).
+checks:
+  # The evidence must name the formulation the requirement asks for.
+  - id: spec-identity
+    requirementSlot: spec-identity
+    fulfilledBy: [ derivation ]
+    requirementPath: material_spec_ref.id
+    evidencePaths: [ "outputs[*].id" ]
+    operator: ref-equality
+
+  # A derivation-typed fulfillment must be the derivation kind the
+  # requirement declared (when declared).
+  - id: derivation-type
+    requirementSlot: derivation-type
+    fulfilledBy: [ derivation ]
+    requirementPath: expectedDerivations
+    evidencePaths: [ derivation_type ]
+    operator: membership
+
+  # A receipt-typed fulfillment's lot must sit inside the requirement's
+  # declared acceptedLots (when declared). Vendor-scoped lot semantics ride
+  # the evidence record itself (RECV owns that); this check only compares
+  # declared facts.
+  - id: accepted-lot
+    requirementSlot: accepted-lot
+    fulfilledBy: [ receipt ]
+    requirementPath: acceptedLots
+    evidencePaths: [ "claims[*].assertion.lot" ]
+    operator: membership
