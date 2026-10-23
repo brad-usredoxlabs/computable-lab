@@ -108,7 +108,9 @@ export class RecordSearchHandlers {
       'equipment-class': 'laboratory equipment model specifications',
       'material': 'chemical reagent supplier',
       'labware': 'laboratory consumable specifications',
-      'instrument': 'analytical instrument specifications',
+      // INSTR-COLLAPSE-2 C4 (OQ-C(2) ratified DELETE): the map is keyed by
+      // RECORD KIND; the instrument kind is deleted, so this is a dead
+      // registry key — not concept vocabulary. Removed with the kind.
     };
     const suffix = kinds.map(k => kindHints[k]).filter(Boolean)[0] || 'laboratory';
 
