@@ -664,6 +664,115 @@ export function foldAnswersIntoShorthand(
   }
 }
 
+// ---------------------------------------------------------------------------
+// ANSWER-FOLD-NULL-1 Leg 1: the fold-null ARM DIAGNOSTIC (additive-only)
+// ---------------------------------------------------------------------------
+
+/** Which null arm of `foldAnswersIntoShorthand` a given answer set would trip.
+ *  The arm tags map 1:1 to the fold's null exits (pinned at dispatch tip
+ *  4f9d147e / re-verified at 0cec0bf0):
+ *    'no-answers'        :582  answers.length === 0
+ *    'join-miss'         :604-615  content-key miss AND legacy-digit fallback miss
+ *    'empty-label'       :616-619  answer label missing/blank
+ *    'no-action-location':620-621  fact lacks loc / actionIndex not number / argument not string
+ *    'slot-not-string'   :622-623  doc.actions[loc.actionIndex][loc.argument] is not a string
+ *    'nothing-answered'  :633  answered.size === 0
+ *    'ajv-reparse-fail'  :653-663  parseShorthandForChat threw ScientistIntentValidationError
+ *  ('none' = no arm fires ⇒ the fold cannot be the null source — the
+ *  should-not-happen case.) */
+export type FoldNullArm =
+  | 'no-answers'
+  | 'join-miss'
+  | 'empty-label'
+  | 'no-action-location'
+  | 'slot-not-string'
+  | 'nothing-answered'
+  | 'ajv-reparse-fail';
+
+export interface FoldNullArmReport {
+  arm: FoldNullArm;
+  /** The requestId of the answer that tripped the arm ('' for 'no-answers'). */
+  requestId: string;
+  /** Present ONLY for 'slot-not-string': the slot's argument name and the
+   *  typeof tag of the slot value (the discriminator this item measures). */
+  argument?: string;
+  slotType?: string;
+}
+
+/**
+ * ANSWER-FOLD-NULL-1 (Leg 1): a PURE MIRROR of the fold's guards — walks the
+ * SAME guards in the SAME order as `foldAnswersIntoShorthand` (byte-mirror of
+ * :582-:663, kept directly under the fold so a fold edit must see it) and
+ * returns the FIRST arm that would make the fold return null, with the
+ * requestId that triggered it and, for 'slot-not-string', the actual typeof
+ * tag of the slot value. Returns null when NO arm fires (the fold would not
+ * be null). This is a diagnostic, not a second fold: it never mutates the
+ * held doc beyond the fold's own string-slot splice, and the fold itself is
+ * byte-unchanged by Leg 1.
+ */
+export function foldNullArm(
+  held: HeldShorthandIntent,
+  answers: readonly AgentClarificationAnswer[],
+): FoldNullArmReport | null {
+  if (answers.length === 0) return { arm: 'no-answers', requestId: '' };
+  const doc: ScientistIntent = structuredClone(held.doc);
+  const factByKey = new Map<string, ScientistIntentUnresolvedFact>();
+  for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
+  const answered = new Set<ScientistIntentUnresolvedFact>();
+  for (const answer of answers) {
+    const requestId = answer.requestId ?? '';
+    let fact = factByKey.get(requestId);
+    if (!fact) {
+      const legacy = /^unresolved-(\d+)$/.exec(requestId);
+      if (legacy) fact = held.clarifications[Number(legacy[1]) - 1];
+    }
+    if (!fact) return { arm: 'join-miss', requestId };
+    const label = typeof answer.label === 'string' && answer.label.trim().length > 0
+      ? answer.label.trim()
+      : null;
+    if (!label) return { arm: 'empty-label', requestId };
+    const loc = fact.actionLocation;
+    if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') {
+      return { arm: 'no-action-location', requestId };
+    }
+    const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
+    if (!action) return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'undefined' };
+    const slotValue = action[loc.argument];
+    if (typeof slotValue !== 'string') {
+      return {
+        arm: 'slot-not-string',
+        requestId,
+        argument: loc.argument,
+        slotType: Array.isArray(slotValue) ? 'array' : typeof slotValue,
+      };
+    }
+    action[loc.argument] = label;
+    answered.add(fact);
+  }
+  if (answered.size === 0) return { arm: 'nothing-answered', requestId: '' };
+  const filledLabels = new Set(
+    answers
+      .map((a) => (typeof a.label === 'string' ? a.label.trim() : ''))
+      .filter((l) => l.length > 0),
+  );
+  doc.unresolved = doc.unresolved.filter((fact) => !filledLabels.has(fact.label));
+  const yamlText = stringifyYaml({
+    intentId: doc.intentId,
+    ...(typeof doc.sourcePrompt === 'string' ? { sourcePrompt: doc.sourcePrompt } : {}),
+    actions: doc.actions,
+    unresolved: doc.unresolved,
+  });
+  try {
+    parseShorthandForChat(yamlText);
+  } catch (error) {
+    if (error instanceof ScientistIntentValidationError) {
+      return { arm: 'ajv-reparse-fail', requestId: '' };
+    }
+    throw error;
+  }
+  return null;
+}
+
 /**
  * SH-QA-1 auto-satisfy ledger (fix 2): drop a re-derived fact iff its slot
  * identity is in the ledger AND the document's slot value is STILL the ledger
