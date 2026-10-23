@@ -18,11 +18,9 @@ kinds:
   - kind: equipment-class
   - kind: training-record
   - kind: competency-authorization
-  - kind: instrument
-    # QMS8-C (D4): same operational vocabulary as equipment (active /
-    # out_of_service / retired / maintenance) and the same lifecycle, so the
-    # same retirement applies. (The kind's own DELETION is a separate item.)
-    stripDomainStatus: true
+    # INSTR-COLLAPSE-2 C3: the `instrument` coverage entry is RETIRED with the
+    # kind (Brad 2026-10-21T19:15 ruling; schema/lab/instrument.{schema,lint,ui}
+    # deleted, record.schema.yaml oneOf branch removed). Coverage is now 6 kinds.
   - kind: calibration-record
 
 # Data-driven archive guard (QMS7-4, ruling B): a NEW ref assignment to a

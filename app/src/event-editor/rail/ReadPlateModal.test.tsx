@@ -63,6 +63,36 @@ describe('ReadPlateModal', () => {
     expect(apiMocks.updateRecord).toHaveBeenCalledTimes(2)
   })
 
+  it('INSTR-COLLAPSE-2 C4: the POSTed appliance job names the seed-declared equipment record (O1 ruling)', async () => {
+    // Ruling ~/.hermes/plans/2026-10-22_instr-collapse-d1-liveflow-gate-decision.md §5:
+    // BOTH refs (appliance-job instrumentRef AND measurement-context equipment_ref)
+    // retarget to the canonical seed-declared id EQP-PLATE-READER. The retired
+    // path-style id (instrument/gemini-em) and the phantom id (EQP-GEMINI-EM)
+    // must not be emitted — no id may be emitted that no record declares.
+    const positive = createGroupDraft({
+      roleDefinition: SEEDED_ROLE_DEFINITIONS.find((role) => role.id === 'CR-ros-positive-control'),
+      selectedWells: ['A1'],
+    })
+    const rail = {
+      'pl-1': {
+        ...DEFAULT_PLATE_RAIL_DRAFT,
+        knowledge: { ...DEFAULT_PLATE_RAIL_DRAFT.knowledge, groups: [positive] },
+      },
+    }
+
+    render(<ReadPlateModal isOpen placementId='pl-1' labware={labware} rail={rail} events={[]} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Execute read' }))
+
+    await waitFor(() => expect(apiMocks.executeInstrumentApplianceJob).toHaveBeenCalledTimes(1))
+    const job = apiMocks.executeInstrumentApplianceJob.mock.calls[0][0]
+    expect(job.request.instrumentRef).toMatchObject({ kind: 'record', type: 'equipment', id: 'EQP-PLATE-READER' })
+
+    // The measurement-context create carries the SAME canonical equipment ref.
+    const mctxCall = apiMocks.createRecord.mock.calls.find((call) => String(call[0]).includes('measurement-context.schema'))
+    expect(mctxCall, 'measurement-context create expected').toBeDefined()
+    expect(mctxCall![1].equipment_ref).toMatchObject({ kind: 'record', type: 'equipment', id: 'EQP-PLATE-READER' })
+  })
+
   it('allows a positive-control-only channel to execute', async () => {
     const positive = createGroupDraft({
       roleDefinition: SEEDED_ROLE_DEFINITIONS.find((role) => role.id === 'CR-ros-positive-control'),

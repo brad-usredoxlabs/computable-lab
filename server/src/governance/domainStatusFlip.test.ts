@@ -259,8 +259,13 @@ describe('QMS8-C C3: a covered-kind write carrying the retired domain status is 
     expect(storedPayload(world, 'EQP-C3-EXIST').name).toBe('Existing pump')
   })
 
-  it('the retired property is GONE from the equipment and instrument schema DATA', () => {
-    for (const name of ['equipment', 'instrument']) {
+  it('the retired property is GONE from the equipment schema DATA', () => {
+    // INSTR-COLLAPSE-2 C3: the instrument leg retires WITH the kind —
+    // schema/lab/instrument.{schema,lint,ui}.yaml are deleted (the deletion is
+    // pinned by InstrumentKindRetirement.test.ts (e)), so this QMS8-C probe
+    // now covers only the kind that survives. Retirement, not weakening: the
+    // surviving equipment leg keeps its original assertions verbatim.
+    for (const name of ['equipment']) {
       const raw = readFileSync(join(SCHEMA_DIR, 'lab', `${name}.schema.yaml`), 'utf8')
       expect(validator.hasSchema(SID(`${name}.schema.yaml`)), `${name}.schema.yaml must load`).toBe(true)
       // Not merely optional — the declaration itself is deleted (D3).
@@ -375,8 +380,10 @@ describe('QMS8-C C3 (D8-(i)): the equipment collection label tells the truth', (
 // ---------------------------------------------------------------------------
 
 describe('QMS8-C C3 (D3): the covered kinds declare no status in their UI', () => {
-  it('equipment.ui.yaml and instrument.ui.yaml declare no $.status field or column', () => {
-    for (const name of ['equipment', 'instrument']) {
+  it('equipment.ui.yaml declares no $.status field or column', () => {
+    // INSTR-COLLAPSE-2 C3: instrument.ui.yaml leg retired with the kind
+    // (file deleted; pinned by InstrumentKindRetirement.test.ts (e)).
+    for (const name of ['equipment']) {
       const raw = readFileSync(join(SCHEMA_DIR, 'lab', `${name}.ui.yaml`), 'utf8')
       expect(raw, `${name}.ui.yaml must not declare a status field`).not.toMatch(/\$\.status/)
       expect(raw).not.toMatch(/label:\s*"Status"/)

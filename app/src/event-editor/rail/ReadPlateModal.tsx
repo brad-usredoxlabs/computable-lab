@@ -53,13 +53,21 @@ function recordRef(id: string, type: string, label?: string): Ref {
 }
 
 function instrumentRef(): Ref {
-  // Active-read/appliance contract ref (field NAME retained; blob-path-style id stays).
-  return recordRef('instrument/gemini-em', 'equipment', 'Gemini EM')
+  // INSTR-COLLAPSE-2 C4 (D1 ruling §5, O1): the appliance-job ref TARGET is
+  // the seed-declared equipment record EQP-PLATE-READER
+  // (records/seed/equipment/eqp-plate-reader.yaml, whose ECP-PLATE-READER
+  // capability binds VERB-READ). The retired path-style id
+  // `instrument/gemini-em` is gone: no id may be emitted that no record
+  // declares. Field NAME instrumentRef retained (contract surface).
+  return recordRef('EQP-PLATE-READER', 'equipment', 'Gemini EM')
 }
 
 function equipmentRef(): Ref {
-  // measurement-context.equipment_ref (INSTR-COLLAPSE-1 C1): the physical source is an equipment record.
-  return recordRef('EQP-GEMINI-EM', 'equipment', 'Gemini EM')
+  // measurement-context.equipment_ref (INSTR-COLLAPSE-1 C1): the physical
+  // source is an equipment record. Same canonical target as instrumentRef()
+  // above (D1 ruling §5 retires the phantom EQP-GEMINI-EM id — zero records
+  // declare it).
+  return recordRef('EQP-PLATE-READER', 'equipment', 'Gemini EM')
 }
 
 function readoutRefForChannel(channel: ChannelDraft): Ref {

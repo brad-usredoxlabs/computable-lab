@@ -92,12 +92,14 @@ function loadCoverage(): { engine: LifecycleEngine; coverage: KindLifecycleRegis
   // For the unit harness the covered-kind set is what the coverage file
   // declares; the loader's knownKinds gate is exercised by the real pipeline
   // in equipment.seed.test.ts, so here a permissive set keeps the focus on
-  // the runner.
+  // the runner. The retired kind was dropped from the registry with its
+  // retirement (Brad 2026-10-21T19:15 collapse ruling), so it is not listed
+  // here either.
   const coverage = loadKindLifecycleRegistry(COVERAGE_FILE, {
     lifecycle: engine,
     knownKinds: new Set([
       'person', 'equipment', 'equipment-class', 'training-record',
-      'competency-authorization', 'instrument', 'calibration-record',
+      'competency-authorization', 'calibration-record',
     ]),
   })
   return { engine, coverage }

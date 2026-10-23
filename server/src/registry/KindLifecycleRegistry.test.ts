@@ -39,16 +39,18 @@ function fixture(name: string, content: string): string {
   return path
 }
 
-const KINDS = ['person', 'equipment', 'equipment-class', 'training-record', 'competency-authorization', 'instrument', 'calibration-record']
+// INSTR-COLLAPSE-2 C3: 'instrument' retired WITH the kind (coverage file now
+// declares 6 kinds; the collapse ruling supersedes the older "KEEP AT 7").
+const KINDS = ['person', 'equipment', 'equipment-class', 'training-record', 'competency-authorization', 'calibration-record']
 
 function deps(engine = realEngine(), knownKinds: Set<string> = new Set(KINDS)): KindLifecycleRegistryDeps {
   return { lifecycle: engine, knownKinds }
 }
 
 describe('KindLifecycleRegistry (QMS7-3 loader)', () => {
-  it('loads the REAL coverage file: exactly the 7 approved kinds, registry-ops/draft', () => {
+  it('loads the REAL coverage file: exactly the 6 covered kinds, registry-ops/draft', () => {
     const registry = loadKindLifecycleRegistry(COVERAGE_FILE, deps())
-    expect(registry.size).toBe(7)
+    expect(registry.size).toBe(6)
     expect([...registry.kinds()].sort()).toEqual([...KINDS].sort())
     expect(registry.lifecycle).toBe('registry-ops')
     const entry = registry.entryFor('equipment-class')
@@ -56,7 +58,9 @@ describe('KindLifecycleRegistry (QMS7-3 loader)', () => {
     // kind with no flag in the DATA reads false — the flag is never inferred.
     expect(entry).toEqual({ kind: 'equipment-class', lifecycleId: 'registry-ops', defaultState: 'draft', stripDomainStatus: false })
     expect(registry.entryFor('equipment')?.stripDomainStatus).toBe(true)
-    expect(registry.kindsRetiringDomainStatus().sort()).toEqual(['equipment', 'instrument'])
+    // INSTR-COLLAPSE-2 C3: 'instrument' is gone from the declared list; the
+    // declared retirement flag survives for the kind that keeps it.
+    expect(registry.kindsRetiringDomainStatus().sort()).toEqual(['equipment'])
     // Undeclared kinds get nothing.
     expect(registry.entryFor('training-material')).toBeUndefined()
     expect(registry.entryFor('protocol')).toBeUndefined()

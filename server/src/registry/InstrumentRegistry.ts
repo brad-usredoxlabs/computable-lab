@@ -32,7 +32,12 @@ let singleton: RegistryLoader<InstrumentDefinition> | null = null;
 export function getInstrumentRegistry(): RegistryLoader<InstrumentDefinition> {
   if (!singleton) {
     singleton = createRegistryLoader({
-      kind: 'instrument',
+      // INSTR-COLLAPSE-2 C4: this loader serves the KEPT
+      // schema/registry/instruments/ directory, whose records are kind
+      // `instrument-definition` (zod literal above). The label now names the
+      // actual kind instead of the deleted one (error-message label only —
+      // file SURVIVES per P3 / COLLAPSE-1 (f) audit KEEP).
+      kind: 'instrument-definition',
       directory: DIR,
       schema: InstrumentDefinitionSchema,
     });

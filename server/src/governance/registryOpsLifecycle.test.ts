@@ -44,13 +44,17 @@ const TMP_DIR = join(here, '../../tmp/qms73-loader-fixtures')
 
 const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/${name}`
 
-/** The 7 approved plain lab-registry kinds (orchestrator ruling OQ3: KEEP AT 7). */
+/**
+ * The plain lab-registry kinds covered by the coverage file.
+ * INSTR-COLLAPSE-2 C3: 7 → 6. The older orchestrator ruling "OQ3: KEEP AT 7"
+ * is SUPERSEDED for this kind by the collapse ruling (Brad 2026-10-21T19:15):
+ * the `instrument` kind is deleted, so its coverage entry retires with it.
+ */
 const COVERED_KINDS = [
   'calibration-record',
   'competency-authorization',
   'equipment',
   'equipment-class',
-  'instrument',
   'person',
   'training-record',
 ]
@@ -653,38 +657,14 @@ describe('QMS7-3 schema-shape guards', () => {
 })
 
 // ===========================================================================
-// 7. instrument special case (bait #6): PRE-EXISTING provenance-injection defect
+// 7. instrument special case — RETIRED with the kind (INSTR-COLLAPSE-2 C3).
+//    This block certified a PRE-EXISTING provenance-injection defect on
+//    instrument CREATE. The kind is deleted (Brad 2026-10-21T19:15 ruling;
+//    schema/lab/instrument.* deleted, registry-kinds entry removed), so the
+//    defect it certifies can no longer occur: there is no instrument create.
+//    Retirement note per the task block — the pins are retired WITH the kind,
+//    not weakened. The defect class itself (create-handler provenance
+//    injection into a schema that declares no provenance properties) remains
+//    a live concern for any other kind; it is NOT fixed here and NOT fixed by
+//    this retirement.
 // ===========================================================================
-
-describe('QMS7-3 instrument: pre-existing provenance-injection defect (finding, not widened)', () => {
-  it('instrument create currently fails validation because the create handler injects createdAt/updatedAt/createdBy into a schema that declares none (pre-existing defect, proven at base)', async () => {
-    const world = makeWorld()
-    const created = await callCreate(world, SID('instrument.schema.yaml'), {
-      kind: 'instrument',
-      id: 'INSTR-QMS7TEST',
-      name: 'QMS7-3 probe instrument',
-    }, 'USR-REGOPS')
-    // Base behavior (verified pre-implementation with the real Ajv pipeline):
-    // the injected provenance fields are unknown properties for instrument.
-    expect(created.status).toBe(422)
-    expect(created.result.error).toBe('Validation failed')
-    const validation = created.result.validation as { errors: Array<{ message: string }> }
-    const unknown = validation.errors.map(e => e.message).filter(m => /Unknown property/.test(m))
-    expect(unknown.join(' ')).toContain('createdAt')
-  })
-
-  // Documents the DESIRED behavior that the pre-existing defect blocks:
-  // passes only while instrument create is broken; flips to failing (and
-  // demands attention) the moment the injection exemption is fixed.
-  it.fails('instrument create yields a governed registry-ops draft (blocked by the pre-existing provenance-injection defect)', async () => {
-    const world = makeWorld()
-    const created = await callCreate(world, SID('instrument.schema.yaml'), {
-      kind: 'instrument',
-      id: 'INSTR-QMS7DRAFT',
-      name: 'QMS7-3 governed instrument',
-    }, 'USR-REGOPS')
-    expect(created.status).toBe(201)
-    expect(storedPayload(world, 'INSTR-QMS7DRAFT').lifecycleId).toBe('registry-ops')
-    expect(storedPayload(world, 'INSTR-QMS7DRAFT').state).toBe('draft')
-  })
-})

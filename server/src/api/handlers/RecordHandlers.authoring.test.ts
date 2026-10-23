@@ -1,5 +1,15 @@
 /**
- * QMS8-B — draft-gated registry authoring for instrument/equipment.
+ * QMS8-B — draft-gated registry authoring for equipment (+ role-grant guard).
+ *
+ * INSTR-COLLAPSE-2 C3 RETIREMENT NOTE: this file was
+ * RecordHandlers.instrumentAuthoring.test.ts and covered BOTH the instrument
+ * and equipment kinds. The instrument KIND is deleted (Brad 2026-10-21T19:15
+ * ruling), so its cases retire WITH the kind — every generic-leg and equipment
+ * case is retained unchanged (denyCode EQUIPMENT_AUTHORING_FORBIDDEN, the
+ * lint-file contract, the role-grant bundle-blind guard). Coverage delta:
+ * 4 instrument-specific cases retired (instrument deny, instrument sandbox,
+ * instrument no-role deny, instrument update-leg) + the instrument rows of the
+ * lint-file contract; equipment coverage is byte-identical.
  *
  * Harness mirrors RecordHandlers.roleGrant.test.ts (the only wired `authoring:`
  * precedent on this trunk): the REAL lint YAML is loaded from disk, a mock
@@ -9,7 +19,7 @@
  *
  * The RED discriminator (spec §RED-first case 1): an actor holding ONLY
  * author@document-controlled-signing (the GRANT-DEMO-AUTHOR shape) must be
- * DENIED an instrument create under authoringGate:deny. On the unfixed handler
+ * DENIED an equipment create under authoringGate:deny. On the unfixed handler
  * rolesFor() is called UNSCOPED, so that inert demo grant leaks through —
  * that failure is the per-lifecycle-scope proof.
  *
@@ -41,7 +51,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_DIR = join(here, '../../../../schema');
 
 const SID = (name: string) => `https://computable-lab.com/schema/computable-lab/${name}`;
-const INSTRUMENT_SCHEMA_ID = SID('instrument.schema.yaml');
 const EQUIPMENT_SCHEMA_ID = SID('equipment.schema.yaml');
 const ROLE_GRANT_SCHEMA_ID = SID('role-grant.schema.yaml');
 
@@ -55,7 +64,6 @@ function readAuthoringLint(relPath: string): { lint: Record<string, unknown>; au
   return { lint: doc as Record<string, unknown>, authoring: doc.authoring as AuthoringPolicy };
 }
 
-const instrumentLint = readAuthoringLint('lab/instrument.lint.yaml');
 const equipmentLint = readAuthoringLint('lab/equipment.lint.yaml');
 const roleGrantLint = readAuthoringLint('identity/role-grant.lint.yaml');
 
@@ -163,8 +171,7 @@ function makeWorld(options: WorldOptions, existing?: RecordEnvelope): World {
       identityService: { resolveRequestUser: async () => ({ userId: options.userId, isSystem: options.isSystem ?? false }) },
       roleResolver: new RoleResolver(store),
       getAuthoringPolicy: (schemaId: string) =>
-        schemaId === INSTRUMENT_SCHEMA_ID ? instrumentLint.authoring
-        : schemaId === EQUIPMENT_SCHEMA_ID ? equipmentLint.authoring
+        schemaId === EQUIPMENT_SCHEMA_ID ? equipmentLint.authoring
         : schemaId === ROLE_GRANT_SCHEMA_ID ? roleGrantLint.authoring
         : undefined,
       getPolicySettings: () => ({
@@ -214,13 +221,6 @@ const equipmentPayload = (id: string, overrides: Record<string, unknown> = {}) =
   ...overrides,
 });
 
-const instrumentPayload = (id: string, overrides: Record<string, unknown> = {}) => ({
-  kind: 'instrument',
-  id,
-  name: 'QMS8-B probe instrument',
-  ...overrides,
-});
-
 const DEMO_GRANT = [{ recordId: 'GRANT-QMS8B-DEMO', userId: 'USR-BRAD', roles: ['author'], lifecycleId: 'document-controlled-signing' }];
 const REGOPS_GRANT = [{ recordId: 'GRANT-QMS8B-REGOPS', userId: 'USR-BRAD', roles: ['author'], lifecycleId: 'registry-ops' }];
 const UNSCOPED_GRANT = [{ recordId: 'GRANT-QMS8B-UNSCOPED', userId: 'USR-BRAD', roles: ['author'] }];
@@ -254,14 +254,6 @@ describe('QMS8-B authoring gate is lifecycle-scoped (RED discriminator)', () => 
     expect(typeof created.result.message).toBe('string');
     expect(created.result.code).toBeUndefined(); // denial bodies are {error, message} — no code field
     expect(world.records.has('EQP-QMS8B-LEAK')).toBe(false);
-  });
-
-  it('author@document-controlled-signing ALONE cannot author an instrument draft under authoringGate:deny', async () => {
-    const world = makeWorld({ userId: 'USR-BRAD', grants: DEMO_GRANT, authoringGate: 'deny' });
-    const created = await create(world, INSTRUMENT_SCHEMA_ID, instrumentPayload('INSTR-QMS8B-LEAK'));
-    expect(created.status).toBe(403);
-    expect(created.result.error).toBe('INSTRUMENT_AUTHORING_FORBIDDEN');
-    expect(world.records.has('INSTR-QMS8B-LEAK')).toBe(false);
   });
 
   it('the same actor WITH author@registry-ops passes, and the coverage stamp still lands (state=draft)', async () => {
@@ -326,22 +318,11 @@ describe('QMS8-B authoring blocks are bundle-gated (gateOnPolicySetting)', () =>
     expect(world.records.has('EQP-QMS8B-SANDBOX')).toBe(true);
   });
 
-  it('authoringGate:allow + instrument with no roles → proceeds (zero friction under sandbox)', async () => {
-    const world = makeWorld({ userId: 'USR-BRAD', grants: [], authoringGate: 'allow' });
-    const created = await create(world, INSTRUMENT_SCHEMA_ID, instrumentPayload('INSTR-QMS8B-SANDBOX'));
-    expect(created.status).toBe(201);
-  });
-
-  it('authoringGate:deny + no roles at all → 403 on both kinds', async () => {
+  it('authoringGate:deny + no roles at all → 403', async () => {
     const eq = makeWorld({ userId: 'USR-BRAD', grants: [], authoringGate: 'deny' });
     const eqRes = await create(eq, EQUIPMENT_SCHEMA_ID, equipmentPayload('EQP-QMS8B-NOROLE'));
     expect(eqRes.status).toBe(403);
     expect(eqRes.result.error).toBe('EQUIPMENT_AUTHORING_FORBIDDEN');
-
-    const inst = makeWorld({ userId: 'USR-BRAD', grants: [], authoringGate: 'deny' });
-    const instRes = await create(inst, INSTRUMENT_SCHEMA_ID, instrumentPayload('INSTR-QMS8B-NOROLE'));
-    expect(instRes.status).toBe(403);
-    expect(instRes.result.error).toBe('INSTRUMENT_AUTHORING_FORBIDDEN');
   });
 
   it('localAdmin and systemActor pass under deny; an unrelated role fails', async () => {
@@ -407,14 +388,6 @@ describe('QMS8-B update leg fires only on declared guardWhenChanged keys', () =>
     expect(allowedRes.status).not.toBe(403);
     expect(storedPayload(allowed, 'EQP-QMS8B-EXIST').location).toBe('Bench 9');
   });
-
-  it('instrument update: changing name fires INSTRUMENT_AUTHORING_FORBIDDEN for a demo-grant-only actor', async () => {
-    const existing = envelope('INSTR-QMS8B-EXIST', INSTRUMENT_SCHEMA_ID, instrumentPayload('INSTR-QMS8B-EXIST', { lifecycleId: 'registry-ops', state: 'draft' }));
-    const world = makeWorld({ userId: 'USR-BRAD', grants: DEMO_GRANT, authoringGate: 'deny' }, existing);
-    const res = await update(world, 'INSTR-QMS8B-EXIST', instrumentPayload('INSTR-QMS8B-EXIST', { name: 'Renamed instrument', lifecycleId: 'registry-ops', state: 'draft' }));
-    expect(res.status).toBe(403);
-    expect(res.result.error).toBe('INSTRUMENT_AUTHORING_FORBIDDEN');
-  });
 });
 
 // ===========================================================================
@@ -449,8 +422,10 @@ describe('QMS8-B role-grant guard stays bundle-blind (no gateOnPolicySetting)', 
 // ===========================================================================
 
 describe('QMS8-B lint-file contract', () => {
+  // INSTR-COLLAPSE-2 C3: the instrument row retired WITH the kind (its lint
+  // file is deleted). The equipment row — the surviving authoring gate — is
+  // unchanged, and the role-grant guard below is unchanged.
   const cases = [
-    { name: 'instrument', lint: instrumentLint, schemaFile: 'lab/instrument.schema.yaml', schemaId: INSTRUMENT_SCHEMA_ID, denyCode: 'INSTRUMENT_AUTHORING_FORBIDDEN' },
     { name: 'equipment', lint: equipmentLint, schemaFile: 'lab/equipment.schema.yaml', schemaId: EQUIPMENT_SCHEMA_ID, denyCode: 'EQUIPMENT_AUTHORING_FORBIDDEN' },
   ] as const;
 
@@ -502,8 +477,10 @@ describe('QMS8-B lint-file contract', () => {
     expect(offenders).toEqual([]);
     const engine = new LintEngine();
     for (const { name, spec } of loaded.specs) engine.addSpec(name, spec);
-    expect(engine.authoringPolicyForSchema(INSTRUMENT_SCHEMA_ID)?.denyCode).toBe('INSTRUMENT_AUTHORING_FORBIDDEN');
     expect(engine.authoringPolicyForSchema(EQUIPMENT_SCHEMA_ID)?.denyCode).toBe('EQUIPMENT_AUTHORING_FORBIDDEN');
     expect(engine.authoringPolicyForSchema(ROLE_GRANT_SCHEMA_ID)?.denyCode).toBe('GRANT_FORBIDDEN');
+    // INSTR-COLLAPSE-2 C3: the deleted instrument lint resolves to NOTHING —
+    // no orphan authoring policy may survive a deleted kind.
+    expect(engine.authoringPolicyForSchema('https://computable-lab.com/schema/computable-lab/instrument.schema.yaml')).toBeUndefined();
   });
 });
