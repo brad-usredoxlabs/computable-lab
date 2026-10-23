@@ -41,14 +41,14 @@ actions:
     targetWells: [A1]
     params:
       composition:
-        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo trypsin-EDTA", role: other, fraction: "50%" }
         - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
         - { material: "Thermo FBS", role: additive, fraction: "10%" }
         - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
 
 const COMPONENTS = [
-  { material: 'Thermo trypsin-EDTA', role: 'solvent', fraction: '50%' },
+  { material: 'Thermo trypsin-EDTA', role: 'other', fraction: '50%' },
   { material: 'Thermo DMEM', role: 'buffer_component', fraction: '50%' },
   { material: 'Thermo FBS', role: 'additive', fraction: '10%' },
   { material: 'HepG2 cells', role: 'cells', count: 10000, counterDensity: { value: 200, unit: 'cells/uL' } },
@@ -139,7 +139,7 @@ describe('shorthand composition carry (task 1 — characterization pins)', () =>
     // `params.additionalProperties: true` validates nothing inside params.
     // Entry-level validation is Stage B. This pin records the REAL door
     // behavior so the deviation is explicit, not silent.
-    const bad = MIXTURE.replace('role: solvent, fraction: "50%"', 'role: 42');
+    const bad = MIXTURE.replace('role: other, fraction: "50%"', 'role: 42');
     expect(() => parseScientistIntent(bad)).not.toThrow();
     const normalized = normalizeScientistIntent(parseScientistIntent(bad));
     const add = normalized.candidateEvents.find((e) => e.verb === 'add_material');

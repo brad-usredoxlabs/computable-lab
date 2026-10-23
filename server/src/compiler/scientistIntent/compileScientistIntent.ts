@@ -117,6 +117,15 @@ export interface ScientistIntentCompileDeps {
    *  identity + a declared reading id only). Absent: every other caller is
    *  byte-unchanged. */
   scientistAnswers?: Readonly<Record<string, string>>;
+  /** MIXROLE-1 (spec §5b step 4, the bar-loop guard): the LABELS of the
+   *  clarifications the scientist answered on the previous 422 exchange — the
+   *  handler builds this from `Object.keys(answers)` (label-set membership
+   *  only; the answer VALUES never ride this key). Threaded VERBATIM into
+   *  normalizeScientistIntent, where the composition role-gap bar skips a gap
+   *  whose entry label is among them (the honest role stays the fallback role
+   *  after any answer, so without suppression the bar loops forever).
+   *  Absent: every other caller is byte-identically unchanged. */
+  answeredClarificationLabels?: readonly string[];
 }
 
 export interface ScientistIntentCompileResult {
@@ -272,6 +281,12 @@ export async function compileScientistIntent(
     // MIXFRAC-1 fix1/D3: the scientist's answers ride the producer bar as DATA
     // (identity matching happens in normalize against the fact IT raised).
     ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
+    // MIXROLE-1 (§5b step 4): the answered clarification LABELS ride the
+    // producer bar as a label SET (conditional spread — exactOptionalPropertyTypes:
+    // absent, never key:undefined). Membership only; no value ever reaches here.
+    ...(deps.answeredClarificationLabels
+      ? { answeredClarificationLabels: deps.answeredClarificationLabels }
+      : {}),
   });
   const registry = buildRegistry(compileIntent, normalized, deps);
   const spec = loadPipeline(SCIENTIST_INTENT_PIPELINE_PATH);

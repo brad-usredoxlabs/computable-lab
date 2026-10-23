@@ -307,7 +307,14 @@ describe('golden.intent-to-clarification.unresolvable-mixture-component', () => 
     const payload = assertBar(run);
 
     const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
-    expect(clarifications).toHaveLength(2);
+    // MIXROLE-1 DELIBERATE PIN UPDATE (Brad ruling 2026-10-22, spec §7 plane 3 /
+    // bait 7): the fixture's trypsin entry is re-pinned role: solvent -> other
+    // (the ruled honest role), which makes it an honest-gap entry beside the
+    // cells sibling — the composition-role-gap clarification fires ON TOP of
+    // the fraction fact. That IS the feature (the role clarification does not
+    // steal the fraction channel: the unknown-noun and fraction legs keep
+    // their exact verbatim shape at indices 0/1; the gap fact appends last).
+    expect(clarifications).toHaveLength(3);
     const item = clarifications[0]!;
     expect(item['label']).toBe('Equine Serum');
     expect(item['reason']).toBe('unknown-noun');
@@ -374,9 +381,18 @@ describe('golden.intent-to-clarification.mixfrac-canonical-ambiguous', () => {
     const payload = assertBar(run);
 
     const clarifications = payload['clarifications'] as Array<Record<string, unknown>>;
-    expect(clarifications).toHaveLength(1);
+    // MIXROLE-1 DELIBERATE PIN UPDATE (Brad ruling 2026-10-22, spec §7 plane 3 /
+    // bait 7): the trypsin entry is re-pinned role: solvent -> other (the ruled
+    // honest role), so the composition-role-gap fact rides ON TOP of the
+    // fraction fact (producer-append order: fraction bar first, gap fact last).
+    expect(clarifications).toHaveLength(2);
     const item = clarifications[0]!;
     expect(item['reason']).toBe('composition-fraction-sum');
+    const gapFact = clarifications[1]!;
+    expect(gapFact['reason'], 'the role-gap fact rides the same 422 bar').toBe('composition-role-gap');
+    expect(gapFact['label'], 'the gap label is the component\u2019s own name').toBe('Trypsin-EDTA');
+    expect(gapFact['actionLocation']).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
+    expect(String(gapFact['message'])).toContain('Trypsin-EDTA');
     expect(item['actionLocation']).toEqual({ actionIndex: 0, action: 'add_material', argument: 'composition' });
     const readings = item['readings'] as Array<Record<string, unknown>>;
     expect(readings).toHaveLength(3);

@@ -23,6 +23,6 @@ modelOutput:
       targetWells: [A1]
       params:
         composition:
-          - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+          - { material: "Trypsin-EDTA", role: other, fraction: "50%" }
           - { material: "DMEM", role: buffer_component, fraction: "50%" }
           - { material: "FBS", role: additive, fraction: "10%" }

@@ -54,7 +54,7 @@ fixtures:
   # UNCHANGED (245603b1...); the ONLY divergence in the record is the appended
   # producer bar fact (reason composition-fraction-sum, THREE candidate readings
   # with computed final fractions) after the verbatim unknown-noun fact.
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 245603b100f927466cb7290656aa0056d489dbd180a1c0c67b8105c1136a3714}
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 7086d6465105fdab7780eb28b12609d320a51e0425f79ef70321411b053742fa}
   # MIXFRAC-1 goldens (blessed ONCE on the final content — spec §7 + §14.2,
   # Brad's OQ-1 ruling numbers): A bar leg (nested declared composition, three
   # readings, preceding-noun FIRST, flat 50/45/5 + nested 90:10), A record leg
@@ -69,10 +69,10 @@ fixtures:
   # request.answers selects the in-house-recipe reading
   # ("Trypsin-EDTA, DMEM, FBS": preceding-noun-recipe) instead of a canned flat
   # modelOutput. Record delta below. All other fixtures unchanged.
-  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: fixtures/mixfrac-canonical-ambiguous.yaml, sha256: fe449f2fe7b9000bd0c5c52f77905802dc0c003461c385e0cc6fb630e463916d}
-  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: fixtures/mixfrac-canonical-flat.yaml, sha256: 509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a}
-  - {name: golden.intent-to-graph.mixfrac-final-volume, path: fixtures/mixfrac-final-volume.yaml, sha256: c7dae608d5f4a7668be6b04aa807386f18289c75b2ba61bf8228d64c58882e5c}
-  - {name: golden.intent-to-clarification.mixfrac-on-top, path: fixtures/mixfrac-on-top.yaml, sha256: c8f279c4b3d0f0458c057bfce139e641ed9ba948577be28831e664b4f1c7d912}
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: fixtures/mixfrac-canonical-ambiguous.yaml, sha256: 39b1f2a48c0ea3d7cb8c97b1f1ff3164b6a3612ae3f506095ced4841be3b04af}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: fixtures/mixfrac-canonical-flat.yaml, sha256: 5654856588d75f1d9e984902190934ed16912b152685c439fe88345c01c68f35}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: fixtures/mixfrac-final-volume.yaml, sha256: 5c5712c726a35da2e007bed7306f57e41983ce143e042e74fb5d3c9280601be2}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: fixtures/mixfrac-on-top.yaml, sha256: 42e2043fa9ee49b78f6e7b87fe6701da0286c184dfba973d931cd0108be4a61b}
 records:
   - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
   - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
@@ -127,7 +127,7 @@ records:
   # collapsed duplicate tier-5 mint candidate per noun (2 -> 1); bless script
   # proved non-mint content byte-identical. No other record or manifest entry
   # moved. Before/after diff in MINT-FLOOR-UI-1-report.wip-l2t0015.md.
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: fe927e73e7b3884cc4a437647cad4a48f806e819100e96802474bed27cd56ab3}
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 9968461799cbe97666ec607d721f97a27e78d2057a916d6647aa7e5c11cd8241}
   # MIXFRAC-1 blessed records (ONCE, same commit as the bar; bless script
   # scripts/mixfrac-bless.mts, before/after hashes in
   # .hermes/plans/MIXFRAC-1-report.wip-l2t0310.md). unresolvable-mixture-
@@ -142,10 +142,10 @@ records:
   # event snapshot stays the FLAT derived view 50/45/5 with byte-stable
   # ratified source strings (diff audit in MIXFRAC-1-fix1-report-l2t1855.md).
   # Every other record unchanged (bless dry-run before/after hashes prove it).
-  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: __records__/mixfrac-canonical-ambiguous.golden.json, sha256: 598a4e23de741e4468247fe94c4868ddf3527433f5ff075201d3130b1c5c8e1c}
-  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: __records__/mixfrac-canonical-flat.golden.json, sha256: a2d1ef365cddcc821f98938686c0053d2a7bbc06ae86c52313a8122752d4831d}
-  - {name: golden.intent-to-graph.mixfrac-final-volume, path: __records__/mixfrac-final-volume.golden.json, sha256: 370e3f57a95af02fef60d99c2bcbf539f67b3e2c1149c6fe278358141e53fa9a}
-  - {name: golden.intent-to-clarification.mixfrac-on-top, path: __records__/mixfrac-on-top.golden.json, sha256: 30b8ae98a38b7dce189c37fb9c4fb8be6239b33e3e732e77622fb8e958d892ae}
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: __records__/mixfrac-canonical-ambiguous.golden.json, sha256: 68208b4f15b303a53543d859ea9317cdb5a21a8d103829f454983d23acdf71ca}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: __records__/mixfrac-canonical-flat.golden.json, sha256: f68e68a79d159df10238d7a1a333ee3189f816459c3e985660d08da2ba4e45b3}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: __records__/mixfrac-final-volume.golden.json, sha256: 1b5f35ff7bc39d3bb1bb481601a9d08bb9d907c9671ab8d4c9338f8ec2b153e5}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: __records__/mixfrac-on-top.golden.json, sha256: c1b6214f044d8792bc456c4c14bfcfa152435b25b649058b460bbca1f4bffa91}
 # Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
 outcomeUnionMember: needs-clarification
 # Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):
