@@ -82,9 +82,11 @@ function findRequirementOccurrence(planPayload: Record<string, unknown>, require
 }
 
 /** Copy the pinned plan's composition component refs (F6 stance: top-level
- *  entries AND one level of nested composition entries — the resolver handles
- *  the nested wildcard; deeper nesting is a RECORDED limitation, named in the
- *  lint rule description and the report, never a silent assumption). */
+ *  entries AND one level of nested composition entries — the copy iterates
+ *  the nested level manually; PathResolver's nested wildcard resolution was
+ *  probe-proven but is not what this loop uses (advc O3 precision); deeper
+ *  nesting is a RECORDED limitation, named in the lint rule description and
+ *  the report, never a silent assumption). */
 function copyComponentRefs(event: Record<string, unknown>, requirement: Record<string, unknown>): string[] {
   const collected = new Set<string>();
   const snapshots = [

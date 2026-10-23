@@ -447,12 +447,18 @@ rules:
 
 # --- declared compatibility evaluation (P8 trio, §7.5) ---------------------
 - id: fulfil-evaluations-declared
-  title: "a fulfillment claim declares its evaluations with declared verdict vocabulary"
+  title: "a fulfillment claim declares a NON-EMPTY evaluations array with declared verdict vocabulary"
   description: >
     Satisfaction must be DECLARED, never assumed (§7.5/P8): a fulfillment claim
-    carries assertion.evaluations[], each with a verdict from the declared
-    trio [compatible, mismatch, incomplete] and a basis naming the declared
-    facts it rests on. The server never infers a verdict.
+    carries a NON-EMPTY assertion.evaluations[], each with a verdict from the
+    declared trio [compatible, mismatch, incomplete] and a basis naming the
+    declared facts it rests on. The server never infers a verdict. GATE SHAPE
+    (advc DEFECT 1): the gate is nonEmpty, not exists — an EMPTY array declares
+    NO evaluations; exists is true for [] and everyItem over [] holds
+    VACUOUSLY, so exists would let a zero-evaluation fulfillment pass as
+    "declared". Stance: a family whose policy declares no checks (e.g.
+    instance) yields [] from the evaluator — a fulfillment for it must declare
+    its evaluations explicitly or it is not a declared satisfaction at all.
   severity: error
   scope: record
   assert:
@@ -465,7 +471,7 @@ rules:
         not: { op: exists, path: assertion.fulfilledBy }
       - op: all
         predicates:
-        - { op: exists, path: assertion.evaluations }
+        - { op: nonEmpty, path: assertion.evaluations }
         - op: everyItem
           collectionPath: assertion.evaluations
           assert:
@@ -504,7 +510,7 @@ rules:
         not: { op: exists, path: assertion.fulfilledBy }
       - op: all
         predicates:
-        - { op: exists, path: assertion.evaluations }
+        - { op: nonEmpty, path: assertion.evaluations }
         - op: everyItem
           collectionPath: assertion.evaluations
           assert:
@@ -512,7 +518,7 @@ rules:
             path: verdict
             values: [ compatible ]
   message:
-    template: "a completed fulfillment claim carries an evaluation verdict outside [compatible] or declares no evaluations ({{claims}})"
+    template: "a completed fulfillment claim carries an evaluation verdict outside [compatible] or declares no evaluations — an EMPTY evaluations array declares nothing ({{claims}})"
     paths: [ "claims" ]
 
 - id: fulfil-mismatch-blocks
