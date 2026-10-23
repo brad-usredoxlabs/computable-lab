@@ -54,7 +54,9 @@ const REGISTRY_KINDS = [
   'training-record',
   'competency-authorization',
   'equipment-training-requirement',
-  'instrument',
+  // INSTR-COLLAPSE-2 C5: 'instrument' retired WITH the kind (the page's
+  // REGISTRY_TABS no longer lists it; the Create picker derives from that
+  // data, so no create entry exists by construction).
   'calibration-record',
   'qualification-record',
   'verb-definition',
@@ -96,7 +98,7 @@ function declaredPattern(kind: string): string {
     'training-record': 'TRR',
     'competency-authorization': 'AUTH',
     'equipment-training-requirement': 'ETR',
-    instrument: 'INSTR',
+    // INSTR-COLLAPSE-2 C5: instrument:'INSTR' row retired with the kind.
     'calibration-record': 'CAL',
     'qualification-record': 'QUAL',
     'verb-definition': 'VERB',
@@ -260,7 +262,8 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
       'Equipment',
       'Training',
       'Authorizations',
-      'Instruments',
+      // INSTR-COLLAPSE-2 C5: the 'Instruments' tab is retired WITH the kind
+      // (pinned in RecordRegistryPage.measurementCapable.test.tsx).
       'Calibrations',
       'Verbs',
       'Capabilities',
