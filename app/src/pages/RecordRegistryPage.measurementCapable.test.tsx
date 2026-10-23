@@ -28,8 +28,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import React from 'react'
-import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import RecordRegistryPage, { REGISTRY_TABS } from './RecordRegistryPage'
 
 // ---------------------------------------------------------------------------
@@ -48,29 +47,29 @@ const envelope = (id: string, schemaName: string, payload: Record<string, unknow
 // eqp-quantstudio5.yaml + ecp-quantstudio5.yaml (equipmentClassRef EQC-
 // QUANTSTUDIO5, capabilities[].verbRef VERB-READ).
 const EQP_QS5 = envelope('EQP-QUANTSTUDIO5', 'equipment.schema.yaml', {
-  kind: 'equipment', id: 'EQP-QUANTSTUDIO5', name: 'QuantStudio 5 qPCR system',
+  kind: 'equipment', id: 'EQP-QUANTSTUDIO5',
   equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-QUANTSTUDIO5' },
 })
 // Analytical-readout-capable via CLASS join where the class is an ontology
 // CURIE (mirrors eqp-plate-reader.yaml: equipmentClassRef kind:ontology
 // id:CL:plate_reader; ECP-PLATE-READER binds the same CURIE).
 const EQP_READER = envelope('EQP-PLATE-READER', 'equipment.schema.yaml', {
-  kind: 'equipment', id: 'EQP-PLATE-READER', name: 'Plate reader',
+  kind: 'equipment', id: 'EQP-PLATE-READER',
   equipmentClassRef: { kind: 'ontology', id: 'CL:plate_reader', namespace: 'CL', label: 'Plate reader' },
 })
 // Capability-bearing but ONLY liquid_handling: the bait-6 discriminator.
 const EQP_SHAKER = envelope('EQP-HEATER-SHAKER', 'equipment.schema.yaml', {
-  kind: 'equipment', id: 'EQP-HEATER-SHAKER', name: 'Heater shaker',
+  kind: 'equipment', id: 'EQP-HEATER-SHAKER',
   equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-HEATER_SHAKER' },
 })
 // Capability-bearing via INSTANCE join (equipmentRef, not classRef).
 const EQP_NANODROP = envelope('EQP-NANODROP', 'equipment.schema.yaml', {
-  kind: 'equipment', id: 'EQP-NANODROP', name: 'NanoDrop spectrophotometer',
+  kind: 'equipment', id: 'EQP-NANODROP',
   equipmentClassRef: { kind: 'ontology', id: 'CL:spectrophotometer', namespace: 'CL', label: 'Spectrophotometer' },
 })
 // No capabilities at all.
 const EQP_PIPETTE = envelope('EQP-PIPETTE', 'equipment.schema.yaml', {
-  kind: 'equipment', id: 'EQP-PIPETTE', name: 'Pipette',
+  kind: 'equipment', id: 'EQP-PIPETTE',
   equipmentClassRef: { kind: 'ontology', id: 'CL:micropipette', namespace: 'CL', label: 'Micropipette' },
 })
 
@@ -133,7 +132,10 @@ vi.mock('../shared/api/client', () => ({
     createDraftCopy: vi.fn(),
     createSignature: vi.fn(),
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
-    getSchemas: vi.fn().mockResolvedValue([]),
+    getSchemas: vi.fn().mockResolvedValue([
+      { id: 'https://computable-lab.com/schema/computable-lab/equipment.schema.yaml', path: 'schema/lab/equipment.schema.yaml', title: 'Equipment' },
+      { id: 'https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml', path: 'schema/lab/equipment-class.schema.yaml', title: 'Equipment class' },
+    ]),
     getSchema: vi.fn().mockResolvedValue(null),
     getLifecycleTerminalStates: vi.fn().mockResolvedValue([]),
   },
@@ -191,7 +193,7 @@ describe('INSTR-COLLAPSE-2 C5: the retired instrument kind leaves no kind-shaped
 
   // (a) RED at base: REGISTRY_TABS carries { id:'instruments', kinds:['instrument'] }.
   it('REGISTRY_TABS has no instruments tab and no instrument kind (Create entry gone by construction)', () => {
-    expect(REGISTRY_TABS.some((tab) => tab.id === 'instruments')).toBe(false)
+    expect(REGISTRY_TABS.some((tab) => (tab.id as string) === 'instruments')).toBe(false)
     expect(REGISTRY_TABS.some((tab) => (tab.kinds as readonly string[]).includes('instrument'))).toBe(false)
     // The surviving tabs are untouched (retirement, not shrinkage).
     expect(REGISTRY_TABS.some((tab) => tab.id === 'equipment')).toBe(true)
@@ -224,7 +226,7 @@ describe('INSTR-COLLAPSE-2 C5: the retired instrument kind leaves no kind-shaped
     const pill = screen.getByTestId('registry-measurement-capable-toggle')
     expect(pill).toBeTruthy()
     // Default OFF: the one-row-per-machine default view is untouched.
-    expect((pill as HTMLInputElement).checked ?? pill.getAttribute('aria-pressed')).toBe('false')
+    expect((pill as HTMLInputElement).checked).toBe(false)
   })
 
   it('the derived filter shows EXACTLY the analytical-readout-capable machines and names their capability records', async () => {
@@ -267,7 +269,9 @@ describe('INSTR-COLLAPSE-2 C5: the retired instrument kind leaves no kind-shaped
 
   // (c) implementation-source guard (spec C5 RED (c); H1/H2 mechanically checkable).
   it('RecordRegistryPage.tsx carries no name-literals or prefix sniffs in the filter logic', () => {
-    const src = readFileSync(path.resolve(process.cwd(), 'src/pages/RecordRegistryPage.tsx'), 'utf8')
+    const raw = readFileSync(path.resolve(process.cwd(), 'src/pages/RecordRegistryPage.tsx'), 'utf8')
+    // The guard is on CODE: retirement-note comments legitimately name the item.
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     expect(src).not.toContain('INSTR-')
     expect(src).not.toContain('VERB-READ')
     expect(src).not.toContain('EQP-QUANTSTUDIO5')
