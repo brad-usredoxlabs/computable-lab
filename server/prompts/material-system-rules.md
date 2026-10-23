@@ -138,7 +138,7 @@ one entry per component:
   targetWells: [A1]
   params:
     composition:
-      - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+      - { material: "Thermo trypsin-EDTA", role: other, fraction: "50%" }
       - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
       - { material: "Thermo FBS", role: additive, fraction: "10%" }
       - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
@@ -146,7 +146,7 @@ one entry per component:
 
 Rules:
 - `material` is the component's own name, in the scientist's words, one per entry.
-- `role` is one of `solute | solvent | buffer_component | additive | activity_source | cells | other`.
+- `role` is one of `solute | solvent | buffer_component | additive | activity_source | cells | other` — closest declared role; if none fits, `other`.
 - `fraction` is the volume fraction of the mixture when the scientist stated one ("50%").
 - A `cells` component carries a COUNT (`count`), never a volume. If the scientist
   gave a density ("200 cells per uL") and a volume, `count = density × volume`;
