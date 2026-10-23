@@ -36,7 +36,7 @@ export function getInstrumentRegistry(): RegistryLoader<InstrumentDefinition> {
       // schema/registry/instruments/ directory, whose records are kind
       // `instrument-definition` (zod literal above). The label now names the
       // actual kind instead of the deleted one (error-message label only —
-      // file SURVIVES per P3/INSTR-1 (f) audit KEEP).
+      // file SURVIVES per P3 / COLLAPSE-1 (f) audit KEEP).
       kind: 'instrument-definition',
       directory: DIR,
       schema: InstrumentDefinitionSchema,
