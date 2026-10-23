@@ -14,6 +14,7 @@ import {
   formatVolume,
 } from '../lib/eventGraph'
 import {
+  describeCellTotal,
   formatComputedConcentration,
   formatComputedCount,
   formatScientificStateSummary,
@@ -101,9 +102,24 @@ export function WellTooltip({
               // is the single volume assertion. The row states its share of the
               // mixture plus count/density. Non-carrier rows render as before.
               const conc = formatComputedConcentration(m.concentration, m.concentrationUnknown) || 'no concentration'
+              const density = formatComputedConcentration(m.counterDensity)
+              // CELLRATE-1: the per-well total is DISPLAY truth over the declared
+              // data — derived ONLY from a declared rate x a declared volume and
+              // labeled derived; a bare count is labeled absolute-unverified and
+              // never scaled. A carrier row cites the header volume (the single
+              // volume assertion); a single-material row cites its own volume.
+              const cellTotal = describeCellTotal({
+                ...(typeof m.count === 'number' ? { count: m.count } : {}),
+                ...(m.counterDensity ? { density: m.counterDensity } : {}),
+                ...(m.volumeIsCarrier
+                  ? (state.volume_uL > 0 ? { volume_uL: state.volume_uL } : {})
+                  : (m.volume_uL > 0 ? { volume_uL: m.volume_uL } : {})),
+              })
+              const countLabel = formatComputedCount(m.count)
+              const amountParts = density ? [countLabel, density, cellTotal] : [cellTotal ?? countLabel]
               const metaParts = m.volumeIsCarrier
-                ? [conc, m.fractionOfMixture, formatComputedCount(m.count), formatComputedConcentration(m.counterDensity)].filter(Boolean)
-                : [conc, formatVolume(m.volume_uL), typeof m.count === 'number' ? formatComputedCount(m.count) : null].filter(Boolean)
+                ? [conc, m.fractionOfMixture, ...amountParts].filter(Boolean)
+                : [conc, formatVolume(m.volume_uL), ...amountParts].filter(Boolean)
               return (
                 <li key={idx}>
                   <span className="well-tooltip__material-name">{m.materialRef}</span>

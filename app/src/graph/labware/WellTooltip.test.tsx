@@ -77,4 +77,32 @@ describe('graph/labware WellTooltip', () => {
     const meta = container.querySelector('.well-tooltip__material-meta')
     expect(meta?.textContent).toBe('1 mM · 100.0 µL')
   })
+
+  // CELLRATE-1 twin leg: the post-fix rate-only shape keeps the declared rate
+  // and shows the per-well total LABELED derived with the operands readable.
+  it('rate-only cells row: declared rate kept, per-well total shown labeled derived', () => {
+    const { container } = renderTooltip((labwareId) => ({
+      eventId: 'evt-rate-only',
+      event_type: 'add_material',
+      details: {
+        labwareId,
+        wells: ['A1'],
+        volume: { value: 100, unit: 'uL' },
+        counter_density: { value: 200, unit: 'cells/uL', basis: 'count_per_volume' },
+        composition_snapshot: [
+          { componentRef: { kind: 'record', id: 'rec-dmem', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
+          { componentRef: { kind: 'record', id: 'rec-hepg2', label: 'HepG2' }, role: 'cells' },
+        ],
+      },
+    }))
+
+    const metas = Array.from(container.querySelectorAll('.well-tooltip__material-meta'))
+    const cellsMeta = metas.find((meta) => meta.textContent?.includes('200 cells/uL'))
+    expect(cellsMeta).toBeTruthy()
+    expect(cellsMeta?.textContent).toContain('200 cells/uL')
+    expect(cellsMeta?.textContent).toContain('20,000/well = 200/uL x 100 uL (derived)')
+    for (const meta of metas) {
+      expect(meta.textContent, 'composition row must not claim a volume').not.toContain('100.0 µL')
+    }
+  })
 })
