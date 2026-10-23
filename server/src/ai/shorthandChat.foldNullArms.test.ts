@@ -102,15 +102,21 @@ describe('ANSWER-FOLD-NULL-1 — foldNullArm: the pure mirror of the fold null a
     expect(foldNullArm(heldNoLoc, [{ requestId: factRequestId(noLocFact), label: 'ok label' }]))
       .toEqual({ arm: 'no-action-location', requestId: factRequestId(noLocFact) });
 
-    // 'slot-not-string' (fold :622-623) with the ARRAY tag: an answer whose
-    // label matches NO composition entry cannot be placed — the array slot is
-    // not a string and there is nothing to splice (never guess).
-    const report = foldNullArm(held, [{ requestId: factRequestId(compositionFact), label: 'No Such Entry' }]);
+    // 'slot-not-string' (fold :622-623 widened by Leg 2): an array slot whose
+    // entries carry NONE of the fact's label — nothing to splice (never
+    // guess). This is the composition-fraction-sum card shape: its label
+    // names the whole composition, not one entry.
+    const wholeCompositionFact: ScientistIntentUnresolvedFact = { label: 'Trypsin-EDTA, DMEM, FBS', reason: 'composition-fraction-sum', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } };
+    const heldWhole: HeldShorthandIntent = { ...held, clarifications: [wholeCompositionFact] };
+    const wholeAnswers = [{ requestId: factRequestId(wholeCompositionFact), label: 'whole-mixture-supplement' }];
+    const report = foldNullArm(heldWhole, wholeAnswers);
     expect(report).not.toBeNull();
     expect(report!.arm).toBe('slot-not-string');
-    expect(report!.requestId).toBe(factRequestId(compositionFact));
+    expect(report!.requestId).toBe(factRequestId(wholeCompositionFact));
     expect(report!.argument).toBe('composition');
     expect(report!.slotType).toBe('array');
+    // Fold-vs-mirror parity on the same input.
+    expect(foldAnswersIntoShorthand(heldWhole, wholeAnswers)).toBeNull();
 
     // 'ajv-reparse-fail' (fold :653-663): a held doc whose folded
     // re-serialization cannot pass Ajv (the DEFECT-4 shape — a bogus
@@ -219,15 +225,20 @@ describe('ANSWER-FOLD-NULL-1 — the canonical 5-card hold (RED->GREEN lock)', (
     expect(foldNullArm(held, answers)).toBeNull();
   });
 
-  it('never guess: an answer naming NO composition entry keeps the fold null (arm slot-not-string, array tag)', () => {
-    const held = canonicalHeld();
-    const compositionFact = CANONICAL_FACTS[1]!;
+  it('never guess: a fact whose label matches NO composition entry keeps the fold null (arm slot-not-string, array tag)', () => {
+    // The composition-fraction-sum card shape (measured live 2026-10-23): the
+    // label names the WHOLE composition; no entry carries it. The fold must
+    // refuse (null), not guess which entry the answer meant.
+    const wholeCompositionFact: ScientistIntentUnresolvedFact = { label: 'Trypsin-EDTA, DMEM, FBS', reason: 'composition-fraction-sum', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } };
+    const held: HeldShorthandIntent = {
+      yaml: CANONICAL_YAML,
+      doc: parseShorthandForChat(CANONICAL_YAML),
+      clarifications: [...CANONICAL_FACTS, wholeCompositionFact],
+    };
     const answers = [
       ...canonicalAnswers(),
-      { requestId: factRequestId(compositionFact), label: 'No Such Entry' },
+      { requestId: factRequestId(wholeCompositionFact), label: 'whole-mixture-supplement' },
     ];
-    // The duplicate answer for the Trypsin-EDTA card names no entry — the
-    // fold must refuse (null), not guess a slot.
     expect(foldAnswersIntoShorthand(held, answers)).toBeNull();
     expect(foldNullArm(held, answers)?.arm).toBe('slot-not-string');
   });

@@ -564,6 +564,16 @@ export function clarificationsFromUnresolvedFacts(
 // Deterministic answer fold (OQ1 mandatory arm): splice → Ajv re-parse → recompile
 // ---------------------------------------------------------------------------
 
+/** ANSWER-FOLD-NULL-1 (OQ2 ruling): does an array-slot ENTRY carry the fact's
+ *  label as a string-valued property? Generic property scan — the entry shape
+ *  (which field is the symbolic noun) is the schema's DATA
+ *  (scientist-intent.schema.yaml composition items), not a TS field-name
+ *  branch. */
+function entryCarriesLabel(entry: unknown, label: string): boolean {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  return Object.values(entry as Record<string, unknown>).some((v) => v === label);
+}
+
 /**
  * Fold clarification answers onto the held intent DETERMINISTICALLY. An answer
  * maps 1:1 when its requestId is the join id of a held unresolved fact AND the
@@ -620,8 +630,35 @@ export function foldAnswersIntoShorthand(
     const loc = fact.actionLocation;
     if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return null;
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
-    if (!action || typeof action[loc.argument] !== 'string') return null;
-    action[loc.argument] = label;
+    if (!action) return null;
+    const slotValue = action[loc.argument];
+    if (typeof slotValue === 'string') {
+      action[loc.argument] = label;
+    } else if (Array.isArray(slotValue)) {
+      // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
+      // 'slot-not-string' with slotType=array — a DECLARED array-valued slot
+      // (the composition mixture-component slot: scientist-intent.schema.yaml
+      // `composition` items, required [material, role], `material` = the
+      // symbolic material noun). The 1:1 splice widens to the ENTRY whose
+      // declared symbolic-noun field equals the fact's label: the FIRST
+      // entry-object carrying a string-valued property equal to fact.label
+      // (generic first-string-property match — no slot-name or field-name
+      // policy branch in TS; the entry shape is the schema's DATA). The chosen
+      // label replaces that symbolic noun (still a symbolic noun — never a
+      // record id; the spine re-binds in the recompile). NO entry match ⇒
+      // null (never guess — the null contract above survives verbatim).
+      const entry = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label));
+      if (!entry) return null;
+      const entryRecord = entry as Record<string, unknown>;
+      for (const key of Object.keys(entryRecord)) {
+        if (typeof entryRecord[key] === 'string' && entryRecord[key] === fact.label) {
+          entryRecord[key] = label;
+          break;
+        }
+      }
+    } else {
+      return null;
+    }
     answered.add(fact);
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
     const refId = refIdOf(answer);
@@ -738,7 +775,19 @@ export function foldNullArm(
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
     if (!action) return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'undefined' };
     const slotValue = action[loc.argument];
-    if (typeof slotValue !== 'string') {
+    if (typeof slotValue === 'string') {
+      action[loc.argument] = label;
+    } else if (Array.isArray(slotValue) && slotValue.some((candidate) => entryCarriesLabel(candidate, fact.label))) {
+      // ANSWER-FOLD-NULL-1 (Leg 2): the fold's widened arm — an array slot
+      // WITH a matching entry folds (mirror stays byte-mirror of the fold).
+      const entryRecord = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label)) as Record<string, unknown>;
+      for (const key of Object.keys(entryRecord)) {
+        if (typeof entryRecord[key] === 'string' && entryRecord[key] === fact.label) {
+          entryRecord[key] = label;
+          break;
+        }
+      }
+    } else {
       return {
         arm: 'slot-not-string',
         requestId,
@@ -746,7 +795,6 @@ export function foldNullArm(
         slotType: Array.isArray(slotValue) ? 'array' : typeof slotValue,
       };
     }
-    action[loc.argument] = label;
     answered.add(fact);
   }
   if (answered.size === 0) return { arm: 'nothing-answered', requestId: '' };
