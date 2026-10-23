@@ -1,0 +1,93 @@
+# Lint rules for add_material plate-event DETAILS (MATRES-FULFIL §7.1/§7.2).
+#
+# These bind the add-material DETAIL schemaId (plate-event.add-material.schema
+# .yaml). Detail-payload validation (ValidationHandlers shape) lints the detail
+# against this schemaId; event-graph payloads bind the graph schemaId and are
+# NOT filtered here (LintEngine.getRules filters by schemaId). Business rules
+# live here as DATA — no TypeScript branch encodes them (§4 negative
+# commitments, bait 4).
+#
+# Vocabulary (bait 3): the requirement id family is REQE- (never the
+# procurement REQ- family — one name, no two systems). requestedSource is the
+# P7 REQUESTED SOURCE: a request, never an allocation — no decrement, no
+# availability, no reservation vocabulary anywhere (P7 / campaign OUT-OF-SCOPE,
+# bait 12).
+#
+# Identity law (§7.2/D3): requirementId is minted by
+# server/src/requirementId law (requirementId.ts, termId-style) from the
+# occurrence's draft-time coordinate, never from mutable content. Pairwise
+# DISTINCTNESS across events is not expressible with the shipped lint ops
+# (no distinct/count op) — it is enforced CONSTRUCTIVELY by the mint law
+# (distinct coordinates mint distinct ids; idempotent re-drafts land on the
+# same id) and by the fulfillment-side draft compile reading the pinned plan.
+# That gap is RECORDED here, not silently dropped.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.add-material.schema.yaml"
+
+rules:
+# --- requirement id shape (belt over the schema pattern; bait 3) -----------
+- id: add-material-requirement-id-shape
+  title: "requirementId must carry the REQE- occurrence family"
+  description: >
+    A requirement occurrence id must match ^REQE-[a-z0-9-]+$ — the stable
+    event-occurrence family minted by the requirementId law. The procurement
+    REQ- family is a DIFFERENT identity system and is rejected here; no second
+    id system is introduced (D3).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: material_source_requirement.requirementId
+  assert:
+    op: regex
+    path: material_source_requirement.requirementId
+    pattern: '^REQE-[a-z0-9-]+$'
+  message:
+    template: "material_source_requirement.requirementId {{material_source_requirement.requirementId}} violates the REQE- occurrence family (procurement REQ- ids are a different system)"
+    paths: [ "material_source_requirement.requirementId" ]
+
+# --- requestedSource legal-when table (§7.1 transition table, D2) ----------
+- id: add-material-requested-source-status
+  title: "requestedSource is legal only under status unresolved or provided"
+  description: >
+    The transition-membership table (spec §7.1): the requested-source state is
+    written event-side and is legal when the requirement status is
+    unresolved|provided. status linked means the source is ALREADY linked —
+    carrying a requested source there contradicts the requirement's own
+    drafting state. The requirement status enum itself is UNCHANGED
+    ([unresolved, provided, linked] — M1/D2): fulfillment states are NEVER
+    status values; they exist only as fulfillment attestations (§7.3).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: material_source_requirement.requestedSource
+  assert:
+    op: in
+    path: material_source_requirement.status
+    values: [ unresolved, provided ]
+  message:
+    template: "requestedSource present while material_source_requirement.status is {{material_source_requirement.status}} — requested-source is legal only under unresolved|provided (§7.1 transition table)"
+    paths: [ "material_source_requirement.status" ]
+
+# --- requestedSource names a physical referent (§7.1b) ----------------------
+- id: add-material-requested-source-ref-type
+  title: "requestedSource must name a physical referent (aliquot | material-instance)"
+  description: >
+    The REQUESTED SOURCE is the physical thing the plan intends to use for
+    this requirement on a FUTURE add_material: the ref rides the shared ref
+    datatype, and its record type is restricted by DATA to the physical
+    referents aliquot | material-instance. A request, never an allocation —
+    nothing here decrements, reserves, or checks availability (P7).
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: material_source_requirement.requestedSource
+  assert:
+    op: in
+    path: material_source_requirement.requestedSource.type
+    values: [ aliquot, material-instance ]
+  message:
+    template: "requestedSource.type {{material_source_requirement.requestedSource.type}} is not a physical referent (aliquot | material-instance)"
+    paths: [ "material_source_requirement.requestedSource.type" ]
