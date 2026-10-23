@@ -109,3 +109,16 @@ tick. Stack UP :3093/:5193 after lint-YAML restart (200/200). Brad's stack untou
 - Adversarial gates: none live (FULFIL cycle-2 accepted 19:25; ANSWER-FOLD cycle-2 accepted).
 - Trunk HEAD 4d8fec8b; working copy clean (tracked); stack UP after lint-YAML restart.
 - AI-13 n=496. No Brad stack touched.
+
+## CORRECTION at final exit (19:40 EDT) — live coder is CHAIN, not PANEL
+Flock wake-up was NOT FIFO (kernel flock makes no FIFO promise): CHAIN unit 737452 acquired the
+slot at 19:35:37 and its coder is LIVE (hermes pid 962828, LAUNCH PINNED_TIP=4d8fec8b = trunk
+tip, worktree wt/MATRES-CHAIN-lane2-l2t1755, report owed MATRES-CHAIN-report.l2t1755.md, log
+logs/coder-MATRESCHAIN-l2t1755.log). It read CHAIN-claim-ready.txt per its prompt (gate-2
+content was in place before it fired). PANEL (274949) and ANSWERFOLD-FIX2 (958594) are parked on
+the flock and fire in kernel-chosen order when CHAIN exits — treat that order as advisory; the
+next tick must NOT assume PANEL is next. MATRES-FULFIL task-block status flipped to done under
+the queue lock; canonical report promoted (trunk 045e1bdc). assumptions.md carries
+AS-ANSWERFOLD-FIXTURE-ENTRY-SHAPE (evidence_debt=true) + AS-LANE2-FIX2-FIFO-ORDER (value now:
+order is kernel-chosen, fleet rule one-coder holds). DO NOT dispatch another coder while
+962828 lives; on its exit -> adversarial gate with unique suffix + §9 battery checks.
