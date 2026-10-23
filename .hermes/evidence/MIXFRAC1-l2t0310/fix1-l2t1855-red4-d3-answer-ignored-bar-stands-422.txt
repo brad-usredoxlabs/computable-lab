@@ -1,0 +1,5 @@
+request.answers: {"sample_type":"bacterial","Trypsin-EDTA, DMEM, FBS":"preceding-noun-recipe"}
+status: 422
+outcome: "needs-clarification"
+clarifications: [ 'composition-fraction-sum' ]
+events: 0

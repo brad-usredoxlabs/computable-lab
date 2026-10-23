@@ -136,8 +136,33 @@ actions:
       - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
 
-/** All four components seeded in the store. */
+/** All four components seeded in the store.
+ *  MIXFRAC-1 fix1/D2 (adversarial review l2t1855): rebased from the 110%
+ *  50/50/10 shape to the ruling's flat derived view 50/45/5 (sum 100) — the
+ *  same rebase the sibling fixtures (mixtureRedundancy PASTE5_DOC/PASTE3_DOC,
+ *  goldenProseBlobStrip COMPONENTS) received. This keeps the fixture's ORIGINAL
+ *  purpose intact: a fully resolvable mixture that compiles CLEAN through the
+ *  full pipeline. The 110% shape is kept as its own explicit leg below
+ *  (ACTION_LEVEL_110_RESOLVABLE / T2c) so the sum bar is still pinned here. */
 const ACTION_LEVEL_ALL_RESOLVABLE = `intentId: comp4-t2
+actions:
+  - action: add_material
+    labware: plate
+    volumeUl: 50
+    targetWells: [A1]
+    composition:
+      - { material: "trypsin-EDTA", role: solvent, fraction: "50%" }
+      - { material: "DMEM", role: buffer_component, fraction: "45%" }
+      - { material: "FBS", role: additive, fraction: "5%" }
+      - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+`;
+
+/** MIXFRAC-1 fix1/D2: the 110% shape as its OWN leg — every component seeded,
+ *  so the ONLY bar is the composition-fraction-sum bar (the noun door binds
+ *  all four). This is the fixture the T2b pin was flipped onto; keeping it
+ *  separate preserves BOTH the clean-compile assertion (T2b) and the sum-bar
+ *  assertion (T2c). */
+const ACTION_LEVEL_110_RESOLVABLE = `intentId: comp4-t2c
 actions:
   - action: add_material
     labware: plate
@@ -226,23 +251,35 @@ describe('comp4.t2-declared-composition-binds', () => {
     expect(outcome.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
   });
 
-  it('T2b: full pipeline — a fully resolvable mixture compiles with zero NOUN clarifications', async () => {
-    // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4 item 4 + §6 bait 5; updated,
-    // not pinned around). BEFORE: zero composition clarifications + outcome not
-    // needs-clarification. AFTER: this fixture's declared fractions are
-    // 50/50/10 = 110%, so the composition-fraction-sum bar fires (the feature)
-    // and the doc bars atomically. The NOUN-resolution behavior this test
-    // exists to pin is UNCHANGED: zero unknown-noun clarifications on the
-    // composition arg.
+  it('T2b: full pipeline — a fully resolvable mixture compiles with zero composition clarifications', async () => {
+    // MIXFRAC-1 fix1/D2 (adversarial review l2t1855): the fixture was REBASED
+    // to the ruling's flat derived view 50/45/5 (sum 100) — the same rebase its
+    // siblings received — so the ORIGINAL pin stands: a fully resolvable
+    // mixture compiles clean through the real chain. The 110% shape lives in
+    // its own leg (T2c) instead of replacing this assertion.
     const { compiled } = await compileReal(ACTION_LEVEL_ALL_RESOLVABLE);
+    expect(compiled.clarifications.filter((c) => c.actionLocation?.argument === 'composition')).toHaveLength(0);
+    // The mixture itself compiles through the real chain (labware 'plate' is
+    // seeded; the compile outcome must not bar on the composition arg).
+    expect(compiled.outcome).not.toBe('needs-clarification');
+  });
+
+  it('T2c: 110% shape with every component seeded — the ONLY bar is the composition-fraction-sum fact', async () => {
+    // MIXFRAC-1 fix1/D2: the 110% fixture kept as an explicit leg. Noun
+    // resolution still passes (all four components seeded, zero unknown-noun
+    // facts); only the declared 110% sum bars, atomically.
+    const { compiled, store } = await compileReal(ACTION_LEVEL_110_RESOLVABLE);
     const compositionItems = compiled.clarifications.filter(
       (c) => c.actionLocation?.argument === 'composition',
     );
     expect(compositionItems.filter((c) => c.reason === 'unknown-noun')).toHaveLength(0);
     expect(compositionItems.filter((c) => c.reason === 'composition-fraction-sum')).toHaveLength(1);
-    // The mixture's noun resolution passes through the real chain (labware
-    // 'plate' is seeded); only the declared 110% sum bars.
+    const readings = (compositionItems[0] as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+    expect(Array.isArray(readings) && readings.length).toBe(3);
     expect(compiled.outcome).toBe('needs-clarification');
+    expect(compiled.terminalArtifacts.events).toEqual([]);
+    expect(store.create).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
   });
 });
 

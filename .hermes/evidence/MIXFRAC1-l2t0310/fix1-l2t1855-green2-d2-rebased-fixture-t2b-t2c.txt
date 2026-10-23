@@ -1,0 +1,10 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/compiler/resolution/compositionArgResolution.test.ts  (15 tests) 2238ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  20:16:41
+   Duration  5.03s (transform 697ms, setup 0ms, collect 1.78s, tests 2.24s, environment 0ms, prepare 363ms)
+

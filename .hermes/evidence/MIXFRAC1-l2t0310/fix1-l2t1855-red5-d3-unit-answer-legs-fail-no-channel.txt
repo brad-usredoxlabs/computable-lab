@@ -1,0 +1,54 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts  (20 tests | 2 failed) 163ms
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a clarification answer selects a reading and drives the carried composition (§14.2 RECORD leg, fix1/D3) > an answer keyed to the bar label whose value is a declared reading id settles the bar and rewrites the carried composition to that reading
+     → the scientist settled the parse — settled, do not re-ask: expected [ { …(5) } ] to have a length of +0 but got 1
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a clarification answer selects a reading and drives the carried composition (§14.2 RECORD leg, fix1/D3) > the whole-mixture reading is selectable the same way (the answer drives the doc, not a canned document)
+     → expected [ { …(5) } ] to have a length of +0 but got 1
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a clarification answer selects a reading and drives the carried composition (§14.2 RECORD leg, fix1/D3) > an answer keyed to the bar label whose value is a declared reading id settles the bar and rewrites the carried composition to that reading
+AssertionError: the scientist settled the parse — settled, do not re-ask: expected [ { …(5) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:396:87
+    394|     });
+    395|     const fractionFacts = (normalized.clarifications ?? []).filter((c)…
+    396|     expect(fractionFacts, 'the scientist settled the parse — settled, …
+       |                                                                                       ^
+    397| 
+    398|     // The carried composition IS the selected reading's flat derived …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a clarification answer selects a reading and drives the carried composition (§14.2 RECORD leg, fix1/D3) > the whole-mixture reading is selectable the same way (the answer drives the doc, not a canned document)
+AssertionError: expected [ { …(5) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:432:91
+    430|       scientistAnswers: { 'Trypsin-EDTA, DMEM, FBS': 'whole-mixture-su…
+    431|     });
+    432|     expect((normalized.clarifications ?? []).filter((c) => c.reason ==…
+       |                                                                                           ^
+    433|     const composition = (normalized.candidateEvents[0] as Record<strin…
+    434|     const byLabel = new Map(composition.map((e) => [String(e['material…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 18 passed (20)
+   Start at  20:22:23
+   Duration  1.72s (transform 403ms, setup 0ms, collect 685ms, tests 163ms, environment 0ms, prepare 399ms)
+

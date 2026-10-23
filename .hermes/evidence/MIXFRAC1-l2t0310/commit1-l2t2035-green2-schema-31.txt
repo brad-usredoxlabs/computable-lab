@@ -1,0 +1,15 @@
+
+> @computable/server@1.0.0 test:run
+> vitest run src/schema/SchemaRegistry.test.ts src/schema/BiologicalTypesSchema.test.ts
+
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/schema/BiologicalTypesSchema.test.ts  (6 tests) 217ms
+ ✓ src/schema/SchemaRegistry.test.ts  (25 tests) 252ms
+
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+   Start at  21:33:14
+   Duration  948ms (transform 116ms, setup 0ms, collect 225ms, tests 469ms, environment 0ms, prepare 121ms)
+

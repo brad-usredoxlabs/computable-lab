@@ -41,6 +41,7 @@ import { foldDeclaredOptionalAbsentHedges } from '../resolution/declaredOptional
 import {
   COMPOSITION_FRACTION_SUM_REASON as COMPOSITION_FRACTION_SUM_CODE,
   evaluateCompositionFractions,
+  settleCompositionFromReading,
   loadFractionConvention,
   formatFractionString,
   FRACTION_CONVENTION_PATH,
@@ -470,6 +471,16 @@ export interface NormalizeOptions {
    *  DATA, never a reagent table. Absent ⇒ no recipe-shaped evidence ⇒ the
    *  shipped presentation order stands. */
   recipeShapedRecords?: readonly RecipeShapedRecordEvidence[];
+  /** MIXFRAC-1 fix1/D3 (§14.2 RECORD leg): the scientist's clarification
+   *  ANSWERS as DATA (the request's answers map rides verbatim — key = a
+   *  clarification's own label, value = the scientist's choice). The fraction
+   *  bar consumes ONLY an entry whose key EXACTLY equals its label and whose
+   *  value is one of the reading ids the bar itself presented (DATA
+   *  `convention.readings`); anything else settles nothing and the bar stands.
+   *  "Settled, do not re-ask" is the same doctrine the noun-answer channel
+   *  (ANSWER-BIND-1) applies — identity matching only, no interpretation, no
+   *  confidence, no ranking. */
+  scientistAnswers?: Readonly<Record<string, string>>;
 }
 
 export interface ScientistIntentNormalized {
@@ -848,6 +859,7 @@ function applyCompositionFractionConvention(
   config: FractionConventionConfig,
   sourcePrompt: string | undefined,
   recipeRecords: readonly RecipeShapedRecordEvidence[] | undefined,
+  scientistAnswers: Readonly<Record<string, string>> | undefined,
   unrealized: ProducerClarification[],
 ): void {
   const composition = declaredCompositionArray(action, candidateEvent, vocabulary);
@@ -856,6 +868,20 @@ function applyCompositionFractionConvention(
   if (!outcome) return;
 
   if (outcome.clarification) {
+    // §14.2 RECORD leg (fix1/D3): the scientist answered THIS bar — an answers
+    // entry whose key EXACTLY equals the clarification's label and whose value
+    // is one of the reading ids the bar presented (DATA `convention.readings`).
+    // The answer settles the parse and the carried composition becomes that
+    // reading's flat derived view. No answer / a value that is not a declared
+    // reading id: the bar stands verbatim (never a guess, never a pick).
+    const answer = scientistAnswers?.[outcome.clarification.label];
+    if (typeof answer === 'string') {
+      const settled = settleCompositionFromReading(composition, answer, config);
+      if (settled && candidateEvent) {
+        candidateEvent['composition'] = settled;
+        return;
+      }
+    }
     unrealized.push({
       label: outcome.clarification.label,
       reason: outcome.clarification.reason,
@@ -978,7 +1004,8 @@ export function normalizeScientistIntent(
       if (fractionConvention) {
         applyCompositionFractionConvention(
           rec, index, verb, candidateEvent, vocabulary,
-          fractionConvention, intent.sourcePrompt, options?.recipeShapedRecords, unrealized,
+          fractionConvention, intent.sourcePrompt, options?.recipeShapedRecords,
+          options?.scientistAnswers, unrealized,
         );
       }
     }

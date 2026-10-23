@@ -137,14 +137,31 @@ describe('golden.intent-to-graph.labware-hint-regression', () => {
 
 describe('golden.intent-to-graph.mixfrac-canonical-flat', () => {
   it('golden.intent-to-graph.mixfrac-canonical-flat', async () => {
-    // MIXFRAC-1 GOLDEN-A RECORD leg (§14.2): the ruling's FLAT DERIVED view
-    // compiled clean — Trypsin-EDTA 50 / DMEM 45 / FBS 5 (sum 100) with the
+    // MIXFRAC-1 GOLDEN-A RECORD leg (§14.2, fix1/D2/D3 per adversarial review
+    // l2t1855 + orchestrator ruling): the ANSWER-DRIVEN leg. The fixture
+    // carries the SAME ambiguous declared document as the bar leg (110% +
+    // nested 90:10 on the medium entry) and request.answers selects the
+    // in-house-recipe reading (key = the bar's own label, value = the reading
+    // id `preceding-noun-recipe`). The answer machinery settles the bar and
+    // the SELECTED reading drives the final document: the carried composition
+    // is rewritten to that reading's flat derived view (nested children
+    // expanded, the absorbed supplement line dropped) and the snapshot emits
+    // the ruling's FLAT entries Trypsin-EDTA 50 / DMEM 45 / FBS 5 with the
     // ratified source strings "50% of the mixture" / "45% of the mixture" /
     // "5% of the mixture" byte-stable (OQ-4: the app's shape parser consumes
     // this form verbatim), cells entry unchanged (roles are MIXROLE-1's
-    // ground — pinned as the pipeline emits). The nested declared truth
-    // (DMEM 90:10 FBS) lives in the BAR-leg fixture's readings data.
+    // ground — pinned as the pipeline emits). The DECLARED nested truth stays
+    // in the held localMacro (§14.2: flat is derived, declared is nested);
+    // the nested form NEVER rides a snapshot entry.
     const fixture = fixtureFromManifest(manifest, 'golden.intent-to-graph.mixfrac-canonical-flat');
+
+    // The leg's premise: the request ANSWERS select the reading — the flat
+    // view is NOT a canned modelOutput (fix1/D3: canned encoding is not
+    // ratified).
+    expect(fixture.request.answers['Trypsin-EDTA, DMEM, FBS']).toBe('preceding-noun-recipe');
+    const declaredComposition = (fixture.modelOutput['actions'] as Array<Record<string, unknown>>)[0]!['params'] as Record<string, unknown>;
+    expect(declaredComposition['composition']).toHaveLength(4);
+
     const run = await runGolden(fixture);
 
     expect(run.status).toBe(200);
@@ -155,6 +172,15 @@ describe('golden.intent-to-graph.mixfrac-canonical-flat', () => {
     const eq = deepEqualGolden(run, record);
     expect(eq.diff ?? '').toBe('');
     expect(eq.ok).toBe(true);
+
+    // The held localMacro keeps the DECLARED nested truth (the answer drove
+    // the derived view; the scientist's declared document was never rewritten).
+    const localMacro = run.payload['localMacro'] as Record<string, unknown>;
+    const macroComposition = ((localMacro['actions'] as Array<Record<string, unknown>>)[0]!['params'] as Record<string, unknown>)['composition'] as Array<Record<string, unknown>>;
+    expect(macroComposition).toHaveLength(4);
+    const declaredMedium = macroComposition[1]!;
+    expect(Array.isArray(declaredMedium['composition'])).toBe(true);
+    expect((declaredMedium['composition'] as Array<Record<string, unknown>>).map((c) => String(c['fraction']))).toEqual(['90%', '10%']);
 
     const ta = run.payload['terminalArtifacts'] as Record<string, unknown>;
     const events = ta['events'] as Array<Record<string, unknown>>;

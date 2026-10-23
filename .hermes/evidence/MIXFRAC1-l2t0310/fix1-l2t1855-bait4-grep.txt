@@ -1,0 +1,5 @@
+38:+ *  index-aligned with these percents), or a settled-reading composition (the
+39:+ *  scientist ANSWERED the bar with a declared reading id — §14.2's answer-
+45:+ * clarification with one of the reading ids the bar itself presented. The answer
+86:+        // declared child with its computed final-of-mixture share.
+117:+  // an entry with NO declared fraction string is OUT OF SCOPE per spec §1 —

@@ -306,6 +306,9 @@ interface DeclaredEntry {
   /** Nested sub-composition entries declared on this entry (the §14.1
    *  expressibility), when present. */
   nested?: readonly unknown[];
+  /** The raw declared entry object (rides verbatim fields — count,
+   *  counterDensity, concentration — through a settled-reading rewrite). */
+  source: Record<string, unknown>;
 }
 
 function readComposition(composition: readonly unknown[], config: FractionConventionConfig): DeclaredEntry[] {
@@ -324,6 +327,7 @@ function readComposition(composition: readonly unknown[], config: FractionConven
       declared,
       parsed: declared ? parseFractionValue(declared, config.fractionPatterns) : undefined,
       ...(Array.isArray(entry.composition) && entry.composition.length > 0 ? { nested: entry.composition as readonly unknown[] } : {}),
+      source: entry,
     });
   });
   return entries;
@@ -359,11 +363,14 @@ export interface ResolvedFraction {
 }
 
 /** Internal strategy output: every computed share keeps its source entry's
- *  declared-array index. */
+ *  declared-array index. A share that came from a DECLARED nested child (the
+ *  §14.1 expressibility expanded into the flat derived view) also names the
+ *  child's own label/role — the parent line never rides the flat view. */
 interface StrategyFraction {
   index: number;
   label: string;
   percent: number;
+  nestedChild?: { label: string; role: string };
 }
 
 function applyStrategy(
@@ -405,7 +412,12 @@ function applyStrategy(
         && declaredChildren.every((c) => c.parsed !== undefined && !config.excludeRoles.includes(c.role));
       if (expandDeclared && declaredChildren) {
         for (const child of declaredChildren) {
-          out.push({ index: preceding.index, label: child.label, percent: precedingShare * (child.parsed as number) / config.total });
+          out.push({
+            index: preceding.index,
+            label: child.label,
+            percent: precedingShare * (child.parsed as number) / config.total,
+            nestedChild: { label: child.label, role: child.role },
+          });
         }
       } else {
         // The preceding entry's declared share p splits: the preceding noun keeps
@@ -536,10 +548,14 @@ export interface FractionCheckClarification {
 /** Outcome: either a clarification (genuine ambiguity — the bar stands) or a
  *  resolved fraction rewrite (one-sided final-volume evidence settles the
  *  re-base; the carried composition entries' fraction strings are replaced
- *  index-aligned with these percents). */
+ *  index-aligned with these percents), or a settled-reading composition (the
+ *  scientist ANSWERED the bar with a declared reading id — §14.2's answer-
+ *  driven RECORD leg: the answer settles the parse and the carried
+ *  composition becomes that reading's flat derived view). */
 export interface FractionCheckOutcome {
   clarification?: FractionCheckClarification;
   resolvedFractions?: ResolvedFraction[];
+  settledComposition?: unknown[];
 }
 
 function interpolate(template: string, values: Record<string, string>): string {
@@ -617,6 +633,79 @@ function nestedSplit(entries: readonly DeclaredEntry[], config: FractionConventi
 }
 
 /**
+ * §14.2 RECORD leg (fix1/D3): the scientist ANSWERED a composition-fraction-sum
+ * clarification with one of the reading ids the bar itself presented. The answer
+ * settles the parse ("settled, do not re-ask" — the same doctrine as the
+ * noun-answer channel) and the carried composition becomes that reading's FLAT
+ * DERIVED view: every share is written onto the declared entry it came from
+ * (index-aligned, never label-keyed), a declared nested composition EXPANDS into
+ * its own flat lines (the parent line never rides the flat view, §14.2), an
+ * entry the reading ABSORBS (the supplement that IS part of the recipe) drops
+ * out, and excluded-role entries (a cells count) ride verbatim.
+ *
+ * Returns undefined — the bar stands — when the answer names something that is
+ * NOT a declared reading id, or when the composition is not fully
+ * declared+parseable (an unparseable declared fraction is never rewritten into
+ * a guess).
+ */
+export function settleCompositionFromReading(
+  composition: readonly unknown[],
+  readingId: string,
+  config: FractionConventionConfig,
+): unknown[] | undefined {
+  if (!config.convention.readings.includes(readingId)) return undefined;
+  const strategy = config.convention.readingArithmetic[readingId];
+  if (typeof strategy !== 'string') return undefined;
+
+  const entries = readComposition(composition, config);
+  const counted = entries.filter((e) => !config.excludeRoles.includes(e.role));
+  if (counted.length < 2 || counted.some((e) => e.parsed === undefined)) return undefined;
+
+  const fractions = applyStrategy(strategy, entries, config);
+  const sharesByIndex = new Map<number, StrategyFraction[]>();
+  for (const f of fractions) {
+    const list = sharesByIndex.get(f.index) ?? [];
+    list.push(f);
+    sharesByIndex.set(f.index, list);
+  }
+
+  const settled: unknown[] = [];
+  for (const entry of entries) {
+    const shares = sharesByIndex.get(entry.index);
+    if (shares && shares.length > 0) {
+      if (shares.some((s) => s.nestedChild !== undefined)) {
+        // The flat derived view of a DECLARED nested composition: one line per
+        // declared child with its computed final-of-mixture share.
+        for (const share of shares) {
+          const child = share.nestedChild ?? { label: share.label, role: entry.role };
+          settled.push({
+            material: child.label,
+            role: child.role,
+            fraction: formatFractionString(roundPercent(share.percent, config), config),
+          });
+        }
+      } else {
+        settled.push({
+          ...entry.source,
+          fraction: formatFractionString(roundPercent(shares[0]!.percent, config), config),
+        });
+      }
+      continue;
+    }
+    // No share for this entry: an excluded-role entry (a count) rides verbatim;
+    // a non-excluded entry the reading ABSORBED drops out of the flat view.
+    if (config.excludeRoles.includes(entry.role)) {
+      settled.push(entry.source);
+    }
+  }
+  return settled;
+}
+
+function roundPercent(value: number, config: FractionConventionConfig): number {
+  return Number(formatFractionPercent(value, config.displayRoundingFactor));
+}
+
+/**
  * Evaluate one declared composition against the convention.
  * Returns undefined when the check does not apply (not fully declared, or the
  * sum holds). Returns a clarification when the sum breaks AND the utterance
@@ -634,6 +723,13 @@ export function evaluateCompositionFractions(
   // The check applies only to a FULLY declared composition: every counted
   // entry declares a fraction string (a declared-but-unparseable one counts
   // as declared and is excluded from the sum + named).
+  // RATIFIED LIMITATION (adversarial review l2t1855 D4, orchestrator ruling):
+  // an entry with NO declared fraction string is OUT OF SCOPE per spec §1 —
+  // the goal is "a composition whose DECLARED fractions do not sum to the
+  // declared convention total", so a partially-declared composition skips the
+  // check entirely (it has no declared-fraction sum to break). This is not an
+  // oversight to widen here: extending the check to undeclared-fraction
+  // entries would invent policy the spec does not declare.
   if (counted.length < 2 || counted.some((e) => e.declared === '')) return undefined;
 
   const malformed = counted.filter((e) => e.parsed === undefined);

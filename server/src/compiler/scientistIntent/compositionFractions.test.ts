@@ -155,9 +155,65 @@ describe('MIXFRAC-1: absent convention file => feature OFF — LOUD (spec §6 ba
 });
 
 describe('MIXFRAC-1: malformed fractions are excluded and named, never guessed', () => {
+  // fix1/D1 (adversarial review l2t1855): the previous fixture ("half" +
+  // "50%" + "50%") provably yields NO clarification — the parseable
+  // non-excluded fractions (50+50) already sum to the total, so the check
+  // returns before the malformed arm is ever reached and the test asserted
+  // nothing (a tautology). Spec §5's rule ("a fraction string that parses to
+  // no number is excluded from the sum and NAMED, never guessed") gets its
+  // coverage here: a fixture whose PARSEABLE fractions genuinely break the
+  // total (50 + 50 + 30 = 130) while ONE entry carries a malformed fraction.
+  const MALFORMED_BREAKS_SUM = `
+intentId: mixfrac-malformed-breaks-sum
+sourcePrompt: "50% Trypsin-EDTA plus 50% DMEM plus half FBS plus 30% Equine Serum"
+actions:
+  - action: add_material
+    labware: plate
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - { material: "Trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "DMEM", role: buffer_component, fraction: "50%" }
+        - { material: "FBS", role: additive, fraction: "half" }
+        - { material: "Equine Serum", role: additive, fraction: "30%" }
+`;
+
   it('a fraction string that parses to no number is excluded from the sum and named in the message', () => {
+    const clarifications = clarificationsFor(MALFORMED_BREAKS_SUM);
+    const fractionFacts = clarifications.filter((c) => c.reason === FRACTION_REASON);
+    // The parseable non-excluded fractions (50 + 50 + 30) break the total, so
+    // the bar fires — the malformed entry alone does not create the break, but
+    // once the bar fires the malformed entry MUST be named.
+    expect(fractionFacts, 'parseable fractions breaking the total must clarify').toHaveLength(1);
+    const fact = fractionFacts[0]!;
+    const message = String((fact as unknown as Record<string, unknown>)['message']);
+
+    // EXCLUDED: the sum the clarification reports is the PARSEABLE rest
+    // (50+50+30 = 130), never a guessed value for "half" and never counting
+    // it (a guessed 0 keeps 130; a guessed 50 would report 180).
+    expect(message, 'the reported sum must be the parseable rest — the malformed entry is excluded').toContain('130');
+    expect(message, 'the malformed entry must never be guessed into the sum').not.toContain('180');
+
+    // NAMED: the malformed fraction string itself appears in the message.
+    expect(message, 'the malformed fraction must be named verbatim').toContain('half');
+
+    // The readings' computed fractions carry ONLY the parseable entries —
+    // "half" never appears as a computed reading fraction.
+    const readings = (fact as unknown as Record<string, unknown>)['readings'] as Array<Record<string, unknown>>;
+    expect(readings).toHaveLength(3);
+    for (const reading of readings) {
+      const labels = (reading['finalFractions'] as Array<Record<string, unknown>>).map((f) => String(f['label']));
+      expect(labels, 'the malformed entry is excluded from every reading').not.toContain('FBS');
+    }
+  });
+
+  it('characterization: parseable fractions summing to the total compile clean even with a malformed fraction present', () => {
+    // The malformed entry alone does NOT clarify: exclusion + naming only
+    // applies when a clarification fires for other reasons (the sum holds
+    // here, so no fact exists to name it in).
     const doc = `
-intentId: mixfrac-malformed
+intentId: mixfrac-malformed-clean-sum
 sourcePrompt: "half Trypsin-EDTA and half DMEM plus half FBS"
 actions:
   - action: add_material
@@ -170,16 +226,7 @@ actions:
         - { material: "DMEM", role: buffer_component, fraction: "50%" }
         - { material: "FBS", role: additive, fraction: "50%" }
 `;
-    const fact = clarificationsFor(doc).find((c) => c.reason === FRACTION_REASON);
-    // The malformed entry is excluded from the sum; the remaining declared
-    // fractions (50+50) sum to the total — so the malformed entry alone does
-    // NOT clarify. It IS named when a clarification fires for other reasons.
-    if (fact) {
-      expect(String((fact as unknown as Record<string, unknown>)['message'])).toContain('half');
-    }
-    // Characterization: a composition whose parseable non-excluded fractions
-    // sum to the total compiles clean even with a malformed fraction present.
-    expect(fact === undefined || clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON).length <= 1).toBe(true);
+    expect(clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
   });
 });
 
@@ -337,6 +384,57 @@ actions:
         - { material: "FBS", role: additive, fraction: "5%" }
 `;
     expect(clarificationsFor(doc).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
+  });
+});
+
+describe('MIXFRAC-1: a clarification answer selects a reading and drives the carried composition (§14.2 RECORD leg, fix1/D3)', () => {
+  it('an answer keyed to the bar label whose value is a declared reading id settles the bar and rewrites the carried composition to that reading', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(CANONICAL_110), {
+      scientistAnswers: { 'Trypsin-EDTA, DMEM, FBS': 'preceding-noun-recipe' },
+    });
+    const fractionFacts = (normalized.clarifications ?? []).filter((c) => c.reason === FRACTION_REASON);
+    expect(fractionFacts, 'the scientist settled the parse — settled, do not re-ask').toHaveLength(0);
+
+    // The carried composition IS the selected reading's flat derived view:
+    // the ruling's numbers (Trypsin-EDTA 50 / DMEM 45 / FBS 5), the absorbed
+    // top-level supplement line is GONE (the attachment reading says the
+    // supplement IS part of the recipe), and the cells entry rides verbatim.
+    const composition = (normalized.candidateEvents[0] as Record<string, unknown>)['composition'] as Array<Record<string, unknown>>;
+    const byLabel = new Map(composition.map((e) => [String(e['material']), e]));
+    expect([...byLabel.keys()].sort()).toEqual(['DMEM', 'FBS', 'HepG2 cells', 'Trypsin-EDTA']);
+    expect(byLabel.get('Trypsin-EDTA')!['fraction']).toBe('50%');
+    expect(byLabel.get('DMEM')!['fraction']).toBe('45%');
+    expect(byLabel.get('FBS')!['fraction']).toBe('5%');
+    expect(byLabel.get('HepG2 cells')!['count']).toBe(10000);
+    expect(Object.keys(byLabel.get('HepG2 cells')!)).not.toContain('fraction');
+    // The flat derived view never carries a nested entry (§14.2).
+    for (const entry of composition) expect(Object.keys(entry)).not.toContain('composition');
+  });
+
+  it('an answer whose value is not a declared reading id settles nothing — the bar stands with all three readings', () => {
+    const clarifications = clarificationsFor(CANONICAL_110, {
+      scientistAnswers: { 'Trypsin-EDTA, DMEM, FBS': 'some-free-text-hedge' },
+    });
+    expect(clarifications.filter((c) => c.reason === FRACTION_REASON)).toHaveLength(1);
+  });
+
+  it('an answer keyed to a DIFFERENT label settles nothing (exact-label identity, never containment)', () => {
+    const clarifications = clarificationsFor(CANONICAL_110, {
+      scientistAnswers: { 'DMEM': 'preceding-noun-recipe' },
+    });
+    expect(clarifications.filter((c) => c.reason === FRACTION_REASON)).toHaveLength(1);
+  });
+
+  it('the whole-mixture reading is selectable the same way (the answer drives the doc, not a canned document)', () => {
+    const normalized = normalizeScientistIntent(parseScientistIntent(CANONICAL_110), {
+      scientistAnswers: { 'Trypsin-EDTA, DMEM, FBS': 'whole-mixture-supplement' },
+    });
+    expect((normalized.clarifications ?? []).filter((c) => c.reason === FRACTION_REASON)).toHaveLength(0);
+    const composition = (normalized.candidateEvents[0] as Record<string, unknown>)['composition'] as Array<Record<string, unknown>>;
+    const byLabel = new Map(composition.map((e) => [String(e['material']), e]));
+    expect(byLabel.get('Trypsin-EDTA')!['fraction']).toBe('45%');
+    expect(byLabel.get('DMEM')!['fraction']).toBe('45%');
+    expect(byLabel.get('FBS')!['fraction']).toBe('10%');
   });
 });
 
