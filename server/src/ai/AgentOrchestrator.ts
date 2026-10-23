@@ -77,6 +77,7 @@ import {
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
+  foldNullArm,
   dropSatisfiedFacts,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
@@ -1418,6 +1419,16 @@ export function createAgentOrchestrator(
             // No 1:1 mapping — re-hold and let the loop re-extract with the
             // held document + answers as grounded context (extraction-only).
             holdShorthandIntent(conversationKey, held);
+            // ANSWER-FOLD-NULL-1 (Leg 1, additive-only): name WHICH null arm
+            // tripped. The arm is RE-DERIVED by the pure mirror `foldNullArm`
+            // (shorthandChat.ts, byte-mirror of the fold's guards) — the fold
+            // itself stays byte-identical. slotType rides only for
+            // 'slot-not-string' (the array-slot discriminator).
+            const armReport = foldNullArm(held, clarificationAnswers);
+            const slotTypeSuffix = armReport?.slotType !== undefined
+              ? ` slotType=${armReport.slotType}`
+              : '';
+            console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${clarificationAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
             console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
           }
         }
