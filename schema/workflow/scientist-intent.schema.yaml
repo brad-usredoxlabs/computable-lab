@@ -204,8 +204,51 @@ properties:
                 properties:
                   value: { type: number }
                   unit: { type: string, minLength: 1 }
+              # CELLRATE-1: a cells count carries its unit as DECLARED DATA.
+              # The number branch is declared FIRST so every currently-valid
+              # bare-number document validates byte-identically (the file's own
+              # sourceWells idiom above). The object arm reuses the EXISTING
+              # concentration terms (basis count_per_volume + the cells/uL unit
+              # family — schema/core/datatypes/concentration.schema.yaml); no
+              # new local term is minted. Rate-vs-absolute is what the declared
+              # shape says — the value is never classified downstream.
               count:
-                type: number
+                oneOf:
+                - type: number
+                - type: object
+                  additionalProperties: false
+                  unevaluatedProperties: false
+                  required: [value, unit, basis]
+                  properties:
+                    value: { type: number, exclusiveMinimum: 0 }
+                    unit:
+                      type: string
+                      enum: [cells, CFU, beads, organisms, worms, colonies,
+                             cells/uL, cells/mL, CFU/uL, CFU/mL, organisms/uL, organisms/mL, worms/mL, worms/uL]
+                    basis:
+                      type: string
+                      enum: [count, count_per_volume]
+                  # Basis/unit cross-enforcement is IN-SCHEMA DATA (the
+                  # quantity.schema.yaml per-dimension if/then precedent): a
+                  # count_per_volume basis requires a per-volume unit; a count
+                  # basis requires an absolute unit. Ajv alone is the validator.
+                  allOf:
+                  - if:
+                      properties:
+                        basis: { const: count_per_volume }
+                      required: [basis]
+                    then:
+                      properties:
+                        unit:
+                          enum: [cells/uL, cells/mL, CFU/uL, CFU/mL, organisms/uL, organisms/mL, worms/mL, worms/uL]
+                  - if:
+                      properties:
+                        basis: { const: count }
+                      required: [basis]
+                    then:
+                      properties:
+                        unit:
+                          enum: [cells, CFU, beads, organisms, worms, colonies]
               counterDensity:
                 type: object
                 additionalProperties: false
