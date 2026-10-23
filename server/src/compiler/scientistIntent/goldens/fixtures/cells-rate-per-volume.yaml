@@ -1,0 +1,46 @@
+# CELLRATE-1 golden (spec §7 plane 2): the canonical rate utterance round-trips
+# as DECLARED RATE DATA. "…200 HepG2 cells/uL" with a 100 uL volume compiles
+# through the real wire schema (the composition item's rate arm validates), the
+# real parse/normalize/compile pipeline, and the real expander — and the emitted
+# add_material event carries counter_density {value:200, unit:"cells/uL",
+# basis:count_per_volume} with NO `count` key at all. THE WALL: the compiler
+# performed no arithmetic, so the string "20000" appears nowhere in the record.
+# The per-well total (20,000/well) is DISPLAY truth over this declared data
+# (app/src/shared/lib/formHelpers.ts describeCellTotal), never a stored fact.
+#
+# Distinct file name from MIXFRAC-1's goldens (mixfrac-canonical-*): the declared
+# fractions here sum to exactly 100%, so the composition-fraction-sum bar never
+# fires and this leg compiles clean.
+name: golden.intent-to-graph.cells-rate-per-volume
+request:
+  protocolText: >-
+    Add 100 uL of DMEM with 200 HepG2 cells/uL to well A1.
+  answers:
+    sample_type: bacterial
+store:
+  records:
+    - recordId: LAB-cellrate-plate-1
+      payload:
+        kind: labware
+        title: Plate
+        synonyms: [plate]
+    - recordId: MAT-cellrate-dmem-1
+      payload:
+        kind: material
+        title: DMEM
+    - recordId: MAT-cellrate-hepg2-1
+      payload:
+        kind: material
+        title: HepG2 cells
+        synonyms: [hepg2]
+modelOutput:
+  intentId: golden-cells-rate-per-volume
+  sourcePrompt: "Add 100 uL of DMEM with 200 HepG2 cells/uL to well A1."
+  actions:
+    - action: add_material
+      labware: plate
+      volumeUl: 100
+      targetWells: [A1]
+      composition:
+        - { material: "DMEM", role: buffer_component, fraction: "100%" }
+        - { material: "HepG2 cells", role: cells, count: { value: 200, unit: "cells/uL", basis: count_per_volume } }

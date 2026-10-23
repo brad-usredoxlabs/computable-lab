@@ -467,10 +467,35 @@ function compositionSnapshotFromParams(
     });
     componentLabels.push(label);
     if (role === 'cells') {
-      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) count = entry.count;
+      // CELLRATE-1 (§5.2): route the DECLARED count shape — the compiler
+      // performs NO arithmetic (THE WALL): a rate leg produces counter_density
+      // and NO count; a declared-absolute leg passes count through unchanged.
+      // Precedence (pinned in simpleVerbsCountRate.test.ts, bait 11): an entry
+      // carrying BOTH counterDensity and a rate-arm count keeps the dedicated
+      // counterDensity slot — the rate arm is never coerced into `count`.
       const density = entry.counterDensity;
       if (density && typeof density === 'object' && !Array.isArray(density)) {
         counterDensity = density as Record<string, unknown>;
+      }
+      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) {
+        count = entry.count;
+      } else if (entry.count && typeof entry.count === 'object' && !Array.isArray(entry.count)) {
+        const declared = entry.count as Record<string, unknown>;
+        const declaredValue = typeof declared.value === 'number' && Number.isFinite(declared.value)
+          ? declared.value
+          : undefined;
+        if (declared.basis === 'count_per_volume') {
+          // The declared rate rides the event's EXISTING counter_density slot
+          // (plate-event.add-material declares counter_density as the
+          // concentration datatype). `count_per_volume` is the existing
+          // concentration.schema.yaml enum term — registration, not policy;
+          // the unit set is schema DATA, never a TS list.
+          if (!counterDensity && declaredValue !== undefined) counterDensity = declared;
+        } else if (declared.basis === 'count' && declaredValue !== undefined) {
+          // Absolute arm: the value lands in the ledger's absolute slot; the
+          // controlled unit term loses no information there.
+          count = declaredValue;
+        }
       }
     }
   }

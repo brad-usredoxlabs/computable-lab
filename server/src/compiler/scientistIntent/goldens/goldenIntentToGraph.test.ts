@@ -242,6 +242,35 @@ describe('golden.intent-to-graph.mixfrac-final-volume', () => {
   });
 });
 
+describe('golden.intent-to-graph.cells-rate-per-volume (CELLRATE-1)', () => {
+  it('the canonical rate utterance round-trips as DECLARED RATE DATA — counter_density declared, NO count key, no computed total (THE WALL)', async () => {
+    const fixture = fixtureFromManifest(manifest, 'golden.intent-to-graph.cells-rate-per-volume');
+    const run = await runGolden(fixture);
+
+    expect(run.status).toBe(200);
+    expect(run.payload['outcome']).toBe('complete');
+    expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+    const record = recordFromManifest(manifest, 'golden.intent-to-graph.cells-rate-per-volume');
+    const eq = deepEqualGolden(run, record);
+    expect(eq.diff ?? '').toBe('');
+    expect(eq.ok).toBe(true);
+
+    const ta = run.payload['terminalArtifacts'] as Record<string, unknown>;
+    const events = ta['events'] as Array<Record<string, unknown>>;
+    expect(events).toHaveLength(1);
+    const details = events[0]!['details'] as Record<string, unknown>;
+    // The rate survives the wire + parse + compile as declared data.
+    expect(details['counter_density']).toEqual({ value: 200, unit: 'cells/uL', basis: 'count_per_volume' });
+    // THE WALL pin: the stored event keeps what the scientist declared — no
+    // count key, and the computed total appears NOWHERE in the payload.
+    expect(Object.keys(details)).not.toContain('count')
+    expect(JSON.stringify(run.normalized)).not.toContain('20000')
+
+    expect(run.spies.writeCalls).toBe(0);
+  });
+});
+
 describe('golden.manifest.versions-current', () => {
   it('golden.manifest.versions-current', () => {
     // Spec §4.2/§4.3 (bait §11.5): rule/spec drift fails CI LOUD instead of
