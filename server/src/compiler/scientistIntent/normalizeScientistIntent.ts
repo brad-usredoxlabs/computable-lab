@@ -49,6 +49,17 @@ import {
   type FractionConventionConfig,
   type RecipeShapedRecordEvidence,
 } from './compositionFractions.js';
+// MIXROLE-1 (Brad ruling 2026-10-22, spec §5b): the generic composition role-gap
+// evaluator + its guidance DATA loader. Zero domain knowledge: the gap role, the
+// firing arms, and the question are DATA in
+// config/drafting/composition-role-guidance.yaml.
+import {
+  COMPOSITION_ROLE_GAP_REASON as COMPOSITION_ROLE_GAP_CODE,
+  evaluateCompositionRoleGaps,
+  loadCompositionRoleGuidance,
+  COMPOSITION_ROLE_GUIDANCE_PATH,
+  type CompositionRoleGuidanceConfig,
+} from './compositionRoles.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { expandWellTokens } from '../../ai/wellRange.js';
 import { parse as parseYaml } from 'yaml';
@@ -425,11 +436,23 @@ export const MIXTURE_BLOB_MATERIAL_REASON = 'unrealized-mixture-blob-material' a
  *  ambiguity is never resolved by confidence. Same envelope as the cue bar:
  *  producer clarification → atomic 422 arm, never 500. */
 export const COMPOSITION_FRACTION_SUM_REASON = COMPOSITION_FRACTION_SUM_CODE;
+
+/** MIXROLE-1 (Brad ruling 2026-10-22): stable reason code for the STRUCTURAL
+ *  FINGERPRINT of an honest role gap — an entry whose role equals the guidance
+ *  DATA's fallback role in a composition carrying the declared firesOn sibling
+ *  (config/drafting/composition-role-guidance.yaml, interpreted by the generic
+ *  evaluator in compositionRoles.ts). The clarification asks the SCIENTIST for
+ *  the intended use in their own words — the annotation rides the existing
+ *  answers channel as opaque text; the compiler NEVER infers intent from a name,
+ *  synonym, or word pattern, and never force-fits the enum. Same envelope as the
+ *  cue/fraction bars: producer clarification → atomic 422 arm, never 500. */
+export const COMPOSITION_ROLE_GAP_REASON = COMPOSITION_ROLE_GAP_CODE;
 export type UnrealizedProducerReason =
   | typeof UNREALIZED_WELL_LABEL_REASON
   | typeof UNREALIZED_DECLARED_ARGUMENT_REASON
   | typeof MIXTURE_BLOB_MATERIAL_REASON
-  | typeof COMPOSITION_FRACTION_SUM_REASON;
+  | typeof COMPOSITION_FRACTION_SUM_REASON
+  | typeof COMPOSITION_ROLE_GAP_REASON;
 
 /** One producer clarification (exactOptionalPropertyTypes: `message` is
  *  absent-or-value, built by conditional spread only). */
@@ -481,6 +504,19 @@ export interface NormalizeOptions {
    *  (ANSWER-BIND-1) applies — identity matching only, no interpretation, no
    *  confidence, no ranking. */
   scientistAnswers?: Readonly<Record<string, string>>;
+  /** MIXROLE-1 (spec §5b): override for the composition role-guidance DATA home
+   *  (same injection pattern as `fractionConventionPath`). Defaults to the shipped
+   *  config/drafting/composition-role-guidance.yaml. Absent file ⇒ the role-gap
+   *  affordance is OFF — LOUD (one console.warn naming the path), entries pass
+   *  through unchanged. */
+  compositionRoleGuidancePath?: URL | string;
+  /** MIXROLE-1 (§5b step 4, the bar-loop guard): the labels of the clarification
+   *  the scientist ANSWERED on the previous 422 exchange (the handler builds this
+   *  from `Object.keys(answers)` — a label SET, never a value read). The role-gap
+   *  bar skips a gap whose entry label is among them: the honest role stays the
+   *  fallback role after any answer, so without suppression the bar loops forever.
+   *  Absent ⇒ every other caller is byte-identically unchanged. */
+  answeredClarificationLabels?: readonly string[];
 }
 
 export interface ScientistIntentNormalized {
@@ -905,6 +941,37 @@ function applyCompositionFractionConvention(
   }
 }
 
+/** MIXROLE-1 (§5b): the composition role-gap affordance, beside the cue +
+ *  fraction bars (same envelope, same channel). An entry whose role equals the
+ *  guidance DATA's fallback role in a composition carrying the declared firesOn
+ *  sibling raises ONE clarification per entry asking the scientist for the
+ *  intended use in their own words. A gap whose entry label is among the
+ *  ANSWERED clarification labels does not re-fire (§5b step 4 — the honest role
+ *  stays the fallback role after any answer, so without suppression the bar
+ *  loops forever). Label-set membership only: the answer VALUE is never read. */
+function applyCompositionRoleGuidance(
+  action: Record<string, unknown>,
+  actionIndex: number,
+  verb: string,
+  candidateEvent: Record<string, unknown> | undefined,
+  vocabulary: ScientistIntentVocabulary,
+  config: CompositionRoleGuidanceConfig,
+  answeredLabels: ReadonlySet<string>,
+  unrealized: ProducerClarification[],
+): void {
+  const composition = declaredCompositionArray(action, candidateEvent, vocabulary);
+  if (!composition || composition.length < 2) return;
+  for (const gap of evaluateCompositionRoleGaps(composition, config, answeredLabels)) {
+    unrealized.push({
+      label: gap.label,
+      reason: gap.reason,
+      actionLocation: { actionIndex, action: verb as ScientistIntentActionKind, argument: 'composition' },
+      // exactOptionalPropertyTypes: the question rides by conditional spread.
+      ...(gap.message.length > 0 ? { message: gap.message } : {}),
+    });
+  }
+}
+
 /** The composition the bar evaluates: the open `params.composition` slot or
  *  the vocabulary-DECLARED many-cardinality composition argument (the same
  *  DATA contract the resolve_nouns door iterates). No key literal beyond the
@@ -954,6 +1021,15 @@ export function normalizeScientistIntent(
   // file/section ⇒ the sum check is OFF — LOUD (one console.warn naming the
   // path), fractions pass through unchanged.
   const fractionConvention = loadFractionConvention(options?.fractionConventionPath ?? FRACTION_CONVENTION_PATH);
+  // MIXROLE-1: the role-guidance DATA, loaded PER call beside the cue + fraction
+  // bars (same drafting-config precedent — never process-cached). Absent
+  // file/section ⇒ the role-gap affordance is OFF — LOUD (one console.warn
+  // naming the path), entries pass through unchanged.
+  const roleGuidance = loadCompositionRoleGuidance(options?.compositionRoleGuidancePath ?? COMPOSITION_ROLE_GUIDANCE_PATH);
+  // MIXROLE-1 (§5b step 4): the answered clarification LABELS as a set (the
+  // handler builds it from Object.keys(answers)). Membership only — the answer
+  // VALUES never reach the producer bars from here.
+  const answeredLabels = new Set(options?.answeredClarificationLabels ?? []);
   // PARAM-FOLD-2 (W28-A5k Q1): ONE fold call over the raw parsed unresolved
   // set, at the top of the unresolved handling. The fold is pure over the
   // parsed intent + the vocabulary (both already in hand — the compile threads
@@ -1006,6 +1082,17 @@ export function normalizeScientistIntent(
           rec, index, verb, candidateEvent, vocabulary,
           fractionConvention, intent.sourcePrompt, options?.recipeShapedRecords,
           options?.scientistAnswers, unrealized,
+        );
+      }
+      // MIXROLE-1: the role-gap affordance, beside the fraction bar (same
+      // envelope, same channel). One clarification per honest-gap entry asking
+      // the scientist for the intended use in their own words; answered gaps
+      // (label-set membership over the answered clarification labels) do not
+      // re-fire — the bar-loop guard (§5b step 4).
+      if (roleGuidance) {
+        applyCompositionRoleGuidance(
+          rec, index, verb, candidateEvent, vocabulary,
+          roleGuidance, answeredLabels, unrealized,
         );
       }
     }
