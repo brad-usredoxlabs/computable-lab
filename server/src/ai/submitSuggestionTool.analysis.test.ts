@@ -48,6 +48,10 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
       // frozen enum; POST /api/drafts/compile remains the trust boundary.
       'compose_record_draft',
       'compose_receiving',
+      // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+      // on the SAME forced tool — the one-tool lock is about the tool, not a frozen
+      // enum; POST /api/drafts/compile remains the trust boundary.
+      'compose_execute_chain',
     ]);
   });
 

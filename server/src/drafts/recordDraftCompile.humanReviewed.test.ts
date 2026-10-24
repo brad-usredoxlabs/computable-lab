@@ -164,8 +164,12 @@ describe('record-drafting humanReviewedCreate — DATA switch (QMS7-7 FIX-2, RUL
     // MATRES-RECV (spec §2c, DELIBERATE golden diff): the `receiving` adapter
     // joins the human-reviewed set — a staged receipt create is HUMAN-REVIEWED
     // at the draft card, never auto-created (same semantics as record-drafting).
-    // Adapter-scoped means: only blocks that DECLARE the flag, never a global.
-    expect(flagged).toEqual(['record-drafting', 'receiving']);
+    // MATRES-CHAIN (spec §7.1, DELIBERATE golden diff): the `chain` adapter
+    // joins the same set — a staged chain create (derivation + instance +
+    // aliquots + attestation) is HUMAN-REVIEWED at the draft card, never
+    // auto-created. Adapter-scoped means: only blocks that DECLARE the flag,
+    // never a global.
+    expect(flagged).toEqual(['record-drafting', 'receiving', 'chain']);
   });
 
   it('T1: a flagged adapter compiles under POL-REGULATED with NO auto-create decision, NO POLICY_BLOCKED, canAccept:true', async () => {

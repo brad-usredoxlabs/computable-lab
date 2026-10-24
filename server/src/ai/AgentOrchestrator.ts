@@ -3367,6 +3367,91 @@ export function createAgentOrchestrator(
               return receivingProposalResult;
             }
 
+            // intent=compose_execute_chain (MATRES-CHAIN, OQ-3(a) ratified): the
+            // ELICITED execute-chain attestation on the ONE forced tool (case 3'
+            // — "I made 1 mL, split into 10 100-uL aliquots, used one today, put
+            // 9 at -20"). THE SAME thin-event design as the receiving arm above:
+            // emit the model's chain INTENT VERBATIM as ONE `chain_proposal`
+            // event and run NOTHING else — no compile, no store write, no accept.
+            // The drafts compile endpoint (POST /api/drafts/compile — the 'chain'
+            // adapter declared in config/drafting/adapters.yaml: the envelope
+            // compiles through chain/ExecuteChainDraft.ts, the staged creates
+            // (material-derivation preparation + prepared material-instance + N
+            // aliquots + the ONE attestation-chain envelope, the fulfillment
+            // claims riding INSIDE the same envelope per the merged FULFIL
+            // vocabulary) run the REAL validate + lint + the declared arithmetic
+            // policy (config/drafting/execute-chain-arithmetic.yaml), canAccept),
+            // NOT this stream, is the trust boundary. Accept writes the whole
+            // chain as ONE reviewed act; nothing here writes a record, attests,
+            // or invents an occurrence time, an attestor, or a storage condition.
+            // An invalid envelope is NOT rejected or rewritten here — the compile
+            // endpoint owns the diagnostic (canAccept:false + path-named
+            // diagnostics). Cross-session consumption is refused by name at
+            // compile (OQ-1(a)), never silently converted.
+            if (agentIntent.intent === 'compose_execute_chain') {
+              const chain = agentIntent.chain;
+              const elapsed = Date.now() - t0;
+              if (!chain) {
+                // The existing error channel (compose_receiving's no-envelope
+                // precedent): success:false with a corrective `error` string, and
+                // NO chain_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const chainEnvelopeError = 'compose_execute_chain requires a `chain` envelope: {operation:"compose-execute-chain", artifactKind, prepared:{name,volume}, aliquotCount, aliquots:[{disposition,volume,...stated facts only}], attested:{claimStatus,occurredAtStatus}} — the server compiles it into ONE review card via POST /api/drafts/compile, derives every id deterministically, and writes nothing until you accept.';
+                const emptyChainResult: AgentResult = {
+                  success: false,
+                  error: chainEnvelopeError,
+                };
+                const emptyChainSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: chainEnvelopeError,
+                };
+                logAgentSummary(tid, emptyChainSummary);
+                console.log(`[agent ${tid}] done compose_execute_chain no-envelope elapsedMs=${elapsed}`);
+                return emptyChainResult;
+              }
+              onEvent?.({ type: 'chain_proposal', chain });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const chainProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed an execute-chain attestation — review the card; nothing was written.'],
+              };
+              const chainProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, chainProposalSummary);
+              console.log(`[agent ${tid}] done compose_execute_chain emitted elapsedMs=${elapsed}`);
+              return chainProposalResult;
+            }
+
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding
             // the ONE forced tool. THE SERVER-BUILT-FRAMES DESIGN (OQ2 ruling):
             // the model supplies VERBS AND TERMS ONLY (`ledgerQuery`); the
