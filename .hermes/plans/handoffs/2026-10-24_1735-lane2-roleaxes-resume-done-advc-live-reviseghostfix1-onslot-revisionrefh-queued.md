@@ -109,3 +109,28 @@ against that route). Brad's stack untouched.
 - QUEUE WAITERS: cl-l2-revisionrefh1-queue-l2t1710 (blocking on flock, FIFO behind fix-1).
 - Trunk HEAD bdeb1378 (code tip a86c31ac); :5193 200, :3093 /api/health 200. ROLE-AXES
   worktree idle-clean at 3e1b6f0a awaiting its gate.
+
+## ADDENDUM (same tick, ~17:50 EDT) — ROLE-AXES advc c1 returned early: VERDICT fix (scope-only), RATIFIED, FIX RUN 1 QUEUED
+advc c1 (cloud, finished ~17:31, report reviews/ROLE-AXES-1-advc-c1-l2t1530.md, 278 lines):
+ZERO functional defects — R1/R2/R3 reproduced PASS first-hand, all 9 baits clean, every
+acceptance criterion satisfied. Verdict fix on scope/mechanism only: D1 MEDIUM (the two
+participationConvention.ts new modules were not in the spec's File-ownership IN list), D2 LOW
+(aiPlanningTools.ts:702 ripple), D3 LOW (resolver-kind vocabulary became a TS const instead
+of config data). ORCH CALLS: D1+D2 RATIFIED into scope + D3 mechanism RULED accepted —
+appended as the spec's '## ORCH RATIFICATION' section (trunk f837ddb6; spec says the
+channel-contract ruling is explicit; the remaining CODE residue is 2 stale resolver
+annotations naming the removed 'solvent' arm: aiPlanningTools.ts:744, MaterialPrepHandlers.ts:505).
+R1 note: the reviewer's base-run scratch harness REFUTED my dispatch root-cause (diluent fold) —
+true cause was the dead coder's fixture dropping the activity_source row; golden 8/80 proven
+correct at base, never re-benched (assumption recorded).
+FIX RUN 1 QUEUED (cycle 1/2): unit cl-l2-roleaxes1-fix1-queue-l2t1710 (belt 1: pid-watch on
+reviseghost flock wrapper 225561; belt 2: wait for cl-l2-revisionrefh1-queue unit to drain;
+then flock), SAME worktree @ 3e1b6f0a additive-only, prompt prompts/coder-ROLEAXES1-fix1-
+l2t1710.txt, log logs/coder-ROLEAXES1-fix1-l2t1710.log, FIX RUN 1 section appended to
+deliverables/ROLE-AXES-1-report.l2t1355.md (must end STATUS: complete, write early). Expected
+small (~20-40 min once on slot). On exit: cycle-2 advc scope 3e1b6f0a...HEAD -> ACCEPT ->
+orch self-verify -> MERGE -> RESTART background=true (schema YAML) -> live drive. Second fix
+verdict = cycle cap -> architect.
+Fleet FIFO now: REVISEGHOST1-FIX1 (LIVE since 17:16) -> REVISIONREFH1 (queued) -> ROLEAXES1-
+FIX1 (queued, belt-ordered). Task-list ROLE-AXES-1 block carries the c1/ratification trail;
+REVISION-REF-HARNESS-1 flipped in-progress with its queue identity.
