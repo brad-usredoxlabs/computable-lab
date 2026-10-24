@@ -91,6 +91,23 @@ export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificati
   // entry keeps the existing null pins green BY DATA, not by incidental
   // fallthrough, and blocks the gap-shape fallback for this reason.
   'missing-required-argument': null,
+  // MATRES-PANEL STEP 0 (orch-ruled, post-merge re-verify §3): the two
+  // MATRES-ELIG reason codes, declared vocabulary data
+  // (schema/scientist-intent/material-eligibility/material-eligibility.yaml
+  // :91 catalogScopeReason, :97 bindIncompleteReason — NOT invented codes).
+  // Both facts always carry actionLocation (resolutionEngine.ts:281, :353).
+  // Without these rows the fact gets NO card and is
+  // unanswerable-by-construction; with them the shipped ANSWER-BIND-1
+  // exact-identity join is the answer path — zero new machinery. This is the
+  // exact SAMPLE-CARD-1 / GAPCARD-1 disease the rows above cured.
+  // 'eligibility-incomplete': a band-passing candidate whose authorized-to-bind
+  // verdict is not PASS falls to clarification as an incomplete possibility.
+  'eligibility-incomplete': '/m',
+  // 'vendor-scope-unknown': a catalog-shaped token with no named vendor scope
+  // (AC-3: elicit scope, never fabricate product identity). It carries ZERO
+  // candidates by design (engine :281) — the '/m' picker SEARCH is the answer
+  // surface (orch OQ-2 ruling: shipped machinery, no new free-text mechanism).
+  'vendor-scope-unknown': '/m',
 }
 
 /**
@@ -124,6 +141,11 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   // GAPCARD-1: same pattern for the two prompt-declared model reasons.
   'ambiguous': { labware: '/l' },
   'contradicts-the-text': { labware: '/l' },
+  // MATRES-PANEL STEP 0: same labware/source overrides as every other carded
+  // reason for the two ELIG codes (W28-SOURCEROW-1: 'source' IS
+  // labware-semantic by declared data); every other argument falls to '/m'.
+  'eligibility-incomplete': { labware: '/l', source: '/l' },
+  'vendor-scope-unknown': { labware: '/l', source: '/l' },
 }
 
 /**
