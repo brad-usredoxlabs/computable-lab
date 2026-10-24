@@ -22,6 +22,7 @@ import {
   factRequestId,
   foldAnswersIntoShorthand,
   foldNullArm,
+  holdShorthandIntent,
   parseShorthandForChat,
   takeHeldShorthandIntent,
   type HeldShorthandIntent,
@@ -533,5 +534,401 @@ actions:
     // No re-hold survives: every closed slot stayed closed.
     const key = deriveContextCacheKey(RUN_CHAT_REQUEST.surface, RUN_CHAT_REQUEST.context);
     expect(takeHeldShorthandIntent(key)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ANSWER-FOLD-NULL-1 FIX RUN 2 — the SHIPPED NESTED-CARRIER shape.
+// The real shipped composition-entry datatype (schema/core/datatypes/
+// composition-entry.schema.yaml) declares required [component_ref, role] with
+// component_ref -> ref.schema.yaml — the noun label rides NESTED at
+// entry.component_ref.label ({component_ref: {kind, id?, type?, label}, role,
+// fraction?}). The cycle-1 entry scan read only Object.values(entry) for
+// STRING values: for a shipped entry the values are object|undefined, never
+// the label string, so the fold refused (never-guess) and the whole answer
+// set nulled. These legs are the RED tests for THIS defect.
+// ---------------------------------------------------------------------------
+
+/** The shipped nested-entry document: the composition rides the OPEN
+ *  params.composition slot (scientist-intent.schema.yaml `params:
+ *  additionalProperties: true` — the wire form the goldens' localMacro carries)
+ *  and each entry is the composition-entry datatype shape: the noun label is
+ *  NESTED at component_ref.label. Fractions sum to the declared 100 and no
+ *  entry falls to the guidance gapRole, so the producer bars stay silent —
+ *  the ONLY bars this document can carry are the noun cards. */
+const NESTED_YAML = `intentId: nested-fold-leg
+actions:
+  - action: add_material
+    labware: "Seeding plate"
+    material: "Mix Prime"
+    volumeUl: 50
+    targetWells: [A1]
+    params:
+      composition:
+        - component_ref:
+            kind: draft
+            id: "mint:Nested Reagent"
+            label: "Nested Reagent"
+          role: additive
+          fraction: "40%"
+        - component_ref:
+            kind: draft
+            id: "mint:Nested Buffer"
+            label: "Nested Buffer"
+          role: buffer_component
+          fraction: "30%"
+        - component_ref:
+            kind: draft
+            id: "mint:Nested Serum"
+            label: "Nested Serum"
+          role: additive
+          fraction: "30%"
+        - component_ref:
+            kind: draft
+            id: "mint:Nested Cells"
+            label: "Nested Cells"
+          role: cells
+        - component_ref:
+            kind: draft
+            id: "mint:Nested Additive"
+            label: "Nested Additive"
+          role: additive
+`;
+
+const NESTED_FACTS: ScientistIntentUnresolvedFact[] = [
+  { label: 'Nested Reagent', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+  { label: 'Nested Buffer', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+  { label: 'Nested Serum', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+  { label: 'Nested Cells', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+  { label: 'Nested Additive', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+];
+
+const NESTED_CHOSEN: Record<string, { label: string; recordId: string }> = {
+  'Nested Reagent': { label: 'Fold One Alpha', recordId: 'MAT-nested-alpha' },
+  'Nested Buffer': { label: 'Fold Two Beta', recordId: 'MAT-nested-beta' },
+  'Nested Serum': { label: 'Fold Three Gamma', recordId: 'MAT-nested-gamma' },
+  'Nested Cells': { label: 'Fold Four Delta', recordId: 'MAT-nested-delta' },
+  'Nested Additive': { label: 'Fold Five Epsilon', recordId: 'MAT-nested-epsilon' },
+};
+
+function nestedHeld(): HeldShorthandIntent {
+  return {
+    yaml: NESTED_YAML,
+    doc: parseShorthandForChat(NESTED_YAML),
+    clarifications: NESTED_FACTS,
+  };
+}
+
+describe('ANSWER-FOLD-NULL-1 fix2 — the shipped nested carrier (component_ref.label): fold + splice', () => {
+  it('RED (shipped shape): 5/5 answers onto nested component_ref entries fold — the nested noun splices, the rest of the entry survives byte-stable', () => {
+    const held = nestedHeld();
+    const answers = NESTED_FACTS.map((fact) => ({
+      requestId: factRequestId(fact),
+      label: NESTED_CHOSEN[fact.label]!.label,
+      ref: { id: NESTED_CHOSEN[fact.label]!.recordId, kind: 'material' as const },
+    }));
+
+    // RED on HEAD: entryCarriesLabel scans only top-level STRING values — a
+    // shipped entry's values are object|undefined, so the fold refuses and the
+    // whole 5-card answer set nulls (arm slot-not-string, array tag).
+    const folded = foldAnswersIntoShorthand(held, answers);
+    expect(folded, 'nested-carrier fold returned null — the entry scan cannot see component_ref.label').not.toBeNull();
+
+    const composition = ((folded!.doc.actions[0] as unknown as Record<string, unknown>).params as Record<string, unknown>).composition as Array<Record<string, unknown>>;
+    // The splice replaces the noun AT THE MATCHED LOCATION (component_ref.label
+    // — the symbolic noun slot; the document stays a scientist-intent: a
+    // symbolic label, never a record id).
+    expect(composition.map((e) => (e.component_ref as Record<string, unknown>).label)).toEqual([
+      'Fold One Alpha',
+      'Fold Two Beta',
+      'Fold Three Gamma',
+      'Fold Four Delta',
+      'Fold Five Epsilon',
+    ]);
+    // Byte-stability of everything else: kind/id ride untouched, role/fraction
+    // survive, entry order survives, the cells entry keeps its shape.
+    expect(composition.map((e) => (e.component_ref as Record<string, unknown>).kind)).toEqual(['draft', 'draft', 'draft', 'draft', 'draft']);
+    expect(composition.map((e) => (e.component_ref as Record<string, unknown>).id)).toEqual([
+      'mint:Nested Reagent', 'mint:Nested Buffer', 'mint:Nested Serum', 'mint:Nested Cells', 'mint:Nested Additive',
+    ]);
+    expect(composition.map((e) => e.role)).toEqual(['additive', 'buffer_component', 'additive', 'cells', 'additive']);
+    expect(composition.map((e) => e.fraction)).toEqual(['40%', '30%', '30%', undefined, undefined]);
+    // The rest of the action is untouched (the mixture slot is not a composition card).
+    expect((folded!.doc.actions[0] as unknown as Record<string, unknown>).material).toBe('Mix Prime');
+
+    expect(folded!.answeredSlots).toEqual(
+      NESTED_FACTS.map((f) => ({ actionIndex: 0, argument: 'composition', label: NESTED_CHOSEN[f.label]!.label })),
+    );
+    expect(folded!.bindings.length).toBe(10);
+    expect(folded!.yaml).toMatch('Fold One Alpha');
+
+    // Fold-vs-mirror parity: with the carrier visible, no arm fires.
+    expect(foldNullArm(held, answers)).toBeNull();
+  });
+
+  it('never guess (nested): a fact whose label matches NO nested carrier keeps the fold null (arm slot-not-string, array tag)', () => {
+    const held = nestedHeld();
+    const ghostFact: ScientistIntentUnresolvedFact = { label: 'Nested Nothing', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } };
+    const answers = [{ requestId: factRequestId(ghostFact), label: 'Whatever' }];
+    expect(foldAnswersIntoShorthand({ ...held, clarifications: [ghostFact] }, answers)).toBeNull();
+    const report = foldNullArm({ ...held, clarifications: [ghostFact] }, answers);
+    expect(report?.arm).toBe('slot-not-string');
+    expect(report?.slotType).toBe('array');
+  });
+
+  it('genericity limit (pinned): a label nested TWO levels down is NOT a carrier — the scan is one level deep, never-guess holds', () => {
+    const held = nestedHeld();
+    const doc = structuredClone(held.doc) as unknown as { actions: Array<Record<string, unknown>> };
+    const composition = (doc.actions[0]!.params as Record<string, unknown>).composition as Array<Record<string, unknown>>;
+    composition[0]!.component_ref = { kind: 'draft', deeper: { label: 'Nested Reagent' } };
+    const heldDeep: HeldShorthandIntent = { ...held, doc: doc as never, clarifications: [NESTED_FACTS[0]!] };
+    const answers = [{ requestId: factRequestId(NESTED_FACTS[0]!), label: 'Fold One Alpha' }];
+    expect(foldAnswersIntoShorthand(heldDeep, answers)).toBeNull();
+    expect(foldNullArm(heldDeep, answers)?.arm).toBe('slot-not-string');
+  });
+});
+
+describe('ANSWER-FOLD-NULL-1 fix2 — parity extension: the nested carrier cannot drift fold-vs-mirror', () => {
+  const NESTED_PARITY_YAML = `intentId: fold-null-arms-nested-parity
+actions:
+  - action: add_material
+    labware: "mystery plate"
+    material: "mystery goop"
+    volumeUl: 50
+    targetWells: [A1]
+`;
+
+  type NestedShape = [name: string, install: (action: Record<string, unknown>) => void, expectFolded: boolean, expectArm: string | null];
+  const shapes: NestedShape[] = [
+    // Match shapes: post-fix the fold AND the mirror both succeed (folded
+    // non-null, mirror null). RED on HEAD (both null — the scan is blind).
+    ['action.array-nested-match', (a) => { a['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, true, null],
+    ['params.array-nested-match', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, true, null],
+    // Nomatch shapes: both null, arm slot-not-string (array tag) — unchanged.
+    ['action.array-nested-nomatch', (a) => { a['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, false, 'slot-not-string'],
+    ['params.array-nested-nomatch', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, false, 'slot-not-string'],
+    ['params.array-nested-empty', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = []; }, false, 'slot-not-string'],
+    // Two-level nesting is NOT a carrier (one-level genericity pinned): both null.
+    ['params.array-nested-deep', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { deeper: { noun: 'slot thing' } }, role: 'additive' }]; }, false, 'slot-not-string'],
+    // Mixed entry: a nested carrier match while a sibling entry carries the
+    // label flat — the FIRST matching entry wins (scan order), both paths agree.
+    ['params.array-nested-mixed', (a) => {
+      (a['params'] as Record<string, unknown>)['goopNoun'] = [
+        { carrier: { noun: 'slot thing' }, role: 'additive' },
+        { noun: 'slot thing', role: 'solvent' },
+      ];
+    }, true, null],
+  ];
+
+  it('mirror null <=> fold null on every nested-carrier shape (7 shapes, action-level + params-nested)', () => {
+    for (const [name, install, expectFolded, expectArm] of shapes) {
+      const doc = parseShorthandForChat(NESTED_PARITY_YAML) as unknown as { actions: Array<Record<string, unknown>> };
+      doc.actions[0]!['params'] = doc.actions[0]!['params'] ?? {};
+      install(doc.actions[0]!);
+      const fact: ScientistIntentUnresolvedFact = {
+        label: 'slot thing',
+        reason: 'unknown-noun',
+        actionLocation: { actionIndex: 0, action: 'add_material', argument: 'goopNoun' },
+      };
+      const held: HeldShorthandIntent = { yaml: NESTED_PARITY_YAML, doc: doc as never, clarifications: [fact] };
+      const answers = [{ requestId: factRequestId(fact), label: 'chosen slot thing' }];
+
+      const folded = foldAnswersIntoShorthand(held, answers);
+      const report = foldNullArm(held, answers);
+
+      // The parity invariant: the mirror fires exactly when the fold is null.
+      expect(report === null, `nested shape ${name}: mirror/fold nullness diverged`).toBe(folded !== null);
+      expect(folded !== null, `nested shape ${name}: fold nullness != expectation`).toBe(expectFolded);
+      if (report !== null) {
+        expect(report.arm, `nested shape ${name}`).toBe(expectArm);
+        expect(report.argument, `nested shape ${name}`).toBe('goopNoun');
+        expect(report.slotType, `nested shape ${name}`).toBe('array');
+      }
+    }
+  });
+});
+
+describe('ANSWER-FOLD-NULL-1 fix2 — live-replay characterization (evidence answerfold-replay-2026-10-23T23-15-28)', () => {
+  /** The replay's held shorthand VERBATIM (turn1 tool_call args): the FLAT
+   *  wire form (action-level composition, material: strings). The replay's
+   *  six cards were 4x ambiguous-noun + 1x composition-fraction-sum (OUT of
+   *  the fold's remit) + 1x composition-role-gap whose label DUPLICATES the
+   *  first ambiguous card's label on the same composition slot. Answering the
+   *  five LABEL cards in card order: the first answer splices the entry, so
+   *  the role-gap fact's label matches no entry anymore — the fold refuses
+   *  (never-guess) and the whole set nulls. This test pins the MEASURED arm
+   *  line (requestId unresolved-c-11c1711f72, slotType=array) on the replay's
+   *  own document, before and after the nested-carrier fix (the fix must not
+   *  change this outcome: a duplicate-label card whose noun slot was already
+   *  spliced is not a 1:1 label->noun map). */
+  const REPLAY_YAML = `intentId: add-trypsin-dmem-fbs-hepg2-mixture
+actions:
+  - action: add_material
+    volumeUl: 50
+    composition:
+      - material: "Thermo trypsin-EDTA"
+        role: other
+        fraction: "50%"
+      - material: "Thermo DMEM"
+        role: buffer_component
+        fraction: "50%"
+      - material: "Thermo FBS"
+        role: additive
+        fraction: "10%"
+      - material: "HepG2 cells"
+        role: cells
+        count: 10000
+`;
+  const REPLAY_LABEL_CARDS: ScientistIntentUnresolvedFact[] = [
+    { label: 'Thermo trypsin-EDTA', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+    { label: 'Thermo DMEM', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+    { label: 'Thermo FBS', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+    { label: 'HepG2 cells', reason: 'ambiguous-noun', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+    { label: 'Thermo trypsin-EDTA', reason: 'composition-role-gap', actionLocation: { actionIndex: 0, action: 'add_material', argument: 'composition' } },
+  ];
+
+  it('the replay arm line reproduces exactly: slot-not-string requestId=unresolved-c-11c1711f72 slotType=array (duplicate-label role-gap card after the entry was spliced)', () => {
+    expect(factRequestId(REPLAY_LABEL_CARDS[4]!)).toBe('unresolved-c-11c1711f72');
+    const held: HeldShorthandIntent = {
+      yaml: REPLAY_YAML,
+      doc: parseShorthandForChat(REPLAY_YAML),
+      clarifications: REPLAY_LABEL_CARDS,
+    };
+    const answers = [
+      { requestId: factRequestId(REPLAY_LABEL_CARDS[0]!), label: 'Trypsin-EDTA' },
+      { requestId: factRequestId(REPLAY_LABEL_CARDS[1]!), label: "Dulbecco's Modified Eagle's Medium" },
+      { requestId: factRequestId(REPLAY_LABEL_CARDS[2]!), label: 'Fetal bovine serum' },
+      { requestId: factRequestId(REPLAY_LABEL_CARDS[3]!), label: 'HepG2 cells' },
+      { requestId: factRequestId(REPLAY_LABEL_CARDS[4]!), label: 'Trypsin-EDTA' },
+    ];
+    expect(foldAnswersIntoShorthand(held, answers)).toBeNull();
+    const report = foldNullArm(held, answers);
+    expect(report?.arm).toBe('slot-not-string');
+    expect(report?.requestId).toBe('unresolved-c-11c1711f72');
+    expect(report?.slotType).toBe('array');
+  });
+});
+
+describe('ANSWER-FOLD-NULL-1 fix2 — AgentOrchestrator fold-success leg on the SHIPPED nested shape (spec §5, RED for this defect)', () => {
+  function nestedStore() {
+    const records = [
+      {
+        recordId: 'LAB-seeding-plate-1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+        payload: { kind: 'labware', name: 'Seeding plate', title: 'Seeding plate', synonyms: ['seeding plate'] },
+      },
+      {
+        recordId: 'MAT-mix-prime',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+        payload: { kind: 'material', name: 'Mix Prime', title: 'Mix Prime', synonyms: ['Mix Prime'] },
+      },
+      ...Object.values(NESTED_CHOSEN).map((c) => ({
+        recordId: c.recordId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+        payload: { kind: 'material', name: c.label, title: c.label, synonyms: [c.label] },
+      })),
+    ];
+    return {
+      get: vi.fn(async () => null),
+      getRecord: vi.fn(async (id: string) => records.find((r) => r.recordId === id) ?? null),
+      list: vi.fn(async (filter?: { kind?: string }) =>
+        records.filter((r) => !filter?.kind || r.payload.kind === filter.kind),
+      ),
+    };
+  }
+
+  function nestedDeps() {
+    const store = nestedStore();
+    return {
+      store: store as never,
+      resolveSpine: createResolveSpineFromContext({ store: store as never }) as never,
+      searchLabwareByHint: createLabwareLookup(store as never) as never,
+    };
+  }
+
+  function nestedStubModel() {
+    const completeStream = vi.fn(async function* () {
+      yield { id: 'resp-never', choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: 'stop' }] } as unknown as CompletionResponse;
+    });
+    return { client: { complete: vi.fn(), completeStream }, callCount: () => completeStream.mock.calls.length };
+  }
+
+  const NESTED_RUN_REQUEST = {
+    prompt: 'add 50 uL of Mix Prime to A1 of the seeding plate',
+    surface: 'workspace.deck' as const,
+    forceDraftTool: true,
+    context: {
+      labwares: [{ labwareId: 'LAB-seeding-plate-1', labwareType: 'plate', name: 'Seeding plate' }],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['add_material'],
+      runId: 'RUN-foldnull-nested',
+    },
+  };
+
+  it('held bar facts carry the shipped nested component_ref shape: 5/5 answers -> folded success, events>0, ZERO model calls', async () => {
+    // The held intent is shaped DIRECTLY on the shipped nested-entry document
+    // (the holdShorthandIntent precedent from AgentOrchestrator.shorthandChat
+    // .test.ts DEFECT-4): the bar facts are the five composition component
+    // labels the shipped shape carries at component_ref.label.
+    const key = deriveContextCacheKey(NESTED_RUN_REQUEST.surface, NESTED_RUN_REQUEST.context);
+    holdShorthandIntent(key, nestedHeld());
+
+    const model = nestedStubModel();
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      nestedDeps(),
+    );
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map((a) => String(a)).join(' '));
+    });
+
+    let second;
+    try {
+      const answers = NESTED_FACTS.map((fact) => ({
+        requestId: factRequestId(fact),
+        label: NESTED_CHOSEN[fact.label]!.label,
+        ref: { id: NESTED_CHOSEN[fact.label]!.recordId, kind: 'material' as const },
+      }));
+      second = await orchestrator.run({ ...NESTED_RUN_REQUEST, clarificationAnswers: answers });
+    } finally {
+      logSpy.mockRestore();
+    }
+
+    // RED on HEAD: the fold cannot see the nested carrier -> fold-null arm
+    // slot-not-string -> extraction-only re-ask (ONE model call, events 0).
+    // GREEN: the deterministic fold consumed the turn with ZERO model calls.
+    expect(model.callCount()).toBe(0);
+    expect(second.success).toBe(true);
+    expect(second.events?.length ?? 0).toBeGreaterThan(0);
+    expect(second.clarificationRequests ?? []).toHaveLength(0);
+    expect(second.shorthand).toMatch('Fold One Alpha');
+    expect(second.shorthand).toMatch('Fold Five Epsilon');
+
+    const foldedLine = logs.find((l) => /shorthand answer folded deterministically .*no model call/.test(l));
+    expect(foldedLine, `folded-success log line absent from:\n${logs.join('\n')}`).toBeDefined();
+    const doneLine = logs.find((l) => /done shorthand-fold success=true events=\d+/.test(l));
+    expect(doneLine, `done shorthand-fold line absent from:\n${logs.join('\n')}`).toBeDefined();
+    expect(Number(/events=(\d+)/.exec(doneLine!)![1])).toBeGreaterThan(0);
+    expect(logs.some((l) => l.includes('fold-null arm='))).toBe(false);
+
+    // The folded document keeps the shipped nested shape: the noun spliced at
+    // component_ref.label, kind/id/role byte-stable.
+    const foldedDoc = parseShorthandForChat(second.shorthand!) as unknown as { actions: Array<Record<string, unknown>> };
+    const composition = (foldedDoc.actions[0]!.params as Record<string, unknown>).composition as Array<Record<string, unknown>>;
+    expect(composition.map((e) => (e.component_ref as Record<string, unknown>).label)).toEqual([
+      'Fold One Alpha', 'Fold Two Beta', 'Fold Three Gamma', 'Fold Four Delta', 'Fold Five Epsilon',
+    ]);
+    expect(composition.map((e) => (e.component_ref as Record<string, unknown>).id)).toEqual([
+      'mint:Nested Reagent', 'mint:Nested Buffer', 'mint:Nested Serum', 'mint:Nested Cells', 'mint:Nested Additive',
+    ]);
+
+    const stillHeld = takeHeldShorthandIntent(key);
+    expect(stillHeld).toBeNull();
   });
 });
