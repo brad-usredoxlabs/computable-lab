@@ -91,9 +91,22 @@ A04-vendor-group.png — 'Vendor-product · tier 1' group + verbatim disclosure
 trail. MATRES-PANEL MARKED DONE 07:55 (all four ACs evidenced: AC1/2/4 gate-5 tier-2,
 AC3 this re-gate; core merged 786e81df). No YAML pending -> no further restart.
 
+## CHAIN GATE-1b RESULT (amendment ~08:05, same tick)
+g1b tier-1 exited rc=0 07:54 with VERDICT: blocked, INVALID submission: no trail.json,
+no report.md, only 4 label-integrity shots, and a FALSE blocker claim
+("grep -r ChainProposalCard app/src returns 0"). ORCH REFUTED FIRST-HAND at 786e81df
+(again post-restart): app/src/event-editor/right-pane/ai/ChainProposalCard.tsx present
+with 13 data-testids; vite-served module 200 containing chain-card-claims. Per 6c
+re-shot AT TIER-2: unit cl-l2-gate-chain-g1bt2-l2t0650 (cloud deepseek), same prompt +
+binding addendum (refutation, drive-don't-grep, no-blocked, per-measurement receipts),
+log logs/gate-MATRESCHAIN-g1bt2-l2t0650.log, receipts fresh suffix dir of its choosing.
+Expected ~30-45 min; 2x ~08:45; 3x -> orch-authored deterministic Playwright + artifact
+judgement (the route that never depends on the slot).
+
 ## Open obligations (carried)
 - PANEL: CLOSED this tick (AC1/2/4 banked + AC3 re-gate accept).
-- CHAIN browser gate: OPEN (g1b tier-1 live, pid 2818594, expected ~30-45 min, 2x ~07:45).
+- CHAIN browser gate: OPEN — g1b tier-1 INVALID-blocked (refuted); tier-2 live
+  cl-l2-gate-chain-g1bt2-l2t0650 (see amendment above).
 - REVISE-GHOST-1: OPEN — branch merge-pending behind architect reading-card ruling;
   a5 attempt-6 re-gate after the ruling lands.
 - W2-11 D4 architect re-consult: OPEN (gated on a5 accept).
