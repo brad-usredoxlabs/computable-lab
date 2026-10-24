@@ -238,6 +238,11 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
         aliquotRecordIds:compiled.aliquotRecordIds,
         envelope:compiled.envelope,
         summary:compiled.summary,
+        // §7.5: the SERVER-BUILT card document + the landing sessionDocument
+        // ride in `result` (the record-drafting doctrine — the client renders
+        // them verbatim; the executor applies the landing on Accept).
+        card:compiled.card,
+        ...(compiled.sessionDocument !== undefined ? { sessionDocument:compiled.sessionDocument } : {}),
         ...(compiled.fulfillmentNote !== undefined ? { fulfillmentNote:compiled.fulfillmentNote } : {}),
         ...(compiled.attestsNothingPhysical === true ? { attestsNothingPhysical:true } : {}),
       };

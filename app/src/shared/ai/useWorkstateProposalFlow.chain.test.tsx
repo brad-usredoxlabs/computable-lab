@@ -17,7 +17,7 @@
  *  - a blocked arithmetic compile never reaches accept.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 import { useWorkstateProposalFlow } from './useWorkstateProposalFlow'
 import { apiClient } from '../api/client'
 import type { WorkstateExecutor } from '../session/useWorkstateExecutor'
@@ -90,7 +90,11 @@ const CHAIN_COMPILED_BLOCKED = {
   diagnostics: [
     { code: 'chain-arithmetic:volume-sum-lte-prepared', message: 'aliquot volumes sum 1100 uL exceeds the prepared volume 1000 uL' },
   ],
-  result: { summary: 'Execute chain blocked', card: CHAIN_COMPILED_OK.result.card },
+  result: {
+    sessionDocument: null,
+    summary: 'Execute chain blocked',
+    card: CHAIN_COMPILED_OK.result.card,
+  },
 }
 
 beforeEach(() => {
