@@ -100,6 +100,44 @@ defaultArm:
   defaultSourceState: other
   volumeFractionFromResolvedAmount: false
 
+# ---- participation-keyed arms (LEG 2b re-point; the LEG 1 axis) ----
+# When an entry DECLARES participation (schema/core/datatypes/
+# composition-entry.schema.yaml + the wire mirror), its arm here WINS over the
+# legacy-role mapping above; a participation-absent record keeps the legacy
+# mapping byte-identically (the byte-pin goldens). Vocabulary equality with the
+# schema enums + the TS unions is machine-pinned by
+# server/src/schema/CompositionParticipationSchema.test.ts — never a copy-paste
+# comment. `null` means "no decision from this arm": the reader DEFERS to the
+# legacy-role mapping, so arithmetic never reads through a declared arm
+# silently. participation_undeclared is entirely null-defaults: the honest gap
+# arm defers completely (bait 8: it does NOT replace gapRole `other` above and
+# this file never feeds the role-gap bar in composition-role-guidance.yaml).
+participationArms:
+  liquid_component:
+    defaultMeasureMode: null
+    defaultSourceState: null
+    volumeFractionFromResolvedAmount: true
+  qs_carrier:
+    defaultMeasureMode: qs_to_final
+    defaultSourceState: liquid
+    volumeFractionFromResolvedAmount: true
+  solute_contributor:
+    defaultMeasureMode: target_concentration
+    defaultSourceState: null
+    volumeFractionFromResolvedAmount: false
+  activity_contributor:
+    defaultMeasureMode: target_concentration
+    defaultSourceState: null
+    volumeFractionFromResolvedAmount: false
+  count_component:
+    defaultMeasureMode: target_concentration
+    defaultSourceState: null
+    volumeFractionFromResolvedAmount: false
+  participation_undeclared:
+    defaultMeasureMode: null
+    defaultSourceState: null
+    volumeFractionFromResolvedAmount: null
+
 # A DECLARED source state overrides the role arm's default measure mode: a
 # solid is measured by its declared contribution — it never fills the final
 # volume. This is the mislabeled-powder arm: the declared fact (source state)

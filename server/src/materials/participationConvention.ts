@@ -45,7 +45,10 @@ export type ConventionArm = {
   /** null = "no decision from this arm": the reader defers to the legacy role mapping. */
   defaultMeasureMode: IngredientMeasureMode | null;
   defaultSourceState: IngredientSourceState | null;
-  volumeFractionFromResolvedAmount: boolean;
+  /** null = "no decision from this arm" (the participation arms' deferral —
+   *  arithmetic never reads through a declared arm silently). Legacy role arms
+   *  declare a concrete boolean. */
+  volumeFractionFromResolvedAmount: boolean | null;
 };
 
 export type ConventionRoleArm = ConventionArm & {
@@ -121,6 +124,11 @@ function requireBoolean(value: unknown, label: string, path: string): boolean {
   return value;
 }
 
+function requireNullableBoolean(value: unknown, label: string, path: string): boolean | null {
+  if (value === null) return null;
+  return requireBoolean(value, label, path);
+}
+
 function requireNullableMeasureMode(value: unknown, label: string, path: string): IngredientMeasureMode | null {
   if (value === null) return null;
   const mode = requireString(value, label, path);
@@ -143,7 +151,11 @@ function parseArm(raw: Record<string, unknown>, label: string, path: string, wit
   const arm: ConventionArm | ConventionRoleArm = {
     defaultMeasureMode: requireNullableMeasureMode(raw.defaultMeasureMode, `${label}.defaultMeasureMode`, path),
     defaultSourceState: requireNullableSourceState(raw.defaultSourceState, `${label}.defaultSourceState`, path),
-    volumeFractionFromResolvedAmount: requireBoolean(raw.volumeFractionFromResolvedAmount, `${label}.volumeFractionFromResolvedAmount`, path),
+    // Participation arms may declare `null` (defer to the legacy-role mapping);
+    // legacy role arms must declare a concrete boolean.
+    volumeFractionFromResolvedAmount: withEmittedRole
+      ? requireBoolean(raw.volumeFractionFromResolvedAmount, `${label}.volumeFractionFromResolvedAmount`, path)
+      : requireNullableBoolean(raw.volumeFractionFromResolvedAmount, `${label}.volumeFractionFromResolvedAmount`, path),
   };
   if (withEmittedRole) {
     (arm as ConventionRoleArm).emittedRole = requireString(raw.emittedRole, `${label}.emittedRole`, path);
@@ -305,10 +317,12 @@ export function maySynthesizeVolumeFraction(
     if (mode !== undefined && conv.volumeFractionMeasureModes.has(mode)) return true;
     if (facts.participation) {
       const arm = conv.participationArms[facts.participation];
-      if (arm) return arm.volumeFractionFromResolvedAmount;
+      // A null-defaulted participation arm (the honest gap arm) DEFERS to the
+      // legacy-role mapping — arithmetic never reads through it silently.
+      if (arm && arm.volumeFractionFromResolvedAmount !== null) return arm.volumeFractionFromResolvedAmount;
     }
     const arm = conv.legacyRoleMapping[facts.role];
-    return (arm ?? conv.defaultArm).volumeFractionFromResolvedAmount;
+    return (arm ?? conv.defaultArm).volumeFractionFromResolvedAmount ?? false;
   }
   // Off-state channel fallback: the bring-to-final mode fills the final volume;
   // every other mode is measured by its own declared contribution.

@@ -77,8 +77,9 @@ export type FormulationCopilotResult = {
  * first): the shipped resolvers branch ONLY on the generic 'ingredient' tag;
  * every other label lookup takes the general order. They are NOT composition
  * roles and never enter composition data. The carrier lookup rides the general
- * tag — resolution behavior is byte-identical to the pre-change 'solvent' tag
- * (both shipped resolvers treated 'solvent' exactly like 'material').
+ * tag — resolution behavior is byte-identical to the pre-change carrier tag
+ * (both shipped resolvers already treated the carrier lookup exactly like the
+ * general material lookup: they branch ONLY on the ingredient tag).
  */
 export const PROMPT_RESOLVER_KINDS = ['material', 'ingredient'] as const;
 export type PromptResolverKind = typeof PROMPT_RESOLVER_KINDS[number];
