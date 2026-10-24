@@ -1363,7 +1363,11 @@ export function createAgentOrchestrator(
           // itself (the held document rides unchanged). The fold's null
           // contract stays byte-identical: it is simply not consulted when
           // there is nothing to splice.
-          const folded = foldAnswers.length > 0
+          // advc-c1 D2 (log honesty): remember whether the fold was actually
+          // CONSULTED (a real splice ran) — the synthesized no-splice recompile
+          // branch must not log the folded line (nothing was folded there).
+          const spliceFoldConsulted = foldAnswers.length > 0;
+          const folded = spliceFoldConsulted
             ? foldAnswersIntoShorthand(held, foldAnswers)
             : readingAnswers.length > 0
               ? { yaml: held.yaml, doc: structuredClone(held.doc), answeredSlots: [] as AnsweredSlot[], bindings: [] as AcceptedShorthandBinding[] }
@@ -1394,7 +1398,13 @@ export function createAgentOrchestrator(
               })(),
             });
             if (compiledFold) {
-              console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
+              // advc-c1 D2 (log honesty): the folded line fires ONLY when a
+              // real splice ran through `foldAnswersIntoShorthand`; the
+              // reading-only batch took the deterministic RECOMPILE path
+              // (the held document rode unchanged — nothing was folded).
+              console.log(spliceFoldConsulted
+                ? `[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`
+                : `[agent ${tid}] shorthand reading answer applied via deterministic recompile onto the held intent (${conversationKey}) — no splice, no model call`);
               // SH-QA-1 auto-satisfy ledger: the slots this fold closed. A
               // re-derived fact for a ledgered slot whose value is STILL the
               // chosen label is moot (the answer already closed it) — dropped

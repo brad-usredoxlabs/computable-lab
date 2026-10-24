@@ -283,7 +283,66 @@ describe('READING-CARD-ANSWER-1 — the AgentOrchestrator fold-answer leg', () =
     expect(reHeld).toBeNull();
   });
 
-  it('honest-survivor characterization: a free-text role-gap answer splices the noun (the fold\u2019s shipped carrier) and the bars re-derive honestly — zero model calls, no crash, no silent swallow', async () => {
+  it('advc-c1 D2 (log honesty): a READING-ONLY batch logs the distinct recompile line — the folded line fires only when a real splice ran', async () => {
+    // The synthesized no-splice branch (foldAnswers empty, readingAnswers
+    // non-empty) must NOT claim a fold happened: the held document rode
+    // unchanged and the §14.2 RECORD leg settled the fraction bar in the
+    // recompile itself. The unanswered role-gap bar honestly survives.
+    const model = stubModel([{ toolCalls: [{ name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_shorthand', shorthand: CANONICAL_YAML } }] }]);
+    const orchestrator = createAgentOrchestrator(
+      model.client,
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+      orchestratorDeps(),
+    );
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map((a) => String(a)).join(' '));
+    });
+    let first;
+    let second;
+    try {
+      first = await orchestrator.run({ ...RUN_CHAT_REQUEST });
+      const requests = first.clarificationRequests ?? [];
+      const readingCard = requests.find((r) => readingsOf(r.unresolvedFact).length > 0)!;
+      // The batch answers ONLY the reading card (value = a declared reading
+      // id) — nothing in it has a label->noun carrier, so the fold is never
+      // consulted.
+      second = await orchestrator.run({
+        ...RUN_CHAT_REQUEST,
+        clarificationAnswers: [
+          { requestId: readingCard.id, value: 'preceding-noun-recipe', label: 'preceding-noun in-house recipe' },
+        ],
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+
+    // Deterministic leg consumed the turn: ZERO model calls.
+    expect(model.callCount(), `expected the recompile leg to consume the turn; logs:\n${logs.join('\n')}`).toBe(1);
+    expect(second.success).toBe(true);
+
+    // THE DISTINCT LINE fires on the no-splice recompile path...
+    const recompileLine = logs.find((l) => /shorthand reading answer applied via deterministic recompile .* no splice, no model call/.test(l));
+    expect(recompileLine, `distinct recompile line absent from:\n${logs.join('\n')}`).toBeDefined();
+    // ...and the FOLDED line does NOT (nothing was folded — the fold was
+    // never consulted on this path).
+    const foldedLine = logs.find((l) => /shorthand answer folded deterministically .*no model call/.test(l));
+    expect(foldedLine, `folded line must NOT fire on the reading-only path:\n${logs.join('\n')}`).toBeUndefined();
+    // The fold was not consulted at all: no fold-null diagnostic either.
+    expect(logs.some((l) => l.includes('fold-null arm=')), `fold-null fired on:\n${logs.join('\n')}`).toBe(false);
+
+    // The fraction bar settled in the recompile (§14.2): no fraction card
+    // survives. The UNANSWERED role-gap bar honestly survives as a card and
+    // the intent re-holds (1 of 2 answered — the honest visible state).
+    const survivors = second.clarificationRequests ?? [];
+    expect(survivors.map((r) => r.unresolvedFact?.reason)).toEqual(['composition-role-gap']);
+    const key = deriveContextCacheKey(RUN_CHAT_REQUEST.surface!, RUN_CHAT_REQUEST.context!);
+    expect(takeHeldShorthandIntent(key)).not.toBeNull();
+  });
+
+  it('honest-survivor characterization: a free-text role-gap answer splices the noun (the fold’s shipped carrier) and the bars re-derive honestly — zero model calls, no crash, no silent swallow', async () => {
     const model = stubModel([{ toolCalls: [{ name: AGENT_INTENT_TOOL_NAME, args: { intent: 'event_shorthand', shorthand: CANONICAL_YAML } }] }]);
     const orchestrator = createAgentOrchestrator(
       model.client,

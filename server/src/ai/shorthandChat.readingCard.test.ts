@@ -138,7 +138,7 @@ describe('READING-CARD-ANSWER-1 — the map arm: a readings-bearing fact becomes
     expect(request!.unresolvedFact).toBe(READING_FACT);
   });
 
-  it('byte-stability: a fact WITHOUT readings renders EXACTLY as today (hash pin)', () => {
+  it('byte-stability: a fact WITHOUT readings renders EXACTLY as today (literal expected-shipped-strings pin)', () => {
     const noReadings: ScientistIntentUnresolvedFact = {
       label: 'Enigma Broth',
       reason: 'unknown-noun',
