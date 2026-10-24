@@ -32,6 +32,16 @@ describe('ROLE-AXES-1 app byte-pin goldens (label-preserving legacy records)', (
       ingredients: [
         { ref: ref('record', 'vp-1', 'Ethanol'), roleType: 'diluent', measureMode: 'target_concentration', sourceState: 'liquid', targetContribution: { value: 10, unit: '% v/v', basis: 'volume_fraction' } },
         { ref: ref('ontology', 'CHEBI:51509', 'BSA'), roleType: 'additive', measureMode: 'target_concentration', sourceState: 'solid', targetContribution: { value: 1, unit: 'mg/mL', basis: 'mass_per_volume' } },
+        // ROLE-AXES-1 resume fix (RA1-RES1-A1): the activity_source row this
+        // test's own title names ("diluent/additive/activity/cells") was
+        // dropped from the app fixture while the server twin carries it
+        // (server/src/materials/formulationMath.decoupling.test.ts:69). Its
+        // resolved 2 mL (100 U/mL target / 1 U/uL stock x 20 mL) is what makes
+        // the matrix qs_to_final resolve 16 mL — the pinned 8 mM / 80 % v/v
+        // are mathematically consistent ONLY with the full row set. Proven
+        // against base 6d64154b: base path on this restored fixture yields
+        // EXACTLY the pinned values (see report). The pin was never re-benched.
+        { ref: ref('ontology', 'CHEBI:27514', 'DNase'), roleType: 'activity_source', measureMode: 'target_concentration', sourceState: 'liquid', stockConcentration: { value: 1, unit: 'U/uL', basis: 'activity_per_volume' }, targetContribution: { value: 100, unit: 'U/mL', basis: 'activity_per_volume' } },
         { ref: ref('record', 'inst-hepg2', 'HepG2 cells'), roleType: 'cells', measureMode: 'target_concentration', sourceState: 'cells', targetContribution: { value: 200000, unit: 'cells/mL', basis: 'count_per_volume' } },
         { ref: ref('record', 'ms-mix', 'Matrix'), roleType: 'matrix', measureMode: 'qs_to_final', sourceState: 'liquid', compositionSnapshot: [
           { componentRef: ref('ontology', 'CHEBI:28284', 'NaCl'), role: 'buffer_component', concentration: { value: 10, unit: 'mM', basis: 'molar' } },
@@ -43,6 +53,7 @@ describe('ROLE-AXES-1 app byte-pin goldens (label-preserving legacy records)', (
     expect(JSON.parse(JSON.stringify(result.outputComposition))).toEqual([
       { componentRef: { kind: 'record', id: 'vp-1', label: 'Ethanol' }, role: 'solvent', concentration: { value: 1, unit: '% v/v', basis: 'volume_fraction' } },
       { componentRef: { kind: 'ontology', id: 'CHEBI:51509', label: 'BSA' }, role: 'additive', concentration: { value: 1, unit: 'mg/mL', basis: 'mass_per_volume' } },
+      { componentRef: { kind: 'ontology', id: 'CHEBI:27514', label: 'DNase' }, role: 'activity_source', concentration: { value: 10, unit: 'U/mL', basis: 'activity_per_volume' } },
       { componentRef: { kind: 'record', id: 'inst-hepg2', label: 'HepG2 cells' }, role: 'cells', concentration: { value: 200000, unit: 'cells/mL', basis: 'count_per_volume' } },
       { componentRef: { kind: 'ontology', id: 'CHEBI:28284', label: 'NaCl' }, role: 'buffer_component', concentration: { value: 8, unit: 'mM', basis: 'molar' } },
       { componentRef: { kind: 'ontology', id: 'CHEBI:15377', label: 'Water' }, role: 'solvent', concentration: { value: 80, unit: '% v/v', basis: 'volume_fraction' } },
