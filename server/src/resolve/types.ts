@@ -11,8 +11,12 @@
 /** Resolution tiers, in priority order (lower = preferred). */
 export type ResolveTier = 0 | 1 | 2 | 3 | 4 | 5;
 
-/** Material-hierarchy layer a candidate sits at (see materials-are-a-hierarchy). */
-export type MaterialLevel = 'concept' | 'spec' | 'instance' | 'aliquot' | 'unknown';
+/** Material-hierarchy layer a candidate sits at (see materials-are-a-hierarchy).
+ *  `vendor-product` is the catalog-identity layer: the eligibility data declares
+ *  it as a canonical referent level (material-eligibility.yaml referentLevels /
+ *  levelSpellings) and materialRefFields' LAYER_ALIASES already normalizes the
+ *  spelling, so the spine carries it rather than collapsing it to 'unknown'. */
+export type MaterialLevel = 'concept' | 'spec' | 'instance' | 'aliquot' | 'vendor-product' | 'unknown';
 
 /** Provider source identifiers, one per tier. */
 export type ResolveSource =
