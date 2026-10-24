@@ -85,6 +85,11 @@ import {
   shorthandResultFromCompile,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
+  partitionReadingAnswers,
+  scientistAnswersFromReadingAnswers,
+  answeredClarificationLabelsFromBatch,
+  type AcceptedShorthandBinding,
+  type AnsweredSlot,
 } from './shorthandChat.js';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
@@ -1341,7 +1346,28 @@ export function createAgentOrchestrator(
       if (shorthandSurface && !deterministicOnly && clarificationAnswers && clarificationAnswers.length > 0) {
         const held = takeHeldShorthandIntent(conversationKey);
         if (held) {
-          const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
+          // READING-CARD-ANSWER-1 (Ruling 2 + Amendment 2): partition the
+          // submitted batch by the STRUCTURAL reading test (the held fact
+          // carries readings AND the answer's value is one of that fact's own
+          // reading ids — no reason literal anywhere). A READING answer never
+          // enters `foldAnswersIntoShorthand`'s splice set (it has no
+          // label→noun carrier; feeding it is precisely the aggregate-label
+          // fold-null the never-guess pin defends); it rides the deterministic
+          // recompile as the §14.2 `scientistAnswers` DATA map (the
+          // IntentCompileFromPromptHandlers.ts precedent) so the fraction bar
+          // settles. The fold itself stays byte-identical.
+          const { readingAnswers, foldAnswers } = partitionReadingAnswers(held.clarifications, clarificationAnswers);
+          const readingScientistAnswers = scientistAnswersFromReadingAnswers(held.clarifications, clarificationAnswers);
+          // A batch whose ONLY answers are reading answers needs no document
+          // splice — the §14.2 RECORD leg settles the bar in the recompile
+          // itself (the held document rides unchanged). The fold's null
+          // contract stays byte-identical: it is simply not consulted when
+          // there is nothing to splice.
+          const folded = foldAnswers.length > 0
+            ? foldAnswersIntoShorthand(held, foldAnswers)
+            : readingAnswers.length > 0
+              ? { yaml: held.yaml, doc: structuredClone(held.doc), answeredSlots: [] as AnsweredSlot[], bindings: [] as AcceptedShorthandBinding[] }
+              : null;
           if (folded) {
             // REVISE-GHOST-1 (OQ-1 ruling): the fold's accepted {label, ref}
             // bindings join the conversation's active-proposal bindings (the
@@ -1355,6 +1381,17 @@ export function createAgentOrchestrator(
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // READING-CARD-ANSWER-1: the reading answers ride the §14.2
+              // RECORD leg as DATA (the IntentCompileFromPromptHandlers.ts
+              // precedent — conditional spread, absent when the batch carries
+              // no reading answer), and the answered clarifications' LABELS
+              // ride the MIXROLE-1 bar-loop guard (the same DATA pair the 422
+              // recompile route passes).
+              ...(readingScientistAnswers ? { scientistAnswers: readingScientistAnswers } : {}),
+              ...(() => {
+                const answeredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
+                return answeredLabels.length > 0 ? { answeredClarificationLabels: answeredLabels } : {};
+              })(),
             });
             if (compiledFold) {
               console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
@@ -1424,11 +1461,14 @@ export function createAgentOrchestrator(
             // (shorthandChat.ts, byte-mirror of the fold's guards) — the fold
             // itself stays byte-identical. slotType rides only for
             // 'slot-not-string' (the array-slot discriminator).
-            const armReport = foldNullArm(held, clarificationAnswers);
+            // READING-CARD-ANSWER-1: the mirror sees the SAME set the fold
+            // received (the reading answers were excluded from it), so the
+            // diagnostic never names a reading answer as the fold-null source.
+            const armReport = foldNullArm(held, foldAnswers);
             const slotTypeSuffix = armReport?.slotType !== undefined
               ? ` slotType=${armReport.slotType}`
               : '';
-            console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${clarificationAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
+            console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${foldAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
             console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
           }
         }
