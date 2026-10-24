@@ -115,3 +115,17 @@ the coder lock 15:57 when menucand fix-1 exited — ONE live coder.
 - LIVE CLOUD GATE: cl-l2-advc-reviseghost-c1-l2t1610 (started ~16:52).
 - QUEUE WAITERS: none behind roleaxes (fleet FIFO empty).
 - Trunk HEAD a86c31ac (code); :3093 200, :5193 200 (served modules confirmed post-restart).
+
+## ADDENDUM (same tick, 17:05 EDT) — REVISE-GHOST advc c1 EXITED: VERDICT fix
+reviews/REVISE-GHOST-1-advc-c1-l2t1610.md — D1 MAJOR (honest-wall emptiness predicate omits the
+non-event deliverable channels -> false-fires on create_record-class success, discards proposal;
+ORCH VERIFIED the client condition :533-549 and the server emptyResult :3918-3925 FIRST-HAND) +
+D2 MINOR (dead export clearAcceptedShorthandBindings + misleading Cancel-hook comment). All other
+mandates/baits clean (14 files/92 AiTabPanel tests, server tsc 0, app tsc 28=28, discriminator
+ordering, OQ rulings). FIX RUN 1 QUEUED 17:03 on the fleet FIFO BEHIND roleaxes: systemd
+cl-l2-reviseghost-fix1-queue-l2t1610 (queue-reviseghost-fix1-l2t1610.sh, flock-blocking), prompt
+prompts/coder-REVISEGHOST1-fix1-l2t1610.txt, log logs/coder-REVISEGHOST1-fix1-l2t1610.log, report
+deliverables/REVISE-GHOST-1-fix1-report.l2t1610.md, SAME worktree/branch. NEXT TICK: on coder
+exit fire cycle-2 advc (suffix l2t<tick>, scope 4ee21633...HEAD) -> ACCEPT -> self-verify ->
+merge -> RESTART -> RE-DRIVE a6b attempt-7 (the attempt-6 acceptance debt). Second fix verdict
+-> architect. Priority-1 in the handoff above is superseded by this addendum.
