@@ -45,7 +45,7 @@ import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabel
 import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
-import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
+import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage, agentDraftProducedNothing } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
 import { followUpForLayer } from './materialFollowUp.js';
 import { repairMintedLabelsAgainstUserWords } from './mintLabelFidelity.js';
@@ -3914,16 +3914,12 @@ export function createAgentOrchestrator(
             // with a cause, never a silent success. The coerced/compile path
             // could end `success=true` with zero events and no explanation
             // (observed live 2026-09-20), the same silence the draft path was
-            // fixed for.
-            const emptyResult =
-              !(result.events?.length ?? 0) &&
-              !(result.clarificationRequests?.length ?? 0) &&
-              !result.error &&
-              !(result.labwareAdditions?.length ?? 0) &&
-              !(result.labwareRequirements?.length ?? 0) &&
-              !(result.recordCreations?.length ?? 0) &&
-              !result.deckLayout;
-            if (emptyResult) {
+            // fixed for. REVISE-GHOST-1 fix 1 (advc cycle-1 D1): the emptiness
+            // test is the ONE shared rule (draftArgDiagnostics
+            // .agentDraftProducedNothing — every deliverable channel, incl.
+            // equipmentRequirements/protocolEdit), not an inline channel list
+            // that can drift from the client's honest-wall mirror.
+            if (agentDraftProducedNothing(result)) {
               result = {
                 ...result,
                 error: emptyDraftMessage({ truncated: truncatedToolCall, hadArguments: true }),

@@ -1,3 +1,5 @@
+import type { AgentResult } from './types.js';
+
 /**
  * Never drop a draft field silently.
  *
@@ -131,5 +133,37 @@ export function emptyDraftMessage(options: { truncated: boolean; hadArguments: b
   return (
     'no proposal: the model’s tool call carried no usable draft arguments. ' +
     'Nothing was applied — try rephrasing, or name the material explicitly.'
+  );
+}
+
+/**
+ * REVISE-GHOST-1 fix 1 (advc cycle-1 D1): the ONE canonical "produced nothing"
+ * rule for a done draft result. A result produced nothing only when EVERY
+ * deliverable channel is empty AND it carries no error: events, clarification
+ * requests, labwareAdditions, labwareRequirements, equipmentRequirements,
+ * recordCreations, deckLayout, protocolEdit ops. A turn that delivered ANY
+ * proposal payload (a record creation, a labware requirement, a deck switch, a
+ * protocol edit…) is NOT empty — it delivered a proposal, even with zero
+ * events.
+ *
+ * This is the single source of the emptiness rule: the orchestrator's empty-
+ * draft guard (AgentOrchestrator.ts) consumes it here, and the client's honest
+ * wall consumes its mirror (app/src/event-editor/right-pane/ai/draftEmptiness.ts)
+ * over the same channel set, so the two layers cannot drift on what "empty"
+ * means. The client cannot import server modules (workspace boundary); the
+ * channel list lives in exactly one place per layer and nowhere else — no
+ * ad-hoc per-channel branches scattered around either leg.
+ */
+export function agentDraftProducedNothing(result: AgentResult): boolean {
+  return (
+    !(result.events?.length ?? 0) &&
+    !(result.clarificationRequests?.length ?? 0) &&
+    !result.error &&
+    !(result.labwareAdditions?.length ?? 0) &&
+    !(result.labwareRequirements?.length ?? 0) &&
+    !(result.equipmentRequirements?.length ?? 0) &&
+    !(result.recordCreations?.length ?? 0) &&
+    !result.deckLayout &&
+    !(result.protocolEdit?.ops?.length ?? 0)
   );
 }

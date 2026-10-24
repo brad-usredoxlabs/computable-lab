@@ -144,6 +144,13 @@ export interface AssistDraftResult {
   /** Place the created record on the bench in the same turn (explicit). */
   alsoPlace?: { surface?: 'lawn' | 'slot'; slotId?: string }
   /**
+   * A deck_layout turn: the draft switches the run's platform/variant (the
+   * server's deck_layout branch, AgentOrchestrator.ts). A deliverable channel
+   * like any other — REVISE-GHOST-1 fix 1 (advc cycle-1 D1): the honest wall's
+   * emptiness rule counts it, so a deck switch is never walled away.
+   */
+  deckLayout?: { platformId: string; variantId: string }
+  /**
    * A protocol_edit proposal emitted via agent_intent (PROTO-AI-7). See
    * AiProtocolEditProposal — the server validates the envelope against the
    * registered schema and WRITES NOTHING; rendering is PROTO-AI-9, applying
