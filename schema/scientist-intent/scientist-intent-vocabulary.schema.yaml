@@ -104,7 +104,7 @@ properties:
                   argument (sourceHint/targetHint/labwareHint).
               level:
                 type: string
-                enum: [concept, spec, instance, aliquot, unknown]
+                enum: [concept, spec, instance, aliquot, vendor-product, unknown]
                 description: >-
                   SPINE-8 DECLARATION SLOT — the MaterialLevel (mirrors
                   server/src/resolve/types.ts MaterialLevel verbatim) the noun
@@ -113,12 +113,15 @@ properties:
                   deps.levelFor; the engine's levelFilter arm then drops
                   concept/unknown-level candidates for a well-ready requirement.
                   INERTNESS (SPINE-8 §9.4): the filter FIRES only for well-ready
-                  layers — 'instance' and 'aliquot' (per materialRefFields.ts
-                  LAYER_ALIASES/WELL_READY_LAYERS data). A declared 'spec',
-                  'concept', or 'unknown' normalizes to layer 'material' and the
-                  filter NO-OPS; declaring one is legal but enforces nothing.
+                  layers — 'instance', 'aliquot', and 'vendor-product' (per
+                  materialRefFields.ts LAYER_ALIASES/WELL_READY_LAYERS data). A
+                  declared 'spec', 'concept', or 'unknown' normalizes to layer
+                  'material' and the filter NO-OPS; declaring one is legal but
+                  enforces nothing.
                   This enum mirrors the TS union honestly rather than narrowing
-                  to firing values (OQ2 disposition).
+                  to firing values (OQ2 disposition). The mirror equality is
+                  pinned by src/resolve/materialLevelMirror.test.ts (set diff
+                  against the types.ts union, both directions).
               cardinality:
                 type: string
                 enum: [one, many]
