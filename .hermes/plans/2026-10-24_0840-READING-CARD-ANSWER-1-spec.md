@@ -63,8 +63,10 @@ Ruling 4 (defect 2 IN scope; defect 4 = separate menu-surface backlog item, NOT 
    composition-fraction-convention.yaml). NO mint row (falls out of menuProvider:'choice').
 4. ANSWER WIRE: unchanged shape — `AgentClarificationAnswer.value` = the reading id, requestId =
    the existing join id (factRequestId). No new wire types.
-5. SERVER ANSWER LEG (the whole delta): at the chat fold leg, build `scientistAnswers`
-   structurally from the held facts + submitted answers — an answer whose HELD FACT carries readings
+5. SERVER ANSWER LEG (the whole delta): at the chat fold leg, build `scientistAnswers` AND
+   `answeredClarificationLabels` structurally from the held facts + submitted answers (per the ORCH
+   RATIFICATION block below, which governs this sentence; tidied at merge l2t1610) — an answer
+   whose HELD FACT carries readings
    and whose value is one of that fact's reading ids goes into `scientistAnswers[label] = value`,
    passed to `compileShorthandDeterministically` by conditional spread (IntentCompileFromPrompt
    AMENDMENT 2: the SAME structural test EXCLUDES reading answers from
