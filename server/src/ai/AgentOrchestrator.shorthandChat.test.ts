@@ -604,6 +604,8 @@ actions:
       // MATRES-RECV (OQ-2 RATIFIED): compose_receiving on the SAME forced tool.
       'compose_record_draft',
       'compose_receiving',
+      // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain.
+      'compose_execute_chain',
     ]);
     expect(params.properties.shorthand?.type).toBe('string');
     const parsed = parseAgentIntentArgs({ intent: 'event_shorthand', shorthand: ADD_DMEM_YAML });

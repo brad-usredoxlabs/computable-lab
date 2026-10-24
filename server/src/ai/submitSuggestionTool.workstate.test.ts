@@ -48,6 +48,9 @@ describe('agent_intent — compose_workstate intent (PB-CH-4)', () => {
       // compile endpoint remains the trust boundary.
       'compose_record_draft',
       'compose_receiving',
+      // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+      // on the SAME forced tool; POST /api/drafts/compile remains the trust boundary.
+      'compose_execute_chain',
     ]);
   });
 
