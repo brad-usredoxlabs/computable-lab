@@ -2,8 +2,6 @@ import { useCallback, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
 import { useAiChat } from '../shared/hooks/useAiChat'
-import { useWorkstateProposalFlow } from '../shared/ai/useWorkstateProposalFlow'
-import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import { useResultInterpretation } from './hooks/useResultInterpretation'
 import { useEvidenceAssembly } from './hooks/useEvidenceAssembly'
@@ -60,18 +58,16 @@ export function RunWorkspacePage() {
   }), [runId, activeTab, summary?.runId, summary?.title, summary?.status, workspace])
   // Phase 2: persist to /api/ai/threads/event-editor (Phase 7 subsumes this
   // route under /event-editor).
-  // MATRES-CHAIN §7.5: the run-workspace chat relays the elicited
-  // execute-chain INTENT (compose_execute_chain → chain_proposal frame) to
-  // the SAME shared proposal flow (adapter 'chain'); the review card mounts
-  // on this page. POST /api/drafts/compile is the trust boundary — nothing
-  // here writes without Accept.
-  const chainFlow = useWorkstateProposalFlow()
+  // MATRES-CHAIN fix2 (gate D1, receipts 2026-10-24_115822): the execute-
+  // chain relay + review card that used to mount HERE are RETIRED — this
+  // module is imported by nothing (no route serves it; the /runs/:runId
+  // route lazy-imports run/RunWorkspacePage), so the §7.5 wall was mounted
+  // on a dead page and never rendered. The ONE reachable mount now lives on
+  // the routed surface (AiTabPanel relays chain_proposal through the shared
+  // flow and mounts ChainProposalCard).
   const aiChat = useAiChat({
     aiContext,
     endpoint: 'event-editor',
-    onChainProposal: (intent) => {
-      void chainFlow.proposeWorkstate('chain', intent)
-    },
   })
   useRegisterAiChat(aiChat)
 
@@ -150,23 +146,6 @@ export function RunWorkspacePage() {
         main={main}
         rightRail={<RunWorkspaceRightRail summary={summary} showChat={showChat} selectedEventRef={selectedEventId} executionStates={workspace?.executionStates} />}
       />
-      {chainFlow.card ? (
-        // MATRES-CHAIN §7.5: the tier-2 execute-chain review card rides the run
-        // workspace (same discipline as the analysis chat): while a card is
-        // pending NOTHING is written — the chain records land only through
-        // Accept → the single writer. The card is presentational; every string
-        // it shows is the server-built card document.
-        <ChainProposalCard
-          phase={chainFlow.card.phase}
-          {...(chainFlow.card.chainCard ? { card: chainFlow.card.chainCard } : {})}
-          {...(chainFlow.card.summary !== undefined ? { summary: chainFlow.card.summary } : {})}
-          {...(chainFlow.card.diagnostics ? { diagnostics: chainFlow.card.diagnostics } : {})}
-          {...(chainFlow.card.draftId !== undefined ? { draftId: chainFlow.card.draftId } : {})}
-          {...(chainFlow.card.revision !== undefined ? { revision: chainFlow.card.revision } : {})}
-          onAccept={() => void chainFlow.acceptWorkstate()}
-          onReject={chainFlow.rejectWorkstate}
-        />
-      ) : null}
       {exportMessage ? <div className="run-workspace-toast run-workspace-toast--success">{exportMessage}</div> : null}
       {exportError ? <div className="run-workspace-toast run-workspace-toast--error">{exportError}</div> : null}
 
