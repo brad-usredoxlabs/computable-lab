@@ -67,9 +67,20 @@ Ruling 4 (defect 2 IN scope; defect 4 = separate menu-surface backlog item, NOT 
    structurally from the held facts + submitted answers — an answer whose HELD FACT carries readings
    and whose value is one of that fact's reading ids goes into `scientistAnswers[label] = value`,
    passed to `compileShorthandDeterministically` by conditional spread (IntentCompileFromPrompt
-   Handlers.ts precedent). AMENDMENT 2: the SAME structural test EXCLUDES reading answers from
+   AMENDMENT 2: the SAME structural test EXCLUDES reading answers from
    `foldAnswersIntoShorthand`'s answer set (they have no label→noun carrier; feeding them to the
    fold is precisely the never-guess fold-null the pin defends).
+
+   ORCH RATIFICATION 2026-10-24T12:55 EDT (l2t1245, resolving advc-c1 D1): the answer delta is
+   `scientistAnswers` AND `answeredClarificationLabels`, both by conditional spread at the same fold
+   leg. Rationale: l2t0650 Ruling 2's OBSERVABLE ACCEPTANCE (both bars settled -> draft mounts ->
+   events>0) is binding and gate-grade, and is unreachable on the chat route without the
+   answeredClarificationLabels threading (advc c1 deletion experiment: without it the role-gap card
+   survives, no draft, events==0). The mechanism feeds the ALREADY-SHIPPED MIXROLE-1 §5b membership
+   guard (normalizeScientistIntent.ts:1032 / compositionRoles.ts:215) with label data only — no new
+   compiler policy, absent path byte-unchanged. l2t0115 R1's "its own item" routing is conditional on
+   fold-success-but-re-hold under (2'); the later ruling's acceptance subsumes it — the R1 routing
+   note is CLOSED for the chat route by this ratification.
 6. HONEST SURVIVOR CLAUSE (Amendment 2 tail): if after the reading answer routes and the remaining
    answers fold, the role-gap bar's answer still trips fold-null, the result must be today's honest
    visible state and the coder REPORTS it plainly — role-vocabulary answer form is NOT this task.
