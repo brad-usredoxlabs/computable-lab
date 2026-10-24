@@ -77,15 +77,52 @@ export function ChainProposalCard({
     )
   }
 
-  // A non-compiling phase with NO server-built card document is a named
-  // honest state (the compile returned nothing reviewable) — the card builds
-  // no placeholder copy of its own.
+  // fix-run 4 D3 (gate g1d): a legitimately refused compile must surface as a
+  // BLOCKED WALL THAT NAMES the offending rule/diagnostic ids (§7.5 / §12 bait
+  // 9), exactly like the shipped record-drafting wall (WorkstateProposalCard
+  // renders the DRAFT_INVALID diagnostics verbatim — AiTabPanel.recordDraft
+  // .test.tsx 'canAccept:false ⇒ summary + diagnostics and NO accept control').
+  // The server names every fired rule in the diagnostics it returns
+  // (attestation-occurred-approximate-needs-approximation,
+  // volume-sum-lte-prepared, chain.prepared.sourceSpecRef, ...); this component
+  // renders them VERBATIM and stays NON-actionable (no Accept on canAccept:false).
+  // Only when the compile produced NEITHER a card document NOR a diagnostic is
+  // the state the honest 'nothing reviewable' wall.
   if (!card) {
+    const hasNamedDiagnostics = diagnostics !== undefined && diagnostics.length > 0;
     return (
-      <div className="chain-card chain-card--blocked" data-testid="chain-card-nocard" role="alert">
-        The compile returned no chain card document — nothing was written.
+      <div
+        className={`chain-card ${hasNamedDiagnostics ? 'chain-card--blocked' : 'chain-card--blocked chain-card--nocard'}`}
+        data-testid={hasNamedDiagnostics ? 'chain-card' : 'chain-card-nocard'}
+        role="alert"
+      >
+        {hasNamedDiagnostics ? (
+          <>
+            <span className="chain-card__blocked-title" data-testid="chain-card-blocked">
+              This chain is blocked — nothing was written.
+            </span>
+            <ul className="chain-card__diagnostics" data-testid="chain-card-blocked-diagnostics">
+              {diagnostics.map((d, i) => (
+                <li key={`${d.code ?? 'diag'}-${i}`} className="chain-card__diagnostic">
+                  {d.code ? `${d.code}: ` : ''}
+                  {d.message}
+                </li>
+              ))}
+            </ul>
+            {phase === 'blocked' ? (
+              <div className="chain-card__actions">
+                <button type="button" className="chain-card__btn chain-card__btn--reject" data-testid="chain-card-reject" onClick={onReject}>
+                  Reject
+                </button>
+                <span className="chain-card__revise-note">fix it through chat, then re-propose</span>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          'The compile returned no chain card document — nothing was written.'
+        )}
       </div>
-    )
+    );
   }
 
   return (
