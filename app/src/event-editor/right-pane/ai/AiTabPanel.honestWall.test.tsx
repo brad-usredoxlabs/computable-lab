@@ -51,6 +51,11 @@ vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.mjs
 
 const mocks = vi.hoisted(() => ({
   chatOptions: null as null | { onDraftResult?: (result: unknown, prompt: string) => void },
+  // FIX 2 (Ruling 1): the protocolEdit arm's jurisdiction is the ATTACHED
+  // protocol identity, so the harness must be able to attach one (the
+  // AiTabPanel.protocolEdit.test.tsx pattern). null = no protocol attached
+  // (every other leg in this file behaves exactly as before).
+  protocolIdentity: { current: null as null | { recordId: string; title?: string; sha?: string } },
   editorActions: {
     setPreview: vi.fn(),
     clearPreview: vi.fn(),
@@ -90,7 +95,19 @@ vi.mock('../../EventEditorContext', async (importOriginal) => {
 vi.mock('../../protocol/ProtocolSelectionContext', () => ({
   NO_PROTOCOL_RESOURCES: { labwares: [], equipment: [] },
   NO_LABWARE_BINDINGS: {},
-  useProtocolSelection: () => null,
+  useProtocolSelection: () => (mocks.protocolIdentity.current
+    ? {
+        protocol: mocks.protocolIdentity.current,
+        steps: [
+          { stepId: 'step-seed', label: 'Seed cells', ordinal: 1, kind: 'add_material', description: 'Seed 10k cells per well' },
+          { stepId: 'step-read', label: 'Read plate', ordinal: 2, kind: 'read', description: 'Read fluorescence' },
+        ],
+        resources: {
+          labwares: [{ roleId: 'labware_plate', description: 'Culture plate', expectedLabwareKinds: ['lab-plate-96'] }],
+          equipment: [],
+        },
+      }
+    : null),
 }))
 
 // The OQ-3 pin test drives the recompile leg — mock the apiClient seam
@@ -192,6 +209,7 @@ beforeEach(() => {
   cleanup()
   mocks.chatOptions = null
   mocks.editor.current = null
+  mocks.protocolIdentity.current = null
   vi.clearAllMocks()
 })
 
@@ -400,51 +418,154 @@ describe('REVISE-GHOST-1 fix 1 — the wall does NOT fire on a proposal-bearing 
     expect(preview.previewPlacements.length).toBeGreaterThan(0)
   })
 
-  it('NEGATIVE (D1): a protocolEdit success with mappable ops does NOT render the wall (the review card is its surface)', async () => {
+  // FIX 2 (advc cycle-2 Defect 1, Ruling 1): protocolEdit is a CLIENT-SURFACE-
+  // AWARE channel. The server emits ops without knowing whether a protocol
+  // identity is attached; only the client's protocolEdit arm knows whether the
+  // turn reached the protocol-edit review surface. Jurisdiction is ARM ORDER:
+  // a mappable envelope (identity attached, diff non-null) dispatches its own
+  // protocolDiff draft-ready and RETURNS (AiTabPanel.tsx:514) — it never
+  // reaches the wall. The only protocolEdit turn that CAN reach the wall is
+  // the fall-through remnant — an identity-less / unmappable envelope — and
+  // that remnant delivered NOTHING and MUST wall. Both arms are asserted with
+  // their DESTINATION, never wall-absence alone (bait 2).
+
+  it('NEGATIVE (D-b, cycle-2 Defect 1): an identity-less protocolEdit-only success is a nothing-delivered success — the WALL fires; NO changes panel, NO live "Apply to run", no ghost set', async () => {
+    // No protocol attached: the arm's identity guard fails, the envelope
+    // falls through, and the 7-term predicate judges the turn empty.
+    mocks.protocolIdentity.current = null
+    mountDeckEditor()
     renderPanel()
     await emitDraft({
       success: true,
       events: [],
-      protocolEdit: { ops: [{ op: 'insert_step', afterStepId: 's1', step: { label: 'wash' } }] },
-    }, 'add a wash step after step 1')
+      protocolEdit: { ops: [{ op: 'step_insert', afterStepId: 'step-read', label: 'Wash' }] },
+    }, 'add a wash step after the read step')
 
-    // The protocol-edit arm owns this turn; the wall must not swallow it.
-    expect(screen.queryByTestId('ai-tab-honest-wall')).toBeNull()
+    // The exact flip of the cycle-2 gate's PROBE_STATE
+    // {"wall":false,"changesPanel":true,"changesApply":true} →
+    // {"wall":true,"changesPanel":false,"changesApply":false}.
+    const wall = await screen.findByTestId('ai-tab-honest-wall')
+    expect(wall.getAttribute('role')).toBe('alert')
+    expect(wall.textContent).toContain('no events')
+    // The defect shape is asserted IMPOSSIBLE: no sidebar review state over
+    // an empty plate with a live Apply button (spec §1 mandate).
+    expect(screen.queryByTestId('changes-panel')).toBeNull()
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(screen.queryByTestId('protocol-diff')).toBeNull()
+    expect(mocks.editorActions.setPreview).not.toHaveBeenCalled()
+    // The chat stays usable — a reported failure, not a silent plate.
+    expect(screen.getByTestId('chat-input')).toBeTruthy()
   })
 
-  // Drift pin (the reviewer's "one shared rule so client and server cannot
-  // drift"): the client predicate and the server's canonical predicate must
-  // count the SAME deliverable channels. The app cannot import server modules
-  // across the workspace boundary, so the channel set is pinned mechanically
-  // against the server source text — a divergence fails the app suite, not a
-  // live dogfood.
-  it('DRIFT PIN: the client wall predicate counts exactly the server canonical channel set', async () => {
+  it('POSITIVE (D-c, cycle-2 Defect 1): a protocolEdit success WITH an attached protocol identity reaches the protocol review surface — protocol-diff renders with Accept; wall absent; never an empty-changes Apply', async () => {
+    mocks.protocolIdentity.current = { recordId: 'PROT-ATT', title: 'Attached assay', sha: 'sha-1' }
+    renderPanel()
+    await screen.findByTestId('ai-tab-system-prompt')
+    await emitDraft({
+      success: true,
+      events: [],
+      protocolEdit: { ops: [{ op: 'step_insert', afterStepId: 'step-read', label: 'Wash', kind: 'wash', description: 'Wash twice with PBS' }] },
+    }, 'add a wash step after the read step')
+
+    // DESTINATION asserted: the protocol-edit review surface renders — the
+    // protocolDiff-bearing draft-ready with its rows and target.
+    expect(await screen.findByTestId('changes-panel')).toBeTruthy()
+    const diff = await screen.findByTestId('protocol-diff')
+    expect(diff).toBeTruthy()
+    expect(screen.getByTestId('protocol-diff-target').textContent).toContain('Attached assay')
+    expect(screen.getAllByTestId('protocol-edit-row')).toHaveLength(1)
+    // The Apply here is the protocol-mode 'Accept' over a NON-empty diff —
+    // never the defect's empty-changes 'Apply to run'.
+    const apply = screen.getByTestId('changes-apply')
+    expect(apply.textContent).toBe('Accept')
+    // The event-graph changes list the defect lands its live Apply over is
+    // EMPTY here (the arm dispatched `changes: []` alongside the protocol
+    // diff — the Apply is the protocol Accept, not an event-graph Apply),
+    // and the protocol surface itself carries the visible rows.
+    const panel = screen.getByTestId('changes-panel')
+    const diffDivs = panel.querySelectorAll(':scope > .changes-panel__diff')
+    expect(diffDivs).toHaveLength(1) // the event-graph diff div, empty
+    expect(diffDivs[0]!.querySelectorAll('.changes-panel__change')).toHaveLength(0)
+    expect(diff.querySelectorAll('.changes-panel__change')).toHaveLength(1)
+    // The arm returned at :514 — the wall never saw this turn.
+    expect(screen.queryByTestId('ai-tab-honest-wall')).toBeNull()
+    expect(mocks.editorActions.setPreview).not.toHaveBeenCalled()
+  })
+
+  it('NEGATIVE (D-c complement): an attached-identity envelope whose ops are UNMAPPABLE falls through and walls — the fall-through remnant is a nothing-delivered success', async () => {
+    mocks.protocolIdentity.current = { recordId: 'PROT-ATT', title: 'Attached assay', sha: 'sha-1' }
+    renderPanel()
+    await screen.findByTestId('ai-tab-system-prompt')
+    await emitDraft({
+      success: true,
+      events: [],
+      // protocolEditDiffFrom skips an op with no recognised name → the diff
+      // is null → the arm falls through (AiTabPanel.tsx:516-518) to the wall.
+      protocolEdit: { ops: [{ op: 'not_a_real_op' }] },
+    }, 'edit the protocol somehow')
+
+    const wall = await screen.findByTestId('ai-tab-honest-wall')
+    expect(wall.getAttribute('role')).toBe('alert')
+    expect(screen.queryByTestId('changes-panel')).toBeNull()
+    expect(screen.queryByTestId('changes-apply')).toBeNull()
+    expect(screen.queryByTestId('protocol-diff')).toBeNull()
+    expect(mocks.editorActions.setPreview).not.toHaveBeenCalled()
+  })
+
+  // Drift pin (Ruling 3, fix-run-2): the client predicate and the SERVER's
+  // inline empty-draft guard must not drift. The relationship is pinned as
+  // CLIENT ⊇ SERVER (never ==): the server arm asserts a PREDICATE-TERM
+  // REGEX per canonical channel against the sliced `const emptyResult =`
+  // guard block (a bare comment naming a channel must NOT satisfy it), and
+  // the superset arm asserts functionally that every server channel is
+  // counted by the client while the client's extra set is EXACTLY
+  // {equipmentRequirements}. protocolEdit is NOT in either set — its
+  // jurisdiction is the protocolEdit arm + fall-through-to-wall (Ruling 1).
+  it('DRIFT PIN (Ruling 3): client predicate ⊇ server inline guard; per-channel regex terms; protocolEdit is arm-governed, not predicate-counted', async () => {
     const { readFileSync } = await import('node:fs')
     const { resolve } = await import('node:path')
     const { draftProducedNothing } = await import('./draftEmptiness')
-    // vitest runs with cwd = the app workspace (the shorthandCancel suite's
-    // resolve(process.cwd(), …) idiom); the server source sits one level up.
-    const serverSource = readFileSync(resolve(process.cwd(), '../server/src/ai/draftArgDiagnostics.ts'), 'utf8')
-    const serverBody = serverSource.slice(
-      serverSource.indexOf('export function agentDraftProducedNothing'),
+
+    // --- Server arm: slice the inline guard block from the orchestrator. ---
+    const orchestratorSource = readFileSync(
+      resolve(process.cwd(), '../server/src/ai/AgentOrchestrator.ts'),
+      'utf8',
     )
-    const channels = [
+    const guardStart = orchestratorSource.indexOf('const emptyResult =')
+    expect(guardStart).toBeGreaterThanOrEqual(0)
+    const guardBlock = orchestratorSource.slice(guardStart, orchestratorSource.indexOf('if (emptyResult)', guardStart))
+    expect(guardBlock.length).toBeGreaterThan(0)
+
+    const serverChannels = [
       'events', 'clarificationRequests', 'error', 'labwareAdditions',
-      'labwareRequirements', 'equipmentRequirements', 'recordCreations',
-      'deckLayout', 'protocolEdit',
+      'labwareRequirements', 'recordCreations', 'deckLayout',
     ]
-    for (const channel of channels) {
-      expect(serverBody).toContain(channel)
+    for (const channel of serverChannels) {
+      // A predicate-term regex: `result.<channel>?.length` or `!result.<channel>`
+      // — prose in a comment naming the channel must NOT satisfy this.
+      const term = new RegExp(`result\\.${channel}\\??\\.length|!result\\.${channel}\\b`)
+      expect(guardBlock).toMatch(term)
     }
-    // The client predicate behaves as the shared rule on each channel.
+    // The server guard counts EXACTLY the 7 canonical channels: no client-
+    // superset member leaked into the server text.
+    expect(guardBlock).not.toMatch(/result\.equipmentRequirements\b/)
+    expect(guardBlock).not.toMatch(/result\.protocolEdit\b/)
+
+    // --- Superset arm: functional per-channel behaviour of the client. ---
     expect(draftProducedNothing({ success: true, events: [] })).toBe(true)
     expect(draftProducedNothing({ success: true, events: [], recordCreations: [{ kind: 'material', name: 'X' }] })).toBe(false)
     expect(draftProducedNothing({ success: true, events: [], labwareRequirements: [{ classCurie: 'CL:24_well_plate' }] })).toBe(false)
     expect(draftProducedNothing({ success: true, events: [], labwareAdditions: [{ recordId: 'LBW-x' }] })).toBe(false)
-    expect(draftProducedNothing({ success: true, events: [], equipmentRequirements: [{ classCurie: 'equipment:water_bath' }] })).toBe(false)
     expect(draftProducedNothing({ success: true, events: [], deckLayout: { platformId: 'p', variantId: 'v' } })).toBe(false)
-    expect(draftProducedNothing({ success: true, events: [], protocolEdit: { ops: [{ op: 'x' }] } })).toBe(false)
     expect(draftProducedNothing({ success: true, events: [], clarificationRequests: [CLARIFICATION] })).toBe(false)
     expect(draftProducedNothing({ success: true, events: [], error: 'boom' })).toBe(false)
+    // The client's ONE sanctioned extra (Ruling 1: a client-surface deliverable
+    // — buildPreviewFromDraft mounts ghosts from it; the D1 negative asserts
+    // setPreview + previewPlacements > 0 as its destination).
+    expect(draftProducedNothing({ success: true, events: [], equipmentRequirements: [{ classCurie: 'equipment:water_bath' }] })).toBe(false)
+    // protocolEdit is NOT predicate-counted: an ops-only envelope IS empty
+    // (the arm owns delivery; the fall-through remnant walls). This leg
+    // INVERTS the cycle-1 pin (:446), which is deleted per Ruling 3.
+    expect(draftProducedNothing({ success: true, events: [], protocolEdit: { ops: [{ op: 'x' }] } })).toBe(true)
   })
 })
