@@ -359,3 +359,29 @@ records (no migration script — OQ-2), app/src/event-editor/right-pane/** (hot-
    three are read-only picks; none performs arithmetic.
 
 DRAFT COMPLETE
+
+
+## ORCH RATIFICATION (l2t1710, post advc cycle-1) — File-ownership deltas RATIFIED
+
+advc cycle-1 (reviews/ROLE-AXES-1-advc-c1-l2t1530.md) VERDICT: fix — zero functional defects;
+D1/D2/D3 are scope/mechanism items. Orch rulings, first-hand verified (grep-clean gate zero
+hits; ontology-terms grep zero):
+
+- D1 RATIFIED: server/src/materials/participationConvention.ts and
+  app/src/shared/lib/participationConvention.ts are blessed into File ownership IN as the
+  mandatory generic consumers of the spec-mandated config/drafting/composition-participation-
+  convention.yaml. The spec's own architecture (interpreter reads data, zero TS policy
+  literals) makes a dedicated module necessary; the fraction-convention inline-consumer
+  precedent does not fit a vocabulary read by BOTH server and app. Grep-clean, no role
+  literals (reviewer-verified).
+- D2 RATIFIED as disclosed ripple: aiPlanningTools.ts:702 ('solvent' -> 'material') is
+  behaviour-preserving (resolver branches only on kind === 'ingredient' at :747; 11/11 green).
+  It must be named as a SCOPE delta in the fix-report, not just as behaviour preservation.
+- D3 RULED: the l2t1355 resume mandate explicitly allowed "config/data-driven OR OTHERWISE
+  role-literal-free" for the resolver-kind vocabulary; the PROMPT_RESOLVER_KINDS TS-const
+  channel contract is the accepted mechanism (resolver kinds are a WIRE contract, not domain
+  policy). REMAINING DEFECT the fix run must clear: reconcile the two shipped resolver
+  annotations that still name the removed 'solvent' arm (server/src/mcp/tools/
+  aiPlanningTools.ts:744, server/src/api/handlers/MaterialPrepHandlers.ts:505) to the shipped
+  contract, and state the channel-contract ruling in the report.
+- O1/O2 observations noted, NOT gates.
