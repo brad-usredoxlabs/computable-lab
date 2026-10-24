@@ -11,6 +11,7 @@ import {
   type CopilotRef,
   type FormulationCopilotDraft,
   type PromptDraftResolver,
+  type PromptResolverKind,
 } from '../../materials/formulationCopilot.js';
 import { parseIngredientConcentration } from '../../materials/formulationMath.js';
 import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from '../../materials/participationConvention.js';
@@ -741,7 +742,7 @@ function generateEventId(prefix = 'evt'): string {
 }
 
 export function registerAiPlanningTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
-  const resolvePromptRef = async (label: string, kind: 'material' | 'solvent' | 'ingredient'): Promise<CopilotRef | undefined> => {
+  const resolvePromptRef = async (label: string, kind: PromptResolverKind): Promise<CopilotRef | undefined> => {
     const query = normalize(label);
     if (!query) return undefined;
     const schemas = kind === 'ingredient'
