@@ -44,12 +44,17 @@
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
 import { loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import { LintEngine } from '../lint/LintEngine.js';
 import { loadAllLintSpecs } from '../lint/LintSpecLoader.js';
 import { loadChainArithmeticPolicy, evaluateChainArithmetic, defaultChainArithmeticPath } from './chainArithmetic.js';
+import { loadChainClaimLabels, loadChainFulfillmentVocabulary, loadChainClaimVerbs } from './ExecuteChainDraft.js';
+import { loadFulfillmentCompatibilityPolicy } from '../fulfillment/fulfillmentPolicy.js';
 
 const SCHEMA_DIR = fileURLToPath(new URL('../../../schema', import.meta.url));
 const CHAIN_DRAFT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/chain-draft.schema.yaml';
@@ -80,20 +85,33 @@ describe('MATRES-CHAIN §9 first GREEN milestone — schema/lint/arithmetic as D
     expect(entry).toBeDefined(); // schema resolves (a structural verdict exists)
   });
 
-  it('chain-draft.lint.yaml carries the parent wall as data: an orphan aliquot composite fires chain-draft-aliquots-need-parent (named rule id)', () => {
-    const composite = {
+  it('orphan wall lives at the RECORD level (fix-run 1 D1): the shipped aliquot.schema.yaml anyOf refuses a parentless aliquot payload, and the DRAFT composite refuses a parent ref on an aliquot item (additionalProperties:false) — the wall is Ajv, not a dead draft lint rule', () => {
+    // The shipped record-level wall (A4): an aliquot with no spec/parent ref.
+    const orphanAliquot = {
+      kind: 'aliquot', id: 'ALQ-ORPHAN', name: 'orphan',
+      volume: { value: 100, unit: 'uL' }, status: 'available',
+    };
+    const v = validator.validate(orphanAliquot, 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml');
+    expect(v.valid).toBe(false);
+    // The composite-shape proof: parent_material_instance_ref is NOT a draft
+    // aliquot property — Ajv rejects it before any draft lint can see it (the
+    // reviewer's probe, pinned here so the wall's location stays declared).
+    const compositeWithParentRef = {
       operation: 'compose-execute-chain',
       artifactKind: 'attestation-chain',
       prepared: { name: 'stock', volume: { value: 1, unit: 'mL' } },
       aliquotCount: 2,
       aliquots: [
         { disposition: 'stored', volume: { value: 100, unit: 'uL' }, parent_material_instance_ref: { kind: 'record', type: 'material-instance', id: 'MINST-X' } },
-        { disposition: 'consumed', volume: { value: 100, unit: 'uL' } }, // orphan: no parent ref
+        { disposition: 'consumed', volume: { value: 100, unit: 'uL' } },
       ],
       attested: { claimStatus: 'completed', occurredAtStatus: 'unknown' },
     };
-    const result = lintEngine.lint(composite, CHAIN_DRAFT_SCHEMA_ID);
-    expect(result.violations.some(v => v.ruleId === 'chain-draft-aliquots-need-parent' && v.severity === 'error')).toBe(true);
+    const cv = validator.validate(compositeWithParentRef, CHAIN_DRAFT_SCHEMA_ID);
+    expect(cv.valid).toBe(false);
+    expect(cv.errors?.some(e => e.message.includes('parent_material_instance_ref'))).toBe(true);
+    // The dead draft-side rule is GONE from the lint file (no unreachable rule).
+    expect(lintEngine.getRule('chain-draft-aliquots-need-parent')).toBeUndefined();
   });
 
   it('chain-draft.lint.yaml: an attestation-chain draft without a declared claimStatus fires chain-draft-attested-chain-needs-declared-claim-status (elicitation wall as data)', () => {
@@ -182,5 +200,63 @@ describe('MATRES-CHAIN §9 first GREEN milestone — schema/lint/arithmetic as D
     };
     const v = validator.validate(payload, DERIVATION_SCHEMA_ID);
     expect(v.valid).toBe(true);
+  });
+
+  it('claim labels + fulfillment verb/fulfilledBy + physical claimVerbs are DECLARED DATA (adapters.yaml chain block, fix-run 1 D2/D3): the loaders read them, and they sit inside the shipped vocabularies', () => {
+    const labels = loadChainClaimLabels();
+    expect(labels).not.toBeNull();
+    // The labels must be members of the attestation claimStatus enum (the
+    // shipped vocabulary — the DATA cannot invent a label Ajv would reject).
+    const claimStatusEnum = validator.validate({ kind: 'attestation', recordId: 'ATT-LABEL-PROBE', artifactKind: 'attestation-chain', claims: [{ claimStatus: labels!.instructed, assertion: { verb: 'prepared', about: { kind: 'record', type: 'material-instance', id: 'MINST-1' } }, occurredAtStatus: 'unknown' }] }, 'https://computable-lab.com/schema/computable-lab/attestation.schema.yaml');
+    expect(claimStatusEnum.valid).toBe(true);
+    const vocab = loadChainFulfillmentVocabulary();
+    expect(vocab).not.toBeNull();
+    const verbs = loadChainClaimVerbs();
+    expect(verbs).not.toBeNull();
+    // Lock vs FULFIL's declared lint vocabulary (attestation.lint.yaml):
+    // fulfil-verb-vocabulary values + fulfil-fulfilledby-vocabulary values.
+    const verbRule = lintEngine.getRule('fulfil-verb-vocabulary');
+    const fulfilledByRule = lintEngine.getRule('fulfil-fulfilledby-vocabulary');
+    expect(verbRule).toBeDefined();
+    expect(fulfilledByRule).toBeDefined();
+    const verbValues = JSON.parse(JSON.stringify(verbRule!)) as { assert: { assert: { predicates: Array<{ values?: string[] }> } } };
+    const fbValues = JSON.parse(JSON.stringify(fulfilledByRule!)) as { assert: { assert: { predicates: Array<{ values?: string[] }> } } };
+    expect(verbValues.assert.assert.predicates.some(p => (p.values ?? []).includes(vocab!.verb))).toBe(true);
+    expect(fbValues.assert.assert.predicates.some(p => (p.values ?? []).includes(vocab!.fulfilledBy))).toBe(true);
+    // Lock vs the compatibility policy: the emitted fulfilledBy selects checks.
+    const policy = loadFulfillmentCompatibilityPolicy();
+    expect(policy.checksFor(vocab!.fulfilledBy).length).toBeGreaterThan(0);
+  });
+
+  it('the satisfied verdict is resolved by NAME via policy.verdictFor("satisfied") (fix-run 1 D4): a verdict-list reorder cannot change the satisfied verdict', () => {
+    const policy = loadFulfillmentCompatibilityPolicy();
+    const satisfied = policy.verdictFor('satisfied');
+    // The declared outcome mapping (not position) names the satisfied verdict.
+    expect(satisfied).toBe('compatible');
+    // A doctored policy with the verdict list REORDERED still resolves the
+    // satisfied verdict to the same name — the compiler's label selection
+    // (verdict === verdictFor('satisfied')) is reorder-proof by construction.
+    const tmp = join(tmpdir(), 'chain-verdict-reorder-policy.yaml');
+    writeFileSync(tmp, [
+      'policyVersion: 1',
+      'verdicts: [ mismatch, compatible, incomplete ]',
+      'outcomes:',
+      '  satisfied: compatible',
+      '  contradicted: mismatch',
+      '  missing-requirement-fact: incomplete',
+      '  missing-evidence-fact: incomplete',
+      'operators: [ membership, ref-equality ]',
+      'checks:',
+      '  - id: spec-identity',
+      '    requirementSlot: spec-identity',
+      '    fulfilledBy: [ derivation ]',
+      '    requirementPath: material_spec_ref.id',
+      '    evidencePaths: [ "outputs[*].id" ]',
+      '    operator: ref-equality',
+    ].join('\n'));
+    const reordered = loadFulfillmentCompatibilityPolicy(tmp);
+    expect(reordered.verdicts()[0]).not.toBe(satisfied); // position 0 CHANGED
+    expect(reordered.verdictFor('satisfied')).toBe(satisfied); // name-resolved verdict UNCHANGED
+    rmSync(tmp, { force: true });
   });
 });

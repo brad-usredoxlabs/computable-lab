@@ -15,33 +15,25 @@ lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/chain-draft.schema.yaml"
 
 rules:
-# --- orphan-aliquot wall (§7.4 rule 1, draft-side half) --------------------
-# The full wall is SHIPPED at the record level: aliquot.schema.yaml's root anyOf
-# forbids an aliquot with no spec/parent ref at all (A4) — the staged create
-# refuses it. This rule is the DRAFT-side half: a composite that names a parent
-# for SOME aliquots but not others has orphans (mixed parentage is the orphan
-# shape a draft can actually carry).
-- id: chain-draft-aliquots-need-parent
-  title: "when the draft names parents for aliquots, every aliquot must name one"
-  description: >
-    Mixed parentage is an orphan: an aliquot the draft left parentless while its
-    siblings name a parent. Cross-record referential truth (the parent resolves
-    to an EXISTING or chain-born instance) is checked at compile against
-    staged+store reads, same as FULFIL's plan-membership check style.
-  severity: error
-  scope: record
-  when:
-    op: nonEmpty
-    path: "aliquots[*].parent_material_instance_ref"
-  assert:
-    op: everyItem
-    collectionPath: aliquots
-    assert:
-      op: exists
-      path: parent_material_instance_ref
-  message:
-    template: "an aliquot in the chain draft carries no parent_material_instance_ref while its siblings do — orphan aliquot ({{aliquots}})"
-    paths: [ "aliquots" ]
+# --- orphan-aliquot wall (§7.4 rule 1) ---------------------------------------
+# THE WALL IS THE SHIPPED RECORD-LEVEL anyOf in schema/lab/aliquot.schema.yaml
+# (:105-108): an aliquot record with no material_spec_ref / parent_aliquot_ref /
+# parent_material_instance_ref is refused by Ajv (A4). It FIRES on the PRODUCTION
+# compile path: the chain compiler builds every aliquot write with
+# parent_material_instance_ref = the chain-born instance; the staging create runs
+# the REAL validate, and a parentless aliquot write fails there -> stage failure
+# -> named diagnostic -> canAccept:false (fix-run 1 D1). Exercised end-to-end in
+# ChainAccept.test.ts ('AC-4 orphan aliquot (production path)').
+#
+# There is deliberately NO draft-side orphan lint rule here (fix-run 1 D1): the
+# composite's aliquot items carry DECLARATION fields only (disposition/volume/
+# storage/occurred triple) under additionalProperties:false — a composite naming
+# parent_material_instance_ref is rejected by Ajv BEFORE any draft lint can see
+# it (probe-proven: "Unknown property: parent_material_instance_ref"), so a rule
+# gating on that path can never fire in the production compile path. The shipped
+# anyOf is the whole wall; the draft-side rule was dead and is removed. The
+# composite-shape proof (Ajv refuses a parent ref on a draft aliquot) is pinned
+# in ChainDraftSchemas.test.ts so the wall's location stays declared, not folklore.
 
 # --- elicitation wall (§7.2: never default the scientist into an attestation) --
 - id: chain-draft-attested-chain-needs-declared-claim-status

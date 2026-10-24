@@ -12,7 +12,13 @@
  *  AC-4 "arithmetic lint rejects sum>prepared and orphan aliquots" ->
  *      'AC-4 arithmetic: 11x100uL > 1mL blocks the card naming volume-sum-lte-prepared with ZERO writes'
  *      'AC-4 count: declared 10 vs 9 staged aliquots blocks naming aliquot-count-matches-declared'
- *      (orphan-aliquot lint rule fires at the data level in ChainDraftSchemas.test.ts)
+ *      'AC-4 orphan aliquot (production path, fix-run 1 D1): the shipped aliquot.schema anyOf fires on the staging create — named wall, canAccept:false, ZERO writes'
+ *      (the orphan wall is the shipped record-level anyOf — exercised HERE, on the
+ *      adapter/compile path, not via a direct lint() call; fix-run 1 D1)
+ *  fix-run 1 D4 (verdict reorder cannot flip the fulfillment label) ->
+ *      'fix-run 1 D4: a verdict-list reorder cannot flip the fulfillment claim label (verdictFor("satisfied") is name-resolved)'
+ *  fix-run 1 D2/D3 (claim vocabulary is DECLARED DATA) ->
+ *      'fix-run 1 D2/D3: an adapter block with no claimLabels/fulfillment vocabulary refuses the compile with CHAIN_CLAIM_VOCAB_UNDECLARED and zero writes'
  *  OQ-1(a) ruling (born-in-session only, bait 12) ->
  *      'OQ-1(a): consuming a PRE-EXISTING aliquot renders unsupported-by-design (named diagnostic, canAccept:false, zero writes) — never silently converted'
  *      'bait 12: the born-in-session consumed aliquot is staged at CREATION with status consumed — the accept loop stages ZERO updates'
@@ -33,6 +39,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +57,7 @@ import { contentHash, object } from '../revisions/RecordRevisionService.js';
 import { DEFAULT_CONFIG } from '../config/types.js';
 import { FormDraftService } from '../drafts/FormDraftService.js';
 import type { CompiledDraft } from '../drafts/FormDraftService.js';
+import { compileExecuteChainIntent } from './ExecuteChainDraft.js';
 import { requirementOccurrenceId } from '../materials/requirementId.js';
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../store/types.js';
@@ -464,5 +472,106 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     const del = await ctx.store.delete({ recordId: attId });
     expect(del.success).toBe(false);
     expect(del.error).toContain('APPEND_ONLY');
+  });
+
+  it('AC-4 orphan aliquot (production path, fix-run 1 D1): the shipped aliquot.schema anyOf fires on the staging create — named wall, canAccept:false, ZERO writes', { timeout: 30000 }, async () => {
+    // The wall is the shipped record-level anyOf (aliquot.schema.yaml:105-108),
+    // NOT a draft lint rule. This drives the REAL production path: adapter
+    // stage -> staging create -> the store's real Ajv validate. The spy strips
+    // parent_material_instance_ref from the aliquot envelope at the validate
+    // boundary — simulating an orphan write reaching the staging create — and
+    // the REAL shipped anyOf refuses it; the adapter names the wall in the
+    // stage failure -> DRAFT_INVALID diagnostic -> canAccept:false.
+    const realValidate = ctx.store.validate.bind(ctx.store);
+    let strippedOnce = false;
+    ctx.store.validate = (envelope: Parameters<typeof realValidate>[0]) => {
+      const payload = object((envelope as { payload?: unknown }).payload);
+      if (!strippedOnce && payload.kind === 'aliquot') {
+        // Strip EVERY anyOf alternative (material_spec_ref / parent_aliquot_ref
+        // / parent_material_instance_ref) from the first aliquot envelope: the
+        // shipped wall refuses an aliquot naming NONE of them.
+        delete payload.material_spec_ref;
+        delete payload.parent_aliquot_ref;
+        delete payload.parent_material_instance_ref;
+        strippedOnce = true;
+      }
+      return realValidate(envelope);
+    };
+    const review = await service.compile({ adapter: 'chain', intent: case3('batch-orphan') });
+    ctx.store.validate = realValidate;
+    expect(strippedOnce).toBe(true);
+    expect(review.canAccept).toBe(false);
+    expect(review.diagnostics.some(d => /staged chain write blocked/.test(d.message) && /anyOf/.test(d.message))).toBe(true);
+    const createSpy = vi.spyOn(ctx.store, 'create');
+    await expect(
+      service.accept({ draftId: review.draftId, revision: review.revision, reviewHash: review.reviewHash }),
+    ).rejects.toThrow(/blocked/i);
+    expect(createSpy).not.toHaveBeenCalled();
+    createSpy.mockRestore();
+  });
+
+  it('fix-run 1 D4: a verdict-list reorder cannot flip the fulfillment claim label — the satisfied verdict is resolved by NAME via policy.verdictFor("satisfied")', { timeout: 30000 }, async () => {
+    // Same compile path (the adapter's own compiler), with the DATA policy's
+    // verdict list REORDERED (position 0 is now 'mismatch'). Under the old
+    // positional comparison the label would flip completed->unknown; under
+    // verdictFor('satisfied') it cannot.
+    const tmpPolicy = join(root, 'reordered-compatibility.yaml');
+    writeFileSync(tmpPolicy, [
+      'policyVersion: 1',
+      'verdicts: [ mismatch, compatible, incomplete ]',
+      'outcomes:',
+      '  satisfied: compatible',
+      '  contradicted: mismatch',
+      '  missing-requirement-fact: incomplete',
+      '  missing-evidence-fact: incomplete',
+      'operators: [ membership, ref-equality ]',
+      'checks:',
+      '  - id: spec-identity',
+      '    requirementSlot: spec-identity',
+      '    fulfilledBy: [ derivation ]',
+      '    requirementPath: material_spec_ref.id',
+      '    evidencePaths: [ "outputs[*].id" ]',
+      '    operator: ref-equality',
+      '  - id: derivation-type',
+      '    requirementSlot: derivation-type',
+      '    fulfilledBy: [ derivation ]',
+      '    requirementPath: expectedDerivations',
+      '    evidencePaths: [ derivation_type ]',
+      '    operator: membership',
+    ].join('\n'));
+    const compiled = await compileExecuteChainIntent(case3('batch-reorder'), {
+      canonical: ctx.store,
+      staging: ctx.store,
+      validate: (doc, schemaId) => ctx.validator.validate(doc, schemaId),
+      lint: (payload, schemaId) => ctx.lintEngine.lint(payload, schemaId),
+      fulfillmentPolicyPath: tmpPolicy,
+    });
+    expect(compiled.ok).toBe(true);
+    const claims = object(compiled.envelope).claims as Array<Record<string, unknown>>;
+    const fulfil = claims.filter(c => object(c.assertion).fulfilledBy !== undefined);
+    expect(fulfil.length).toBeGreaterThanOrEqual(1);
+    const evaluations = object(fulfil[0]!.assertion).evaluations as Array<Record<string, unknown>>;
+    expect(evaluations.length).toBeGreaterThan(0);
+    expect(evaluations.every(e => e.verdict === 'compatible')).toBe(true);
+    // verdicts()[0] is 'mismatch' in the reordered policy — the label stayed
+    // the DATA fulfillmentSatisfied value ('completed'), proving name-resolution.
+    expect(fulfil[0]!.claimStatus).toBe('completed');
+    rmSync(tmpPolicy, { force: true });
+  });
+
+  it('fix-run 1 D2/D3: an adapter block with no claimLabels/fulfillment vocabulary refuses the compile with CHAIN_CLAIM_VOCAB_UNDECLARED and zero writes — the compiler never defaults a label', { timeout: 30000 }, async () => {
+    const tmpAdapters = join(root, 'vocab-less-adapters.yaml');
+    writeFileSync(tmpAdapters, 'adapters:\n  chain:\n    domain: chain\n    operations: [compose-execute-chain]\n    projection: {}\n    humanReviewedCreate: true\n    landing:\n      tabKind: record-edit\n      idField: recordId\n      idPrefix: record\n');
+    const compiled = await compileExecuteChainIntent(case3('batch-novocab'), {
+      canonical: ctx.store,
+      staging: ctx.store,
+      validate: (doc, schemaId) => ctx.validator.validate(doc, schemaId),
+      lint: (payload, schemaId) => ctx.lintEngine.lint(payload, schemaId),
+      adaptersPath: tmpAdapters,
+    });
+    expect(compiled.ok).toBe(false);
+    expect(compiled.diagnostics.some(d => d.includes('CHAIN_CLAIM_VOCAB_UNDECLARED'))).toBe(true);
+    expect(compiled.envelope).toBeUndefined();
+    rmSync(tmpAdapters, { force: true });
   });
 });

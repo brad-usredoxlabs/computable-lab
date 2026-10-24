@@ -106,6 +106,40 @@ adapters:
     operations: [compose-execute-chain]
     projection: {}
     humanReviewedCreate: true
+    # §7.2 claim-label vocabulary (DATA, bait-8 repair MATRES-CHAIN fix-run 1):
+    # the labels the chain compiler ECHOES are declared here, never hardcoded in
+    # TypeScript. `instructed` is the plan-side label for an INSTRUCTED
+    # (plan-slot-reference) payload; `declaredFallback` is echoed when the
+    # scientist declared an attested posture but named no claimStatus;
+    # `fulfillmentSatisfied`/`fulfillmentIncomplete` are the fulfillment-claim
+    # labels the compiler selects from the DATA verdict semantics
+    # (fulfillment-compatibility.yaml outcomes.satisfied via
+    # policy.verdictFor('satisfied')) — the compiler never derives a label from
+    # a positional verdict comparison and never rewrites a DECLARED label
+    # (OQ-4 law inherited: these are the drafting-side defaults the elicited
+    # composite declares, surfaced as data the compiler reads).
+    claimLabels:
+      instructed: proposed
+      declaredFallback: unknown
+      fulfillmentSatisfied: completed
+      fulfillmentIncomplete: unknown
+    # §7.6 fulfillment emission tokens (DATA, bait-8/D3 repair fix-run 1): the
+    # chain's fulfillment claim verb + evidence family. These MUST stay inside
+    # FULFIL's declared vocabulary (attestation.lint.yaml fulfil-verb-vocabulary
+    # / fulfil-fulfilledby-vocabulary; fulfillment-compatibility.yaml checks
+    # select by fulfilledBy) — the lock test pins the two data sources so they
+    # cannot drift. The compiler reads them; zero verb/fulfilledBy literals in TS.
+    fulfillment:
+      verb: fulfills
+      fulfilledBy: derivation
+    # Physical claim verbs (DATA, same bait-8 repair): the drafting side's own
+    # assertion verbs for the chain's physical claims. `prepared` labels the
+    # preparation claim; `stored`/`consumed` map the DECLARED disposition to the
+    # per-aliquot verb. The compiler echoes them; zero verb literals in TS.
+    claimVerbs:
+      prepared: prepared
+      stored: aliquoted
+      consumed: consumed
     # §7.5 landing: the accepted chain re-focuses the attestation record on its
     # record-edit tab (a REGISTERED lab-session tab kind — DATA, never a TS
     # literal; the same landing.tabKind precedent as record-drafting, plus the

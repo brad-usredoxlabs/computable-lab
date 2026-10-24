@@ -21,10 +21,16 @@
  * - claimStatus is a DECLARATION of the drafting side, never a server
  *   derivation at the accept wall (OQ-4 inherited): the elicited compile IS
  *   the drafting side for chat — it carries the scientist's declared label for
- *   physical claims, and for a fulfillment claim it declares `completed` only
- *   when the DATA policy's evaluations are all compatible, `unknown` when a
- *   declared fact is missing (honest incompleteness is legal, P8). The accept
- *   path never rewrites it.
+ *   physical claims, and for a fulfillment claim it declares the DATA label
+ *   (adapters.yaml claimLabels.fulfillmentSatisfied) only when every declared
+ *   evaluation carries the DATA satisfied verdict
+ *   (policy.verdictFor('satisfied') — never a positional verdict comparison),
+ *   and the DATA fulfillmentIncomplete label when a declared fact is missing
+ *   (honest incompleteness is legal, P8). The accept path never rewrites it.
+ *   The label VOCABULARY itself is declared data (config/drafting/adapters.yaml
+ *   chain.claimLabels — bait-8 repair, fix-run 1): the compiler echoes declared
+ *   values and fails with a named diagnostic when the declaration is absent;
+ *   zero claimStatus/verb/fulfilledBy string literals live in this file.
  * - ABSENT-before-accept (ratified, Q8 mechanism ruling): the envelope carries
  *   NO attestedAt; the chain adapter's onAccept hook stamps the acceptance time
  *   (adapters.ts hook). occurredAt is ONLY ever the scientist's stated time;
@@ -35,10 +41,12 @@
  * - §7.6 FULFIL ride: CHAIN reads the pinned plan's REQE- requirement
  *   occurrences (never mints them — FULFIL's normalizer owns ids), never
  *   mutates the plan, never touches plate-event.add-material*, never
- *   re-declares the fulfilledBy/verb/verdict vocabulary in TS (the values ride
- *   FULFIL's lint data + its shared evaluator, imported read-only). A plan
- *   whose requirements lack ids yields ZERO fulfillment claims + an honest
- *   note.
+ *   re-declares the fulfilledBy/verb/verdict vocabulary in TS (the tokens are
+ *   READ out of FULFIL's declared lint vocabulary (schema/lab/attestation.lint
+ *   .yaml: fulfil-verb-vocabulary / fulfil-fulfilledby-vocabulary) and the
+ *   verdicts out of fulfillment-compatibility.yaml via its shared evaluator,
+ *   imported read-only). A plan whose requirements lack ids yields ZERO
+ *   fulfillment claims + an honest note.
  * - OQ-1(a) ruling: consumption is staged at CREATION (status consumed on the
  *   create) for the born-in-session aliquot; a cross-session consume ref is
  *   REFUSED by the lint rule, never silently converted (bait 12).
@@ -107,6 +115,98 @@ export function loadChainLandingPolicy(adaptersPath = defaultAdaptersPath()): Ch
   if (typeof idField !== 'string' || idField.trim().length === 0) return null;
   if (typeof idPrefix !== 'string' || idPrefix.trim().length === 0) return null;
   return { tabKind: tabKind.trim(), idField: idField.trim(), idPrefix: idPrefix.trim() };
+}
+
+/** §7.2 claim-label vocabulary (DATA, bait-8 repair fix-run 1): the labels the
+ *  compiler ECHOES live in the chain adapter block's `claimLabels` — never as
+ *  TypeScript literals. Absent declaration => null => the compile refuses with
+ *  a named diagnostic (the landing-policy precedent: the compiler never
+ *  defaults a label). */
+export interface ChainClaimLabels {
+  /** Plan-side label for an INSTRUCTED (plan-slot-reference) payload (§7.2). */
+  instructed: string;
+  /** Echoed when an attested posture was declared but named no claimStatus. */
+  declaredFallback: string;
+  /** Label for a fulfillment claim whose evaluations all carry the DATA
+   *  satisfied verdict (policy.verdictFor('satisfied') — never positional). */
+  fulfillmentSatisfied: string;
+  /** Label for a fulfillment claim with a missing/incomplete declared fact (P8). */
+  fulfillmentIncomplete: string;
+}
+
+export interface ChainFulfillmentVocabulary {
+  /** The fulfillment verb (FULFIL's declared vocabulary, pinned by lock test). */
+  verb: string;
+  /** The evidence family this chain emits (FULFIL's fulfilledBy vocabulary). */
+  fulfilledBy: string;
+}
+
+/** Physical claim verbs (DATA): the drafting side's assertion verbs for the
+ *  chain's physical claims, echoed by the compiler (bait-8 repair). */
+export interface ChainClaimVerbs {
+  prepared: string;
+  stored: string;
+  consumed: string;
+}
+
+function chainAdapterBlock(adaptersPath: string): Record<string, unknown> | null {
+  let raw: string;
+  try {
+    raw = readFileSync(adaptersPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const parsed = parseYaml(raw) as unknown;
+  const block = (parsed as { adapters?: Record<string, unknown> } | null)?.adapters?.['chain'];
+  return block !== null && typeof block === 'object' && !Array.isArray(block)
+    ? (block as Record<string, unknown>)
+    : null;
+}
+
+export function loadChainClaimLabels(adaptersPath = defaultAdaptersPath()): ChainClaimLabels | null {
+  const labels = asObjectOrNull(chainAdapterBlock(adaptersPath)?.claimLabels);
+  if (labels === null) return null;
+  const instructed = labels.instructed;
+  const declaredFallback = labels.declaredFallback;
+  const fulfillmentSatisfied = labels.fulfillmentSatisfied;
+  const fulfillmentIncomplete = labels.fulfillmentIncomplete;
+  if (typeof instructed !== 'string' || instructed.trim().length === 0) return null;
+  if (typeof declaredFallback !== 'string' || declaredFallback.trim().length === 0) return null;
+  if (typeof fulfillmentSatisfied !== 'string' || fulfillmentSatisfied.trim().length === 0) return null;
+  if (typeof fulfillmentIncomplete !== 'string' || fulfillmentIncomplete.trim().length === 0) return null;
+  return {
+    instructed: instructed.trim(),
+    declaredFallback: declaredFallback.trim(),
+    fulfillmentSatisfied: fulfillmentSatisfied.trim(),
+    fulfillmentIncomplete: fulfillmentIncomplete.trim(),
+  };
+}
+
+/** §7.6 fulfillment emission tokens as DECLARED DATA (bait-8/D3 repair): the
+ *  chain's declared verb + evidence family, lock-tested against FULFIL's
+ *  declared vocabulary (attestation.lint.yaml fulfil-verb-vocabulary /
+ *  fulfil-fulfilledby-vocabulary + fulfillment-compatibility.yaml checks) so
+ *  the two data sources cannot drift. The compiler reads them; zero literals. */
+export function loadChainFulfillmentVocabulary(adaptersPath = defaultAdaptersPath()): ChainFulfillmentVocabulary | null {
+  const vocab = asObjectOrNull(chainAdapterBlock(adaptersPath)?.fulfillment);
+  if (vocab === null) return null;
+  const verb = vocab.verb;
+  const fulfilledBy = vocab.fulfilledBy;
+  if (typeof verb !== 'string' || verb.trim().length === 0) return null;
+  if (typeof fulfilledBy !== 'string' || fulfilledBy.trim().length === 0) return null;
+  return { verb: verb.trim(), fulfilledBy: fulfilledBy.trim() };
+}
+
+export function loadChainClaimVerbs(adaptersPath = defaultAdaptersPath()): ChainClaimVerbs | null {
+  const verbs = asObjectOrNull(chainAdapterBlock(adaptersPath)?.claimVerbs);
+  if (verbs === null) return null;
+  const prepared = verbs.prepared;
+  const stored = verbs.stored;
+  const consumed = verbs.consumed;
+  if (typeof prepared !== 'string' || prepared.trim().length === 0) return null;
+  if (typeof stored !== 'string' || stored.trim().length === 0) return null;
+  if (typeof consumed !== 'string' || consumed.trim().length === 0) return null;
+  return { prepared: prepared.trim(), stored: stored.trim(), consumed: consumed.trim() };
 }
 
 export interface ChainCompileDeps {
@@ -227,6 +327,10 @@ function asObject(v: unknown): Record<string, unknown> | undefined {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
 
+function asObjectOrNull(v: unknown): Record<string, unknown> | null {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
 /** Copy the pinned plan's composition component refs for one event (the FULFIL
  *  F6 stance, mirrored read-side: top-level entries AND one level of nested
  *  composition entries; deeper nesting is a RECORDED limitation). CHAIN copies;
@@ -318,6 +422,22 @@ export async function compileExecuteChainIntent(
     for (const violation of evaluateChainArithmetic(arithmetic, intent)) {
       diagnostics.push(violation.message);
     }
+  }
+
+  // 3b. The claim-label vocabulary + the fulfillment emission tokens are
+  //     DECLARED DATA (config/drafting/adapters.yaml chain.claimLabels /
+  //     chain.fulfillment — bait-8 repair, fix-run 1 D2/D3): the compiler
+  //     ECHOES declared values and refuses with a named diagnostic when the
+  //     declaration is absent (the landing-policy precedent — the compiler
+  //     never defaults a label and carries zero label/verb literals in TS).
+  const claimLabels = loadChainClaimLabels(deps.adaptersPath ?? defaultAdaptersPath());
+  const fulfilVocab = loadChainFulfillmentVocabulary(deps.adaptersPath ?? defaultAdaptersPath());
+  const claimVerbs = loadChainClaimVerbs(deps.adaptersPath ?? defaultAdaptersPath());
+  if (claimLabels === null || fulfilVocab === null || claimVerbs === null) {
+    return {
+      ok: false,
+      diagnostics: [...diagnostics, 'CHAIN_CLAIM_VOCAB_UNDECLARED: the chain adapter block in config/drafting/adapters.yaml declares no claimLabels {instructed, declaredFallback, fulfillmentSatisfied, fulfillmentIncomplete}, no fulfillment {verb, fulfilledBy}, and/or no claimVerbs {prepared, stored, consumed}, so the compile cannot echo the §7.2/§7.6 claim vocabulary from DATA. Nothing was staged; declare the vocabulary in the adapter block.'],
+    };
   }
 
   const artifactKind = trimmed(intent.artifactKind) ?? 'plan-slot-reference';
@@ -439,8 +559,13 @@ export async function compileExecuteChainIntent(
   });
 
   // 8. The claims (§7.2 labels + §7.6 fulfillment claims in the SAME envelope).
+  //    Every label is a DECLARED value echoed from DATA (adapters.yaml
+  //    chain.claimLabels — bait-8 repair): the scientist's own attested.claimStatus
+  //    when declared, the DATA instructed label for a plan-side payload, the
+  //    DATA fallback when an attested posture named no label. The server NEVER
+  //    derives or rewrites a declared claimStatus (OQ-4 law inherited).
   const claims: Record<string, unknown>[] = [];
-  const physicalClaimStatus = isAttestedChain ? (claimStatus ?? 'unknown') : 'proposed';
+  const physicalClaimStatus = isAttestedChain ? (claimStatus ?? claimLabels.declaredFallback) : claimLabels.instructed;
 
   const timeFields = (statusRaw: unknown, atRaw: unknown, approxRaw: unknown): Record<string, unknown> => {
     const status = trimmed(statusRaw) ?? 'unknown';
@@ -457,7 +582,7 @@ export async function compileExecuteChainIntent(
     claims.push({
       claimStatus: physicalClaimStatus,
       assertion: {
-        verb: 'prepared',
+        verb: claimVerbs.prepared,
         about: { kind: 'record', type: 'material-instance', id: instanceRecordId },
         ...(sourceSpecRef !== undefined ? { materialSpecRef: sourceSpecRef } : {}),
         volume: { value: preparedVolume.value, unit: String(preparedVolume.unit ?? '') },
@@ -474,7 +599,7 @@ export async function compileExecuteChainIntent(
         assertion: {
           // The consumption FACT is a DECLARED claim (verb consumed, about the
           // aliquot) — never inferred from the status field alone (bait 10).
-          verb: disposition === 'consumed' ? 'consumed' : 'aliquoted',
+          verb: disposition === 'consumed' ? claimVerbs.consumed : claimVerbs.stored,
           about: { kind: 'record', type: 'aliquot', id: aliquotRecordIds[i]! },
           volume: { value: object(a.volume).value, unit: String(object(a.volume).unit ?? '') },
           ...(asObject(a.storage) !== undefined ? { storage: asObject(a.storage)! } : {}),
@@ -485,12 +610,12 @@ export async function compileExecuteChainIntent(
   } else {
     // Instructed (plan-side): proposed claims describe the PLAN; acceptance
     // attests NOTHING physical (P2 — the shipped wall keeps proposed off a
-    // CHAIN; this envelope is plan-slot-reference, so proposed is its honest
-    // label).
+    // CHAIN; this envelope is plan-slot-reference, so the DATA instructed
+    // label is its honest label).
     claims.push({
-      claimStatus: 'proposed',
+      claimStatus: claimLabels.instructed,
       assertion: {
-        verb: 'prepared',
+        verb: claimVerbs.prepared,
         about: { kind: 'record', type: 'material-instance', id: instanceRecordId },
         volume: { value: preparedVolume.value, unit: String(preparedVolume.unit ?? '') },
       },
@@ -498,9 +623,9 @@ export async function compileExecuteChainIntent(
     });
     aliquots.forEach((_a, i) => {
       claims.push({
-        claimStatus: 'proposed',
+        claimStatus: claimLabels.instructed,
         assertion: {
-          verb: 'aliquoted',
+          verb: claimVerbs.stored,
           about: { kind: 'record', type: 'aliquot', id: aliquotRecordIds[i]! },
         },
         occurredAtStatus: 'unknown',
@@ -511,22 +636,26 @@ export async function compileExecuteChainIntent(
   // §7.6 FULFIL ride: fulfillment claims ONLY for REQE- occurrences the PINNED
   // plan already declares. The evaluations are the DATA policy's verdicts
   // (fulfillment-compatibility.yaml via FULFIL's shared evaluator — imported
-  // read-only, zero vocabulary re-declaration). claimStatus for a fulfillment
-  // is the drafting side's honest declaration: completed ONLY when every
-  // declared evaluation is compatible; otherwise unknown (P8: honest
+  // read-only, zero vocabulary re-declaration). The claim's label is the DATA
+  // declaration (adapters.yaml chain.claimLabels): fulfillmentSatisfied ONLY
+  // when every declared evaluation carries the DATA satisfied verdict —
+  // resolved through policy.verdictFor('satisfied'), NEVER a positional
+  // comparison against the verdict list (fix-run 1 D4: a verdict-list reorder
+  // cannot flip the label) — and fulfillmentIncomplete otherwise (P8: honest
   // incompleteness is legal, presented-as-completed is not).
   let fulfillmentNote: string | undefined;
   if (isAttestedChain && occurrences.length > 0) {
     const policy = loadFulfillmentCompatibilityPolicy(deps.fulfillmentPolicyPath ?? defaultFulfillmentPolicyPath());
+    const satisfiedVerdict = policy.verdictFor('satisfied');
     for (const { event, requirement, requirementId } of occurrences) {
-      const evaluations = evaluateCompatibility(policy, 'derivation', requirement, derivationPayload);
-      const allCompatible = evaluations.length > 0 && evaluations.every(e => e.verdict === policy.verdicts()[0]);
+      const evaluations = evaluateCompatibility(policy, fulfilVocab.fulfilledBy, requirement, derivationPayload);
+      const allSatisfied = evaluations.length > 0 && evaluations.every(e => e.verdict === satisfiedVerdict);
       claims.push({
-        claimStatus: allCompatible ? 'completed' : 'unknown',
+        claimStatus: allSatisfied ? claimLabels.fulfillmentSatisfied : claimLabels.fulfillmentIncomplete,
         assertion: {
-          verb: 'fulfills',
+          verb: fulfilVocab.verb,
           about: { kind: 'record', type: 'event-requirement', id: requirementId },
-          fulfilledBy: 'derivation',
+          fulfilledBy: fulfilVocab.fulfilledBy,
           evidence: { kind: 'record', type: 'material-derivation', id: derivationRecordId },
           // Citation law (FULFIL §7.6): the claim cites the evidence it rests on.
           cites: derivationRecordId,

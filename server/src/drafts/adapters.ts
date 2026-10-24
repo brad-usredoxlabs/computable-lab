@@ -228,8 +228,17 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
         // id names a record the durable store ALREADY holds with content equal
         // modulo the acceptance stamp => that IS the accepted form (no re-mint,
         // no second chain). A DIFFERENT payload under the same id is a real
-        // collision and stays a stage failure (blocked card).
-        if(!created.success && !durable.has(write.recordId))throw new Error(`staged chain write blocked (${write.recordId}): ${created.error ?? 'validation/lint failure'}`);
+        // collision and stays a stage failure (blocked card). The refusal names
+        // the WALL that fired: the staging create's real validate/lint results
+        // ride in the message (fix-run 1 D1 — e.g. the shipped aliquot.schema
+        // anyOf orphan wall surfaces its own Ajv errors on the compile path).
+        if(!created.success && !durable.has(write.recordId)){
+          const wallErrors = (created.validation?.errors ?? [])
+            .map(e => `${e.path}: ${e.message}`)
+            .concat((created.lint?.violations ?? []).map(v => `${v.ruleId}: ${v.message}`))
+            .join('; ');
+          throw new Error(`staged chain write blocked (${write.recordId}): ${created.error ?? 'validation/lint failure'}${wallErrors ? ` — wall: ${wallErrors}` : ''}`);
+        }
       }
       return {
         recordId:compiled.recordId,
