@@ -443,8 +443,11 @@ export function acceptedShorthandBindingsFor(
   return acceptedBindings.get(key) ?? [];
 }
 
-/** Drop the conversation's accepted bindings (the Cancel-leg clear the
- *  held-intent clearHeldShorthandIntent mirrors). Idempotent. */
+/** Drop the conversation's accepted bindings. REVISE-GHOST-1 fix 1 (advc
+ *  cycle-1 D2): this IS wired to the Cancel leg — shorthandCancel (AIHandlers)
+ *  calls it beside clearHeldShorthandIntent, so a CANCELLED proposal's answered
+ *  bindings die with it. The fresh-start read (acceptedShorthandBindingsFor with
+ *  activeProposal=false) is the other clear. Idempotent. */
 export function clearAcceptedShorthandBindings(key: string): boolean {
   return acceptedBindings.delete(key);
 }
