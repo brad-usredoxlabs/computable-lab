@@ -101,3 +101,18 @@ onChainProposal (candidate live on :5193). Brad's stack untouched; no model serv
   2x ~10:15.
 - SPEC-COMP ROLE-AXES LIVE (thunderbeast): cl-l2-speccomp-roleaxes-l2t0915b; expected ~20-40 min.
 - Trunk HEAD fe586759; :3093/:5193 = 200. No Brad stack touched; no model services touched.
+
+## APPENDIX l2t0945 (09:50, same tick) — G1C RENDERED: VERDICT fix (1 blocker) -> FIX RUN 3 QUEUED
+- g1c tier-2 EXITED rc=0 09:38 with FULL receipts (receipts/MATRES-CHAIN/2026-10-24_092812/:
+  trail.json, network.jsonl, backend-chain-lines.jsonl, sse-raw-server.txt, shots/, report.md).
+  Tier-2 direct justified: real evidence, precise root cause.
+- D1 (sole blocker, orch-verified first-hand at fe586759): assistStream.ts parseAssistFrame switch
+  has NO `case 'chain_proposal'` — the SSE frame the server emits 3/3 is dropped by the CLIENT
+  PARSER, one layer below fix-2's hook/render wiring (union member declared :293-294 but
+  unhandled). Hook-layer tests (mocked hook / useAiChat) never covered assistStream. C2-C8
+  blocked; C8 baseline proves stale-sha 409 server-side.
+- FIX RUN 3 QUEUED fleet FIFO (unit cl-l2-chainfix3-queue-l2t0945; wt/MATRES-CHAIN-fix3-lane2-
+  l2t0945 off fe586759 — NFS worktree checkout RUNNING at checkpoint; prompt mandates
+  RED-first assistStream-layer parser test + full-path trace + disclose any further missing hop).
+  Do NOT dispatch another coder; fleet-single held by READING-CARD.
+- g1d after fix-3 merges: tier-2 cloud re-shot with same criteria + D1-closure check.
