@@ -699,7 +699,7 @@ async function draftSerialDilutionFromPrompt(
   const usingMatch = text.match(/\b(?:using|with)\s+([A-Za-z0-9 %+().\-_/]+)$/i);
   if (usingMatch?.[1] && resolveRef) {
     const candidate = usingMatch[1].trim().replace(/\.$/, '');
-    const resolved = await resolveRef(candidate, 'solvent');
+    const resolved = await resolveRef(candidate, 'material');
     if (resolved) {
       draft.diluentRef = resolved;
       if (draft.solventPolicyMode === 'enforce_constant_vehicle') draft.matchedDiluentRef = resolved;

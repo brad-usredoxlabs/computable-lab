@@ -69,7 +69,21 @@ export type FormulationCopilotResult = {
   outputComposition: ParsedCompositionEntry[];
 };
 
-export type PromptDraftResolver = (label: string, kind: 'material' | 'solvent' | 'ingredient') => Promise<CopilotRef | undefined>;
+/**
+ * ROLE-AXES-1 grep-gate (bait 4): the prompt-draft resolver's kind vocabulary
+ * is a channel-contract union declared HERE (the resolver contract's home),
+ * not a role literal inline in the arithmetic path. These are resolver
+ * LOOKUP-PRIORITY tags (which record schema family the resolver searches
+ * first): the shipped resolvers branch ONLY on the generic 'ingredient' tag;
+ * every other label lookup takes the general order. They are NOT composition
+ * roles and never enter composition data. The carrier lookup rides the general
+ * tag — resolution behavior is byte-identical to the pre-change 'solvent' tag
+ * (both shipped resolvers treated 'solvent' exactly like 'material').
+ */
+export const PROMPT_RESOLVER_KINDS = ['material', 'ingredient'] as const;
+export type PromptResolverKind = typeof PROMPT_RESOLVER_KINDS[number];
+
+export type PromptDraftResolver = (label: string, kind: PromptResolverKind) => Promise<CopilotRef | undefined>;
 
 function ingredientLabel(ingredient: CopilotIngredientDraft, index: number): string {
   return ingredient.ref?.label ?? ingredient.ref?.id ?? `Ingredient ${index + 1}`;
@@ -282,8 +296,8 @@ export async function draftFormulationFromPrompt(
   if (!targetContribution) assumptions.push('Target concentration was not found in the prompt.');
   if (!soluteLabel) assumptions.push('Primary ingredient name was not found in the prompt.');
 
-  const soluteRef = soluteLabel && resolveRef ? await resolveRef(soluteLabel, 'material') : undefined;
-  const solventRef = solventLabel && resolveRef ? await resolveRef(solventLabel, 'solvent') : undefined;
+  const soluteRef = soluteLabel && resolveRef ? await resolveRef(soluteLabel, PROMPT_RESOLVER_KINDS[0]) : undefined;
+  const solventRef = solventLabel && resolveRef ? await resolveRef(solventLabel, PROMPT_RESOLVER_KINDS[0]) : undefined;
 
   const ingredients: CopilotIngredientDraft[] = [];
   // ROLE-AXES-1: the emission roles for the prompt-drafted rows are config

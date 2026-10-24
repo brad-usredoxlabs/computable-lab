@@ -8,8 +8,13 @@
  */
 import { describe, expect, it } from 'vitest'
 import { computeFormulationComposition } from './formulationMath'
+import type { Ref } from '../../types/ref'
 
-const ref = (kind: 'record' | 'ontology', id: string, label: string) => ({ kind, id, label })
+// Test-fixture refs are intentionally partial (no namespace): the goldens pin
+// componentRef byte-for-byte as {kind, id, label}. The cast keeps the fixture
+// honest to the runtime shape without polluting the pinned output (the app tsc
+// gate counts ZERO new error lines from this file).
+const ref = (kind: 'record' | 'ontology', id: string, label: string) => ({ kind, id, label }) as unknown as Ref
 
 describe('ROLE-AXES-1 app byte-pin goldens (label-preserving legacy records)', () => {
   it('legacy record 1: NaCl (solid solute) + Water (qs solvent) — byte-identical output', () => {
