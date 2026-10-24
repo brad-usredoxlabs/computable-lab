@@ -255,12 +255,15 @@ describe('ANSWER-FOLD-NULL-1 — the canonical 5-card hold (RED->GREEN lock)', (
 // ---------------------------------------------------------------------------
 // DEFECT-2 collapse proof: fold-vs-mirror slot-resolution parity fuzz.
 // The mirror's slot expressions are now the fold's expressions VERBATIM
-// (shorthandChat.ts fold :641-:673 vs mirror :795-:830). This test pins the
-// invariant `foldNullArm(...) !== null  <=>  foldAnswersIntoShorthand(...) ===
-// null` across the slot shapes the reviewer fuzzed (action-level and
-// params-nested: string / array-with-matching-entry / array-without-match /
-// empty array / number / null / object / missing), so any future asymmetry
-// between the two paths fails here.
+// (shorthandChat.ts fold vs mirror). This test pins the invariant
+// `foldNullArm(...) !== null  <=>  foldAnswersIntoShorthand(...) === null`
+// across the slot shapes the reviewer fuzzed (action-level and params-nested:
+// string / array-with-matching-entry / array-without-match / empty array /
+// number / null / object / missing) AND the SHIPPED nested-entry shapes
+// (FIX RUN 2: the noun label one level down inside a plain-object entry-value
+// — the composition-entry datatype carrier — match / nomatch / empty /
+// two-level-deep / mixed), so any future asymmetry between the two paths
+// fails here.
 // ---------------------------------------------------------------------------
 describe('ANSWER-FOLD-NULL-1 — fold-vs-mirror parity: the collapsed slot resolution cannot drift', () => {
   const PARITY_YAML = `intentId: fold-null-arms-parity
@@ -272,36 +275,60 @@ actions:
     targetWells: [A1]
 `;
 
-  type SlotShape = [name: string, install: (action: Record<string, unknown>) => void, expectSlotType: string];
+  type SlotShape = [name: string, install: (action: Record<string, unknown>) => void, expectSlotType: string, expectFolded: boolean];
   const shapes: SlotShape[] = [
-    ['action.string', (a) => { a['goopNoun'] = 'slot thing'; }, 'string'],
-    ['action.array-match', (a) => { a['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }]; }, 'array'],
-    ['action.array-nomatch', (a) => { a['goopNoun'] = [{ noun: 'other thing', role: 'additive' }]; }, 'array'],
-    ['action.array-empty', (a) => { a['goopNoun'] = []; }, 'array'],
-    ['action.number', (a) => { a['goopNoun'] = 42; }, 'number'],
-    ['action.null', (a) => { a['goopNoun'] = null; }, 'object'],
-    ['action.object', (a) => { a['goopNoun'] = { nested: true }; }, 'object'],
-    ['action.missing', () => { /* no goopNoun key at all */ }, 'undefined'],
-    ['params.string', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = 'slot thing'; }, 'string'],
-    ['params.array-match', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }]; }, 'array'],
-    ['params.array-nomatch', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'other thing', role: 'additive' }]; }, 'array'],
-    ['params.number', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = 7; }, 'undefined'],
+    ['action.string', (a) => { a['goopNoun'] = 'slot thing'; }, 'string', true],
+    ['action.array-match', (a) => { a['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }]; }, 'array', true],
+    ['action.array-nomatch', (a) => { a['goopNoun'] = [{ noun: 'other thing', role: 'additive' }]; }, 'array', false],
+    ['action.array-empty', (a) => { a['goopNoun'] = []; }, 'array', false],
+    ['action.number', (a) => { a['goopNoun'] = 42; }, 'number', false],
+    ['action.null', (a) => { a['goopNoun'] = null; }, 'object', false],
+    ['action.object', (a) => { a['goopNoun'] = { nested: true }; }, 'object', false],
+    ['action.missing', () => { /* no goopNoun key at all */ }, 'undefined', false],
+    ['params.string', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = 'slot thing'; }, 'string', true],
+    ['params.array-match', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }]; }, 'array', true],
+    ['params.array-nomatch', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'other thing', role: 'additive' }]; }, 'array', false],
+    ['params.number', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = 7; }, 'undefined', false],
     ['action.string+params.array', (a) => {
       a['goopNoun'] = 'slot thing';
       (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }];
-    }, 'string'],
+    }, 'string', true],
     ['action.array+params.string', (a) => {
       a['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }];
       (a['params'] as Record<string, unknown>)['goopNoun'] = 'slot thing';
-    }, 'array'],
+    }, 'array', true],
     ['action.array-nomatch+params.array-match', (a) => {
       a['goopNoun'] = [{ noun: 'other thing', role: 'additive' }];
       (a['params'] as Record<string, unknown>)['goopNoun'] = [{ noun: 'slot thing', role: 'additive' }];
-    }, 'array'],
+    }, 'array', false],
+    // FIX RUN 2 — the SHIPPED nested-entry shapes (the noun label one level
+    // down inside a plain-object entry-value; the carrier is generic, no
+    // field-name literal). RED on HEAD: the match shapes null (scan blind).
+    ['action.array-nested-match', (a) => { a['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, 'array', true],
+    ['action.array-nested-nomatch', (a) => { a['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, 'array', false],
+    ['params.array-nested-match', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, 'array', true],
+    ['params.array-nested-nomatch', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, 'array', false],
+    ['params.array-nested-empty', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = []; }, 'array', false],
+    // Two-level nesting is NOT a carrier (one-level genericity pinned): null.
+    ['params.array-nested-deep', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { deeper: { noun: 'slot thing' } }, role: 'additive' }]; }, 'array', false],
+    // Mixed entry array: nested carrier first, flat carrier second — the
+    // FIRST matching entry wins (scan order); fold and mirror agree.
+    ['action.array-nested-mixed', (a) => {
+      a['goopNoun'] = [
+        { carrier: { noun: 'slot thing' }, role: 'additive' },
+        { noun: 'slot thing', role: 'solvent' },
+      ];
+    }, 'array', true],
+    ['params.array-nested-mixed', (a) => {
+      (a['params'] as Record<string, unknown>)['goopNoun'] = [
+        { carrier: { noun: 'slot thing' }, role: 'additive' },
+        { noun: 'slot thing', role: 'solvent' },
+      ];
+    }, 'array', true],
   ];
 
-  it('mirror null <=> fold null on every slot shape (15 shapes, action-level + params-nested)', () => {
-    for (const [name, install, expectSlotType] of shapes) {
+  it('mirror null <=> fold null on every slot shape (23 shapes: 15 slot shapes + 8 shipped nested-entry shapes)', () => {
+    for (const [name, install, expectSlotType, expectFolded] of shapes) {
       const doc = parseShorthandForChat(PARITY_YAML) as unknown as { actions: Array<Record<string, unknown>> };
       doc.actions[0]!['params'] = doc.actions[0]!['params'] ?? {};
       install(doc.actions[0]!);
@@ -322,6 +349,7 @@ actions:
 
       // The parity invariant: the mirror fires exactly when the fold is null.
       expect(report === null, `shape ${name}: mirror/fold nullness diverged`).toBe(folded !== null);
+      expect(folded !== null, `shape ${name}: fold nullness != expectation`).toBe(expectFolded);
       if (report !== null) {
         expect(report.arm, `shape ${name}`).toBe('slot-not-string');
         expect(report.argument, `shape ${name}`).toBe('goopNoun');
@@ -685,66 +713,6 @@ describe('ANSWER-FOLD-NULL-1 fix2 — the shipped nested carrier (component_ref.
     const answers = [{ requestId: factRequestId(NESTED_FACTS[0]!), label: 'Fold One Alpha' }];
     expect(foldAnswersIntoShorthand(heldDeep, answers)).toBeNull();
     expect(foldNullArm(heldDeep, answers)?.arm).toBe('slot-not-string');
-  });
-});
-
-describe('ANSWER-FOLD-NULL-1 fix2 — parity extension: the nested carrier cannot drift fold-vs-mirror', () => {
-  const NESTED_PARITY_YAML = `intentId: fold-null-arms-nested-parity
-actions:
-  - action: add_material
-    labware: "mystery plate"
-    material: "mystery goop"
-    volumeUl: 50
-    targetWells: [A1]
-`;
-
-  type NestedShape = [name: string, install: (action: Record<string, unknown>) => void, expectFolded: boolean, expectArm: string | null];
-  const shapes: NestedShape[] = [
-    // Match shapes: post-fix the fold AND the mirror both succeed (folded
-    // non-null, mirror null). RED on HEAD (both null — the scan is blind).
-    ['action.array-nested-match', (a) => { a['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, true, null],
-    ['params.array-nested-match', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'slot thing' }, role: 'additive' }]; }, true, null],
-    // Nomatch shapes: both null, arm slot-not-string (array tag) — unchanged.
-    ['action.array-nested-nomatch', (a) => { a['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, false, 'slot-not-string'],
-    ['params.array-nested-nomatch', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { noun: 'other thing' }, role: 'additive' }]; }, false, 'slot-not-string'],
-    ['params.array-nested-empty', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = []; }, false, 'slot-not-string'],
-    // Two-level nesting is NOT a carrier (one-level genericity pinned): both null.
-    ['params.array-nested-deep', (a) => { (a['params'] as Record<string, unknown>)['goopNoun'] = [{ carrier: { deeper: { noun: 'slot thing' } }, role: 'additive' }]; }, false, 'slot-not-string'],
-    // Mixed entry: a nested carrier match while a sibling entry carries the
-    // label flat — the FIRST matching entry wins (scan order), both paths agree.
-    ['params.array-nested-mixed', (a) => {
-      (a['params'] as Record<string, unknown>)['goopNoun'] = [
-        { carrier: { noun: 'slot thing' }, role: 'additive' },
-        { noun: 'slot thing', role: 'solvent' },
-      ];
-    }, true, null],
-  ];
-
-  it('mirror null <=> fold null on every nested-carrier shape (7 shapes, action-level + params-nested)', () => {
-    for (const [name, install, expectFolded, expectArm] of shapes) {
-      const doc = parseShorthandForChat(NESTED_PARITY_YAML) as unknown as { actions: Array<Record<string, unknown>> };
-      doc.actions[0]!['params'] = doc.actions[0]!['params'] ?? {};
-      install(doc.actions[0]!);
-      const fact: ScientistIntentUnresolvedFact = {
-        label: 'slot thing',
-        reason: 'unknown-noun',
-        actionLocation: { actionIndex: 0, action: 'add_material', argument: 'goopNoun' },
-      };
-      const held: HeldShorthandIntent = { yaml: NESTED_PARITY_YAML, doc: doc as never, clarifications: [fact] };
-      const answers = [{ requestId: factRequestId(fact), label: 'chosen slot thing' }];
-
-      const folded = foldAnswersIntoShorthand(held, answers);
-      const report = foldNullArm(held, answers);
-
-      // The parity invariant: the mirror fires exactly when the fold is null.
-      expect(report === null, `nested shape ${name}: mirror/fold nullness diverged`).toBe(folded !== null);
-      expect(folded !== null, `nested shape ${name}: fold nullness != expectation`).toBe(expectFolded);
-      if (report !== null) {
-        expect(report.arm, `nested shape ${name}`).toBe(expectArm);
-        expect(report.argument, `nested shape ${name}`).toBe('goopNoun');
-        expect(report.slotType, `nested shape ${name}`).toBe('array');
-      }
-    }
   });
 });
 
