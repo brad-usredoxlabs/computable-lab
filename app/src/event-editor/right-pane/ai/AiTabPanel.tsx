@@ -40,6 +40,7 @@ import type { DraftTermRow } from './TermPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
+import { draftProducedNothing } from './draftEmptiness'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
@@ -518,25 +519,36 @@ export function AiTabPanel() {
         }
       }
 
-      // REVISE-GHOST-1 (OQ-2 ruling) — the HONEST WALL on the chat draft leg.
-      // A `success:true` done result that mounts NOTHING (zero events) and
-      // asks NOTHING (zero clarification cards) with no error is a REPORTED
-      // failure, never an actionable review: the swallowed-events leg (spec §5)
-      // landed exactly this shape — a proposal-bearing turn whose compile
-      // produced zero mountable events. Same PB-CH-4 D1 discipline as the
+      // REVISE-GHOST-1 (OQ-2 ruling) + fix 2 (advc cycle-2 Defect 1,
+      // architect ruling l2t1835) — the HONEST WALL on the chat draft leg. A
+      // `success:true` done result that PRODUCED NOTHING — every deliverable
+      // channel empty: zero mountable events, zero clarification cards, zero
+      // recordCreations / labwareAdditions / labwareRequirements /
+      // equipmentRequirements, no deckLayout — and no error is a REPORTED
+      // failure, never an actionable review: the swallowed-events leg (spec
+      // §5) landed exactly this shape — a proposal-bearing turn whose compile
+      // produced zero mountable events. The emptiness test is the ONE shared
+      // rule (draftEmptiness.draftProducedNothing — the server guard's 7
+      // canonical channels plus the sanctioned client-superset member
+      // equipmentRequirements; the honestWall drift pin asserts the superset
+      // mechanically) — NOT "zero events" alone: a create_record /
+      // labware-requirement / deckLayout success DID deliver a proposal and
+      // must fall through to its existing draft-ready/preview handling, never
+      // be walled and discarded. protocolEdit is NOT a predicate term: its
+      // jurisdiction is the ARM ORDER above — a mappable envelope dispatches
+      // its own protocolDiff draft-ready and returns inside the arm, so the
+      // only protocolEdit turn that reaches this check is the fall-through
+      // remnant (identity-less / unmappable envelope), which delivered
+      // NOTHING and walls here rather than landing an empty ChangesPanel with
+      // a live "Apply to run". Same PB-CH-4 D1 discipline as the
       // error/workstate/ledger guards above: sidebar reset (no 'reviewing', no
       // empty actionable 'Apply to run'), the chat section stays mounted, and
-      // the failure text NAMES what the turn delivered (shorthand-only? notes?
-      // nothing?) — never a silent empty plate under a happy panel. The
-      // clarifications-needed arm below stays as-is (a legitimate hold keeps
-      // its cards). A result WITHOUT the success key (a hand-authored/legacy
-      // empty draft, the R-Defect-2 pin) is untouched.
-      if (
-        result.success === true
-        && draftedEvents.length === 0
-        && !(result.clarificationRequests?.length ?? 0)
-        && !result.error
-      ) {
+      // the failure text NAMES what the turn delivered (shorthand-only?
+      // notes? nothing?) — never a silent empty plate under a happy panel.
+      // The clarifications-needed arm below stays as-is (a legitimate hold
+      // keeps its cards). A result WITHOUT the success key (a hand-authored/
+      // legacy empty draft, the R-Defect-2 pin) is untouched.
+      if (result.success === true && draftProducedNothing(result)) {
         const delivered = [
           typeof result.shorthand === 'string' ? 'the shorthand document' : null,
           (result.notes?.length ?? 0) > 0 ? 'notes' : null,

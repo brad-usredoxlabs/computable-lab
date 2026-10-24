@@ -16,7 +16,7 @@ import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-
 import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
 import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
-import { clearHeldShorthandIntent } from '../../ai/shorthandChat.js';
+import { clearHeldShorthandIntent, clearAcceptedShorthandBindings } from '../../ai/shorthandChat.js';
 import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
 
 export interface DraftEventsBody {
@@ -207,11 +207,15 @@ function buildProtocolExtractedEvent(
  * No second key scheme, no raw-key passthrough.
  *
  * Idempotent: an already-clear conversation answers 200 {cleared:false}.
- * Scope: clears ONLY this conversation's hold — never a broadcast clear.
- * Touches nothing else: no stream abort, no state beyond heldIntents (the
- * smallest honest fix). Auth: none beyond what the sibling /ai/*
- * registrations already require (they carry no route-level hook) — matched
- * exactly, no new policy.
+ * Scope: clears ONLY this conversation's hold AND its accepted bindings —
+ * never a broadcast clear. REVISE-GHOST-1 fix 1 (advc cycle-1 D2): the Cancel
+ * leg clears BOTH per-conversation stores a shorthand proposal keeps —
+ * heldIntents (SH-QC-1-OQ1) and acceptedBindings (the OQ-1 reuse hint) — so a
+ * CANCELLED proposal's answered bindings die with it and can never leak into
+ * the next proposal. Touches nothing else: no stream abort, no state beyond
+ * those two maps (the smallest honest fix). Auth: none beyond what the sibling
+ * /ai/* registrations already require (they carry no route-level hook) —
+ * matched exactly, no new policy.
  */
 export async function shorthandCancel(
   request: FastifyRequest<{ Body: ShorthandCancelBody }>,
@@ -233,7 +237,13 @@ export async function shorthandCancel(
     ...context,
   };
   const key = deriveContextCacheKey(surface, editorContext);
-  return { cleared: clearHeldShorthandIntent(key) };
+  // REVISE-GHOST-1 fix 1 (advc cycle-1 D2): the Cancel leg clears BOTH stores
+  // the shorthand proposal keeps for this conversation — the held intent
+  // (SH-QC-1-OQ1) and the accepted {label,ref} bindings (the OQ-1 reuse hint).
+  // `cleared` is honest about either: true when ANYTHING was cleared.
+  const clearedHold = clearHeldShorthandIntent(key);
+  const clearedBindings = clearAcceptedShorthandBindings(key);
+  return { cleared: clearedHold || clearedBindings };
 }
 
 /**
