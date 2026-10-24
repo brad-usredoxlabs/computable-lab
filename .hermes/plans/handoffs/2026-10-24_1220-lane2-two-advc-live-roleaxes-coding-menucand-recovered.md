@@ -115,3 +115,25 @@ Brad's stack untouched; no model services touched. Fleet rule held: ONE live cod
   cl-l2-advc-chainfix3-l2t1215 (reports owed at reviews/ paths above).
 - MENU-CANDIDATES-1 QUEUED FIFO second on fleet lock (unit live; worktree clean).
 - Trunk HEAD 055d120e (code tip 6d64154b); :3093 /api/health 200, :5193 200.
+
+## ADDENDUM (l2t1215 late, 12:33) — CHAIN fix-3 CLOSED THE TICK: ACCEPT + MERGED + g1d LIVE
+- advc fix-3 rendered within minutes: VERDICT accept, zero defects, bait A-G all PASS,
+  RED-claim verified independently (reviews/MATRES-CHAIN-fix3-advc-l2t1215.md).
+  Observations logged: O1 naming (parseAssistFrame == dispatchFrame, label mismatch only);
+  O2 malformed-frame silent drop = sibling-compliant per bait-B mandate (on the record).
+- ORCH SELF-VERIFY: assistStream suites 30/30 (cwd=worktree/app), tree clean, tip 566f2b17.
+  tsc sorted-diff vs trunk showed 14 delta lines — inspected ALL: pre-existing module-identity
+  /symlink path artifacts in files the diff never touches (tabNavPlugin, ProtocolAuthoringWidgets,
+  SequencesPage, WorkstateProposalCard, useWorkstateExecutor); advc measured 27=27 zero-new on a
+  clean scratch checkout. AS-APP-TSC-BASELINE-28 precedent covers this class. Zero new introduced.
+- MERGED --no-ff -> trunk 3c0fd83e. NO schema/YAML in the merge -> NO stack restart needed;
+  served-module re-confirmed on :5193 contains case "chain_proposal" at :149 (vite transform).
+- GATE g1d dispatched 12:30 (tier-2 cloud ladder 6c, same route as g1c): unit
+  cl-l2-gate-chaining-g1d-l2t1230, prompt prompts/gate-MATRESCHAIN-g1d-l2t1230.txt with
+  D1-CLOSURE CHECK as step 1 + full g1c criteria verbatim. Receipts:
+  /home/brad/.hermes/cl/receipts/MATRES-CHAIN/g1d-<ts>/. MATRES-CHAIN done ONLY on receipts
+  accept. NEXT TICK: read the gate log + trail.json + screenshots; on fix, defect list back to
+  a fix run (same worktree/branch), on accept mark done + g1d receipt paths in the task block.
+- Live at exit (~12:33, ~43 min wall): ROLE-AXES coder (fleet lock), advc READING-CARD c1
+  (cloud), g1d browser gate (cloud), MENU-CAND queue FIFO second. All survive this tick
+  (systemd units / flock queue units).
