@@ -55,9 +55,11 @@ describe('elig-ac2 tier legality', () => {
       }],
       vendorProvider: async (): Promise<ProviderHit[]> => {
         vendorCalls += 1;
-        // OQ-1 as-stanced + harvest H3: vendor hits arrive level unknown —
-        // the spine's MaterialLevel union has NO vendor-product member and the
-        // fact-builder never infers a level from a tier.
+        // OQ-1 as-stanced + harvest H3: the spine's MaterialLevel union HAS
+        // the vendor-product member (MATRES-PANEL fix1 widening), but this
+        // tier-4 provider stub emits level 'unknown' — the fact-builder never
+        // infers a level from a tier, so a remote/vendor tier-1..4 hit arrives
+        // level 'unknown' unless its provider declares one.
         return [{ curie: 'vendor:CAT-99', label: 'Trypsin-EDTA catalog', namespace: 'vendor', level: 'unknown' }];
       },
       localTimeoutMs: 500,
@@ -148,8 +150,9 @@ describe('elig-ac2 tier legality', () => {
         label: 'Trypsin-EDTA catalog',
         namespace: 'vendor',
         tier: 4,
-        // The spine's MaterialLevel union has NO vendor-product member (OQ-1);
-        // a catalog hit arrives level unknown.
+        // The spine's MaterialLevel union HAS the vendor-product member
+        // (MATRES-PANEL fix1 widening, OQ-1); this fixture models a tier-4
+        // catalog hit that arrives level unknown (no provider declared one).
         level: 'unknown',
         score: 0.9,
         source: 'vendor',
