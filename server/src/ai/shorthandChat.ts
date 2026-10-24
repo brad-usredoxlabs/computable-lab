@@ -46,6 +46,12 @@ import type {
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import {
+  formatFractionString,
+  loadFractionConvention,
+  type CompositionReading,
+  type FractionConventionConfig,
+} from '../compiler/scientistIntent/compositionFractions.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {
@@ -82,6 +88,27 @@ export interface AcceptedShorthandBinding {
 export interface ShorthandCompileDeps {
   store?: RecordStore;
   searchLabwareByHint?: ScientistIntentCompileDeps['searchLabwareByHint'];
+  /**
+   * READING-CARD-ANSWER-1 (Ruling 2): the scientist's READING answers as DATA
+   * (key = the bar's OWN label, value = the reading id the scientist chose).
+   * Threaded VERBATIM into compileScientistIntent's §14.2 RECORD leg — the
+   * producer bar decides whether an entry settles a fact it raised
+   * (exact-label identity + a declared reading id only). Absent: every other
+   * caller is byte-unchanged (the IntentCompileFromPromptHandlers.ts
+   * scientistAnswers precedent).
+   */
+  scientistAnswers?: Readonly<Record<string, string>>;
+  /**
+   * READING-CARD-ANSWER-1 (the same DATA pair the 422 recompile route passes
+   * at IntentCompileFromPromptHandlers.ts): the LABELS of the clarifications
+   * this batch answered (membership only — no value ever reaches the bar).
+   * Threaded VERBATIM into compileScientistIntent's MIXROLE-1 bar-loop guard:
+   * the composition role-gap bar skips a gap whose entry label is among them
+   * (the honest role stays the fallback role after any answer; without this
+   * the answered gap re-asks forever). Absent: every other caller is
+   * byte-unchanged.
+   */
+  answeredClarificationLabels?: readonly string[];
   /**
    * REVISE-GHOST-1: the conversation's accepted {label, ref} bindings, applied
    * at the ai/ seam BEFORE resolution — the spine is COMPOSED so an exact
@@ -333,6 +360,10 @@ export async function compileShorthandDeterministically(
       ? composeSpineWithReuseBindings(spine, reuseBindings)
       : spine,
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+    ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
+    ...(deps.answeredClarificationLabels
+      ? { answeredClarificationLabels: deps.answeredClarificationLabels }
+      : {}),
   });
 }
 
@@ -512,11 +543,159 @@ export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
 }
 
 /**
+ * READING-CARD-ANSWER-1 (Ruling 2 + Amendment 1): the STRUCTURAL reading test.
+ * A fact CARRYING a non-empty `readings` array (the candidate readings the bar
+ * itself attached by conditional spread — normalizeScientistIntent) is a
+ * READING fact: its answer is one of the reading ids it presented. The test
+ * reads the carried DATA only — never a reason literal, never a reasons list
+ * in TS (l2t0115 prohibitions intact). A fact without readings is byte-identical
+ * to today's shape everywhere this is consulted.
+ */
+function factReadings(fact: ScientistIntentUnresolvedFact): readonly CompositionReading[] | undefined {
+  const readings = (fact as unknown as Record<string, unknown>)['readings'];
+  return Array.isArray(readings) && readings.length > 0 ? readings as readonly CompositionReading[] : undefined;
+}
+
+/** The bar's own data-derived question text, when the producer attached one
+ *  (the same generic read — the fact type's declared envelope is
+ *  {label, reason, actionLocation}; the producer clarification's optional
+ *  `message` rides the fact at runtime). */
+function factMessage(fact: ScientistIntentUnresolvedFact): string | undefined {
+  const message = (fact as unknown as Record<string, unknown>)['message'];
+  return typeof message === 'string' && message.trim().length > 0 ? message : undefined;
+}
+
+/** The option snippet for one reading: its COMPUTED final fractions rendered
+ *  through the DATA fraction format (compositionFractions.ts — the same
+ *  `messages.fractionFormat` template the settle leg uses; the TS carries no
+ *  suffix literal), plus the reading's own note when it carries one. */
+function readingOptionSnippet(
+  reading: { label: string; finalFractions: ReadonlyArray<{ label: string; percent: number }>; note?: string },
+  config: FractionConventionConfig | undefined,
+): string {
+  const fractions = reading.finalFractions
+    .map((f) => `${f.label} ${config ? formatFractionString(f.percent, config) : String(f.percent)}`)
+    .join(', ');
+  return typeof reading.note === 'string' && reading.note.trim() ? `${fractions} — ${reading.note}` : fractions;
+}
+
+/**
+ * READING-CARD-ANSWER-1 (Ruling 2 + Amendment 2): the STRUCTURAL
+ * reading-answer test for the ANSWER leg. An answer is a READING answer iff
+ * its held fact carries readings (the same `factReadings` data read the map
+ * arm uses — one test, both legs, cannot drift) AND its `value` is one of
+ * that fact's own reading ids. No reason literal, no reasons list in TS.
+ * The join mirrors the fold's content-key join (including the pinned legacy
+ * digits fallback) so the partition and the fold resolve the SAME fact.
+ */
+function heldFactForAnswer(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answer: AgentClarificationAnswer,
+): ScientistIntentUnresolvedFact | undefined {
+  const requestId = answer.requestId ?? '';
+  for (const fact of heldFacts) {
+    if (factRequestId(fact) === requestId) return fact;
+  }
+  const legacy = /^unresolved-(\d+)$/.exec(requestId);
+  if (legacy) return heldFacts[Number(legacy[1]) - 1];
+  return undefined;
+}
+
+function isReadingAnswer(
+  fact: ScientistIntentUnresolvedFact,
+  answer: AgentClarificationAnswer,
+): boolean {
+  const readings = factReadings(fact);
+  if (!readings) return false;
+  return typeof answer.value === 'string' && readings.some((reading) => reading.id === answer.value);
+}
+
+export interface ReadingAnswerPartition {
+  /** Answers routed to the §14.2 RECORD leg (value = a declared reading id). */
+  readingAnswers: readonly AgentClarificationAnswer[];
+  /** The REMAINING answers — the fold's splice set (Amendment 2: reading
+   *  answers never enter `foldAnswersIntoShorthand`; feeding them to the fold
+   *  is precisely the aggregate-label fold-null the never-guess pin defends). */
+  foldAnswers: readonly AgentClarificationAnswer[];
+}
+
+/** Split a submitted answer batch by the structural reading test. */
+export function partitionReadingAnswers(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): ReadingAnswerPartition {
+  const readingAnswers: AgentClarificationAnswer[] = [];
+  const foldAnswers: AgentClarificationAnswer[] = [];
+  for (const answer of answers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact && isReadingAnswer(fact, answer)) {
+      readingAnswers.push(answer);
+    } else {
+      foldAnswers.push(answer);
+    }
+  }
+  return { readingAnswers, foldAnswers };
+}
+
+/**
+ * Build the §14.2 `scientistAnswers` DATA map from the reading answers:
+ * key = the held fact's OWN label (the exact-identity key the producer bar
+ * matches against the clarification it raised), value = the chosen reading
+ * id. Absent (undefined) when the batch carries no reading answer — the
+ * conditional-spread discipline: every other caller stays byte-unchanged.
+ */
+export function scientistAnswersFromReadingAnswers(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): Readonly<Record<string, string>> | undefined {
+  const { readingAnswers } = partitionReadingAnswers(heldFacts, answers);
+  if (readingAnswers.length === 0) return undefined;
+  const map: Record<string, string> = {};
+  for (const answer of readingAnswers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact && typeof answer.value === 'string') map[fact.label] = answer.value;
+  }
+  return Object.keys(map).length > 0 ? map : undefined;
+}
+
+/**
+ * The MIXROLE-1 bar-loop guard DATA for a chat answer batch: the LABELS of
+ * the held clarifications this batch answered (the 422 route's
+ * `Object.keys(answers)` precedent — the answers map is keyed by each
+ * clarification's OWN label, so the chat analogue is the ANSWERED FACT's
+ * label, read structurally). Membership only; no answer value ever rides
+ * this key. The composition role-gap bar skips an answered gap (the honest
+ * role stays the fallback role after any answer — without this the answered
+ * gap re-asks forever).
+ */
+export function answeredClarificationLabelsFromBatch(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): readonly string[] {
+  const labels = new Set<string>();
+  for (const answer of answers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact) labels.add(fact.label);
+  }
+  return [...labels];
+}
+
+/**
  * ScientistIntentUnresolvedFact[] → AgentClarificationRequest[] — a PURE
  * structural map. label/reason/candidates/actionLocation ride through
  * UNTOUCHED on `unresolvedFact`; the only minted value is the join id. The
  * kind + menu provider come from the vocabulary's declared domain for the
  * fact's argument location (data, one source — no verb-name branch).
+ *
+ * READING-CARD-ANSWER-1 (Ruling 2): a third structural arm — a fact CARRYING
+ * readings (the data the bar itself attached) maps to menuProvider 'choice'
+ * with its readings as the option set (id = reading id, label = the reading's
+ * own label, snippet = the computed final fractions + note; ARRAY order — the
+ * server never pre-picks). Mint suppression falls out of the EXISTING
+ * `menuProvider !== 'choice' && mintable` expression — zero new policy. The
+ * prompt is the fact's OWN `message` (already data-derived), not the noun
+ * template. kind stays from the domain map. A fact WITHOUT readings renders
+ * byte-identically to today.
  */
 export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
@@ -531,29 +710,49 @@ export function clarificationsFromUnresolvedFacts(
   // scientist can still search /m or pick a near-miss. A cue hit alone never
   // refuses mint (the sibling canon formulations stay mintable).
   const nounShape = loadNounShape();
+  // READING-CARD-ANSWER-1: the fraction-format DATA home, loaded PER call
+  // (the nounShape/fraction-convention discipline) — only consulted to render
+  // a reading option's fractions through the declared template.
+  const fractionConfig = loadFractionConvention();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
       ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.domain
       : undefined;
     const kind = domain === 'labware' ? 'labware' : domain === 'material' ? 'material' : 'general';
-    const menuProvider = domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
+    // The reading arm is STRUCTURAL (factReadings): a readings-bearing
+    // fact is a choice card; every other fact keeps the domain map verbatim.
+    const readings = factReadings(fact);
+    const menuProvider = readings
+      ? 'choice'
+      : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
     const mintable = isMintableLabel(fact.label, nounShape);
     const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    const nounPrompt = mintable
+      ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+      : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
+    const message = factMessage(fact);
     return {
       id: factRequestId(fact),
       kind,
-      prompt: mintable
-        ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
-        : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`,
+      // The READING arm's prompt is the bar's OWN data-derived message (the
+      // message is consulted ONLY on this arm — a fact without readings keeps
+      // the noun template byte-identically, whatever else it carries).
+      prompt: readings && message ? message : nounPrompt,
       origin: 'harness',
       entityType: kind,
       menuProvider,
       query: fact.label,
       // Forced-draft mode offers NO model-authored options; the live /m or /l
       // search (real records + ontologies) is the only menu. The bar's own
-      // candidates ride on `unresolvedFact`, untouched.
-      options: [],
+      // candidates ride on `unresolvedFact`, untouched. A READING fact's
+      // options ARE the bar's own readings (Ruling 2): the scientist chooses
+      // a READING, seeing what each does to the fractions.
+      options: (readings ?? []).map((reading) => ({
+        id: reading.id,
+        label: reading.label,
+        snippet: readingOptionSnippet(reading, fractionConfig),
+      })),
       allowCreateLocal,
       unresolvedFact: fact,
     };
