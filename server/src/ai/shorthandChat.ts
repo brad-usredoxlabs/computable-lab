@@ -564,14 +564,38 @@ export function clarificationsFromUnresolvedFacts(
 // Deterministic answer fold (OQ1 mandatory arm): splice → Ajv re-parse → recompile
 // ---------------------------------------------------------------------------
 
-/** ANSWER-FOLD-NULL-1 (OQ2 ruling): does an array-slot ENTRY carry the fact's
- *  label as a string-valued property? Generic property scan — the entry shape
- *  (which field is the symbolic noun) is the schema's DATA
- *  (scientist-intent.schema.yaml composition items), not a TS field-name
- *  branch. */
-function entryCarriesLabel(entry: unknown, label: string): boolean {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
-  return Object.values(entry as Record<string, unknown>).some((v) => v === label);
+/** ANSWER-FOLD-NULL-1 (OQ2 ruling + FIX RUN 2 nested carrier): WHERE does an
+ *  array-slot ENTRY carry the fact's label as a string value? Generic property
+ *  scan — the entry shape (which field is the symbolic noun) is the schema's
+ *  DATA (scientist-intent.schema.yaml composition items: the noun at the
+ *  entry's own string property; schema/core/datatypes/composition-entry.schema
+ *  .yaml: required [component_ref, role] with component_ref -> ref.schema.yaml
+ *  — the noun NESTED one level down inside a plain-object entry-value), never
+ *  a TS field-name branch. A plain-object entry-value contributes its OWN
+ *  string values to the scan (one level deep — a label nested TWO levels is
+ *  not a carrier: pinned, never-guess holds). Returns the holder record + key
+ *  to splice, or null when the entry carries no such string.
+ *  FIX RUN 2 (advc D2 discipline kept): ONE carrier scan shared VERBATIM by
+ *  the fold and its byte-mirror `foldNullArm` — the two paths cannot drift. */
+interface EntryLabelCarrier {
+  holder: Record<string, unknown>;
+  key: string;
+}
+
+function entryLabelCarrier(entry: unknown, label: string): EntryLabelCarrier | null {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const entryRecord = entry as Record<string, unknown>;
+  for (const key of Object.keys(entryRecord)) {
+    if (entryRecord[key] === label) return { holder: entryRecord, key };
+    const nested = entryRecord[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const nestedRecord = nested as Record<string, unknown>;
+      for (const nestedKey of Object.keys(nestedRecord)) {
+        if (nestedRecord[nestedKey] === label) return { holder: nestedRecord, key: nestedKey };
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -652,22 +676,20 @@ export function foldAnswersIntoShorthand(
       slotHolder[slotKey!] = label;
     } else if (Array.isArray(slotValue)) {
       // The 1:1 splice widens to the ENTRY whose declared symbolic-noun field
-      // equals the fact's label: the FIRST entry-object carrying a
-      // string-valued property equal to fact.label (generic first-string-
-      // property match — no slot-name or field-name policy branch in TS; the
-      // entry shape is the schema's DATA). The chosen label replaces that
-      // symbolic noun (still a symbolic noun — never a record id; the spine
-      // re-binds in the recompile). NO entry match ⇒ null (never guess — the
-      // null contract above survives verbatim).
-      const entry = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label));
-      if (!entry) return null;
-      const entryRecord = entry as Record<string, unknown>;
-      for (const key of Object.keys(entryRecord)) {
-        if (typeof entryRecord[key] === 'string' && entryRecord[key] === fact.label) {
-          entryRecord[key] = label;
-          break;
-        }
-      }
+      // equals the fact's label: the FIRST entry-object carrying the label as
+      // a string value — at the entry's own property OR one level down inside
+      // a plain-object entry-value (the shipped composition-entry datatype
+      // nests the noun inside its ref carrier; FIX RUN 2). Generic carrier
+      // scan — no slot-name or field-name policy branch in TS; the entry shape
+      // is the schema's DATA. The chosen label replaces the symbolic noun AT
+      // THE MATCHED LOCATION (still a symbolic noun — never a record id; the
+      // spine re-binds in the recompile); the rest of the entry (role,
+      // fraction, the carrier's kind/id) survives byte-stable. NO entry match
+      // ⇒ null (never guess — the null contract above survives verbatim).
+      const matched = slotValue.find((candidate) => entryLabelCarrier(candidate, fact.label) !== null);
+      if (!matched) return null;
+      const carrier = entryLabelCarrier(matched, fact.label)!;
+      carrier.holder[carrier.key] = label;
     } else {
       return null;
     }
@@ -804,20 +826,17 @@ export function foldNullArm(
     if (typeof slotValue === 'string') {
       slotHolder[slotKey!] = label;
     } else if (Array.isArray(slotValue)) {
-      // ANSWER-FOLD-NULL-1 (Leg 2): the fold's widened arm — an array slot
-      // splices the FIRST entry carrying the fact's label; NO entry match ⇒
+      // ANSWER-FOLD-NULL-1 (Leg 2 + FIX RUN 2): the fold's widened arm — an
+      // array slot splices the FIRST entry carrying the fact's label (the
+      // SAME shared `entryLabelCarrier` scan the fold runs, nested carrier
+      // included — one scan, both paths, cannot drift). NO entry match ⇒
       // the fold returns null ⇒ the mirror reports 'slot-not-string' (array tag).
-      const entry = slotValue.find((candidate) => entryCarriesLabel(candidate, fact.label));
-      if (!entry) {
+      const matched = slotValue.find((candidate) => entryLabelCarrier(candidate, fact.label) !== null);
+      if (!matched) {
         return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'array' };
       }
-      const entryRecord = entry as Record<string, unknown>;
-      for (const key of Object.keys(entryRecord)) {
-        if (typeof entryRecord[key] === 'string' && entryRecord[key] === fact.label) {
-          entryRecord[key] = label;
-          break;
-        }
-      }
+      const carrier = entryLabelCarrier(matched, fact.label)!;
+      carrier.holder[carrier.key] = label;
     } else {
       return {
         arm: 'slot-not-string',
