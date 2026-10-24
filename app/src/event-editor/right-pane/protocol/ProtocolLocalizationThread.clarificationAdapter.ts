@@ -91,6 +91,23 @@ export const CLARIFICATION_MENU_BY_REASON: Readonly<Record<string, AiClarificati
   // entry keeps the existing null pins green BY DATA, not by incidental
   // fallthrough, and blocks the gap-shape fallback for this reason.
   'missing-required-argument': null,
+  // MATRES-PANEL STEP 0 (orch-ruled, post-merge re-verify §3): the two
+  // MATRES-ELIG reason codes, declared vocabulary data
+  // (schema/scientist-intent/material-eligibility/material-eligibility.yaml
+  // :91 catalogScopeReason, :97 bindIncompleteReason — NOT invented codes).
+  // Both facts always carry actionLocation (resolutionEngine.ts:281, :353).
+  // Without these rows the fact gets NO card and is
+  // unanswerable-by-construction; with them the shipped ANSWER-BIND-1
+  // exact-identity join is the answer path — zero new machinery. This is the
+  // exact SAMPLE-CARD-1 / GAPCARD-1 disease the rows above cured.
+  // 'eligibility-incomplete': a band-passing candidate whose authorized-to-bind
+  // verdict is not PASS falls to clarification as an incomplete possibility.
+  'eligibility-incomplete': '/m',
+  // 'vendor-scope-unknown': a catalog-shaped token with no named vendor scope
+  // (AC-3: elicit scope, never fabricate product identity). It carries ZERO
+  // candidates by design (engine :281) — the '/m' picker SEARCH is the answer
+  // surface (orch OQ-2 ruling: shipped machinery, no new free-text mechanism).
+  'vendor-scope-unknown': '/m',
 }
 
 /**
@@ -124,6 +141,11 @@ const CLARIFICATION_MENU_BY_REASON_ARGUMENT: Readonly<Record<string, Readonly<Re
   // GAPCARD-1: same pattern for the two prompt-declared model reasons.
   'ambiguous': { labware: '/l' },
   'contradicts-the-text': { labware: '/l' },
+  // MATRES-PANEL STEP 0: same labware/source overrides as every other carded
+  // reason for the two ELIG codes (W28-SOURCEROW-1: 'source' IS
+  // labware-semantic by declared data); every other argument falls to '/m'.
+  'eligibility-incomplete': { labware: '/l', source: '/l' },
+  'vendor-scope-unknown': { labware: '/l', source: '/l' },
 }
 
 /**
@@ -164,6 +186,47 @@ function isMintOfferForLabel(optionLabel: string, factLabel: string): boolean {
 }
 
 /**
+ * MATRES-PANEL §8: the widened candidateFact disclosure ride (the ONE option
+ * mapper in `heldFactToClarificationRequest`). The engine's additive keys
+ * (resolutionEngine.ts:127-146: `tier`, `referentLevel`, `eligibility` —
+ * conditional spread server-side) arrive on the schema-free 422 body; each is
+ * read generically off the wire candidate and rides onto the option via
+ * CONDITIONAL spread only (exactOptionalPropertyTypes: absent-or-value, never
+ * :undefined — the trunk idiom, ProtocolLocalizationThread.tsx:793). A
+ * candidate with no eligibility run (tier-5 mint offer, near-miss suggestion,
+ * model-side fact) contributes NOTHING — its option stays byte-unchanged.
+ * The verdict enums are validated against the merged engine's enum set
+ * ('pass'|'fail'|'incomplete', types.ts:123-125); a malformed payload simply
+ * drops the key (no inference, no fabrication).
+ */
+const VERDICT_ENUMS: readonly string[] = ['pass', 'fail', 'incomplete']
+
+function eligibilityRide(c: Record<string, unknown>): { eligibility?: AiClarificationOption['eligibility'] } {
+  const e = c.eligibility
+  if (typeof e !== 'object' || e === null) return {}
+  const verdicts = e as { display?: unknown; suppress?: unknown; bind?: unknown; policyIds?: unknown; bindRole?: unknown; displayRole?: unknown }
+  if (!VERDICT_ENUMS.includes(String(verdicts.display))
+    || !VERDICT_ENUMS.includes(String(verdicts.suppress))
+    || !VERDICT_ENUMS.includes(String(verdicts.bind))) return {}
+  const policyIds = typeof verdicts.policyIds === 'object' && verdicts.policyIds !== null
+    ? verdicts.policyIds as { display?: unknown; suppress?: unknown; bind?: unknown }
+    : undefined
+  return {
+    eligibility: {
+      display: verdicts.display as 'pass' | 'fail' | 'incomplete',
+      suppress: verdicts.suppress as 'pass' | 'fail' | 'incomplete',
+      bind: verdicts.bind as 'pass' | 'fail' | 'incomplete',
+      ...(policyIds !== undefined
+        && typeof policyIds.display === 'string' && typeof policyIds.suppress === 'string' && typeof policyIds.bind === 'string'
+        ? { policyIds: { display: policyIds.display, suppress: policyIds.suppress, bind: policyIds.bind } }
+        : {}),
+      ...(typeof verdicts.bindRole === 'string' && verdicts.bindRole.trim() ? { bindRole: verdicts.bindRole.trim() } : {}),
+      ...(typeof verdicts.displayRole === 'string' && verdicts.displayRole.trim() ? { displayRole: verdicts.displayRole.trim() } : {}),
+    },
+  }
+}
+
+/**
  * Map one held clarification fact onto a picker request. Returns null when the
  * fact has no identity or no answer surface (no menu for its reason) — the
  * caller then renders no card. `index` is the card's UI identity within this
@@ -180,24 +243,25 @@ export function heldFactToClarificationRequest(
   // is read generically off the wire fact's actionLocation (SPINE-1 frozen
   // shape), never inferred from the label or the candidates.
   const actionLocation = typeof fact.actionLocation === 'object' && fact.actionLocation !== null
-    ? fact.actionLocation as { argument?: unknown }
+    ? fact.actionLocation as { argument?: unknown; actionIndex?: unknown }
     : undefined
   const argument = typeof actionLocation?.argument === 'string' ? actionLocation.argument : undefined
+  const actionIndex = typeof actionLocation?.actionIndex === 'number' ? actionLocation.actionIndex : undefined
   const menuProvider = menuForFact(reason, argument)
   if (!menuProvider) return null
 
   const rawCandidates = Array.isArray(fact.candidates) ? fact.candidates : []
   const options: AiClarificationOption[] = rawCandidates
-    .filter((c): c is { label: string; ref?: unknown } =>
+    .filter((c): c is Record<string, unknown> =>
       typeof c === 'object' && c !== null && typeof (c as { label?: unknown }).label === 'string'
       && !!(c as { label: string }).label.trim())
     // MINT-FLOOR-UI-1: the mint offer for THIS fact's own label is the
     // picker's floor row already — drop the duplicate dead-end option button.
     // Mint offers for a DIFFERENT term survive (keyed rule, not a blanket).
-    .filter((c) => !isMintOfferForLabel(c.label.trim(), label))
+    .filter((c) => !isMintOfferForLabel((c as { label: string }).label.trim(), label))
     .map((c, i) => ({
       id: `held-candidate-${index}-${i}`,
-      label: c.label.trim(),
+      label: (c as { label: string }).label.trim(),
       // W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1): ride the wire
       // candidate's store-backed record handle (the SPINE-1 candidate entry's
       // additive optional `ref`, emitted by the engine for tier <= 1 record
@@ -206,6 +270,18 @@ export function heldFactToClarificationRequest(
       // id semantics MessageLog.optionRefId already reads. A candidate without
       // a handle keeps the option shape byte-unchanged.
       ...(typeof c.ref === 'string' && c.ref.trim() ? { ref: { id: c.ref.trim() } } : {}),
+      // MATRES-PANEL §8 (post-merge re-verify §2/§3 item 2): the widened
+      // candidateFact keys (tier/referentLevel/eligibility,
+      // resolutionEngine.ts:127-146 conditional spread) DO reach the browser
+      // via the schema-free 422 body — the drop was HERE (:190-209). Widening
+      // the option payload is PANEL's own §8 work: CONDITIONAL spreads only
+      // (exactOptionalPropertyTypes — absent-or-value, never :undefined). A
+      // candidate with no eligibility run (tier-5 mint offer, near-miss
+      // suggestion, model-side fact) keeps the pre-PANEL option shape
+      // byte-unchanged.
+      ...(typeof c.referentLevel === 'string' && c.referentLevel.trim() ? { level: c.referentLevel.trim() } : {}),
+      ...(typeof c.tier === 'number' ? { tier: c.tier } : {}),
+      ...eligibilityRide(c),
     }))
 
   return {
@@ -215,6 +291,14 @@ export function heldFactToClarificationRequest(
     menuProvider,
     query: label,
     options,
+    // MATRES-PANEL §7.1: the SLOT identity is the wire fact's own
+    // actionLocation (argument + actionIndex — the SPINE-1 frozen shape the
+    // adapter already reads generically), never a second server key channel.
+    // The ANSWER still rides answers[fact.label] byte-unchanged (D2 — the
+    // ANSWER-BIND-1 exact-label join); the slot key is presentation-only.
+    ...(argument !== undefined
+      ? { slot: typeof actionIndex === 'number' ? `${argument}:${actionIndex}` : argument }
+      : {}),
   }
 }
 

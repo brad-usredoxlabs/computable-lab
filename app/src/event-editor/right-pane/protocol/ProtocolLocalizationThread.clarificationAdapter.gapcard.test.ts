@@ -217,6 +217,11 @@ describe('clarificationAdapter — gap reasons get their menu rows (W211-GAPCARD
       'ambiguous': '/m',
       'contradicts-the-text': '/m',
       'missing-required-argument': null,
+      // MATRES-PANEL STEP-0 DELIBERATE PIN UPDATE (orch-ruled, same sanctioned
+      // pattern): the ONLY further delta is the two MATRES-ELIG reason rows
+      // (material-eligibility.yaml :91/:97 — declared vocabulary data).
+      'eligibility-incomplete': '/m',
+      'vendor-scope-unknown': '/m',
     })
   })
 })
