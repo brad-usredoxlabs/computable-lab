@@ -58,6 +58,8 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { contentHash, object } from '../revisions/RecordRevisionService.js';
 import { canonicalReadStore, LAB_SESSION_SCHEMA_ID } from '../drafts/workstateCompile.js';
+import { createResolveSpine } from '../resolve/ResolveSpine.js';
+import { createRecordProvider } from '../resolve/providers/records.js';
 import type { AppContext } from '../server.js';
 import { resolvePath } from '../lint/PathResolver.js';
 import { evaluateCompatibility } from '../fulfillment/evaluateCompatibility.js';
@@ -445,7 +447,7 @@ export async function compileExecuteChainIntent(
   const prepared = object(intent.prepared);
   const preparedName = trimmed(prepared.name) ?? '';
   const preparedVolume = object(prepared.volume);
-  const sourceSpecRef = asObject(prepared.sourceSpecRef);
+  let sourceSpecRef = asObject(prepared.sourceSpecRef);
   const aliquots = Array.isArray(intent.aliquots) ? (intent.aliquots as Record<string, unknown>[]) : [];
 
   // 4. The pinned plan (READ, never written): its REQE- occurrences are the
@@ -472,6 +474,44 @@ export async function compileExecuteChainIntent(
     specRecordId = sourceSpecRef.id;
     const spec = await deps.staging.get(specRecordId);
     if (spec) reads[specRecordId] = contentHash(spec.payload);
+  }
+
+  // fix-run 4 D2(b): the LIVE emission names the prep by NAME only (prepared
+  // {name, volume} with no sourceSpecRef), so the instance payload would never
+  // gain material_spec_ref and would fail the shipped material-instance anyOf.
+  // The compiler attempts a DATA resolution of the declared name against the
+  // lab's existing material-spec records through the SHIPPED name->record
+  // mechanism — the resolve spine's tier-1 record provider
+  // (server/src/resolve/providers/records.ts, the provider createResolveSpine
+  // composes for every name->record binding: server.ts:802,
+  // server/src/ai/resolveDraftMaterials.ts). Local tiers only (the
+  // resolveDraftMaterials localOnly doctrine — offline-safe, deterministic).
+  // Binding law (the resolveDraftMaterials/lookupVendorProduct doctrine):
+  // exactly one distinct record binds; ZERO matches and MORE THAN ONE distinct
+  // match are NOT resolvable — the compiler never fuzzy-guesses across distinct
+  // records and never mints a spec. An unresolvable name leaves the compile
+  // legitimately blocked with a NAMED diagnostic (the blocked wall, D3).
+  if (isAttestedChain && specRecordId === undefined && preparedName.length > 0) {
+    const spine = createResolveSpine({
+      recordProvider: createRecordProvider(deps.canonical, ['material-spec']),
+    });
+    const candidates = await spine.resolve(preparedName, { localOnly: true, level: 'spec' });
+    const specIds = [...new Set(
+      candidates
+        .filter(c => c.tier === 1 && c.level === 'spec' && c.curie.startsWith('local:'))
+        .map(c => c.curie.slice('local:'.length))
+        .filter(id => id.length > 0),
+    )].sort();
+    if (specIds.length === 1) {
+      specRecordId = specIds[0]!;
+      sourceSpecRef = { kind: 'record', type: 'material-spec', id: specRecordId };
+      const spec = await deps.staging.get(specRecordId);
+      if (spec) reads[specRecordId] = contentHash(spec.payload);
+    } else if (specIds.length === 0) {
+      diagnostics.push(`chain.prepared.sourceSpecRef: no material-spec record names the declared prep '${preparedName}' — the compiler resolves the prep's material through the lab's name->record spine (resolve/providers/records tier 1) and NEVER guesses or mints a spec; name the material the prep realizes so the spine can bind it`);
+    } else {
+      diagnostics.push(`chain.prepared.sourceSpecRef: the declared prep name '${preparedName}' is ambiguous — ${String(specIds.length)} distinct material-spec records match (${specIds.join(', ')}); the compiler binds a name only when exactly one record matches and NEVER fuzzy-guesses across distinct records`);
+    }
   }
 
   // 5. Deterministic ids (D4): seed-hashes over (draft content, plan coordinate).
@@ -567,10 +607,32 @@ export async function compileExecuteChainIntent(
   const claims: Record<string, unknown>[] = [];
   const physicalClaimStatus = isAttestedChain ? (claimStatus ?? claimLabels.declaredFallback) : claimLabels.instructed;
 
+  // fix-run 4 D2(a): the compiler NEVER emits approximate-without-occurredAt.
+  // The shipped pairing wall (attestation.lint.yaml
+  // attestation-occurred-approximate-needs-approximation) requires BOTH
+  // occurredAt and approximation on an approximate claim, and no declared
+  // data/config resolves a relative approximation token ('today', 'yesterday')
+  // to a concrete timestamp — inventing one would be a synthesized occurrence
+  // time, which the Q5/Q8 law forbids (occurredAt is ONLY ever the
+  // scientist's stated time). So an approximate claim with no stated
+  // occurredAt downgrades to the terminal 'unknown' (Q5: "I don't know" is a
+  // complete answer) and the human approximation note is RETAINED for the
+  // review card only (display), never on the stored claim (the
+  // unknown-is-terminal wall forbids time fields on unknown).
+  // timeApproximationNotes is index-aligned with the PHYSICAL claims the
+  // attested branch builds (the prepared claim first, then one per aliquot —
+  // the same order the §9b card claims render before any fulfillment claims).
+  const timeApproximationNotes: Array<string | undefined> = [];
   const timeFields = (statusRaw: unknown, atRaw: unknown, approxRaw: unknown): Record<string, unknown> => {
-    const status = trimmed(statusRaw) ?? 'unknown';
+    let status = trimmed(statusRaw) ?? 'unknown';
     const at = trimmed(atRaw);
     const approx = trimmed(approxRaw);
+    if (status === 'approximate' && at === undefined) {
+      status = 'unknown';
+      timeApproximationNotes.push(approx);
+      return { occurredAtStatus: status };
+    }
+    timeApproximationNotes.push(undefined);
     return {
       occurredAtStatus: status,
       ...(status !== 'unknown' && at !== undefined ? { occurredAt: at } : {}),
@@ -707,9 +769,15 @@ export async function compileExecuteChainIntent(
   //     performer is NEVER pre-filled with the attestor (bait 9).
   const cardCopy = loadChainCardCopy(deps.arithmeticPolicyPath ?? defaultChainArithmeticPath());
   const unknownLabel = cardCopy?.unknownLabel ?? '';
-  const cardClaims: ChainCardClaim[] = claims.map(claim => {
+  const cardClaims: ChainCardClaim[] = claims.map((claim, i) => {
     const assertion = object(claim.assertion);
     const about = object(assertion.about);
+    // fix-run 4 D2(a): a downgraded claim (approximate-without-occurredAt ->
+    // terminal unknown) keeps its HUMAN APPROXIMATION NOTE on the card — the
+    // scientist's own word ('today'/'yesterday') rendered for review. The note
+    // is display-only: the stored claim carries neither occurredAt nor
+    // approximation (the unknown-is-terminal wall).
+    const retainedNote = trimmed(claim.approximation) ?? timeApproximationNotes[i];
     return {
       label: String(claim.claimStatus ?? ''),
       verb: String(assertion.verb ?? ''),
@@ -717,7 +785,7 @@ export async function compileExecuteChainIntent(
       aboutType: String(about.type ?? ''),
       occurredAtStatus: String(claim.occurredAtStatus ?? 'unknown'),
       ...(trimmed(claim.occurredAt) !== undefined ? { occurredAt: trimmed(claim.occurredAt)! } : {}),
-      ...(trimmed(claim.approximation) !== undefined ? { approximation: trimmed(claim.approximation)! } : {}),
+      ...(retainedNote !== undefined ? { approximation: retainedNote } : {}),
       identity: {
         performer: performerLabel ?? unknownLabel,
         accountSupplier: accountSupplierLabel ?? unknownLabel,

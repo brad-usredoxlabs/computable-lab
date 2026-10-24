@@ -210,6 +210,18 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
   'chain': {
     async stage(context,_actor,intent,_targetId,_now) {
       const compiled = await compileExecuteChainIntent(intent, chainDepsFromContext(context));
+      // fix-run 4 D3 (gate g1d): the refusal message carries the compile's
+      // NAMED diagnostics verbatim (the shipped sibling pattern — record-drafting
+      // :107 and receiving :141 throw the rule-named diagnostics; the pipeline
+      // records them as DRAFT_INVALID needs-missing-fact -> canAccept:false,
+      // the generic gate). ExecuteChainDraft now BUILDS the card document even
+      // on a refused compile (its ok:false return carries `card` — pinned in
+      // ChainLiveEmission.test.ts arm D) and every fired wall is NAMED
+      // (attestation pairing downgrades instead of firing; the material gap is
+      // chain.prepared.sourceSpecRef; the arithmetic rule is
+      // volume-sum-lte-prepared), so the blocked wall the card renders NAMES
+      // the offending rule ids. The accept path still refuses server-side
+      // (FormDraftService.ts:178/:186 canAccept gate) with ZERO staged writes.
       if(!compiled.ok)throw new Error(compiled.diagnostics.join('; '));
       const durable = compiled.durableAcceptedIds ?? new Set<string>();
       // The instructed (plan-side) posture stages ONLY the plan-side envelope:
