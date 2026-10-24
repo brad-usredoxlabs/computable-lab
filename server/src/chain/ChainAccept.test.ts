@@ -148,7 +148,7 @@ function case3(tag: string, overrides: Record<string, unknown> = {}): Record<str
     operation: 'compose-execute-chain',
     artifactKind: 'attestation-chain',
     plan: { recordId: PLAN_ID },
-    preparation: {
+    prepared: {
       name: `Fenofibrate stock ${tag}`,
       volume: { value: 1, unit: 'mL' },
       sourceSpecRef: { kind: 'record', type: 'material-spec', id: SPEC_ID },
@@ -442,7 +442,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     const envelope = object((draft.result as Record<string, unknown>).envelope);
     const claims = envelope.claims as Array<Record<string, unknown>>;
     expect(claims.some(c => object(c.assertion).fulfilledBy !== undefined)).toBe(false);
-    expect(String((draft.result as Record<string, unknown>).fulfillmentNote)).toMatch(/no requirement ids|not drafted/i);
+    expect(String((draft.result as Record<string, unknown>).fulfillmentNote)).toMatch(/no fulfillment claims/i);
   });
 
   it('D4 stale source: a post-review plan edit 409s with the rail message VERBATIM', async () => {

@@ -1,0 +1,51 @@
+# MATRES-CHAIN §7.4 (OQ-2 ruling (b)) — the execute-chain arithmetic POLICY (DATA).
+#
+# The ACs "aliquot volumes sum <= prepared volume" and "counts reconcile" are
+# decided by THIS file, never by a TypeScript branch: the evaluator
+# (server/src/chain/chainArithmetic.ts) is a PURE generic read that walks these
+# declared rules over the draft composite (the fulfillment-compatibility.yaml
+# precedent — policy-as-YAML-data, per-call load, malformed data throws naming
+# the path, ABSENT file = LOUD off via console.warn, never silent).
+#
+# The lint DSL has no aggregate numeric predicate (lint-v1 `compare` is
+# path-vs-number-LITERAL only — §5 A11). The named missing predicate
+# (aggregate sum/count compare, unit-scaled, generic) is recorded as a PROPOSED
+# FOLLOW-UP capability item (PROTO-AI-3 pattern, its own task, Brad-visible
+# meta-schema touch) — NOT smuggled in here. "Lintable" means
+# declared-data-checkable in this item (OQ-2 ruling).
+#
+# Zero volume/unit/count literals in the evaluator: the unit scale table and
+# every path live HERE.
+policyVersion: 1
+
+# Unit scale table (DATA): unit name -> factor relative to the smallest declared
+# base unit. A unit absent from this table is a declared-fact gap: the evaluator
+# reports it honestly (never guesses a conversion).
+scales:
+  mL: 1000
+  uL: 1
+
+rules:
+  # Rule 2 (§7.4): the sum of the aliquot volumes must not exceed the prepared
+  # volume. Generic sumCompare: sum of value*scale(unit) over the collection,
+  # compared (lte) to the value at againstValuePath * againstScale.
+  - id: volume-sum-lte-prepared
+    title: "aliquot volumes must not exceed the prepared volume"
+    operator: sumCompare
+    collectionPath: aliquots
+    valuePath: volume.value
+    unitPath: volume.unit
+    againstValuePath: prepared.volume.value
+    againstUnitPath: prepared.volume.unit
+    comparison: lte
+    message: "the declared aliquot volumes sum beyond the prepared volume (unit scale from execute-chain-arithmetic.yaml)"
+
+  # Rule 3 (§7.4): the declared aliquot count must equal the number of aliquots
+  # in the composite (10 = 1 used + 9 stored reconciles through the same count:
+  # the composite carries every aliquot with its declared disposition).
+  - id: aliquot-count-matches-declared
+    title: "the declared aliquot count must match the composite"
+    operator: countEquals
+    collectionPath: aliquots
+    declaredCountPath: aliquotCount
+    message: "the declared aliquotCount does not match the number of aliquots in the draft"

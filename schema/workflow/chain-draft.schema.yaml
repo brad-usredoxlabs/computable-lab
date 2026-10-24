@@ -1,0 +1,150 @@
+# MATRES-CHAIN §7.1/§7.4 — the elicited execute-chain DRAFT shape (DATA).
+#
+# This is the composite the `chain` draft adapter's stage() validates against
+# and the shape the chain-draft lint rules + config/drafting/execute-chain-
+# arithmetic.yaml bind to. It is a DRAFT shape, NOT a record kind: nothing here
+# is ever stored as a record of this schemaId (zero new kinds — D2). The
+# physical records it compiles onto ride the EXISTING schemas
+# (material-derivation / material-instance / aliquot) and the attestation
+# envelope rides schema/lab/attestation.schema.yaml UNTOUCHED — CHAIN adds no
+# envelope fields ("schema as MATRES-ATTEST defines").
+#
+# Vocabulary honesty: claimStatus/occurredAtStatus values here are the ATTESTATION
+# envelope's declared labels (attestation.schema.yaml enums), re-declared on the
+# DRAFT side only as the elicitation contract; the server NEVER derives or
+# rewrites them (OQ-4 law inherited). `proposed` is deliberately ABSENT from
+# attested.claimStatus: an attestation-chain cannot carry proposed claims
+# (the shipped wall attestation.lint.yaml attestation-chain-no-proposed-claims
+# is the wall — CHAIN rides it, adds nothing). An INSTRUCTED payload declares
+# artifactKind plan-slot-reference and carries NO attested block (§7.2).
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/chain-draft.schema.yaml"
+title: "Execute-chain draft (composite)"
+description: >
+  The elicited execute-chain drafting composite: ONE reviewed payload covering
+  a preparation (material-derivation of type preparation), the prepared
+  material-instance, and N aliquots, attested by ONE attestation-chain envelope
+  (§7.1 graph). Every edge is a DECLARED field; nothing is inferred from
+  proximity, naming, or time order.
+
+type: object
+additionalProperties: false
+required: [operation, artifactKind, prepared, aliquotCount, aliquots]
+
+properties:
+  operation:
+    type: string
+    const: compose-execute-chain
+    description: "The registered chain verb (adapter operations [compose-execute-chain])."
+
+  requestId:
+    type: string
+    description: "Compiler-injected draft coordinate (the FormDraftService requestId precedent — NEVER part of the id-hashed core)."
+
+  artifactKind:
+    type: string
+    enum: [ attestation-chain, plan-slot-reference ]
+    description: >
+      §7.2 declared posture: attestation-chain = done-work retrospective (every
+      claim completed|unknown|reported-by-other — the shipped lint wall keeps
+      proposed off); plan-slot-reference = INSTRUCTED ("decides to make") —
+      acceptance attests NOTHING physical and ZERO physical records stage.
+      The default is VISIBLE in the card header (Q2), never silent.
+
+  plan:
+    type: object
+    additionalProperties: false
+    required: [ recordId ]
+    description: >
+      The PINNED plan (event-graph) the chain is drafted against, when the
+      drafting context carries one. READ-ONLY: the chain never mutates the plan
+      (FULFIL AC-5). Its requirement occurrences (REQE- ids) are the fulfillment
+      claims' referents; a plan whose requirements lack ids yields ZERO
+      fulfillment claims (no minting from the chain side, §7.6).
+    properties:
+      recordId: { type: string, minLength: 1 }
+
+  prepared:
+    type: object
+    additionalProperties: false
+    required: [ name, volume ]
+    description: "The preparation: what was made (name) and how much (volume)."
+    properties:
+      name: { type: string, minLength: 1 }
+      volume:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, minimum: 0 }
+          unit: { type: string, minLength: 1 }
+      sourceSpecRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "The material-spec (plan formulation) this prep realizes — READ, never written."
+
+  aliquotCount:
+    type: integer
+    minimum: 1
+    description: "The DECLARED aliquot count the composite reconciles against (DATA rule aliquot-count-matches-declared)."
+
+  aliquots:
+    type: array
+    minItems: 1
+    description: >
+      The aliquot composite. `disposition` is the declared truth-for-the-day
+      (stored | consumed); a consumed aliquot whose whole life is inside the
+      attested session is staged status:consumed AT CREATION (OQ-1(a)/D4 —
+      never an update to a pre-existing record, bait 12).
+    items:
+      type: object
+      additionalProperties: false
+      required: [ disposition, volume ]
+      properties:
+        disposition: { type: string, enum: [ stored, consumed ] }
+        volume:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value: { type: number, minimum: 0 }
+            unit: { type: string, minLength: 1 }
+        storage:
+          type: object
+          additionalProperties: false
+          properties:
+            temperature_C: { type: number }
+            location: { type: string }
+        occurredAtStatus: { type: string, enum: [ known, approximate, unknown ] }
+        occurredAt: { type: string, minLength: 1 }
+        approximation: { type: string, minLength: 1 }
+
+  attested:
+    type: object
+    additionalProperties: false
+    required: [ claimStatus, occurredAtStatus ]
+    description: >
+      The DECLARED attestation posture for the physical claims (never derived):
+      claimStatus completed|unknown|reported-by-other + the occurredAtStatus
+      triple (Q5 terminal honesty). The identity labels are the scientist's
+      words; absence means UNKNOWN, never presumed (P3). attestedAt is NEVER
+      here — ABSENT-before-accept is the ratified mechanism (the onAccept hook
+      stamps the acceptance time).
+    properties:
+      claimStatus: { type: string, enum: [ completed, unknown, reported-by-other ] }
+      occurredAtStatus: { type: string, enum: [ known, approximate, unknown ] }
+      occurredAt: { type: string, minLength: 1 }
+      approximation: { type: string, minLength: 1 }
+      attestorLabel: { type: string, minLength: 1 }
+      performerLabel: { type: string, minLength: 1 }
+      accountSupplierLabel: { type: string, minLength: 1 }
+
+  consumeExistingAliquotRef:
+    type: string
+    minLength: 1
+    description: >
+      UNSUPPORTED-BY-DESIGN in this wave (OQ-1(a) ruling): consuming an aliquot
+      that already exists durably (cross-session) is out of scope, named as a
+      blocked diagnostic, NEVER silently converted into a born-in-session
+      consumption or an update. The lint rule
+      chain-draft-cross-session-consumption-out-of-scope renders the refusal as
+      DATA.

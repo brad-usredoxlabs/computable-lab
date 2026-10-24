@@ -1,0 +1,135 @@
+# Lint rules for the execute-chain DRAFT composite (MATRES-CHAIN §7.4/§7.2).
+#
+# D6 (orch ruling): CHAIN's rules live ONLY in THIS file, bound to CHAIN's own
+# draft schemaId — attestation.lint.yaml and FULFIL's files are ZERO-diff. The
+# attestation-chain label wall (attestation-chain-no-proposed-claims) is RIDDEN,
+# never re-declared here.
+#
+# These rules bind the DRAFT composite (chain-draft.schema.yaml) at compile
+# time: a fired ERROR becomes a named diagnostic -> canAccept:false (the generic
+# gate, not an adapter-name branch). The aggregate arithmetic ACs (sum<=prepared,
+# count reconcile) are NOT here — the lint DSL has no aggregate numeric
+# predicate (§5 A11, named gap) and OQ-2 ruled them into
+# config/drafting/execute-chain-arithmetic.yaml + the pure evaluator.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/chain-draft.schema.yaml"
+
+rules:
+# --- orphan-aliquot wall (§7.4 rule 1, draft-side half) --------------------
+# The full wall is SHIPPED at the record level: aliquot.schema.yaml's root anyOf
+# forbids an aliquot with no spec/parent ref at all (A4) — the staged create
+# refuses it. This rule is the DRAFT-side half: a composite that names a parent
+# for SOME aliquots but not others has orphans (mixed parentage is the orphan
+# shape a draft can actually carry).
+- id: chain-draft-aliquots-need-parent
+  title: "when the draft names parents for aliquots, every aliquot must name one"
+  description: >
+    Mixed parentage is an orphan: an aliquot the draft left parentless while its
+    siblings name a parent. Cross-record referential truth (the parent resolves
+    to an EXISTING or chain-born instance) is checked at compile against
+    staged+store reads, same as FULFIL's plan-membership check style.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: "aliquots[*].parent_material_instance_ref"
+  assert:
+    op: everyItem
+    collectionPath: aliquots
+    assert:
+      op: exists
+      path: parent_material_instance_ref
+  message:
+    template: "an aliquot in the chain draft carries no parent_material_instance_ref while its siblings do — orphan aliquot ({{aliquots}})"
+    paths: [ "aliquots" ]
+
+# --- elicitation wall (§7.2: never default the scientist into an attestation) --
+- id: chain-draft-attested-chain-needs-declared-claim-status
+  title: "an attestation-chain draft must carry the DECLARED attestation posture"
+  description: >
+    artifactKind attestation-chain asserts physical facts, so the draft must
+    carry the declared attested block (claimStatus + occurredAtStatus). An
+    absent attested block means the instructed-vs-attested distinction was never
+    elicited — the card asks the minimum completing question ("did this happen,
+    or are you planning it?") instead of defaulting. The server NEVER derives
+    claimStatus (OQ-4 law inherited); this rule only refuses the UNDECLARED.
+  severity: error
+  scope: record
+  when:
+    op: equals
+    path: artifactKind
+    value: attestation-chain
+  assert:
+    op: exists
+    path: attested.claimStatus
+  message:
+    template: "attestation-chain draft carries no declared attested.claimStatus — did this happen, or are you planning it? ({{artifactKind}})"
+    paths: [ "artifactKind" ]
+
+# --- occurredAtStatus pairing over the aliquot composite (Q5/Q8, mirrors the
+#     shipped attestation pairing rules on the DRAFT side) --------------------
+- id: chain-draft-occurred-known-needs-occurred-at
+  title: "an aliquot claim with occurredAtStatus known must carry occurredAt"
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: aliquots
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: known }
+      - op: exists
+        path: occurredAt
+  message:
+    template: "an aliquot with occurredAtStatus known is missing occurredAt ({{aliquots}})"
+    paths: [ "aliquots" ]
+
+- id: chain-draft-occurred-unknown-is-terminal
+  title: "an aliquot with occurredAtStatus unknown carries no time fields (terminal honesty, Q5)"
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: aliquots
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: unknown }
+      - op: all
+        predicates:
+        - op: not
+          not: { op: exists, path: occurredAt }
+        - op: not
+          not: { op: exists, path: approximation }
+  message:
+    template: "an aliquot with occurredAtStatus unknown must not carry occurredAt or approximation ({{aliquots}})"
+    paths: [ "aliquots" ]
+
+# --- OQ-1(a) ruling: cross-session consumption is OUT OF SCOPE, rendered as a
+#     refusal, never silently converted (bait 12 / bait via OQ-1) --------------
+- id: chain-draft-cross-session-consumption-out-of-scope
+  title: "consuming a PRE-EXISTING aliquot is unsupported by design in this wave"
+  description: >
+    OQ-1(a) ruling: CHAIN is scoped to born-in-session consumption (status
+    consumed staged AT CREATION, D4). The cross-session "use 1 of the 9
+    tomorrow" case would stage an UPDATE to an existing record inside the accept
+    loop, which the shipped loop cannot make idempotent (§12 bait 12), and no
+    consumption record type exists (§5 A5). A draft naming an existing aliquot
+    to consume is REFUSED by name — a future item with its own ruling owns it.
+    The assert is always-firing when the when-gate passes (operation is const in
+    the schema), the honest refusal shape.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: consumeExistingAliquotRef
+  assert:
+    # Intentionally always-firing: operation is const in chain-draft.schema.yaml.
+    op: not
+    not: { op: equals, path: operation, value: compose-execute-chain }
+  message:
+    template: "consumeExistingAliquotRef {{consumeExistingAliquotRef}}: cross-session consumption of an already-stored aliquot is OUT OF SCOPE by ruling (OQ-1(a)) — only an aliquot BORN in this attested session can be consumed by this chain; the stored-bottle case is a separate item with its own ruling"
+    paths: [ "consumeExistingAliquotRef" ]
