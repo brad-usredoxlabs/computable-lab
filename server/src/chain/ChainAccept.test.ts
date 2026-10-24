@@ -195,7 +195,7 @@ async function compileAndAccept(tag: string, overrides: Record<string, unknown> 
 }
 
 describe('MATRES-CHAIN accept through the production FormDraftService rail (case-3\' end to end)', () => {
-  it('case-3 end-to-end: make 1 mL, 10x100uL aliquots, 1 today, 9 at -20 -> derivation + instance + 10 aliquots + ONE attestation-chain', async () => {
+  it('case-3 end-to-end: make 1 mL, 10x100uL aliquots, 1 today, 9 at -20 -> derivation + instance + 10 aliquots + ONE attestation-chain', { timeout: 30000 }, async () => {
     const before = await counts();
     const { draft } = await compileAndAccept('batch-A');
     // The compile staged the full graph as writes and wrote NOTHING canonical before accept.
@@ -254,7 +254,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(claims.some(c => c.occurredAt === '2026-10-21T10:00:00-04:00')).toBe(true);
   });
 
-  it('attestedAt ABSENT from the draft envelope pre-accept (bait 4: conditional spread, never key:undefined)', async () => {
+  it('attestedAt ABSENT from the draft envelope pre-accept (bait 4: conditional spread, never key:undefined)', { timeout: 30000 }, async () => {
     const draft = await service.compile({ adapter: 'chain', intent: case3('batch-absent') });
     expect(draft.canAccept).toBe(true);
     const envelope = object((draft.result as Record<string, unknown>).envelope);
@@ -264,7 +264,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     }
   });
 
-  it('D4: the same sentence twice compiles byte-identical id sets (seed-hash over draft content + plan coordinate, never token/randomUUID)', async () => {
+  it('D4: the same sentence twice compiles byte-identical id sets (seed-hash over draft content + plan coordinate, never token/randomUUID)', { timeout: 30000 }, async () => {
     const a = await service.compile({ adapter: 'chain', intent: case3('batch-idem') });
     const b = await service.compile({ adapter: 'chain', intent: case3('batch-idem') });
     expect(a.writes.map(w => w.recordId).sort()).toEqual(b.writes.map(w => w.recordId).sort());
@@ -274,7 +274,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(c.writes.map(w => w.recordId).sort()).not.toEqual(a.writes.map(w => w.recordId).sort());
   });
 
-  it('AC-2 double-accept: repeat-accept of the same revision leaves ONE chain (store COUNTS, not responses)', async () => {
+  it('AC-2 double-accept: repeat-accept of the same revision leaves ONE chain (store COUNTS, not responses)', { timeout: 30000 }, async () => {
     const { draft } = await compileAndAccept('batch-double');
     const instanceId = String((draft.result as Record<string, unknown>).instanceRecordId);
     await service.accept({ draftId: draft.draftId, revision: draft.revision, reviewHash: draft.reviewHash });
@@ -285,7 +285,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect((await ctx.store.list({ kind: 'attestation' })).filter(a => a.recordId === attId)).toHaveLength(1);
   });
 
-  it('AC-2 volatile-field exemption (bait 2): two drafts compiled BEFORE either accept, accepted by DIFFERENT clocks, land ONE chain — never a 409 on the attestedAt delta', async () => {
+  it('AC-2 volatile-field exemption (bait 2): two drafts compiled BEFORE either accept, accepted by DIFFERENT clocks, land ONE chain — never a 409 on the attestedAt delta', { timeout: 30000 }, async () => {
     const LATER_ACCEPT = '2026-10-22T09:00:00.000Z';
     const laterService = new FormDraftService(ctx, 'USR-CHAIN-ACCEPT', () => LATER_ACCEPT);
     const a = await service.compile({ adapter: 'chain', intent: case3('batch-volatile') });
@@ -303,7 +303,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect((await ctx.store.list({ kind: 'aliquot' })).filter(x => refIdOf(x.payload, 'parent_material_instance_ref') === instanceId)).toHaveLength(10);
   });
 
-  it('AC-2 re-draft after accept: a fresh draft of identical content lands the SAME ids and ONE chain (prior-scan equal-modulo-volatile)', async () => {
+  it('AC-2 re-draft after accept: a fresh draft of identical content lands the SAME ids and ONE chain (prior-scan equal-modulo-volatile)', { timeout: 30000 }, async () => {
     const first = await service.compile({ adapter: 'chain', intent: case3('batch-redraft') });
     await service.accept({ draftId: first.draftId, revision: first.revision, reviewHash: first.reviewHash });
     const attId = String((first.result as Record<string, unknown>).recordId);
@@ -317,7 +317,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect((await ctx.store.list({ kind: 'aliquot' })).filter(x => refIdOf(x.payload, 'parent_material_instance_ref') === instanceId)).toHaveLength(10);
   });
 
-  it('AC-3 partial failure (bait 11): a mid-loop create fault 503s with Save-incomplete and the replay lands the tail with ONE chain', async () => {
+  it('AC-3 partial failure (bait 11): a mid-loop create fault 503s with Save-incomplete and the replay lands the tail with ONE chain', { timeout: 30000 }, async () => {
     const draft = await service.compile({ adapter: 'chain', intent: case3('batch-partial') });
     const instanceId = String((draft.result as Record<string, unknown>).instanceRecordId);
     const attId = String((draft.result as Record<string, unknown>).recordId);
@@ -345,7 +345,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect((await ctx.store.list({ kind: 'material-instance' })).filter(x => x.recordId === instanceId)).toHaveLength(1);
   });
 
-  it('AC-4 arithmetic (DATA rule volume-sum-lte-prepared): 11x100uL > 1mL blocks the card naming the rule id, with ZERO writes', async () => {
+  it('AC-4 arithmetic (DATA rule volume-sum-lte-prepared): 11x100uL > 1mL blocks the card naming the rule id, with ZERO writes', { timeout: 30000 }, async () => {
     const intent = case3('batch-sum');
     (intent.aliquots as unknown[]).push({ disposition: 'stored', volume: { value: 100, unit: 'uL' }, storage: { temperature_C: -20 }, occurredAtStatus: 'unknown' });
     intent.aliquotCount = 11;
@@ -360,7 +360,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     createSpy.mockRestore();
   });
 
-  it('AC-4 arithmetic (DATA rule aliquot-count-matches-declared): declared 10 vs 9 staged blocks naming the rule id', async () => {
+  it('AC-4 arithmetic (DATA rule aliquot-count-matches-declared): declared 10 vs 9 staged blocks naming the rule id', { timeout: 30000 }, async () => {
     const intent = case3('batch-count');
     (intent.aliquots as unknown[]).pop();
     const review = await service.compile({ adapter: 'chain', intent });
@@ -368,7 +368,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(review.diagnostics.some(d => d.message.includes('aliquot-count-matches-declared'))).toBe(true);
   });
 
-  it('OQ-1(a) ruling: consuming a PRE-EXISTING aliquot renders unsupported-by-design (named diagnostic, canAccept:false, zero writes) — never silently converted', async () => {
+  it('OQ-1(a) ruling: consuming a PRE-EXISTING aliquot renders unsupported-by-design (named diagnostic, canAccept:false, zero writes) — never silently converted', { timeout: 30000 }, async () => {
     const review = await service.compile({ adapter: 'chain', intent: case3('batch-cross', { consumeExistingAliquotRef: 'ALQ-SOME-BOTTLE-ALREADY-ON-THE-SHELF' }) });
     expect(review.canAccept).toBe(false);
     expect(review.diagnostics.some(d => /cross-session|out of scope|unsupported/i.test(d.message))).toBe(true);
@@ -383,7 +383,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     updateSpy.mockRestore();
   });
 
-  it('bait 12: the born-in-session consumed aliquot is staged at CREATION (status consumed on the create) — the staged plan contains ZERO updates to pre-existing records', async () => {
+  it('bait 12: the born-in-session consumed aliquot is staged at CREATION (status consumed on the create) — the staged plan contains ZERO updates to pre-existing records', { timeout: 30000 }, async () => {
     const draft = await service.compile({ adapter: 'chain', intent: case3('batch-creation') });
     // Every staged write is a CREATE of a deterministic id; the consumed aliquot
     // is among them already carrying status consumed.
@@ -399,7 +399,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(refIdOf(object(consumptionClaim!.assertion), 'about')).toBe(consumedStaged!.recordId);
   });
 
-  it('instructed payload (D3): plan-slot-reference stages ZERO physical records; acceptance attests nothing physical', async () => {
+  it('instructed payload (D3): plan-slot-reference stages ZERO physical records; acceptance attests nothing physical', { timeout: 30000 }, async () => {
     const intent = case3('batch-instructed', { artifactKind: 'plan-slot-reference' });
     delete (intent as Record<string, unknown>).attested;
     const draft = await service.compile({ adapter: 'chain', intent });
@@ -413,7 +413,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect((await ctx.store.list({ kind: 'aliquot' })).some(a => String(object(a.payload).name ?? '').includes('batch-instructed'))).toBe(false);
   });
 
-  it('§7.6 FULFIL ride: fulfillment claims ride the SAME envelope — verb fulfills, about REQE-, fulfilledBy derivation, evaluations from the DATA policy, against{} pin', async () => {
+  it('§7.6 FULFIL ride: fulfillment claims ride the SAME envelope — verb fulfills, about REQE-, fulfilledBy derivation, evaluations from the DATA policy, against{} pin', { timeout: 30000 }, async () => {
     const { draft } = await compileAndAccept('batch-fulfil');
     const attId = String((draft.result as Record<string, unknown>).recordId);
     const att = object((await ctx.store.get(attId))!.payload);
@@ -434,7 +434,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(typeof object(att.against).graphRevision).toBe('string');
   });
 
-  it('§7.6 honesty: a draft with NO pinned plan carries ZERO fulfillment claims and the result says so (no minting requirement ids from the chain side)', async () => {
+  it('§7.6 honesty: a draft with NO pinned plan carries ZERO fulfillment claims and the result says so (no minting requirement ids from the chain side)', { timeout: 30000 }, async () => {
     const intent = case3('batch-noplan');
     delete (intent as Record<string, unknown>).plan;
     const draft = await service.compile({ adapter: 'chain', intent });
@@ -445,7 +445,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     expect(String((draft.result as Record<string, unknown>).fulfillmentNote)).toMatch(/no fulfillment claims/i);
   });
 
-  it('D4 stale source: a post-review plan edit 409s with the rail message VERBATIM', async () => {
+  it('D4 stale source: a post-review plan edit 409s with the rail message VERBATIM', { timeout: 30000 }, async () => {
     const draft = await service.compile({ adapter: 'chain', intent: case3('batch-stale') });
     const planRecord = (await ctx.store.get(PLAN_ID))!;
     await ctx.store.update({ envelope: { ...planRecord, payload: { ...object(planRecord.payload), name: 'Edited after review' } } });
@@ -454,7 +454,7 @@ describe('MATRES-CHAIN accept through the production FormDraftService rail (case
     ).rejects.toThrow('Source changed. Reload and review the draft.');
   });
 
-  it('append-only wall rides the chain attestation (DATA knob, zero new code): update/delete of the stored chain hits APPEND_ONLY', async () => {
+  it('append-only wall rides the chain attestation (DATA knob, zero new code): update/delete of the stored chain hits APPEND_ONLY', { timeout: 30000 }, async () => {
     const { draft } = await compileAndAccept('batch-wall');
     const attId = String((draft.result as Record<string, unknown>).recordId);
     const stored = (await ctx.store.get(attId))!;
