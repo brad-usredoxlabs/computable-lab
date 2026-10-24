@@ -485,6 +485,63 @@
   opacity: 0.5;
 }
 
+/* --- MATRES-PANEL: grouped candidate buckets + per-selection semantics --- */
+.pl-held-clarification-slot {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--cl-text-muted, #64748b);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+.pl-candidate-group {
+  border: 1px solid var(--cl-border);
+  border-radius: 5px;
+  background: var(--cl-bg-elev-1);
+  padding: 6px 8px;
+  margin-top: 6px;
+}
+
+.pl-candidate-group__header {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.pl-candidate-group__semantics {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--cl-text-muted, #64748b);
+}
+
+.pl-candidate-group__disclosure {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-accent);
+}
+
+.pl-held-clarification-option__ref {
+  display: block;
+  font-size: 10px;
+  color: var(--cl-text-muted, #64748b);
+  margin-top: 2px;
+}
+
+.pl-candidate-marker {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--cl-text-muted, #64748b);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: 4px 4px 0 0;
+}
+
 /* --- Review deck & labware (one-shot localization gate) --- */
 .protocol-localization-thread__deckreview {
   display: flex;

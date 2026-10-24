@@ -183,7 +183,7 @@ describe('ProtocolLocalizationThread — held clarifications render answerable c
   it('1. a held 422 renders one answerable card per clarification (label visible + picker present)', async () => {
     await openBarWithCard()
 
-    const cards = await screen.findByTestId('pl-clarification-cards')
+    const cards = await screen.findByTestId('pl-clarification-panel')
     const card = screen.getByTestId('pl-clarification-card')
     expect(card.textContent).toContain(MINTED_LABEL)
     // The answer surface: the picker's search box (the /m menu with the mint floor).
