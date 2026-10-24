@@ -442,7 +442,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; recordDraft?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary; toolName?: string; args?: Record<string, unknown>; success?: boolean; durationMs?: number; outcome?: string; diagnostics?: PipelineDiagnosticItem[]; events?: DraftEventProposal[]; action?: AgentActionEnvelope; workstate?: Record<string, unknown>; analysis?: Record<string, unknown>; recordDraft?: Record<string, unknown>; chain?: Record<string, unknown>; answer?: LedgerAnswerEnvelope }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -508,6 +508,17 @@ function dispatchFrame(
       // A frame without an object payload is DROPPED, never guessed into an event.
       if (parsed.recordDraft && typeof parsed.recordDraft === 'object' && !Array.isArray(parsed.recordDraft)) {
         onEvent({ type: 'record_draft_proposal', recordDraft: parsed.recordDraft })
+      }
+      return
+    case 'chain_proposal':
+      // MATRES-CHAIN tier-2 (execute-chain, OQ-3(a)): same discipline — relay
+      // the model's chain INTENT verbatim; the mount relays it to
+      // POST /api/drafts/compile (adapter 'chain'), which is the
+      // Ajv/canAccept trust boundary. A frame without an object payload is
+      // DROPPED, never guessed into an event. (g1c D1: without this case the
+      // server's frame fell through to `default:` and the card never mounted.)
+      if (parsed.chain && typeof parsed.chain === 'object' && !Array.isArray(parsed.chain)) {
+        onEvent({ type: 'chain_proposal', chain: parsed.chain })
       }
       return
     case 'ledger_answer':
