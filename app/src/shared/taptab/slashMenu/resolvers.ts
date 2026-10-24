@@ -29,6 +29,45 @@ import { exaVendorEnabled } from '../../lib/integrationFlags'
 const PAGE = 8
 const MATERIAL_PAGE = 12
 
+/**
+ * MENU-CANDIDATES-1 Fix B: the structural aggregate joiners the PLATFORM
+ * itself writes into material labels — `componentLabels.join(' + ')` for
+ * per-accept draft specs (server AddMaterialSupport), comma-joined
+ * fraction-sum/role-gap aggregate labels, and slash-joined media names
+ * (e.g. 'DMEM/F-12'). These three literals ONLY. This is a search-shape
+ * list, not a label-shape heuristic: it never keys on a fact's reason, never
+ * suppresses the mint row, and a query containing none of them behaves
+ * byte-identically to before (no component search fires).
+ */
+const AGGREGATE_JOINERS = [' + ', ',', '/']
+
+/**
+ * Split an aggregate query into its component tokens so each component can be
+ * searched on its own. A record titled 'Thermo DMEM' can never match the
+ * aggregate needle 'Thermo trypsin-EDTA + Thermo DMEM + …' by substring, so
+ * without this the per-component records are filtered out server-side before
+ * any menu logic sees them.
+ *
+ * Returns [] for any query that is not an aggregate (no joiner, or nothing
+ * left after splitting) — the byte-stability guarantee for delimiter-free
+ * queries like 'tris' or 'dmem'.
+ */
+function aggregateComponentTokens(query: string): string[] {
+  if (!AGGREGATE_JOINERS.some((joiner) => query.includes(joiner))) return []
+  let parts = [query]
+  for (const joiner of AGGREGATE_JOINERS) {
+    parts = parts.flatMap((part) => part.split(joiner))
+  }
+  const tokens: string[] = []
+  for (const part of parts) {
+    const token = part.trim()
+    if (!token || tokens.includes(token)) continue
+    tokens.push(token)
+  }
+  // A single surviving token is not an aggregate — nothing to expand.
+  return tokens.length > 1 ? tokens : []
+}
+
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
   const layer = ctx.materialLayer
@@ -43,6 +82,12 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
 
   const scopedToConcept = layer === 'material'
 
+  // MENU-CANDIDATES-1: the label-collapse ledger for THIS menu opening. The
+  // first paint seeds it; the streamed component searches below merge through
+  // the SAME dedup so a component hit that re-surfaces an already-shown
+  // (kind, title) row does not duplicate it.
+  const menuSeenLabels = new Set<string>()
+
   // First paint: workspace records (+ formulations, unless the question is about
   // the concept itself). Both come from the local SQLite-backed indices and
   // return in <50ms, so the menu pops the instant the user finishes typing the
@@ -56,7 +101,7 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   ])
   abortIfNeeded(ctx)
 
-  const workspace = materialSuggestions(materialRes.items, formulations)
+  const workspace = materialSuggestions(materialRes.items, formulations, menuSeenLabels)
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
 
@@ -97,6 +142,11 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // additions that aren't already on screen — the menu rebuilds in
   // strictly additive order. Aborts when the user keeps typing.
   if (q && ctx.onUpdate) {
+    // MENU-CANDIDATES-1 Fix B: an aggregate label (the card prefills the full
+    // fact label) fires one extra search per component token so the store's
+    // per-component records surface. Delimiter-free queries get an empty token
+    // list and behave byte-identically to before.
+    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx)
     void (async () => {
       try {
         const localRes = await apiClient.resolve({
@@ -202,6 +252,57 @@ function appendOntologyHits(
     additions.push(s)
   }
   if (additions.length > 0) onUpdate(additions)
+}
+
+/** MENU-CANDIDATES-1 Fix A: the display-label dedup key (OQ2 ruling:
+ * entityKind + normalized title). Normalization is whitespace/case only —
+ * titles are compared as the biologist reads them, not as search needles. */
+function menuLabelKey(entityKind: MaterialMentionKind, title: string): string {
+  return `${entityKind}::${title.trim().toLowerCase().replace(/\s+/g, ' ')}`
+}
+
+/**
+ * MENU-CANDIDATES-1 Fix B: per-component search for an aggregate query.
+ * The card prefills the /m search with the fact's FULL aggregate label
+ * (server shorthandChat sets query = fact.label — untouched per Ruling 4),
+ * and every server tier asks "does the RECORD contain the QUERY", so a
+ * record titled 'Thermo DMEM' can never surface. Fire one additional
+ * searchMaterials per trimmed component token and stream the hits through
+ * the SAME label dedup via the existing onUpdate path: exact-token titles
+ * land after the direct hits, before the mint row (pinBottom keeps mint
+ * last). Mint is never suppressed; no term is minted or invented for
+ * 'the aggregate'.
+ */
+function appendComponentHits(
+  tokens: string[],
+  seenKeys: Set<string>,
+  seenLabels: Set<string>,
+  ctx: SlashResolverContext,
+): void {
+  const onUpdate = ctx.onUpdate
+  if (!onUpdate) return
+  void Promise.all(
+    tokens.map((token) =>
+      apiClient
+        .searchMaterials({ q: token, limit: MATERIAL_PAGE })
+        .then((res) => res.items ?? [])
+        .catch(() => [] as MaterialSearchItem[]),
+    ),
+  ).then((perToken) => {
+    if (ctx.signal.aborted) return
+    const merged: SlashSuggestion[] = []
+    for (const items of perToken) {
+      // Same dedup as the first paint: the shared seenLabels ledger collapses
+      // re-surfaced same-titled rows, and seenKeys keeps rows already on
+      // screen from repeating.
+      for (const s of materialSuggestions(items, [], seenLabels)) {
+        if (seenKeys.has(s.key)) continue
+        seenKeys.add(s.key)
+        merged.push(s)
+      }
+    }
+    if (merged.length > 0) onUpdate(merged)
+  })
 }
 
 /**
@@ -594,6 +695,7 @@ const MATERIAL_CATEGORY_RANK: Record<MaterialSearchItem['category'], number> = {
 function materialSuggestions(
   items: MaterialSearchItem[],
   formulations: FormulationSummary[],
+  seenLabels?: Set<string>,
 ): SlashSuggestion[] {
   const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
     recordId: summary.outputSpec.id,
@@ -609,6 +711,20 @@ function materialSuggestions(
   }))
 
   const seen = new Set<string>()
+  // MENU-CANDIDATES-1 Fix A: display-label dedup. Distinct records that render
+  // byte-identically (the per-accept MSP-DRAFT specs + prior-drive aggregate
+  // mints all share one title) used to fill the whole page with rows a
+  // biologist could not tell apart. Collapse rows sharing
+  // (entityKind, normalized title) AFTER the rank sort so the survivor is the
+  // first in rank order, and BEFORE the caller's slice(0, MATERIAL_PAGE) so
+  // the collapsed rows free page slots for real candidates.
+  //
+  // Presentation only: the key stays `entityKind:recordId` and the surviving
+  // row keeps its real recordId — selection is still a real record, never an
+  // invented term for "the aggregate". Different entityKinds are different
+  // layers and both legitimately answer an unscoped '/m' card, so the key
+  // includes the kind.
+  const labelKeys = seenLabels ?? new Set<string>()
   return [...formulationItems, ...items]
     .filter((item) => {
       if (seen.has(item.recordId)) return false
@@ -619,6 +735,12 @@ function materialSuggestions(
       const ar = MATERIAL_CATEGORY_RANK[a.category] ?? 10
       const br = MATERIAL_CATEGORY_RANK[b.category] ?? 10
       return ar === br ? a.title.localeCompare(b.title) : ar - br
+    })
+    .filter((item) => {
+      const labelKey = menuLabelKey(materialMentionKind(item.kind), item.title)
+      if (labelKeys.has(labelKey)) return false
+      labelKeys.add(labelKey)
+      return true
     })
     .map((item) => {
       const entityKind = materialMentionKind(item.kind)
