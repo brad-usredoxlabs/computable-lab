@@ -284,6 +284,14 @@ export type AssistStreamEvent =
   // server frame (AgentOrchestrator emits
   // {type:'record_draft_proposal', recordDraft}).
   | { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }
+  // MATRES-CHAIN (OQ-3(a) ratified, tier-2 execute-chain): the model's elicited
+  // execute-chain INTENT — the thin attestation envelope only, relayed verbatim.
+  // NOT a compiled draft and NOT actionable alone: POST /api/drafts/compile
+  // (adapter 'chain' — Ajv chain-draft + chain-draft.lint.yaml + the DATA
+  // arithmetic evaluator + canAccept) is the trust boundary, not this stream.
+  // Field name `chain` mirrors the server frame (AgentOrchestrator emits
+  // {type:'chain_proposal', chain}).
+  | { type: 'chain_proposal'; chain: Record<string, unknown> }
   // PB-CH-8: the ledger ANSWER — SERVER-BUILT fetched evidence (never model
   // narration). The client relays the envelope verbatim; `answerText` is the
   // server's single wording authority. Deliberately assistStream-only: the

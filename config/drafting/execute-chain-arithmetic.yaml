@@ -38,6 +38,7 @@ rules:
     againstValuePath: prepared.volume.value
     againstUnitPath: prepared.volume.unit
     comparison: lte
+    countFieldPath: disposition
     message: "the declared aliquot volumes sum beyond the prepared volume (unit scale from execute-chain-arithmetic.yaml)"
 
   # Rule 3 (§7.4): the declared aliquot count must equal the number of aliquots
@@ -49,3 +50,22 @@ rules:
     collectionPath: aliquots
     declaredCountPath: aliquotCount
     message: "the declared aliquotCount does not match the number of aliquots in the draft"
+
+# §7.4 r2 HONESTY CEILING + §7.5 card copy (DATA, not TS): the review card
+# renders these strings VERBATIM. The ceiling is required card text (bait 10) —
+# arithmetic proves the DRAFT internally consistent; it is no evidence the wet
+# work happened. The attestation label (claimStatus + attestor + the server's
+# attestedAt stamp) is what carries that.
+card:
+  ceilingNote: >-
+    Arithmetic reconciles this draft with itself: it is no evidence the wet work
+    happened. What the acceptance attests is each claim's label — completed,
+    unknown, or reported-by-other — recorded against the scientist who declared
+    it. A completed label is a person's attestation, not a measurement.
+  reconciliationTitle: "Arithmetic reconciliation"
+  # Display labels for the DECLARED dispositions (the composite's own values).
+  dispositionLabels:
+    consumed: "used"
+    stored: "stored"
+  # The unknown-identity rendering (P3): absence is rendered, never pre-filled.
+  unknownLabel: "unknown"

@@ -41,6 +41,9 @@ export interface ArithmeticRule {
   againstUnitPath?: string;
   comparison?: string;
   declaredCountPath?: string;
+  /** Optional DATA field: the per-item field whose values the readout counts
+   *  (labelled through the card copy's dispositionLabels map). */
+  countFieldPath?: string;
   message: string;
 }
 
@@ -54,6 +57,25 @@ export interface ChainArithmeticPolicy {
 export interface ArithmeticViolation {
   ruleId: string;
   message: string;
+}
+
+/** §7.5 card copy (DATA): the strings the review card renders VERBATIM. */
+export interface ChainCardCopy {
+  ceilingNote: string;
+  reconciliationTitle: string;
+  dispositionLabels: ReadonlyMap<string, string>;
+  unknownLabel: string;
+}
+
+/** The reconciliation readout the card shows (numbers computed from the DATA
+ *  scale table over the draft's own declared values — zero TS literals). */
+export interface ChainArithmeticReadout {
+  /** Sum of the collection's declared volumes on the declared unit scale. */
+  collectionSumScaled: number;
+  /** The compared (prepared) value on the declared unit scale. */
+  againstScaled: number;
+  /** Count per declared collection value (labels come from the DATA map). */
+  counts: Array<{ value: string; label: string; count: number }>;
 }
 
 function requireString(value: unknown, field: string, path: string): string {
@@ -115,10 +137,47 @@ export function loadChainArithmeticPolicy(filePath = defaultChainArithmeticPath(
       ...(typeof r.againstUnitPath === 'string' ? { againstUnitPath: r.againstUnitPath } : {}),
       ...(typeof r.comparison === 'string' ? { comparison: r.comparison } : {}),
       ...(typeof r.declaredCountPath === 'string' ? { declaredCountPath: r.declaredCountPath } : {}),
+      ...(typeof r.countFieldPath === 'string' ? { countFieldPath: r.countFieldPath } : {}),
       message: requireString(r.message, `rules[${i}].message`, filePath),
     };
   });
   return { scales: () => scales, rules: () => rules };
+}
+
+/** Load the §7.5 card copy block from the SAME policy document (the ceiling
+ *  note is REQUIRED card text — bait 10 — and it lives as DATA). Absent policy
+ *  (the loud-off path) returns null: the card then renders its own named
+ *  gap, never a hardcoded fallback string. */
+export function loadChainCardCopy(filePath = defaultChainArithmeticPath()): ChainCardCopy | null {
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, 'utf8');
+  } catch {
+    console.warn(`chain arithmetic policy absent at ${filePath} — the card copy (ceiling note) is unavailable (declared-data gap, never a hardcoded fallback)`);
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(raw);
+  } catch {
+    return null;
+  }
+  const card = (parsed as Record<string, unknown> | null)?.card;
+  if (!card || typeof card !== 'object' || Array.isArray(card)) return null;
+  const c = card as Record<string, unknown>;
+  const labelsRaw = c.dispositionLabels;
+  const dispositionLabels = new Map<string, string>();
+  if (labelsRaw && typeof labelsRaw === 'object' && !Array.isArray(labelsRaw)) {
+    for (const [value, label] of Object.entries(labelsRaw as Record<string, unknown>)) {
+      if (typeof label === 'string') dispositionLabels.set(value, label);
+    }
+  }
+  return {
+    ceilingNote: typeof c.ceilingNote === 'string' ? c.ceilingNote.trim() : '',
+    reconciliationTitle: typeof c.reconciliationTitle === 'string' ? c.reconciliationTitle.trim() : '',
+    dispositionLabels,
+    unknownLabel: typeof c.unknownLabel === 'string' ? c.unknownLabel.trim() : '',
+  };
 }
 
 function select(data: unknown, path: string): { found: boolean; value: unknown } {
@@ -209,4 +268,62 @@ export function evaluateChainArithmetic(policy: ChainArithmeticPolicy, draft: Re
     throw new Error(`Chain arithmetic rule '${rule.id}' declares unsupported operator '${rule.operator}'`);
   }
   return violations;
+}
+
+/**
+ * Compute the §7.5 reconciliation readout for the CARD from the declared
+ * sumCompare rule (the first rule declaring operator sumCompare — the rule id
+ * rides the readout so the card names which data rule the numbers answer).
+ * Pure read over the draft's own declared values through the DATA scale table:
+ * zero volume/unit literals in TypeScript (bait 8). Returns null when the
+ * policy declares no sumCompare rule or the draft lacks the compared value —
+ * the card then shows NO reconciliation block rather than invented numbers.
+ */
+export function chainArithmeticReadout(
+  policy: ChainArithmeticPolicy,
+  draft: Record<string, unknown>,
+  cardCopy: ChainCardCopy | null,
+): ChainArithmeticReadout | null {
+  const scales = policy.scales();
+  const rule = policy.rules().find(r => r.operator === 'sumCompare');
+  if (rule === undefined || rule.valuePath === undefined || rule.againstValuePath === undefined) return null;
+
+  const collection = select(draft, rule.collectionPath);
+  if (!collection.found || !Array.isArray(collection.value)) return null;
+
+  let sum = 0;
+  const counts = new Map<string, number>();
+  for (const item of collection.value) {
+    const v = select(item, rule.valuePath);
+    if (v.found && typeof v.value === 'number') {
+      let factor = 1;
+      if (rule.unitPath !== undefined) {
+        const u = select(item, rule.unitPath);
+        const declared = scales.get(typeof u.value === 'string' ? u.value : '');
+        if (declared === undefined) return null; // unit gap: no invented numbers
+        factor = declared;
+      }
+      sum += v.value * factor;
+    }
+    if (rule.countFieldPath !== undefined) {
+      const f = select(item, rule.countFieldPath);
+      const key = typeof f.value === 'string' ? f.value : '';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  const against = select(draft, rule.againstValuePath);
+  if (!against.found || typeof against.value !== 'number') return null;
+  let againstFactor = 1;
+  if (rule.againstUnitPath !== undefined) {
+    const u = select(draft, rule.againstUnitPath);
+    const declared = scales.get(typeof u.value === 'string' ? u.value : '');
+    if (declared === undefined) return null;
+    againstFactor = declared;
+  }
+  const labels = cardCopy?.dispositionLabels;
+  return {
+    collectionSumScaled: sum,
+    againstScaled: against.value * againstFactor,
+    counts: [...counts.entries()].sort().map(([value, count]) => ({ value, label: labels?.get(value) ?? value, count })),
+  };
 }

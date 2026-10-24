@@ -2305,8 +2305,10 @@ export const apiClient = {
      * widens this to the registered set — 'analysis' is the second compiled
      * composition target on the SAME seam; the endpoint is adapter-blind.
      * QMS7-7 (OQ-1 ruling A) adds 'record-drafting' — the third registered
-     * adapter on the SAME seam; this transport stays adapter-blind. */
-    adapter: 'workstate' | 'analysis' | 'record-drafting'
+     * adapter on the SAME seam; this transport stays adapter-blind.
+     * MATRES-CHAIN (OQ-3(a)) adds 'chain' — the fourth registered adapter on
+     * the SAME adapter-blind seam. */
+    adapter: 'workstate' | 'analysis' | 'record-drafting' | 'chain'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
@@ -2318,10 +2320,11 @@ export const apiClient = {
     diagnostics: Array<{ code?: string; severity?: string; outcome?: string; message: string }>
     /** The compiled composition result. Adapter-shaped: workstate/analysis
      * carry sessionDocument/summary/resolvedTerms; QMS7-7's 'record-drafting'
-     * additionally carries `recordFields` (the server-built ui-v1 field list).
-     * The transport stays adapter-blind — it forwards whatever the server
-     * compiled, it does not interpret it. */
-    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown; recordFields?: unknown }
+     * additionally carries `recordFields` (the server-built ui-v1 field list);
+     * MATRES-CHAIN's 'chain' additionally carries `card` (the server-built
+     * review card document). The transport stays adapter-blind — it forwards
+     * whatever the server compiled, it does not interpret it. */
+    result?: { sessionDocument: unknown; summary?: string; resolvedTerms?: unknown; recordFields?: unknown; card?: unknown }
   }> {
     return request(`/drafts/compile`, {
       method: 'POST',

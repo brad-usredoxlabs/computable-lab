@@ -106,3 +106,13 @@ adapters:
     operations: [compose-execute-chain]
     projection: {}
     humanReviewedCreate: true
+    # §7.5 landing: the accepted chain re-focuses the attestation record on its
+    # record-edit tab (a REGISTERED lab-session tab kind — DATA, never a TS
+    # literal; the same landing.tabKind precedent as record-drafting, plus the
+    # workstate-tab-kinds.yaml idField/idPrefix shape so the server-derived
+    # activeTabId matches what app/src/shared/session/tabId.ts re-derives). An
+    # absent landing key fails the compile honestly with a named diagnostic.
+    landing:
+      tabKind: record-edit
+      idField: recordId
+      idPrefix: record

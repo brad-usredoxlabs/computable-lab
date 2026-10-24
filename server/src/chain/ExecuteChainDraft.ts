@@ -45,13 +45,16 @@
  */
 
 import type { RecordStore } from '../store/types.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { contentHash, object } from '../revisions/RecordRevisionService.js';
-import { canonicalReadStore } from '../drafts/workstateCompile.js';
+import { canonicalReadStore, LAB_SESSION_SCHEMA_ID } from '../drafts/workstateCompile.js';
 import type { AppContext } from '../server.js';
 import { resolvePath } from '../lint/PathResolver.js';
 import { evaluateCompatibility } from '../fulfillment/evaluateCompatibility.js';
 import { loadFulfillmentCompatibilityPolicy, defaultFulfillmentPolicyPath } from '../fulfillment/fulfillmentPolicy.js';
-import { loadChainArithmeticPolicy, evaluateChainArithmetic, defaultChainArithmeticPath } from './chainArithmetic.js';
+import { loadChainArithmeticPolicy, evaluateChainArithmetic, defaultChainArithmeticPath, loadChainCardCopy, chainArithmeticReadout } from './chainArithmetic.js';
 import {
   ALIQUOT_SCHEMA_ID,
   ATTESTATION_SCHEMA_ID,
@@ -66,6 +69,45 @@ import {
 } from './chainIdentity.js';
 
 const REQUIREMENT_ID_PATTERN = /^REQE-[a-z0-9-]+$/;
+
+/** Production adapters.yaml location (module-relative, the per-call-load
+ *  precedent — the config/ dir lives at the repo root, three levels above
+ *  server/src/chain). */
+function defaultAdaptersPath(): string {
+  return fileURLToPath(new URL('../../../config/drafting/adapters.yaml', import.meta.url));
+}
+
+/** §7.5 landing policy — DATA (config/drafting/adapters.yaml, the chain
+ *  block's `landing:` sub-key; the record-drafting landing precedent, plus the
+ *  workstate-tab-kinds.yaml idField/idPrefix shape). Loaded PER CALL (presence
+ *  checks only; no surface knowledge lives in TypeScript). Returns the chain
+ *  block's declared landing shape, or null when the block or the landing key
+ *  is absent: the compile then fails honestly with a LANDING_TAB_KIND_UNDECLARED
+ *  diagnostic and ZERO writes — the compiler never defaults a surface. */
+export interface ChainLandingPolicy {
+  tabKind: string;
+  idField: string;
+  idPrefix: string;
+}
+
+export function loadChainLandingPolicy(adaptersPath = defaultAdaptersPath()): ChainLandingPolicy | null {
+  let raw: string;
+  try {
+    raw = readFileSync(adaptersPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const parsed = parseYaml(raw) as unknown;
+  const block = (parsed as { adapters?: Record<string, unknown> } | null)?.adapters?.['chain'];
+  const landing = (block as { landing?: Record<string, unknown> } | undefined)?.landing;
+  const tabKind = landing?.tabKind;
+  const idField = landing?.idField;
+  const idPrefix = landing?.idPrefix;
+  if (typeof tabKind !== 'string' || tabKind.trim().length === 0) return null;
+  if (typeof idField !== 'string' || idField.trim().length === 0) return null;
+  if (typeof idPrefix !== 'string' || idPrefix.trim().length === 0) return null;
+  return { tabKind: tabKind.trim(), idField: idField.trim(), idPrefix: idPrefix.trim() };
+}
 
 export interface ChainCompileDeps {
   /** Canonical READ-ONLY store (the exported canonicalReadStore view — the
@@ -85,6 +127,8 @@ export interface ChainCompileDeps {
   arithmeticPolicyPath?: string;
   /** Fixture-injectable FULFIL compatibility policy path (per-call load). */
   fulfillmentPolicyPath?: string;
+  /** Fixture-injectable adapters.yaml path for the landing policy (per-call load). */
+  adaptersPath?: string;
 }
 
 export function chainDepsFromContext(ctx: AppContext): ChainCompileDeps {
@@ -123,6 +167,56 @@ export interface CompiledChainDraft {
   /** §7.2: an instructed (plan-side) acceptance attests NOTHING physical. */
   attestsNothingPhysical?: boolean;
   summary?: string;
+  /**
+   * §7.5 landing document: the surface the accepted chain re-focuses, built
+   * from the chain adapter block's declared `landing.tabKind` in
+   * config/drafting/adapters.yaml (DATA, never a TS literal — the
+   * record-drafting landing precedent) and re-validated against the REGISTERED
+   * lab-session $id. An absent landing key fails the compile honestly with a
+   * named diagnostic; the compiler never defaults a surface.
+   */
+  sessionDocument?: { version: 1; tabs: Array<Record<string, unknown>>; activeTabId: string | null };
+  /**
+   * §7.5 — the SERVER-BUILT review card document (the recordFields doctrine:
+   * the client renders it verbatim and maps nothing by kind name). Every
+   * string here is either the draft's own DECLARED value or a copy read out
+   * of config/drafting/execute-chain-arithmetic.yaml — zero card copy lives in
+   * TypeScript (bait 8/10). The claim table shows each claim's label VERBATIM
+   * as stored; the identity triple renders absence as the DATA unknown label,
+   * never the acceptor.
+   */
+  card?: ChainCardDocument;
+}
+
+export interface ChainCardClaim {
+  /** The claimStatus VERBATIM (proposed|completed|unknown|reported-by-other). */
+  label: string;
+  verb: string;
+  aboutId: string;
+  aboutType: string;
+  occurredAtStatus: string;
+  occurredAt?: string;
+  approximation?: string;
+  /** The DECLARED identity triple (P3): absent renders as the unknown label,
+   *  and performer is NEVER pre-filled with the attestor. */
+  identity: { performer: string; accountSupplier: string; attestor: string };
+}
+
+export interface ChainCardDocument {
+  /** artifactKind in the header (Q2: a default is visible, never invisible). */
+  artifactKind: string;
+  claims: ChainCardClaim[];
+  /** The arithmetic reconciliation readout (numbers from the DATA scale
+   *  table); absent when the policy declares no sumCompare rule. */
+  reconciliation?: {
+    title: string;
+    sumScaled: number;
+    preparedScaled: number;
+    counts: Array<{ label: string; count: number }>;
+  };
+  /** The §7.4 r2 honesty ceiling — REQUIRED card text, loaded from DATA. */
+  ceilingNote: string;
+  fulfillmentNote?: string;
 }
 
 function trimmed(v: unknown): string | undefined {
@@ -475,6 +569,77 @@ export async function compileExecuteChainIntent(
   const recordId = chainAttestationId(envelope);
   envelope.recordId = recordId;
 
+  // 9b. The §7.5 SERVER-BUILT review card document (the recordFields doctrine:
+  //     the client renders it verbatim and maps nothing by kind name). Labels
+  //     are the claims' claimStatus VERBATIM; the reconciliation numbers come
+  //     from the DATA scale table; the ceiling note is loaded from the SAME
+  //     policy file (required card text — bait 10). The identity triple renders
+  //     the DECLARED labels only — absence is the DATA unknown label, and
+  //     performer is NEVER pre-filled with the attestor (bait 9).
+  const cardCopy = loadChainCardCopy(deps.arithmeticPolicyPath ?? defaultChainArithmeticPath());
+  const unknownLabel = cardCopy?.unknownLabel ?? '';
+  const cardClaims: ChainCardClaim[] = claims.map(claim => {
+    const assertion = object(claim.assertion);
+    const about = object(assertion.about);
+    return {
+      label: String(claim.claimStatus ?? ''),
+      verb: String(assertion.verb ?? ''),
+      aboutId: String(about.id ?? ''),
+      aboutType: String(about.type ?? ''),
+      occurredAtStatus: String(claim.occurredAtStatus ?? 'unknown'),
+      ...(trimmed(claim.occurredAt) !== undefined ? { occurredAt: trimmed(claim.occurredAt)! } : {}),
+      ...(trimmed(claim.approximation) !== undefined ? { approximation: trimmed(claim.approximation)! } : {}),
+      identity: {
+        performer: performerLabel ?? unknownLabel,
+        accountSupplier: accountSupplierLabel ?? unknownLabel,
+        attestor: attestorLabel ?? unknownLabel,
+      },
+    };
+  });
+  const readout = arithmetic !== null ? chainArithmeticReadout(arithmetic, intent, cardCopy) : null;
+  const card: ChainCardDocument = {
+    artifactKind,
+    claims: cardClaims,
+    ...(readout !== null && cardCopy !== null
+      ? {
+          reconciliation: {
+            title: cardCopy.reconciliationTitle,
+            sumScaled: readout.collectionSumScaled,
+            preparedScaled: readout.againstScaled,
+            counts: readout.counts.map(c => ({ label: c.label, count: c.count })),
+          },
+        }
+      : {}),
+    ceilingNote: cardCopy?.ceilingNote ?? '',
+    ...(fulfillmentNote !== undefined ? { fulfillmentNote } : {}),
+  };
+
+  // 9c. The §7.5 landing document (the record-drafting landing precedent): the
+  //     tab shape is the chain adapter block's declared landing (tabKind +
+  //     idField + idPrefix — DATA), the id VALUE is the attestation's derived
+  //     recordId, and the activeTabId rides the declared idPrefix so
+  //     app/src/shared/session/tabId.ts re-derives the same slot id. Re-
+  //     validated against the REGISTERED lab-session $id. An absent landing
+  //     declaration fails the compile honestly — the compiler never defaults a
+  //     surface.
+  const landingPolicy = loadChainLandingPolicy(deps.adaptersPath ?? defaultAdaptersPath());
+  let sessionDocument: { version: 1; tabs: Array<Record<string, unknown>>; activeTabId: string | null } | undefined;
+  if (landingPolicy === null) {
+    diagnostics.push('LANDING_TAB_KIND_UNDECLARED: the chain adapter declares no landing.tabKind/idField/idPrefix in config/drafting/adapters.yaml, so the compile cannot name the surface the accepted chain lands on. Nothing was staged; declare the landing shape in the chain adapter block.');
+  } else {
+    const built = {
+      version: 1 as const,
+      tabs: [{ kind: landingPolicy.tabKind, [landingPolicy.idField]: recordId, title: String(envelope.title ?? recordId) }],
+      activeTabId: `${landingPolicy.idPrefix}:${recordId}`,
+    };
+    const landingValidation = deps.validate(built, LAB_SESSION_SCHEMA_ID);
+    if (!landingValidation.valid) {
+      diagnostics.push(...(landingValidation.errors ?? []).map(e => `chain landing${e.path}: ${e.message}`));
+    } else {
+      sessionDocument = built;
+    }
+  }
+
   // 10. Structural authority (Ajv) on every planned payload + the shipped
   //     attestation walls (attestation.lint.yaml: the chain-no-proposed wall,
   //     the occurred pairing, FULFIL's fulfil-* rules) named on the card.
@@ -528,7 +693,7 @@ export async function compileExecuteChainIntent(
     : `Planned execute chain: ${preparedName} (${String(aliquots.length)} planned aliquots) — plan-side only; acceptance attests NOTHING physical.`;
 
   if (diagnostics.length > 0) {
-    return { ok: false, diagnostics, envelope, derivationPayload, instancePayload, aliquotPayloads, recordId, derivationRecordId, instanceRecordId, aliquotRecordIds, reads, durableAcceptedIds, ...(fulfillmentNote !== undefined ? { fulfillmentNote } : {}), summary };
+    return { ok: false, diagnostics, envelope, derivationPayload, instancePayload, aliquotPayloads, recordId, derivationRecordId, instanceRecordId, aliquotRecordIds, reads, durableAcceptedIds, ...(fulfillmentNote !== undefined ? { fulfillmentNote } : {}), card, ...(sessionDocument !== undefined ? { sessionDocument } : {}), summary };
   }
   return {
     ok: true,
@@ -544,6 +709,8 @@ export async function compileExecuteChainIntent(
     reads,
     durableAcceptedIds,
     ...(fulfillmentNote !== undefined ? { fulfillmentNote } : {}),
+    card,
+    ...(sessionDocument !== undefined ? { sessionDocument } : {}),
     ...(isAttestedChain ? {} : { attestsNothingPhysical: true }),
     summary,
   };
