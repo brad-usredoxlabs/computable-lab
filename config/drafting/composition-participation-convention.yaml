@@ -1,0 +1,146 @@
+# ROLE-AXES-1 (Brad ruling 2026-10-22, "materials have identities and properties;
+# their roles are contextual, and their purposes are experimental"): the
+# role -> arithmetic decisions that formulation math used to make in TypeScript
+# are DATA here. The TS (server/src/materials/participationConvention.ts,
+# consumed by server/src/materials/formulationMath.ts, formulationCopilot.ts,
+# vendorComposition.ts, mcp/tools/aiPlanningTools.ts, and the app mirror
+# app/src/shared/lib/participationConvention.ts consumed by
+# app/src/editor/lib/formulationMath.ts + app/src/types/material.ts) interprets
+# the mappings generically: zero role/vocab string literals in the arithmetic
+# files (the item's grep-clean gate). Role names legitimately live HERE, in data.
+#
+# Loaded PER call (never process-cached), mirroring the composition-fraction
+# convention discipline verbatim: an absent file turns the convention layer OFF —
+# LOUD (one console.warn naming the path), never silently, never a throw; the
+# arithmetic then runs on the facts the record itself declares (measure mode,
+# source state, amounts, concentrations) and the convention-supplied defaults
+# simply do not fire. A present-but-malformed file THROWS naming the path.
+#
+# LEG ORDER (ratified): this file ships LEG 2 with the legacy-role mapping only.
+# LEG 2b adds the participation-keyed arms below the marker; when an entry
+# declares participation, its arm WINS; the legacy-role mapping stays the
+# loud-off fallback for participation-absent records (byte-pin goldens).
+#
+# MIXROLE-1 boundary (bait 8): the ROLE gap arm stays `other` in
+# config/drafting/composition-role-guidance.yaml (gapRole). participation_undeclared
+# does NOT replace it and this file never feeds the role-gap bar.
+#
+# Ontology discipline (bait 3): the participation terms are LOCAL datatype enum
+# values (schema/core/datatypes/composition-entry.schema.yaml). They are NEVER
+# minted into schema/registry/ontology-terms/* and are never equivalent to
+# substance classes: EC 3.4.21.4 lands on a CONSTITUENT inside a nested
+# composition, never on a participation word.
+#
+# App-side note: the browser bundle embeds this file at build time (vite ?raw
+# import in app/src/shared/lib/participationConvention.ts); the parse still runs
+# per call. A YAML edit needs an app rebuild (the server reads it per call).
+
+version: 1
+
+# ---- legacy-role mapping (loud-off fallback for participation-absent records) ----
+# Keyed by the role enum in schema/core/datatypes/composition-entry.schema.yaml
+# (plus the recipe-side roleType values diluent/matrix that fold onto it).
+# emittedRole is the ladder the snapshot-inference used to hardcode (free-form
+# roleType -> ledger role). Byte-stability is the point: a correct-label legacy
+# record computes EXACTLY what it computed before this file existed.
+legacyRoleMapping:
+  solute:
+    emittedRole: solute
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  solvent:
+    emittedRole: solvent
+    defaultMeasureMode: qs_to_final
+    defaultSourceState: liquid
+    volumeFractionFromResolvedAmount: true
+  diluent:
+    # The ladder emits the solvent ledger role for a diluent, so the legacy arm
+    # carries the solvent posture verbatim (byte-stability mirror).
+    emittedRole: solvent
+    defaultMeasureMode: qs_to_final
+    defaultSourceState: liquid
+    volumeFractionFromResolvedAmount: true
+  buffer_component:
+    emittedRole: buffer_component
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  activity_source:
+    emittedRole: activity_source
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  additive:
+    emittedRole: additive
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  cells:
+    emittedRole: cells
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  matrix:
+    emittedRole: buffer_component
+    defaultMeasureMode: qs_to_final
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+  other:
+    emittedRole: other
+    defaultMeasureMode: target_concentration
+    defaultSourceState: other
+    volumeFractionFromResolvedAmount: false
+
+# A roleType the mapping does not know (free-form text) emits this ledger role
+# and takes these defaults — the honest closest-role fallback, never a guess.
+defaultArm:
+  emittedRole: other
+  defaultMeasureMode: target_concentration
+  defaultSourceState: other
+  volumeFractionFromResolvedAmount: false
+
+# A DECLARED source state overrides the role arm's default measure mode: a
+# solid is measured by its declared contribution — it never fills the final
+# volume. This is the mislabeled-powder arm: the declared fact (source state)
+# beats the role label. Keyed on source states, not roles.
+sourceStateMeasureModeOverrides:
+  solid: target_concentration
+
+# The role a solid-target composition entry falls back to when the inferred
+# base composition carries none (the `?? 'solute'` the TS used to hardcode).
+fallbackCompositionRole: solute
+
+# ---- volume-fraction arm (measure-mode keyed, NOT label keyed) ----
+# A concentration-less entry may carry a synthesized volume fraction when the
+# ingredient's declared measure mode resolves it as the volume that fills the
+# final. An explicit fixed_amount declaration says "aliquot, not filler" and is
+# excluded FIRST. When the record declares NO measure mode at all, the reader
+# falls back to the legacy role mapping above (loud-off), so legacy records stay
+# byte-identical.
+volumeFractionMeasureModes: [qs_to_final]
+volumeFractionExcludedMeasureModes: [fixed_amount]
+
+# The unit a resolved count amount renders in (the display unit the TS used to
+# hardcode beside the count_per_volume branch).
+countAmountUnit: cells
+
+# ---- secondary P-read sites (OQ-4 ruling: same pick, ONE config key) ----
+# preferredRole order for picking the primary declared concentration of a
+# vendor/declared composition (server/src/materials/vendorComposition.ts,
+# server/src/mcp/tools/aiPlanningTools.ts, app/src/types/material.ts).
+primaryConcentrationRoleOrder: [solute, activity_source, cells, other]
+
+# ---- prompt-emission roles (E sites; role names ride DATA, not TS) ----
+# draftFormulationFromPrompt builds a primary-ingredient row and a carrier row;
+# the roleType/snapshot role it emits is declared here.
+promptEmission:
+  primaryRoleType: solute
+  carrierRoleType: solvent
+  carrierSnapshotRole: solvent
+
+# ---- recipe-name label site ----
+# suggestMissingFormulationFields names the recipe "<primary> in <carrier>" by
+# finding the ingredient whose roleType is one of these (label text only — the
+# output must stay byte-stable for correct-label records, bait 5).
+recipeNameCarrierRoleTypes: [solvent, diluent]

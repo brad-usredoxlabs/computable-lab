@@ -1,4 +1,5 @@
 import { parseConcentration, type Concentration } from './concentration.js';
+import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from './participationConvention.js';
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -15,7 +16,12 @@ function declaredCompositionEntries(value: unknown): Record<string, unknown>[] {
 
 export function extractPrimaryDeclaredConcentration(value: unknown): Concentration | undefined {
   const entries = declaredCompositionEntries(value);
-  for (const preferredRole of ['solute', 'activity_source', 'cells', 'other']) {
+  // ROLE-AXES-1 (OQ-4 ruling): the preferredRole pick order is config DATA
+  // (primaryConcentrationRoleOrder), loaded per call. Convention off (absent
+  // file, LOUD warn): the preference pass simply does not fire — the first
+  // concentration-bearing entry is taken.
+  const conv = loadParticipationConvention();
+  for (const preferredRole of primaryConcentrationRoleOrderFor(conv)) {
     for (const entry of entries) {
       const role = typeof entry.role === 'string' ? entry.role.trim() : '';
       if (role && role !== preferredRole) continue;

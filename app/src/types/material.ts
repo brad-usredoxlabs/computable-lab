@@ -3,6 +3,8 @@
  * Pure-data module — no React dependencies.
  */
 
+import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from '../shared/lib/participationConvention'
+
 /** Material domain classification */
 export type MaterialDomain = 'cell_line' | 'chemical' | 'media' | 'reagent' | 'organism' | 'sample' | 'other'
 
@@ -388,7 +390,11 @@ export function parseCompositionDrafts(value: unknown): CompositionDraftValue[] 
 
 export function getPrimaryDeclaredConcentration(value: unknown): ConcentrationValue | undefined {
   const entries = parseCompositionEntries(value)
-  for (const preferredRole of ['solute', 'activity_source', 'cells', 'other'] as const) {
+  // ROLE-AXES-1 (OQ-4 ruling): the preferredRole pick order is config DATA
+  // (primaryConcentrationRoleOrder), parsed per call. Convention off: the
+  // preference pass does not fire — the first concentration-bearing entry wins.
+  const order = primaryConcentrationRoleOrderFor(loadParticipationConvention())
+  for (const preferredRole of order) {
     const match = entries.find((entry) => entry.role === preferredRole && entry.concentration)
     if (match?.concentration) return match.concentration
   }

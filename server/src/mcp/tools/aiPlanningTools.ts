@@ -13,6 +13,7 @@ import {
   type PromptDraftResolver,
 } from '../../materials/formulationCopilot.js';
 import { parseIngredientConcentration } from '../../materials/formulationMath.js';
+import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from '../../materials/participationConvention.js';
 import { parseOperationTemplatePayload } from '../../execution/planning/transferPrograms.js';
 import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
@@ -351,7 +352,11 @@ function deriveSerialVolumes(args: {
 }
 
 function primaryCompositionConcentration(entries: ParsedCompositionEntry[]): NonNullable<ConcentrationShape> | undefined {
-  for (const preferredRole of ['solute', 'activity_source', 'cells', 'other'] as const) {
+  // ROLE-AXES-1 (OQ-4 ruling): same pick, ONE config key — the preferredRole
+  // order is config DATA (primaryConcentrationRoleOrder), loaded per call.
+  // Convention off (absent file, LOUD warn): the preference pass does not fire.
+  const order = primaryConcentrationRoleOrderFor(loadParticipationConvention());
+  for (const preferredRole of order) {
     const match = entries.find((entry) => entry.role === preferredRole && entry.concentration);
     if (match?.concentration) return match.concentration;
   }

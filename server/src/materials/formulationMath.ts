@@ -1,5 +1,16 @@
 import { parseConcentration, toStoredConcentration, type Concentration } from './concentration.js';
-import { parseStoredCompositionEntries, type ParsedCompositionEntry } from './composition.js';
+import { parseStoredCompositionEntries, type CompositionRole, type ParsedCompositionEntry } from './composition.js';
+import {
+  countAmountUnitFor,
+  emittedRoleFor,
+  fallbackCompositionRoleFor,
+  loadParticipationConvention,
+  maySynthesizeVolumeFraction,
+  PARTICIPATION_CONVENTION_PATH,
+  type IngredientMeasureMode,
+  type IngredientSourceState,
+  type ParticipationConvention,
+} from './participationConvention.js';
 
 type RefShape = {
   kind: 'record' | 'ontology';
@@ -10,8 +21,7 @@ type RefShape = {
   uri?: string;
 };
 
-export type IngredientMeasureMode = 'target_concentration' | 'fixed_amount' | 'qs_to_final';
-export type IngredientSourceState = 'solid' | 'liquid' | 'stock_solution' | 'formulation' | 'cells' | 'other';
+export type { IngredientMeasureMode, IngredientSourceState };
 
 export type FlexibleQuantity = {
   value: number | string;
@@ -21,6 +31,9 @@ export type FlexibleQuantity = {
 export type FormulationIngredient = {
   ref?: RefShape | null;
   roleType?: string;
+  /** ROLE-AXES-1: the declared participation axis — optional everywhere; the
+   *  arithmetic reads it only through the config convention (LEG 2b arms). */
+  participation?: string;
   measureMode?: IngredientMeasureMode;
   sourceState?: IngredientSourceState;
   stockConcentration?: Concentration;
@@ -207,25 +220,18 @@ function primaryIngredientRef(ingredient: FormulationIngredient): RefShape | und
   return ingredient.ref ?? ingredient.compositionSnapshot?.[0]?.componentRef;
 }
 
-function inferredCompositionForIngredient(ingredient: FormulationIngredient): ParsedCompositionEntry[] {
+function inferredCompositionForIngredient(
+  ingredient: FormulationIngredient,
+  conv: ParticipationConvention | undefined,
+): ParsedCompositionEntry[] {
   if (ingredient.compositionSnapshot?.length) return ingredient.compositionSnapshot;
   const ref = primaryIngredientRef(ingredient);
   if (!ref) return [];
   return [{
     componentRef: ref,
-    role: ingredient.roleType === 'cells'
-      ? 'cells'
-      : ingredient.roleType === 'solvent' || ingredient.roleType === 'diluent'
-        ? 'solvent'
-        : ingredient.roleType === 'buffer_component' || ingredient.roleType === 'matrix'
-          ? 'buffer_component'
-          : ingredient.roleType === 'activity_source'
-            ? 'activity_source'
-            : ingredient.roleType === 'additive'
-              ? 'additive'
-              : ingredient.roleType === 'solute'
-                ? 'solute'
-                : 'other',
+    // ROLE-AXES-1: the emission ladder is the config legacy-role mapping
+    // (emittedRole per roleType) — no role literals here.
+    role: emittedRoleFor(conv, ingredient.roleType) as CompositionRole,
     ...(ingredient.targetContribution ? { concentration: ingredient.targetContribution } : {}),
   }];
 }
@@ -233,6 +239,7 @@ function inferredCompositionForIngredient(ingredient: FormulationIngredient): Pa
 function computeRequiredAmount(
   ingredient: FormulationIngredient,
   totalOutputQuantity: { value: number; unit: string } | undefined,
+  conv: ParticipationConvention | undefined,
 ): { value: number; unit: string } | undefined {
   const explicit = quantityValue(ingredient.requiredAmount);
   if (explicit) return explicit;
@@ -259,7 +266,7 @@ function computeRequiredAmount(
     if (ingredient.targetContribution.basis === 'count_per_volume' && totalVolumeL !== undefined) {
       const cellsPerL = concentrationToBase(ingredient.targetContribution);
       if (cellsPerL !== undefined) {
-        return { value: Number((cellsPerL * totalVolumeL).toFixed(2)), unit: 'cells' };
+        return { value: Number((cellsPerL * totalVolumeL).toFixed(2)), unit: countAmountUnitFor(conv, ingredient.targetContribution.unit) };
       }
     }
 
@@ -308,17 +315,18 @@ function computeQsToFinalAmount(
 function flattenIngredientComposition(
   ingredient: ResolvedIngredient,
   totalOutputQuantity: { value: number; unit: string } | undefined,
+  conv: ParticipationConvention | undefined,
 ): ParsedCompositionEntry[] {
   const totalVolumeL = volumeToLiters(totalOutputQuantity);
   const ingredientVolumeL = volumeToLiters(ingredient.resolvedAmount);
-  const baseComposition = inferredCompositionForIngredient(ingredient);
+  const baseComposition = inferredCompositionForIngredient(ingredient, conv);
 
   if (ingredient.measureMode === 'target_concentration' && ingredient.sourceState === 'solid' && ingredient.targetContribution) {
     const ref = primaryIngredientRef(ingredient);
     if (!ref) return baseComposition;
     return [{
       componentRef: ref,
-      role: baseComposition[0]?.role ?? 'solute',
+      role: (baseComposition[0]?.role ?? fallbackCompositionRoleFor(conv)) as CompositionRole,
       concentration: ingredient.targetContribution,
     }];
   }
@@ -333,12 +341,19 @@ function flattenIngredientComposition(
         ...(concentration ? { concentration } : {}),
       };
     }
+    // ROLE-AXES-1: the synthesized volume fraction rides the declared measure
+    // mode + resolved amount through the config convention — never the role
+    // label. A declared fixed-amount entry is an aliquot, not a filler.
     if (
       !entry.concentration
-      && entry.role === 'solvent'
       && ingredientVolumeL !== undefined
       && totalVolumeL !== undefined
       && totalVolumeL > 0
+      && maySynthesizeVolumeFraction(conv, {
+        measureMode: ingredient.measureMode,
+        role: entry.role,
+        ...(ingredient.participation ? { participation: ingredient.participation } : {}),
+      })
     ) {
       return {
         ...entry,
@@ -356,11 +371,19 @@ function flattenIngredientComposition(
 export function computeFormulation(args: {
   ingredients: FormulationIngredient[];
   totalOutputQuantity?: { value: number; unit: string };
+  /** Injection seam (the compositionFractions NormalizeOptions precedent):
+   *  tests drive the absent/malformed-convention legs without touching the
+   *  shipped data home. The load is still PER call. */
+  conventionPath?: URL | string;
 }): FormulationComputationResult {
+  // ROLE-AXES-1: the convention is loaded PER call (never process-cached) —
+  // absent file => LOUD-off warn naming the path, arithmetic unchanged;
+  // malformed file => throws naming the path.
+  const conv = loadParticipationConvention(args.conventionPath ?? PARTICIPATION_CONVENTION_PATH);
   const warnings: string[] = [];
   const ingredients: ResolvedIngredient[] = args.ingredients.map((ingredient) => {
     const next: ResolvedIngredient = { ...ingredient };
-    const resolvedAmount = computeRequiredAmount(ingredient, args.totalOutputQuantity);
+    const resolvedAmount = computeRequiredAmount(ingredient, args.totalOutputQuantity, conv);
     if (resolvedAmount) next.resolvedAmount = resolvedAmount;
     return next;
   });
@@ -377,7 +400,7 @@ export function computeFormulation(args: {
   });
 
   const outputComposition = mergeCompositionEntries(
-    ingredients.flatMap((ingredient) => flattenIngredientComposition(ingredient, args.totalOutputQuantity)),
+    ingredients.flatMap((ingredient) => flattenIngredientComposition(ingredient, args.totalOutputQuantity, conv)),
   );
 
   return { ingredients, outputComposition, warnings };
