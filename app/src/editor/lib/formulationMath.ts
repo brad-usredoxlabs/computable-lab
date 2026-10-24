@@ -1,10 +1,21 @@
 import type { IngredientMeasureMode, IngredientSourceState, QuantityValue } from '../../shared/api/client'
 import type { Ref } from '../../types/ref'
-import type { CompositionEntryValue, ConcentrationValue } from '../../types/material'
+import type { CompositionEntryValue, CompositionRole, ConcentrationValue } from '../../types/material'
+import {
+  countAmountUnitFor,
+  emittedRoleFor,
+  fallbackCompositionRoleFor,
+  loadParticipationConvention,
+  maySynthesizeVolumeFraction,
+  type ParticipationConvention,
+} from '../../shared/lib/participationConvention'
 
 export type FormulationIngredientComputation = {
   ref: Ref | null
   roleType: string
+  /** ROLE-AXES-1: the declared participation axis — optional everywhere; the
+   *  arithmetic reads it only through the config convention (LEG 2b arms). */
+  participation?: string
   measureMode?: IngredientMeasureMode
   sourceState?: IngredientSourceState
   stockConcentration?: ConcentrationValue
@@ -159,31 +170,25 @@ export function inferIngredientSourceState(ref: Ref | null, domain?: string): In
   return 'liquid'
 }
 
-function defaultComposition(ingredient: FormulationIngredientComputation): CompositionEntryValue[] {
+function defaultComposition(
+  ingredient: FormulationIngredientComputation,
+  conv: ParticipationConvention | undefined,
+): CompositionEntryValue[] {
   if (ingredient.compositionSnapshot?.length) return ingredient.compositionSnapshot
   if (!ingredient.ref) return []
   return [{
     componentRef: ingredient.ref,
-    role: ingredient.roleType === 'cells'
-      ? 'cells'
-      : ingredient.roleType === 'solvent' || ingredient.roleType === 'diluent'
-        ? 'solvent'
-        : ingredient.roleType === 'buffer_component' || ingredient.roleType === 'matrix'
-          ? 'buffer_component'
-          : ingredient.roleType === 'activity_source'
-            ? 'activity_source'
-            : ingredient.roleType === 'additive'
-              ? 'additive'
-              : ingredient.roleType === 'solute'
-                ? 'solute'
-                : 'other',
+    // ROLE-AXES-1: the emission ladder is the config legacy-role mapping
+    // (emittedRole per roleType) — no role literals here.
+    role: emittedRoleFor(conv, ingredient.roleType) as CompositionRole,
     ...(ingredient.targetContribution ? { concentration: ingredient.targetContribution } : {}),
   }]
 }
 
 function computeRequiredAmount(
   ingredient: FormulationIngredientComputation,
-  totalOutputQuantity?: QuantityValue,
+  totalOutputQuantity: QuantityValue | undefined,
+  conv: ParticipationConvention | undefined,
 ): QuantityValue | undefined {
   if (ingredient.requiredAmount) return ingredient.requiredAmount
   const totalVolumeL = volumeToLiters(totalOutputQuantity)
@@ -202,7 +207,7 @@ function computeRequiredAmount(
 
   if (ingredient.targetContribution.basis === 'count_per_volume' && totalVolumeL !== undefined) {
     const cellsPerL = concentrationToBase(ingredient.targetContribution)
-    if (cellsPerL !== undefined) return { value: Number((cellsPerL * totalVolumeL).toFixed(2)), unit: 'cells' }
+    if (cellsPerL !== undefined) return { value: Number((cellsPerL * totalVolumeL).toFixed(2)), unit: countAmountUnitFor(conv, ingredient.targetContribution.unit) }
   }
 
   if (ingredient.targetContribution.basis === 'volume_fraction' && totalVolumeL !== undefined) {
@@ -228,16 +233,17 @@ function computeRequiredAmount(
 
 function flattenIngredient(
   ingredient: FormulationIngredientComputation & { resolvedAmount?: QuantityValue },
-  totalOutputQuantity?: QuantityValue,
+  totalOutputQuantity: QuantityValue | undefined,
+  conv: ParticipationConvention | undefined,
 ): CompositionEntryValue[] {
   const totalVolumeL = volumeToLiters(totalOutputQuantity)
   const ingredientVolumeL = volumeToLiters(ingredient.resolvedAmount)
-  const entries = defaultComposition(ingredient)
+  const entries = defaultComposition(ingredient, conv)
 
   if (ingredient.measureMode === 'target_concentration' && ingredient.sourceState === 'solid' && ingredient.targetContribution && ingredient.ref) {
     return [{
       componentRef: ingredient.ref,
-      role: entries[0]?.role ?? 'solute',
+      role: (entries[0]?.role ?? fallbackCompositionRoleFor(conv)) as CompositionRole,
       concentration: ingredient.targetContribution,
     }]
   }
@@ -249,7 +255,20 @@ function flattenIngredient(
         concentration: scaleConcentration(entry.concentration, ingredientVolumeL / totalVolumeL),
       }
     }
-    if (!entry.concentration && entry.role === 'solvent' && ingredientVolumeL !== undefined && totalVolumeL !== undefined && totalVolumeL > 0) {
+    // ROLE-AXES-1: the synthesized volume fraction rides the declared measure
+    // mode + resolved amount through the config convention — never the role
+    // label. A declared fixed-amount entry is an aliquot, not a filler.
+    if (
+      !entry.concentration
+      && ingredientVolumeL !== undefined
+      && totalVolumeL !== undefined
+      && totalVolumeL > 0
+      && maySynthesizeVolumeFraction(conv, {
+        measureMode: ingredient.measureMode,
+        role: entry.role,
+        ...(ingredient.participation ? { participation: ingredient.participation } : {}),
+      })
+    ) {
       return {
         ...entry,
         concentration: {
@@ -267,11 +286,15 @@ export function computeFormulationComposition(args: {
   ingredients: FormulationIngredientComputation[]
   totalOutputQuantity?: QuantityValue
 }): FormulationComputationResult {
+  // ROLE-AXES-1: the convention is parsed PER call from the embedded config
+  // text (never process-cached) — empty text => LOUD-off warn naming the path,
+  // arithmetic unchanged; malformed text => throws naming the path.
+  const conv = loadParticipationConvention()
   const warnings: string[] = []
   const ingredients = args.ingredients.map((ingredient) => ({
     ...ingredient,
-    ...(computeRequiredAmount(ingredient, args.totalOutputQuantity)
-      ? { resolvedAmount: computeRequiredAmount(ingredient, args.totalOutputQuantity) }
+    ...(computeRequiredAmount(ingredient, args.totalOutputQuantity, conv)
+      ? { resolvedAmount: computeRequiredAmount(ingredient, args.totalOutputQuantity, conv) }
       : {}),
   }))
 
@@ -292,7 +315,7 @@ export function computeFormulationComposition(args: {
 
   return {
     ingredients,
-    outputComposition: mergeCompositionEntries(ingredients.flatMap((ingredient) => flattenIngredient(ingredient, args.totalOutputQuantity))),
+    outputComposition: mergeCompositionEntries(ingredients.flatMap((ingredient) => flattenIngredient(ingredient, args.totalOutputQuantity, conv))),
     warnings,
   }
 }

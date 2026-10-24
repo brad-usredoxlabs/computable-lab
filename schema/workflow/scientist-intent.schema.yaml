@@ -195,6 +195,22 @@ properties:
               role:
                 type: string
                 enum: [solute, solvent, buffer_component, additive, activity_source, cells, other]
+              # ROLE-AXES-1 (wire mirror of the datatype axis, bait 6: the
+              # equality is machine-pinned against
+              # schema/core/datatypes/composition-entry.schema.yaml and the TS
+              # unions by CompositionParticipationSchema.test.ts — never by a
+              # copy-paste comment). `unevaluatedProperties: false` above
+              # FORBIDS an implicit carry, so the field must be DECLARED here
+              # for a wire participation to survive the fold/recompile
+              # carry-through. Optional + additive: a participation-absent
+              # document validates byte-identically. Same local-enum
+              # discipline as the datatype (never minted into
+              # schema/registry/ontology-terms/*); same never-guess rule
+              # (participation_undeclared defers to the config legacy-role
+              # mapping; purpose is never carried on this axis at all).
+              participation:
+                type: string
+                enum: [liquid_component, qs_carrier, solute_contributor, activity_contributor, count_component, participation_undeclared]
               fraction:
                 type: string
               concentration:

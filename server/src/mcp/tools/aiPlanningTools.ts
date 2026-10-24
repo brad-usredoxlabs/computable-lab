@@ -11,8 +11,10 @@ import {
   type CopilotRef,
   type FormulationCopilotDraft,
   type PromptDraftResolver,
+  type PromptResolverKind,
 } from '../../materials/formulationCopilot.js';
 import { parseIngredientConcentration } from '../../materials/formulationMath.js';
+import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from '../../materials/participationConvention.js';
 import { parseOperationTemplatePayload } from '../../execution/planning/transferPrograms.js';
 import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
@@ -351,7 +353,11 @@ function deriveSerialVolumes(args: {
 }
 
 function primaryCompositionConcentration(entries: ParsedCompositionEntry[]): NonNullable<ConcentrationShape> | undefined {
-  for (const preferredRole of ['solute', 'activity_source', 'cells', 'other'] as const) {
+  // ROLE-AXES-1 (OQ-4 ruling): same pick, ONE config key — the preferredRole
+  // order is config DATA (primaryConcentrationRoleOrder), loaded per call.
+  // Convention off (absent file, LOUD warn): the preference pass does not fire.
+  const order = primaryConcentrationRoleOrderFor(loadParticipationConvention());
+  for (const preferredRole of order) {
     const match = entries.find((entry) => entry.role === preferredRole && entry.concentration);
     if (match?.concentration) return match.concentration;
   }
@@ -694,7 +700,7 @@ async function draftSerialDilutionFromPrompt(
   const usingMatch = text.match(/\b(?:using|with)\s+([A-Za-z0-9 %+().\-_/]+)$/i);
   if (usingMatch?.[1] && resolveRef) {
     const candidate = usingMatch[1].trim().replace(/\.$/, '');
-    const resolved = await resolveRef(candidate, 'solvent');
+    const resolved = await resolveRef(candidate, 'material');
     if (resolved) {
       draft.diluentRef = resolved;
       if (draft.solventPolicyMode === 'enforce_constant_vehicle') draft.matchedDiluentRef = resolved;
@@ -736,7 +742,7 @@ function generateEventId(prefix = 'evt'): string {
 }
 
 export function registerAiPlanningTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
-  const resolvePromptRef = async (label: string, kind: 'material' | 'solvent' | 'ingredient'): Promise<CopilotRef | undefined> => {
+  const resolvePromptRef = async (label: string, kind: PromptResolverKind): Promise<CopilotRef | undefined> => {
     const query = normalize(label);
     if (!query) return undefined;
     const schemas = kind === 'ingredient'

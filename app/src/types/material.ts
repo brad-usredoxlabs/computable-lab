@@ -3,6 +3,8 @@
  * Pure-data module — no React dependencies.
  */
 
+import { loadParticipationConvention, primaryConcentrationRoleOrderFor } from '../shared/lib/participationConvention'
+
 /** Material domain classification */
 export type MaterialDomain = 'cell_line' | 'chemical' | 'media' | 'reagent' | 'organism' | 'sample' | 'other'
 
@@ -47,9 +49,38 @@ export type CompositionRole =
   | 'cells'
   | 'other'
 
+/**
+ * ROLE-AXES-1: the participation axis mirror (app twin of
+ * server/src/materials/composition.ts CompositionParticipation; the schema
+ * datatype + wire enums, pinned equal by
+ * server/src/schema/CompositionParticipationSchema.test.ts). Optional
+ * everywhere: participation means ABSENT, never key:undefined.
+ */
+export type CompositionParticipation =
+  | 'liquid_component'
+  | 'qs_carrier'
+  | 'solute_contributor'
+  | 'activity_contributor'
+  | 'count_component'
+  | 'participation_undeclared'
+
+/** Membership set for the participation passthrough (the COMPOSITION_ROLES
+ *  parse-check precedent). Pinned equal to the schema enums by the server pin
+ *  test; the TS never infers participation from anything else. */
+const PARTICIPATION_VALUES = new Set<string>([
+  'liquid_component',
+  'qs_carrier',
+  'solute_contributor',
+  'activity_contributor',
+  'count_component',
+  'participation_undeclared',
+])
+
 export interface CompositionEntryValue {
   componentRef: MaterialRefValue
   role: CompositionRole
+  /** ROLE-AXES-1: declared participation — passthrough only, never inferred. */
+  participation?: CompositionParticipation
   concentration?: ConcentrationValue
   concentrationRange?: ConcentrationRangeValue
   source?: string
@@ -283,9 +314,16 @@ export function parseCompositionEntries(value: unknown): CompositionEntryValue[]
       : undefined
     const concentration = withInferredConcentrationBasis(rawConcentration)
     const concentrationRange = parseConcentrationRange(entry.concentration_range)
+    // ROLE-AXES-1: participation PASSTHROUGH — a declared vocabulary member
+    // survives; anything else stays ABSENT (never inferred, never key:undefined).
+    const participation = typeof entry.participation === 'string'
+      && PARTICIPATION_VALUES.has(entry.participation.trim())
+      ? (entry.participation.trim() as CompositionParticipation)
+      : undefined
     return [{
       componentRef,
       role,
+      ...(participation ? { participation } : {}),
       ...(concentration ? { concentration } : {}),
       ...(concentrationRange ? { concentrationRange } : {}),
       ...(typeof entry.source === 'string' && entry.source.trim() ? { source: entry.source.trim() } : {}),
@@ -388,7 +426,11 @@ export function parseCompositionDrafts(value: unknown): CompositionDraftValue[] 
 
 export function getPrimaryDeclaredConcentration(value: unknown): ConcentrationValue | undefined {
   const entries = parseCompositionEntries(value)
-  for (const preferredRole of ['solute', 'activity_source', 'cells', 'other'] as const) {
+  // ROLE-AXES-1 (OQ-4 ruling): the preferredRole pick order is config DATA
+  // (primaryConcentrationRoleOrder), parsed per call. Convention off: the
+  // preference pass does not fire — the first concentration-bearing entry wins.
+  const order = primaryConcentrationRoleOrderFor(loadParticipationConvention())
+  for (const preferredRole of order) {
     const match = entries.find((entry) => entry.role === preferredRole && entry.concentration)
     if (match?.concentration) return match.concentration
   }
