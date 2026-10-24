@@ -116,3 +116,25 @@ onChainProposal (candidate live on :5193). Brad's stack untouched; no model serv
   RED-first assistStream-layer parser test + full-path trace + disclose any further missing hop).
   Do NOT dispatch another coder; fleet-single held by READING-CARD.
 - g1d after fix-3 merges: tier-2 cloud re-shot with same criteria + D1-closure check.
+
+## APPENDIX l2t0955 (10:00, same tick) — CFG-UNION-1 DONE (merged 6d64154b + live re-prove PASSED)
+- advc c1 ACCEPT zero defects (reviews/CFG-UNION-1-advc-l2t0915.md; falsification + audit spot-check).
+- ORCH SELF-VERIFY: real diff opened (generic unionArrays, DEFAULT-first, dedup-preserving-first,
+  both-sides-array guard, zero policy literals); vitest src/config 17/17 cwd=server; tsc -p . = 0.
+  Consumer grep myself: appendOnlyKinds/revisionOnEditKinds consumers spread-in config arrays
+  (RecordStoreImpl.ts:274/957 pattern) — union-safe by construction.
+- MERGE --no-ff -> 6d64154b. Stack RESTARTED (:3093/:5193=200). LIVE PUT-TAMPER RE-PROVE: PUT on
+  vendor-protocol-candidate CAN-w211-live (kind ABSENT from the lane config's partial
+  appendOnlyKinds list) -> HTTP 405 {"error":"APPEND_ONLY"} — defaults protected end-to-end.
+  CFG-UNION-1 marked DONE; report promoted .hermes/plans/CFG-UNION-1-report.md. Evidence debt
+  AS-CFGUNION-ADDITIVE-ONLY-SEMANTICS CLEARED (assumptions.md).
+- OPEN EVIDENCE DEBTS AT EXIT: none.
+
+## live-worker checkpoint at FINAL exit (~10:02 EDT; ~52 min wall, budget spent)
+- READING-CARD CODER LIVE (fleet slot): cl-l2-readingcard1-queue-l2t0915 (since 09:29; 2x ~10:15).
+- CHAIN FIX-3 coder QUEUED (FIFO behind READING-CARD): cl-l2-chainfix3-queue-l2t0945; worktree
+  checkout (NFS, slow) was RUNNING at exit — queue unit dispatches only on lock release; verify
+  wt HEAD=fe586759 at next reconcile.
+- ROLE-AXES SPEC-COMPOSER LIVE (thunderbeast): cl-l2-speccomp-roleaxes-l2t0915b (since 09:31;
+  draft owed specs-draft/2026-10-24_0930-...l2t0915.md; orch review owed before promotion).
+- Trunk HEAD 6d64154b; :3093/:5193 = 200. MATRES-CHAIN gate g1d waits on fix-3 merge.
