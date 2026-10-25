@@ -115,6 +115,16 @@ export interface AssistDraftResult {
   labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
   labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
   /**
+   * REVISE-GHOST-1 fix3 (gate Defect 1): the compile's resolved placement
+   * offers — labware hints the deterministic pipeline bound against REAL
+   * inventory records (including the scientist's accepted card picks). The
+   * panel threads them into buildPreviewFromDraft's resolved arm so the deck
+   * ghosts a PLACEMENT of the existing record (keyed by recordId, never a
+   * re-creation). Absent on payloads that carried no offers (key ABSENT,
+   * never undefined).
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
+  /**
    * Bench equipment the draft proposes (water bath, heat block, shaker…).
    * Equipment is NOT labware and never occupies a deck slot.
    */
