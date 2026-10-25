@@ -178,12 +178,19 @@ describe('SHORTHAND-CHAT deck binding (plate1 false-bar)', () => {
     expect(result.success).toBe(true);
     expect(result.events).toHaveLength(1);
     // 'plate' matches NO deck name exactly → the STORE lookup binds it in
-    // resolve_nouns/resolve_labware (no bar). The event keeps the scientist's
-    // label — the pre-existing shape for store-bound labware on this chain
-    // (the deck binder only rewrites names it can prove against the deck).
+    // resolve_nouns/resolve_labware (no bar). REVISE-GHOST-1 fix3 (gate Defect
+    // 1): the compile's OWN resolved pair (hint 'plate' → LAB-plate-1, from
+    // terminalArtifacts.resolvedLabwares) now rides the binder, so the event
+    // carries the RECORD id. That is what makes the ghost mount: the ghost
+    // PLACEMENT is keyed by the record id (draftPreview resolved arm) and the
+    // ghost WELL bucket is keyed by the event's labwareId (previewProjection)
+    // — they only meet on the plate when the event carries the record id the
+    // compile PROVED. Still evidence-driven, never a name guess: only pairs
+    // the compile itself resolved are rewritten, and a deck name still wins a
+    // collision.
     expect(result.clarificationRequests ?? []).toHaveLength(0);
     const ev = result.events![0] as unknown as Record<string, unknown>;
-    expect(ev.labwareId).toBe('plate');
+    expect(ev.labwareId).toBe('LAB-plate-1');
   });
 });
 

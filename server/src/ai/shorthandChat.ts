@@ -189,28 +189,66 @@ export function composeLabwareHintLookupWithDeck(
  * expander emits for a one-token wells array (expandEventWells expands the
  * ARRAY fields; this covers the scalar the scalar expander produces).
  */
+/** One resolved placement offer from the compile (terminalArtifacts shape). */
+export interface ResolvedLabwareOffer {
+  hint?: string;
+  recordId: string;
+  title?: string;
+}
+
 export function bindShorthandEventsToDeck<T extends object>(
   events: readonly T[],
   deck: readonly DeckLabwareSummary[] | undefined,
+  // REVISE-GHOST-1 fix3 (gate Defect 1): the compile's OWN resolved pairs
+  // (resolve_labware's terminalArtifacts.resolvedLabwares — the hints the
+  // frozen pipeline bound against REAL inventory records, including the
+  // scientist's accepted card picks riding reuseBindings). A label the
+  // compile bound to a record id must reach the client as that record id,
+  // or the ghost placement (keyed by the record) and the ghost-well bucket
+  // (keyed by the event's labwareId) never meet on the plate. The DECK map
+  // still wins a collision: a labware physically on the deck binds to the
+  // deck id first. Zero name literals — every pair is compile output.
+  resolved?: readonly ResolvedLabwareOffer[] | undefined,
 ): T[] {
-  if (!Array.isArray(deck) || deck.length === 0 || events.length === 0) return [...events];
+  const hasDeck = Array.isArray(deck) && deck.length > 0;
+  const hasResolved = Array.isArray(resolved) && resolved.length > 0;
+  if ((!hasDeck && !hasResolved) || events.length === 0) return [...events];
   const idByName = new Map<string, { id: string; ambiguous: boolean }>();
   const knownIds = new Set<string>();
-  for (const lw of deck) {
-    if (!lw || typeof lw.labwareId !== 'string') continue;
-    knownIds.add(lw.labwareId);
-    if (typeof lw.name !== 'string') continue;
-    const key = lw.name.trim().toLowerCase();
-    if (!key) continue;
-    const seen = idByName.get(key);
-    if (seen) seen.ambiguous = true;
-    else idByName.set(key, { id: lw.labwareId, ambiguous: false });
+  if (hasDeck) {
+    for (const lw of deck!) {
+      if (!lw || typeof lw.labwareId !== 'string') continue;
+      knownIds.add(lw.labwareId);
+      if (typeof lw.name !== 'string') continue;
+      const key = lw.name.trim().toLowerCase();
+      if (!key) continue;
+      const seen = idByName.get(key);
+      if (seen) seen.ambiguous = true;
+      else idByName.set(key, { id: lw.labwareId, ambiguous: false });
+    }
+  }
+  const resolvedByName = new Map<string, { id: string; ambiguous: boolean }>();
+  if (hasResolved) {
+    for (const offer of resolved!) {
+      if (!offer || typeof offer.hint !== 'string' || !offer.hint.trim()) continue;
+      if (typeof offer.recordId !== 'string' || !offer.recordId) continue;
+      const key = offer.hint.trim().toLowerCase();
+      const seen = resolvedByName.get(key);
+      if (seen) {
+        if (seen.id !== offer.recordId) seen.ambiguous = true;
+      } else {
+        resolvedByName.set(key, { id: offer.recordId, ambiguous: false });
+      }
+    }
   }
   const bindRef = (ref: unknown): string | undefined => {
     if (typeof ref !== 'string' || !ref.trim()) return undefined;
     if (knownIds.has(ref)) return undefined; // already a deck id
-    const hit = idByName.get(ref.trim().toLowerCase());
-    return hit && !hit.ambiguous ? hit.id : undefined;
+    const key = ref.trim().toLowerCase();
+    const hit = idByName.get(key);
+    if (hit) return hit.ambiguous ? undefined : hit.id;
+    const bound = resolvedByName.get(key);
+    return bound && !bound.ambiguous ? bound.id : undefined;
   };
   return events.map((raw) => {
     const ev = raw as Record<string, unknown>;
@@ -1228,6 +1266,14 @@ export function shorthandResultFromCompile(
   const events = bindShorthandEventsToDeck(
     compiledEventsToProposals(compiled.terminalArtifacts.events),
     deck,
+    // REVISE-GHOST-1 fix3 (gate Defect 1, f2mjyr 'events=3' with ghostTiles=0):
+    // the compile's resolved placement offers (resolve_labware output, already
+    // capped by config/drafting/deck-review.yaml at the compile choke). The
+    // client's buildPreviewFromDraft ghosts a PLACEMENT of an EXISTING record
+    // ONLY from this channel (its resolved arm); dropping it here is what left
+    // the plate empty under a '3 events' preview bar. Same conditional-spread
+    // discipline as labwareAdditions (exactOptionalPropertyTypes).
+    compiled.terminalArtifacts.resolvedLabwares,
   );
   // The compileResultToAgentResult precedent: gaps ride unresolvedRefs through
   // the same loose proposal shape the compiler path already emits.
@@ -1256,6 +1302,14 @@ export function shorthandResultFromCompile(
     // type.
     ...(compiled.terminalArtifacts.labwareAdditions && compiled.terminalArtifacts.labwareAdditions.length > 0
       ? { labwareAdditions: compiled.terminalArtifacts.labwareAdditions }
+      : {}),
+    // REVISE-GHOST-1 fix3 (gate Defect 1): the resolved placement offers ride
+    // the done result so the client's resolved arm can ghost a placement of
+    // the record the lab already owns (submitSuggestionTool.ts:311: placed,
+    // never re-created). Conditional spread only — a compile with no offers
+    // ships NO key (the R-Defect-2 / exactOptionalPropertyTypes discipline).
+    ...(compiled.terminalArtifacts.resolvedLabwares && compiled.terminalArtifacts.resolvedLabwares.length > 0
+      ? { resolvedLabwares: compiled.terminalArtifacts.resolvedLabwares }
       : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),

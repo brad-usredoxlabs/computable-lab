@@ -25,7 +25,7 @@ import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
 import { pdfSelectionToSurfaceContext, stepSelectionToSurfaceContext } from './toSurfaceContext'
-import type { AiAlsoPlace, AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiAlsoPlace, AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiResolvedLabware } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
@@ -598,6 +598,14 @@ export function AiTabPanel() {
       const events = (result.events ?? []) as PlateEvent[]
       const labwareAdditions = (result.labwareAdditions ?? []) as AiLabwareAddition[]
       const labwareRequirements = (result.labwareRequirements ?? []) as AiLabwareRequirement[]
+      // REVISE-GHOST-1 fix3 (gate Defect 1): the compile's resolved placement
+      // offers ride the done result (shorthandResultFromCompile carries
+      // terminalArtifacts.resolvedLabwares verbatim). buildPreviewFromDraft's
+      // RESOLVED arm ghosts a PLACEMENT of the EXISTING record from them —
+      // without this thread a resolved draft mounts events but zero
+      // placements (DeckSlot renders the ghost tile only when
+      // previewPlacement && previewLabware are both truthy).
+      const resolvedLabwares = (result.resolvedLabwares ?? []) as AiResolvedLabware[]
       const equipmentRequirements = (result.equipmentRequirements ?? []) as AiEquipmentRequirement[]
       // Creations arrive on the create_record intent; they are proposals until Accept.
       const recordCreations = (result.recordCreations ?? []).filter(
@@ -612,6 +620,7 @@ export function AiTabPanel() {
         events,
         labwareAdditions,
         labwareRequirements,
+        resolvedLabwares,
         equipmentRequirements,
         recordCreations,
         ...(alsoPlace ? { alsoPlace } : {}),
@@ -1611,6 +1620,36 @@ export function AiTabPanel() {
             onClick={handleCancelDraft}
           >
             Cancel this draft and start a new prompt
+          </button>
+        </section>
+      ) : sidebar.mode === 'interpreting' ? (
+        // REVISE-GHOST-1 fix3 (gate Defect 2, attempt-9 q3kibt): a revise turn
+        // on a cold model ran 66s; while the sidebar sat at 'interpreting' the
+        // pane rendered NO ChatInput (isChatEnabled false), NO clarifying/
+        // updating block, NO Stop — cards=0, chatSend=0, chatInput=0,
+        // noStopObserved:true. D4: never a stuck pane with zero controls. The
+        // interpreting window gets a Stop escape: it aborts the in-flight
+        // stream (chat.stop — the same AbortController the Stop button uses)
+        // AND returns the sidebar to chat. The mounted preview is NOT
+        // discarded — Stop abandons the REQUEST, not the draft the deck
+        // already shows (handleCancelDraft's clearPreview is the Discard
+        // affordance's job). A stream that died on an error frame with no
+        // `done` frame strands 'interpreting' the same way — the escape covers
+        // both (chat.stop is a safe no-op when nothing is in flight).
+        <section className="ai-tab__section ai-tab__section--interpreting-escape">
+          <p className="ai-tab__input-disabled-text">
+            The AI is working on this turn. You can stop it and start a new prompt.
+          </p>
+          <button
+            type="button"
+            className="ai-tab__input-cancel"
+            data-testid="interpreting-stop"
+            onClick={() => {
+              chat.stop()
+              sidebarDispatch({ type: 'reset' })
+            }}
+          >
+            Stop this request and start a new prompt
           </button>
         </section>
       ) : null}
