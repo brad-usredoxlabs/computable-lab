@@ -28,6 +28,7 @@ const KIND_LEVEL: Record<string, MaterialLevel> = {
   formulation: 'spec',
   'material-instance': 'instance',
   aliquot: 'aliquot',
+  'vendor-product': 'vendor-product',
 };
 
 function matchableStrings(payload: Record<string, unknown>): string[] {

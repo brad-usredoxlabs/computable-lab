@@ -47,6 +47,7 @@ import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
 import { sidebarReducer, initialSidebarState, isChatEnabled, headerLabel } from './sidebarState'
 import { useWorkstateProposalFlow, type WorkstateAdapter } from '../../../shared/ai/useWorkstateProposalFlow'
 import { WorkstateProposalCard } from './WorkstateProposalCard'
+import { ChainProposalCard } from './ChainProposalCard'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -787,6 +788,22 @@ export function AiTabPanel() {
   // code, now shared with the Analysis + protocol-builder mounts).
   const flow = useWorkstateProposalFlow()
 
+  // MATRES-CHAIN fix2 (gate D1/D2, receipts 2026-10-24_115822): the ONE flow
+  // serves every adapter on this mount (one pending identity, one supersede
+  // discipline — the flow's own doctrine: a second adapter is ONE constant at
+  // the call site, never a second flow), but the review card is adapter-
+  // shaped: the execute-chain wall (ChainProposalCard) and the composition
+  // card (WorkstateProposalCard) are different presentational components over
+  // the SAME card state. The panel records WHICH adapter the pending card
+  // came from at the propose call site — the same adapter constant the flow
+  // already takes, no new vocabulary — and the render branch reads it. The
+  // marker only ever matters while a card is pending: with no card frame
+  // (flow.card null) NO card chrome renders (the PB-CH-4 no-leak discipline).
+  // A ref (the workstateTurnRef precedent): the propose call site sets it in
+  // the same breath as flow.proposeWorkstate, and the render that flow's
+  // setCard triggers reads it current.
+  const flowCardAdapterRef = useRef<WorkstateAdapter>('workstate')
+
   // THE CONTEXT GAP FIX: `focusedStep` is display-only in ChatContextHeader
   // today. Here it leaves the DOM and rides the request contract. Conditional
   // spread — with nothing focused the key is ABSENT, never `undefined`
@@ -829,6 +846,10 @@ export function AiTabPanel() {
       // behind the client's /ai/assist/stream), so the flag is set before the
       // same turn's onDraftResult consumes it.
       workstateTurnRef.current = true
+      // MATRES-CHAIN fix2: record which adapter's card the pending flow card
+      // is (the same constant the flow takes — no new vocabulary), so the
+      // render branch mounts the matching presentational card.
+      flowCardAdapterRef.current = adapter
       void flow.proposeWorkstate(adapter, intent)
     },
     [flow],
@@ -853,6 +874,16 @@ export function AiTabPanel() {
     // one adapter constant, not a fork (the analysis pattern copied verbatim).
     onRecordDraftProposal: (intent) => {
       handleWorkstateProposal(intent, 'record-drafting')
+    },
+    // MATRES-CHAIN fix2 (gate D2, receipts 2026-10-24_115822): the execute-
+    // chain INTENT rides the SAME flow on the ROUTED surface — one adapter
+    // constant ('chain'), the same compile→card→accept/reject machinery
+    // (the analysis/record-drafting pattern copied verbatim). At base this
+    // callback was never passed here (only the unrouted graph page passed
+    // it), so useChatThread's chain_proposal frame was swallowed and no
+    // compile request was ever issued.
+    onChainProposal: (intent) => {
+      handleWorkstateProposal(intent, 'chain')
     },
     // PB-CH-8 fix1: the ledger_answer frame marks THIS turn as a ledger turn
     // (the hook still renders the trace verbatim — this is the flag-set site,
@@ -1404,18 +1435,37 @@ export function AiTabPanel() {
             // preview, no store copy) — the workspace adopts a workstate only
             // through Accept → the single writer. PB-CH-6: the card state now
             // comes from the shared flow (same phases, same identity).
-            <WorkstateProposalCard
-              phase={flow.card.phase}
-              {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
-              {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
-              {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
-              {...(flow.card.recordFields ? { recordFields: flow.card.recordFields } : {})}
-              {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
-              {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
-              {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
-              onAccept={() => void flow.acceptWorkstate()}
-              onReject={flow.rejectWorkstate}
-            />
+            // MATRES-CHAIN fix2 (gate D1/D2): the SAME flow card state mounts
+            // the matching presentational wall — the execute-chain card for a
+            // 'chain' compile (its strings are the SERVER-BUILT card document
+            // the flow carried verbatim into card state), the composition card
+            // for every other adapter. No card frame (flow.card null) → no
+            // card chrome at all (the PB-CH-4 no-leak discipline).
+            flowCardAdapterRef.current === 'chain' ? (
+              <ChainProposalCard
+                phase={flow.card.phase}
+                {...(flow.card.chainCard ? { card: flow.card.chainCard } : {})}
+                {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+                {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+                {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+                {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+                onAccept={() => void flow.acceptWorkstate()}
+                onReject={flow.rejectWorkstate}
+              />
+            ) : (
+              <WorkstateProposalCard
+                phase={flow.card.phase}
+                {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+                {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
+                {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+                {...(flow.card.recordFields ? { recordFields: flow.card.recordFields } : {})}
+                {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+                {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+                {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+                onAccept={() => void flow.acceptWorkstate()}
+                onReject={flow.rejectWorkstate}
+              />
+            )
           ) : null}
         </section>
       ) : null}

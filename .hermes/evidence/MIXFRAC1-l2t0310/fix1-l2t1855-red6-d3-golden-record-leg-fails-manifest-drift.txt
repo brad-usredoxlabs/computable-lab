@@ -1,0 +1,82 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > payload is 200 complete-shaped, clarifications ABSENT, zero writes
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the stripped compile emits the SAME events as the composition-only canned output (the paste-#3 good path)
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts  (3 tests | 1 failed) 293ms
+   ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+     → expected [ Array(1) ] to deeply equal []
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (5 tests | 2 failed) 286ms
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.mixfrac-canonical-flat > golden.intent-to-graph.mixfrac-canonical-flat
+     → fixture golden.intent-to-graph.mixfrac-canonical-flat drifted from its blessed manifest hash (509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a !== dbabb88f5c265ec657946ec3d1840e8ccf6d76d3ac9f40371c495d37c23cb394)
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+     → expected [ Array(1) ] to deeply equal []
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 298ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (8 tests) 488ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.mixfrac-canonical-flat > golden.intent-to-graph.mixfrac-canonical-flat
+Error: fixture golden.intent-to-graph.mixfrac-canonical-flat drifted from its blessed manifest hash (509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a !== dbabb88f5c265ec657946ec3d1840e8ccf6d76d3ac9f40371c495d37c23cb394)
+ ❯ Module.fixtureFromManifest src/compiler/scientistIntent/goldens/replayKernel.ts:393:11
+    391|   const actual = sha256File(manifestFixturePath(entry));
+    392|   if (actual !== entry.sha256) {
+    393|     throw new Error(`fixture ${name} drifted from its blessed manifest…
+       |           ^
+    394|   }
+    395|   return loadFixture(manifestFixturePath(entry));
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:156:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "fixtures/mixfrac-canonical-flat.yaml: manifest dbabb88f5c265ec657946ec3d1840e8ccf6d76d3ac9f40371c495d37c23cb394 actual 509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:250:24
+    248|     // silently re-blessing. Every manifest-pinned file re-hashed vs m…
+    249|     const mismatches = manifestHashMismatches(manifest);
+    250|     expect(mismatches).toEqual([]);
+       |                        ^
+    251|   });
+    252| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "fixtures/mixfrac-canonical-flat.yaml: manifest dbabb88f5c265ec657946ec3d1840e8ccf6d76d3ac9f40371c495d37c23cb394 actual 509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts:110:52
+    108| 
+    109|   it('the MANIFEST did not move: manifestHashMismatches is empty (B4)'…
+    110|     expect(manifestHashMismatches(loadManifest())).toEqual([]);
+       |                                                    ^
+    111|   });
+    112| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  3 failed | 20 passed (23)
+   Start at  20:29:03
+   Duration  2.62s (transform 562ms, setup 1ms, collect 3.18s, tests 1.36s, environment 1ms, prepare 1.76s)
+

@@ -132,6 +132,32 @@ type Dict = Record<string, unknown>;
 
 type CompositionRole = 'solute' | 'solvent' | 'buffer_component' | 'additive' | 'activity_source' | 'cells' | 'other';
 
+/**
+ * ROLE-AXES-1: the participation axis mirror (composition.ts
+ * CompositionParticipation / the schema enums — pinned equal by
+ * CompositionParticipationSchema.test.ts). PASSTHROUGH ONLY in this file:
+ * a DECLARED participation on an incoming materials[] entry survives into the
+ * emitted composition_snapshot; nothing here INFERS participation (inferRole
+ * is unchanged — the word-regexes stay the honest closest-ROLE emission,
+ * never a participation guess). Optional: absent, never key:undefined.
+ */
+type CompositionParticipation = 'liquid_component' | 'qs_carrier' | 'solute_contributor' | 'activity_contributor' | 'count_component' | 'participation_undeclared';
+
+const PARTICIPATION_VALUES = new Set<string>([
+  'liquid_component',
+  'qs_carrier',
+  'solute_contributor',
+  'activity_contributor',
+  'count_component',
+  'participation_undeclared',
+]);
+
+function declaredParticipation(value: unknown): CompositionParticipation | undefined {
+  return typeof value === 'string' && PARTICIPATION_VALUES.has(value.trim())
+    ? (value.trim() as CompositionParticipation)
+    : undefined;
+}
+
 const COMPOSITION_ROLES = new Set<string>([
   'solute',
   'solvent',
@@ -154,6 +180,8 @@ interface RefPart {
   curie?: string;
   label?: string;
   role?: CompositionRole;
+  /** ROLE-AXES-1: passthrough of a DECLARED participation (never inferred). */
+  participation?: CompositionParticipation;
   concentration?: Dict;
   count?: number;
 }
@@ -341,20 +369,23 @@ function collectParts(e: Dict, details: Dict, mentions: PromptMention[] = []): R
     const ref = asDict(itemRecord?.ref);
     if (!ref) continue;
     const role = inferRole(undefined, itemRecord?.role ?? itemRecord?.slot);
+    // ROLE-AXES-1: PASSTHROUGH ONLY — a declared participation on the incoming
+    // entry rides through to the emitted snapshot. Never inferred here.
+    const participation = declaredParticipation(itemRecord?.participation);
     const concentration = concentrationValue(itemRecord?.concentration, eventTotalVolume);
     const count = countValue(itemRecord?.count);
     if (typeof ref.curie === 'string' && ref.curie) {
       const curie = canonicalMaterialCurie(ref.curie);
       const split = splitCurieList(curie);
       if (split) {
-        for (const c of split) parts.push({ curie: canonicalMaterialCurie(c), role, ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
+        for (const c of split) parts.push({ curie: canonicalMaterialCurie(c), role, ...(participation ? { participation } : {}), ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
       } else {
-        parts.push({ curie, role, ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
+        parts.push({ curie, role, ...(participation ? { participation } : {}), ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
       }
     } else {
       const mint = asDict(ref.mint);
       if (mint && typeof mint.label === 'string' && mint.label) {
-        parts.push({ label: mint.label, role: inferRole(mint.label, itemRecord?.role ?? itemRecord?.slot), ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
+        parts.push({ label: mint.label, role: inferRole(mint.label, itemRecord?.role ?? itemRecord?.slot), ...(participation ? { participation } : {}), ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
       }
     }
   }
@@ -525,6 +556,9 @@ function makeCompositionEntry(part: RefPart, componentRef: Dict, role: Compositi
   return {
     component_ref: componentRef,
     role,
+    // ROLE-AXES-1: the declared participation rides through (eOPT spread —
+    // ABSENT when undeclared, never key:undefined). Never inferred.
+    ...(part.participation ? { participation: part.participation } : {}),
     ...(options.includeConcentration !== false && part.concentration ? { concentration: part.concentration } : {}),
   };
 }

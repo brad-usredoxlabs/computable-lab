@@ -81,7 +81,7 @@ Any surviving assumption is tagged ASSUMED-PENDING-AUDIT with what was checked.
 | A13 | append-only wall | SHIPPED, DATA | `server/src/config/types.ts` :533 `appendOnlyKinds: [... 'attestation']` — the accepted chain attestation is immutable with zero new code. |
 | A14 | MATRES-SHELF merged | SHIPPED | `server/src/resolve/shelfLookup.ts` (+test) on trunk; `InventoryShelfHandlers.ts` wired. Chain's 9 stored aliquots must be discoverable there (§8 app/verify note). |
 | A15 | Forced-tool intent enum + emission relay | SHIPPED trunk / RECV-pending | Trunk `server/src/ai/submitSuggestionTool.ts` :722 enum (12 members + unknown). `compose_receiving` + `receiving_proposal` relay arm exist ONLY on RECV branch 5ef7d4f0 — CHAIN's emission follows that ratified precedent post-merge. → OQ-3 |
-| A16 | run-workspace chat mount | SHIPPED | `app/src/graph/run-workspace/RunClaimsTab.tsx` renders `chat: UseAiChatReturn` + `AssertionDraftPanel` — the chain draft card mounts here (§7.5). |
+| A16 | run-workspace chat mount | SHIPPED | `app/src/graph/run-workspace/RunClaimsTab.tsx` renders `chat: UseAiChatReturn` + `AssertionDraftPanel` — the chain draft card mounts here (§7.5). **AMEND 2026-10-24 (orch l2t1030, advc O4 + fix-2 gate):** the binding ruling relocated the mount to the routed AI surface — `ChainProposalCard` mounts in `app/src/event-editor/right-pane/ai/AiTabPanel.tsx` (merged fe586759); the graph-page mount in `RunWorkspacePage.tsx` was retired in the same merge. Where this line says RunClaimsTab, read AiTabPanel. |
 
 ## §6 Dependency posture
 
@@ -238,7 +238,9 @@ that, and the ceiling note states exactly that.
   forced tool, no free-prose path, relay stays thin (verbatim envelope, trust boundary
   remains POST /api/drafts/compile). → OQ-3 (the intent enum addition is Brad-visible by
   golden-pin precedent — RECV did it with a deliberate golden diff; CHAIN mirrors).
-- Review card (`ChainProposalCard`, mounted in RunClaimsTab, pattern:
+- Review card (`ChainProposalCard`, mounted in the routed AiTabPanel surface — amended
+  2026-10-24 l2t1030 per the fix-2 relocation ruling; original text said RunClaimsTab,
+  pattern:
   WorkstateProposalCard/useWorkstateProposalFlow): renders the plan — derivation → instance
   → N aliquots — and the **claim table where EVERY claim shows its label**
   `proposed | completed | unknown | reported-by-other` VERBATIM as stored, plus artifactKind

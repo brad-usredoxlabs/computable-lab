@@ -441,6 +441,22 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
             searchLabwareByHint,
             spine,
             ...(answeredSlots.length > 0 ? { answeredSlots } : {}),
+            // MIXFRAC-1 fix1/D3 (§14.2 RECORD leg): the answers map ALSO rides
+            // the producer channel as DATA, verbatim (the prompt above is
+            // byte-unchanged). The composition-fraction bar consumes only an
+            // entry whose key equals its own label and whose value is one of
+            // the reading ids it presented; every other fact is untouched.
+            // No reason/label/reading branch exists in this handler, by design.
+            scientistAnswers: answers,
+            // MIXROLE-1 (§5b step 4): the answered clarification LABELS ride as
+            // a label SET built from Object.keys(answers) ONLY — membership,
+            // never a value read. The composition role-gap bar skips an answered
+            // gap (the honest role stays the fallback role after any answer, so
+            // without this the bar loops forever). Non-empty answers are
+            // guaranteed at this call site (the empty-answers branch returned
+            // above), so this key is always present here; every other caller of
+            // the compile deps is byte-identically unchanged.
+            answeredClarificationLabels: Object.keys(answers),
           },
           labInventory,
         });

@@ -132,7 +132,7 @@ actions:
     targetWells: [A1]
     params:
       composition:
-        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo trypsin-EDTA", role: other, fraction: "50%" }
         - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
         - { material: "Thermo FBS", role: additive, fraction: "10%" }
         - material: "HepG2 cells"

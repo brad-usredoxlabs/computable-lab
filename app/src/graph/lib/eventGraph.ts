@@ -528,7 +528,13 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
         ...(isCarrierComposition && parseMixtureFraction(entry.source) ? { fractionOfMixture: parseMixtureFraction(entry.source) } : {}),
         // Density is event-level: attach it generically to the row that carries
         // the count (same predicate as the count grant), never by name lookup.
-        ...(count !== undefined && details.counter_density ? { counterDensity: details.counter_density } : {}),
+        // CELLRATE-1: a rate-only event (counter_density, NO count — the shape
+        // the fixed compiler emits) must keep its density on the cells row;
+        // the old count-gated predicate erased the declared rate. Legacy
+        // count+density rows are unchanged (they always had a count).
+        ...(details.counter_density && (count !== undefined || entry.role === 'cells')
+          ? { counterDensity: details.counter_density }
+          : {}),
         // The event-level concentration fallback is dead ONLY on multi-entry
         // carrier compositions (same predicate as the marker). A single-entry
         // snapshot is a single-material add (requirement 3): it keeps today's

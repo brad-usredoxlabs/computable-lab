@@ -1,0 +1,6 @@
+request.answers: {"sample_type":"bacterial","Trypsin-EDTA, DMEM, FBS":"preceding-noun-recipe"}
+status: 200
+outcome: "complete"
+clarifications: undefined
+events: 1
+snapshot: [{"component_ref":{"kind":"draft","id":"mint:Trypsin-EDTA","label":"Trypsin-EDTA"},"role":"solvent","source":"50% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:DMEM","label":"DMEM"},"role":"buffer_component","source":"45% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:FBS","label":"FBS"},"role":"additive","source":"5% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:HepG2 cells","label":"HepG2 cells"},"role":"cells"}]

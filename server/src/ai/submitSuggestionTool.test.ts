@@ -301,7 +301,11 @@ describe('agent_intent — the constrained emission menu', () => {
     // forced tool (the one-tool lock is about the TOOL, never a frozen enum); the
     // 'receiving' draft adapter (config/drafting/adapters.yaml, DATA) remains the
     // trust boundary. No second forced tool, no clarification-panel affordance.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving']);
+    // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+    // — the elicited execute-chain attestation (case 3' "make 1 mL, 10x100uL
+    // aliquots") rides the SAME one forced tool; the 'chain' draft adapter remains
+    // the trust boundary. Still ONE forced tool.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

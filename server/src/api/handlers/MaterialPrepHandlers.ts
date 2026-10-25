@@ -20,6 +20,7 @@ import {
   summarizeFormulationDraft as summarizeFormulationDraftResult,
   type CopilotRef,
   type FormulationCopilotDraft,
+  type PromptResolverKind,
 } from '../../materials/formulationCopilot.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
@@ -502,7 +503,7 @@ export interface MaterialPrepHandlers {
 }
 
 export function createMaterialPrepHandlers(store: RecordStore, indexManager?: IndexManager): MaterialPrepHandlers {
-  const resolvePromptRef = async (label: string, kind: 'material' | 'solvent' | 'ingredient'): Promise<CopilotRef | undefined> => {
+  const resolvePromptRef = async (label: string, kind: PromptResolverKind): Promise<CopilotRef | undefined> => {
     const query = label.trim().toLowerCase();
     if (!query) return undefined;
     const schemaPriority = kind === 'ingredient'

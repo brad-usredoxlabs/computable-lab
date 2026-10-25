@@ -1,0 +1,33 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts  (16 tests | 1 failed) 174ms
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: malformed fractions are excluded and named, never guessed > a fraction string that parses to no number is excluded from the sum and named in the message
+     → the malformed fraction must be named verbatim: expected 'The declared composition fractions su…' to contain 'half'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: malformed fractions are excluded and named, never guessed > a fraction string that parses to no number is excluded from the sum and named in the message
+AssertionError: the malformed fraction must be named verbatim: expected 'The declared composition fractions su…' to contain 'half'
+
+- Expected
++ Received
+
+- half
++ The declared composition fractions sum to 130 percent, not the declared 100 percent (percent-of-final-volume). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions. The utterance also carries a quantity adjacent to a supplement connector — the attachment (whole-mixture vs preceding-noun) is one of the candidate parses.
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:199:70
+    197| 
+    198|     // NAMED: the malformed fraction string itself appears in the mess…
+    199|     expect(message, 'the malformed fraction must be named verbatim').t…
+       |                                                                      ^
+    200| 
+    201|     // The readings' computed fractions carry ONLY the parseable entri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  20:06:08
+   Duration  2.77s (transform 692ms, setup 0ms, collect 1.75s, tests 174ms, environment 0ms, prepare 391ms)
+

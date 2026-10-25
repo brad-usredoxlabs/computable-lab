@@ -28,6 +28,7 @@ import type {
   WorkstateCardTab,
   WorkstateCardTerm,
 } from '../../event-editor/right-pane/ai/WorkstateProposalCard'
+import type { ChainCardView } from '../../event-editor/right-pane/ai/ChainProposalCard'
 import type { AiAgentActionEnvelope } from '../../types/ai'
 
 /** Registered compiled-composition adapters (config/drafting/adapters.yaml).
@@ -35,8 +36,12 @@ import type { AiAgentActionEnvelope } from '../../types/ai'
  *  at the call site, never a second flow.
  *  QMS7-7 (OQ-1 ruling A): 'record-drafting' joins the union — the ONLY
  *  acceptable diff in this file; the flow body is untouched (shared machinery,
- *  not a fork). */
-export type WorkstateAdapter = 'workstate' | 'analysis' | 'record-drafting'
+ *  not a fork).
+ *  MATRES-CHAIN (OQ-3(a) ratified): 'chain' joins the SAME union on the SAME
+ *  seam — the flow body stays shared machinery; the only chain-specific
+ *  handling is carrying the server-built `card` document verbatim into the
+ *  card state (the recordFields precedent — the client builds no copy). */
+export type WorkstateAdapter = 'workstate' | 'analysis' | 'record-drafting' | 'chain'
 
 /**
  * The mount-side card state. Mirrors WorkstateProposalCard's props so a mount
@@ -52,6 +57,11 @@ export interface WorkstateProposalCardState {
   /** QMS7-7: the compiled record proposal's field list (presentational mirror
    *  of the card prop; absent unless the compile result carries recordFields). */
   recordFields?: WorkstateCardRecordField[]
+  /** MATRES-CHAIN §7.5: the SERVER-BUILT chain card document (claims verbatim,
+   *  reconciliation readout, honesty ceiling) — presentational mirror of
+   *  ChainProposalCard's prop; absent unless the compile result carries `card`
+   *  (exactOptionalPropertyTypes — the client builds no copy). */
+  chainCard?: ChainCardView
   draftId?: string
   revision?: number
 }
@@ -108,6 +118,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
           summary?: unknown
           resolvedTerms?: unknown
           recordFields?: unknown
+          card?: unknown
         }
         const docTabs = Array.isArray(result.sessionDocument?.tabs) ? result.sessionDocument?.tabs : undefined
         const terms = Array.isArray(result.resolvedTerms) ? (result.resolvedTerms as WorkstateCardTerm[]) : undefined
@@ -115,6 +126,14 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
         // projection) rides into the card state verbatim — absent unless the
         // compile result actually carries it (exactOptionalPropertyTypes).
         const recordFields = Array.isArray(result.recordFields) ? (result.recordFields as WorkstateCardRecordField[]) : undefined
+        // MATRES-CHAIN §7.5: the SERVER-BUILT chain card document rides into
+        // the card state VERBATIM (the recordFields precedent — the client
+        // builds no copy, maps nothing, adds no copy of its own). Absent
+        // unless the compile result actually carries it.
+        const chainCard =
+          result.card && typeof result.card === 'object' && !Array.isArray(result.card)
+            ? (result.card as ChainCardView)
+            : undefined
         setCard({
           phase: res.canAccept ? 'review' : 'blocked',
           ...(typeof result.summary === 'string' ? { summary: result.summary } : {}),
@@ -128,6 +147,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
             : {}),
           ...(terms ? { resolvedTerms: terms } : {}),
           ...(recordFields ? { recordFields } : {}),
+          ...(chainCard ? { chainCard } : {}),
           ...(res.diagnostics.length > 0 ? { diagnostics: res.diagnostics } : {}),
           draftId: res.draftId,
           revision: res.revision,

@@ -1,0 +1,23 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T1: redundant top-level material + composition compiles CLEAN (no noun question) > T1: outcome complete, zero clarifications, the sentence is never asked as a noun
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T2 EQUIVALENCE: the stripped compile deep-equals the composition-only good path > T2: same event count + details; the mixture material_ref is the DERIVED componentLabels.join, NOT the sentence
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T3 declared-form twin: the action-level many-arg strips identically > T3: action-level composition (vocabulary many-arg) + the sentence -> same strip, same events
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T5 idempotence / round-trip: recompiling the stripped doc strips nothing further > T5: compile(strippedDoc) events == compile(doc) events; a second strip is empty
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/mixtureRedundancy.test.ts  (10 tests) 658ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.test.ts  (11 tests) 695ms
+
+ Test Files  2 passed (2)
+      Tests  21 passed (21)
+   Start at  22:12:44
+   Duration  3.34s (transform 670ms, setup 0ms, collect 1.70s, tests 1.35s, environment 0ms, prepare 188ms)
+

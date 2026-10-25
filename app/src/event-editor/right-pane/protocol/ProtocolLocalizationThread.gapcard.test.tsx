@@ -155,7 +155,7 @@ describe('ProtocolLocalizationThread — 200-gap clarifications fold into the de
     seedGapFold()
 
     await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
-    const cards = await screen.findByTestId('pl-clarification-cards')
+    const cards = await screen.findByTestId('pl-clarification-panel')
     const cardEls = screen.getAllByTestId('pl-clarification-card')
     expect(cardEls.length).toBe(2)
     expect(cardEls[0]!.textContent).toContain('Bead Beating Plate')
@@ -171,7 +171,7 @@ describe('ProtocolLocalizationThread — 200-gap clarifications fold into the de
 
   it('2. the gap card is kind-correct: menu chip choice, NO picker, NO option buttons, the free-text box present', async () => {
     seedGapFold()
-    await screen.findByTestId('pl-clarification-cards')
+    await screen.findByTestId('pl-clarification-panel')
 
     const cardEls = screen.getAllByTestId('pl-clarification-card')
     const gapCard = cardEls.find((el) => (el.textContent ?? '').includes(GAP_LABEL))
@@ -192,14 +192,14 @@ describe('ProtocolLocalizationThread — 200-gap clarifications fold into the de
     seedGapFold(COMPLETE_200_RES)
 
     await waitFor(() => expect(screen.getByTestId('pl-deck-review')).toBeTruthy())
-    expect(screen.queryByTestId('pl-clarification-cards')).toBeNull()
+    expect(screen.queryByTestId('pl-clarification-panel')).toBeNull()
     expect(screen.queryByTestId('pl-clarification-card')).toBeNull()
     expect(document.querySelector('[data-testid="parameter-answer-input"]')).toBeNull()
   })
 
   it('4. no new deck-gate policy: pl-load-deck stays ENABLED beside unanswered cards (OQ4)', async () => {
     seedGapFold()
-    await screen.findByTestId('pl-clarification-cards')
+    await screen.findByTestId('pl-clarification-panel')
 
     await waitFor(() => expect(screen.getByTestId('deck-labware-LAB-w211-golden-beadplate-a')).toBeTruthy())
     const loadDeck = screen.getByTestId('pl-load-deck') as HTMLButtonElement
@@ -210,7 +210,7 @@ describe('ProtocolLocalizationThread — 200-gap clarifications fold into the de
 
   it('5. answering the choice card through its real control rides answers[<fact label>] as plain text, and a complete-200 collapses the cards', async () => {
     seedGapFold()
-    await screen.findByTestId('pl-clarification-cards')
+    await screen.findByTestId('pl-clarification-panel')
 
     const cardEls = screen.getAllByTestId('pl-clarification-card')
     const gapCard = cardEls.find((el) => (el.textContent ?? '').includes(GAP_LABEL))!

@@ -1,4 +1,10 @@
 import { computeFormulation, type IngredientMeasureMode, type IngredientSourceState } from './formulationMath.js';
+import {
+  defaultMeasureModeFor,
+  defaultSourceStateFor,
+  loadParticipationConvention,
+  type ParticipationConvention,
+} from './participationConvention.js';
 import type { Concentration } from './concentration.js';
 import type { ParsedCompositionEntry } from './composition.js';
 
@@ -14,6 +20,8 @@ export type CopilotRef = {
 export type CopilotIngredientDraft = {
   ref?: CopilotRef;
   roleType: string;
+  /** ROLE-AXES-1: the declared participation axis — optional everywhere. */
+  participation?: string;
   measureMode?: IngredientMeasureMode;
   sourceState?: IngredientSourceState;
   stockConcentration?: Concentration;
@@ -61,30 +69,63 @@ export type FormulationCopilotResult = {
   outputComposition: ParsedCompositionEntry[];
 };
 
-export type PromptDraftResolver = (label: string, kind: 'material' | 'solvent' | 'ingredient') => Promise<CopilotRef | undefined>;
+/**
+ * ROLE-AXES-1 grep-gate (bait 4): the prompt-draft resolver's kind vocabulary
+ * is a channel-contract union declared HERE (the resolver contract's home),
+ * not a role literal inline in the arithmetic path. These are resolver
+ * LOOKUP-PRIORITY tags (which record schema family the resolver searches
+ * first): the shipped resolvers branch ONLY on the generic 'ingredient' tag;
+ * every other label lookup takes the general order. They are NOT composition
+ * roles and never enter composition data. The carrier lookup rides the general
+ * tag — resolution behavior is byte-identical to the pre-change carrier tag
+ * (both shipped resolvers already treated the carrier lookup exactly like the
+ * general material lookup: they branch ONLY on the ingredient tag).
+ */
+export const PROMPT_RESOLVER_KINDS = ['material', 'ingredient'] as const;
+export type PromptResolverKind = typeof PROMPT_RESOLVER_KINDS[number];
+
+export type PromptDraftResolver = (label: string, kind: PromptResolverKind) => Promise<CopilotRef | undefined>;
 
 function ingredientLabel(ingredient: CopilotIngredientDraft, index: number): string {
   return ingredient.ref?.label ?? ingredient.ref?.id ?? `Ingredient ${index + 1}`;
 }
 
-function roleDefaultMeasureMode(roleType: string): IngredientMeasureMode {
-  if (roleType === 'solvent' || roleType === 'diluent' || roleType === 'matrix') return 'qs_to_final';
-  return 'target_concentration';
+function roleDefaultMeasureMode(
+  roleType: string,
+  conv: ParticipationConvention | undefined,
+  participation?: string,
+  ingredientSourceState?: string,
+): IngredientMeasureMode {
+  // ROLE-AXES-1: the default rides the config arm (participation wins when
+  // declared; a declared source state overrides the role arm; the legacy-role
+  // mapping is the loud-off fallback). Off-state: the declared-contribution
+  // default.
+  return defaultMeasureModeFor(conv, roleType, participation, ingredientSourceState) ?? 'target_concentration';
 }
 
-export function inferIngredientMeasureMode(ingredient: CopilotIngredientDraft): IngredientMeasureMode {
+export function inferIngredientMeasureMode(
+  ingredient: CopilotIngredientDraft,
+  conv: ParticipationConvention | undefined,
+): IngredientMeasureMode {
   return ingredient.measureMode
-    ?? (ingredient.requiredAmount ? 'fixed_amount' : roleDefaultMeasureMode(ingredient.roleType));
+    ?? (ingredient.requiredAmount
+      ? 'fixed_amount'
+      : roleDefaultMeasureMode(ingredient.roleType, conv, ingredient.participation, ingredient.sourceState));
 }
 
 export function summarizeFormulationDraft(draft: FormulationCopilotDraft): FormulationCopilotResult {
+  // ROLE-AXES-1: convention loaded PER call (loud-off when absent, throws when
+  // malformed — naming the path).
+  const conv = loadParticipationConvention();
   const assumptions: string[] = [];
   const baseWarnings: string[] = [];
   const normalizedIngredients = draft.ingredients.map((ingredient) => {
     const normalized: CopilotIngredientDraft = {
       ...ingredient,
-      measureMode: inferIngredientMeasureMode(ingredient),
-      sourceState: ingredient.sourceState ?? (ingredient.roleType === 'solvent' || ingredient.roleType === 'diluent' ? 'liquid' : 'other'),
+      measureMode: inferIngredientMeasureMode(ingredient, conv),
+      // ROLE-AXES-1: the source-state default rides the config arm — never the
+      // role label in TS. Off-state: the neutral default.
+      sourceState: ingredient.sourceState ?? defaultSourceStateFor(conv, ingredient.roleType, ingredient.participation) ?? 'other',
     };
     if (normalized.measureMode === 'target_concentration' && !normalized.targetContribution) {
       baseWarnings.push(`Missing target concentration for ${ingredient.ref?.label ?? ingredient.ref?.id ?? 'an ingredient'}.`);
@@ -115,6 +156,7 @@ export function summarizeFormulationDraft(draft: FormulationCopilotDraft): Formu
       ...(ingredient.requiredAmount ? { requiredAmount: ingredient.requiredAmount } : {}),
       ...(ingredient.molecularWeight ? { molecularWeight: ingredient.molecularWeight } : {}),
       ...(ingredient.compositionSnapshot ? { compositionSnapshot: ingredient.compositionSnapshot } : {}),
+      ...(ingredient.participation ? { participation: ingredient.participation } : {}),
     })),
     ...(draft.totalProduced ? { totalOutputQuantity: draft.totalProduced } : {}),
   });
@@ -167,10 +209,18 @@ export function flattenFormulationDraft(draft: FormulationCopilotDraft): Formula
 export function suggestMissingFormulationFields(draft: FormulationCopilotDraft): FormulationCopilotResult {
   const summary = summarizeFormulationDraft(draft);
   const draftPatch: Partial<FormulationCopilotDraft> = { ...summary.draftPatch };
+  const conv = loadParticipationConvention();
 
   if (!draft.recipeName?.trim()) {
     const primary = draft.representsMaterial?.label ?? draft.ingredients[0]?.ref?.label ?? draft.ingredients[0]?.ref?.id;
-    const solvent = draft.outputSolventRef?.label ?? draft.ingredients.find((entry) => entry.roleType === 'solvent' || entry.roleType === 'diluent')?.ref?.label;
+    // ROLE-AXES-1: the carrier-roleTypes that name the recipe are config DATA
+    // (label text only — byte-stable for correct-label records). Off-state:
+    // no carrier lookup fires (the name falls back to the primary alone).
+    const carrierTypes = conv?.recipeNameCarrierRoleTypes ?? [];
+    const solvent = draft.outputSolventRef?.label
+      ?? (carrierTypes.length
+        ? draft.ingredients.find((entry) => carrierTypes.includes(entry.roleType))?.ref?.label
+        : undefined);
     if (primary) {
       draftPatch.recipeName = solvent ? `${primary} in ${solvent}` : primary;
     }
@@ -247,14 +297,20 @@ export async function draftFormulationFromPrompt(
   if (!targetContribution) assumptions.push('Target concentration was not found in the prompt.');
   if (!soluteLabel) assumptions.push('Primary ingredient name was not found in the prompt.');
 
-  const soluteRef = soluteLabel && resolveRef ? await resolveRef(soluteLabel, 'material') : undefined;
-  const solventRef = solventLabel && resolveRef ? await resolveRef(solventLabel, 'solvent') : undefined;
+  const soluteRef = soluteLabel && resolveRef ? await resolveRef(soluteLabel, PROMPT_RESOLVER_KINDS[0]) : undefined;
+  const solventRef = solventLabel && resolveRef ? await resolveRef(solventLabel, PROMPT_RESOLVER_KINDS[0]) : undefined;
 
   const ingredients: CopilotIngredientDraft[] = [];
+  // ROLE-AXES-1: the emission roles for the prompt-drafted rows are config
+  // DATA (promptEmission). Off-state: the honest gap role — never a guess.
+  const conv = loadParticipationConvention();
+  const primaryRoleType = conv?.promptEmission.primaryRoleType ?? 'other';
+  const carrierRoleType = conv?.promptEmission.carrierRoleType ?? 'other';
+  const carrierSnapshotRole = conv?.promptEmission.carrierSnapshotRole ?? 'other';
   if (soluteLabel) {
     ingredients.push({
       ...(soluteRef ? { ref: soluteRef } : {}),
-      roleType: 'solute',
+      roleType: primaryRoleType,
       measureMode: 'target_concentration',
       sourceState: 'solid',
       ...(targetContribution ? { targetContribution } : {}),
@@ -263,10 +319,10 @@ export async function draftFormulationFromPrompt(
   if (solventLabel) {
     const solventIngredient: CopilotIngredientDraft = {
       ...(solventRef ? { ref: solventRef } : {}),
-      roleType: 'solvent',
+      roleType: carrierRoleType,
       measureMode: 'qs_to_final',
       sourceState: 'liquid',
-      ...(solventRef ? { compositionSnapshot: [{ componentRef: solventRef, role: 'solvent' }] } : {}),
+      ...(solventRef ? { compositionSnapshot: [{ componentRef: solventRef, role: carrierSnapshotRole as ParsedCompositionEntry['role'] }] } : {}),
     };
     ingredients.push(solventIngredient);
   }

@@ -77,6 +77,7 @@ import {
   holdShorthandIntent,
   takeHeldShorthandIntent,
   foldAnswersIntoShorthand,
+  foldNullArm,
   dropSatisfiedFacts,
   heldReextractionContext,
   malformedShorthandRepairPrompt,
@@ -84,6 +85,11 @@ import {
   shorthandResultFromCompile,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
+  partitionReadingAnswers,
+  scientistAnswersFromReadingAnswers,
+  answeredClarificationLabelsFromBatch,
+  type AcceptedShorthandBinding,
+  type AnsweredSlot,
 } from './shorthandChat.js';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
@@ -1340,7 +1346,32 @@ export function createAgentOrchestrator(
       if (shorthandSurface && !deterministicOnly && clarificationAnswers && clarificationAnswers.length > 0) {
         const held = takeHeldShorthandIntent(conversationKey);
         if (held) {
-          const folded = foldAnswersIntoShorthand(held, clarificationAnswers);
+          // READING-CARD-ANSWER-1 (Ruling 2 + Amendment 2): partition the
+          // submitted batch by the STRUCTURAL reading test (the held fact
+          // carries readings AND the answer's value is one of that fact's own
+          // reading ids — no reason literal anywhere). A READING answer never
+          // enters `foldAnswersIntoShorthand`'s splice set (it has no
+          // label→noun carrier; feeding it is precisely the aggregate-label
+          // fold-null the never-guess pin defends); it rides the deterministic
+          // recompile as the §14.2 `scientistAnswers` DATA map (the
+          // IntentCompileFromPromptHandlers.ts precedent) so the fraction bar
+          // settles. The fold itself stays byte-identical.
+          const { readingAnswers, foldAnswers } = partitionReadingAnswers(held.clarifications, clarificationAnswers);
+          const readingScientistAnswers = scientistAnswersFromReadingAnswers(held.clarifications, clarificationAnswers);
+          // A batch whose ONLY answers are reading answers needs no document
+          // splice — the §14.2 RECORD leg settles the bar in the recompile
+          // itself (the held document rides unchanged). The fold's null
+          // contract stays byte-identical: it is simply not consulted when
+          // there is nothing to splice.
+          // advc-c1 D2 (log honesty): remember whether the fold was actually
+          // CONSULTED (a real splice ran) — the synthesized no-splice recompile
+          // branch must not log the folded line (nothing was folded there).
+          const spliceFoldConsulted = foldAnswers.length > 0;
+          const folded = spliceFoldConsulted
+            ? foldAnswersIntoShorthand(held, foldAnswers)
+            : readingAnswers.length > 0
+              ? { yaml: held.yaml, doc: structuredClone(held.doc), answeredSlots: [] as AnsweredSlot[], bindings: [] as AcceptedShorthandBinding[] }
+              : null;
           if (folded) {
             // REVISE-GHOST-1 (OQ-1 ruling): the fold's accepted {label, ref}
             // bindings join the conversation's active-proposal bindings (the
@@ -1354,9 +1385,26 @@ export function createAgentOrchestrator(
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // READING-CARD-ANSWER-1: the reading answers ride the §14.2
+              // RECORD leg as DATA (the IntentCompileFromPromptHandlers.ts
+              // precedent — conditional spread, absent when the batch carries
+              // no reading answer), and the answered clarifications' LABELS
+              // ride the MIXROLE-1 bar-loop guard (the same DATA pair the 422
+              // recompile route passes).
+              ...(readingScientistAnswers ? { scientistAnswers: readingScientistAnswers } : {}),
+              ...(() => {
+                const answeredLabels = answeredClarificationLabelsFromBatch(held.clarifications, clarificationAnswers);
+                return answeredLabels.length > 0 ? { answeredClarificationLabels: answeredLabels } : {};
+              })(),
             });
             if (compiledFold) {
-              console.log(`[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`);
+              // advc-c1 D2 (log honesty): the folded line fires ONLY when a
+              // real splice ran through `foldAnswersIntoShorthand`; the
+              // reading-only batch took the deterministic RECOMPILE path
+              // (the held document rode unchanged — nothing was folded).
+              console.log(spliceFoldConsulted
+                ? `[agent ${tid}] shorthand answer folded deterministically onto the held intent (${conversationKey}) — no model call`
+                : `[agent ${tid}] shorthand reading answer applied via deterministic recompile onto the held intent (${conversationKey}) — no splice, no model call`);
               // SH-QA-1 auto-satisfy ledger: the slots this fold closed. A
               // re-derived fact for a ledgered slot whose value is STILL the
               // chosen label is moot (the answer already closed it) — dropped
@@ -1418,6 +1466,19 @@ export function createAgentOrchestrator(
             // No 1:1 mapping — re-hold and let the loop re-extract with the
             // held document + answers as grounded context (extraction-only).
             holdShorthandIntent(conversationKey, held);
+            // ANSWER-FOLD-NULL-1 (Leg 1, additive-only): name WHICH null arm
+            // tripped. The arm is RE-DERIVED by the pure mirror `foldNullArm`
+            // (shorthandChat.ts, byte-mirror of the fold's guards) — the fold
+            // itself stays byte-identical. slotType rides only for
+            // 'slot-not-string' (the array-slot discriminator).
+            // READING-CARD-ANSWER-1: the mirror sees the SAME set the fold
+            // received (the reading answers were excluded from it), so the
+            // diagnostic never names a reading answer as the fold-null source.
+            const armReport = foldNullArm(held, foldAnswers);
+            const slotTypeSuffix = armReport?.slotType !== undefined
+              ? ` slotType=${armReport.slotType}`
+              : '';
+            console.log(`[agent ${tid}] fold-null arm=${armReport?.arm ?? 'none'} requestId=${armReport?.requestId ?? ''} answers=${foldAnswers.length} heldFacts=${held.clarifications.length}${slotTypeSuffix}`);
             console.log(`[agent ${tid}] shorthand answers have no 1:1 mapping onto the held intent — falling back to one extraction-only re-ask`);
           }
         }
@@ -3354,6 +3415,91 @@ export function createAgentOrchestrator(
               logAgentSummary(tid, receivingProposalSummary);
               console.log(`[agent ${tid}] done compose_receiving emitted elapsedMs=${elapsed}`);
               return receivingProposalResult;
+            }
+
+            // intent=compose_execute_chain (MATRES-CHAIN, OQ-3(a) ratified): the
+            // ELICITED execute-chain attestation on the ONE forced tool (case 3'
+            // — "I made 1 mL, split into 10 100-uL aliquots, used one today, put
+            // 9 at -20"). THE SAME thin-event design as the receiving arm above:
+            // emit the model's chain INTENT VERBATIM as ONE `chain_proposal`
+            // event and run NOTHING else — no compile, no store write, no accept.
+            // The drafts compile endpoint (POST /api/drafts/compile — the 'chain'
+            // adapter declared in config/drafting/adapters.yaml: the envelope
+            // compiles through chain/ExecuteChainDraft.ts, the staged creates
+            // (material-derivation preparation + prepared material-instance + N
+            // aliquots + the ONE attestation-chain envelope, the fulfillment
+            // claims riding INSIDE the same envelope per the merged FULFIL
+            // vocabulary) run the REAL validate + lint + the declared arithmetic
+            // policy (config/drafting/execute-chain-arithmetic.yaml), canAccept),
+            // NOT this stream, is the trust boundary. Accept writes the whole
+            // chain as ONE reviewed act; nothing here writes a record, attests,
+            // or invents an occurrence time, an attestor, or a storage condition.
+            // An invalid envelope is NOT rejected or rewritten here — the compile
+            // endpoint owns the diagnostic (canAccept:false + path-named
+            // diagnostics). Cross-session consumption is refused by name at
+            // compile (OQ-1(a)), never silently converted.
+            if (agentIntent.intent === 'compose_execute_chain') {
+              const chain = agentIntent.chain;
+              const elapsed = Date.now() - t0;
+              if (!chain) {
+                // The existing error channel (compose_receiving's no-envelope
+                // precedent): success:false with a corrective `error` string, and
+                // NO chain_proposal event.
+                onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: false, durationMs: 0 });
+                const chainEnvelopeError = 'compose_execute_chain requires a `chain` envelope: {operation:"compose-execute-chain", artifactKind, prepared:{name,volume}, aliquotCount, aliquots:[{disposition,volume,...stated facts only}], attested:{claimStatus,occurredAtStatus}} — the server compiles it into ONE review card via POST /api/drafts/compile, derives every id deterministically, and writes nothing until you accept.';
+                const emptyChainResult: AgentResult = {
+                  success: false,
+                  error: chainEnvelopeError,
+                };
+                const emptyChainSummary: AgentSummary = {
+                  traceId: tid,
+                  surface: surfaceName,
+                  model,
+                  success: false,
+                  elapsedMs: elapsed,
+                  turns: turnStats,
+                  totals: {
+                    turns: turn + 1,
+                    toolCalls: totalToolCalls,
+                    promptTokens: totalUsage.promptTokens,
+                    completionTokens: totalUsage.completionTokens,
+                    totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                  },
+                  resolvedMentions: resolvedMentionsCount,
+                  bypass: null,
+                  // exactOptionalPropertyTypes: `error` is a definite string here.
+                  error: chainEnvelopeError,
+                };
+                logAgentSummary(tid, emptyChainSummary);
+                console.log(`[agent ${tid}] done compose_execute_chain no-envelope elapsedMs=${elapsed}`);
+                return emptyChainResult;
+              }
+              onEvent?.({ type: 'chain_proposal', chain });
+              onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: true, durationMs: 0 });
+              const chainProposalResult: AgentResult = {
+                success: true,
+                notes: ['Proposed an execute-chain attestation — review the card; nothing was written.'],
+              };
+              const chainProposalSummary: AgentSummary = {
+                traceId: tid,
+                surface: surfaceName,
+                model,
+                success: true,
+                elapsedMs: elapsed,
+                turns: turnStats,
+                totals: {
+                  turns: turn + 1,
+                  toolCalls: totalToolCalls,
+                  promptTokens: totalUsage.promptTokens,
+                  completionTokens: totalUsage.completionTokens,
+                  totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+                },
+                resolvedMentions: resolvedMentionsCount,
+                bypass: null,
+              };
+              logAgentSummary(tid, chainProposalSummary);
+              console.log(`[agent ${tid}] done compose_execute_chain emitted elapsedMs=${elapsed}`);
+              return chainProposalResult;
             }
 
             // intent=query_workstate_history (PB-CH-8): the ledger READ riding

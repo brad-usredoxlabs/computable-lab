@@ -29,9 +29,9 @@ export function registerResolveTool(server: McpServer, ctx: AppContext, registry
       surface: z.string().optional().describe('Active surface / grounding profile (biases material level)'),
       kinds: z.array(z.string()).optional().describe('Restrict to candidate kinds (e.g. ["material","labware"])'),
       level: z
-        .enum(['concept', 'spec', 'instance', 'aliquot', 'unknown'])
+        .enum(['concept', 'spec', 'instance', 'aliquot', 'vendor-product', 'unknown'])
         .optional()
-        .describe('Bias toward a material-hierarchy layer'),
+        .describe('Bias toward a material-hierarchy layer (mirrors the spine MaterialLevel union)'),
       limit: z.number().optional().describe('Maximum candidates (default 20)'),
     },
     async (args) => {

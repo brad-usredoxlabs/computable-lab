@@ -65,6 +65,9 @@ describe('clarificationAdapter — not-stated gets its card (SAMPLE-CARD-1, W28-
     // further delta is the two prompt-declared model rows
     // (intent.compile.system.yaml:22) + the explicit declared-no-surface entry
     // for 'missing-required-argument' (null BY DATA, not by fallthrough).
+    // MATRES-PANEL STEP-0 DELIBERATE PIN UPDATE (orch-ruled, same sanctioned
+    // pattern): the ONLY further delta is the two MATRES-ELIG reason rows
+    // (material-eligibility.yaml :91/:97 — declared vocabulary data).
     expect({ ...CLARIFICATION_MENU_BY_REASON }).toEqual({
       'unknown-noun': '/m',
       'ambiguous-noun': '/m',
@@ -73,6 +76,8 @@ describe('clarificationAdapter — not-stated gets its card (SAMPLE-CARD-1, W28-
       'ambiguous': '/m',
       'contradicts-the-text': '/m',
       'missing-required-argument': null,
+      'eligibility-incomplete': '/m',
+      'vendor-scope-unknown': '/m',
     })
     // Loop-pin each existing engine reason at (reason,'*') and at
     // (reason, labware): unchanged, byte-for-byte, exactly as ANSWER-SURFACE-1

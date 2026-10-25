@@ -58,7 +58,17 @@ export function RunWorkspacePage() {
   }), [runId, activeTab, summary?.runId, summary?.title, summary?.status, workspace])
   // Phase 2: persist to /api/ai/threads/event-editor (Phase 7 subsumes this
   // route under /event-editor).
-  const aiChat = useAiChat({ aiContext, endpoint: 'event-editor' })
+  // MATRES-CHAIN fix2 (gate D1, receipts 2026-10-24_115822): the execute-
+  // chain relay + review card that used to mount HERE are RETIRED — this
+  // module is imported by nothing (no route serves it; the /runs/:runId
+  // route lazy-imports run/RunWorkspacePage), so the §7.5 wall was mounted
+  // on a dead page and never rendered. The ONE reachable mount now lives on
+  // the routed surface (AiTabPanel relays chain_proposal through the shared
+  // flow and mounts ChainProposalCard).
+  const aiChat = useAiChat({
+    aiContext,
+    endpoint: 'event-editor',
+  })
   useRegisterAiChat(aiChat)
 
   const resolvedRunId = runId ?? 'RUN-UNKNOWN'

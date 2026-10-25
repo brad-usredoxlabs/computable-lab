@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from './loader.js';
+import { DEFAULT_CONFIG } from './types.js';
 
 describe('config loader', () => {
   let tempDir: string | undefined;
@@ -356,6 +357,123 @@ describe('config loader', () => {
       // enabled should stay at default (false)
       expect(config.ai?.extractor?.enabled).toBe(false);
       expect(config.ai?.extractor?.model).toBe('Qwen/Qwen3.5-9B-Instruct');
+    });
+  });
+
+  describe('array union semantics (CFG-UNION-1, Brad ruling (b))', () => {
+    // deepMerge must UNION array-valued config keys with DEFAULT_CONFIG
+    // (DEFAULT first, then config entries, dedup preserving first occurrence).
+    // An explicit config array may NEVER silently drop DEFAULT_CONFIG entries.
+    const unionBaseYaml = [
+      'server:',
+      '  port: 3001',
+      '  host: 0.0.0.0',
+      '  logLevel: info',
+      '  workspaceDir: /tmp/cl-workspaces',
+      '  cors:',
+      '    enabled: true',
+    ];
+    const unionTailYaml = [
+      'schemas:',
+      '  source: bundled',
+      '  bundledDir: ./schema',
+      'repositories: []',
+    ];
+
+    async function writeConfig(lines: string[]): Promise<string> {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(configPath, lines.join('\n'), 'utf8');
+      return configPath;
+    }
+
+    it('a partial appendOnlyKinds list still yields every DEFAULT_CONFIG entry post-load', async () => {
+      const configPath = await writeConfig([
+        ...unionBaseYaml,
+        '  appendOnlyKinds:',
+        '    - attestation',
+        ...unionTailYaml,
+      ]);
+
+      const config = await loadConfig({ configPath });
+      // RED (pre-fix): the array branch REPLACES — result would be ['attestation'].
+      // GREEN: union keeps every default and the explicit entry.
+      expect(config.server.appendOnlyKinds).toEqual([
+        'audit-event',
+        'signature',
+        'vendor-protocol-candidate',
+        'attestation',
+        'material-receiving',
+      ]);
+      expect(config.server.appendOnlyKinds).toContain('material-receiving');
+    });
+
+    it('unions a partial appendOnlyKinds list DEFAULT-first and dedups repeated defaults', async () => {
+      const configPath = await writeConfig([
+        ...unionBaseYaml,
+        '  appendOnlyKinds:',
+        '    - audit-event',
+        '    - audit-event',
+        '    - custom-guard',
+        ...unionTailYaml,
+      ]);
+
+      const config = await loadConfig({ configPath });
+      // DEFAULT order first, then config-only entries in config order;
+      // 'audit-event' named twice appears exactly once.
+      expect(config.server.appendOnlyKinds).toEqual([
+        'audit-event',
+        'signature',
+        'vendor-protocol-candidate',
+        'attestation',
+        'material-receiving',
+        'custom-guard',
+      ]);
+      expect(
+        (config.server.appendOnlyKinds ?? []).filter((k) => k === 'audit-event').length,
+      ).toBe(1);
+    });
+
+    it('an explicit empty appendOnlyKinds list cannot drop the defaults', async () => {
+      const configPath = await writeConfig([
+        ...unionBaseYaml,
+        '  appendOnlyKinds: []',
+        ...unionTailYaml,
+      ]);
+
+      const config = await loadConfig({ configPath });
+      // Ruling (b): an explicit array may never silently drop DEFAULT entries.
+      expect(config.server.appendOnlyKinds).toEqual(
+        DEFAULT_CONFIG.server.appendOnlyKinds,
+      );
+    });
+
+    it('revisionOnEditKinds unions too (same data-knob pattern)', async () => {
+      const configPath = await writeConfig([
+        ...unionBaseYaml,
+        '  revisionOnEditKinds:',
+        '    - custom-revision-kind',
+        ...unionTailYaml,
+      ]);
+
+      const config = await loadConfig({ configPath });
+      expect(config.server.revisionOnEditKinds).toEqual([
+        'extraction-draft',
+        'custom-revision-kind',
+      ]);
+    });
+
+    it('nested array key server.cors.origins unions with the default', async () => {
+      // deepMerge recurses into cors; origins is the nested array case.
+      const configPath = await writeConfig([
+        ...unionBaseYaml,
+        '    origins:',
+        '      - https://mylab.org',
+        ...unionTailYaml,
+      ]);
+
+      const config = await loadConfig({ configPath });
+      expect(config.server.cors.origins).toEqual(['*', 'https://mylab.org']);
     });
   });
 

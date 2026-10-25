@@ -27,6 +27,9 @@ describe('ProcurementSchemaContracts', () => {
       'core/datatypes/concentration.schema.yaml',
       'core/datatypes/composition-entry.schema.yaml',
       'core/datatypes/file-ref.schema.yaml',
+      // planned-run embeds event-graph, which $refs the revision-ref datatype;
+      // the harness path list mirrors the schema's dependency closure.
+      'core/datatypes/revision-ref.schema.yaml',
       'core/common.schema.yaml',
       'workflow/event-graph.schema.yaml',
       'workflow/procurement-manifest.schema.yaml',

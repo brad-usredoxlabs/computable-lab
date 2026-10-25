@@ -8,6 +8,8 @@ import { compileAnalysisIntent, analysisDepsFromContext } from './analysisCompil
 import { compileRecordDraftIntent, recordDraftDepsFromContext } from './recordDraftCompile.js';
 import { compileReceivingIntent, receivingDepsFromContext } from '../receiving/MaterialReceivingDraft.js';
 import { MATERIAL_RECEIVING_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID } from '../receiving/receivingIdentity.js';
+import { compileExecuteChainIntent, chainDepsFromContext } from '../chain/ExecuteChainDraft.js';
+import { ATTESTATION_SCHEMA_ID as CHAIN_ATTESTATION_SCHEMA_ID, ALIQUOT_SCHEMA_ID as CHAIN_ALIQUOT_SCHEMA_ID, MATERIAL_DERIVATION_SCHEMA_ID as CHAIN_DERIVATION_SCHEMA_ID, MATERIAL_INSTANCE_SCHEMA_ID as CHAIN_INSTANCE_SCHEMA_ID } from '../chain/chainIdentity.js';
 
 /** What an adapter's onAccept hook returns: the plan the generic accept loop
  *  writes, plus the per-record volatile-field exemptions (recordId -> payload
@@ -172,6 +174,116 @@ export const draftAdapters: Readonly<Record<string,DraftAdapter>> = {
     project(projection) {
       // The projection is the intent echo; the card document rides in `result`
       // and the two staged creates (receipt + instance) ride in `writes`.
+      return projection;
+    },
+  },
+  // MATRES-CHAIN (OQ-1(a)/OQ-2(b)/OQ-3(a) rulings): the execute-chain adapter.
+  // ONE elicited intent (compose_execute_chain on the ONE forced agent_intent
+  // tool) compiles the chain record-graph — material-derivation (preparation) +
+  // the prepared material-instance + N aliquots + ONE attestation-chain
+  // envelope (the FULFIL fulfillment claims ride INSIDE the same envelope, D2)
+  // — through the staging store (the REAL schema validate + lint run at compile;
+  // nothing durable before the reviewHash-verified accept). The business walls
+  // (mixed-parentage orphan shape, the elicitation wall, the occurred pairings,
+  // the OQ-1(a) cross-session refusal, the shipped chain-no-proposed wall) are
+  // chain-draft.lint.yaml + attestation.lint.yaml DATA; the arithmetic ACs
+  // (sum<=prepared, count reconcile) are execute-chain-arithmetic.yaml DATA via
+  // the pure evaluator (chainArithmetic.ts). A blocked wall surfaces as a stage
+  // failure -> needs-missing-fact with canAccept:false (the generic gate, not an
+  // adapter-name branch). ALL ids are deterministic seed-hashes over (draft
+  // content, plan coordinate) (D4) — a re-draft of identical content lands the
+  // SAME ids; the idempotence lookup (canonical LIST view, the RECV ruling item
+  // B shape) makes the already-accepted form the plan's outcome: no second gate,
+  // no second chain (AC-2). Consumption is staged at CREATION for the
+  // born-in-session aliquot (OQ-1(a)); the cross-session case is refused by the
+  // lint rule, never silently converted (bait 12). The staged creates are
+  // HUMAN-REVIEWED (adapters.yaml humanReviewedCreate: true).
+  //
+  // RATIFIED (rail ruling (a), the receiving precedent): ABSENT-BEFORE-ACCEPT.
+  // The draft envelope carries NO attestedAt; the chain attestation's attestedAt
+  // is the server's ACCEPTANCE time, stamped by this adapter's onAccept hook
+  // from the rail's accept clock (identified by the schema id its staged create
+  // rode — never a kind branch). The volatileFields exemption the hook declares
+  // is what makes a content-identical re-draft land the SAME records
+  // idempotently instead of 409-ing on the accept-stamp delta (bait 2).
+  // occurredAt is byte-untouched end-to-end.
+  'chain': {
+    async stage(context,_actor,intent,_targetId,_now) {
+      const compiled = await compileExecuteChainIntent(intent, chainDepsFromContext(context));
+      // fix-run 4 D3 (gate g1d): the refusal message carries the compile's
+      // NAMED diagnostics verbatim (the shipped sibling pattern — record-drafting
+      // :107 and receiving :141 throw the rule-named diagnostics; the pipeline
+      // records them as DRAFT_INVALID needs-missing-fact -> canAccept:false,
+      // the generic gate). ExecuteChainDraft now BUILDS the card document even
+      // on a refused compile (its ok:false return carries `card` — pinned in
+      // ChainLiveEmission.test.ts arm D) and every fired wall is NAMED
+      // (attestation pairing downgrades instead of firing; the material gap is
+      // chain.prepared.sourceSpecRef; the arithmetic rule is
+      // volume-sum-lte-prepared), so the blocked wall the card renders NAMES
+      // the offending rule ids. The accept path still refuses server-side
+      // (FormDraftService.ts:178/:186 canAccept gate) with ZERO staged writes.
+      if(!compiled.ok)throw new Error(compiled.diagnostics.join('; '));
+      const durable = compiled.durableAcceptedIds ?? new Set<string>();
+      // The instructed (plan-side) posture stages ONLY the plan-side envelope:
+      // ZERO physical records (acceptance attests NOTHING physical, P2/§7.2).
+      const plan = compiled.attestsNothingPhysical === true
+        ? [{ recordId:compiled.recordId!, schemaId:CHAIN_ATTESTATION_SCHEMA_ID, payload:compiled.envelope! }]
+        : [
+            { recordId:compiled.derivationRecordId!, schemaId:CHAIN_DERIVATION_SCHEMA_ID, payload:compiled.derivationPayload! },
+            { recordId:compiled.instanceRecordId!, schemaId:CHAIN_INSTANCE_SCHEMA_ID, payload:compiled.instancePayload! },
+            ...(compiled.aliquotPayloads ?? []).map((payload,i) => ({ recordId:compiled.aliquotRecordIds![i]!, schemaId:CHAIN_ALIQUOT_SCHEMA_ID, payload })),
+            { recordId:compiled.recordId!, schemaId:CHAIN_ATTESTATION_SCHEMA_ID, payload:compiled.envelope! },
+          ];
+      for(const write of plan){
+        const created = await context.store.create({ envelope:write, message:'Execute-chain draft staged create' });
+        // Create-if-absent identity (the RECV ruling item B): the deterministic
+        // id names a record the durable store ALREADY holds with content equal
+        // modulo the acceptance stamp => that IS the accepted form (no re-mint,
+        // no second chain). A DIFFERENT payload under the same id is a real
+        // collision and stays a stage failure (blocked card). The refusal names
+        // the WALL that fired: the staging create's real validate/lint results
+        // ride in the message (fix-run 1 D1 — e.g. the shipped aliquot.schema
+        // anyOf orphan wall surfaces its own Ajv errors on the compile path).
+        if(!created.success && !durable.has(write.recordId)){
+          const wallErrors = (created.validation?.errors ?? [])
+            .map(e => `${e.path}: ${e.message}`)
+            .concat((created.lint?.violations ?? []).map(v => `${v.ruleId}: ${v.message}`))
+            .join('; ');
+          throw new Error(`staged chain write blocked (${write.recordId}): ${created.error ?? 'validation/lint failure'}${wallErrors ? ` — wall: ${wallErrors}` : ''}`);
+        }
+      }
+      return {
+        recordId:compiled.recordId,
+        derivationRecordId:compiled.derivationRecordId,
+        instanceRecordId:compiled.instanceRecordId,
+        aliquotRecordIds:compiled.aliquotRecordIds,
+        envelope:compiled.envelope,
+        summary:compiled.summary,
+        // §7.5: the SERVER-BUILT card document + the landing sessionDocument
+        // ride in `result` (the record-drafting doctrine — the client renders
+        // them verbatim; the executor applies the landing on Accept).
+        card:compiled.card,
+        ...(compiled.sessionDocument !== undefined ? { sessionDocument:compiled.sessionDocument } : {}),
+        ...(compiled.fulfillmentNote !== undefined ? { fulfillmentNote:compiled.fulfillmentNote } : {}),
+        ...(compiled.attestsNothingPhysical === true ? { attestsNothingPhysical:true } : {}),
+      };
+    },
+    async onAccept(writes,acceptNow) {
+      // Accept-time composition for THIS adapter's own plan: the attestation
+      // envelope (identified by the schema id its staged create rode — never a
+      // kind branch) gains the server's acceptance stamp. The physical records
+      // (derivation/instance/aliquots) are NOT stamped; occurredAt is
+      // byte-untouched (the server never writes a time the scientist stated).
+      // The exemption map names exactly the stamped key.
+      const stamped = writes.map(w => w.schemaId === CHAIN_ATTESTATION_SCHEMA_ID
+        ? { ...w, payload: { ...object(w.payload), attestedAt: acceptNow } }
+        : w);
+      const attestation = stamped.find(w => w.schemaId === CHAIN_ATTESTATION_SCHEMA_ID);
+      return { writes: stamped, ...(attestation ? { volatileFields: { [attestation.recordId]: ['attestedAt'] } } : {}) };
+    },
+    project(projection) {
+      // The projection is the intent echo; the card document rides in `result`
+      // and the chain's staged creates ride in `writes`.
       return projection;
     },
   },

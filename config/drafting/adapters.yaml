@@ -79,3 +79,74 @@ adapters:
     operations: [compose-receiving]
     projection: {}
     humanReviewedCreate: true
+  # MATRES-CHAIN (OQ-1(a)/OQ-2(b)/OQ-3(a) rulings): the execute-chain attestation
+  # adapter. ONE elicited intent (compose_execute_chain on the ONE forced
+  # agent_intent tool) compiles the chain record-graph — material-derivation
+  # (preparation) + the prepared material-instance + N aliquots + ONE
+  # attestation-chain envelope (the FULFIL fulfillment claims ride INSIDE the
+  # same envelope; zero new kinds, zero new envelopes) — through the staging
+  # store (the REAL schema validate + lint run at compile; nothing durable
+  # before the reviewHash-verified accept). Business walls (mixed-parentage
+  # orphan shape, the elicitation wall, the occurred pairings, the OQ-1(a)
+  # cross-session consumption refusal, the shipped chain-no-proposed wall) are
+  # schema/workflow/chain-draft.lint.yaml + schema/lab/attestation.lint.yaml
+  # DATA; the arithmetic ACs (aliquot volumes sum <= prepared volume, the count
+  # reconcile) are config/drafting/execute-chain-arithmetic.yaml DATA via the
+  # pure compile-time evaluator (OQ-2 ruling (b) — the named missing lint
+  # predicate is a follow-up capability item, NOT a lint-v1 edit). A blocked
+  # wall surfaces as needs-missing-fact with canAccept:false (the generic gate,
+  # not an adapter-name branch). ALL ids are deterministic seed-hashes over
+  # (draft content, plan coordinate) — a re-draft of identical content lands the
+  # SAME records (AC-2 idempotence via the shipped prior-scan + the hook's
+  # volatileFields exemption). Consumption is staged at CREATION for the
+  # born-in-session aliquot; the cross-session case is refused by name, never
+  # silently converted. The staged creates are HUMAN-REVIEWED.
+  chain:
+    domain: chain
+    operations: [compose-execute-chain]
+    projection: {}
+    humanReviewedCreate: true
+    # §7.2 claim-label vocabulary (DATA, bait-8 repair MATRES-CHAIN fix-run 1):
+    # the labels the chain compiler ECHOES are declared here, never hardcoded in
+    # TypeScript. `instructed` is the plan-side label for an INSTRUCTED
+    # (plan-slot-reference) payload; `declaredFallback` is echoed when the
+    # scientist declared an attested posture but named no claimStatus;
+    # `fulfillmentSatisfied`/`fulfillmentIncomplete` are the fulfillment-claim
+    # labels the compiler selects from the DATA verdict semantics
+    # (fulfillment-compatibility.yaml outcomes.satisfied via
+    # policy.verdictFor('satisfied')) — the compiler never derives a label from
+    # a positional verdict comparison and never rewrites a DECLARED label
+    # (OQ-4 law inherited: these are the drafting-side defaults the elicited
+    # composite declares, surfaced as data the compiler reads).
+    claimLabels:
+      instructed: proposed
+      declaredFallback: unknown
+      fulfillmentSatisfied: completed
+      fulfillmentIncomplete: unknown
+    # §7.6 fulfillment emission tokens (DATA, bait-8/D3 repair fix-run 1): the
+    # chain's fulfillment claim verb + evidence family. These MUST stay inside
+    # FULFIL's declared vocabulary (attestation.lint.yaml fulfil-verb-vocabulary
+    # / fulfil-fulfilledby-vocabulary; fulfillment-compatibility.yaml checks
+    # select by fulfilledBy) — the lock test pins the two data sources so they
+    # cannot drift. The compiler reads them; zero verb/fulfilledBy literals in TS.
+    fulfillment:
+      verb: fulfills
+      fulfilledBy: derivation
+    # Physical claim verbs (DATA, same bait-8 repair): the drafting side's own
+    # assertion verbs for the chain's physical claims. `prepared` labels the
+    # preparation claim; `stored`/`consumed` map the DECLARED disposition to the
+    # per-aliquot verb. The compiler echoes them; zero verb literals in TS.
+    claimVerbs:
+      prepared: prepared
+      stored: aliquoted
+      consumed: consumed
+    # §7.5 landing: the accepted chain re-focuses the attestation record on its
+    # record-edit tab (a REGISTERED lab-session tab kind — DATA, never a TS
+    # literal; the same landing.tabKind precedent as record-drafting, plus the
+    # workstate-tab-kinds.yaml idField/idPrefix shape so the server-derived
+    # activeTabId matches what app/src/shared/session/tabId.ts re-derives). An
+    # absent landing key fails the compile honestly with a named diagnostic.
+    landing:
+      tabKind: record-edit
+      idField: recordId
+      idPrefix: record

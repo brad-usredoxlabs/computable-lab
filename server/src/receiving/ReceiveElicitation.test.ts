@@ -523,7 +523,9 @@ describe('receiving envelope lockstep — tool-def property vs compile-side sche
 describe('parse/menu regression (§5.4 mirror of submitSuggestionTool.test)', () => {
   it('the menu carries compose_receiving and ALL existing intents stay pinned in order', () => {
     const props = (AGENT_INTENT_TOOL_DEF.function.parameters as { properties: Record<string, { enum?: string[] }> }).properties;
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving']);
+    // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+    // joins the menu tail — the one-tool lock is about the tool, not a frozen enum.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain']);
   });
 
   it('parses compose_receiving and retains the envelope VERBATIM (by reference — the compile endpoint is the trust boundary)', () => {

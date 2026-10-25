@@ -73,4 +73,16 @@ describe('AiStreamEvent ↔ AssistStreamEvent channel-member pin (PB-CH-6)', () 
     // is what the ai.ts comment claims the pin does.
     expect(assistSrc).toMatch(/\| \{ type: 'analysis_proposal'; analysis: Record<string, unknown> \}/)
   })
+
+  it('the chain_proposal member (MATRES-CHAIN, OQ-3(a)) is pinned two-way too', () => {
+    // types/ai.ts: the export interface with the verbatim wire shape
+    // (server emits {type:'chain_proposal', chain} — AgentOrchestrator).
+    expect(aiTypesSrc).toMatch(
+      /export interface AiChainProposalEvent \{\s*\n\s*type: 'chain_proposal'\s*\n\s*chain: Record<string, unknown>\s*\n\s*\}/,
+    )
+    // types/ai.ts: the member is actually IN the AiStreamEvent union.
+    expect(aiTypesSrc).toMatch(/\|\s*AiChainProposalEvent/)
+    // assistStream.ts (the wire-shape authority) carries the inline member.
+    expect(assistSrc).toMatch(/\| \{ type: 'chain_proposal'; chain: Record<string, unknown> \}/)
+  })
 })

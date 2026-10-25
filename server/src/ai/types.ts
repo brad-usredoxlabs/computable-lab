@@ -964,6 +964,16 @@ export type AgentEvent =
    */
   | { type: 'receiving_proposal'; receiving: Record<string, unknown> }
   /**
+   * MATRES-CHAIN (OQ-3(a) ratified) — the ELICITED execute-chain attestation
+   * intent (compose_execute_chain on the ONE forced tool). Carries the model's
+   * chain envelope VERBATIM; the drafts compile endpoint (the 'chain' adapter),
+   * NOT this event, is the trust boundary. The stream NEVER compiles, writes,
+   * or attests here — the server never invents an occurrence time, an attestor,
+   * or a storage condition, and cross-session consumption is refused by name at
+   * compile (thin-event design — same shape as receiving_proposal).
+   */
+  | { type: 'chain_proposal'; chain: Record<string, unknown> }
+  /**
    * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
    * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors
    * ledgerQuery.ts LedgerAnswerEnvelope field-for-field (status, asOf,

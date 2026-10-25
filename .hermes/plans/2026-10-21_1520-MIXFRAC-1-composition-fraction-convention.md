@@ -183,6 +183,13 @@ Explicitly OUT of scope:
 > not pinned around. npm run test:run -w server + typecheck at baseline. Compiler-path task: no
 > browser gate in scope (panel rendering of the clarification rides MATRES-PANEL).
 
+> RATIFIED LIMITATION (adversarial review l2t1855 D4, orchestrator ruling; text folded from
+> fix-run-2 report l2t2110): the sum check applies only to a FULLY declared composition — an
+> entry with no declared fraction string is out of scope, because the goal is "a composition
+> whose DECLARED fractions do not sum to the declared convention total"; a partially-declared
+> composition therefore skips the check entirely (it has no declared-fraction sum to break),
+> and this is not an oversight to widen.
+
 RESOLVED (was a tension; now settled by Brad's ruling): "45/45/10 re-base golden" refers to
 GOLDEN-B ("bring to 10% final" whole-mixture supplement with an explicit final-volume phrase — the
 ONE-SIDED-EVIDENCE arm that re-bases to 45/45/10), NOT GOLDEN-A. GOLDEN-A pins the blessed

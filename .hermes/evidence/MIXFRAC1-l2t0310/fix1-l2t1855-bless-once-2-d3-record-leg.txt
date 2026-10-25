@@ -1,0 +1,57 @@
+manifest hash mismatches BEFORE bless:
+  __records__/mixfrac-canonical-flat.golden.json: manifest a2d1ef365cddcc821f98938686c0053d2a7bbc06ae86c52313a8122752d4831d actual e99f916f0e9997f98dcc5d1d9f2921ea1d2050e862fb8c4df1b25a8ce4e1fa08
+
+golden.intent-to-clarification.unresolvable-mixture-component
+  fixture  /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/fixtures/unresolvable-mixture-component.yaml
+    sha256 245603b100f927466cb7290656aa0056d489dbd180a1c0c67b8105c1136a3714
+  record   /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/__records__/unresolvable-mixture-component.golden.json
+    before fe927e73e7b3884cc4a437647cad4a48f806e819100e96802474bed27cd56ab3
+    after  fe927e73e7b3884cc4a437647cad4a48f806e819100e96802474bed27cd56ab3
+  status   422
+  clarifications [{"label":"Equine Serum","reason":"unknown-noun","candidates":[{"label":"Create local term “Equine Serum”","confidence":0.05}],"actionLocation":{"actionIndex":0,"action":"add_material","argument":"composition"}},{"label":"trypsin-EDTA, DMEM, Equine Serum","reason":"composition-fraction-sum","actionLocation":{"actionIndex":0,"action":"add_material","argument":"composition"},"message":"The declared composition fractions sum to 110 percent, not the declared 100 percent (percent-of-final-volume). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions.","readings":[{"id":"whole-mixture-supplement","label":"whole-mixture supplement (the supplement is a share of the final volume; the bases re-base)","finalFractions":[{"label":"trypsin-EDTA","percent":45},{"label":"DMEM","percent":45},{"label":"Equine Serum","percent":10}]},{"id":"preceding-noun-recipe","label":"preceding-noun in-house recipe (the supplement attaches to the entry that precedes it — a complete medium the lab makes)","finalFractions":[{"label":"trypsin-EDTA","percent":50},{"label":"DMEM","percent":45},{"label":"Equine Serum","percent":5}],"nestedFractions":[{"label":"DMEM","percent":90},{"label":"Equine Serum","percent":10}]},{"id":"explicit-on-top","label":"explicit on-top (declared fractions stay fractions-of-mixture)","finalFractions":[{"label":"trypsin-EDTA","percent":50},{"label":"DMEM","percent":50},{"label":"Equine Serum","percent":10}],"note":"Declared fractions sum to 110 percent of the mixture, not 100 percent — the fractions are kept as declared fractions-of-mixture."}]}]
+  events 0
+  first-event details undefined
+
+golden.intent-to-clarification.mixfrac-canonical-ambiguous
+  fixture  /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/fixtures/mixfrac-canonical-ambiguous.yaml
+    sha256 fe449f2fe7b9000bd0c5c52f77905802dc0c003461c385e0cc6fb630e463916d
+  record   /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/__records__/mixfrac-canonical-ambiguous.golden.json
+    before 598a4e23de741e4468247fe94c4868ddf3527433f5ff075201d3130b1c5c8e1c
+    after  598a4e23de741e4468247fe94c4868ddf3527433f5ff075201d3130b1c5c8e1c
+  status   422
+  clarifications [{"label":"Trypsin-EDTA, DMEM, FBS","reason":"composition-fraction-sum","actionLocation":{"actionIndex":0,"action":"add_material","argument":"composition"},"message":"The declared composition fractions sum to 110 percent, not the declared 100 percent (percent-of-final-volume). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions. The utterance also carries a quantity adjacent to a supplement connector — the attachment (whole-mixture vs preceding-noun) is one of the candidate parses.","readings":[{"id":"preceding-noun-recipe","label":"preceding-noun in-house recipe (the supplement attaches to the entry that precedes it — a complete medium the lab makes)","finalFractions":[{"label":"Trypsin-EDTA","percent":50},{"label":"DMEM","percent":45},{"label":"FBS","percent":5}],"nestedFractions":[{"label":"DMEM","percent":90},{"label":"FBS","percent":10}]},{"id":"whole-mixture-supplement","label":"whole-mixture supplement (the supplement is a share of the final volume; the bases re-base)","finalFractions":[{"label":"Trypsin-EDTA","percent":45},{"label":"DMEM","percent":45},{"label":"FBS","percent":10}]},{"id":"explicit-on-top","label":"explicit on-top (declared fractions stay fractions-of-mixture)","finalFractions":[{"label":"Trypsin-EDTA","percent":50},{"label":"DMEM","percent":50},{"label":"FBS","percent":10}],"note":"Declared fractions sum to 110 percent of the mixture, not 100 percent — the fractions are kept as declared fractions-of-mixture."}]}]
+  events 0
+  first-event details undefined
+
+golden.intent-to-graph.mixfrac-canonical-flat
+  fixture  /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/fixtures/mixfrac-canonical-flat.yaml
+    sha256 509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a
+  record   /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/__records__/mixfrac-canonical-flat.golden.json
+    before e99f916f0e9997f98dcc5d1d9f2921ea1d2050e862fb8c4df1b25a8ce4e1fa08
+    after  a2d1ef365cddcc821f98938686c0053d2a7bbc06ae86c52313a8122752d4831d
+  status   200
+  clarifications null
+  events 1
+  first-event details {"well":"A1","volumeUl":50,"volume":{"value":50,"unit":"uL"},"composition_snapshot":[{"component_ref":{"kind":"draft","id":"mint:Trypsin-EDTA","label":"Trypsin-EDTA"},"role":"solvent","source":"50% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:DMEM","label":"DMEM"},"role":"buffer_component","source":"45% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:FBS","label":"FBS"},"role":"additive","source":"5% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:HepG2 cells","label":"HepG2 cells"},"role":"cells"}],"formulation_kind":"complex_composition","material_ref":{"kind":"draft","id":"mint:Trypsin-EDTA + DMEM + FBS + HepG2 cells","label":"Trypsin-EDTA + DMEM + FBS + HepG2 cells"},"count":10000,"counter_density":{"value":200,"unit":"cells/uL"}}
+
+golden.intent-to-graph.mixfrac-final-volume
+  fixture  /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/fixtures/mixfrac-final-volume.yaml
+    sha256 c7dae608d5f4a7668be6b04aa807386f18289c75b2ba61bf8228d64c58882e5c
+  record   /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/__records__/mixfrac-final-volume.golden.json
+    before 370e3f57a95af02fef60d99c2bcbf539f67b3e2c1149c6fe278358141e53fa9a
+    after  370e3f57a95af02fef60d99c2bcbf539f67b3e2c1149c6fe278358141e53fa9a
+  status   200
+  clarifications null
+  events 1
+  first-event details {"well":"A1","volumeUl":50,"volume":{"value":50,"unit":"uL"},"composition_snapshot":[{"component_ref":{"kind":"draft","id":"mint:Trypsin-EDTA","label":"Trypsin-EDTA"},"role":"solvent","source":"45% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:DMEM","label":"DMEM"},"role":"buffer_component","source":"45% of the mixture"},{"component_ref":{"kind":"draft","id":"mint:FBS","label":"FBS"},"role":"additive","source":"10% of the mixture"}],"formulation_kind":"complex_composition","material_ref":{"kind":"draft","id":"mint:Trypsin-EDTA + DMEM + FBS","label":"Trypsin-EDTA + DMEM + FBS"}}
+
+golden.intent-to-clarification.mixfrac-on-top
+  fixture  /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/fixtures/mixfrac-on-top.yaml
+    sha256 c8f279c4b3d0f0458c057bfce139e641ed9ba948577be28831e664b4f1c7d912
+  record   /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/scientistIntent/goldens/__records__/mixfrac-on-top.golden.json
+    before 30b8ae98a38b7dce189c37fb9c4fb8be6239b33e3e732e77622fb8e958d892ae
+    after  30b8ae98a38b7dce189c37fb9c4fb8be6239b33e3e732e77622fb8e958d892ae
+  status   422
+  clarifications [{"label":"Trypsin-EDTA, DMEM, FBS","reason":"composition-fraction-sum","actionLocation":{"actionIndex":0,"action":"add_material","argument":"composition"},"message":"The declared composition fractions sum to 110 percent, not the declared 100 percent (percent-of-final-volume). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions.","readings":[{"id":"whole-mixture-supplement","label":"whole-mixture supplement (the supplement is a share of the final volume; the bases re-base)","finalFractions":[{"label":"Trypsin-EDTA","percent":45},{"label":"DMEM","percent":45},{"label":"FBS","percent":10}]},{"id":"preceding-noun-recipe","label":"preceding-noun in-house recipe (the supplement attaches to the entry that precedes it — a complete medium the lab makes)","finalFractions":[{"label":"Trypsin-EDTA","percent":50},{"label":"DMEM","percent":45},{"label":"FBS","percent":5}],"nestedFractions":[{"label":"DMEM","percent":90},{"label":"FBS","percent":10}]},{"id":"explicit-on-top","label":"explicit on-top (declared fractions stay fractions-of-mixture)","finalFractions":[{"label":"Trypsin-EDTA","percent":50},{"label":"DMEM","percent":50},{"label":"FBS","percent":10}],"note":"Declared fractions sum to 110 percent of the mixture, not 100 percent — the fractions are kept as declared fractions-of-mixture."}]}]
+  events 0
+  first-event details undefined

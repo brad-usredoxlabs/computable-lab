@@ -11,6 +11,8 @@
  * the graph): verb, what it touches, how much, and which labware.
  */
 import type { EventGraphChange } from './sidebarState'
+import { describeCellTotal } from '../../../shared/lib/formHelpers'
+import type { ConcentrationValue } from '../../../types/material'
 
 type Dict = Record<string, unknown>
 
@@ -32,13 +34,32 @@ export function describeWells(wells: readonly string[]): string {
 function describeAmount(details: Dict): string {
   const parts: string[] = []
   const count = details['count']
+  const volume = asDict(details['volume'])
+  const density = asDict(details['counter_density'])
+  // CELLRATE-1: the per-well total is DISPLAY truth over the declared data —
+  // the shared helper derives it ONLY from a declared rate x a declared volume
+  // and labels it derived; a bare count with a volume is labeled
+  // absolute-unverified and never scaled (no invented unit).
+  const cellTotal = describeCellTotal({
+    ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
+    ...(density ? { density: density as unknown as ConcentrationValue } : {}),
+    ...(volume && typeof volume['value'] === 'number' ? { volume_uL: volume['value'] } : {}),
+    ...(volume && asString(volume['unit']) ? { volume_unit: asString(volume['unit']) } : {}),
+  })
   // "count 10,000" — neutral and true whatever the material is (cells, beads,
   // organisms). The material's own name sits beside it in the same row.
-  if (typeof count === 'number' && Number.isFinite(count)) parts.push(`count ${count.toLocaleString('en-US')}`)
-  const volume = asDict(details['volume'])
+  // When the helper's labeled reading already names the declared number
+  // (derived total or absolute-unverified label), the row shows the READING
+  // instead of the bare count — never a bare ambiguous number when both
+  // inputs exist.
+  if (typeof count === 'number' && Number.isFinite(count)) {
+    const named = cellTotal !== null && cellTotal.includes(count.toLocaleString('en-US'))
+    if (!named) parts.push(`count ${count.toLocaleString('en-US')}`)
+  }
   if (volume) parts.push(`${asString(volume['value'])} ${asString(volume['unit'])}`.trim())
   const concentration = asDict(details['concentration'])
   if (concentration) parts.push(`${asString(concentration['value'])} ${asString(concentration['unit'])}`.trim())
+  if (cellTotal) parts.push(cellTotal)
   return parts.join(', ')
 }
 

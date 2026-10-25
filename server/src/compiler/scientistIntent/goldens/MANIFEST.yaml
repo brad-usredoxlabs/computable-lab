@@ -30,7 +30,18 @@ treeState:
   # false / unevaluatedProperties: false posture and its required set are
   # UNCHANGED — the only delta in the file is the new optional property block.
   # Vocabulary and pipeline pins unchanged from the prior bless.
-  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 5327495e9c708df799ba4a00db6418d78022b85dbc56ebb83055c1e4b3d8de63}
+  # CELLRATE-1 REBLESS (this item): the wire schema's composition item `count`
+  # gained a rate-capable declared branch (oneOf — the number branch declared
+  # FIRST so every currently-valid bare-number document validates
+  # byte-identically; the object arm reuses the existing concentration terms,
+  # basis count_per_volume + the cells/uL unit family, with in-schema basis/unit
+  # cross-enforcement). counterDensity is UNTOUCHED; the entry's
+  # additionalProperties/unevaluatedProperties posture is unchanged. Before
+  # 5327495e9c708df799ba4a00db6418d78022b85dbc56ebb83055c1e4b3d8de63 -> after
+  # 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4 (one
+  # deliberate re-hash, same commit; before/after captured by
+  # server/scripts/cellrate-bless.mts).
+  - {path: schema/workflow/scientist-intent.schema.yaml, sha256: 647f524dbb38e8e475d0aac7ff7513c794adf455392acd205661c7d718fc4bc4}
   - {path: schema/registry/compile-pipelines/scientist-intent-compile.yaml, sha256: b47eee0c3bd0f4f334b5070c3bfba2cbf0d0a360bd38af855c10bd012679fbf8}
 fixtures:
   - {name: golden.intent-to-graph.transfer-read, path: fixtures/transfer-read.yaml, sha256: a8556ba41ae2f9ef151948ad4349335ab3fb1ff0992efd07896f46e4d8ceac11}
@@ -46,9 +57,41 @@ fixtures:
   # leg SPINE-6 moved here). Vocabulary-declared wash.material level: aliquot
   # drives the engine's levelFilter arm through the real route.
   - {name: golden.intent-to-clarification.material-level-mismatch, path: fixtures/material-level-mismatch.yaml, sha256: 53a86fe894d62bc32bc3d0b4cf8a0df90fd2e57b15537c38b83e28985cf0307c}
-  # COMP-4 Stage B golden: the declared many-cardinality composition arg bars
-  # naming the unresolvable COMPONENT (422, zero writes, no partial mint).
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 245603b100f927466cb7290656aa0056d489dbd180a1c0c67b8105c1136a3714}
+  # COMP-4 Stage B golden: the declared many-cardinality composition bar naming
+  # the unresolvable component (422, zero writes, no partial mint).
+  # MIXFRAC-1 REBLESS (this item, blessed ONCE in the same commit as the bar):
+  # the fixture ALREADY carried 50/50+50/50+10/10 = a 110% declared sum (bait 5),
+  # so the new composition-fraction-sum bar fires there too. Fixture bytes
+  # UNCHANGED (245603b1...); the ONLY divergence in the record is the appended
+  # producer bar fact (reason composition-fraction-sum, THREE candidate readings
+  # with computed final fractions) after the verbatim unknown-noun fact.
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: fixtures/unresolvable-mixture-component.yaml, sha256: 7086d6465105fdab7780eb28b12609d320a51e0425f79ef70321411b053742fa}
+  # MIXFRAC-1 goldens (blessed ONCE on the final content — spec §7 + §14.2,
+  # Brad's OQ-1 ruling numbers): A bar leg (nested declared composition, three
+  # readings, preceding-noun FIRST, flat 50/45/5 + nested 90:10), A record leg
+  # (flat derived view compiled clean, ratified source strings byte-stable),
+  # B (one-sided final-volume arm re-based 45/45/10, no clarification), C
+  # (explicit on-top 50/50/10 + sum note riding the reading data, OQ-4).
+  # MIXFRAC-1 FIX-RUN 1 REBLESS (adversarial review l2t1855 D3, orchestrator
+  # ruling "route a real reading-selection answer through the answer machinery
+  # — canned encoding is NOT ratified"): the A record-leg fixture re-blessed
+  # ONCE. Fixture delta dbabb88f... -> 509da519...: the fixture now carries the
+  # SAME ambiguous declared document as the bar leg (110% + nested 90:10) and
+  # request.answers selects the in-house-recipe reading
+  # ("Trypsin-EDTA, DMEM, FBS": preceding-noun-recipe) instead of a canned flat
+  # modelOutput. Record delta below. All other fixtures unchanged.
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: fixtures/mixfrac-canonical-ambiguous.yaml, sha256: 39b1f2a48c0ea3d7cb8c97b1f1ff3164b6a3612ae3f506095ced4841be3b04af}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: fixtures/mixfrac-canonical-flat.yaml, sha256: 5654856588d75f1d9e984902190934ed16912b152685c439fe88345c01c68f35}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: fixtures/mixfrac-final-volume.yaml, sha256: 5c5712c726a35da2e007bed7306f57e41983ce143e042e74fb5d3c9280601be2}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: fixtures/mixfrac-on-top.yaml, sha256: 42e2043fa9ee49b78f6e7b87fe6701da0286c184dfba973d931cd0108be4a61b}
+  # CELLRATE-1 golden (spec §7 plane 2): the canonical rate utterance round-trips
+  # as DECLARED RATE DATA — the wire rate arm validates, the compile lands 200
+  # complete, and the add_material event carries counter_density
+  # {value:200, unit:"cells/uL", basis:count_per_volume} with NO count key. THE
+  # WALL: the serialized record contains no "20000" (the compiler performed no
+  # arithmetic; the per-well total is display-only). Blessed ONCE via
+  # server/scripts/cellrate-bless.mts.
+  - {name: golden.intent-to-graph.cells-rate-per-volume, path: fixtures/cells-rate-per-volume.yaml, sha256: ddb6e81c5014211ab8556a09fe3def37224a4e8928bc4549fd7d58d7db9f6000}
 records:
   - {name: golden.intent-to-graph.transfer-read, path: __records__/transfer-read.golden.json, sha256: 46e48f42693af70067723febeb5425279b1ade09990c8dccac0aae741d7e9ffa}
   - {name: golden.intent-to-graph.labware-hint-regression, path: __records__/labware-hint-regression.golden.json, sha256: c5a08a0797142b2c05ebda39e4f60b19eb3079bb6d8b3838c0c8c0773405b10f}
@@ -103,7 +146,30 @@ records:
   # collapsed duplicate tier-5 mint candidate per noun (2 -> 1); bless script
   # proved non-mint content byte-identical. No other record or manifest entry
   # moved. Before/after diff in MINT-FLOOR-UI-1-report.wip-l2t0015.md.
-  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 75ef78d867f7682b1aa0119b8735aab0fb5a1bec99899b83c7a94fa6ccaf757e}
+  - {name: golden.intent-to-clarification.unresolvable-mixture-component, path: __records__/unresolvable-mixture-component.golden.json, sha256: 9968461799cbe97666ec607d721f97a27e78d2057a916d6647aa7e5c11cd8241}
+  # MIXFRAC-1 blessed records (ONCE, same commit as the bar; bless script
+  # scripts/mixfrac-bless.mts, before/after hashes in
+  # .hermes/plans/MIXFRAC-1-report.wip-l2t0310.md). unresolvable-mixture-
+  # component re-blessed ONCE: 75ef78d8... -> fe927e73... (the ONLY divergence
+  # is the appended composition-fraction-sum bar fact; the unknown-noun fact is
+  # byte-identical). The four MIXFRAC-1 records are blessed for the first time.
+  # MIXFRAC-1 FIX-RUN 1 REBLESS (l2t1855 D3, blessed ONCE in the same commit as
+  # the answer-channel fix): mixfrac-canonical-flat record re-blessed
+  # e99f916f... -> a2d1ef36... — the ONLY divergence is the answer-driven
+  # replay: the held localMacro now carries the DECLARED nested document
+  # (110% + nested 90:10, 4 entries) instead of the canned flat one, and the
+  # event snapshot stays the FLAT derived view 50/45/5 with byte-stable
+  # ratified source strings (diff audit in MIXFRAC-1-fix1-report-l2t1855.md).
+  # Every other record unchanged (bless dry-run before/after hashes prove it).
+  - {name: golden.intent-to-clarification.mixfrac-canonical-ambiguous, path: __records__/mixfrac-canonical-ambiguous.golden.json, sha256: 68208b4f15b303a53543d859ea9317cdb5a21a8d103829f454983d23acdf71ca}
+  - {name: golden.intent-to-graph.mixfrac-canonical-flat, path: __records__/mixfrac-canonical-flat.golden.json, sha256: f68e68a79d159df10238d7a1a333ee3189f816459c3e985660d08da2ba4e45b3}
+  - {name: golden.intent-to-graph.mixfrac-final-volume, path: __records__/mixfrac-final-volume.golden.json, sha256: 1b5f35ff7bc39d3bb1bb481601a9d08bb9d907c9671ab8d4c9338f8ec2b153e5}
+  - {name: golden.intent-to-clarification.mixfrac-on-top, path: __records__/mixfrac-on-top.golden.json, sha256: c1b6214f044d8792bc456c4c14bfcfa152435b25b649058b460bbca1f4bffa91}
+  # CELLRATE-1 record (blessed ONCE via server/scripts/cellrate-bless.mts): the
+  # add_material event carries counter_density {value:200, unit:"cells/uL",
+  # basis:count_per_volume} and NO count key; the serialized record contains no
+  # "20000" (THE WALL — the compiler performed no arithmetic).
+  - {name: golden.intent-to-graph.cells-rate-per-volume, path: __records__/cells-rate-per-volume.golden.json, sha256: 1143fd41339ee246f0568a81042a337e21224d9b27fa0bcbf65b756b7228eca2}
 # Actual merged spelling (name-and-read 1, CompileContracts.ts:87 at c74c5214).
 outcomeUnionMember: needs-clarification
 # Actual merged contract (name-and-read 4, IntentCompileFromPromptHandlers.ts at c74c5214):

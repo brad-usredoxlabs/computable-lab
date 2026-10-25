@@ -138,19 +138,19 @@ one entry per component:
   targetWells: [A1]
   params:
     composition:
-      - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+      - { material: "Thermo trypsin-EDTA", role: other, fraction: "50%" }
       - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
       - { material: "Thermo FBS", role: additive, fraction: "10%" }
-      - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
+      - { material: "HepG2 cells", role: cells, count: { value: 200, unit: "cells/uL", basis: count_per_volume } }
 ```
 
 Rules:
 - `material` is the component's own name, in the scientist's words, one per entry.
-- `role` is one of `solute | solvent | buffer_component | additive | activity_source | cells | other`.
+- `role` is one of `solute | solvent | buffer_component | additive | activity_source | cells | other` — closest declared role; if none fits, `other`.
 - `fraction` is the volume fraction of the mixture when the scientist stated one ("50%").
-- A `cells` component carries a COUNT (`count`), never a volume. If the scientist
-  gave a density ("200 cells per uL") and a volume, `count = density × volume`;
-  carry both the `count` and the `counterDensity` so the arithmetic is auditable.
+- A `cells` component carries a COUNT (`count`), never a volume. A stated rate
+  rides `count: {value, unit, basis: count_per_volume}` (e.g. 200 cells/uL); an
+  absolute is a plain number (e.g. 20000). NEVER multiply; carry both if stated.
 - `material` (the single-material field) names the MIXTURE itself, or is omitted.
   NEVER put a mixture sentence in `material` — a blob is not a material and it
   cannot bind to anything in the lab.

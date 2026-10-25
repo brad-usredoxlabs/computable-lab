@@ -91,4 +91,43 @@ describe('WellTooltip (event-editor focus)', () => {
     const concCell = container.querySelector('.well-tooltip__material-conc')
     expect(concCell?.textContent).toBe('1 mM')
   })
+
+  // CELLRATE-1 (RED-first): the post-fix compiled shape — a rate-only event
+  // (counter_density declared, NO count). The cells row keeps the declared
+  // rate AND shows the per-well total LABELED derived with the operands
+  // readable; the header stays the single volume assertion.
+  it('rate-only cells row: declared rate kept, per-well total shown labeled derived (20,000/well = 200/uL x 100 uL)', () => {
+    const { container } = renderTooltip((labwareId) => ({
+      eventId: 'evt-rate-only',
+      event_type: 'add_material',
+      details: {
+        labwareId,
+        wells: ['A1'],
+        volume: { value: 100, unit: 'uL' },
+        counter_density: { value: 200, unit: 'cells/uL', basis: 'count_per_volume' },
+        composition_snapshot: [
+          { componentRef: { kind: 'record', id: 'rec-dmem', label: 'DMEM' }, role: 'buffer_component', source: '100% of the mixture' },
+          { componentRef: { kind: 'record', id: 'rec-hepg2', label: 'HepG2' }, role: 'cells' },
+        ],
+      },
+    }))
+
+    const rows = Array.from(container.querySelectorAll('.well-tooltip__material'))
+    const cellsRow = rows.find((row) => row.textContent?.includes('HepG2'))
+    expect(cellsRow).toBeTruthy()
+    const concCell = cellsRow?.querySelector('.well-tooltip__material-conc')?.textContent ?? ''
+    // The declared rate stays visible...
+    expect(concCell).toContain('200 cells/uL')
+    // ...and the per-well total is shown LABELED derived, operands readable.
+    expect(concCell).toContain('20,000/well = 200/uL x 100 uL (derived)')
+    // No bare ambiguous number: the row never shows a lone "200".
+    expect(concCell).not.toMatch(/(^|·)\s*200\s*(·|$)/)
+    // SH-QA-4 unchanged: the header is the only volume assertion.
+    const headerVols = Array.from(container.querySelectorAll('.well-tooltip__volume'))
+    expect(headerVols.length).toBe(1)
+    const volCells = Array.from(container.querySelectorAll('.well-tooltip__material-vol'))
+    for (const cell of volCells) {
+      expect(cell.textContent, 'composition row must not claim a volume').not.toBe('100.0 µL')
+    }
+  })
 })

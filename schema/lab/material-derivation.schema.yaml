@@ -42,15 +42,15 @@ properties:
   inputs:
     type: array
     items:
-      $ref: '../core/ref.schema.yaml'
+      $ref: './datatypes/ref.schema.yaml'
   outputs:
     type: array
     items:
-      $ref: '../core/ref.schema.yaml'
+      $ref: './datatypes/ref.schema.yaml'
   protocol_ref:
-    $ref: '../core/ref.schema.yaml'
+    $ref: './datatypes/ref.schema.yaml'
   source_event_graph_ref:
-    $ref: '../core/ref.schema.yaml'
+    $ref: './datatypes/ref.schema.yaml'
   conditions:
     type: object
     additionalProperties: true

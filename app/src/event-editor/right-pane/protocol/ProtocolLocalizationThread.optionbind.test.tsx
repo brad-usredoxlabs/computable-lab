@@ -173,7 +173,7 @@ describe('clarificationAdapter — the candidate handle rides onto the option (W
 describe('ProtocolLocalizationThread — an option pick with a handle emits the binding idiom (W28-OPTIONBIND-1)', () => {
   it('3. clicking a ref-bearing option re-sends answers[<fact label>] as [[labware:<id>|<label>]] (the answerFromMention idiom the server validates)', async () => {
     seedFold(ENGINE_FACT_WITH_REF)
-    await screen.findByTestId('pl-clarification-cards')
+    await screen.findByTestId('pl-clarification-panel')
 
     const cardEls = screen.getAllByTestId('pl-clarification-card')
     const card = cardEls.find((el) => (el.textContent ?? '').includes(FACT_LABEL))!
@@ -193,7 +193,7 @@ describe('ProtocolLocalizationThread — an option pick with a handle emits the 
 
   it('4. contrast pin (holds at base AND after the fix): an option WITHOUT a handle keeps today\'s plain-label value', async () => {
     seedFold(ENGINE_FACT_NO_REF)
-    await screen.findByTestId('pl-clarification-cards')
+    await screen.findByTestId('pl-clarification-panel')
 
     const cardEls = screen.getAllByTestId('pl-clarification-card')
     const card = cardEls.find((el) => (el.textContent ?? '').includes(FACT_LABEL))!

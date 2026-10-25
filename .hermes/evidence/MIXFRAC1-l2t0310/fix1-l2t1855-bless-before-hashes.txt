@@ -1,0 +1,2 @@
+509da519437b4e9e90718665d5f7d0d68b5098f7d9b08432a8eff92b584f103a  src/compiler/scientistIntent/goldens/fixtures/mixfrac-canonical-flat.yaml
+e99f916f0e9997f98dcc5d1d9f2921ea1d2050e862fb8c4df1b25a8ce4e1fa08  src/compiler/scientistIntent/goldens/__records__/mixfrac-canonical-flat.golden.json

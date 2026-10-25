@@ -1,0 +1,5 @@
+$ git -c core.fileMode=false diff -- server/src/compiler/scientistIntent/compositionFractions.ts | grep "^+" | grep -inE "dmem|fbs|trypsin|hepg|serum|'50'|\\"50\\"|\\b45\\b|\\b10\\b|\\b100\\b|on top|bring to|final|of the mixture"
+EXIT=1 (1 = zero matches — bait-4 clean over the fix2 added production lines)
+
+$ grep -rn settledComposition server/src
+EXIT=1 (1 = field gone)

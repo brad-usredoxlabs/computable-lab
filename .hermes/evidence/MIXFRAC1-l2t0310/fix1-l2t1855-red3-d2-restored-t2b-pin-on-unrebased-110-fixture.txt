@@ -1,0 +1,33 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/resolution/compositionArgResolution.test.ts  (15 tests | 1 failed) 2464ms
+   ❯ src/compiler/resolution/compositionArgResolution.test.ts > comp4.t2-declared-composition-binds > T2b: full pipeline — a fully resolvable mixture compiles with zero composition clarifications
+     → expected [ { …(5) } ] to have a length of +0 but got 1
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/resolution/compositionArgResolution.test.ts > comp4.t2-declared-composition-binds > T2b: full pipeline — a fully resolvable mixture compiles with zero composition clarifications
+AssertionError: expected [ { …(5) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/compiler/resolution/compositionArgResolution.test.ts:261:97
+    259|     // its own leg (T2c) instead of replacing this assertion.
+    260|     const { compiled } = await compileReal(ACTION_LEVEL_ALL_RESOLVABLE…
+    261|     expect(compiled.clarifications.filter((c) => c.actionLocation?.arg…
+       |                                                                                                 ^
+    262|     // The mixture itself compiles through the real chain (labware 'pl…
+    263|     // seeded; the compile outcome must not bar on the composition arg…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  20:15:16
+   Duration  4.47s (transform 478ms, setup 0ms, collect 1.20s, tests 2.46s, environment 0ms, prepare 332ms)
+
