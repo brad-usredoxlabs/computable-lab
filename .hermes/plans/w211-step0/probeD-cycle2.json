@@ -1,0 +1,193 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "stool samples",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term \u201cstool samples\u201d",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 1,
+     "action": "add_material",
+     "argument": "source"
+    }
+   },
+   {
+    "label": "stool sample source",
+    "reason": "scientist said 'bring one Sample Plate holding 50 uL of each stool sample in wells A1-D4' but did not name the source container of the stool samples"
+   },
+   {
+    "label": "wash reagent",
+    "reason": "wash step stated as 'wash the plate once' without an explicit wash reagent; inventory suggests MagWash 2 + magnetic rack but not confirmed"
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "zymobiomics-96-magbead-dna-prep",
+   "actions": [
+    {
+     "action": "create_container",
+     "labware": "Sample Plate"
+    },
+    {
+     "action": "add_material",
+     "source": "stool samples",
+     "target": "Sample Plate",
+     "source_name": "stool sample",
+     "volumeUl": 50
+    },
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Lysis Plate",
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "target": "Lysis Plate",
+     "material": "Lysis Solution",
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bead Beating Plate A",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Lysis Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "transfer",
+     "source": "Lysis Plate",
+     "target": "MagBinding Plate",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Beads v211g1",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Buffer",
+     "volumeUl": 800
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "cycles": 1
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "material": "DNase/RNase Free Water",
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": [
+    {
+     "label": "stool sample source",
+     "reason": "scientist said 'bring one Sample Plate holding 50 uL of each stool sample in wells A1-D4' but did not name the source container of the stool samples"
+    },
+    {
+     "label": "wash reagent",
+     "reason": "wash step stated as 'wash the plate once' without an explicit wash reagent; inventory suggests MagWash 2 + magnetic rack but not confirmed"
+    }
+   ]
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "zymobiomics-96-magbead-dna-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "stool samples",
+       "labwareHint": "stool samples",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Lysis Plate",
+       "labwareHint": "Lysis Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bead Beating Plate A",
+       "labwareHint": "Bead Beating Plate A",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": [
+     {
+      "id": "unresolved-stool sample source",
+      "kind": "operation",
+      "label": "stool sample source",
+      "reason": "scientist said 'bring one Sample Plate holding 50 uL of each stool sample in wells A1-D4' but did not name the source container of the stool samples",
+      "blocksLowering": false
+     },
+     {
+      "id": "unresolved-wash reagent",
+      "kind": "operation",
+      "label": "wash reagent",
+      "reason": "wash step stated as 'wash the plate once' without an explicit wash reagent; inventory suggests MagWash 2 + magnetic rack but not confirmed",
+      "blocksLowering": false
+     }
+    ]
+   }
+  }
+ }
+}

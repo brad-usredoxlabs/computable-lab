@@ -1,0 +1,16 @@
+
+Running 1 test using 1 worker
+
+[golden] cleared prior-run minted nonce MAT-magbinding-beads-v211g1-vizl -> 200
+[page] W211-DIAG thread MOUNTED at 3997ms
+[G1 draw1 attempt 1] ask arm -> HTTP 200
+[G1 draw2 attempt 1] answered compile -> HTTP 422
+[G1 pick-b] answered re-POST -> HTTP 422
+[G1 mint-c] POST /vocab/mint (fired by the UI) -> recordId MAT-magbinding-beads-v211g1-vizl
+[G1 pick-c] answered re-POST -> HTTP 200
+[G1 paste] LPR LPR-zymobiomics-96-magbead-dna-kit-semantic--mvekt2q7 inherits_from=CAN-protocol-1792373300447 overrides=11 branch_resolution=[{"axisId":"branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead-lysis-tubes","matched":true,"branchIds":["branch-1"],"choices":{"branch-axis-zymobiomics-bashingbead-lysis-rack-zr-bashingbead
+[G1 seam-a proof] replay log grew 5 entries during the leg: [branch-questions, branch-questions, intent-draw-tool, intent-draw-tool, intent-draw-tool]
+[G1 class-(d)] gap-fact deck-surface answerability is BLOCKED-ON-FIX (W211-GAPCARD-1) — legs a/b/c stand; see report §STEP0 + fixture obligations[3]
+  ✓  1 [chromium] › e2e/w2-11-campaign-demo.spec.mjs:1290:3 › W2-11 zymo campaign demo gate › G1: golden fixture — replay producer drives the real UI end-to-end with fidelity assertions (41.5s)
+
+  1 passed (49.0s)

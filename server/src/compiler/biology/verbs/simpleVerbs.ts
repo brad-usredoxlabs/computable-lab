@@ -8,6 +8,43 @@
 import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type PlateEventPrimitive, type VerbInput } from '../BiologyVerbExpander.js';
 import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
 import { expandWellTokens } from '../../../ai/wellRange.js';
+// MIXFRAC-1 (OQ-2 ruling): the declared fraction convention applied at
+// snapshot emission. The evaluator is generic (zero domain knowledge) and the
+// parse patterns + canonical rendering form are DATA in
+// config/drafting/composition-fraction-convention.yaml. No fraction, reagent,
+// or phrase literal lives here beyond the existing `of the mixture` site.
+import {
+  FRACTION_CONVENTION_PATH,
+  formatFractionString,
+  loadFractionConvention,
+  parseFractionValue,
+  type FractionConventionConfig,
+} from '../../scientistIntent/compositionFractions.js';
+
+/** MIXFRAC-1 (§3.2): the fraction string the snapshot `source` carries.
+ *  The declared convention is applied BEFORE the `of the mixture` copy: a
+ *  declared fraction that parses under the DATA patterns is emitted in the
+ *  convention's canonical final-of-mixture form (the DATA `fractionFormat`
+ *  template renders it, so a bare number and a spaced-percent form land in
+ *  the SAME canonical shape the app's shape parser consumes). A declared
+ *  fraction that
+ *  parses to NO number passes through VERBATIM — never guessed. An absent
+ *  convention file turns this off (the loader warns LOUD, naming the path) and
+ *  the declared string passes through unchanged. */
+function conventionAppliedFraction(declared: string, config: FractionConventionConfig | undefined): string {
+  if (!config) return declared;
+  const parsed = parseFractionValue(declared, config.fractionPatterns);
+  if (parsed === undefined) return declared;
+  return formatFractionString(parsed, config);
+}
+
+/** MIXFRAC-1 (§3 OUT pin caution): the ratified snapshot source form, routed
+ *  through the ONE `of the mixture` site in this file (the existing :385
+ *  emission, now a helper so the flat entry AND the flattened-nested entry
+ *  share the identical byte-stable form). */
+function mixtureSourceString(fractionText: string): string {
+  return `${fractionText} of the mixture`;
+}
 
 /**
  * Shared helper for verbs that do add_material + incubate.
@@ -365,6 +402,11 @@ function compositionSnapshotFromParams(
   counterDensity?: Record<string, unknown>;
 } | null {
   if (!Array.isArray(composition) || composition.length < 2) return null;
+  // MIXFRAC-1: the convention DATA is loaded PER call (the mixture-cue
+  // discipline — never process-cached, so a convention edit needs no restart
+  // and tests never need a reload). Absent file ⇒ OFF — LOUD (one console.warn
+  // naming the path) and the declared fractions pass through unchanged.
+  const fractionConvention = loadFractionConvention(FRACTION_CONVENTION_PATH);
   const snapshot: Record<string, unknown>[] = [];
   const componentLabels: string[] = [];
   let count: number | undefined;
@@ -378,18 +420,82 @@ function compositionSnapshotFromParams(
     // A component with no CURIE is a DRAFT ref — the exact shape
     // MaterialGrounding.ensureLocalMaterialForDraft mints into a MAT- record.
     const componentRef: Record<string, unknown> = { kind: 'draft', id: `mint:${label}`, label };
+    // MIXFRAC-1 (§14.2, Brad's OQ-1 ruling): a declared entry that carries its
+    // OWN composition (the ONE additive composition-entry property, §14.1) is
+    // an in-house formulation — the snapshot emits the FLAT DERIVED view: each
+    // child line takes parentShare x childShare / total as its final-of-mixture
+    // fraction, and the parent line is NOT emitted (the nested form never
+    // rides a snapshot entry; the declared truth stays in the document/record
+    // layer). Flattening fires ONLY when the parent fraction AND every child
+    // fraction parses under the DATA patterns — an unparseable declared value
+    // passes through verbatim, never guessed.
+    const nested = Array.isArray(entry.composition) ? entry.composition : undefined;
+    const parentParsed = fractionConvention && typeof entry.fraction === 'string'
+      ? parseFractionValue(entry.fraction, fractionConvention.fractionPatterns)
+      : undefined;
+    if (nested && nested.length > 0 && parentParsed !== undefined && fractionConvention) {
+      const childLines = nested.flatMap((childRaw) => {
+        if (!childRaw || typeof childRaw !== 'object' || Array.isArray(childRaw)) return [];
+        const child = childRaw as Record<string, unknown>;
+        const childLabel = typeof child.material === 'string' ? child.material.trim() : '';
+        const childFraction = typeof child.fraction === 'string' ? child.fraction.trim() : '';
+        const childParsed = childFraction ? parseFractionValue(childFraction, fractionConvention.fractionPatterns) : undefined;
+        if (!childLabel || childParsed === undefined) return [];
+        const childRole = typeof child.role === 'string' && child.role.trim() ? child.role.trim() : role;
+        return [{ childLabel, childRole, childParsed }];
+      });
+      if (childLines.length === nested.length) {
+        for (const child of childLines) {
+          const finalPercent = (parentParsed * child.childParsed) / fractionConvention.total;
+          snapshot.push({
+            component_ref: { kind: 'draft', id: `mint:${child.childLabel}`, label: child.childLabel },
+            role: child.childRole,
+            source: mixtureSourceString(formatFractionString(finalPercent, fractionConvention)),
+          });
+          componentLabels.push(child.childLabel);
+        }
+        continue;
+      }
+    }
     snapshot.push({
       component_ref: componentRef,
       role,
       ...(entry.concentration !== undefined ? { concentration: entry.concentration } : {}),
-      ...(typeof entry.fraction === 'string' ? { source: `${entry.fraction} of the mixture` } : {}),
+      ...(typeof entry.fraction === 'string'
+        ? { source: mixtureSourceString(conventionAppliedFraction(entry.fraction, fractionConvention)) }
+        : {}),
     });
     componentLabels.push(label);
     if (role === 'cells') {
-      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) count = entry.count;
+      // CELLRATE-1 (§5.2): route the DECLARED count shape — the compiler
+      // performs NO arithmetic (THE WALL): a rate leg produces counter_density
+      // and NO count; a declared-absolute leg passes count through unchanged.
+      // Precedence (pinned in simpleVerbsCountRate.test.ts, bait 11): an entry
+      // carrying BOTH counterDensity and a rate-arm count keeps the dedicated
+      // counterDensity slot — the rate arm is never coerced into `count`.
       const density = entry.counterDensity;
       if (density && typeof density === 'object' && !Array.isArray(density)) {
         counterDensity = density as Record<string, unknown>;
+      }
+      if (typeof entry.count === 'number' && Number.isFinite(entry.count)) {
+        count = entry.count;
+      } else if (entry.count && typeof entry.count === 'object' && !Array.isArray(entry.count)) {
+        const declared = entry.count as Record<string, unknown>;
+        const declaredValue = typeof declared.value === 'number' && Number.isFinite(declared.value)
+          ? declared.value
+          : undefined;
+        if (declared.basis === 'count_per_volume') {
+          // The declared rate rides the event's EXISTING counter_density slot
+          // (plate-event.add-material declares counter_density as the
+          // concentration datatype). `count_per_volume` is the existing
+          // concentration.schema.yaml enum term — registration, not policy;
+          // the unit set is schema DATA, never a TS list.
+          if (!counterDensity && declaredValue !== undefined) counterDensity = declared;
+        } else if (declared.basis === 'count' && declaredValue !== undefined) {
+          // Absolute arm: the value lands in the ledger's absolute slot; the
+          // controlled unit term loses no information there.
+          count = declaredValue;
+        }
       }
     }
   }
@@ -632,6 +738,28 @@ export const shakeExpander: BiologyVerbExpander = {
   },
 };
 
+/**
+ * bead_beat: single mix event (mechanical bead-beating disruption).
+ */
+export const beadBeatExpander: BiologyVerbExpander = {
+  verb: 'bead_beat',
+  expand(input) {
+    const { params } = input;
+    return [{
+      eventId: makeEventId('bead_beat'),
+      event_type: 'mix',
+      details: {
+        mode: 'bead_beating',
+        ...(params.cycles !== undefined ? { cycles: params.cycles as number } : {}),
+        ...(params.temperature !== undefined
+          ? { temperature: params.temperature as number }
+          : {}),
+      },
+      ...(params.labware_id ? { labwareId: params.labware_id as string } : {}),
+    }];
+  },
+};
+
 // Register all expanders at module import time
 registerVerbExpander(seedExpander);
 registerVerbExpander(incubateExpander);
@@ -651,3 +779,4 @@ registerVerbExpander(createContainerExpander);
 registerVerbExpander(readExpander);
 registerVerbExpander(transferExpander);
 registerVerbExpander(shakeExpander);
+registerVerbExpander(beadBeatExpander);

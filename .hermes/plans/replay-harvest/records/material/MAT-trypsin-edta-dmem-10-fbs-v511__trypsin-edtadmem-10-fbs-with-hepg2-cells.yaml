@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-trypsin-edta-dmem-10-fbs-v511
+kind: material
+id: MAT-trypsin-edta-dmem-10-fbs-v511
+name: Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for
+  "Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells").

@@ -1,0 +1,10 @@
+# panel T9-known-vendor-product — noun “HB-8065” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+  tier 1:
+    Hep G2 [HEPG2] - HB-8065 | ATCC  [local:MAT-hep-g2-hepg2-hb-8065-atc-7hdl]  score=1.020
+
+level: unknown
+  tier 1:
+    Hep G2 [HEPG2] - HB-8065 | ATCC  [local:VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB]  score=1.020
+

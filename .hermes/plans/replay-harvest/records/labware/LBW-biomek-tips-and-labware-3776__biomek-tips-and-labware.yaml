@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LBW-biomek-tips-and-labware-3776
+kind: labware
+name: Biomek Tips and Labware
+labwareType: other
+manufacturer:
+  url: https://media.beckman.com/-/media/pdf-assets/catalogs/biomek-tips-labware-catalog.pdf?rev=69aba91a65cc4c3b8569f33acba53abd
+notes: "Imported from Exa vendor product search:
+  https://media.beckman.com/-/media/pdf-assets/catalogs/biomek-tips-labware-cat\
+  alog.pdf?rev=69aba91a65cc4c3b8569f33acba53abd"

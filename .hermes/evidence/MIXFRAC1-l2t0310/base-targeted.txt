@@ -1,0 +1,30 @@
+ FAIL  src/compiler/scientistIntent/mixtureRedundancy.test.ts [ src/compiler/scientistIntent/mixtureRedundancy.test.ts ]
+ FAIL  src/compiler/scientistIntent/promptShapeParity.test.ts [ src/compiler/scientistIntent/promptShapeParity.test.ts ]
+ FAIL  src/compiler/scientistIntent/quantityWireContract.test.ts [ src/compiler/scientistIntent/quantityWireContract.test.ts ]
+ FAIL  src/compiler/scientistIntent/realizationGolden.test.ts [ src/compiler/scientistIntent/realizationGolden.test.ts ]
+ FAIL  src/compiler/scientistIntent/realizeScientistIntent.test.ts [ src/compiler/scientistIntent/realizeScientistIntent.test.ts ]
+ FAIL  src/compiler/scientistIntent/scientistIntent.test.ts [ src/compiler/scientistIntent/scientistIntent.test.ts ]
+ FAIL  src/compiler/scientistIntent/scientistIntentContract.test.ts [ src/compiler/scientistIntent/scientistIntentContract.test.ts ]
+ FAIL  src/compiler/scientistIntent/vocabularyMirrorDrift.test.ts [ src/compiler/scientistIntent/vocabularyMirrorDrift.test.ts ]
+ FAIL  src/compiler/scientistIntent/vocabularyRipOut.test.ts [ src/compiler/scientistIntent/vocabularyRipOut.test.ts ]
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts [ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts ]
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts [ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts ]
+ FAIL  src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts [ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts ]
+ FAIL  src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts [ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts ]
+Error: Failed to load url ../../ai/materialRefFields.js (resolved id: ../../ai/materialRefFields.js) in /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/resolution/resolutionEngine.ts. Does the file exist?
+ ❯ loadAndTransform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionDecomposition.test.ts [ src/compiler/scientistIntent/compositionDecomposition.test.ts ]
+ FAIL  src/compiler/scientistIntent/rolesSeam.test.ts [ src/compiler/scientistIntent/rolesSeam.test.ts ]
+Error: Failed to load url ../../ai/materialRefFields.js (resolved id: ../../ai/materialRefFields.js) in /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/src/compiler/resolution/resolutionEngine.ts. Does the file exist?
+ ❯ loadAndTransform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯
+
+ Test Files  19 failed | 12 passed (31)
+      Tests  123 passed (123)
+   Start at  05:47:49
+   Duration  4.95s (transform 4.50s, setup 0ms, collect 6.01s, tests 5.50s, environment 9ms, prepare 13.21s)
+

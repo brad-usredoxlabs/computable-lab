@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-XCO-QA-TRYPSIN
+kind: material
+id: MAT-XCO-QA-TRYPSIN
+name: QA trypsin-EDTA
+domain: media
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceCurie: XCO:qa-trypsin
+  sourceLabel: QA trypsin-EDTA
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-16T14:45:59.114Z
+  note: Created as a proposed local material record from an accepted add-material
+    event graph.
+class:
+  - kind: ontology
+    id: XCO:qa-trypsin
+    namespace: XCO
+    label: QA trypsin-EDTA

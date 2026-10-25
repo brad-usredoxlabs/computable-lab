@@ -130,6 +130,14 @@ export interface UseChatThreadOptions {
    */
   onRecordDraftProposal?: (recordDraft: Record<string, unknown>) => void
   /**
+   * MATRES-CHAIN (OQ-3(a) ratified) — tier-2 mount (execute-chain): fires when
+   * the model proposes an execute-chain attestation for human review. Forwards
+   * the INTENT verbatim; the mount relays it to POST /api/drafts/compile with
+   * adapter 'chain'. Same zero-touch discipline as onRecordDraftProposal —
+   * the card owns the flow.
+   */
+  onChainProposal?: (chain: Record<string, unknown>) => void
+  /**
    * PB-CH-8 fix1 — turn marker (NOT a content relay): fires when the server's
    * ledger_answer frame arrives during the turn. The hook still owns the
    * kind:'ledger' trace render VERBATIM (the dispatch below is unchanged);
@@ -154,6 +162,7 @@ export function useChatThread({
   onWorkstateProposal,
   onAnalysisProposal,
   onRecordDraftProposal,
+  onChainProposal,
   onLedgerAnswer,
   workingFocus,
   runStream,
@@ -324,6 +333,19 @@ export function useChatThread({
                   // end the turn or the chat.
                 }
                 return
+              case 'chain_proposal':
+                // MATRES-CHAIN tier-2 (execute-chain, OQ-3(a)): same zero-touch
+                // discipline as the record-drafting case above — the mount
+                // relays the INTENT to POST /api/drafts/compile (adapter
+                // 'chain'); the hook touches nothing else, with the same
+                // never-break-the-turn wrapper.
+                try {
+                  onChainProposal?.(event.chain)
+                } catch {
+                  // The card mount owns the flow; a mount explosion must not
+                  // end the turn or the chat.
+                }
+                return
               case 'ledger_answer': {
                 // PB-CH-8: the SERVER-BUILT ledger answer (journal snapshot +
                 // server-known audit rows — fetched evidence, never model
@@ -377,7 +399,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onLedgerAnswer, runStream],
+    [state.messages, surface, context, workingFocus, onDraftResult, onAgentAction, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onLedgerAnswer, runStream],
   )
 
   const stop = useCallback(() => {

@@ -1,0 +1,164 @@
+{
+ "status": 422,
+ "body": {
+  "error": "NEEDS_CLARIFICATION",
+  "outcome": "needs-clarification",
+  "clarifications": [
+   {
+    "label": "Bead Beating Plate",
+    "reason": "ambiguous-noun",
+    "candidates": [
+     {
+      "label": "Bead Beating Plate A",
+      "confidence": 1
+     },
+     {
+      "label": "Bead Beating Plate B",
+      "confidence": 1
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 2,
+     "action": "bead_beat",
+     "argument": "labware"
+    }
+   },
+   {
+    "label": "MagBinding Beads v211g1",
+    "reason": "unknown-noun",
+    "candidates": [
+     {
+      "label": "Create local term “MagBinding Beads v211g1”",
+      "confidence": 0.05
+     }
+    ],
+    "actionLocation": {
+     "actionIndex": 5,
+     "action": "add_material",
+     "argument": "material"
+    }
+   }
+  ],
+  "localMacro": {
+   "kind": "scientist-intent",
+   "version": "0.1.0",
+   "intentId": "w211-golden-bench-prep",
+   "actions": [
+    {
+     "action": "transfer",
+     "source": "Sample Plate",
+     "target": "Lysis Plate",
+     "volumeUl": 50
+    },
+    {
+     "action": "add_material",
+     "target": "Lysis Plate",
+     "material": "Lysis Solution",
+     "volumeUl": 700
+    },
+    {
+     "action": "bead_beat",
+     "labware": "Bead Beating Plate",
+     "duration": "30 s"
+    },
+    {
+     "action": "spin",
+     "labware": "Lysis Plate",
+     "duration": "10 min",
+     "rpm": 3000
+    },
+    {
+     "action": "transfer",
+     "source": "Lysis Plate",
+     "target": "MagBinding Plate",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Beads v211g1",
+     "volumeUl": 500
+    },
+    {
+     "action": "add_material",
+     "target": "MagBinding Plate",
+     "material": "MagBinding Buffer",
+     "volumeUl": 800
+    },
+    {
+     "action": "wash",
+     "labware": "MagBinding Plate",
+     "cycles": 1
+    },
+    {
+     "action": "transfer",
+     "source": "MagBinding Plate",
+     "target": "Sample Plate",
+     "material": "nuclease-free water",
+     "volumeUl": 100
+    },
+    {
+     "action": "incubate",
+     "labware": "Sample Plate",
+     "duration": "30 min",
+     "temperatureC": 37
+    },
+    {
+     "action": "read",
+     "labware": "Sample Plate",
+     "mode": "absorbance",
+     "wavelength": "600 nm"
+    }
+   ],
+   "unresolved": []
+  },
+  "terminalArtifacts": {
+   "events": [],
+   "directives": [],
+   "gaps": [],
+   "protocolIntent": {
+    "kind": "protocol_intent",
+    "version": "0.1.0",
+    "intentId": "w211-golden-bench-prep",
+    "steps": [],
+    "resources": {
+     "labwareInstances": [
+      {
+       "id": "Sample Plate",
+       "labwareHint": "Sample Plate",
+       "role": "source",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Lysis Plate",
+       "labwareHint": "Lysis Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "Bead Beating Plate",
+       "labwareHint": "Bead Beating Plate",
+       "resolutionStatus": "candidate"
+      },
+      {
+       "id": "MagBinding Plate",
+       "labwareHint": "MagBinding Plate",
+       "role": "target",
+       "resolutionStatus": "candidate"
+      }
+     ],
+     "materialDefinitions": [],
+     "materialFormulations": [],
+     "materialAliquots": [],
+     "pipettes": [],
+     "tips": [],
+     "waste": []
+    },
+    "operations": [],
+    "patterns": [],
+    "assumptions": [],
+    "unresolved": []
+   }
+  }
+ }
+}

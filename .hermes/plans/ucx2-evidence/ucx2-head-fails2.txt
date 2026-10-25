@@ -1,0 +1,8 @@
+src/App.test.tsx > App router (Phase 12) > redirects /browser to / (Welcome) 
+src/App.test.tsx > App router (Phase 12) > redirects /literature to / (Welcome) 
+src/App.test.tsx > App router (Phase 12) > redirects /protocols to / (Welcome) 
+src/App.test.tsx > App router (Phase 12) > renders 404 for retired legacy URL /extraction 
+src/App.test.tsx > App router (Phase 12) > renders 404 for retired legacy URL /extraction/review/DRA-1 
+src/App.test.tsx > App router (Phase 12) > renders 404 for retired legacy URL /ingestion 
+src/App.test.tsx > App router (Phase 12) > renders 404 for retired legacy URL /runs/RUN-1 
+src/App.test.tsx > App router (Phase 12) > renders WelcomePage at / 

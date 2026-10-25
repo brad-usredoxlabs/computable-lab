@@ -52,7 +52,8 @@ export type ScientistIntentActionKind =
   | 'serial_dilution'
   | 'media_swap_duplicate_columns'
   | 'source_wells_to_duplicate_target_columns'
-  | 'repeat_rows';
+  | 'repeat_rows'
+  | 'bead_beat';
 
 export interface ScientistIntentActionValue {
   schema?: unknown;
@@ -115,7 +116,15 @@ export interface ScientistIntentActionLocation {
 export interface ScientistIntentUnresolvedFact {
   label: string;
   reason: string;
-  candidates?: Array<{ label: string; confidence?: number }>;
+  /** W28-OPTIONBIND-1 (W28-A5n Q1): the ADDITIVE optional `ref` — the
+   *  candidate's own store-backed record id, emitted by the engine ONLY for a
+   *  tier <= 1 candidate whose CURIE names a record (resolutionEngine.ts
+   *  candidateRecordRef; mint affordances and tier > 1 hits carry none).
+   *  Absent-or-value, never :undefined. The parse door does NOT copy a model
+   *  candidate's ref (anti-fabrication: only the engine's gathered evidence
+   *  carries a handle); normalizeScientistIntent's unresolvedRefs boundary
+   *  stays {kind,label,reason} (SPINE-1 Q1 ruling unchanged). */
+  candidates?: Array<{ label: string; confidence?: number; ref?: string }>;
   actionLocation?: ScientistIntentActionLocation;
 }
 

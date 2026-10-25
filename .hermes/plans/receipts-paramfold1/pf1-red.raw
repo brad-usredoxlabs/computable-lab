@@ -1,0 +1,171 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+ ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts  (8 tests | 4 failed) 19ms
+   ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V1 RED pin (probe shape): three not-stated hedges on three ABSENT declared-optional args of one action are folded — zero clarifications from them, blocked:false
+     → expected [ { …(3) }, { …(3) }, { …(3) } ] to deeply equal []
+   ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V2a KEEP guard (4): a not-stated hedge whose argument is PRESENT in the action is KEPT (the fold never hides a stated value)
+     → expected [ { …(3) }, { …(3) }, { …(3) }, …(1) ] to have a length of 1 but got 4
+   ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V2f two-class separation: an ABSENT declared-optional RESOLVABLE hedge is FOLDED; a PRESENT declared-optional resolvable (the SAMPLE-CARD-1 class) is KEPT
+     → expected [ { …(3) } ] to deeply equal []
+   ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V3 characterization: an engine clarification and a gated survivor ride the pass byte-identically with the fold installed (order kept, folded facts absent)
+     → expected [ { …(3) }, { …(3) }, { …(3) }, …(1) ] to deeply equal [ { …(3) }, { …(3) } ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V1 RED pin (probe shape): three not-stated hedges on three ABSENT declared-optional args of one action are folded — zero clarifications from them, blocked:false
+AssertionError: expected [ { …(3) }, { …(3) }, { …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
++       "argument": "source",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
++       "argument": "labware",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++ ]
+
+ ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts:127:35
+    125|     const output = result.output as ResolveNounsOutput;
+    126| 
+    127|     expect(output.clarifications).toEqual([]);
+       |                                   ^
+    128|     expect(output.blocked).toBe(false);
+    129|     expect(result.ok).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V2a KEEP guard (4): a not-stated hedge whose argument is PRESENT in the action is KEPT (the fold never hides a stated value)
+AssertionError: expected [ { …(3) }, { …(3) }, { …(3) }, …(1) ] to have a length of 1 but got 4
+
+- Expected
++ Received
+
+- 1
++ 4
+
+ ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts:143:35
+    141|     const output = result.output as ResolveNounsOutput;
+    142| 
+    143|     expect(output.clarifications).toHaveLength(1);
+       |                                   ^
+    144|     expect(output.clarifications[0]!.reason).toBe(NOT_STATED);
+    145|     expect(output.clarifications[0]!.actionLocation?.argument).toBe(st…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V2f two-class separation: an ABSENT declared-optional RESOLVABLE hedge is FOLDED; a PRESENT declared-optional resolvable (the SAMPLE-CARD-1 class) is KEPT
+AssertionError: expected [ { …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
++       "argument": "source",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++ ]
+
+ ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts:205:38
+    203|     );
+    204|     const absentOut = absent.output as ResolveNounsOutput;
+    205|     expect(absentOut.clarifications).toEqual([]);
+       |                                      ^
+    206|     expect(absentOut.blocked).toBe(false);
+    207| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/compiler/resolution/resolveNounsPass.paramFold.test.ts > param-fold-1.declared-optional-absence fold (resolve_nouns) > V3 characterization: an engine clarification and a gated survivor ride the pass byte-identically with the fold installed (order kept, folded facts absent)
+AssertionError: expected [ { …(3) }, { …(3) }, { …(3) }, …(1) ] to deeply equal [ { …(3) }, { …(3) } ]
+
+- Expected
++ Received
+
+  Array [
+    Object {
+      "actionLocation": Object {
+        "action": "seed",
+        "actionIndex": 0,
+        "argument": "source",
+      },
+      "label": "Lyse the sample (gate 2025)",
+      "reason": "ambiguous-noun",
+    },
+    Object {
+      "actionLocation": Object {
+        "action": "seed",
+        "actionIndex": 0,
++       "argument": "material",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
++       "argument": "labware",
++     },
++     "label": "Lyse the sample (gate 2025)",
++     "reason": "not-stated",
++   },
++   Object {
++     "actionLocation": Object {
++       "action": "seed",
++       "actionIndex": 0,
+        "argument": "undeclaredArgumentName",
+      },
+      "label": "gated blob survivor",
+      "reason": "not-stated",
+    },
+  ]
+
+ ❯ src/compiler/resolution/resolveNounsPass.paramFold.test.ts:251:35
+    249|     // Engine fact first (verbatim), gated survivor last (the pinned
+    250|     // end-of-list position); the foldable model facts are GONE.
+    251|     expect(output.clarifications).toEqual([engineFact, gatedFact]);
+       |                                   ^
+    252|     expect(output.blocked).toBe(true);
+    253|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 4 passed (8)
+   Start at  03:08:32
+   Duration  3.48s (transform 350ms, setup 0ms, collect 1.22s, tests 19ms, environment 0ms, prepare 390ms)
+
+EXIT=1

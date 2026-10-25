@@ -1,0 +1,2561 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2207170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/shared/shell/TabUrlSync.test.tsx  (0 test)
+ ❯ src/shared/session/urlSession.test.ts  (0 test)
+ ❯ src/shared/shell/OpenTabsContext.url.test.ts  (4 tests | 1 failed) 32ms
+   ❯ src/shared/shell/OpenTabsContext.url.test.ts > OpenTabsProvider URL hydration (cl:workspace-strip-binding) > the URL strip REPLACES the stored session on the first render
+     → expected [ 'run:RUN-OLD' ] to deeply equal [ 'project:STU-1', 'record:DOC-9' ]
+ ❯ src/shared/session/useSessionSync.boot.test.ts  (2 tests | 2 failed) 33ms
+   ❯ src/shared/session/useSessionSync.boot.test.ts > useSessionSync skipBootPull (UCX-2) > skipBootPull suppresses the boot GET so the local (URL-hydrated) strip survives
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   ❯ src/shared/session/useSessionSync.boot.test.ts > useSessionSync skipBootPull (UCX-2) > ATTACH-on-focus still pulls when skipBootPull is set (focus-ATTACH unchanged)
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+stderr | src/App.url.test.tsx > App deep-link hydration (UCX-2) > a malformed ws renders the diagnostic banner and the page, never a crash
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?tab=Analysis activates the Analysis tab on first paint
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > malformed ?tab=Nope degrades to the default Editor with no crash
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?source= without ?tab= still routes to Import (existing behavior byte-pin)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+stderr | src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a valid ?tab= outranks ?source=
+Warning: An update to SequencesPage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at SequencesPage (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/sequences/SequencesPage.tsx:35:42)
+    at Router (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1207:17)
+    at MemoryRouter (/mnt/vast/home/brad/git/computable-lab/node_modules/react-router/dist/umd/react-router.development.js:1101:7)
+    at AiPanelProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/context/AiPanelContext.tsx:14:28)
+    at OpenTabsProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/OpenTabsContext.tsx:317:29)
+    at ThemeProvider (/mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app/src/shared/shell/useTheme.tsx:26:26)
+
+ ❯ src/sequences/SequencesPage.urltab.test.tsx  (6 tests | 4 failed) 2365ms
+   ❯ src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?tab=Analysis activates the Analysis tab on first paint
+     → expected false to be true // Object.is equality
+   ❯ src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a valid ?tab= outranks ?source=
+     → expected false to be true // Object.is equality
+   ❯ src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a human tab click writes ?tab= with replace:true
+     → expected null to be 'Setup' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"cl-app cl-app--workspace"[39m
+        [33mdata-theme[39m=[32m"dark"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"topbar topbar--workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-navbar"[39m
+            [33mdata-testid[39m=[32m"global-navbar"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"global-navbar__brand"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"global-navbar__brand-text"[39m
+              [36m>[39m
+                [0mComputable Lab[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<nav[39m
+              [33mclass[39m=[32m"global-navbar__destinations"[39m
+              [33mrole[39m=[32m"navigation"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-projects"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mProjects[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-runs"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRuns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-claims"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClaims[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-lab"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mLab[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-ingestion"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mIngestion[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-chat"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mChat[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-registry"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRegistry[0m
+              [36m</button>[39m
+            [36m</nav>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__search"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"global-search-bar"[39m
+              [36m>[39m
+                [36m<form[39m
+                  [33mclass[39m=[32m"global-search-bar__form"[39m
+                  [33mdata-testid[39m=[32m"global-search-form"[39m
+                  [33mrole[39m=[32m"search"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mclass[39m=[32m"global-search-bar__input"[39m
+                    [33mdata-testid[39m=[32m"global-search-bar"[39m
+                    [33mplaceholder[39m=[32m"Find anything…"[39m
+                    [33mtype[39m=[32m"text"[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</form>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__actions"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"create-menu"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33mclass[39m=[32m"create-menu__button"[39m
+                  [33mdata-testid[39m=[32m"create-menu"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+ Create[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__trailing"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"settings-menu-button"[39m
+                [33mdata-testid[39m=[32m"settings-menu-button"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-haspopup[39m=[32m"menu"[39m
+                  [33maria-label[39m=[32m"Settings, theme, and about"[39m
+                  [33mclass[39m=[32m"settings-menu-button__trigger"[39m
+                  [33mdata-testid[39m=[32m"settings-menu-trigger"[39m
+                  [33mtitle[39m=[32m"Settings · Theme · About"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m⚙[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__tabs"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"workspace-tab-strip"[39m
+              [33mdata-testid[39m=[32m"workspace-tab-strip"[39m
+              [33mrole[39m=[32m"tablist"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab-strip__nav"[39m
+                [33mdata-testid[39m=[32m"tab-history-nav"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Back"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Back to previous tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m←[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Forward"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Forward to next tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m→[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab__add-wrap"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Open new tab"[39m
+                  [33mclass[39m=[32m"workspace-tab__add"[39m
+                  [33mdata-testid[39m=[32m"workspace-tab-add"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__surface"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"surface-indicator"[39m
+              [33mdata-surface[39m=[32m"sequences"[39m
+              [33mdata-testid[39m=[32m"surface-indicator"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"surface-indicator__dot"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"surface-indicator__label"[39m
+              [36m>[39m
+                [0mSequences[0m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"cl-workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"cl-workspace__panels cl-workspace__panels--three"[39m
+            [33mdata-panel-group[39m=[32m""[39m
+            [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+            [33mdata-panel-group-id[39m=[32m":ro:"[39m
+            [33mstyle[39m=[32m"display: flex; flex-direction: row; height: 100%; overflow: hidden; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--nav"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rp:"[39m
+              [33mdata-panel-size[39m=[32m"18.0"[39m
+              [33mid[39m=[32m":rp:"[39m
+              [33mstyle[39m=[32m"flex: 18 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<aside[39m
+                [33mclass[39m=[32m"sequences-page sequence-library"[39m
+              [36m>[39m
+                [36m<h2>[39m
+                  [0mLibrary[0m
+                [36m</h2>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"Search sequences"[39m
+                  [33mplaceholder[39m=[32m"Find sequence…"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</aside>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":rq:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--action"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rr:"[39m
+              [33mdata-panel-size[39m=[32m"52.0"[39m
+              [33mid[39m=[32m":rr:"[39m
+              [33mstyle[39m=[32m"flex: 52 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<main[39m
+                [33mclass[39m=[32m"sequences-page"[39m
+              [36m>[39m
+                [36m<h1>[39m
+                  [0mSequences & assays[0m
+                [36m</h1>[39m
+                [36m<nav[39m
+                  [33maria-label[39m=[32m"Sequence workspace"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mEditor[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAssay[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAnalysis[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"true"[39m
+                  [36m>[39m
+                    [0mSetup[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mImport[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mKnowledge[0m
+                  [36m</button>[39m
+                [36m</nav>[39m
+                [36m<div[39m
+                  [33mhidden[39m=[32m""[39m
+                [36m>[39m
+                  [36m<section[39m
+                    [33maria-label[39m=[32m"Sequence editor"[39m
+                    [33mclass[39m=[32m"sequence-authoring"[39m
+                  [36m>[39m
+                    [36m<fieldset[39m
+                      [33mclass[39m=[32m"sequence-native-fields"[39m
+                    [36m>[39m
+                      [36m<legend>[39m
+                        [0mSequence / oligo[0m
+                      [36m</legend>[39m
+                      [36m<button>[39m
+                        [0mNew sequence[0m
+                      [36m</button>[39m
+                      [36m<label>[39m
+                        [0mName[0m
+                        [36m<input[39m
+                          [33mvalue[39m=[32m""[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"sequence-fields"[39m
+                      [36m>[39m
+                        [36m<label>[39m
+                          [0mAlphabet[0m
+                          [36m<select />[39m
+                        [36m</label>[39m
+                        [36m<label>[39m
+                          [0mTopology[0m
+                          [36m<select>[39m
+                            [36m<option>[39m
+                              [0mlinear[0m
+                            [36m</option>[39m
+                            [36m<option>[39m
+                              [0mcircular[0m
+                            [36m</option>[39m
+                          [36m</select>[39m
+                        [36m</label>[39m
+                      [36m</div>[39m
+                      [36m<label>[39m
+                        [0mSequence, 5′ → 3′[0m
+                        [36m<textarea[39m
+                          [33maria-label[39m=[32m"Sequence, 5′ → 3′"[39m
+                          [33mclass[39m=[32m"sequence-residues"[39m
+                          [33mrows[39m=[32m"8"[39m
+                          [33mspellcheck[39m=[32m"false"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<p>[39m
+                        [0m0[0m
+                        [0m residues[0m
+                      [36m</p>[39m
+                      [36m<details>[39m
+                        [36m<summary>[39m
+                          [0mNormalized sequence[0m
+                        [36m</summary>[39m
+                        [36m<pre />[39m
+                      [36m</details>[39m
+                      [36m<label>[39m
+                        [36m<input[39m
+                          [33mtype[39m=[32m"checkbox"[39m
+                        [36m/>[39m
+                        [0m Oligo specification[0m
+                      [36m</label>[39m
+                      [36m<button[39m
+                        [33mdisabled[39m=[32m""[39m
+                      [36m>[39m
+                        [0mReview and save [0m
+                        [0msequence[0m
+                      [36m</button>[39m
+                    [36m</fieldset>[39m
+                  [36m</section>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mImport FASTA[0m
+                    [36m</legend>[39m
+                    [36m<input[39m
+                      [33maccept[39m=[32m".fa,.fasta,.fna,.faa,.txt"[39m
+                      [33maria-label[39m=[32m"FASTA file"[39m
+                      [33mtype[39m=[32m"file"[39m
+                    [36m/>[39m
+                  [36m</fieldset>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mAnnotate a region[0m
+                    [36m</legend>[39m
+                    [36m<label>[39m
+                      [0mRegion name[0m
+                      [36m<input[39m
+                        [33mvalue[39m=[32m""[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"sequence-fields"[39m
+                    [36m>[39m
+                      [36m<label>[39m
+                        [0mStart (1-based)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<label>[39m
+                        [0mEnd (inclusive)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mdisabled[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSave region[0m
+                    [36m</button>[39m
+                  [36m</fieldset>[39m
+                [36m</div>[39m
+                [36m<button>[39m
+                  [0mDiscover installed engines[0m
+                [36m</button>[39m
+                [36m<p>[39m
+                  [0mConfigure an installed local tool or a container image pinned by digest. Virtual PCR runs locally without additional software.[0m
+                [36m</p>[39m
+                [36m<label>[39m
+                  [0mEngine[0m
+                  [36m<select />[39m
+                [36m</label>[39m
+                [36m<label>[39m
+                  [0mName[0m
+                  [36m<input[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</label>[39m
+                [36m<button[39m
+                  [33mdisabled[39m=[32m""[39m
+                [36m>[39m
+                  [0mVerify and save endpoint[0m
+                [36m</button>[39m
+                [36m<details>[39m
+                  [36m<summary>[39m
+                    [0mStructured action request[0m
+                  [36m</summary>[39m
+                  [36m<textarea[39m
+                    [33maria-label[39m=[32m"Action YAML"[39m
+                    [33mrows[39m=[32m"12"[39m
+                  [36m/>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mAccept and apply[0m
+                  [36m</button>[39m
+                  [36m<button>[39m
+                    [0mDiscard[0m
+                  [36m</button>[39m
+                [36m</details>[39m
+              [36m</main>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":rs:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--chat"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rt:"[39m
+              [33mdata-panel-size[39m=[32m"30.0"[39m
+              [33mid[39m=[32m":rt:"[39m
+              [33mstyle[39m=[32m"flex: 30 1 0px; overflow: hidden;"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"probe-search"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+   ❯ src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > the agent setTab path persists through the same setter (replace)
+     → expected null to be 'Analysis' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"cl-app cl-app--workspace"[39m
+        [33mdata-theme[39m=[32m"dark"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"topbar topbar--workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-navbar"[39m
+            [33mdata-testid[39m=[32m"global-navbar"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"global-navbar__brand"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"global-navbar__brand-text"[39m
+              [36m>[39m
+                [0mComputable Lab[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<nav[39m
+              [33mclass[39m=[32m"global-navbar__destinations"[39m
+              [33mrole[39m=[32m"navigation"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-projects"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mProjects[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-runs"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRuns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-claims"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClaims[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-lab"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mLab[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-ingestion"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mIngestion[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-chat"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mChat[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-registry"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRegistry[0m
+              [36m</button>[39m
+            [36m</nav>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__search"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"global-search-bar"[39m
+              [36m>[39m
+                [36m<form[39m
+                  [33mclass[39m=[32m"global-search-bar__form"[39m
+                  [33mdata-testid[39m=[32m"global-search-form"[39m
+                  [33mrole[39m=[32m"search"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mclass[39m=[32m"global-search-bar__input"[39m
+                    [33mdata-testid[39m=[32m"global-search-bar"[39m
+                    [33mplaceholder[39m=[32m"Find anything…"[39m
+                    [33mtype[39m=[32m"text"[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</form>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__actions"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"create-menu"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33mclass[39m=[32m"create-menu__button"[39m
+                  [33mdata-testid[39m=[32m"create-menu"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+ Create[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__trailing"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"settings-menu-button"[39m
+                [33mdata-testid[39m=[32m"settings-menu-button"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-haspopup[39m=[32m"menu"[39m
+                  [33maria-label[39m=[32m"Settings, theme, and about"[39m
+                  [33mclass[39m=[32m"settings-menu-button__trigger"[39m
+                  [33mdata-testid[39m=[32m"settings-menu-trigger"[39m
+                  [33mtitle[39m=[32m"Settings · Theme · About"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m⚙[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__tabs"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"workspace-tab-strip"[39m
+              [33mdata-testid[39m=[32m"workspace-tab-strip"[39m
+              [33mrole[39m=[32m"tablist"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab-strip__nav"[39m
+                [33mdata-testid[39m=[32m"tab-history-nav"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Back"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Back to previous tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m←[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Forward"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Forward to next tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m→[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab__add-wrap"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Open new tab"[39m
+                  [33mclass[39m=[32m"workspace-tab__add"[39m
+                  [33mdata-testid[39m=[32m"workspace-tab-add"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__surface"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"surface-indicator"[39m
+              [33mdata-surface[39m=[32m"sequences"[39m
+              [33mdata-testid[39m=[32m"surface-indicator"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"surface-indicator__dot"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"surface-indicator__label"[39m
+              [36m>[39m
+                [0mSequences[0m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"cl-workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"cl-workspace__panels cl-workspace__panels--three"[39m
+            [33mdata-panel-group[39m=[32m""[39m
+            [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+            [33mdata-panel-group-id[39m=[32m":ru:"[39m
+            [33mstyle[39m=[32m"display: flex; flex-direction: row; height: 100%; overflow: hidden; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--nav"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":rv:"[39m
+              [33mdata-panel-size[39m=[32m"18.0"[39m
+              [33mid[39m=[32m":rv:"[39m
+              [33mstyle[39m=[32m"flex: 18 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<aside[39m
+                [33mclass[39m=[32m"sequences-page sequence-library"[39m
+              [36m>[39m
+                [36m<h2>[39m
+                  [0mLibrary[0m
+                [36m</h2>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"Search sequences"[39m
+                  [33mplaceholder[39m=[32m"Find sequence…"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</aside>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":r10:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--action"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":r11:"[39m
+              [33mdata-panel-size[39m=[32m"52.0"[39m
+              [33mid[39m=[32m":r11:"[39m
+              [33mstyle[39m=[32m"flex: 52 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<main[39m
+                [33mclass[39m=[32m"sequences-page"[39m
+              [36m>[39m
+                [36m<h1>[39m
+                  [0mSequences & assays[0m
+                [36m</h1>[39m
+                [36m<nav[39m
+                  [33maria-label[39m=[32m"Sequence workspace"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mEditor[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAssay[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"true"[39m
+                  [36m>[39m
+                    [0mAnalysis[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mSetup[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mImport[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mKnowledge[0m
+                  [36m</button>[39m
+                [36m</nav>[39m
+                [36m<div[39m
+                  [33mhidden[39m=[32m""[39m
+                [36m>[39m
+                  [36m<section[39m
+                    [33maria-label[39m=[32m"Sequence editor"[39m
+                    [33mclass[39m=[32m"sequence-authoring"[39m
+                  [36m>[39m
+                    [36m<fieldset[39m
+                      [33mclass[39m=[32m"sequence-native-fields"[39m
+                    [36m>[39m
+                      [36m<legend>[39m
+                        [0mSequence / oligo[0m
+                      [36m</legend>[39m
+                      [36m<button>[39m
+                        [0mNew sequence[0m
+                      [36m</button>[39m
+                      [36m<label>[39m
+                        [0mName[0m
+                        [36m<input[39m
+                          [33mvalue[39m=[32m""[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"sequence-fields"[39m
+                      [36m>[39m
+                        [36m<label>[39m
+                          [0mAlphabet[0m
+                          [36m<select />[39m
+                        [36m</label>[39m
+                        [36m<label>[39m
+                          [0mTopology[0m
+                          [36m<select>[39m
+                            [36m<option>[39m
+                              [0mlinear[0m
+                            [36m</option>[39m
+                            [36m<option>[39m
+                              [0mcircular[0m
+                            [36m</option>[39m
+                          [36m</select>[39m
+                        [36m</label>[39m
+                      [36m</div>[39m
+                      [36m<label>[39m
+                        [0mSequence, 5′ → 3′[0m
+                        [36m<textarea[39m
+                          [33maria-label[39m=[32m"Sequence, 5′ → 3′"[39m
+                          [33mclass[39m=[32m"sequence-residues"[39m
+                          [33mrows[39m=[32m"8"[39m
+                          [33mspellcheck[39m=[32m"false"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<p>[39m
+                        [0m0[0m
+                        [0m residues[0m
+                      [36m</p>[39m
+                      [36m<details>[39m
+                        [36m<summary>[39m
+                          [0mNormalized sequence[0m
+                        [36m</summary>[39m
+                        [36m<pre />[39m
+                      [36m</details>[39m
+                      [36m<label>[39m
+                        [36m<input[39m
+                          [33mtype[39m=[32m"checkbox"[39m
+                        [36m/>[39m
+                        [0m Oligo specification[0m
+                      [36m</label>[39m
+                      [36m<button[39m
+                        [33mdisabled[39m=[32m""[39m
+                      [36m>[39m
+                        [0mReview and save [0m
+                        [0msequence[0m
+                      [36m</button>[39m
+                    [36m</fieldset>[39m
+                  [36m</section>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mImport FASTA[0m
+                    [36m</legend>[39m
+                    [36m<input[39m
+                      [33maccept[39m=[32m".fa,.fasta,.fna,.faa,.txt"[39m
+                      [33maria-label[39m=[32m"FASTA file"[39m
+                      [33mtype[39m=[32m"file"[39m
+                    [36m/>[39m
+                  [36m</fieldset>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mAnnotate a region[0m
+                    [36m</legend>[39m
+                    [36m<label>[39m
+                      [0mRegion name[0m
+                      [36m<input[39m
+                        [33mvalue[39m=[32m""[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"sequence-fields"[39m
+                    [36m>[39m
+                      [36m<label>[39m
+                        [0mStart (1-based)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<label>[39m
+                        [0mEnd (inclusive)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mdisabled[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSave region[0m
+                    [36m</button>[39m
+                  [36m</fieldset>[39m
+                [36m</div>[39m
+                [36m<label>[39m
+                  [0mAnalysis[0m
+                  [36m<select />[39m
+                [36m</label>[39m
+                [36m<label>[39m
+                  [0mConfigured endpoint[0m
+                  [36m<select>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSelect endpoint…[0m
+                    [36m</option>[39m
+                  [36m</select>[39m
+                [36m</label>[39m
+                [36m<button[39m
+                  [33mdisabled[39m=[32m""[39m
+                [36m>[39m
+                  [0mRun analysis[0m
+                [36m</button>[39m
+                [36m<fieldset>[39m
+                  [36m<legend>[39m
+                    [0mSaved analysis runs[0m
+                  [36m</legend>[39m
+                [36m</fieldset>[39m
+                [36m<fieldset>[39m
+                  [36m<legend>[39m
+                    [0mReference / alignment collection[0m
+                  [36m</legend>[39m
+                  [36m<label>[39m
+                    [0mCollection name[0m
+                    [36m<input[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m/>[39m
+                  [36m</label>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mSave collection[0m
+                  [36m</button>[39m
+                [36m</fieldset>[39m
+                [36m<details>[39m
+                  [36m<summary>[39m
+                    [0mStructured action request[0m
+                  [36m</summary>[39m
+                  [36m<textarea[39m
+                    [33maria-label[39m=[32m"Action YAML"[39m
+                    [33mrows[39m=[32m"12"[39m
+                  [36m/>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mAccept and apply[0m
+                  [36m</button>[39m
+                  [36m<button>[39m
+                    [0mDiscard[0m
+                  [36m</button>[39m
+                [36m</details>[39m
+              [36m</main>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":r12:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--chat"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":r13:"[39m
+              [33mdata-panel-size[39m=[32m"30.0"[39m
+              [33mid[39m=[32m":r13:"[39m
+              [33mstyle[39m=[32m"flex: 30 1 0px; overflow: hidden;"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"probe-search"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ src/App.url.test.tsx  (5 tests | 3 failed) 3052ms
+   ❯ src/App.url.test.tsx > App deep-link hydration (UCX-2) > a malformed ws renders the diagnostic banner and the page, never a crash
+     → Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   ❯ src/App.url.test.tsx > App deep-link hydration (UCX-2) > per-entry keep-valid/drop-bad: registry survives a bad sibling entry
+     → Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+   ❯ src/App.url.test.tsx > App deep-link hydration (UCX-2) > malformed ws degrades to the storage workspace (storage untouched)
+     → Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/session/urlSession.test.ts [ src/shared/session/urlSession.test.ts ]
+Error: Failed to resolve import "./urlSession" from "src/shared/session/urlSession.test.ts". Does the file exist?
+ ❯ TransformPluginContext._formatError ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41
+ ❯ TransformPluginContext.error ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16
+ ❯ normalizeUrl ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23
+ ❯ async file:/mnt/vast/home/brad/git/computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+ ❯ TransformPluginContext.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7
+ ❯ PluginContainer.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18
+ ❯ loadAndTransform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  src/shared/shell/TabUrlSync.test.tsx [ src/shared/shell/TabUrlSync.test.tsx ]
+Error: Failed to resolve import "./TabUrlSync" from "src/shared/shell/TabUrlSync.test.tsx". Does the file exist?
+ ❯ TransformPluginContext._formatError ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41
+ ❯ TransformPluginContext.error ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16
+ ❯ normalizeUrl ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23
+ ❯ async file:/mnt/vast/home/brad/git/computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+ ❯ TransformPluginContext.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7
+ ❯ PluginContainer.transform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18
+ ❯ loadAndTransform ../../../computable-lab/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.url.test.tsx > App deep-link hydration (UCX-2) > a malformed ws renders the diagnostic banner and the page, never a crash
+TestingLibraryElementError: Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../computable-lab/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.url.test.tsx:97:33
+     95|   it('a malformed ws renders the diagnostic banner and the page, never…
+     96|     visit('/registry?ws=%%nonsense%%&wsa=zzz')
+     97|     const banner = await screen.findByTestId('ws-param-diagnostic')
+       |                                 ^
+     98|     expect(banner.textContent).toContain('MALFORMED_WS_PARAM')
+     99|     await waitFor(() => expect(screen.getByTestId('record-registry-pag…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  src/App.url.test.tsx > App deep-link hydration (UCX-2) > per-entry keep-valid/drop-bad: registry survives a bad sibling entry
+TestingLibraryElementError: Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../computable-lab/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.url.test.tsx:104:33
+    102|   it('per-entry keep-valid/drop-bad: registry survives a bad sibling e…
+    103|     visit('/registry?ws=registry,notakind!&wsa=registry')
+    104|     const banner = await screen.findByTestId('ws-param-diagnostic')
+       |                                 ^
+    105|     expect(banner).toBeTruthy()
+    106|     await waitFor(() => expect(screen.getByTestId('record-registry-pag…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  src/App.url.test.tsx > App deep-link hydration (UCX-2) > malformed ws degrades to the storage workspace (storage untouched)
+TestingLibraryElementError: Unable to find an element by: [data-testid="ws-param-diagnostic"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"record-registry-page"[39m
+    [36m>[39m
+      [0mregistry[0m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../../computable-lab/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.url.test.tsx:117:18
+    115|   it('malformed ws degrades to the storage workspace (storage untouche…
+    116|     visit('/registry?ws=%%nonsense%%&wsa=zzz')
+    117|     await screen.findByTestId('ws-param-diagnostic')
+       |                  ^
+    118|     const raw = window.localStorage.getItem(STORAGE_KEY)
+    119|     expect(JSON.parse(raw!).activeTabId).toBe('run:RUN-OLD')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > ?tab=Analysis activates the Analysis tab on first paint
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sequences/SequencesPage.urltab.test.tsx:102:33
+    100|   it('?tab=Analysis activates the Analysis tab on first paint', () => {
+    101|     mountPage('/sequences?tab=Analysis')
+    102|     expect(pressed('Analysis')).toBe(true)
+       |                                 ^
+    103|     expect(pressed('Editor')).toBe(false)
+    104|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a valid ?tab= outranks ?source=
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sequences/SequencesPage.urltab.test.tsx:118:30
+    116|   it('a valid ?tab= outranks ?source=', () => {
+    117|     mountPage('/sequences?source=ncbi&tab=Setup')
+    118|     expect(pressed('Setup')).toBe(true)
+       |                              ^
+    119|   })
+    120| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > a human tab click writes ?tab= with replace:true
+AssertionError: expected null to be 'Setup' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"cl-app cl-app--workspace"[39m
+        [33mdata-theme[39m=[32m"dark"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"topbar topbar--workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-navbar"[39m
+            [33mdata-testid[39m=[32m"global-navbar"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"global-navbar__brand"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"global-navbar__brand-text"[39m
+              [36m>[39m
+                [0mComputable Lab[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<nav[39m
+              [33mclass[39m=[32m"global-navbar__destinations"[39m
+              [33mrole[39m=[32m"navigation"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-projects"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mProjects[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-runs"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRuns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-claims"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClaims[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-lab"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mLab[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-ingestion"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mIngestion[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-chat"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mChat[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-registry"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRegistry[0m
+              [36m</button>[39m
+            [36m</nav>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__search"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"global-search-bar"[39m
+              [36m>[39m
+                [36m<form[39m
+                  [33mclass[39m=[32m"global-search-bar__form"[39m
+                  [33mdata-testid[39m=[32m"global-search-form"[39m
+                  [33mrole[39m=[32m"search"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mclass[39m=[32m"global-search-bar__input"[39m
+                    [33mdata-testid[39m=[32m"global-search-bar"[39m
+                    [33mplaceholder[39m=[32m"Find anything…"[39m
+                    [33mtype[39m=[32m"text"[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</form>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__actions"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"create-menu"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33mclass[39m=[32m"create-menu__button"[39m
+                  [33mdata-testid[39m=[32m"create-menu"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+ Create[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__trailing"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"settings-menu-button"[39m
+                [33mdata-testid[39m=[32m"settings-menu-button"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-haspopup[39m=[32m"menu"[39m
+                  [33maria-label[39m=[32m"Settings, theme, and about"[39m
+                  [33mclass[39m=[32m"settings-menu-button__trigger"[39m
+                  [33mdata-testid[39m=[32m"settings-menu-trigger"[39m
+                  [33mtitle[39m=[32m"Settings · Theme · About"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m⚙[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__tabs"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"workspace-tab-strip"[39m
+              [33mdata-testid[39m=[32m"workspace-tab-strip"[39m
+              [33mrole[39m=[32m"tablist"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab-strip__nav"[39m
+                [33mdata-testid[39m=[32m"tab-history-nav"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Back"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Back to previous tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m←[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Forward"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Forward to next tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m→[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab__add-wrap"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Open new tab"[39m
+                  [33mclass[39m=[32m"workspace-tab__add"[39m
+                  [33mdata-testid[39m=[32m"workspace-tab-add"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__surface"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"surface-indicator"[39m
+              [33mdata-surface[39m=[32m"sequences"[39m
+              [33mdata-testid[39m=[32m"surface-indicator"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"surface-indicator__dot"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"surface-indicator__label"[39m
+              [36m>[39m
+                [0mSequences[0m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"cl-workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"cl-workspace__panels cl-workspace__panels--three"[39m
+            [33mdata-panel-group[39m=[32m""[39m
+            [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+            [33mdata-panel-group-id[39m=[32m":ro:"[39m
+            [33mstyle[39m=[32m"display: flex; flex-direction: row; height: 100%; overflow: hidden; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--nav"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rp:"[39m
+              [33mdata-panel-size[39m=[32m"18.0"[39m
+              [33mid[39m=[32m":rp:"[39m
+              [33mstyle[39m=[32m"flex: 18 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<aside[39m
+                [33mclass[39m=[32m"sequences-page sequence-library"[39m
+              [36m>[39m
+                [36m<h2>[39m
+                  [0mLibrary[0m
+                [36m</h2>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"Search sequences"[39m
+                  [33mplaceholder[39m=[32m"Find sequence…"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</aside>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":rq:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--action"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rr:"[39m
+              [33mdata-panel-size[39m=[32m"52.0"[39m
+              [33mid[39m=[32m":rr:"[39m
+              [33mstyle[39m=[32m"flex: 52 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<main[39m
+                [33mclass[39m=[32m"sequences-page"[39m
+              [36m>[39m
+                [36m<h1>[39m
+                  [0mSequences & assays[0m
+                [36m</h1>[39m
+                [36m<nav[39m
+                  [33maria-label[39m=[32m"Sequence workspace"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mEditor[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAssay[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAnalysis[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"true"[39m
+                  [36m>[39m
+                    [0mSetup[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mImport[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mKnowledge[0m
+                  [36m</button>[39m
+                [36m</nav>[39m
+                [36m<div[39m
+                  [33mhidden[39m=[32m""[39m
+                [36m>[39m
+                  [36m<section[39m
+                    [33maria-label[39m=[32m"Sequence editor"[39m
+                    [33mclass[39m=[32m"sequence-authoring"[39m
+                  [36m>[39m
+                    [36m<fieldset[39m
+                      [33mclass[39m=[32m"sequence-native-fields"[39m
+                    [36m>[39m
+                      [36m<legend>[39m
+                        [0mSequence / oligo[0m
+                      [36m</legend>[39m
+                      [36m<button>[39m
+                        [0mNew sequence[0m
+                      [36m</button>[39m
+                      [36m<label>[39m
+                        [0mName[0m
+                        [36m<input[39m
+                          [33mvalue[39m=[32m""[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"sequence-fields"[39m
+                      [36m>[39m
+                        [36m<label>[39m
+                          [0mAlphabet[0m
+                          [36m<select />[39m
+                        [36m</label>[39m
+                        [36m<label>[39m
+                          [0mTopology[0m
+                          [36m<select>[39m
+                            [36m<option>[39m
+                              [0mlinear[0m
+                            [36m</option>[39m
+                            [36m<option>[39m
+                              [0mcircular[0m
+                            [36m</option>[39m
+                          [36m</select>[39m
+                        [36m</label>[39m
+                      [36m</div>[39m
+                      [36m<label>[39m
+                        [0mSequence, 5′ → 3′[0m
+                        [36m<textarea[39m
+                          [33maria-label[39m=[32m"Sequence, 5′ → 3′"[39m
+                          [33mclass[39m=[32m"sequence-residues"[39m
+                          [33mrows[39m=[32m"8"[39m
+                          [33mspellcheck[39m=[32m"false"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<p>[39m
+                        [0m0[0m
+                        [0m residues[0m
+                      [36m</p>[39m
+                      [36m<details>[39m
+                        [36m<summary>[39m
+                          [0mNormalized sequence[0m
+                        [36m</summary>[39m
+                        [36m<pre />[39m
+                      [36m</details>[39m
+                      [36m<label>[39m
+                        [36m<input[39m
+                          [33mtype[39m=[32m"checkbox"[39m
+                        [36m/>[39m
+                        [0m Oligo specification[0m
+                      [36m</label>[39m
+                      [36m<button[39m
+                        [33mdisabled[39m=[32m""[39m
+                      [36m>[39m
+                        [0mReview and save [0m
+                        [0msequence[0m
+                      [36m</button>[39m
+                    [36m</fieldset>[39m
+                  [36m</section>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mImport FASTA[0m
+                    [36m</legend>[39m
+                    [36m<input[39m
+                      [33maccept[39m=[32m".fa,.fasta,.fna,.faa,.txt"[39m
+                      [33maria-label[39m=[32m"FASTA file"[39m
+                      [33mtype[39m=[32m"file"[39m
+                    [36m/>[39m
+                  [36m</fieldset>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mAnnotate a region[0m
+                    [36m</legend>[39m
+                    [36m<label>[39m
+                      [0mRegion name[0m
+                      [36m<input[39m
+                        [33mvalue[39m=[32m""[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"sequence-fields"[39m
+                    [36m>[39m
+                      [36m<label>[39m
+                        [0mStart (1-based)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<label>[39m
+                        [0mEnd (inclusive)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mdisabled[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSave region[0m
+                    [36m</button>[39m
+                  [36m</fieldset>[39m
+                [36m</div>[39m
+                [36m<button>[39m
+                  [0mDiscover installed engines[0m
+                [36m</button>[39m
+                [36m<p>[39m
+                  [0mConfigure an installed local tool or a container image pinned by digest. Virtual PCR runs locally without additional software.[0m
+                [36m</p>[39m
+                [36m<label>[39m
+                  [0mEngine[0m
+                  [36m<select />[39m
+                [36m</label>[39m
+                [36m<label>[39m
+                  [0mName[0m
+                  [36m<input[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</label>[39m
+                [36m<button[39m
+                  [33mdisabled[39m=[32m""[39m
+                [36m>[39m
+                  [0mVerify and save endpoint[0m
+                [36m</button>[39m
+                [36m<details>[39m
+                  [36m<summary>[39m
+                    [0mStructured action request[0m
+                  [36m</summary>[39m
+                  [36m<textarea[39m
+                    [33maria-label[39m=[32m"Action YAML"[39m
+                    [33mrows[39m=[32m"12"[39m
+                  [36m/>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mAccept and apply[0m
+                  [36m</button>[39m
+                  [36m<button>[39m
+                    [0mDiscard[0m
+                  [36m</button>[39m
+                [36m</details>[39m
+              [36m</main>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":rs:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--chat"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ro:"[39m
+              [33mdata-panel-id[39m=[32m":rt:"[39m
+              [33mdata-panel-size[39m=[32m"30.0"[39m
+              [33mid[39m=[32m":rt:"[39m
+              [33mstyle[39m=[32m"flex: 30 1 0px; overflow: hidden;"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"probe-search"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected: 
+"Setup"
+
++ Received: 
+null
+
+ ❯ src/sequences/SequencesPage.urltab.test.tsx:124:58
+    122|     mountPage('/sequences')
+    123|     fireEvent.click(screen.getByRole('button', { name: 'Setup' }))
+    124|     await waitFor(() => expect(probeSearch().get('tab')).toBe('Setup'))
+       |                                                          ^
+    125|     expect(pressed('Setup')).toBe(true)
+    126|     const last = searchSpy.calls[searchSpy.calls.length - 1]
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  src/sequences/SequencesPage.urltab.test.tsx > SequencesPage ?tab= consumer (UCX-2) > the agent setTab path persists through the same setter (replace)
+AssertionError: expected null to be 'Analysis' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"cl-app cl-app--workspace"[39m
+        [33mdata-theme[39m=[32m"dark"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"topbar topbar--workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"global-navbar"[39m
+            [33mdata-testid[39m=[32m"global-navbar"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"global-navbar__brand"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"global-navbar__brand-text"[39m
+              [36m>[39m
+                [0mComputable Lab[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<nav[39m
+              [33mclass[39m=[32m"global-navbar__destinations"[39m
+              [33mrole[39m=[32m"navigation"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-projects"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mProjects[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-runs"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRuns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-claims"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mClaims[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-lab"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mLab[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-ingestion"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mIngestion[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-chat"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mChat[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"global-navbar__dest"[39m
+                [33mdata-testid[39m=[32m"global-nav-registry"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mRegistry[0m
+              [36m</button>[39m
+            [36m</nav>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__search"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"global-search-bar"[39m
+              [36m>[39m
+                [36m<form[39m
+                  [33mclass[39m=[32m"global-search-bar__form"[39m
+                  [33mdata-testid[39m=[32m"global-search-form"[39m
+                  [33mrole[39m=[32m"search"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mclass[39m=[32m"global-search-bar__input"[39m
+                    [33mdata-testid[39m=[32m"global-search-bar"[39m
+                    [33mplaceholder[39m=[32m"Find anything…"[39m
+                    [33mtype[39m=[32m"text"[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</form>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__actions"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"create-menu"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33mclass[39m=[32m"create-menu__button"[39m
+                  [33mdata-testid[39m=[32m"create-menu"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+ Create[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"global-navbar__trailing"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"settings-menu-button"[39m
+                [33mdata-testid[39m=[32m"settings-menu-button"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-expanded[39m=[32m"false"[39m
+                  [33maria-haspopup[39m=[32m"menu"[39m
+                  [33maria-label[39m=[32m"Settings, theme, and about"[39m
+                  [33mclass[39m=[32m"settings-menu-button__trigger"[39m
+                  [33mdata-testid[39m=[32m"settings-menu-trigger"[39m
+                  [33mtitle[39m=[32m"Settings · Theme · About"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m⚙[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__tabs"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"workspace-tab-strip"[39m
+              [33mdata-testid[39m=[32m"workspace-tab-strip"[39m
+              [33mrole[39m=[32m"tablist"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab-strip__nav"[39m
+                [33mdata-testid[39m=[32m"tab-history-nav"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Back"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Back to previous tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m←[0m
+                [36m</button>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Forward"[39m
+                  [33mclass[39m=[32m"workspace-tab__nav-btn"[39m
+                  [33mdisabled[39m=[32m""[39m
+                  [33mtitle[39m=[32m"Forward to next tab"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m→[0m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"workspace-tab__add-wrap"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Open new tab"[39m
+                  [33mclass[39m=[32m"workspace-tab__add"[39m
+                  [33mdata-testid[39m=[32m"workspace-tab-add"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0m+[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"topbar__surface"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"surface-indicator"[39m
+              [33mdata-surface[39m=[32m"sequences"[39m
+              [33mdata-testid[39m=[32m"surface-indicator"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"surface-indicator__dot"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"surface-indicator__label"[39m
+              [36m>[39m
+                [0mSequences[0m
+              [36m</span>[39m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"cl-workspace"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"cl-workspace__panels cl-workspace__panels--three"[39m
+            [33mdata-panel-group[39m=[32m""[39m
+            [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+            [33mdata-panel-group-id[39m=[32m":ru:"[39m
+            [33mstyle[39m=[32m"display: flex; flex-direction: row; height: 100%; overflow: hidden; width: 100%;"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--nav"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":rv:"[39m
+              [33mdata-panel-size[39m=[32m"18.0"[39m
+              [33mid[39m=[32m":rv:"[39m
+              [33mstyle[39m=[32m"flex: 18 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<aside[39m
+                [33mclass[39m=[32m"sequences-page sequence-library"[39m
+              [36m>[39m
+                [36m<h2>[39m
+                  [0mLibrary[0m
+                [36m</h2>[39m
+                [36m<input[39m
+                  [33maria-label[39m=[32m"Search sequences"[39m
+                  [33mplaceholder[39m=[32m"Find sequence…"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</aside>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":r10:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--action"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":r11:"[39m
+              [33mdata-panel-size[39m=[32m"52.0"[39m
+              [33mid[39m=[32m":r11:"[39m
+              [33mstyle[39m=[32m"flex: 52 1 0px; overflow: hidden;"[39m
+            [36m>[39m
+              [36m<main[39m
+                [33mclass[39m=[32m"sequences-page"[39m
+              [36m>[39m
+                [36m<h1>[39m
+                  [0mSequences & assays[0m
+                [36m</h1>[39m
+                [36m<nav[39m
+                  [33maria-label[39m=[32m"Sequence workspace"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mEditor[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mAssay[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"true"[39m
+                  [36m>[39m
+                    [0mAnalysis[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mSetup[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mImport[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-pressed[39m=[32m"false"[39m
+                  [36m>[39m
+                    [0mKnowledge[0m
+                  [36m</button>[39m
+                [36m</nav>[39m
+                [36m<div[39m
+                  [33mhidden[39m=[32m""[39m
+                [36m>[39m
+                  [36m<section[39m
+                    [33maria-label[39m=[32m"Sequence editor"[39m
+                    [33mclass[39m=[32m"sequence-authoring"[39m
+                  [36m>[39m
+                    [36m<fieldset[39m
+                      [33mclass[39m=[32m"sequence-native-fields"[39m
+                    [36m>[39m
+                      [36m<legend>[39m
+                        [0mSequence / oligo[0m
+                      [36m</legend>[39m
+                      [36m<button>[39m
+                        [0mNew sequence[0m
+                      [36m</button>[39m
+                      [36m<label>[39m
+                        [0mName[0m
+                        [36m<input[39m
+                          [33mvalue[39m=[32m""[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"sequence-fields"[39m
+                      [36m>[39m
+                        [36m<label>[39m
+                          [0mAlphabet[0m
+                          [36m<select />[39m
+                        [36m</label>[39m
+                        [36m<label>[39m
+                          [0mTopology[0m
+                          [36m<select>[39m
+                            [36m<option>[39m
+                              [0mlinear[0m
+                            [36m</option>[39m
+                            [36m<option>[39m
+                              [0mcircular[0m
+                            [36m</option>[39m
+                          [36m</select>[39m
+                        [36m</label>[39m
+                      [36m</div>[39m
+                      [36m<label>[39m
+                        [0mSequence, 5′ → 3′[0m
+                        [36m<textarea[39m
+                          [33maria-label[39m=[32m"Sequence, 5′ → 3′"[39m
+                          [33mclass[39m=[32m"sequence-residues"[39m
+                          [33mrows[39m=[32m"8"[39m
+                          [33mspellcheck[39m=[32m"false"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<p>[39m
+                        [0m0[0m
+                        [0m residues[0m
+                      [36m</p>[39m
+                      [36m<details>[39m
+                        [36m<summary>[39m
+                          [0mNormalized sequence[0m
+                        [36m</summary>[39m
+                        [36m<pre />[39m
+                      [36m</details>[39m
+                      [36m<label>[39m
+                        [36m<input[39m
+                          [33mtype[39m=[32m"checkbox"[39m
+                        [36m/>[39m
+                        [0m Oligo specification[0m
+                      [36m</label>[39m
+                      [36m<button[39m
+                        [33mdisabled[39m=[32m""[39m
+                      [36m>[39m
+                        [0mReview and save [0m
+                        [0msequence[0m
+                      [36m</button>[39m
+                    [36m</fieldset>[39m
+                  [36m</section>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mImport FASTA[0m
+                    [36m</legend>[39m
+                    [36m<input[39m
+                      [33maccept[39m=[32m".fa,.fasta,.fna,.faa,.txt"[39m
+                      [33maria-label[39m=[32m"FASTA file"[39m
+                      [33mtype[39m=[32m"file"[39m
+                    [36m/>[39m
+                  [36m</fieldset>[39m
+                  [36m<fieldset>[39m
+                    [36m<legend>[39m
+                      [0mAnnotate a region[0m
+                    [36m</legend>[39m
+                    [36m<label>[39m
+                      [0mRegion name[0m
+                      [36m<input[39m
+                        [33mvalue[39m=[32m""[39m
+                      [36m/>[39m
+                    [36m</label>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"sequence-fields"[39m
+                    [36m>[39m
+                      [36m<label>[39m
+                        [0mStart (1-based)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                      [36m<label>[39m
+                        [0mEnd (inclusive)[0m
+                        [36m<input[39m
+                          [33mmin[39m=[32m"1"[39m
+                          [33mtype[39m=[32m"number"[39m
+                          [33mvalue[39m=[32m"1"[39m
+                        [36m/>[39m
+                      [36m</label>[39m
+                    [36m</div>[39m
+                    [36m<button[39m
+                      [33mdisabled[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSave region[0m
+                    [36m</button>[39m
+                  [36m</fieldset>[39m
+                [36m</div>[39m
+                [36m<label>[39m
+                  [0mAnalysis[0m
+                  [36m<select />[39m
+                [36m</label>[39m
+                [36m<label>[39m
+                  [0mConfigured endpoint[0m
+                  [36m<select>[39m
+                    [36m<option[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m>[39m
+                      [0mSelect endpoint…[0m
+                    [36m</option>[39m
+                  [36m</select>[39m
+                [36m</label>[39m
+                [36m<button[39m
+                  [33mdisabled[39m=[32m""[39m
+                [36m>[39m
+                  [0mRun analysis[0m
+                [36m</button>[39m
+                [36m<fieldset>[39m
+                  [36m<legend>[39m
+                    [0mSaved analysis runs[0m
+                  [36m</legend>[39m
+                [36m</fieldset>[39m
+                [36m<fieldset>[39m
+                  [36m<legend>[39m
+                    [0mReference / alignment collection[0m
+                  [36m</legend>[39m
+                  [36m<label>[39m
+                    [0mCollection name[0m
+                    [36m<input[39m
+                      [33mvalue[39m=[32m""[39m
+                    [36m/>[39m
+                  [36m</label>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mSave collection[0m
+                  [36m</button>[39m
+                [36m</fieldset>[39m
+                [36m<details>[39m
+                  [36m<summary>[39m
+                    [0mStructured action request[0m
+                  [36m</summary>[39m
+                  [36m<textarea[39m
+                    [33maria-label[39m=[32m"Action YAML"[39m
+                    [33mrows[39m=[32m"12"[39m
+                  [36m/>[39m
+                  [36m<button[39m
+                    [33mdisabled[39m=[32m""[39m
+                  [36m>[39m
+                    [0mAccept and apply[0m
+                  [36m</button>[39m
+                  [36m<button>[39m
+                    [0mDiscard[0m
+                  [36m</button>[39m
+                [36m</details>[39m
+              [36m</main>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__handle"[39m
+              [33mdata-panel-group-direction[39m=[32m"horizontal"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-resize-handle-enabled[39m=[32m"true"[39m
+              [33mdata-panel-resize-handle-id[39m=[32m":r12:"[39m
+              [33mdata-resize-handle[39m=[32m""[39m
+              [33mdata-resize-handle-state[39m=[32m"inactive"[39m
+              [33mrole[39m=[32m"separator"[39m
+              [33mstyle[39m=[32m"touch-action: none; user-select: none;"[39m
+              [33mtabindex[39m=[32m"0"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"cl-workspace__pane cl-workspace__pane--chat"[39m
+              [33mdata-panel[39m=[32m""[39m
+              [33mdata-panel-collapsible[39m=[32m"true"[39m
+              [33mdata-panel-group-id[39m=[32m":ru:"[39m
+              [33mdata-panel-id[39m=[32m":r13:"[39m
+              [33mdata-panel-size[39m=[32m"30.0"[39m
+              [33mid[39m=[32m":r13:"[39m
+              [33mstyle[39m=[32m"flex: 30 1 0px; overflow: hidden;"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"probe-search"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected: 
+"Analysis"
+
++ Received: 
+null
+
+ ❯ src/sequences/SequencesPage.urltab.test.tsx:138:58
+    136|     })
+    137|     await waitFor(() => expect(pressed('Analysis')).toBe(true))
+    138|     await waitFor(() => expect(probeSearch().get('tab')).toBe('Analysi…
+       |                                                          ^
+    139|     const last = searchSpy.calls[searchSpy.calls.length - 1]
+    140|     expect((last?.opts as { replace?: boolean } | undefined)?.replace)…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  src/shared/session/useSessionSync.boot.test.ts > useSessionSync skipBootPull (UCX-2) > skipBootPull suppresses the boot GET so the local (URL-hydrated) strip survives
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ src/shared/session/useSessionSync.boot.test.ts:61:28
+     59|     })
+     60| 
+     61|     expect(getSession).not.toHaveBeenCalled()
+       |                            ^
+     62|     expect(result.current.state.tabs.map((t) => t.tab.id)).toEqual(['r…
+     63|     expect(result.current.state.activeTabId).toBe('record:DOC-9')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  src/shared/session/useSessionSync.boot.test.ts > useSessionSync skipBootPull (UCX-2) > ATTACH-on-focus still pulls when skipBootPull is set (focus-ATTACH unchanged)
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ src/shared/session/useSessionSync.boot.test.ts:85:28
+     83|       await Promise.resolve()
+     84|     })
+     85|     expect(getSession).not.toHaveBeenCalled()
+       |                            ^
+     86| 
+     87|     await act(async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  src/shared/shell/OpenTabsContext.url.test.ts > OpenTabsProvider URL hydration (cl:workspace-strip-binding) > the URL strip REPLACES the stored session on the first render
+AssertionError: expected [ 'run:RUN-OLD' ] to deeply equal [ 'project:STU-1', 'record:DOC-9' ]
+
+- Expected
++ Received
+
+  Array [
+-   "project:STU-1",
+-   "record:DOC-9",
++   "run:RUN-OLD",
+  ]
+
+ ❯ src/shared/shell/OpenTabsContext.url.test.ts:53:60
+     51|     const { result } = renderHook(() => useOpenTabs(), { wrapper })
+     52|     // First render — not after an effect.
+     53|     expect(result.current.state.tabs.map((t) => t.tab.id)).toEqual([
+       |                                                            ^
+     54|       'project:STU-1',
+     55|       'record:DOC-9',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+ Test Files  6 failed (6)
+      Tests  10 failed | 7 passed (17)
+   Start at  06:40:15
+   Duration  5.22s (transform 782ms, setup 549ms, collect 1.90s, tests 5.48s, environment 4.76s, prepare 790ms)
+

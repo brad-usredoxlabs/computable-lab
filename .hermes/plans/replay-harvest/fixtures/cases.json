@@ -1,0 +1,168 @@
+{
+  "note": "Every case is harvested real evidence or an explicit ABSENCE record. No transcript was synthesized. Nouns ride add-material normalizer sourceLabels and accepted event-graph labels.",
+  "turns": [
+    {
+      "id": "T1-unobtainium",
+      "source": "main--default--event-editor.json msg 4 (2026-10-18T13:27:04Z)",
+      "utterance": "add 100 uL of unobtainium to wells A1:C3",
+      "assistant_outcome": "The draft names \"unobtainium\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "workspace_context": "ABSENT \u2014 the main data repo has no journal for user 'default' (journal/ not present); the deck at the time is not captured in persisted form",
+      "nouns": [
+        "unobtainium"
+      ],
+      "case3_note": null,
+      "engine_arms": [
+        "add_material"
+      ]
+    },
+    {
+      "id": "T2-phlogiston",
+      "source": "main--default--event-editor.json msg 6 (2026-10-18T13:35:22Z)",
+      "utterance": "add 50 uL of phlogiston to A1",
+      "assistant_outcome": "The draft names \"phlogiston\" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.",
+      "workspace_context": "ABSENT (same as T1)",
+      "nouns": [
+        "phlogiston"
+      ],
+      "case3_note": null,
+      "engine_arms": [
+        "add_material"
+      ]
+    },
+    {
+      "id": "T4-canonical-four-term",
+      "source": "derived: MAT-trypsin-edta-dmem-fbs-he-1om4 provenance.sourceLabel (accepted event graph EVG-mvak17we-gdah); NO live event-editor transcript exists on any lane data repo",
+      "utterance": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "assistant_outcome": "accepted: material-spec + material bound into EVG-mvak17we-gdah (2026-10-16T05:56Z) \u2014 clarification history NOT persisted (heldIntents memory-only)",
+      "workspace_context": "journal snapshots for USR-BRAD deck tab EXR-LANE2-AI10 around 2026-10-16T05:5x (copied under journal/ when present)",
+      "nouns": [
+        "Trypsin-EDTA",
+        "DMEM",
+        "FBS",
+        "HepG2 cells",
+        "Trypsin-EDTA + DMEM + FBS + HepG2 cells"
+      ],
+      "case3_note": "material_source_requirement.status=unresolved in EVG-mvajv2lb-xxwa: 'No explicit material instance, aliquot, or source lot selected during drafting.' \u2014 the persisted FORM of required-case 3' (unspecified source); no user transcript survives.",
+      "engine_arms": [
+        "add_material",
+        "wash"
+      ]
+    },
+    {
+      "id": "T5-vendor-spelled-four-term",
+      "source": "derived: MAT-thermo-trypsin-edta-ther-1tuz + MSP-DRAFT-EVG_MV7Q7F5I_* provenance.sourceLabel (accepted EVG-mv7q7f5i-el9g)",
+      "utterance": "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells",
+      "assistant_outcome": "accepted into EVG-mv7q7f5i-el9g",
+      "workspace_context": "RUN-2026-10-09-run-1i4b deck (journal entries with eventGraphId EVG-SPK-VERIFY are a different session; no EXR context for this graph's drafting window on lane2 journal seq range 191-690 covers it)",
+      "nouns": [
+        "Thermo trypsin-EDTA",
+        "Thermo DMEM",
+        "Thermo FBS",
+        "HepG2 cells",
+        "Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells"
+      ],
+      "case3_note": null,
+      "engine_arms": [
+        "add_material",
+        "wash"
+      ]
+    },
+    {
+      "id": "T6-ratio-blob",
+      "source": "derived: MAT-50-50-trypsin-edta-dmem--vkwl provenance.sourceLabel",
+      "utterance": "50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul",
+      "assistant_outcome": "record exists (accepted); clarification history not persisted",
+      "workspace_context": "ABSENT (no surviving thread; journal not attributable to a single turn)",
+      "nouns": [
+        "50/50 Trypsin-EDTA/DMEM + 10% FBS with 500 HepG2 cells/ul",
+        "50/50 Trypsin-EDTA/DMEM"
+      ],
+      "case3_note": "nounShape mint-refuse DATA (config/drafting/shorthand-drafting.yaml) names THIS shape as its seed case.",
+      "engine_arms": [
+        "add_material"
+      ]
+    },
+    {
+      "id": "T7-expanded-names",
+      "source": "derived: MSP-DRAFT-EVG_MVAJOKF5_5ERR_* provenance.sourceLabel (accepted EVG-mvajokf5-5err)",
+      "utterance": "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells",
+      "assistant_outcome": "accepted into EVG-mvajokf5-5err",
+      "workspace_context": "deck EXR-LANE2-AI10 (journal entries with this eventGraphId exist on USR-BRAD)",
+      "nouns": [
+        "Dulbecco's Modified Eagle's Medium",
+        "Fetal bovine serum",
+        "HepG2 cells",
+        "Trypsin-EDTA",
+        "Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells"
+      ],
+      "case3_note": null,
+      "engine_arms": [
+        "add_material",
+        "wash"
+      ]
+    },
+    {
+      "id": "T8-level-mismatch-probe",
+      "source": "NOT a transcript \u2014 declared DATA probe: wash.material carries the shipped vocabulary's only `level: aliquot` declaration; replaying the canonical nouns under the wash verb exercises the engine's levelFilter against the SAME harvested store.",
+      "utterance": "(wash arm of: Trypsin-EDTA + DMEM + FBS + HepG2 cells)",
+      "assistant_outcome": "n/a \u2014 spine/engine replay only",
+      "workspace_context": "same harvested lane2 store",
+      "nouns": [
+        "Trypsin-EDTA",
+        "DMEM",
+        "FBS",
+        "HepG2 cells"
+      ],
+      "case3_note": null,
+      "engine_arms": [
+        "wash"
+      ]
+    },
+    {
+      "id": "T9-known-vendor-product",
+      "source": "derived: VPR-hep-g2-hepg2-hb-8065-atc-29B6ACCB record name (a real persisted vendor-product)",
+      "utterance": "Hep G2 [HEPG2] - HB-8065 | ATCC",
+      "assistant_outcome": "n/a \u2014 replay only",
+      "workspace_context": "same harvested lane2 store",
+      "nouns": [
+        "Hep G2 [HEPG2] - HB-8065 | ATCC",
+        "HB-8065"
+      ],
+      "case3_note": "required-case 2 (known-vendor product missing locally) \u2014 this record IS locally present, so the true P4 probe (vendor hit wrongly disabling product lookup) is NOT harvestable from real transcripts: none asked for an absent vendor product.",
+      "engine_arms": [
+        "add_material",
+        "wash"
+      ]
+    },
+    {
+      "id": "T10-case3-prime-unspecified-source",
+      "source": "derived: EVG-mvajv2lb-xxwa details.material_source_requirement {status: unresolved, reason: 'No explicit material instance, aliquot, or source lot selected during drafting.'}",
+      "utterance": "ABSENT \u2014 no user transcript with an unspecified-source material turn survives in any harvested thread",
+      "assistant_outcome": "persisted as the unresolved material_source_requirement inside the accepted event graph",
+      "workspace_context": "deck EXR-LANE2-AI10",
+      "nouns": [],
+      "case3_note": "RECORDED ABSENCE. The persisted artifact proves the situation occurred (laziness arm reached the writer); the utterance itself is gone (held clarifications memory-only).",
+      "engine_arms": []
+    },
+    {
+      "id": "T11-case3-explicit-bottle",
+      "source": "ABSENCE",
+      "utterance": "ABSENT \u2014 no harvested transcript names a physical bottle/lot/location",
+      "assistant_outcome": "n/a",
+      "workspace_context": "n/a",
+      "nouns": [],
+      "case3_note": "RECORDED ABSENCE (greps: 'bottle', 'lot', cat/sku over all harvested threads: 0 hits).",
+      "engine_arms": []
+    },
+    {
+      "id": "T12-execution-instruction-not-yet",
+      "source": "ABSENCE",
+      "utterance": "ABSENT \u2014 no harvested transcript carries a future-tense prep instruction ('make 1 mL ...'); grep 'make 1|mL of' over harvested threads: 0 hits",
+      "assistant_outcome": "n/a",
+      "workspace_context": "n/a",
+      "nouns": [],
+      "case3_note": "RECORDED ABSENCE (P2 probe needs an authored synthetic case \u2014 a separate decision per spec \u00a7OUT).",
+      "engine_arms": []
+    }
+  ]
+}

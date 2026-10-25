@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { WellId } from '../../types/plate'
 import { formatVolume, type WellComputedState } from '../../graph/lib/eventGraph'
-import { formatComputedConcentration, formatComputedCount } from '../../shared/lib/formHelpers'
+import { describeCellTotal, formatComputedConcentration, formatComputedCount } from '../../shared/lib/formHelpers'
 
 interface WellTooltipProps {
   wellId: WellId
@@ -84,9 +84,27 @@ export function WellTooltip({ wellId, state, isTubeRack = false, clientX, client
               // single volume assertion. The row states what the snapshot
               // actually carries: its share of the mixture, plus count/density.
               const isCarrier = Boolean(m.volumeIsCarrier)
+              // CELLRATE-1: the per-well total is DISPLAY truth over the declared
+              // data. The helper derives it ONLY from a declared rate x a declared
+              // volume and labels it derived; a bare count is labeled
+              // absolute-unverified and NEVER scaled. A carrier row cites the
+              // header volume (the single volume assertion); a single-material
+              // row cites its own volume.
+              const cellTotal = describeCellTotal({
+                ...(typeof m.count === 'number' ? { count: m.count } : {}),
+                ...(m.counterDensity ? { density: m.counterDensity } : {}),
+                ...(isCarrier
+                  ? (state.volume_uL > 0 ? { volume_uL: state.volume_uL } : {})
+                  : (m.volume_uL > 0 ? { volume_uL: m.volume_uL } : {})),
+              })
+              // Both DECLARED numbers stay visible whenever a density is declared
+              // (auditability); the helper's labeled reading rides alongside.
+              // With no rate anywhere, the helper's absolute-unverified label
+              // replaces the bare count rather than duplicating it.
+              const amountParts = density ? [count, density, cellTotal] : [cellTotal ?? count]
               const concCell = isCarrier
-                ? [conc, count, density].filter(Boolean).join(' · ') || '—'
-                : conc ?? count ?? '—'
+                ? [conc, ...amountParts].filter(Boolean).join(' · ') || '—'
+                : conc ?? amountParts.find(Boolean) ?? '—'
               const volCell = isCarrier
                 ? m.fractionOfMixture ?? '—'
                 : formatVolume(m.volume_uL)

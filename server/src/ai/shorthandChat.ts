@@ -38,6 +38,7 @@ import {
   type ScientistIntentCompileDeps,
 } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
+import type { EngineSpineLike } from '../compiler/resolution/adapters.js';
 import type { RecordStore } from '../store/types.js';
 import type {
   ScientistIntent,
@@ -45,6 +46,12 @@ import type {
 } from '../compiler/scientistIntent/types.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import { loadNounShape, isMintableLabel } from '../compiler/resolution/nounShape.js';
+import {
+  formatFractionString,
+  loadFractionConvention,
+  type CompositionReading,
+  type FractionConventionConfig,
+} from '../compiler/scientistIntent/compositionFractions.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
 import type {
@@ -64,9 +71,54 @@ export interface DeckLabwareSummary {
   name?: string;
 }
 
+/**
+ * REVISE-GHOST-1 (OQ-1 ruling): one accepted clarification binding — the
+ * scientist's ALREADY-CHOSEN record for one label, inside the ACTIVE proposal.
+ * Generic `{label, ref}` strings: zero reagent nouns, zero domain branches —
+ * TS sees strings (the shorthandDeckLabwares shape precedent).
+ */
+export interface AcceptedShorthandBinding {
+  /** The label the scientist answered (the card's own label, and separately
+   *  the label they chose — both spellings join the revise document). */
+  label: string;
+  /** The record identity they chose (the answer's ref — never a mint). */
+  ref: string;
+}
+
 export interface ShorthandCompileDeps {
   store?: RecordStore;
   searchLabwareByHint?: ScientistIntentCompileDeps['searchLabwareByHint'];
+  /**
+   * READING-CARD-ANSWER-1 (Ruling 2): the scientist's READING answers as DATA
+   * (key = the bar's OWN label, value = the reading id the scientist chose).
+   * Threaded VERBATIM into compileScientistIntent's §14.2 RECORD leg — the
+   * producer bar decides whether an entry settles a fact it raised
+   * (exact-label identity + a declared reading id only). Absent: every other
+   * caller is byte-unchanged (the IntentCompileFromPromptHandlers.ts
+   * scientistAnswers precedent).
+   */
+  scientistAnswers?: Readonly<Record<string, string>>;
+  /**
+   * READING-CARD-ANSWER-1 (the same DATA pair the 422 recompile route passes
+   * at IntentCompileFromPromptHandlers.ts): the LABELS of the clarifications
+   * this batch answered (membership only — no value ever reaches the bar).
+   * Threaded VERBATIM into compileScientistIntent's MIXROLE-1 bar-loop guard:
+   * the composition role-gap bar skips a gap whose entry label is among them
+   * (the honest role stays the fallback role after any answer; without this
+   * the answered gap re-asks forever). Absent: every other caller is
+   * byte-unchanged.
+   */
+  answeredClarificationLabels?: readonly string[];
+  /**
+   * REVISE-GHOST-1: the conversation's accepted {label, ref} bindings, applied
+   * at the ai/ seam BEFORE resolution — the spine is COMPOSED so an exact
+   * label match narrows to the candidate the scientist already chose (the
+   * composeLabwareHintLookupWithDeck deck-first precedent). Resolution itself
+   * (compiler/resolution/**, server/src/resolve/**) is untouched: the reuse
+   * never re-asks a label this proposal already bound, and never invents —
+   * the chosen ref must be one the spine itself surfaced for that label.
+   */
+  reuseBindings?: readonly AcceptedShorthandBinding[];
   /**
    * The editor's DECK labware (context.labwares — the plates the scientist
    * is looking at). Deck plates are editor state, not store records, so the
@@ -137,28 +189,66 @@ export function composeLabwareHintLookupWithDeck(
  * expander emits for a one-token wells array (expandEventWells expands the
  * ARRAY fields; this covers the scalar the scalar expander produces).
  */
+/** One resolved placement offer from the compile (terminalArtifacts shape). */
+export interface ResolvedLabwareOffer {
+  hint?: string;
+  recordId: string;
+  title?: string;
+}
+
 export function bindShorthandEventsToDeck<T extends object>(
   events: readonly T[],
   deck: readonly DeckLabwareSummary[] | undefined,
+  // REVISE-GHOST-1 fix3 (gate Defect 1): the compile's OWN resolved pairs
+  // (resolve_labware's terminalArtifacts.resolvedLabwares — the hints the
+  // frozen pipeline bound against REAL inventory records, including the
+  // scientist's accepted card picks riding reuseBindings). A label the
+  // compile bound to a record id must reach the client as that record id,
+  // or the ghost placement (keyed by the record) and the ghost-well bucket
+  // (keyed by the event's labwareId) never meet on the plate. The DECK map
+  // still wins a collision: a labware physically on the deck binds to the
+  // deck id first. Zero name literals — every pair is compile output.
+  resolved?: readonly ResolvedLabwareOffer[] | undefined,
 ): T[] {
-  if (!Array.isArray(deck) || deck.length === 0 || events.length === 0) return [...events];
+  const hasDeck = Array.isArray(deck) && deck.length > 0;
+  const hasResolved = Array.isArray(resolved) && resolved.length > 0;
+  if ((!hasDeck && !hasResolved) || events.length === 0) return [...events];
   const idByName = new Map<string, { id: string; ambiguous: boolean }>();
   const knownIds = new Set<string>();
-  for (const lw of deck) {
-    if (!lw || typeof lw.labwareId !== 'string') continue;
-    knownIds.add(lw.labwareId);
-    if (typeof lw.name !== 'string') continue;
-    const key = lw.name.trim().toLowerCase();
-    if (!key) continue;
-    const seen = idByName.get(key);
-    if (seen) seen.ambiguous = true;
-    else idByName.set(key, { id: lw.labwareId, ambiguous: false });
+  if (hasDeck) {
+    for (const lw of deck!) {
+      if (!lw || typeof lw.labwareId !== 'string') continue;
+      knownIds.add(lw.labwareId);
+      if (typeof lw.name !== 'string') continue;
+      const key = lw.name.trim().toLowerCase();
+      if (!key) continue;
+      const seen = idByName.get(key);
+      if (seen) seen.ambiguous = true;
+      else idByName.set(key, { id: lw.labwareId, ambiguous: false });
+    }
+  }
+  const resolvedByName = new Map<string, { id: string; ambiguous: boolean }>();
+  if (hasResolved) {
+    for (const offer of resolved!) {
+      if (!offer || typeof offer.hint !== 'string' || !offer.hint.trim()) continue;
+      if (typeof offer.recordId !== 'string' || !offer.recordId) continue;
+      const key = offer.hint.trim().toLowerCase();
+      const seen = resolvedByName.get(key);
+      if (seen) {
+        if (seen.id !== offer.recordId) seen.ambiguous = true;
+      } else {
+        resolvedByName.set(key, { id: offer.recordId, ambiguous: false });
+      }
+    }
   }
   const bindRef = (ref: unknown): string | undefined => {
     if (typeof ref !== 'string' || !ref.trim()) return undefined;
     if (knownIds.has(ref)) return undefined; // already a deck id
-    const hit = idByName.get(ref.trim().toLowerCase());
-    return hit && !hit.ambiguous ? hit.id : undefined;
+    const key = ref.trim().toLowerCase();
+    const hit = idByName.get(key);
+    if (hit) return hit.ambiguous ? undefined : hit.id;
+    const bound = resolvedByName.get(key);
+    return bound && !bound.ambiguous ? bound.id : undefined;
   };
   return events.map((raw) => {
     const ev = raw as Record<string, unknown>;
@@ -240,6 +330,51 @@ export function bindShorthandEventsToDeck<T extends object>(
 }
 
 /**
+ * REVISE-GHOST-1: compose the candidate spine with the conversation's accepted
+ * {label, ref} bindings (the composeLabwareHintLookupWithDeck deck-first
+ * precedent, applied to the spine instead). An EXACT label match (trim +
+ * case-insensitive — the same normalization the deck match uses) narrows the
+ * spine's OWN candidate set to the record the scientist already chose:
+ * "settled, do not re-ask". NEVER invents — if the chosen ref is not among
+ * the spine's candidates for that label, the spine result rides untouched.
+ * Resolution itself (compiler/resolution/**, server/src/resolve/**) is
+ * untouched: this wraps the injected spine at the ai/ seam BEFORE the compile.
+ * Zero reagent nouns, zero domain branches — TS sees strings.
+ */
+export function composeSpineWithReuseBindings(
+  spine: EngineSpineLike,
+  bindings: readonly AcceptedShorthandBinding[],
+): EngineSpineLike {
+  if (bindings.length === 0) return spine;
+  const refsByLabel = new Map<string, Set<string>>();
+  for (const b of bindings) {
+    const key = b.label.trim().toLowerCase();
+    if (!key || !b.ref.trim()) continue;
+    const set = refsByLabel.get(key) ?? new Set<string>();
+    set.add(b.ref.trim());
+    refsByLabel.set(key, set);
+  }
+  if (refsByLabel.size === 0) return spine;
+  return {
+    async resolve(term: string, opts?: Parameters<EngineSpineLike['resolve']>[1]) {
+      const candidates = await spine.resolve(term, opts);
+      const refs = refsByLabel.get(term.trim().toLowerCase());
+      if (!refs || candidates.length === 0) return candidates;
+      const chosen = candidates.filter((c) => refs.has(recordIdFromCurie(c.curie)));
+      return chosen.length > 0 ? chosen : candidates;
+    },
+  };
+}
+
+/** Unwrap the spine's declared local CURIE ('local:<recordId>',
+ *  resolve/providers/records.ts:77) into the record identity. Generic CURIE
+ *  plumbing, the resolveNounsPass precedent — not a local invention. */
+function recordIdFromCurie(curie: string): string {
+  const prefix = 'local:';
+  return curie.startsWith(prefix) ? curie.slice(prefix.length) : curie;
+}
+
+/**
  * Compile a VALIDATED shorthand document through the FROZEN deterministic
  * pipeline with the SAME production deps the intent-compile routes build
  * (IntentCompileHandlers.ts:59-62, the server.ts:733 composition): a
@@ -247,6 +382,9 @@ export function bindShorthandEventsToDeck<T extends object>(
  * COMPILE_INTERNAL precedent — never a provider-less spine that false-bars
  * every store-resolvable noun). This module is the chat-side seam's single
  * declared consumer of the pipeline (the W2-7 no-bypass closure allow-list).
+ * REVISE-GHOST-1: when the conversation carries accepted bindings for the
+ * ACTIVE proposal, the spine is composed with the reuse hint BEFORE the
+ * compile (exact-label narrowing, never invention).
  */
 export async function compileShorthandDeterministically(
   doc: ScientistIntent,
@@ -254,9 +392,16 @@ export async function compileShorthandDeterministically(
 ): Promise<ScientistIntentCompileResult | null> {
   if (!deps.store) return null;
   const spine = createResolveSpineFromContext({ store: deps.store });
+  const reuseBindings = deps.reuseBindings ?? [];
   return compileScientistIntent(doc, {
-    spine,
+    spine: reuseBindings.length > 0
+      ? composeSpineWithReuseBindings(spine, reuseBindings)
+      : spine,
     ...(deps.searchLabwareByHint ? { searchLabwareByHint: deps.searchLabwareByHint } : {}),
+    ...(deps.scientistAnswers ? { scientistAnswers: deps.scientistAnswers } : {}),
+    ...(deps.answeredClarificationLabels
+      ? { answeredClarificationLabels: deps.answeredClarificationLabels }
+      : {}),
   });
 }
 
@@ -324,6 +469,58 @@ export interface AnsweredSlot {
 const MAX_HELD_CONVERSATIONS = 64;
 const heldIntents = new Map<string, HeldShorthandIntent>();
 
+/**
+ * REVISE-GHOST-1 (OQ-1 ruling): the ACTIVE proposal's accepted label->ref
+ * bindings, held per conversationKey (the heldIntents precedent, same eviction
+ * bound). The leak this closes: the answer fold consumed the held intent and
+ * the accepted binding died with it, so a LATER revise turn re-resolved every
+ * label from prose and re-asked questions the scientist had already answered
+ * (the swallowed-events leg, spec §5). Lifecycle: recorded by the fold, read
+ * by a revise turn (draftRevision context present), CLEARED by a fresh-start
+ * turn (no mounted preview) — bindings never cross a proposal boundary
+ * (Accept/Discard/fresh-start all land the next turn without draftRevision).
+ */
+const acceptedBindings = new Map<string, readonly AcceptedShorthandBinding[]>();
+
+export function rememberAcceptedShorthandBindings(
+  key: string,
+  bindings: readonly AcceptedShorthandBinding[],
+): void {
+  if (bindings.length === 0) return;
+  if (acceptedBindings.size >= MAX_HELD_CONVERSATIONS) {
+    const oldest = acceptedBindings.keys().next();
+    if (!oldest.done) acceptedBindings.delete(oldest.value);
+  }
+  acceptedBindings.set(key, bindings);
+}
+
+/**
+ * Read the conversation's accepted bindings for THIS turn. `activeProposal`
+ * is the client's mounted-preview marker (context.draftRevision present):
+ * a revise turn continues the proposal and reuses the bindings; a fresh-start
+ * turn ends it — the bindings are dropped (idempotent) and the turn resolves
+ * from scratch exactly as before the fix.
+ */
+export function acceptedShorthandBindingsFor(
+  key: string,
+  activeProposal: boolean,
+): readonly AcceptedShorthandBinding[] {
+  if (!activeProposal) {
+    acceptedBindings.delete(key);
+    return [];
+  }
+  return acceptedBindings.get(key) ?? [];
+}
+
+/** Drop the conversation's accepted bindings. REVISE-GHOST-1 fix 1 (advc
+ *  cycle-1 D2): this IS wired to the Cancel leg — shorthandCancel (AIHandlers)
+ *  calls it beside clearHeldShorthandIntent, so a CANCELLED proposal's answered
+ *  bindings die with it. The fresh-start read (acceptedShorthandBindingsFor with
+ *  activeProposal=false) is the other clear. Idempotent. */
+export function clearAcceptedShorthandBindings(key: string): boolean {
+  return acceptedBindings.delete(key);
+}
+
 export function holdShorthandIntent(key: string, held: HeldShorthandIntent): void {
   if (heldIntents.size >= MAX_HELD_CONVERSATIONS) {
     const oldest = heldIntents.keys().next();
@@ -387,11 +584,159 @@ export function factRequestId(fact: ScientistIntentUnresolvedFact): string {
 }
 
 /**
+ * READING-CARD-ANSWER-1 (Ruling 2 + Amendment 1): the STRUCTURAL reading test.
+ * A fact CARRYING a non-empty `readings` array (the candidate readings the bar
+ * itself attached by conditional spread — normalizeScientistIntent) is a
+ * READING fact: its answer is one of the reading ids it presented. The test
+ * reads the carried DATA only — never a reason literal, never a reasons list
+ * in TS (l2t0115 prohibitions intact). A fact without readings is byte-identical
+ * to today's shape everywhere this is consulted.
+ */
+function factReadings(fact: ScientistIntentUnresolvedFact): readonly CompositionReading[] | undefined {
+  const readings = (fact as unknown as Record<string, unknown>)['readings'];
+  return Array.isArray(readings) && readings.length > 0 ? readings as readonly CompositionReading[] : undefined;
+}
+
+/** The bar's own data-derived question text, when the producer attached one
+ *  (the same generic read — the fact type's declared envelope is
+ *  {label, reason, actionLocation}; the producer clarification's optional
+ *  `message` rides the fact at runtime). */
+function factMessage(fact: ScientistIntentUnresolvedFact): string | undefined {
+  const message = (fact as unknown as Record<string, unknown>)['message'];
+  return typeof message === 'string' && message.trim().length > 0 ? message : undefined;
+}
+
+/** The option snippet for one reading: its COMPUTED final fractions rendered
+ *  through the DATA fraction format (compositionFractions.ts — the same
+ *  `messages.fractionFormat` template the settle leg uses; the TS carries no
+ *  suffix literal), plus the reading's own note when it carries one. */
+function readingOptionSnippet(
+  reading: { label: string; finalFractions: ReadonlyArray<{ label: string; percent: number }>; note?: string },
+  config: FractionConventionConfig | undefined,
+): string {
+  const fractions = reading.finalFractions
+    .map((f) => `${f.label} ${config ? formatFractionString(f.percent, config) : String(f.percent)}`)
+    .join(', ');
+  return typeof reading.note === 'string' && reading.note.trim() ? `${fractions} — ${reading.note}` : fractions;
+}
+
+/**
+ * READING-CARD-ANSWER-1 (Ruling 2 + Amendment 2): the STRUCTURAL
+ * reading-answer test for the ANSWER leg. An answer is a READING answer iff
+ * its held fact carries readings (the same `factReadings` data read the map
+ * arm uses — one test, both legs, cannot drift) AND its `value` is one of
+ * that fact's own reading ids. No reason literal, no reasons list in TS.
+ * The join mirrors the fold's content-key join (including the pinned legacy
+ * digits fallback) so the partition and the fold resolve the SAME fact.
+ */
+function heldFactForAnswer(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answer: AgentClarificationAnswer,
+): ScientistIntentUnresolvedFact | undefined {
+  const requestId = answer.requestId ?? '';
+  for (const fact of heldFacts) {
+    if (factRequestId(fact) === requestId) return fact;
+  }
+  const legacy = /^unresolved-(\d+)$/.exec(requestId);
+  if (legacy) return heldFacts[Number(legacy[1]) - 1];
+  return undefined;
+}
+
+function isReadingAnswer(
+  fact: ScientistIntentUnresolvedFact,
+  answer: AgentClarificationAnswer,
+): boolean {
+  const readings = factReadings(fact);
+  if (!readings) return false;
+  return typeof answer.value === 'string' && readings.some((reading) => reading.id === answer.value);
+}
+
+export interface ReadingAnswerPartition {
+  /** Answers routed to the §14.2 RECORD leg (value = a declared reading id). */
+  readingAnswers: readonly AgentClarificationAnswer[];
+  /** The REMAINING answers — the fold's splice set (Amendment 2: reading
+   *  answers never enter `foldAnswersIntoShorthand`; feeding them to the fold
+   *  is precisely the aggregate-label fold-null the never-guess pin defends). */
+  foldAnswers: readonly AgentClarificationAnswer[];
+}
+
+/** Split a submitted answer batch by the structural reading test. */
+export function partitionReadingAnswers(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): ReadingAnswerPartition {
+  const readingAnswers: AgentClarificationAnswer[] = [];
+  const foldAnswers: AgentClarificationAnswer[] = [];
+  for (const answer of answers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact && isReadingAnswer(fact, answer)) {
+      readingAnswers.push(answer);
+    } else {
+      foldAnswers.push(answer);
+    }
+  }
+  return { readingAnswers, foldAnswers };
+}
+
+/**
+ * Build the §14.2 `scientistAnswers` DATA map from the reading answers:
+ * key = the held fact's OWN label (the exact-identity key the producer bar
+ * matches against the clarification it raised), value = the chosen reading
+ * id. Absent (undefined) when the batch carries no reading answer — the
+ * conditional-spread discipline: every other caller stays byte-unchanged.
+ */
+export function scientistAnswersFromReadingAnswers(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): Readonly<Record<string, string>> | undefined {
+  const { readingAnswers } = partitionReadingAnswers(heldFacts, answers);
+  if (readingAnswers.length === 0) return undefined;
+  const map: Record<string, string> = {};
+  for (const answer of readingAnswers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact && typeof answer.value === 'string') map[fact.label] = answer.value;
+  }
+  return Object.keys(map).length > 0 ? map : undefined;
+}
+
+/**
+ * The MIXROLE-1 bar-loop guard DATA for a chat answer batch: the LABELS of
+ * the held clarifications this batch answered (the 422 route's
+ * `Object.keys(answers)` precedent — the answers map is keyed by each
+ * clarification's OWN label, so the chat analogue is the ANSWERED FACT's
+ * label, read structurally). Membership only; no answer value ever rides
+ * this key. The composition role-gap bar skips an answered gap (the honest
+ * role stays the fallback role after any answer — without this the answered
+ * gap re-asks forever).
+ */
+export function answeredClarificationLabelsFromBatch(
+  heldFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AgentClarificationAnswer[],
+): readonly string[] {
+  const labels = new Set<string>();
+  for (const answer of answers) {
+    const fact = heldFactForAnswer(heldFacts, answer);
+    if (fact) labels.add(fact.label);
+  }
+  return [...labels];
+}
+
+/**
  * ScientistIntentUnresolvedFact[] → AgentClarificationRequest[] — a PURE
  * structural map. label/reason/candidates/actionLocation ride through
  * UNTOUCHED on `unresolvedFact`; the only minted value is the join id. The
  * kind + menu provider come from the vocabulary's declared domain for the
  * fact's argument location (data, one source — no verb-name branch).
+ *
+ * READING-CARD-ANSWER-1 (Ruling 2): a third structural arm — a fact CARRYING
+ * readings (the data the bar itself attached) maps to menuProvider 'choice'
+ * with its readings as the option set (id = reading id, label = the reading's
+ * own label, snippet = the computed final fractions + note; ARRAY order — the
+ * server never pre-picks). Mint suppression falls out of the EXISTING
+ * `menuProvider !== 'choice' && mintable` expression — zero new policy. The
+ * prompt is the fact's OWN `message` (already data-derived), not the noun
+ * template. kind stays from the domain map. A fact WITHOUT readings renders
+ * byte-identically to today.
  */
 export function clarificationsFromUnresolvedFacts(
   facts: readonly ScientistIntentUnresolvedFact[],
@@ -406,29 +751,49 @@ export function clarificationsFromUnresolvedFacts(
   // scientist can still search /m or pick a near-miss. A cue hit alone never
   // refuses mint (the sibling canon formulations stay mintable).
   const nounShape = loadNounShape();
+  // READING-CARD-ANSWER-1: the fraction-format DATA home, loaded PER call
+  // (the nounShape/fraction-convention discipline) — only consulted to render
+  // a reading option's fractions through the declared template.
+  const fractionConfig = loadFractionConvention();
   return facts.map((fact) => {
     const loc = fact.actionLocation;
     const domain = loc?.action && typeof loc.argument === 'string'
       ? vocabulary.argContracts(loc.action).find((contract) => contract.name === loc.argument)?.domain
       : undefined;
     const kind = domain === 'labware' ? 'labware' : domain === 'material' ? 'material' : 'general';
-    const menuProvider = domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
+    // The reading arm is STRUCTURAL (factReadings): a readings-bearing
+    // fact is a choice card; every other fact keeps the domain map verbatim.
+    const readings = factReadings(fact);
+    const menuProvider = readings
+      ? 'choice'
+      : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
     const mintable = isMintableLabel(fact.label, nounShape);
     const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    const nounPrompt = mintable
+      ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
+      : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`;
+    const message = factMessage(fact);
     return {
       id: factRequestId(fact),
       kind,
-      prompt: mintable
-        ? `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is, or create a local term.`
-        : `The draft names "${fact.label}" and the lab spine could not bind it (${fact.reason}). Choose what it is.`,
+      // The READING arm's prompt is the bar's OWN data-derived message (the
+      // message is consulted ONLY on this arm — a fact without readings keeps
+      // the noun template byte-identically, whatever else it carries).
+      prompt: readings && message ? message : nounPrompt,
       origin: 'harness',
       entityType: kind,
       menuProvider,
       query: fact.label,
       // Forced-draft mode offers NO model-authored options; the live /m or /l
       // search (real records + ontologies) is the only menu. The bar's own
-      // candidates ride on `unresolvedFact`, untouched.
-      options: [],
+      // candidates ride on `unresolvedFact`, untouched. A READING fact's
+      // options ARE the bar's own readings (Ruling 2): the scientist chooses
+      // a READING, seeing what each does to the fractions.
+      options: (readings ?? []).map((reading) => ({
+        id: reading.id,
+        label: reading.label,
+        snippet: readingOptionSnippet(reading, fractionConfig),
+      })),
       allowCreateLocal,
       unresolvedFact: fact,
     };
@@ -438,6 +803,40 @@ export function clarificationsFromUnresolvedFacts(
 // ---------------------------------------------------------------------------
 // Deterministic answer fold (OQ1 mandatory arm): splice → Ajv re-parse → recompile
 // ---------------------------------------------------------------------------
+
+/** ANSWER-FOLD-NULL-1 (OQ2 ruling + FIX RUN 2 nested carrier): WHERE does an
+ *  array-slot ENTRY carry the fact's label as a string value? Generic property
+ *  scan — the entry shape (which field is the symbolic noun) is the schema's
+ *  DATA (scientist-intent.schema.yaml composition items: the noun at the
+ *  entry's own string property; schema/core/datatypes/composition-entry.schema
+ *  .yaml: required [component_ref, role] with component_ref -> ref.schema.yaml
+ *  — the noun NESTED one level down inside a plain-object entry-value), never
+ *  a TS field-name branch. A plain-object entry-value contributes its OWN
+ *  string values to the scan (one level deep — a label nested TWO levels is
+ *  not a carrier: pinned, never-guess holds). Returns the holder record + key
+ *  to splice, or null when the entry carries no such string.
+ *  FIX RUN 2 (advc D2 discipline kept): ONE carrier scan shared VERBATIM by
+ *  the fold and its byte-mirror `foldNullArm` — the two paths cannot drift. */
+interface EntryLabelCarrier {
+  holder: Record<string, unknown>;
+  key: string;
+}
+
+function entryLabelCarrier(entry: unknown, label: string): EntryLabelCarrier | null {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const entryRecord = entry as Record<string, unknown>;
+  for (const key of Object.keys(entryRecord)) {
+    if (entryRecord[key] === label) return { holder: entryRecord, key };
+    const nested = entryRecord[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const nestedRecord = nested as Record<string, unknown>;
+      for (const nestedKey of Object.keys(nestedRecord)) {
+        if (nestedRecord[nestedKey] === label) return { holder: nestedRecord, key: nestedKey };
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Fold clarification answers onto the held intent DETERMINISTICALLY. An answer
@@ -453,7 +852,7 @@ export function clarificationsFromUnresolvedFacts(
 export function foldAnswersIntoShorthand(
   held: HeldShorthandIntent,
   answers: readonly AgentClarificationAnswer[],
-): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[] } | null {
+): { yaml: string; doc: ScientistIntent; answeredSlots: AnsweredSlot[]; bindings: AcceptedShorthandBinding[] } | null {
   if (answers.length === 0) return null;
   const doc: ScientistIntent = structuredClone(held.doc);
   // SH-QA-1: the join is CONTENT-keyed — build the same key map the mint used
@@ -463,6 +862,17 @@ export function foldAnswersIntoShorthand(
   for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
   const answered = new Set<ScientistIntentUnresolvedFact>();
   const answeredSlots: AnsweredSlot[] = [];
+  // REVISE-GHOST-1: the accepted {label, ref} bindings this fold records. The
+  // bar's OWN label and the label the scientist chose BOTH join the chosen
+  // record — a later revise turn re-emits the scientist's phrasing, not the
+  // record it was shown. The ref is the answer's own record identity (a
+  // generic `id` read — never a mint, never invented): an answer that carries
+  // no record ref records no binding.
+  const bindings: AcceptedShorthandBinding[] = [];
+  const refIdOf = (answer: AgentClarificationAnswer): string | null => {
+    const id = (answer.ref as { id?: unknown } | undefined)?.id;
+    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+  };
   for (const answer of answers) {
     const requestId = answer.requestId ?? '';
     let fact = factByKey.get(requestId);
@@ -484,10 +894,52 @@ export function foldAnswersIntoShorthand(
     const loc = fact.actionLocation;
     if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') return null;
     const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
-    if (!action || typeof action[loc.argument] !== 'string') return null;
-    action[loc.argument] = label;
+    if (!action) return null;
+    // ANSWER-FOLD-NULL-1 (Leg 2, OQ2 ruling): the measured null arm was
+    // 'slot-not-string' — slotType=array (action-level composition) AND
+    // slotType=undefined (composition nested under `params`; the schema
+    // declares BOTH forms valid: scientist-intent.schema.yaml `composition`
+    // items required [material, role], `material` = the symbolic material
+    // noun, and the open `params.composition` slot). Resolve WHERE the slot
+    // lives, then splice.
+    const params = action['params'] as Record<string, unknown> | undefined;
+    const slotKey = typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument])
+      ? loc.argument
+      : params && (typeof params[loc.argument] === 'string' || Array.isArray(params[loc.argument]))
+        ? loc.argument
+        : null;
+    const slotHolder: Record<string, unknown> = slotKey === loc.argument
+      ? (typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument]) ? action : params!)
+      : action;
+    const slotValue = slotKey === null ? action[loc.argument] : slotHolder[slotKey];
+    if (typeof slotValue === 'string') {
+      slotHolder[slotKey!] = label;
+    } else if (Array.isArray(slotValue)) {
+      // The 1:1 splice widens to the ENTRY whose declared symbolic-noun field
+      // equals the fact's label: the FIRST entry-object carrying the label as
+      // a string value — at the entry's own property OR one level down inside
+      // a plain-object entry-value (the shipped composition-entry datatype
+      // nests the noun inside its ref carrier; FIX RUN 2). Generic carrier
+      // scan — no slot-name or field-name policy branch in TS; the entry shape
+      // is the schema's DATA. The chosen label replaces the symbolic noun AT
+      // THE MATCHED LOCATION (still a symbolic noun — never a record id; the
+      // spine re-binds in the recompile); the rest of the entry (role,
+      // fraction, the carrier's kind/id) survives byte-stable. NO entry match
+      // ⇒ null (never guess — the null contract above survives verbatim).
+      const matched = slotValue.find((candidate) => entryLabelCarrier(candidate, fact.label) !== null);
+      if (!matched) return null;
+      const carrier = entryLabelCarrier(matched, fact.label)!;
+      carrier.holder[carrier.key] = label;
+    } else {
+      return null;
+    }
     answered.add(fact);
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
+    const refId = refIdOf(answer);
+    if (refId) {
+      bindings.push({ label: fact.label, ref: refId });
+      if (label !== fact.label) bindings.push({ label, ref: refId });
+    }
   }
   if (answered.size === 0) return null;
   // Drop any document-declared unresolved entry that names the same noun slot
@@ -516,11 +968,147 @@ export function foldAnswersIntoShorthand(
     // unchanged: the lift makes strictly MORE documents parse, and a genuinely
     // invalid folded document still returns null (the caller's permitted
     // extraction-only fallback).
-    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots };
+    return { yaml: yamlText, doc: parseShorthandForChat(yamlText), answeredSlots, bindings };
   } catch (error) {
     if (error instanceof ScientistIntentValidationError) return null;
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// ANSWER-FOLD-NULL-1 Leg 1: the fold-null ARM DIAGNOSTIC (additive-only)
+// ---------------------------------------------------------------------------
+
+/** Which null arm of `foldAnswersIntoShorthand` a given answer set would trip.
+ *  The arm tags map 1:1 to the fold's null exits (pinned at dispatch tip
+ *  4f9d147e / re-verified at 0cec0bf0):
+ *    'no-answers'        :582  answers.length === 0
+ *    'join-miss'         :604-615  content-key miss AND legacy-digit fallback miss
+ *    'empty-label'       :616-619  answer label missing/blank
+ *    'no-action-location':620-621  fact lacks loc / actionIndex not number / argument not string
+ *    'slot-not-string'   :622-623  doc.actions[loc.actionIndex][loc.argument] is not a string
+ *    'nothing-answered'  :633  answered.size === 0
+ *    'ajv-reparse-fail'  :653-663  parseShorthandForChat threw ScientistIntentValidationError
+ *  ('none' = no arm fires ⇒ the fold cannot be the null source — the
+ *  should-not-happen case.) */
+export type FoldNullArm =
+  | 'no-answers'
+  | 'join-miss'
+  | 'empty-label'
+  | 'no-action-location'
+  | 'slot-not-string'
+  | 'nothing-answered'
+  | 'ajv-reparse-fail';
+
+export interface FoldNullArmReport {
+  arm: FoldNullArm;
+  /** The requestId of the answer that tripped the arm ('' for 'no-answers'). */
+  requestId: string;
+  /** Present ONLY for 'slot-not-string': the slot's argument name and the
+   *  typeof tag of the slot value (the discriminator this item measures). */
+  argument?: string;
+  slotType?: string;
+}
+
+/**
+ * ANSWER-FOLD-NULL-1 (Leg 1): a PURE MIRROR of the fold's guards — walks the
+ * SAME guards in the SAME order as `foldAnswersIntoShorthand` (byte-mirror of
+ * :582-:663, kept directly under the fold so a fold edit must see it) and
+ * returns the FIRST arm that would make the fold return null, with the
+ * requestId that triggered it and, for 'slot-not-string', the actual typeof
+ * tag of the slot value. Returns null when NO arm fires (the fold would not
+ * be null). This is a diagnostic, not a second fold: it never mutates the
+ * held doc beyond the fold's own string-slot splice, and the fold itself is
+ * byte-unchanged by Leg 1.
+ */
+export function foldNullArm(
+  held: HeldShorthandIntent,
+  answers: readonly AgentClarificationAnswer[],
+): FoldNullArmReport | null {
+  if (answers.length === 0) return { arm: 'no-answers', requestId: '' };
+  const doc: ScientistIntent = structuredClone(held.doc);
+  const factByKey = new Map<string, ScientistIntentUnresolvedFact>();
+  for (const fact of held.clarifications) factByKey.set(factRequestId(fact), fact);
+  const answered = new Set<ScientistIntentUnresolvedFact>();
+  for (const answer of answers) {
+    const requestId = answer.requestId ?? '';
+    let fact = factByKey.get(requestId);
+    if (!fact) {
+      const legacy = /^unresolved-(\d+)$/.exec(requestId);
+      if (legacy) fact = held.clarifications[Number(legacy[1]) - 1];
+    }
+    if (!fact) return { arm: 'join-miss', requestId };
+    const label = typeof answer.label === 'string' && answer.label.trim().length > 0
+      ? answer.label.trim()
+      : null;
+    if (!label) return { arm: 'empty-label', requestId };
+    const loc = fact.actionLocation;
+    if (!loc || typeof loc.actionIndex !== 'number' || typeof loc.argument !== 'string') {
+      return { arm: 'no-action-location', requestId };
+    }
+    const action = doc.actions[loc.actionIndex] as Record<string, unknown> | undefined;
+    if (!action) return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'undefined' };
+    // Byte-mirror of the fold's slot resolution (foldAnswersIntoShorthand
+    // :641-:673 — the SAME expressions verbatim, so a future edit to one path
+    // is visibly an edit to the other; advc DEFECT-2 collapse). The slot may
+    // live at action level OR nested under `params` (both forms are
+    // schema-valid — scientist-intent.schema.yaml composition + open params).
+    const params = action['params'] as Record<string, unknown> | undefined;
+    const slotKey = typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument])
+      ? loc.argument
+      : params && (typeof params[loc.argument] === 'string' || Array.isArray(params[loc.argument]))
+        ? loc.argument
+        : null;
+    const slotHolder: Record<string, unknown> = slotKey === loc.argument
+      ? (typeof action[loc.argument] === 'string' || Array.isArray(action[loc.argument]) ? action : params!)
+      : action;
+    const slotValue = slotKey === null ? action[loc.argument] : slotHolder[slotKey];
+    if (typeof slotValue === 'string') {
+      slotHolder[slotKey!] = label;
+    } else if (Array.isArray(slotValue)) {
+      // ANSWER-FOLD-NULL-1 (Leg 2 + FIX RUN 2): the fold's widened arm — an
+      // array slot splices the FIRST entry carrying the fact's label (the
+      // SAME shared `entryLabelCarrier` scan the fold runs, nested carrier
+      // included — one scan, both paths, cannot drift). NO entry match ⇒
+      // the fold returns null ⇒ the mirror reports 'slot-not-string' (array tag).
+      const matched = slotValue.find((candidate) => entryLabelCarrier(candidate, fact.label) !== null);
+      if (!matched) {
+        return { arm: 'slot-not-string', requestId, argument: loc.argument, slotType: 'array' };
+      }
+      const carrier = entryLabelCarrier(matched, fact.label)!;
+      carrier.holder[carrier.key] = label;
+    } else {
+      return {
+        arm: 'slot-not-string',
+        requestId,
+        argument: loc.argument,
+        slotType: typeof slotValue,
+      };
+    }
+    answered.add(fact);
+  }
+  if (answered.size === 0) return { arm: 'nothing-answered', requestId: '' };
+  const filledLabels = new Set(
+    answers
+      .map((a) => (typeof a.label === 'string' ? a.label.trim() : ''))
+      .filter((l) => l.length > 0),
+  );
+  doc.unresolved = doc.unresolved.filter((fact) => !filledLabels.has(fact.label));
+  const yamlText = stringifyYaml({
+    intentId: doc.intentId,
+    ...(typeof doc.sourcePrompt === 'string' ? { sourcePrompt: doc.sourcePrompt } : {}),
+    actions: doc.actions,
+    unresolved: doc.unresolved,
+  });
+  try {
+    parseShorthandForChat(yamlText);
+  } catch (error) {
+    if (error instanceof ScientistIntentValidationError) {
+      return { arm: 'ajv-reparse-fail', requestId: '' };
+    }
+    throw error;
+  }
+  return null;
 }
 
 /**
@@ -678,6 +1266,14 @@ export function shorthandResultFromCompile(
   const events = bindShorthandEventsToDeck(
     compiledEventsToProposals(compiled.terminalArtifacts.events),
     deck,
+    // REVISE-GHOST-1 fix3 (gate Defect 1, f2mjyr 'events=3' with ghostTiles=0):
+    // the compile's resolved placement offers (resolve_labware output, already
+    // capped by config/drafting/deck-review.yaml at the compile choke). The
+    // client's buildPreviewFromDraft ghosts a PLACEMENT of an EXISTING record
+    // ONLY from this channel (its resolved arm); dropping it here is what left
+    // the plate empty under a '3 events' preview bar. Same conditional-spread
+    // discipline as labwareAdditions (exactOptionalPropertyTypes).
+    compiled.terminalArtifacts.resolvedLabwares,
   );
   // The compileResultToAgentResult precedent: gaps ride unresolvedRefs through
   // the same loose proposal shape the compiler path already emits.
@@ -706,6 +1302,14 @@ export function shorthandResultFromCompile(
     // type.
     ...(compiled.terminalArtifacts.labwareAdditions && compiled.terminalArtifacts.labwareAdditions.length > 0
       ? { labwareAdditions: compiled.terminalArtifacts.labwareAdditions }
+      : {}),
+    // REVISE-GHOST-1 fix3 (gate Defect 1): the resolved placement offers ride
+    // the done result so the client's resolved arm can ghost a placement of
+    // the record the lab already owns (submitSuggestionTool.ts:311: placed,
+    // never re-created). Conditional spread only — a compile with no offers
+    // ships NO key (the R-Defect-2 / exactOptionalPropertyTypes discipline).
+    ...(compiled.terminalArtifacts.resolvedLabwares && compiled.terminalArtifacts.resolvedLabwares.length > 0
+      ? { resolvedLabwares: compiled.terminalArtifacts.resolvedLabwares }
       : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
     ...(requests.length > 0 ? { clarificationRequests: requests } : {}),

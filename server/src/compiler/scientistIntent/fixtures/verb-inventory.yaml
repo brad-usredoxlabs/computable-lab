@@ -34,3 +34,4 @@ verbs:
 - media_swap_duplicate_columns
 - source_wells_to_duplicate_target_columns
 - repeat_rows
+- bead_beat

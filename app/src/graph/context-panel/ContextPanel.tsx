@@ -20,6 +20,7 @@ import {
   type LabwareStates,
 } from '../../graph/lib/eventGraph'
 import {
+  describeCellTotal,
   formatComputedConcentration,
   formatComputedCount,
   formatScientificStateSummary,
@@ -262,9 +263,24 @@ function SubjectStateCard({
               // the mixture, never the mixture's volume (the header is the
               // single volume assertion). Non-carrier rows render as before.
               const conc = formatComputedConcentration(material.concentration, material.concentrationUnknown) || 'no concentration'
+              const density = formatComputedConcentration(material.counterDensity)
+              // CELLRATE-1: the per-well total is DISPLAY truth over the declared
+              // data — derived ONLY from a declared rate x a declared volume and
+              // labeled derived; a bare count is labeled absolute-unverified and
+              // never scaled. A carrier row cites the header volume (the single
+              // volume assertion); a single-material row cites its own volume.
+              const cellTotal = describeCellTotal({
+                ...(typeof material.count === 'number' ? { count: material.count } : {}),
+                ...(material.counterDensity ? { density: material.counterDensity } : {}),
+                ...(material.volumeIsCarrier
+                  ? (state.volume_uL > 0 ? { volume_uL: state.volume_uL } : {})
+                  : (material.volume_uL > 0 ? { volume_uL: material.volume_uL } : {})),
+              })
+              const countLabel = formatComputedCount(material.count)
+              const amountParts = density ? [countLabel, density, cellTotal] : [cellTotal ?? countLabel]
               const metaParts = material.volumeIsCarrier
-                ? [conc, material.fractionOfMixture, formatComputedCount(material.count), formatComputedConcentration(material.counterDensity)].filter(Boolean)
-                : [conc, formatVolume(material.volume_uL), typeof material.count === 'number' ? formatComputedCount(material.count) : null].filter(Boolean)
+                ? [conc, material.fractionOfMixture, ...amountParts].filter(Boolean)
+                : [conc, formatVolume(material.volume_uL), ...amountParts].filter(Boolean)
               return (
                 <li key={idx}>
                   <span className="material-name">{material.materialRef}</span>

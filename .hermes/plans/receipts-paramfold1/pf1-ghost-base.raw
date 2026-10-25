@@ -1,0 +1,46 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+stdout | unknown test
+=== BASE COMPLIANT emission (no unresolved): {
+ "outcome": "complete",
+ "clarifications": [],
+ "gaps": [],
+ "unresolvedRefs": []
+}
+=== BASE HEDGED emission (bars): {
+ "outcome": "needs-clarification",
+ "clarifications": [
+  {
+   "label": "duration",
+   "reason": "not-stated",
+   "actionLocation": {
+    "actionIndex": 0,
+    "action": "bead_beat",
+    "argument": "duration"
+   }
+  }
+ ],
+ "gaps": [],
+ "unresolvedRefs": [
+  {
+   "kind": "unresolved_symbol",
+   "label": "duration",
+   "reason": "not-stated"
+  }
+ ]
+}
+
+ ❯ src/compiler/scientistIntent/pf1GhostProbe.test.ts  (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/pf1GhostProbe.test.ts [ src/compiler/scientistIntent/pf1GhostProbe.test.ts ]
+Error: No test suite found in file /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server/src/compiler/scientistIntent/pf1GhostProbe.test.ts
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  03:32:46
+   Duration  4.22s (transform 686ms, setup 0ms, collect 2.10s, tests 0ms, environment 0ms, prepare 720ms)
+

@@ -87,6 +87,7 @@ import {
 import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
+import { createInventoryShelfHandlers } from './api/handlers/InventoryShelfHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
 import { createHumanStepsHandlers, type HumanStepsHandlers } from './api/handlers/HumanStepsHandlers.js';
@@ -854,6 +855,7 @@ export async function createServer(
     ),
   });
   const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
+  const inventoryShelfHandlers = createInventoryShelfHandlers(ctx.store);
   const extractProtocolHandlers = createExtractProtocolHandlers(ctx.workspaceRoot);
   const aiProfile = ctx.appConfig?.ai ? resolveAiProfile(ctx.appConfig.ai) : undefined;
   const assuranceThreshold = ctx.appConfig?.ai?.assuranceThreshold;
@@ -1600,6 +1602,7 @@ export async function createServer(
       materialPrepHandlers,
       materialLifecycleHandlers,
       materialProfileHandlers,
+      inventoryShelfHandlers,
       extractProtocolHandlers,
       protocolBuilderHandlers,
       checkinHandlers,

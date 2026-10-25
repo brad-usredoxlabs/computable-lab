@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-nod-377d
+kind: organism
+id: TERM-nod-377d
+preferredLabel: NOD
+aliases:
+  - NOD mouse
+  - NOD/ShiLtJ
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: NOD
+strain_of:
+  kind: record
+  id: TERM-mus-musculus-q1al
+  type: term
+  label: Mus musculus

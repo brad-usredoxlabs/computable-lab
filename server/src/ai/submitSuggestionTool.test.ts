@@ -296,7 +296,16 @@ describe('agent_intent — the constrained emission menu', () => {
     // workstate history exists for that time"). It reads; it writes nothing.
     // QMS7-7 (DELIBERATE golden diff): compose_record_draft — the record proposal
     // rides the ONE forced tool; POST /api/drafts/compile remains the trust boundary.
-    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft']);
+    // MATRES-RECV (OQ-2 RATIFIED, DELIBERATE golden diff): compose_receiving — the
+    // elicited receiving attestation (case 4 retrospective chat) rides the SAME one
+    // forced tool (the one-tool lock is about the TOOL, never a frozen enum); the
+    // 'receiving' draft adapter (config/drafting/adapters.yaml, DATA) remains the
+    // trust boundary. No second forced tool, no clarification-panel affordance.
+    // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+    // — the elicited execute-chain attestation (case 3' "make 1 mL, 10x100uL
+    // aliquots") rides the SAME one forced tool; the 'chain' draft adapter remains
+    // the trust boundary. Still ONE forced tool.
+    expect(props.intent?.enum).toEqual(['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain']);
     // deck_layout args
     expect(props.variantId?.type).toBe('string');
     // event_graph args carried over from the draft tool

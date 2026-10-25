@@ -1,0 +1,15 @@
+D6 probe (private stack :3193, 2026-10-18, fix1) — POST an EXISTING seed row
+directly (GET-miss simulation). Proves the material 409 the fixed branch now
+tolerates is a REAL server response, mirroring the labware branch.
+
+--- material seed row (MAT-w211-magbuffer) ---
+POST1 status=409
+{"success":false,"error":"Record already exists: MAT-w211-magbuffer"}
+
+--- labware seed row (LAB-w211-golden-magplate), symmetry ---
+POST2 status=409
+{"success":false,"error":"Record already exists: LAB-w211-golden-magplate"}
+
+(Pre-fix, the material branch threw on exactly this 409; the labware branch
+already tolerated it. Fix mirrors the labware branch. Same behaviour recorded
+in the step-0 log targeted-3193.out.txt.)

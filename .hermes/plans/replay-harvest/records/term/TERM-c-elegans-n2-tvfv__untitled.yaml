@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-c-elegans-n2-tvfv
+kind: organism
+id: TERM-c-elegans-n2-tvfv
+preferredLabel: C. elegans N2
+aliases:
+  - N2
+  - wild-type N2
+status: proposed
+lifecycleId: lab-vocabulary-control
+strain: N2
+strain_of:
+  kind: record
+  id: TERM-caenorhabditis-elegans-vyv4
+  type: term
+  label: Caenorhabditis elegans

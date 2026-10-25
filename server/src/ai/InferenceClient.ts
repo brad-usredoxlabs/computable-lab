@@ -63,6 +63,11 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     streamIdleTimeoutMs = 300_000,
     streamMaxMs,
     enableThinking,
+    // WIRE-TEMP-1: the declared config temperature (e.g. the scientist-intent
+    // one-shot's `temperature: 0`) used to be silently dropped — the body was
+    // built from request fields only, so the call ran at the serving stack's
+    // default sampling. Capture it here; normalizeRequest forwards it.
+    temperature,
   } = config;
   const baseUrl = normalizeBaseUrl(config.baseUrl);
   const isOpenRouter = new URL(baseUrl).hostname === 'openrouter.ai';
@@ -83,15 +88,23 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   // Forward enableThinking as `enable_thinking` inside chat_template_kwargs
   // (Qwen3+ template control). Request-level values win on key collision so
   // callers can override per-call if needed.
+  //
+  // WIRE-TEMP-1: the same ??-precedence forwards the declared config temperature
+  // into the body when the request itself does not set one (request-level wins,
+  // mirroring `requestEnableThinking ?? enableThinking` below). A value absent
+  // on BOTH sides stays absent — never an explicit `temperature: undefined`
+  // (exactOptionalPropertyTypes is on for the backend).
   function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
     const { max_tokens, chat_template_kwargs, enableThinking: requestEnableThinking, ...rest } = req;
     const effectiveEnableThinking = requestEnableThinking ?? enableThinking;
+    const effectiveTemperature = rest.temperature ?? temperature;
     if (isOpenRouter) {
       const { cache_key: _key, cache_prompt: _cache, id_slot: _slot, reasoning, ...cloud } = rest;
       const thinking = requestEnableThinking ?? (typeof chat_template_kwargs?.enable_thinking === 'boolean' ? chat_template_kwargs.enable_thinking : enableThinking);
       const body: Record<string, unknown> = {
         ...cloud,
         ...(max_tokens != null ? { max_tokens } : {}),
+        ...(effectiveTemperature !== undefined ? { temperature: effectiveTemperature } : {}),
         ...((thinking !== undefined || reasoning) ? { reasoning: { ...(thinking !== undefined ? { enabled: thinking } : {}), ...reasoning } } : {}),
       };
       // Alibaba's Qwen routes cannot force a tool while thinking (often on by default).
@@ -107,6 +120,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     return {
       ...rest,
       ...(max_tokens != null ? { max_completion_tokens: max_tokens } : {}),
+      ...(effectiveTemperature !== undefined ? { temperature: effectiveTemperature } : {}),
       ...(mergedKwargs ? { chat_template_kwargs: mergedKwargs } : {}),
     };
   }

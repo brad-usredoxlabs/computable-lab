@@ -244,7 +244,7 @@ unresolved:
 });
 
 describe('clarification-contract.candidate shape freeze (SPINE-3 cannot silently widen it)', () => {
-  it('the schema candidates item is exactly {label required, confidence optional 0..1, additionalProperties false, unevaluatedProperties false}', () => {
+  it('the schema candidates item is exactly {label required, confidence optional 0..1, ref optional string, additionalProperties false, unevaluatedProperties false}', () => {
     const doc = loadSchemaDocument();
     const unresolvedItem = ((doc.properties as Record<string, unknown>).unresolved as Record<string, unknown>).items as Record<string, unknown>;
     const candidates = (unresolvedItem.properties as Record<string, unknown>).candidates as Record<string, unknown>;
@@ -254,12 +254,21 @@ describe('clarification-contract.candidate shape freeze (SPINE-3 cannot silently
     expect(item.unevaluatedProperties).toBe(false);
     expect(item.required).toEqual(['label']);
 
+    // W28-OPTIONBIND-1 DELIBERATE PIN UPDATE (the sanctioned pin+row pattern,
+    // W28-A5n Q1): the ONLY delta is the additive optional `ref` — the engine's
+    // store-backed record handle (resolutionEngine.ts candidateRecordRef;
+    // tier <= 1 record candidates only, mint/tier>1 carry none). The freeze
+    // itself is unchanged: required stays ['label'], the
+    // additionalProperties/unevaluatedProperties posture stays false/false, and
+    // the next test proves an UNDECLARED key is still rejected.
     const props = item.properties as Record<string, Record<string, unknown>>;
-    expect(Object.keys(props).sort()).toEqual(['confidence', 'label']);
+    expect(Object.keys(props).sort()).toEqual(['confidence', 'label', 'ref']);
     expect(props.label?.type).toBe('string');
     expect(props.confidence?.type).toBe('number');
     expect(props.confidence?.minimum).toBe(0);
     expect(props.confidence?.maximum).toBe(1);
+    expect(props.ref?.type).toBe('string');
+    expect(props.ref?.minLength).toBe(1);
   });
 
   it('rejects an extra property on a candidate item (the freeze is enforced, not just declared)', () => {

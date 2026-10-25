@@ -58,6 +58,19 @@ export function promptBlockVerbs(text: string): string[] {
   return m[1].split('\n').flatMap((line) => line.split('|')).map((t) => t.trim()).filter((t) => t.length > 0);
 }
 
+/**
+ * HEDGE-TYPE-1 fix1/D1: the ARGUMENTS (required-vs-optional) block lines from
+ * a prompt text — the generated prompt's block AND the mirror's block extract
+ * the same way, so the two can be BYTE-compared line by line. Without this
+ * leg, a vocabulary arg-contract change would silently desync the mirror's
+ * required-vs-optional marks (the exact contract-vs-data class this item
+ * closes, one layer over).
+ */
+export function argContractBlockLines(text: string): string[] {
+  const m = text.match(/ARGUMENTS \([^\n]*\n([\s\S]*?)\n\n/);
+  return m ? m[1].split('\n') : [];
+}
+
 function diffSets(a: readonly string[], b: readonly string[]): { onlyA: string[]; onlyB: string[] } {
   const setA = new Set(a);
   const setB = new Set(b);
@@ -107,6 +120,54 @@ describe('scientist-intent-vocabulary.mirror-drift', () => {
     const d = diffSets(vocab.verbs(), block);
     expect(d.onlyA).toEqual([]);
     expect(d.onlyB).toEqual([]);
+  });
+
+  // HEDGE-TYPE-1 fix1/D1: the mirror's ARGUMENTS block is ENFORCED, not merely
+  // hand-matched. The generated block comes from vocab.verbs()/argContracts();
+  // the mirror's copy must be BYTE-identical line-for-line, so a future
+  // vocabulary arg-contract change (a renamed arg, a required<->optional flip,
+  // a new/removed arg) cannot leave the mirror teaching stale marks.
+  it('(f) mirror ARGUMENTS block == generated promptArgContractBlock(vocab) — BYTE-identical line-for-line', () => {
+    const registry = parseYaml(readFileSync(REGISTRY_TEMPLATE_PATH, 'utf-8')) as { content: string };
+    const generated = argContractBlockLines(INTENT_COMPILE_SYSTEM_PROMPT);
+    const mirror = argContractBlockLines(registry.content);
+    expect(generated.length).toBeGreaterThan(0);
+    expect(mirror.length).toBe(generated.length);
+    const mismatched = generated
+      .map((line, i) => ({ i, generated: line, mirror: mirror[i] }))
+      .filter((r) => r.generated !== r.mirror);
+    expect(mismatched).toEqual([]);
+    // And the mirror's own block must still agree with the vocabulary data it
+    // claims to mirror (required args unmarked, optional args carry '?').
+    for (const verb of vocab.verbs()) {
+      const line = mirror.find((l) => l.startsWith(`- ${verb}`));
+      expect(line, `mirror ARGUMENTS line for ${verb}`).toBeDefined();
+      for (const a of vocab.argContracts(verb)) {
+        const rendered = `${a.name}${a.required ? '' : '?'}:${a.kind}${a.domain ? `(${a.domain})` : ''}`;
+        expect(line!, `${verb}.${a.name}`).toContain(rendered);
+      }
+    }
+  });
+
+  it('MUTATION LEG (D1): a stale mirror ARGUMENTS line (optional mark flipped) makes the byte-compare go RED', () => {
+    const shippedText = readFileSync(REGISTRY_TEMPLATE_PATH, 'utf-8');
+    // Flip ONE required-vs-optional mark in the mirror's copy of the bead_beat
+    // line (duration?:scalar -> duration:scalar) — exactly the desync class a
+    // future vocabulary change would produce.
+    const staleText = shippedText.replace('- bead_beat — labware?:resolvable(labware), material?:resolvable(material), duration?:scalar', '- bead_beat — labware?:resolvable(labware), material?:resolvable(material), duration:scalar');
+    expect(staleText).not.toBe(shippedText); // the mutation applied
+    const stale = parseYaml(staleText) as { content: string };
+    const generated = argContractBlockLines(INTENT_COMPILE_SYSTEM_PROMPT);
+    const mirror = argContractBlockLines(stale.content);
+    expect(mirror.length).toBe(generated.length);
+    const mismatched = generated
+      .map((line, i) => ({ i, generated: line, mirror: mirror[i] }))
+      .filter((r) => r.generated !== r.mirror);
+    // The byte-compare assertion the GREEN leg uses would FAIL here:
+    expect(mismatched.length).toBe(1);
+    expect(mismatched[0]!.mirror).toContain('- bead_beat — ');
+    expect(mismatched[0]!.mirror).toContain('duration:scalar');
+    expect(mismatched[0]!.generated).toContain('duration?:scalar');
   });
 
   it('MUTATION LEG: a stale mirror (one verb removed from the wire-schema text) makes the diff go RED', () => {

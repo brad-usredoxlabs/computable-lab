@@ -1,0 +1,35 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/W28-OPTIONBIND1-lane2-l2t1515/app
+
+(node:3043840) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.sourcerow.test.ts  (3 tests | 1 failed) 15ms
+   ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.sourcerow.test.ts > clarificationAdapter — (not-stated, source) gets /l (W28-SOURCEROW-1, W28-A5n Q2) > 1. {reason:not-stated, actionLocation.argument=source} maps to /l (source is labware-semantic by declared vocabulary)
+     → declared domain: labware — '/l' (resolveLabware, no mint floor), never the '/m' material funnel: expected '/m' to be '/l' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.sourcerow.test.ts > clarificationAdapter — (not-stated, source) gets /l (W28-SOURCEROW-1, W28-A5n Q2) > 1. {reason:not-stated, actionLocation.argument=source} maps to /l (source is labware-semantic by declared vocabulary)
+AssertionError: declared domain: labware — '/l' (resolveLabware, no mint floor), never the '/m' material funnel: expected '/m' to be '/l' // Object.is equality
+
+- Expected
++ Received
+
+- /l
++ /m
+
+ ❯ src/event-editor/right-pane/protocol/ProtocolLocalizationThread.clarificationAdapter.sourcerow.test.ts:38:130
+     36|     }, 0)
+     37|     expect(req, 'a source-argument not-stated fact must get a card').n…
+     38|     expect(req!.menuProvider, "declared domain: labware — '/l' (resolv…
+       |                                                                                                                                  ^
+     39|   })
+     40| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  15:50:38
+   Duration  4.51s (transform 98ms, setup 483ms, collect 56ms, tests 15ms, environment 3.28s, prepare 138ms)
+

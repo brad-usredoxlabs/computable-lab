@@ -1,0 +1,18 @@
+
+> @computable/server@1.0.0 test:run
+> vitest run src/compiler/scientistIntent/compositionFractions.test.ts src/compiler/resolution/compositionArgResolution.test.ts src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts src/api/handlers/IntentCompileFromPromptHandlers.test.ts src/api/handlers/IntentCompileFromPromptHandlers.answeredPrompt.test.ts
+
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/compiler/scientistIntent/compositionFractions.test.ts  (20 tests) 192ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.answeredPrompt.test.ts  (4 tests) 269ms
+ ✓ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (5 tests) 387ms
+ ✓ src/api/handlers/IntentCompileFromPromptHandlers.test.ts  (11 tests) 577ms
+ ✓ src/compiler/resolution/compositionArgResolution.test.ts  (15 tests) 1131ms
+
+ Test Files  5 passed (5)
+      Tests  55 passed (55)
+   Start at  21:33:39
+   Duration  2.31s (transform 769ms, setup 0ms, collect 3.06s, tests 2.56s, environment 1ms, prepare 361ms)
+

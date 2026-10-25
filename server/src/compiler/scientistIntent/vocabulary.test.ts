@@ -4,7 +4,7 @@
  * resolver-spec.validation: the shipped vocabulary validates (Ajv) AND lints
  * (P1-P4) CLEAN; each named fixture mutation produces a NAMED failure.
  * current-verb-parity: vocabulary verb set+order == fixtures/verb-inventory.yaml
- * == 31, and every acceptance shape SPINE-1 pinned still parses through the
+ * == 32, and every acceptance shape SPINE-1 pinned still parses through the
  * REAL parseScientistIntent singleton.
  */
 import { describe, expect, it } from 'vitest';
@@ -60,7 +60,7 @@ actions:
 describe('resolver-spec.validation', () => {
   it('the shipped vocabulary validates + lints CLEAN (zero findings)', async () => {
     const vocab = defaultScientistIntentVocabulary();
-    expect(vocab.verbs()).toHaveLength(31);
+    expect(vocab.verbs()).toHaveLength(32);
 
     // The lint spec loads through the repo lint loader with zero load errors
     // for our paths, and the shipped document produces zero violations.
@@ -76,13 +76,17 @@ describe('resolver-spec.validation', () => {
     const result = engine.lint(doc, SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID);
     expect(result.violations).toEqual([]);
     // Backstop (bait 4): server.ts skips empty-rule specs silently — the shipped
-    // spec must carry its four policy rules.
+    // spec must carry its policy rules.
+    // MATRES-ELIG DELIBERATE PIN UPDATE (declared, spec §7.5/§9): P6
+    // `vocab-preferred-member-of-levels` is the new well-formedness rule for the
+    // arg-contract `preferred`/`levels` DECLARATION SLOTS.
     expect(ours[0]!.spec.rules.map((r) => r.id)).toEqual([
       'vocab-resolvable-args-declare-domain',
       'vocab-policy-refs-declared',
       'vocab-hint-verbs-carry-policy-ref',
       'vocab-pattern-verbs-forbid-required-resolvable',
       'vocab-many-args-declare-item-noun-field',
+      'vocab-preferred-member-of-levels',
       'vocab-strategy-refs-declared',
     ]);
   });
@@ -93,7 +97,15 @@ describe('resolver-spec.validation', () => {
     const ids = result.entries.map((e) => e.schema['$id']);
     expect(ids).toContain(SCIENTIST_INTENT_VOCABULARY_SCHEMA_ID);
     // Only the *.schema.yaml file is schema-registered; the data file is not.
-    expect(result.entries).toHaveLength(1);
+    // MATRES-ELIG DELIBERATE PIN UPDATE (declared, spec §6): the NEW
+    // material-eligibility triplet lives under this tree
+    // (schema/scientist-intent/material-eligibility/), so the recursive loader
+    // now registers TWO schema files — the vocabulary's and the eligibility
+    // meta-schema. The eligibility DATA and LINT files match neither loader
+    // pattern and stay unregistered (asserted below).
+    expect(result.entries).toHaveLength(2);
+    expect(ids).toContain('https://computable-lab.com/schema/scientist-intent/material-eligibility.schema.yaml');
+    expect(result.entries.map((e) => e.path ?? '')).not.toContain(join(VOCAB_DIR, VOCABULARY_DATA_FILE));
   });
 
   it('P1 mutation: a resolvable arg without a domain fails with the NAMED rule', () => {
@@ -157,16 +169,16 @@ describe('resolver-spec.validation', () => {
     const shipped = defaultScientistIntentVocabulary();
     expect(a).toBe(b); // cached per path
     expect(a).not.toBe(shipped);
-    expect(a.verbs()).toHaveLength(30);
-    expect(shipped.verbs()).toHaveLength(31);
+    expect(a.verbs()).toHaveLength(31);
+    expect(shipped.verbs()).toHaveLength(32);
   });
 });
 
 describe('current-verb-parity', () => {
-  it('vocabulary verb set+order == verb-inventory.yaml == 31 (order-aware, bait 10)', () => {
+  it('vocabulary verb set+order == verb-inventory.yaml == 32 (order-aware, bait 10)', () => {
     const inventory = (parseYaml(readFileSync(INVENTORY_PATH, 'utf-8')) as { verbs: string[] }).verbs;
     const vocab = defaultScientistIntentVocabulary();
-    expect(inventory).toHaveLength(31);
+    expect(inventory).toHaveLength(32);
     expect([...vocab.verbs()]).toEqual(inventory); // order-aware equality
     expect(new Set(vocab.verbs())).toEqual(new Set(inventory)); // set identity both directions
   });

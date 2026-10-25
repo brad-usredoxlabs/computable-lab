@@ -165,6 +165,24 @@ export interface AiRecordDraftProposalEvent {
   recordDraft: Record<string, unknown>
 }
 
+/**
+ * MATRES-CHAIN (OQ-3(a) ratified) — the execute-chain INTENT frame, mirrored
+ * into the generic stack's union the same way as the members above. The SAME
+ * server handler emits it (POST /ai/assist/stream and the event-editor
+ * draft-events stream — AgentOrchestrator emits {type:'chain_proposal',
+ * chain}); the shape matches `event-editor/right-pane/ai/assistStream.ts`
+ * (the wire-shape authority, `| { type: 'chain_proposal'; chain:
+ * Record<string, unknown> }`) member-for-member, and
+ * aiStreamTypes.pin.test.ts keeps the unions from drifting.
+ * exactOptionalPropertyTypes convention: the payload is forwarded verbatim —
+ * the trust boundary is POST /api/drafts/compile (adapter 'chain': Ajv +
+ * lint + DATA arithmetic + canAccept), not this stream.
+ */
+export interface AiChainProposalEvent {
+  type: 'chain_proposal'
+  chain: Record<string, unknown>
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -180,6 +198,7 @@ export type AiStreamEvent =
   | AiWorkstateProposalEvent
   | AiAnalysisProposalEvent
   | AiRecordDraftProposalEvent
+  | AiChainProposalEvent
 
 // =============================================================================
 // Agent Result (final output from AI)
@@ -198,6 +217,27 @@ export interface AiClarificationOption {
   source?: string
   score?: number
   ref?: Record<string, unknown>
+  /**
+   * MATRES-PANEL §8 (additive, conditional-spread discipline): the engine's
+   * own candidate disclosure, read off the schema-free 422 body's widened
+   * candidateFact (server/src/compiler/resolution/resolutionEngine.ts:127-146
+   * — `referentLevel`/`tier`/`eligibility` via conditional spread; the drop
+   * was client-side at clarificationAdapter.ts:190-209, widening it HERE is
+   * PANEL's own work). Absent-or-value, never :undefined
+   * (exactOptionalPropertyTypes). A candidate with no eligibility run (tier-5
+   * mint offer, near-miss suggestion, model-side fact) keeps the pre-PANEL
+   * option shape byte-unchanged.
+   */
+  level?: string
+  tier?: number
+  eligibility?: {
+    display: 'pass' | 'fail' | 'incomplete'
+    suppress: 'pass' | 'fail' | 'incomplete'
+    bind: 'pass' | 'fail' | 'incomplete'
+    policyIds?: { display: string; suppress: string; bind: string }
+    bindRole?: string
+    displayRole?: string
+  }
 }
 
 export type AiClarificationKind =

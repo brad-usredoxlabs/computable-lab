@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-gate-plate-1f6a
+kind: material
+id: MAT-gate-plate-1f6a
+name: gate plate
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "gate plate").

@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-heparg-ii79
+kind: organism
+id: TERM-heparg-ii79
+preferredLabel: HepaRG
+aliases:
+  - HepaRG cell
+  - HepaRG cells
+status: proposed
+lifecycleId: lab-vocabulary-control
+domain: cell_line
+linkouts:
+  - kind: ontology
+    curie: CLO:0020273
+    namespace: CLO
+    label: CLO:0020273

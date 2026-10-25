@@ -1,0 +1,164 @@
+# MIXFRAC-1 (OQ-2 ruling, MATRES-CHAIN OQ-2(b) shape): the composition-fraction
+# convention is DATA. The sum policy, the fraction parse patterns, the excluded
+# roles, the utterance-shape attachment evidence, the recipe-shaped reading
+# evidence, and the parse-precedence are declared here; the TypeScript side
+# (server/src/compiler/scientistIntent/compositionFractions.ts, called from
+# normalizeScientistIntent beside the cue bar) interprets them generically.
+# Zero reagent nouns, zero fraction literals, zero connector phrases in TS
+# (repo rule #1 / CLAUDE.md "The Hard Boundary").
+#
+# Loaded PER call (never process-cached), mirroring the mixture-cue discipline
+# verbatim: an absent file or absent required section turns the check OFF —
+# LOUD (one console.warn naming the path), never silently; a present-but-
+# malformed file THROWS naming the path. Fractions pass through unchanged when
+# the check is off.
+#
+# THE DEFECT this file exists to close: "50/50 X/Y + 10% Z" (110% of the
+# declared basis) compiled clean because nothing parsed or summed the declared
+# fraction strings. A composition whose non-excluded fractions do not sum to
+# `basis.total` (within `tolerance`) now raises ONE clarification with reason
+# code composition-fraction-sum carrying the candidate readings, each with its
+# COMPUTED final fractions. Cells and other excluded roles never join the sum.
+
+# ---- sum policy (OQ-2) ----
+basis: percent-of-final-volume
+total: 100
+tolerance: 0.0001
+# Rounding factor used when a computed fraction is rendered for display or for
+# a rewritten fraction string (1/100 => two decimal places). The TS derives
+# every rounding from this DATA value — it carries no rounding literal.
+displayRoundingFactor: 100
+
+# Roles whose entries never join the fraction sum (count components — a cells
+# entry carries a count, never a volume). The role names ride DATA and must
+# match the enum in schema/core/datatypes/composition-entry.schema.yaml; the
+# TS never duplicates the enum.
+excludeRoles: [cells]
+
+# ---- fraction parsing (DATA regexes) ----
+# A fraction string is parsed by trying each pattern in order; the first
+# capture group is the number. A fraction string that parses to NO number is
+# EXCLUDED from the sum and NAMED in the clarification message — never guessed.
+fractionPatterns:
+  - "^(\\d+(?:\\.\\d+)?)\\s*%$"
+  - "^(\\d+(?:\\.\\d+)?)\\s*percent$"
+  - "^(\\d+(?:\\.\\d+)?)$"
+malformedFractionBehavior: exclude-and-name
+
+# ---- utterance-shape attachment evidence (firesOn idiom, mirroring
+# config/drafting/mixture-material-cues.yaml: evidence is DATA, zero literals
+# in TS, no confidence anywhere) ----
+attachmentEvidence:
+  # Connectors that join a supplement to what precedes it in the utterance.
+  supplementConnectors:
+    - " + "
+    - " with "
+    - " plus "
+  # Phrases that make the supplement a fraction OF THE FINAL volume (one-sided
+  # evidence for the whole-mixture re-base parse).
+  finalVolumePhrases:
+    - "bring to"
+    - "to a final"
+    - "final volume"
+    - "final of"
+  # Phrases that make the supplement explicitly added ON TOP of the mixture
+  # (one-sided evidence for the on-top parse; the declared fractions stay
+  # fractions-of-mixture and the sum note rides the reading data).
+  onTopPhrases:
+    - "on top"
+    - "v/v on top"
+    - "added on top"
+  # Ratio/quantity adjacency idiom reused from the cues file: a ratio/quantity
+  # match whose span touches this many characters around a connector
+  # occurrence is attachment evidence.
+  adjacencyWindowChars: 16
+  ratioPatterns:
+    - "\\d+\\s*[:/xX×]\\s*\\d+"
+    - "\\d+\\s*%"
+
+# ---- parse precedence (Brad's OQ-1 ruling, l2t1635 amendment) ----
+# The three candidate readings, in presentation order when the default-parse
+# condition does NOT reorder them. A genuinely ambiguous utterance ALWAYS
+# clarifies with all three readings; a worker/evaluator NEVER picks a reading
+# by confidence. One-sided evidence (exactly one finalVolumePhrases or
+# onTopPhrases arm fires) resolves to that arm's parse without a clarification.
+convention:
+  readings: [whole-mixture-supplement, preceding-noun-recipe, explicit-on-top]
+  defaultParse: preceding-noun
+  defaultParseCondition: recipeShapedReadingExists
+  onGenuineAmbiguity: clarify
+  # Reading arithmetic (generic, over the declared fractions — no reagent
+  # knowledge):
+  #   whole-mixture-supplement: the supplement keeps its declared share of the
+  #     FINAL total; every non-excluded non-supplement entry is scaled
+  #     proportionally so the total equals `total`.
+  #   preceding-noun-recipe: the supplement attaches to the entry that
+  #     PRECEDES it (an in-house recipe reading: "X + f% Y" is X-with-Y, a
+  #     UNIT). The preceding entry's share p splits: preceding keeps
+  #     p*(1 - f/total), the supplement takes p*(f/total); the preceding
+  #     entry's own declared composition is the nested (total-f):f split.
+  #   explicit-on-top: the declared fractions stay fractions-of-mixture; the
+  #     sum note rides the reading data (OQ-4: never the ledger, never the
+  #     "<fraction> of the mixture" source form).
+  readingArithmetic:
+    whole-mixture-supplement: rebase-to-total
+    preceding-noun-recipe: attach-to-preceding
+    explicit-on-top: keep-declared
+  # Silent-resolution arm: ONE-SIDED finalVolumePhrases evidence (the
+  # final-volume arm fires and the on-top arm does not) settles the parse to
+  # the whole-mixture-supplement reading WITHOUT a clarification — the re-base
+  # makes the fractions sum to `total` by construction, so the composition is
+  # self-consistent. On-top evidence does NOT resolve silently: the declared
+  # fractions still break the total, so the bar stands and the sum note rides
+  # the on-top reading (OQ-4).
+  silentResolution:
+    whenEvidence: finalVolumePhrases
+    reading: whole-mixture-supplement
+  # Presentation labels for each reading (DATA — the clarification names the
+  # parses; the TS never hardcodes a reading string).
+  readingLabels:
+    whole-mixture-supplement: "whole-mixture supplement (the supplement is a share of the final volume; the bases re-base)"
+    preceding-noun-recipe: "preceding-noun in-house recipe (the supplement attaches to the entry that precedes it — a complete medium the lab makes)"
+    explicit-on-top: "explicit on-top (declared fractions stay fractions-of-mixture)"
+
+# ---- clarification message templates (DATA; {placeholders} are filled with
+# COMPUTED values only — never a reagent noun) ----
+messages:
+  clarification: "The declared composition fractions sum to {sum} percent, not the declared {total} percent ({basis}). The utterance carries more than one legal parse — choose which reading applies; each candidate lists its computed final fractions."
+  sumNote: "Declared fractions sum to {sum} percent of the mixture, not {total} percent — the fractions are kept as declared fractions-of-mixture."
+  malformedNote: "The declared fraction \"{fraction}\" parses to no number and is excluded from the sum (never guessed)."
+  # Appended when the utterance-shape evidence (supplementConnectors +
+  # adjacencyWindowChars + ratioPatterns) shows a quantity attached to a
+  # supplement connector — the attachment ambiguity is then named explicitly.
+  attachmentNote: "The utterance also carries a quantity adjacent to a supplement connector — the attachment (whole-mixture vs preceding-noun) is one of the candidate parses."
+  # Canonical rendering of a parsed fraction when it is rewritten onto the
+  # composition entry / snapshot source (the snapshot emission applies this
+  # form; an unparseable declared fraction is NEVER rewritten).
+  fractionFormat: "{value}%"
+
+# ---- recipe-shaped reading evidence (§14.3, firesOn idiom) ----
+# "Recipe-shaped reading exists" = a formulation-shaped STORE record whose
+# name matches the preceding-noun phrase AND that record declares its own
+# composition. The record IS the datum; no reagent word is ever written here.
+# The evidence records are injected through NormalizeOptions (the
+# mixtureCuesPath injection precedent); the evaluator interprets the match
+# rules below generically against the injected records.
+recipeShapedReadingEvidence:
+  storeKinds: [material-spec]
+  formulationKinds: [defined_composition]
+  # Whole-word containment idiom (the cues `exempt:` arm shape): the
+  # preceding-noun phrase (derived from the composition entries on the LEFT
+  # flank of the supplement connector) matches a store record when the phrase
+  # holds inside the record name as a whole-word run, case-folded and
+  # whitespace-normalized — the phrase's first/last characters may not sit
+  # inside a longer word.
+  phraseMatch: whole-word-containment
+  ratioPatterns:
+    - "\\d+\\s*[:/xX×]\\s*\\d+"
+    - "\\d+\\s*%"
+  # Document-side arm: a recipe-shaped component reading is ALSO present when
+  # the composition entry on the LEFT flank of the supplement declares its OWN
+  # composition (the §14.1 expressibility — an in-house formulation stated in
+  # the document itself). The evaluator treats the declared sub-composition as
+  # the datum; no reagent word is consulted.
+  documentSideReading: precedingEntryDeclaresOwnComposition

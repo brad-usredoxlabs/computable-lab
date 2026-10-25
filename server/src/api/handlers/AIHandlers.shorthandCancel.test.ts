@@ -26,7 +26,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { createAgentOrchestrator } from '../../ai/AgentOrchestrator.js';
 import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
-import { holdShorthandIntent, takeHeldShorthandIntent } from '../../ai/shorthandChat.js';
+import { holdShorthandIntent, takeHeldShorthandIntent, rememberAcceptedShorthandBindings, acceptedShorthandBindingsFor } from '../../ai/shorthandChat.js';
 import { createResolveSpineFromContext } from '../../resolve/index.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 import { parseScientistIntent } from '../../compiler/scientistIntent/parseScientistIntent.js';
@@ -320,5 +320,53 @@ describe('SH-QC-1-OQ1 — clear held shorthand intent on cancel', () => {
     expect(model.callCount()).toBe(1);
     expect(second.success).toBe(true);
     expect(second.events?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  // REVISE-GHOST-1 fix 1 (advc cycle-1 D2): the Cancel leg must ALSO clear the
+  // conversation's accepted {label,ref} bindings beside the held intent — a
+  // CANCELLED proposal's answered bindings die with it and can never leak into
+  // the next proposal. RED at base: shorthandCancel touched heldIntents only.
+  it('R5 (D2): cancel clears the accepted bindings beside the held intent — a later active-proposal read sees nothing', async () => {
+    const RUN = runRequest('RUN-shqcoq1-r5');
+    const key = deriveContextCacheKey(RUN.surface, RUN.context);
+    holdShorthandIntent(key, heldFixture());
+    rememberAcceptedShorthandBindings(key, [{ label: 'test reagent', ref: 'MAT-test-material-1' }]);
+    // Precondition: the bindings ARE held for this conversation.
+    expect(acceptedShorthandBindingsFor(key, true).length).toBe(1);
+
+    const handlers = createAIHandlers(noopOrchestrator());
+    const res = await handlers.shorthandCancel(
+      { body: { surface: RUN.surface, context: RUN.context } } as unknown as FastifyRequest<{ Body: unknown }>,
+      mockReply(),
+    );
+    expect(res).toEqual({ cleared: true });
+    // BOTH stores are clear: the hold is gone AND the bindings are gone — an
+    // active-proposal read (the revise-turn read) sees NOTHING.
+    expect(takeHeldShorthandIntent(key)).toBeNull();
+    expect(acceptedShorthandBindingsFor(key, true)).toEqual([]);
+  });
+
+  it('R5b (D2): bindings-only conversation (no held intent) still cancels cleared:true, and a sibling conversation\'s bindings are untouched', async () => {
+    const RUN = runRequest('RUN-shqcoq1-r5b');
+    const contextA = { ...RUN.context, runId: 'RUN-shqcoq1-r5b-a' };
+    const contextB = { ...RUN.context, runId: 'RUN-shqcoq1-r5b-b' };
+    const keyA = deriveContextCacheKey(RUN.surface, contextA);
+    const keyB = deriveContextCacheKey(RUN.surface, contextB);
+    rememberAcceptedShorthandBindings(keyA, [{ label: 'test reagent', ref: 'MAT-test-material-1' }]);
+    rememberAcceptedShorthandBindings(keyB, [{ label: 'test reagent', ref: 'MAT-test-material-1' }]);
+
+    const handlers = createAIHandlers(noopOrchestrator());
+    const cancelFor = (context: Record<string, unknown>) =>
+      handlers.shorthandCancel(
+        { body: { surface: RUN.surface, context } } as unknown as FastifyRequest<{ Body: unknown }>,
+        mockReply(),
+      );
+
+    // No hold, only bindings: the cancel is still a success.
+    expect(await cancelFor(contextA)).toEqual({ cleared: true });
+    // Idempotent: a second cancel clears nothing.
+    expect(await cancelFor(contextA)).toEqual({ cleared: false });
+    // The sibling conversation's bindings survive — never a broadcast clear.
+    expect(acceptedShorthandBindingsFor(keyB, true).length).toBe(1);
   });
 });

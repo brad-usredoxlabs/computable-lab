@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-mus-musculus-q1al
+kind: organism
+id: TERM-mus-musculus-q1al
+preferredLabel: Mus musculus
+aliases:
+  - mouse
+  - house mouse
+status: proposed
+lifecycleId: lab-vocabulary-control
+linkouts:
+  - kind: ontology
+    curie: NCBITaxon:10090
+    namespace: NCBITaxon
+    label: NCBITaxon:10090

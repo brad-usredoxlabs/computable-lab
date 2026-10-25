@@ -73,8 +73,14 @@ async function compileWith(yaml: string) {
 
 /** The paste-#5/#6 shape: the prose sentence AND the correct
  *  params.composition ride the same action (the compositionDecomposition
- *  MIXTURE block verbatim). No labware arg (PROBE P8: an empty store bars an
- *  unseeded `labware: plate` noun — out of this item's scenario). */
+ *  MIXTURE block). No labware arg (PROBE P8: an empty store bars an
+ *  unseeded `labware: plate` noun — out of this item's scenario).
+ *  MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4/bait 5, updated not pinned
+ *  around): the composition fractions are the OQ-1 ruling's FLAT derived
+ *  view (50/45/5, sum 100) — the block's original 50/50/10 is a 110% declared
+ *  sum that now bars with the composition-fraction-sum clarification (pinned
+ *  in compositionFractions.test.ts + the goldens, not here). This item's
+ *  subject is the redundancy STRIP; the strip behavior is unchanged. */
 const PASTE5_DOC = `intentId: shqa3-t1-paste5
 actions:
   - action: add_material
@@ -84,8 +90,8 @@ actions:
     params:
       composition:
         - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
-        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
-        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "45%" }
+        - { material: "Thermo FBS", role: additive, fraction: "5%" }
         - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
 
@@ -105,7 +111,8 @@ describe('SH-QA-3 T1: redundant top-level material + composition compiles CLEAN 
 });
 
 /** The paste-#3 GOOD path: the same doc with the redundant top-level material
- *  absent — the composition-only shape the expander already handles. */
+ *  absent — the composition-only shape the expander already handles.
+ *  MIXFRAC-1: fractions are the flat derived view (see PASTE5_DOC note). */
 const PASTE3_DOC = `intentId: shqa3-t2-paste3
 actions:
   - action: add_material
@@ -114,8 +121,8 @@ actions:
     params:
       composition:
         - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
-        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
-        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "45%" }
+        - { material: "Thermo FBS", role: additive, fraction: "5%" }
         - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
 
@@ -163,8 +170,8 @@ actions:
     targetWells: [A1]
     composition:
       - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
-      - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
-      - { material: "Thermo FBS", role: additive, fraction: "10%" }
+      - { material: "Thermo DMEM", role: buffer_component, fraction: "45%" }
+      - { material: "Thermo FBS", role: additive, fraction: "5%" }
       - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `;
     const declared = await compileWith(declaredDoc);
@@ -223,8 +230,8 @@ actions:
     params:
       composition:
         - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
-        - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
-        - { material: "Thermo FBS", role: additive, fraction: "10%" }
+        - { material: "Thermo DMEM", role: buffer_component, fraction: "45%" }
+        - { material: "Thermo FBS", role: additive, fraction: "5%" }
         - { material: "HepG2 cells", role: cells, count: 10000, counterDensity: { value: 200, unit: "cells/uL" } }
 `);
     expect(comparableEvents(a.compiled.terminalArtifacts.events))

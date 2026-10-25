@@ -1,0 +1,355 @@
+# MATRES-ELIG meta-schema — STRUCTURAL rules only (JSON Schema; Ajv is the
+# structural validation authority, per campaign discipline). Conditional
+# well-formedness (canonical-value cross-references, the custody-guard shape of
+# every bind policy, mode keys, uniqueness) rides material-eligibility.lint.yaml
+# (DSL-only), never here and never in TypeScript.
+#
+# Triplet pattern (scientist-intent-vocabulary / constraint-vocabulary): the
+# data file matches neither SchemaLoader's *.schema.yaml nor LintSpecLoader's
+# .lint.yaml by name alone — the loader binds data -> schema -> lint by schemaId.
+# NB this file IS a *.schema.yaml and therefore joins the repo-wide schema set
+# (SchemaLoader DEFAULT_PATTERNS); its $id is unique and it $refs only the
+# shipped lint-v1 predicate definition, so the registry's topological order is
+# unaffected.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/scientist-intent/material-eligibility.schema.yaml"
+title: Material Eligibility Policy
+description: >
+  Authority document for the three-way material-eligibility verdicts
+  (eligible-to-display / sufficient-to-suppress / authorized-to-bind) and the
+  purpose-based tier-legality table (utterance-demanded referent level x
+  campaign mode). The eligibility evaluator reads THIS document per call;
+  TypeScript keeps no policy branch, no tier list, and no level list.
+  Structural shape is checked here; conditional policy well-formedness rides
+  the bound lint spec.
+type: object
+additionalProperties: false
+unevaluatedProperties: false
+required:
+- eligibilityVersion
+- referentLevels
+- identityLevels
+- demandedLevelValues
+- spineTiers
+- spineLayerValues
+- remoteTiers
+- custodyNeverTiers
+- identityRole
+- identityRolePolicies
+- catalogScopeReason
+- bindIncompleteReason
+- undeclaredLevelSpelling
+- levelSpellings
+- campaignModes
+- defaultCampaignMode
+- verdictClasses
+- catalogShape
+- tierLegality
+- policies
+properties:
+  eligibilityVersion:
+    type: integer
+    const: 1
+
+  referentLevels:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    # The five canonical referent levels (campaign header P5 / memo Q1). The
+    # vocabulary meta-schema's `levels` enum mirrors this list; the eligibility
+    # data test pins the two as a SET DIFF (never two local terms for one
+    # entity).
+    items:
+      type: string
+      enum: [concept, formulation, vendor-product, instance, aliquot]
+
+  identityLevels:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    description: >
+      The referent levels whose PURPOSE is catalog IDENTITY (a product-level
+      referent resolved by a vendor/catalog lookup). The fact-builder reads
+      this membership to decide the tier-legality purpose (identityPurpose) —
+      no level literal in TypeScript. Lint E9 pins members against
+      referentLevels.
+    items:
+      type: string
+      enum: [concept, formulation, vendor-product, instance, aliquot]
+
+  demandedLevelValues:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    description: >
+      The values a tierLegality row may name as demandedLevel: the canonical
+      five plus the spine's undeclared spelling (a demand with no vocabulary
+      level policy is a real, honest state and gets its own legality row).
+    items:
+      type: string
+      enum: [concept, formulation, vendor-product, instance, aliquot, unknown]
+
+  spineTiers:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+
+  spineLayerValues:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      enum: [material, material-spec, material-instance, aliquot, vendor-product, unknown]
+    description: >-
+      The MaterialLayer union materialRefFields' LAYER_ALIASES table normalizes
+      TO (as data). The meta-schema enum authority for levelSpellings rows —
+      the DSL cannot flatten an array-valued slot across two wildcard levels
+      (probe evidence, MATRES-ELIG report), so the layer-spelling VALUES are
+      pinned structurally here.
+
+  remoteTiers:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+
+  custodyNeverTiers:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+
+  identityRole:
+    type: string
+    minLength: 1
+    description: >
+      The role tag every identity-only tier verdict carries (P4: catalog lookup
+      may resolve catalog identity; its result may never serve as evidence of
+      custody or use). SINGLE SOURCE (fix-run 1 D2): the loader injects this
+      tag into the verdicts of the policies named in identityRolePolicies —
+      the per-policy data carries no duplicate role literal. The tag survives
+      from this data into the verdict payload (displayRole/bindRole).
+
+  identityRolePolicies:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    description: >
+      The policy ids whose verdict carries the identityRole tag. Lint E11
+      pins every name against the declared policy ids (fix-run 1 D2: one
+      declaration of the role value, referenced by id — never two local
+      terms for one value).
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_-]*$"
+
+  catalogScopeReason:
+    type: string
+    minLength: 1
+    description: >
+      The clarification reason code elicited when a catalog-shaped token carries
+      no named vendor scope (AC-3: elicit scope, never fabricate product
+      identity).
+
+  bindIncompleteReason:
+    type: string
+    minLength: 1
+    description: >
+      The clarification reason code elicited when a band-passing candidate's
+      authorized-to-bind verdict is not PASS (spec 7.4.2: an incomplete
+      possibility, never a bind). Declared as DATA so the engine names it from
+      this document instead of hardcoding a reason literal.
+
+  undeclaredLevelSpelling:
+    type: string
+    minLength: 1
+    description: >
+      The spine's undeclared-level spelling (resolve/types.ts MaterialLevel
+      'unknown'). Declared as DATA so the fact-builder and the policies read
+      the unknown-presence value instead of hardcoding a level literal.
+
+  levelSpellings:
+    type: array
+    minItems: 1
+    description: >
+      canonical referent level <-> the layer spellings materialRefFields'
+      LAYER_ALIASES table normalizes TO (materialLayerOf output). The fact-
+      builder composes the EXISTING alias table with THIS table — no new TS
+      level list (OQ-1 ruling). Lint pins: every canonical is a referentLevel
+      member and every spelling is a spine-known layer name.
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - canonical
+      - layerSpellings
+      properties:
+        canonical:
+          type: string
+          enum: [concept, formulation, vendor-product, instance, aliquot, unknown]
+        layerSpellings:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [material, material-spec, material-instance, aliquot, vendor-product, unknown]
+
+  campaignModes:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      pattern: "^[a-z][a-z0-9_]*$"
+
+  defaultCampaignMode:
+    type: string
+    pattern: "^[a-z][a-z0-9_]*$"
+
+  verdictClasses:
+    type: array
+    minItems: 3
+    uniqueItems: true
+    items:
+      type: string
+      enum: [eligible-to-display, sufficient-to-suppress, authorized-to-bind]
+
+  catalogShape:
+    type: array
+    minItems: 1
+    description: >
+      Catalog-shaped token patterns (the nounShape precedent — loaded per call).
+      A token matching a shape with no named vendor scope elicits vendor scope;
+      shape alone never invents vendor scope.
+    items:
+      type: string
+      pattern: "\\^"
+
+  tierLegality:
+    type: array
+    minItems: 1
+    description: >
+      Purpose-based tier legality per (utterance-demanded referent level x
+      campaign mode). The lint spec pins demandedLevel members against
+      demandedLevelValues, mode members against campaignModes, tier members
+      against spineTiers, and the uniqueness of demandedLevel x mode pairs.
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - demandedLevel
+      - mode
+      - queryTiers
+      - displayTiers
+      - identityOnlyTiers
+      properties:
+        demandedLevel:
+          type: string
+          enum: [concept, formulation, vendor-product, instance, aliquot, unknown]
+        mode:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+        queryTiers:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: >
+            Tiers a review-interaction spine call may FIRE for this purpose
+            (AC-2: a physical-instance demand never fires a vendor/remote tier).
+          items:
+            type: integer
+            enum: [0, 1, 2, 3, 4, 5]
+        displayTiers:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Tiers eligible-to-DISPLAY for this purpose.
+          items:
+            type: integer
+            enum: [0, 1, 2, 3, 4, 5]
+        identityOnlyTiers:
+          type: array
+          uniqueItems: true
+          description: >
+            Tiers whose result may serve catalog IDENTITY only (never custody/
+            use/attestation evidence — P4). May be empty (no identity-only tier
+            for this purpose).
+          items:
+            type: integer
+            enum: [0, 1, 2, 3, 4, 5]
+
+  policies:
+    type: array
+    minItems: 1
+    description: >
+      The eligibility policy registry. `requires` is the evidence-completeness
+      guard (not PASS => INCOMPLETE, never a silent pass); `assert` is the
+      business predicate (FAIL => FAIL). The lint spec pins policy-id
+      uniqueness, verdict membership, and the custody-guard shape of every
+      authorized-to-bind policy (spec §7.3: "the lint forbids the shape").
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - id
+      - verdict
+      - requires
+      - assert
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z][a-z0-9_-]*$"
+        verdict:
+          type: string
+          enum: [eligible-to-display, sufficient-to-suppress, authorized-to-bind]
+        role:
+          type: string
+          minLength: 1
+          description: >
+            Optional per-policy role override carried into the verdict payload.
+            The SHIPPED data declares no role literal: the identity role is
+            single-sourced from identityRole + identityRolePolicies (fix-run 1
+            D2, bait §9: the tag must survive from policy data into the verdict).
+        when:
+          $ref: "#/definitions/predicate"
+          description: Optional applicability guard over the fact envelope.
+        requires:
+          $ref: "#/definitions/predicate"
+        assert:
+          $ref: "#/definitions/predicate"
+        custodyGuard:
+          $ref: "#/definitions/predicate"
+          description: >-
+            DECLARED custody disjointness (P4): the noneIn over
+            demanded.custodyNeverTiers that keeps a catalog/remote tier from
+            ever satisfying a bind. THE EVALUATOR READS IT (evaluate.ts: a
+            non-PASS guard makes the policy verdict FAIL/INCOMPLETE — fix-run
+            1 D1), and the evaluator's guarantee is only as strong as the
+            declared guard, so its SHAPE is pinned at the data layer too: lint
+            E7 requires the slot on every authorized-to-bind policy, lint E12
+            requires it to be EXACTLY {op: noneIn, path: candidate.tier,
+            collectionPath: demanded.custodyNeverTiers} (fix-run 2 D1 — a
+            presence-only pin let a substituted trivially-true guard fake the
+            P4 rail), and lint E8 forbids the leaked assert shape (a bind
+            assert naming a custody collection as positive evidence). A bind
+            policy without the pinned guard is the custody-leakage shape
+            (bait 9) and is rejected at the data layer.
+
+definitions:
+  # The predicate shape is the SHIPPED lint-v1 predicate definition — imported
+  # by $ref so the eligibility data cannot invent a predicate op (zero new DSL
+  # ops, zero interpreter changes; spec §9).
+  predicate:
+    $ref: "https://computable-lab.com/schema/lint/lint-v1.schema.yaml#/definitions/predicate"

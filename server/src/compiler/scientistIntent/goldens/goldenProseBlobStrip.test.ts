@@ -21,9 +21,14 @@ import {
 } from './replayKernel.js';
 
 const COMPONENTS = [
+  // MIXFRAC-1 DELIBERATE PIN UPDATE (spec §3.4/bait 5): the flat derived view
+  // (50/45/5, sum 100) — the original 50/50/10 is a 110% declared sum that now
+  // bars with the composition-fraction-sum clarification (pinned in
+  // compositionFractions.test.ts + the goldens). This replay's subject is the
+  // redundancy strip; the strip behavior is unchanged.
   { material: 'Thermo trypsin-EDTA', role: 'solvent', fraction: '50%' },
-  { material: 'Thermo DMEM', role: 'buffer_component', fraction: '50%' },
-  { material: 'Thermo FBS', role: 'additive', fraction: '10%' },
+  { material: 'Thermo DMEM', role: 'buffer_component', fraction: '45%' },
+  { material: 'Thermo FBS', role: 'additive', fraction: '5%' },
   { material: 'HepG2 cells', role: 'cells', count: 10000, counterDensity: { value: 200, unit: 'cells/uL' } },
 ];
 

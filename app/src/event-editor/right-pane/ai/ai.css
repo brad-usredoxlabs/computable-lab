@@ -269,6 +269,46 @@
   font-size: 12px;
 }
 
+/* READING-CARD-ANSWER-1: the reading-choice rows (one per candidate reading,
+   array order — label + computed final fractions snippet). */
+.questions-panel__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.questions-panel__option {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font: inherit;
+  text-align: left;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.questions-panel__option:hover {
+  border-color: var(--cl-accent);
+}
+
+.questions-panel__option-label {
+  font-size: 12px;
+}
+
+.questions-panel__option-snippet {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--cl-text-dim, var(--cl-text));
+  opacity: 0.85;
+}
+
 .questions-panel__btn,
 .questions-panel__change-btn {
   appearance: none;

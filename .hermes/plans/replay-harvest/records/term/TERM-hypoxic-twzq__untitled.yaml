@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-hypoxic-twzq
+kind: condition
+id: TERM-hypoxic-twzq
+preferredLabel: hypoxic
+aliases:
+  - hypoxia
+  - low-oxygen
+status: proposed
+lifecycleId: lab-vocabulary-control

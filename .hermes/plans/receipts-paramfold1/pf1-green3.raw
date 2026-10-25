@@ -1,0 +1,11 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/PARAM-FOLD-1-lane2-l2t0135/server
+
+ ✓ src/compiler/resolution/resolveNounsPass.paramFold.test.ts  (8 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  03:39:02
+   Duration  3.42s (transform 274ms, setup 0ms, collect 1.23s, tests 7ms, environment 0ms, prepare 443ms)
+
+EXIT=0

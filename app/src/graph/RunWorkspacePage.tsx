@@ -59,6 +59,13 @@ export function RunWorkspacePage() {
   // route under /event-editor).
   // Universal chat + proposal flow in ONE call: the shared pane renders the
   // compile card (workstate / analysis / record-drafting) from it.
+  // MATRES-CHAIN fix2 (gate D1, receipts 2026-10-24_115822): the execute-
+  // chain relay + review card that used to mount HERE are RETIRED — this
+  // module is imported by nothing (no route serves it; the /runs/:runId
+  // route lazy-imports run/RunWorkspacePage), so the §7.5 wall was mounted
+  // on a dead page and never rendered. The ONE reachable mount now lives on
+  // the routed surface (AiTabPanel relays chain_proposal through the shared
+  // flow and mounts ChainProposalCard).
   const { chat: aiChat } = useSurfaceChat({ aiContext, endpoint: 'event-editor' })
 
   const resolvedRunId = runId ?? 'RUN-UNKNOWN'

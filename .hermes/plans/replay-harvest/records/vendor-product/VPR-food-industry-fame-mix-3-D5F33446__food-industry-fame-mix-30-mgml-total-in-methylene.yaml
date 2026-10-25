@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml
+recordId: VPR-food-industry-fame-mix-3-D5F33446
+kind: vendor-product
+id: VPR-food-industry-fame-mix-3-D5F33446
+name: Food Industry FAME Mix, 30 mg/mL Total in Methylene ...
+vendor: Unknown
+catalog_number: N/A
+material_ref:
+  kind: record
+  id: MAT-food-industry-fame-mix-3-o734
+  type: material
+  label: Food Industry FAME Mix, 30 mg/mL Total in Methylene ...
+product_url: https://www.restek.com/p/35077
+composition_provenance:
+  source_type: vendor_page
+  vendor: Unknown
+  source_url: https://www.restek.com/p/35077
+  captured_at: 2026-09-07T20:10:24.603Z

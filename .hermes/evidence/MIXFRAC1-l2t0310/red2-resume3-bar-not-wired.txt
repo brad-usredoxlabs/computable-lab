@@ -1,0 +1,117 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts  (13 tests | 7 failed) 88ms
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > RED core: the canonical 50/50/10 composition emits ONE clarification with reason composition-fraction-sum
+     → a 110% declared sum must clarify (the trunk defect): expected [] to have a length of 1 but got +0
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > the clarification carries THREE readings, each with COMPUTED final fractions (OQ-1 ruling)
+     → Cannot read properties of undefined (reading 'readings')
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > no reading is picked by confidence: the clarification carries all three, unranked (spec §6 bait 8)
+     → "undefined" is not valid JSON
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > the clarification names the action location (composition argument)
+     → Cannot read properties of undefined (reading 'actionLocation')
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > an injected recipe-shaped record (name matches the preceding-noun phrase, declares its own composition) reorders the readings
+     → Cannot read properties of undefined (reading 'readings')
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > without recipe-shaped evidence the shipped presentation order stands (whole-mixture first)
+     → Cannot read properties of undefined (reading 'readings')
+   ❯ src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > a store record that does NOT declare its own composition is not recipe-shaped evidence
+     → Cannot read properties of undefined (reading 'readings')
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > RED core: the canonical 50/50/10 composition emits ONE clarification with reason composition-fraction-sum
+AssertionError: a 110% declared sum must clarify (the trunk defect): expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:54:82
+     52|     const clarifications = clarificationsFor(CANONICAL_110);
+     53|     const fractionFacts = clarifications.filter((c) => c.reason === FR…
+     54|     expect(fractionFacts, 'a 110% declared sum must clarify (the trunk…
+       |                                                                                  ^
+     55|     // One clarification for the whole composition, not one per compon…
+     56|     // (spec §6 bait 7).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > the clarification carries THREE readings, each with COMPUTED final fractions (OQ-1 ruling)
+TypeError: Cannot read properties of undefined (reading 'readings')
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:62:23
+     60|   it('the clarification carries THREE readings, each with COMPUTED fin…
+     61|     const fact = clarificationsFor(CANONICAL_110).find((c) => c.reason…
+     62|     const readings = (fact as unknown as Record<string, unknown>)['rea…
+       |                       ^
+     63|     expect(readings, 'the ambiguous utterance carries three candidate …
+     64|     const byId = new Map(readings.map((r) => [String(r['id']), r]));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > no reading is picked by confidence: the clarification carries all three, unranked (spec §6 bait 8)
+SyntaxError: "undefined" is not valid JSON
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:105:22
+    103|   it('no reading is picked by confidence: the clarification carries al…
+    104|     const fact = clarificationsFor(CANONICAL_110).find((c) => c.reason…
+    105|     const raw = JSON.parse(JSON.stringify(fact)) as Record<string, unk…
+       |                      ^
+    106|     expect(JSON.stringify(raw), 'confidence must never appear in the f…
+    107|     const readings = raw['readings'] as Array<Record<string, unknown>>;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: a 110% composition clarifies with the three candidate readings > the clarification names the action location (composition argument)
+TypeError: Cannot read properties of undefined (reading 'actionLocation')
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:115:13
+    113|   it('the clarification names the action location (composition argumen…
+    114|     const fact = clarificationsFor(CANONICAL_110).find((c) => c.reason…
+    115|     expect((fact as unknown as Record<string, unknown>)['actionLocatio…
+       |             ^
+    116|       actionIndex: 0,
+    117|       action: 'add_material',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > an injected recipe-shaped record (name matches the preceding-noun phrase, declares its own composition) reorders the readings
+TypeError: Cannot read properties of undefined (reading 'readings')
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:230:23
+    228|       ],
+    229|     }).find((c) => c.reason === FRACTION_REASON)!;
+    230|     const readings = (fact as unknown as Record<string, unknown>)['rea…
+       |                       ^
+    231|     expect(String(readings[0]!['id']), 'the recipe-shaped reading is p…
+    232|     expect(readings).toHaveLength(3);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > without recipe-shaped evidence the shipped presentation order stands (whole-mixture first)
+TypeError: Cannot read properties of undefined (reading 'readings')
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:237:23
+    235|   it('without recipe-shaped evidence the shipped presentation order st…
+    236|     const fact = clarificationsFor(CANONICAL_110).find((c) => c.reason…
+    237|     const readings = (fact as unknown as Record<string, unknown>)['rea…
+       |                       ^
+    238|     expect(String(readings[0]!['id'])).toBe('whole-mixture-supplement'…
+    239|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts > MIXFRAC-1: recipe-shaped store evidence presents preceding-noun FIRST (§14.3) > a store record that does NOT declare its own composition is not recipe-shaped evidence
+TypeError: Cannot read properties of undefined (reading 'readings')
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:247:23
+    245|       ],
+    246|     }).find((c) => c.reason === FRACTION_REASON)!;
+    247|     const readings = (fact as unknown as Record<string, unknown>)['rea…
+       |                       ^
+    248|     expect(String(readings[0]!['id'])).toBe('whole-mixture-supplement'…
+    249|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 6 passed (13)
+   Start at  13:47:54
+   Duration  1.83s (transform 198ms, setup 0ms, collect 897ms, tests 88ms, environment 0ms, prepare 358ms)
+

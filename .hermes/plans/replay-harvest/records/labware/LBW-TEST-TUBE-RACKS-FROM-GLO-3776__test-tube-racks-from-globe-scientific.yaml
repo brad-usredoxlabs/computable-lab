@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+recordId: LBW-TEST-TUBE-RACKS-FROM-GLO-3776
+kind: labware
+name: Test Tube Racks from Globe Scientific
+labwareType: other
+manufacturer:
+  url: https://globescientific.com/
+notes: "Imported from Exa vendor product search: https://globescientific.com/"

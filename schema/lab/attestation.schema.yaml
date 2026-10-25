@@ -1,0 +1,279 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/attestation.schema.yaml"
+title: "Attestation"
+description: >
+  MATRES-ATTEST (§2a): the reviewable attestation envelope whose ACCEPTANCE IS
+  the attestation (P2). Enumerates each assertion with a declared label
+  (proposed|completed|unknown|reported-by-other), the performer /
+  accountSupplier / attestor identity triple (P3: may coincide, never silently
+  presumed identical), and explicit attestedAt vs occurredAt time semantics
+  (Q8). Payload-revision pinning lives in `against` (reference-copy, never a
+  live pointer, Q3). Supersession-correction (Q4) rides `supersedes` +
+  `correction` on the SAME kind — one generic mechanism, no second correction
+  kind (orch ruling OQ-2). Business rules (time pairing, chain label wall,
+  supersedes/correction pairing, deviation gate) live in
+  schema/lab/attestation.lint.yaml, NOT here and NOT in TypeScript (§4).
+  Triplet note: .schema.yaml + .lint.yaml ship here; .ui.yaml is DEFERRED —
+  no UI surface in this item (sample-receipt ships schema-only precedent;
+  review-wall rendering is MATRES-CHAIN's browser gate).
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, artifactKind, claims ]
+
+properties:
+  kind:
+    const: "attestation"
+
+  recordId:
+    type: string
+    pattern: "^ATT-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: >
+      Stable local identifier. On accepted records it is a deterministic
+      content-hash id minted by the accept service over the payload revision
+      (termId discipline, Q4e): same payload revision -> same id, so a
+      double-submitted correction lands on the SAME record. NEVER Date.now()
+      or randomUUID.
+
+  artifactKind:
+    type: string
+    enum: [ plan-slot-reference, planned-run-binding, material-spec, attestation-chain, candidate-protocol ]
+    description: >
+      What kind of artifact this envelope reviews. Envelope-side slot only —
+      the emission-side enum + drafting header (Q2) is NOT built in this item;
+      this slot exists so kinds cannot drift later.
+      [DEFAULT-PENDING-RATIFICATION: Q2]
+      An attestation asserting physical facts declares artifactKind:
+      attestation-chain; the lint wall (attestation-chain-no-proposed-claims)
+      keeps proposed claims off a CHAIN ("acceptance of a plan or instruction
+      attests NOTHING physical", P2/r2).
+
+  claims:
+    type: array
+    minItems: 1
+    description: >
+      Each assertion the review wall displays and the acceptance attests
+      (r2: "attests the assertions displayed in that payload"). MATRES-RECV
+      §1/OQ-1 extraction (additive, behavior-preserving): the claim shape
+      lives in $defs/Claim so a specializing kind (material-receiving) can
+      $ref it instead of re-declaring envelope vocabulary.
+    items:
+      $ref: "#/$defs/Claim"
+
+  attestedAt:
+    $ref: "#/$defs/AttestedAt"
+
+  against:
+    $ref: "#/$defs/Against"
+
+  evidenceRefs:
+    type: array
+    description: >
+      Envelope-level evidence data references (photo, packing slip) — never
+      inline blobs. Claim-level evidenceRefs cover per-assertion evidence;
+      this is evidence for the envelope/correction as a whole.
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  supersedes:
+    $ref: "#/$defs/AttestationRefWidened"
+    description: >
+      Q4: this envelope corrects THAT attestation/receipt. A claim-carrying attestation
+      with supersedes present IS a correction record. The superseded record is
+      never rewritten or deleted (audit pattern + correction model, §2c).
+      [DEFAULT-PENDING-RATIFICATION: Q4]
+
+  correction:
+    $ref: "#/$defs/Correction"
+
+$defs:
+  AttestedAt:
+    type: string
+    format: date-time
+    readOnly: true
+    description: >
+      Server-stamped at acceptance (injectable clock), immutable afterwards
+      via the append-only wall (§2b data knob). ABSENT before accept: the
+      draft carries no attestedAt. Distinct from occurredAt (Q8): attestedAt
+      is when the acceptance happened; occurredAt is when the fact occurred.
+      [DEFAULT-PENDING-RATIFICATION: Q8]
+  Against:
+    type: object
+    additionalProperties: false
+    description: >
+      Payload-revision pinning (Q3c): "whatever exists on the source, copied
+      as-of-acceptance" — a reference-copy, NEVER a live pointer. NO new
+      versioning engine: graphRevision values are revision/sha strings the
+      edit path already computes (expectedSha / REV- pattern). Mutating a
+      pinned source after accept means the pin no longer matches — the
+      accept-time re-check surfaces that as a conflict (Q3d).
+      [DEFAULT-PENDING-RATIFICATION: Q3]
+    properties:
+      plannedRunRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      eventGraphRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      graphRevision:
+        type: string
+        minLength: 1
+      protocolSha:
+        type: string
+        minLength: 1
+  Claim:
+    type: object
+    additionalProperties: false
+    required: [ claimStatus, assertion, occurredAtStatus ]
+    properties:
+      claimStatus:
+        type: string
+        enum: [ proposed, completed, unknown, reported-by-other ]
+        description: >
+          The P2 review-wall labels as DATA (schema enum; no TS branch).
+          A DECLARED label chosen by the drafting side and confirmed at the
+          review wall — nothing computes, infers, or ranks it (P8, OQ-4:
+          server NEVER derives or rewrites claimStatus).
+
+      assertion:
+        type: object
+        required: [ verb, about ]
+        additionalProperties: true
+        description: >
+          Free-shape business assertion payload with at least verb + about
+          (entity ref). Deliberately loose: assertion payload shapes belong
+          to RECV/FULFIL/CHAIN; the envelope owns the WRAPPER semantics.
+        properties:
+          verb:
+            type: string
+            minLength: 1
+          about:
+            $ref: "./datatypes/ref.schema.yaml"
+            description: "The entity this claim is about."
+
+      occurredAtStatus:
+        type: string
+        enum: [ known, approximate, unknown ]
+        description: >
+          Q8/Q5 occurrence-time triple. Terminal honesty: 'unknown' is a
+          COMPLETE answer ("I don't know"), never a gap to be filled from
+          now() (no manufacturing). [DEFAULT-PENDING-RATIFICATION: Q8]
+
+      occurredAt:
+        type: string
+        format: date-time
+        description: >
+          When the asserted fact OCCURRED (as declared by the drafting side;
+          the server never writes or synthesizes occurredAt). Legal iff
+          occurredAtStatus known|approximate — pairing enforced by lint
+          (attestation-occurred-* rules), never by a TS branch.
+
+      approximation:
+        type: string
+        minLength: 1
+        description: >
+          Human approximation when exact occurrence is unknown-but-rough
+          (e.g. "morning", "~last week"). Legal iff occurredAtStatus
+          approximate — pairing enforced by lint.
+
+      performer:
+        $ref: "#/$defs/PersonRef"
+        description: >
+          Who physically did it (P3). Absent means UNKNOWN — never presumed
+          equal to attestor or accountSupplier.
+
+      accountSupplier:
+        $ref: "#/$defs/PersonRef"
+        description: >
+          Whose account the claim rests on (P3). Absent means UNKNOWN,
+          never presumed.
+
+      attestor:
+        $ref: "#/$defs/PersonRef"
+        description: >
+          Who supplies this envelope for attestation (OQ-1 ruling: the
+          envelope stores the attestor ref supplied with the accept request;
+          WHO may attest is an open governance gap flagged for a future item
+          — no bespoke auth branch here).
+
+      evidenceRefs:
+        type: array
+        description: "Data references to evidence (photo, packing slip) — never inline blobs."
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+  Correction:
+    type: object
+    additionalProperties: false
+    required: [ claimTarget, changedFacts ]
+    description: >
+      Q4 correction payload. One generic mechanism (kind `attestation` +
+      `supersedes` + `correction`, orch ruling OQ-2): RECV names its own
+      claims/assertions vocabulary on top; no second correction kind.
+      [DEFAULT-PENDING-RATIFICATION: Q4]
+    properties:
+      claimTarget:
+        type: object
+        additionalProperties: false
+        required: [ mode ]
+        properties:
+          mode:
+            type: string
+            enum: [ same-entity-reattribute, entity-substitution ]
+            description: >
+              same-entity-reattribute: the SAME entity, corrected facts
+              (descendants keep pointing at the ENTITY — no orphaned or
+              duplicated aliquots, Q4b). entity-substitution: replaces the
+              entity reference; touching an already-CONSUMED reference requires
+              an explicit deviation resolution first (lint
+              attestation-entity-substitution-needs-deviation-resolution).
+      changedFacts:
+        type: object
+        minProperties: 1
+        description: >
+          The facts this correction changes (e.g. {lot: "09213"}). Part of the
+          content-hash identity: id = hash(supersedes + changedFacts +
+          claimTarget.mode) (Q4e) — duplicate submission lands on the SAME
+          record id (termId precedent).
+      resolutionNote:
+        type: string
+        minLength: 1
+        description: >
+          Deviation resolution evidence for entity-substitution corrections
+          (Q4b gate). The deviation FACT itself is an `attestation` claim with
+          claimStatus unknown + about = the consumed ref (OQ-3 ruling: zero
+          new kinds).
+  PersonRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    properties:
+      kind: { const: record }
+      type: { const: person }
+      id: { type: string, minLength: 1 }
+  AttestationRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    properties:
+      kind: { const: record }
+      type: { const: attestation }
+      id: { type: string, pattern: "^ATT-[A-Za-z0-9][A-Za-z0-9_-]*$" }
+  AttestationRefWidened:
+    type: object
+    additionalProperties: false
+    required: [ kind, type, id ]
+    description: >
+      D3 (MATRES-RECV fix-run, architect ruling): the supersedes ref
+      vocabulary INCLUDING the material-receiving specialization — declared
+      exactly ONCE here and $ref'd from envelope.supersedes AND from the
+      material-receiving kind (a kind re-declaring the widened shape inline
+      is the canonical OQ-2/bait-3 violation). Widened relative to
+      AttestationRef: type may be attestation OR material-receiving and the
+      id pattern covers both prefixes, so a receipt can supersede a receipt
+      OR an envelope record. The AttestationRef def above stands UNTOUCHED
+      (this entry is additive-only).
+    properties:
+      kind: { const: record }
+      type: { enum: [ attestation, material-receiving ] }
+      id: { type: string, pattern: "^(ATT|RECV)-[A-Za-z0-9][A-Za-z0-9_-]*$" }

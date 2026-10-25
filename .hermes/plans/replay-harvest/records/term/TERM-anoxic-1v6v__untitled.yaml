@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-anoxic-1v6v
+kind: condition
+id: TERM-anoxic-1v6v
+preferredLabel: anoxic
+aliases:
+  - anoxia
+  - anaerobic
+status: proposed
+lifecycleId: lab-vocabulary-control

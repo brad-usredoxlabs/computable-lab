@@ -1,0 +1,574 @@
+$schema: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+recordId: EVG-mvajv2lb-xxwa
+id: EVG-mvajv2lb-xxwa
+kind: event-graph
+events:
+  - eventId: evt-add_material-la64vwwc
+    event_type: add_material
+    details:
+      well: A2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - A2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_LA64VWWC
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-l8h0tnym
+    event_type: add_material
+    details:
+      well: B2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - B2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_L8H0TNYM
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-a8ujpoet
+    event_type: add_material
+    details:
+      well: C2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - C2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_A8UJPOET
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-jyl63wr6
+    event_type: add_material
+    details:
+      well: D2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - D2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_JYL63WR6
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-1vc3vd6l
+    event_type: add_material
+    details:
+      well: E2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - E2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_1VC3VD6L
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-wqj0eg2y
+    event_type: add_material
+    details:
+      well: F2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - F2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_WQJ0EG2Y
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-6ef4dirj
+    event_type: add_material
+    details:
+      well: G2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - G2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_6EF4DIRJ
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+  - eventId: evt-add_material-hye34l7p
+    event_type: add_material
+    details:
+      well: H2
+      volumeUl: 200
+      volume:
+        value: 200
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-trypsin-edta-100w
+            type: material
+            label: Trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-fbs-3776
+            type: material
+            label: FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-trypsin-edta-thermo-dmem-tnru
+        type: material
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      count: 50000
+      counter_density:
+        value: 500
+        unit: cells/uL
+      labwareId: lw-1792129638358-9dydor
+      wells:
+        - H2
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P
+        type: material-spec
+        label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MVAJV2LB_XXWA_EVT_ADD_MATERIAL_HYE34L7P
+          type: material-spec
+          label: Trypsin-EDTA + Thermo DMEM + FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    labwareId: lw-1792129638358-9dydor
+labwares:
+  - labwareId: lw-1792129638358-9dydor
+    labwareType: plate_96
+    name: plate1
+    addressing:
+      type: grid
+      rows: 8
+      columns: 12
+      rowLabels:
+        - A
+        - B
+        - C
+        - D
+        - E
+        - F
+        - G
+        - H
+      columnLabels:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+        - "11"
+        - "12"
+    geometry:
+      maxVolume_uL: 200
+      minVolume_uL: 1
+      wellShape: round
+    layoutFamily: sbs_plate
+    wellPitch_mm: 9
+    orientationPolicy: rotatable
+    definitionId: opentrons/nest_96_wellplate_200ul_flat@v1
+    definitionSource: registry
+    renderProfile: plate
+    linearAxis: x
+runId: EXR-LANE2-AI10
+name: Event Graph for EXR-LANE2-AI10
+links:
+  runId: EXR-LANE2-AI10
+status: filed
+editorLayout:
+  surface: event-editor/v1
+  placements:
+    - placementId: pl-mvajpqzf-2
+      labwareId: lw-1792129638358-9dydor
+      location:
+        kind: slot
+        slotId: PLATE
+      orientation: landscape
+createdAt: 2026-10-16T05:52:26.350Z
+updatedAt: 2026-10-16T05:52:26.350Z

@@ -104,7 +104,7 @@ properties:
                   argument (sourceHint/targetHint/labwareHint).
               level:
                 type: string
-                enum: [concept, spec, instance, aliquot, unknown]
+                enum: [concept, spec, instance, aliquot, vendor-product, unknown]
                 description: >-
                   SPINE-8 DECLARATION SLOT — the MaterialLevel (mirrors
                   server/src/resolve/types.ts MaterialLevel verbatim) the noun
@@ -113,12 +113,15 @@ properties:
                   deps.levelFor; the engine's levelFilter arm then drops
                   concept/unknown-level candidates for a well-ready requirement.
                   INERTNESS (SPINE-8 §9.4): the filter FIRES only for well-ready
-                  layers — 'instance' and 'aliquot' (per materialRefFields.ts
-                  LAYER_ALIASES/WELL_READY_LAYERS data). A declared 'spec',
-                  'concept', or 'unknown' normalizes to layer 'material' and the
-                  filter NO-OPS; declaring one is legal but enforces nothing.
+                  layers — 'instance', 'aliquot', and 'vendor-product' (per
+                  materialRefFields.ts LAYER_ALIASES/WELL_READY_LAYERS data). A
+                  declared 'spec', 'concept', or 'unknown' normalizes to layer
+                  'material' and the filter NO-OPS; declaring one is legal but
+                  enforces nothing.
                   This enum mirrors the TS union honestly rather than narrowing
-                  to firing values (OQ2 disposition).
+                  to firing values (OQ2 disposition). The mirror equality is
+                  pinned by src/resolve/materialLevelMirror.test.ts (set diff
+                  against the types.ts union, both directions).
               cardinality:
                 type: string
                 enum: [one, many]
@@ -137,6 +140,46 @@ properties:
                   noun the resolver binds (e.g. 'material'). Required by lint when
                   cardinality is many. Entry shape policy (role/quantity fields,
                   concrete-instance rejection) lives in the wire schema, not here.
+              levels:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items:
+                  type: string
+                  enum: [concept, formulation, vendor-product, instance, aliquot]
+                description: >-
+                  MATRES-ELIG DECLARATION SLOT [memo Q1, RATIFIED 2026-10-20] —
+                  the ALLOWED referent levels for binding this argument. Absent =
+                  unconstrained (today's behavior; backwards-compatible — no verb
+                  breaks when the field ships). A candidate may be BOUND only if
+                  its level is in `levels` (or `levels` absent); lint P7 pins
+                  every member against the vocabulary's declared referentLevels
+                  list (the canonical five). Interpreted generically — no verb or
+                  arg NAME is referenced by any consumer.
+              preferred:
+                type: string
+                enum: [concept, formulation, vendor-product, instance, aliquot]
+                description: >-
+                  MATRES-ELIG DECLARATION SLOT [memo Q1, RATIFIED] — the
+                  time-phase default hint for the PANEL's pre-selection (P5).
+                  NEVER a filter, never suppression: binding a non-preferred
+                  allowed level is legal without a clarification. Lint P6 pins
+                  preferred ∈ levels.
+
+  referentLevels:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      enum: [concept, formulation, vendor-product, instance, aliquot]
+    description: >-
+      MATRES-ELIG (spec §7.3): the canonical referent-level list declared IN
+      the vocabulary data as the lint authority for every `levels` value
+      (vocab lint P7 allIn against this list). The eligibility policy data
+      declares the same five; the eligibility data test pins the two lists as
+      a SET DIFF (never two local terms for one entity). Optional so existing
+      fixture copies (which declare no levels slots) stay structurally valid.
 
   policies:
     type: object

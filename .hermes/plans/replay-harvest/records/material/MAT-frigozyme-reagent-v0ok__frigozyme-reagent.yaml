@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-frigozyme-reagent-v0ok
+kind: material
+id: MAT-frigozyme-reagent-v0ok
+name: frigozyme reagent
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "frigozyme reagent").

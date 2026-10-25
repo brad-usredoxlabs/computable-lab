@@ -43,7 +43,15 @@ describe('agent_intent — compose_analysis intent (PB-CH-5)', () => {
       // QMS7-7 (DELIBERATE golden diff): compose_record_draft — the record
       // proposal rides the ONE forced tool; the drafts compile endpoint is
       // still the trust boundary (this tool relays, never compiles).
+      // MATRES-RECV (OQ-2 RATIFIED, DELIBERATE golden diff): compose_receiving
+      // on the SAME forced tool — the one-tool lock is about the tool, not a
+      // frozen enum; POST /api/drafts/compile remains the trust boundary.
       'compose_record_draft',
+      'compose_receiving',
+      // MATRES-CHAIN (OQ-3(a) RATIFIED, DELIBERATE golden diff): compose_execute_chain
+      // on the SAME forced tool — the one-tool lock is about the tool, not a frozen
+      // enum; POST /api/drafts/compile remains the trust boundary.
+      'compose_execute_chain',
     ]);
   });
 

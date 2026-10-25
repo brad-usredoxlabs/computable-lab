@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-magnetic-rack-1ar6
+kind: material
+id: MAT-magnetic-rack-1ar6
+name: magnetic rack
+domain: other
+status: proposed

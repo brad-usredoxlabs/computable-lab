@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-food-industry-fame-mix-3-o734
+kind: material
+id: MAT-food-industry-fame-mix-3-o734
+name: Food Industry FAME Mix, 30 mg/mL Total in Methylene ...
+domain: chemical
+status: proposed
+provenance:
+  source: import
+  sourceLabel: Exa web search
+  note: "Imported from Exa vendor product search: https://www.restek.com/p/35077"

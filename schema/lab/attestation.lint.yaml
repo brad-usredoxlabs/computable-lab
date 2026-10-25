@@ -1,0 +1,583 @@
+# Lint rules for Attestation records (MATRES-ATTEST §2a/§2c/§2d).
+#
+# These are the BUSINESS RULES of the attestation layer — they live here as
+# data, never as TypeScript branches (§4 negative commitments). The schema
+# (attestation.schema.yaml) owns structure (enums, required, closed objects);
+# this file owns the CONDITIONAL pairings and walls.
+#
+# Time vocabulary (Q8/Q5): occurredAtStatus known|approximate|unknown is the
+# terminal-honest triple — "I don't know" is a complete answer. No rule here
+# ever infers a time; the server never synthesizes occurredAt from now().
+#
+# Identity honesty (P3): there is deliberately NO rule inferring
+# performer = attestor (or any other identity equality). Absence means
+# unknown, never presumed.
+#
+# Plate-event note (§2e): plate events are editor content inside an
+# event-graph, not records — the append-only wall does NOT apply to them.
+# The immutability that matters (Q4 "never rewrite history") lives on the
+# attestation RECORD. Mutating a graph event after an attestation pinned it
+# means the pin (against.graphRevision) no longer matches — the accept-time
+# re-check surfaces that as a conflict (Q3d reference-copy semantics).
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/attestation.schema.yaml"
+
+rules:
+# --- occurredAtStatus pairing (three rules, §2a rule 1) -------------------
+- id: attestation-occurred-known-needs-occurred-at
+  title: "known occurrence requires occurredAt"
+  description: >
+    Every claim with occurredAtStatus: known must carry occurredAt. The
+    quantifier names the failing item index inside the claims collection.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: known }
+      - op: exists
+        path: occurredAt
+  message:
+    template: "claims pairing: a claim with occurredAtStatus known is missing occurredAt ({{claims}})"
+    paths: [ "claims" ]
+
+- id: attestation-occurred-approximate-needs-approximation
+  title: "approximate occurrence requires occurredAt + approximation"
+  description: >
+    Every claim with occurredAtStatus: approximate must carry BOTH occurredAt
+    and the human approximation string (e.g. "morning", "~last week").
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: approximate }
+      - op: all
+        predicates:
+        - { op: exists, path: occurredAt }
+        - { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus approximate must carry occurredAt and approximation ({{claims}})"
+    paths: [ "claims" ]
+
+- id: attestation-occurred-unknown-is-terminal
+  title: "unknown occurrence carries no time fields (terminal honesty, Q5)"
+  description: >
+    Every claim with occurredAtStatus: unknown must carry NEITHER occurredAt
+    NOR approximation. "I don't know" is a complete answer — no manufacturing.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: occurredAtStatus, value: unknown }
+      - op: all
+        predicates:
+        - op: not
+          not: { op: exists, path: occurredAt }
+        - op: not
+          not: { op: exists, path: approximation }
+  message:
+    template: "claims pairing: a claim with occurredAtStatus unknown must not carry occurredAt or approximation ({{claims}})"
+    paths: [ "claims" ]
+
+# --- supersedes / correction pairing (§2c) --------------------------------
+- id: attestation-supersedes-needs-correction
+  title: "supersedes requires correction"
+  description: >
+    A record that supersedes another attestation must carry the correction
+    payload (claimTarget + changedFacts). A claim-carrying attestation with
+    supersedes present IS a correction record.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: supersedes
+  assert:
+    op: exists
+    path: correction
+  message:
+    template: "supersedes present without correction payload ({{supersedes}})"
+    paths: [ "supersedes" ]
+
+- id: attestation-correction-needs-supersedes
+  title: "correction requires supersedes"
+  description: >
+    A correction payload without a supersedes ref is an orphan: nothing is
+    being corrected, so it is not a legal attestation shape.
+  severity: error
+  scope: record
+  when:
+    op: exists
+    path: correction
+  assert:
+    op: exists
+    path: supersedes
+  message:
+    template: "correction present without supersedes ref ({{correction}})"
+    paths: [ "correction" ]
+
+# --- P2 chain wall (§2a lint rule 3) --------------------------------------
+- id: attestation-chain-no-proposed-claims
+  title: "an attestation-chain may not carry proposed claims"
+  description: >
+    "Acceptance of a plan or instruction attests NOTHING physical" (P2/r2):
+    artifactKind attestation-chain claims must be completed, unknown, or
+    reported-by-other. Plan-side artifactKinds (plan-slot-reference,
+    planned-run-binding, candidate-protocol) may carry proposed claims.
+  severity: error
+  scope: record
+  when:
+    op: equals
+    path: artifactKind
+    value: attestation-chain
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: in
+      path: claimStatus
+      values: [ completed, unknown, reported-by-other ]
+  message:
+    template: "attestation-chain carries a claim outside [completed, unknown, reported-by-other] ({{artifactKind}})"
+    paths: [ "artifactKind" ]
+
+# --- Q4b deviation gate (§2c) ----------------------------------------------
+- id: attestation-entity-substitution-needs-deviation-resolution
+  title: "entity-substitution over a consumed ref requires a deviation resolution"
+  description: >
+    Substitutions touching an already-CONSUMED reference require an explicit
+    deviation resolution before the correction can reach accepted state (Q4b).
+    The deviation FACT is an `attestation` claim with claimStatus unknown +
+    about = the consumed ref (OQ-3 ruling: zero new kinds); the correction
+    record itself must carry the resolutionNote naming that resolution.
+  severity: error
+  scope: record
+  when:
+    op: all
+    predicates:
+    - { op: equals, path: correction.claimTarget.mode, value: entity-substitution }
+    - { op: exists, path: correction.changedFacts.consumedRef }
+  assert:
+    op: exists
+    path: correction.resolutionNote
+  message:
+    template: "entity-substitution correction touches consumed ref {{correction.changedFacts.consumedRef}} without a deviation resolutionNote"
+    paths: [ "correction.changedFacts.consumedRef" ]
+
+# --- Q4 fulfillment re-evaluation OBLIGATION (declared, queryable) --------
+# Standing info finding on EVERY correction record, expressed honestly: the
+# assert is ALWAYS-FALSE-BY-CONSTRUCTION on a legal path. The inner equals
+# is true for every attestation (attestation.schema.yaml pins
+# `kind: const "attestation"`), so its negation can never pass — the rule
+# always fires as info whenever `supersedes` is present. The obligation is
+# therefore STANDING: no record state can clear it (completion lives in
+# FULFIL's fulfillment-review fact, never on the correction).
+# (The previous shape — `assert: exists` on correction.fulfillmentReviewCompleted
+# — was a dead assert on a path the closed correction object forbids
+# (additionalProperties: false): it fired only by accident and would have
+# silently STOPPED firing if the schema ever allowed the property. advc1
+# defect 5.)
+- id: attestation-correction-triggers-reevaluation-review
+  title: "a correction declares a fulfillment re-evaluation obligation"
+  description: >
+    Standing info finding on every correction record: fulfillment facts citing
+    the superseded evidence must be re-evaluated (r2: supersession is an audit
+    pattern, not yet a fulfillment review). This item ships the OBLIGATION as
+    a queryable fact (CurrentAssertionView.reevaluationObligations reads it,
+    live only for supersessions a claim actually cites); the re-evaluation
+    MECHANICS belong to FULFIL's fulfillment-review fact. Info severity: it
+    never blocks acceptance.
+  severity: info
+  scope: record
+  when:
+    op: exists
+    path: supersedes
+  assert:
+    # Intentionally always-firing: kind is const "attestation" in the schema,
+    # so the inner equals always passes and this negation always fails.
+    op: not
+    not: { op: equals, path: kind, value: attestation }
+  message:
+    template: "correction supersedes {{supersedes}} — fulfillment facts citing the superseded evidence require re-evaluation (FULFIL hook)"
+    paths: [ "supersedes" ]
+
+# ============================================================================
+# MATRES-FULFIL additions (§7.3/§7.4/§7.5/§7.6) — ADDITIVE ONLY.
+#
+# A fulfillment IS an attestation-kind record (D4: zero new kinds, zero new
+# envelope vocabulary — the merged $defs are $ref'd, never re-declared). These
+# rules bind the attestation envelope schemaId (LintEngine.getRules filters by
+# schemaId) and read the LOOSE assertion bag (attestation.schema.yaml
+# $defs/Claim: required [verb, about], additionalProperties: true). The
+# envelope schema is UNTOUCHED: FULFIL's vocabulary (verbs fulfills /
+# re-evaluates-fulfillment, fulfilledBy receipt|derivation|instance, verdicts
+# compatible|mismatch|incomplete) lives HERE as data + is pinned by contract
+# tests (bait 3), and NEVER enters the scientist-intent verb union (stays 32).
+#
+# Per-item guards: rules that quantify over claims gate on
+# `not(exists assertion.fulfilledBy)` INSIDE the item, so a plain
+# received-claim envelope carries ZERO fulfil-* violations (existing attestation
+# vocabulary untouched — proven by contract test).
+#
+# Copied-plan snapshot fields (assertion.requirementIds / assertion.componentRefs):
+# reference-copies of the pinned plan's requirement occurrence ids and component
+# refs, written by the fulfillment draft compile (never a live pointer, §7.4).
+# The DSL has no cross-path equality op, so byte-traceability is expressed as
+# MEMBERSHIP: about.id must be a member of the claim's own copied requirementIds.
+# ============================================================================
+
+# --- FULFIL vocabulary (bait 3: one name, no two systems) ------------------
+- id: fulfil-verb-vocabulary
+  title: "a fulfillment claim's verb is fulfills or re-evaluates-fulfillment"
+  description: >
+    FULFIL's assertion verbs, declared ONCE here as data. They are NOT
+    scientist-intent verbs (the verb union stays 32; no new agent intent, no
+    new forced tool). A claim carrying the fulfillment marker (fulfilledBy)
+    must use one of these two verbs — 'fulfilled' is not a verb, fulfillment
+    is a RECORD (§7.3: fulfilled-by-* is never a status value).
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: "claims[*].assertion.fulfilledBy"
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: in
+        path: assertion.verb
+        values: [ fulfills, re-evaluates-fulfillment ]
+  message:
+    template: "a fulfillment claim (assertion.fulfilledBy present) carries a verb outside [fulfills, re-evaluates-fulfillment] ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-fulfilledby-vocabulary
+  title: "fulfilledBy is exactly receipt | derivation | instance"
+  description: >
+    The three evidence families (RECV receipt, derivation output/instance,
+    direct instance/aliquot). The enum lives in THIS lint file because the
+    assertion bag is deliberately loose (D4's stated cost, bait 3) — the
+    contract test pins the same list so the two cannot drift apart.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: "claims[*].assertion.fulfilledBy"
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: in
+        path: assertion.fulfilledBy
+        values: [ receipt, derivation, instance ]
+  message:
+    template: "assertion.fulfilledBy outside [receipt, derivation, instance] ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-about-names-requirement
+  title: "a fulfillment claim is about the requirement occurrence (event-requirement ref, REQE- id)"
+  description: >
+    assertion.about is the requirement occurrence as a first-class referent:
+    {kind: record, type: event-requirement, id: <requirementId>} —
+    minted-by-reference, no new record kind (Q3b). A reviewer must be able to
+    trace about.id back to the event's requirementId byte-identically.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: all
+        predicates:
+        - { op: equals, path: assertion.about.kind, value: record }
+        - { op: equals, path: assertion.about.type, value: event-requirement }
+        - { op: regex, path: assertion.about.id, pattern: '^REQE-[a-z0-9-]+$' }
+  message:
+    template: "a fulfillment claim's about must be a record ref of type event-requirement with a REQE- id ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-requirement-id-traceable
+  title: "about.id must be a member of the claim's copied requirementIds"
+  description: >
+    Traceability pin (§7.3 quadruple): the requirement the claim is about must
+    be the requirement copied from the PINNED plan (assertion.requirementIds —
+    a reference-copy written by the fulfillment draft compile, never a live
+    read). The shipped lint ops have no cross-path equality op, so equality is
+    expressed as membership in the claim's own copied set.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: allIn
+        path: assertion.about.id
+        collectionPath: assertion.requirementIds
+  message:
+    template: "a fulfillment claim's about.id is not one of its copied assertion.requirementIds ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-evidence-is-ref
+  title: "a fulfillment claim names its evidence as a ref-shaped object, never a bare string"
+  description: >
+    §7.3: assertion.evidence rides the shared ref datatype (kind + id, optional
+    revisionRef when pinned). A bare string would silently detach the
+    fulfillment from the record it rests on. A fulfillment with NO evidence is
+    not a fulfillment-by-evidence at all.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: all
+        predicates:
+        - { op: exists, path: assertion.evidence }
+        - { op: exists, path: assertion.evidence.kind }
+        - { op: exists, path: assertion.evidence.id }
+  message:
+    template: "a fulfillment claim must carry assertion.evidence as a ref-shaped object with kind + id ({{claims}})"
+    paths: [ "claims" ]
+
+# --- componentRef anchor (D3: occurrence id + componentRef, NO second id) --
+- id: fulfil-componentref-in-requirement
+  title: "a claimed componentRef must be a member of the copied componentRefs"
+  description: >
+    §7.2 per-component ruling: component occurrences are anchored by the
+    entry's component_ref inside the pinned plan's composition snapshot — no
+    second id system. A claim naming assertion.componentRef must name one of
+    the copied assertion.componentRefs (the plan's composition entries at that
+    event, copied by the draft compile). NESTING STANCE (F6): the copied set
+    covers the top-level composition entries AND one level of nested
+    composition entries (the resolver handles the nested wildcard path); deeper
+    nesting is a RECORDED limitation, not a silent assumption.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.componentRef }
+      - op: allIn
+        path: assertion.componentRef
+        collectionPath: assertion.componentRefs
+  message:
+    template: "assertion.componentRef is not a member of the copied assertion.componentRefs from the pinned plan ({{claims}})"
+    paths: [ "claims" ]
+
+# --- pinned-revision scoping (§7.4) -----------------------------------------
+- id: fulfil-claim-pin-required
+  title: "a fulfillment claim requires the pinned plan in against{}"
+  description: >
+    "Scoped to pinned plan/run revisions" is STRUCTURAL: every fulfillment
+    envelope names the plan it was evaluated against (against.eventGraphRef or
+    against.plannedRunRef — the merged $defs/Against reference-copy fields,
+    $ref'd not re-declared). A fulfillment with no pin is a claim about
+    nothing in particular.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: "claims[*].assertion.fulfilledBy"
+  assert:
+    op: any
+    predicates:
+    - { op: exists, path: against.eventGraphRef }
+    - { op: exists, path: against.plannedRunRef }
+  message:
+    template: "a fulfillment envelope must carry against.eventGraphRef or against.plannedRunRef ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-pin-graph-revision
+  title: "against.eventGraphRef pairs with graphRevision (reference-copy pinning)"
+  description: >
+    Following the existing attestation pairing pattern: a graph pin without its
+    revision string is a live pointer, not a reference-copy (Q3c). Scoped to
+    fulfillment envelopes (a fulfillment claim is present) so existing
+    attestation envelopes are untouched.
+  severity: error
+  scope: record
+  when:
+    op: all
+    predicates:
+    - { op: exists, path: against.eventGraphRef }
+    - { op: nonEmpty, path: "claims[*].assertion.fulfilledBy" }
+  assert:
+    op: exists
+    path: against.graphRevision
+  message:
+    template: "against.eventGraphRef present without against.graphRevision — the pin must be a reference-copy ({{against}})"
+    paths: [ "against" ]
+
+# --- declared compatibility evaluation (P8 trio, §7.5) ---------------------
+- id: fulfil-evaluations-declared
+  title: "a fulfillment claim declares a NON-EMPTY evaluations array with declared verdict vocabulary"
+  description: >
+    Satisfaction must be DECLARED, never assumed (§7.5/P8): a fulfillment claim
+    carries a NON-EMPTY assertion.evaluations[], each with a verdict from the
+    declared trio [compatible, mismatch, incomplete] and a basis naming the
+    declared facts it rests on. The server never infers a verdict. GATE SHAPE
+    (advc DEFECT 1): the gate is nonEmpty, not exists — an EMPTY array declares
+    NO evaluations; exists is true for [] and everyItem over [] holds
+    VACUOUSLY, so exists would let a zero-evaluation fulfillment pass as
+    "declared". Stance: a family whose policy declares no checks (e.g.
+    instance) yields [] from the evaluator — a fulfillment for it must declare
+    its evaluations explicitly or it is not a declared satisfaction at all.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: all
+        predicates:
+        - { op: nonEmpty, path: assertion.evaluations }
+        - op: everyItem
+          collectionPath: assertion.evaluations
+          assert:
+            op: in
+            path: verdict
+            values: [ compatible, mismatch, incomplete ]
+  message:
+    template: "a fulfillment claim must declare assertion.evaluations with verdicts in [compatible, mismatch, incomplete] ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-completed-needs-compatible-evaluations
+  title: "a completed fulfillment claim requires EVERY evaluation verdict compatible"
+  description: >
+    P8: a receipt proves CUSTODY, not SATISFACTION. A claim labelled completed
+    asserts satisfaction, so every declared verdict must be compatible.
+    Evidence whose evaluation is INCOMPLETE (a required declared fact is
+    missing) is legally attested with claimStatus unknown — honest
+    incompleteness is legal, honest incompleteness presented as completed is
+    not (Q5 terminal-honest analogue). claimStatus is a DECLARED label: the
+    server never derives or rewrites it (OQ-4 inherited) — this lint gate is
+    the enforcement, exactly like the chain-no-proposed wall.
+  severity: error
+  scope: record
+  when:
+    op: nonEmpty
+    path: "claims[*].assertion.fulfilledBy"
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: equals, path: claimStatus, value: completed }
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: all
+        predicates:
+        - { op: nonEmpty, path: assertion.evaluations }
+        - op: everyItem
+          collectionPath: assertion.evaluations
+          assert:
+            op: in
+            path: verdict
+            values: [ compatible ]
+  message:
+    template: "a completed fulfillment claim carries an evaluation verdict outside [compatible] or declares no evaluations — an EMPTY evaluations array declares nothing ({{claims}})"
+    paths: [ "claims" ]
+
+- id: fulfil-mismatch-blocks
+  title: "ANY mismatch verdict blocks a fulfillment claim regardless of claimStatus"
+  description: >
+    Honest mismatch blocks, honest incompleteness does not (P8 trio): a
+    declared mismatch means the evidence is known NOT to satisfy the
+    requirement's formulation — no claimStatus label launders that into
+    acceptance. Absence of evaluations is handled by
+    fulfil-evaluations-declared / fulfil-completed-needs-compatible-evaluations.
+  severity: error
+  scope: record
+  assert:
+    op: everyItem
+    collectionPath: claims
+    assert:
+      op: any
+      predicates:
+      - op: not
+        not: { op: exists, path: assertion.fulfilledBy }
+      - op: not
+        not: { op: exists, path: assertion.evaluations }
+      - op: everyItem
+        collectionPath: assertion.evaluations
+        assert:
+          op: not
+          not: { op: equals, path: verdict, value: mismatch }
+  message:
+    template: "a fulfillment claim declares a mismatch evaluation — the evidence is known not to satisfy the requirement ({{claims}})"
+    paths: [ "claims" ]
+
+# --- case-5 re-evaluation: the changedFacts-vary collision ruling (§7.6) ---
+- id: fulfil-reevaluation-changed-facts-must-vary
+  title: "a re-evaluates-fulfillment correction must name priorEvidenceRef + newEvidenceRef"
+  description: >
+    OQ-1 stance (a): the merged correction-identity formula
+    (AttestationAcceptService.ts — id = hash(supersedes + changedFacts +
+    claimTarget.mode), ratified behavior, UNCHANGED by this item) excludes
+    claims/evidenceRefs from content identity, so an evidence-only re-fulfillment
+    would collide with its predecessor's id. FULFIL-side protection ONLY: a
+    re-evaluation's changedFacts must carry the vocabulary pair
+    priorEvidenceRef + newEvidenceRef, so a re-fulfillment citing NEW evidence
+    can never land on the collided id, while a byte-identical resubmission
+    landing on the SAME id remains the wanted idempotence (Q4e). The general
+    formula amendment stays queued for the orchestrator/Brad, not coder
+    discretion. Plain (non-fulfillment) corrections are untouched.
+  severity: error
+  scope: record
+  when:
+    op: all
+    predicates:
+    - { op: exists, path: supersedes }
+    - { op: exists, path: correction }
+    - { op: nonEmpty, path: "claims[*].assertion.fulfilledBy" }
+  assert:
+    op: all
+    predicates:
+    - { op: exists, path: correction.changedFacts.priorEvidenceRef }
+    - { op: exists, path: correction.changedFacts.newEvidenceRef }
+  message:
+    template: "a re-evaluates-fulfillment correction must vary changedFacts with priorEvidenceRef + newEvidenceRef ({{supersedes}})"
+    paths: [ "supersedes" ]

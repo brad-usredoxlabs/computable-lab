@@ -18,6 +18,26 @@ export type CompositionRole =
   | 'cells'
   | 'other';
 
+/**
+ * ROLE-AXES-1 (Brad ruling 2026-10-22): the participation axis — HOW a
+ * component is incorporated, DECLARED by the author. The TS mirror of the
+ * datatype enum (schema/core/datatypes/composition-entry.schema.yaml) and the
+ * wire mirror (schema/workflow/scientist-intent.schema.yaml); equality is
+ * machine-pinned by server/src/schema/CompositionParticipationSchema.test.ts
+ * (bait 6), never by a copy-paste comment. Optional everywhere: participation
+ * means ABSENT, never `participation: undefined` (exactOptionalPropertyTypes —
+ * every add is the `...(v ? { participation: v } : {})` spread idiom).
+ * participation_undeclared is the honest gap arm: arithmetic never reads
+ * through it (it defers to the config legacy-role mapping, loudly off).
+ */
+export type CompositionParticipation =
+  | 'liquid_component'
+  | 'qs_carrier'
+  | 'solute_contributor'
+  | 'activity_contributor'
+  | 'count_component'
+  | 'participation_undeclared';
+
 export type ConcentrationRange = {
   min?: number;
   max?: number;
@@ -28,6 +48,10 @@ export type ConcentrationRange = {
 export type ParsedCompositionEntry = {
   componentRef: RefShape;
   role: CompositionRole;
+  /** ROLE-AXES-1: the declared participation axis — passthrough only. No
+   *  parse/normalization site INFERS it (never-guess); an absent declaration
+   *  stays absent. */
+  participation?: CompositionParticipation;
   concentration?: Concentration;
   concentrationRange?: ConcentrationRange;
   source?: string;
@@ -41,6 +65,28 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/** ROLE-AXES-1: participation PASSTHROUGH — a declared value that is a member
+ *  of the vocabulary survives; anything else (absent, non-string, unknown
+ *  value) stays ABSENT. This never infers participation from a role, a name,
+ *  or a word pattern (the never-guess line); Ajv is the authority on the wire
+ *  and stored payloads. Membership over the TS union mirror (bait 6 pins the
+ *  union == the schema enums). */
+const PARTICIPATION_VALUES: readonly string[] = [
+  'liquid_component',
+  'qs_carrier',
+  'solute_contributor',
+  'activity_contributor',
+  'count_component',
+  'participation_undeclared',
+];
+
+function participationValue(value: unknown): CompositionParticipation | undefined {
+  const declared = stringValue(value);
+  return declared && PARTICIPATION_VALUES.includes(declared)
+    ? declared as CompositionParticipation
+    : undefined;
 }
 
 function concentrationRangeValue(value: unknown): ConcentrationRange | undefined {
@@ -99,6 +145,7 @@ export function parseStoredCompositionEntries(value: unknown): ParsedComposition
     return [{
       componentRef,
       role,
+      ...(participationValue(obj.participation) ? { participation: participationValue(obj.participation)! } : {}),
       ...(concentration ? { concentration } : {}),
       ...(concentrationRange ? { concentrationRange } : {}),
       ...(stringValue(obj.source) ? { source: stringValue(obj.source)! } : {}),
@@ -119,6 +166,7 @@ export function toStoredCompositionEntries(value: unknown): Record<string, unkno
     return [{
       component_ref: componentRef,
       role,
+      ...(participationValue(obj.participation) ? { participation: participationValue(obj.participation)! } : {}),
       ...(concentration ? { concentration } : {}),
       ...(concentrationRange ? { concentration_range: concentrationRange } : {}),
       ...(stringValue(obj.source) ? { source: stringValue(obj.source)! } : {}),

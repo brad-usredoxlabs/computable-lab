@@ -57,6 +57,7 @@ $defs:
     - media_swap_duplicate_columns
     - source_wells_to_duplicate_target_columns
     - repeat_rows
+    - bead_beat
 
 properties:
   intentId:
@@ -194,6 +195,22 @@ properties:
               role:
                 type: string
                 enum: [solute, solvent, buffer_component, additive, activity_source, cells, other]
+              # ROLE-AXES-1 (wire mirror of the datatype axis, bait 6: the
+              # equality is machine-pinned against
+              # schema/core/datatypes/composition-entry.schema.yaml and the TS
+              # unions by CompositionParticipationSchema.test.ts — never by a
+              # copy-paste comment). `unevaluatedProperties: false` above
+              # FORBIDS an implicit carry, so the field must be DECLARED here
+              # for a wire participation to survive the fold/recompile
+              # carry-through. Optional + additive: a participation-absent
+              # document validates byte-identically. Same local-enum
+              # discipline as the datatype (never minted into
+              # schema/registry/ontology-terms/*); same never-guess rule
+              # (participation_undeclared defers to the config legacy-role
+              # mapping; purpose is never carried on this axis at all).
+              participation:
+                type: string
+                enum: [liquid_component, qs_carrier, solute_contributor, activity_contributor, count_component, participation_undeclared]
               fraction:
                 type: string
               concentration:
@@ -203,8 +220,51 @@ properties:
                 properties:
                   value: { type: number }
                   unit: { type: string, minLength: 1 }
+              # CELLRATE-1: a cells count carries its unit as DECLARED DATA.
+              # The number branch is declared FIRST so every currently-valid
+              # bare-number document validates byte-identically (the file's own
+              # sourceWells idiom above). The object arm reuses the EXISTING
+              # concentration terms (basis count_per_volume + the cells/uL unit
+              # family — schema/core/datatypes/concentration.schema.yaml); no
+              # new local term is minted. Rate-vs-absolute is what the declared
+              # shape says — the value is never classified downstream.
               count:
-                type: number
+                oneOf:
+                - type: number
+                - type: object
+                  additionalProperties: false
+                  unevaluatedProperties: false
+                  required: [value, unit, basis]
+                  properties:
+                    value: { type: number, exclusiveMinimum: 0 }
+                    unit:
+                      type: string
+                      enum: [cells, CFU, beads, organisms, worms, colonies,
+                             cells/uL, cells/mL, CFU/uL, CFU/mL, organisms/uL, organisms/mL, worms/mL, worms/uL]
+                    basis:
+                      type: string
+                      enum: [count, count_per_volume]
+                  # Basis/unit cross-enforcement is IN-SCHEMA DATA (the
+                  # quantity.schema.yaml per-dimension if/then precedent): a
+                  # count_per_volume basis requires a per-volume unit; a count
+                  # basis requires an absolute unit. Ajv alone is the validator.
+                  allOf:
+                  - if:
+                      properties:
+                        basis: { const: count_per_volume }
+                      required: [basis]
+                    then:
+                      properties:
+                        unit:
+                          enum: [cells/uL, cells/mL, CFU/uL, CFU/mL, organisms/uL, organisms/mL, worms/mL, worms/uL]
+                  - if:
+                      properties:
+                        basis: { const: count }
+                      required: [basis]
+                    then:
+                      properties:
+                        unit:
+                          enum: [cells, CFU, beads, organisms, worms, colonies]
               counterDensity:
                 type: object
                 additionalProperties: false
@@ -269,3 +329,21 @@ properties:
                 type: number
                 minimum: 0
                 maximum: 1
+              # ---- W28-OPTIONBIND-1 (ARCHITECT DECISION W28-A5n Q1) ----
+              # ADDITIVE optional field: the candidate's OWN store-backed record
+              # id (the id store.get() accepts — the spine's `local:<recordId>`
+              # suffix unwrapped, or the bare recordId the labware-hint/registry
+              # adapters carry). Emitted by the resolution engine ONLY for a
+              # tier <= 1 candidate whose CURIE names a record; the tier-5 mint
+              # affordance and tier > 1 ontology hits carry NONE (anti-
+              # fabrication: the handle is the engine's existing gathered
+              # evidence, never a minted or inferred value). It exists so an
+              # option-button pick can emit the same `[[labware:<id>|label]]`
+              # idiom ClarificationPicker's answerFromMention already emits and
+              # the ANSWER-BIND validation already accepts. The
+              # additionalProperties/unevaluatedProperties posture and the
+              # required set are UNCHANGED — a fabricated extra key is still
+              # rejected.
+              ref:
+                type: string
+                minLength: 1

@@ -57,7 +57,7 @@ export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
   "- Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.",
     '- For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user\'s exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.',
-    '- Finish by calling the `agent_intent` tool exactly once (intent "event_graph" to draft events, or "deck_layout" to switch the deck layout). Do NOT print JSON in your text reply.',
+    '- Finish by calling the `agent_intent` tool exactly once, choosing ONE intent from its menu (the drafting intent this surface supports, or "deck_layout" to switch the deck layout). Do NOT print JSON in your text reply.',
   "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.",
   '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
   '- Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.',
@@ -318,7 +318,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
           type: 'array',
           minItems: 1,
           description:
-            'Records the lab does NOT have yet, which the user wants added — the AUTHORING act, for intent "create_record". This is not a placement: putting something you already have on the bench is equipmentRequirements / labwareRequirements inside intent "event_graph", and a record the lab already owns must be PLACED, not re-created. '
+            'Records the lab does NOT have yet, which the user wants added — the AUTHORING act, for intent "create_record". This is not a placement: putting something you already have on the bench is equipmentRequirements / labwareRequirements inside the chosen drafting intent, and a record the lab already owns must be PLACED, not re-created. '
             + 'Nothing is written when you emit this: the user reviews the proposal and Accept creates the record, warning instead of duplicating if the lab turns out to have it. '
             + 'One entry per record, with `kind` naming what it is: "equipment" (an instrument — water bath, heater-shaker, incubator, plate reader), "material" (a reagent, chemical, cell line, medium) or "labware" (a plate, reservoir, tube, rack). '
             + 'NEVER downgrade a named product into a generic kind: if the user names a specific model you cannot resolve (e.g. "the lab\'s Benchmark Incu-Mixer MP4"), ask with an /e clarification, or state where the specification came from in `source` — classKind alone is only for a kind the user actually spoke generically ("add a water bath"). '
@@ -442,7 +442,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
   function: {
     name: AGENT_INTENT_TOOL_NAME,
     description:
-      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing), or `compose_analysis` to propose opening/creating an ANALYSIS against a method the lab already has (an analysis envelope — the server COMPILES this into a review card; it creates at most a QUEUED run record on Accept; it NEVER executes and NEVER promotes). Fill only the fields that belong to the intent you chose; never mix intents.',
+      'Emit EXACTLY ONE declarative agent intent for this turn. Choose `event_graph` to compile a draft event graph onto the current deck, `deck_layout` to switch the deck layout (platform/variant — e.g. variant `manual_freeform` is the freeform bench / "Manual Bench"), `protocol_edit` to propose declarative edits to the ATTACHED protocol (an `ops` envelope — nothing is written until the user accepts the proposal), `workspace_action` to propose a workspace action (focus the investigation on a target, or open a registered surface — the server compiles your terms into real refs and writes nothing), `compose_workstate` to propose the workspace TABS to open (a workstate envelope — the server compiles it into a proposal card that only becomes actionable after the user reviews it; it writes nothing), or `compose_analysis` to propose opening/creating an ANALYSIS against a method the lab already has (an analysis envelope — the server COMPILES this into a review card; it creates at most a QUEUED run record on Accept; it NEVER executes and NEVER promotes), or `compose_receiving` to record that a physical thing ENTERED LAB CUSTODY (a receiving attestation envelope — retrospective is legitimate: "the Sigma bottle that arrived last week, lot 09231"; the server COMPILES this into a review card; Accept writes the immutable receipt AND the material-instance it brought into custody; it NEVER invents an arrival date, a receiver, or a duplicate arrival), or `compose_execute_chain` to record that you MADE something in the lab and split it (an execute-chain attestation envelope — "I made 1 mL, split into 10 100-uL aliquots, used one today, put 9 at -20"; the server COMPILES this into ONE review card covering the preparation, the prepared material, every aliquot, and what happened to each; Accept writes the whole chain as ONE reviewed act; it NEVER invents an occurrence time, an attestor, or a storage condition, and a time you did not state stays UNKNOWN on the card). Fill only the fields that belong to the intent you chose; never mix intents.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -450,7 +450,7 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
       properties: {
         intent: {
           type: 'string',
-          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft'],
+          enum: ['event_graph', 'deck_layout', 'create_record', 'protocol_edit', 'workspace_action', 'compose_workstate', 'compose_analysis', 'query_workstate_history', 'event_shorthand', 'compose_record_draft', 'compose_receiving', 'compose_execute_chain'],
           description:
             'event_graph: compile a draft event graph (ghostable events / clarification gaps). deck_layout: change the run deck layout — set platformId/variantId and leave the event fields empty. protocol_edit: propose edits to the attached protocol via `ops` — cite only stepIds/roleIds from the ATTACHED PROTOCOL block; the server validates the envelope and PROPOSES it (it writes nothing). workspace_action: propose a workspace action (focus | open-surface) via the `action` envelope — VERBS AND TERMS ONLY; the server resolves your terms through the lab spine + surface registry and REJECTS invented ids (it writes nothing). compose_workstate: propose the workspace tabs to open via the `workstate` envelope (operation + tabs {surface, target:{term|recordId}} + optional activeTab) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept, and writes nothing. compose_analysis: propose opening an analysis run, or a new QUEUED run against an analysis method the lab already has, via the `analysis` envelope (operation + target {revision|run} + optional newRun/focus/open) — VERBS AND TERMS ONLY; the server compiles it into a review card the user must accept; Accept creates at most a QUEUED run record, and it NEVER executes and NEVER promotes. query_workstate_history: ask the server for the user\'s stored WORKSTATE HISTORY of a run/study/record — VERBS AND TERMS ONLY via `ledgerQuery` ({term} or {recordId}); the SERVER supplies the time anchor from its own audit clock and answers honestly, including "no workstate history exists for that time". event_shorthand: draft events onto the deck by writing a SCIENTIST-INTENT YAML document in `shorthand` (SHORTHAND-CHAT) — high-level verbs with natural-language noun labels ONLY; the deterministic compiler expands it into the event graph, so you NEVER write events, wells grids, labware ids, or deck slots yourself. compose_record_draft: propose a NEW record for human review via the `recordDraft` envelope (operation \"compose-record\" + `kind` + `fields` — fields the target schema declares ONLY, e.g. title/materialType for a training-material) — the server COMPILES this into a review card via POST /api/drafts/compile: it resolves the kind through the schema corpus, DERIVES the record id from the declared pattern of that schema (never supply an id), validates the fields against the target schema, and NOTHING is written until the user accepts; Accept creates exactly ONE governed DRAFT record. You never supply a timestamp and never invent an id.',
         },
@@ -669,6 +669,101 @@ export const AGENT_INTENT_TOOL_DEF: ToolDefinition = {
             fields: { type: 'object', description: 'The proposed field values, restricted to the target schema\'s declared fields. The server validates them against the target schema at compile time; unevaluated or smuggled fields are rejected.' },
           },
         },
+        receiving: {
+          type: 'object',
+          // MATRES-RECV (OQ-2 ratified): the receiving attestation envelope —
+          // the twin of the compile-side authority in
+          // receiving/MaterialReceivingDraft.ts (RECEIVING_INTENT_SCHEMA),
+          // same required keys, same additionalProperties:false.
+          additionalProperties: false,
+          required: ['operation', 'claim'],
+          description:
+            'compose_receiving only: the receiving attestation envelope (the receiving shape). VERBS AND DECLARED FACTS ONLY — `operation` is \"compose-receiving\"; `claim` carries the receipt assertion the scientist is attesting: {vendor: vendor words, catalogNumber?, lotNumber?, receivedByLabel?, receivedByStatus: known|approximate|unknown, occurredAtStatus: known|approximate|unknown, occurredAt? (ONLY when the scientist stated it), approximation? (e.g. \"last week\"), evidenceFileNames?}. NEVER an id, NEVER a timestamp you did not hear, NEVER a receiver you did not hear — \"I don\'t know\" is a COMPLETE answer (unknown is terminal-honest). THE SERVER compiles this into a review card: it resolves the vendor-product for CATALOG IDENTITY ONLY (a catalog hit is never evidence of custody), derives the instance entity id deterministically, runs the REAL schema validate + lint, and NOTHING is written until the scientist accepts the card; Accept writes the immutable material-receiving record AND the material-instance it brought into custody. Corrections ride supersedes + correction on the SAME kind.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-receiving'], description: 'The registered receiving verb.' },
+            claim: {
+              type: 'object',
+              additionalProperties: false,
+              description: 'The receipt assertion in the scientist\'s own declared facts. Absent means UNKNOWN — never presumed, never synthesized.',
+              properties: {
+                vendor: { type: 'string', minLength: 1, description: 'The vendor in the scientist\'s words (e.g. \"Sigma\"). The server looks the vendor-product up for CATALOG IDENTITY only.' },
+                catalogNumber: { type: 'string', description: 'The catalog number if stated (e.g. \"D8418\").' },
+                productLabel: { type: 'string', description: 'The product in the scientist\'s words (e.g. \"Trypan Blue\").' },
+                lotNumber: { type: 'string', description: 'The lot number as reported. A lot is VENDOR-SCOPED: it is never a global key and never mints an id.' },
+                expirationDate: { type: 'string', description: 'Lot expiration date if stated (YYYY-MM-DD).' },
+                receivedByLabel: { type: 'string', description: 'Who took custody, if the scientist said. Absent + receivedByStatus unknown is terminal-honest.' },
+                receivedByStatus: { type: 'string', enum: ['known', 'approximate', 'unknown'], description: 'Q5 triple: \"I don\'t know\" is a complete answer.' },
+                occurredAtStatus: { type: 'string', enum: ['known', 'approximate', 'unknown'], description: 'Arrival-time triple. A retrospective receipt is approximate or unknown — NEVER silently known=today.' },
+                occurredAt: { type: 'string', description: 'ONLY a date the scientist actually stated (ISO date or date-time). The server never synthesizes it.' },
+                approximation: { type: 'string', description: 'The human approximation when exact arrival is rough (e.g. \"last week\").' },
+                evidenceFileNames: { type: 'array', items: { type: 'string' }, description: 'Names of evidence files (packing slip, photo) the scientist references — data references only, never inline blobs.' },
+                supersedesRecordId: { type: 'string', description: 'Optional: the receipt/attestation record id this CORRECTS (supersedes). A correction is never a second arrival.' },
+                correctionNote: { type: 'string', description: 'Why this corrects that record (changedFacts are derived server-side from the corrected claim).' },
+              },
+            },
+          },
+        },
+        chain: {
+          type: 'object',
+          // MATRES-CHAIN (OQ-3(a) ratified): the execute-chain attestation
+          // envelope — the twin of the compile-side authority in
+          // schema/workflow/chain-draft.schema.yaml, same required keys, same
+          // additionalProperties:false.
+          additionalProperties: false,
+          required: ['operation', 'artifactKind', 'prepared', 'aliquotCount', 'aliquots'],
+          description:
+            'compose_execute_chain only: the execute-chain attestation envelope (the chain shape). VERBS AND DECLARED FACTS ONLY — `operation` is "compose-execute-chain"; `artifactKind` is "attestation-chain" for DONE work (every claim completed|unknown|reported-by-other — proposed is a wall, not a default) or "plan-slot-reference" for INSTRUCTED work ("decide to make" — attests nothing physical, stages zero physical records). `prepared` carries what you made and how much ({name, volume:{value,unit}}); `aliquotCount` + `aliquots` carry the split (each {disposition: stored|consumed, volume, storage?{temperature_C,location}, occurredAtStatus: known|approximate|unknown, occurredAt? ONLY when stated}); `attested` carries the DECLARED posture ({claimStatus, occurredAtStatus triple, occurredAt? ONLY when stated, attestorLabel?}) — "I don\'t know" is a COMPLETE answer (unknown is terminal-honest). NEVER an id, NEVER a timestamp you did not hear, NEVER a storage condition you did not hear. THE SERVER compiles this into ONE review card: it derives every record id deterministically from the draft content, runs the REAL schema validate + lint + the declared arithmetic policy (aliquot volumes must not exceed the prepared volume; the counts must reconcile), and NOTHING is written until the scientist accepts the card; Accept writes the preparation, the prepared material, every aliquot, and the attestation as ONE reviewed act. A consumed aliquot whose whole life is inside this session is staged consumed AT CREATION; consuming an aliquot that already exists in another session is OUT OF SCOPE and is refused by name, never silently converted.',
+          properties: {
+            operation: { type: 'string', enum: ['compose-execute-chain'], description: 'The registered chain verb.' },
+            artifactKind: { type: 'string', enum: ['attestation-chain', 'plan-slot-reference'], description: 'Declared posture: done-work attestation vs instructed plan-slot. The default is VISIBLE on the card, never silent.' },
+            plan: { type: 'object', additionalProperties: false, required: ['recordId'], properties: { recordId: { type: 'string', description: 'The pinned plan (event-graph) record id this chain is drafted against, when the drafting context carries one. READ-ONLY.' } }, description: 'Optional pinned plan; its requirement occurrences are the fulfillment claims\' referents.' },
+            prepared: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['name', 'volume'],
+              properties: {
+                name: { type: 'string', description: 'What you made, in your words.' },
+                volume: { type: 'object', additionalProperties: false, required: ['value', 'unit'], properties: { value: { type: 'number' }, unit: { type: 'string' } }, description: 'How much you made.' },
+              },
+              description: 'The preparation.',
+            },
+            aliquotCount: { type: 'integer', minimum: 1, description: 'The DECLARED aliquot count; the server reconciles it against the aliquots list.' },
+            aliquots: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['disposition', 'volume'],
+                properties: {
+                  disposition: { type: 'string', enum: ['stored', 'consumed'], description: 'Declared truth-for-the-day for this aliquot.' },
+                  volume: { type: 'object', additionalProperties: false, required: ['value', 'unit'], properties: { value: { type: 'number' }, unit: { type: 'string' } } },
+                  storage: { type: 'object', additionalProperties: false, properties: { temperature_C: { type: 'number' }, location: { type: 'string' } }, description: 'The storage condition ONLY as stated ("at -20"). Absent means unstated, never presumed.' },
+                  occurredAtStatus: { type: 'string', enum: ['known', 'approximate', 'unknown'], description: 'Per-aliquot occurrence triple. "today" is approximate unless a time was stated.' },
+                  occurredAt: { type: 'string', description: 'ONLY a time the scientist actually stated. The server never synthesizes it.' },
+                  approximation: { type: 'string', description: 'The human approximation when exact time is rough (e.g. "today").' },
+                },
+              },
+              description: 'The split: one entry per aliquot.',
+            },
+            attested: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['claimStatus', 'occurredAtStatus'],
+              properties: {
+                claimStatus: { type: 'string', enum: ['completed', 'unknown', 'reported-by-other'], description: 'DECLARED posture — never derived. proposed is a wall for attestation-chains.' },
+                occurredAtStatus: { type: 'string', enum: ['known', 'approximate', 'unknown'], description: 'Q5 triple: "I don\'t know" is a complete answer.' },
+                occurredAt: { type: 'string', description: 'ONLY a time the scientist actually stated.' },
+                approximation: { type: 'string', description: 'The human approximation when exact time is rough.' },
+                attestorLabel: { type: 'string', description: 'Who attests, if the scientist said. Absent + unknown is terminal-honest.' },
+                performerLabel: { type: 'string', description: 'Who performed the work, if someone else did (reported-by-other).' },
+                accountSupplierLabel: { type: 'string', description: 'Who told you, if reported-by-other.' },
+              },
+              description: 'The DECLARED attestation posture (never derived; attestedAt is stamped by the server at Accept, never here).',
+            },
+            consumeExistingAliquotRef: { type: 'string', description: 'OUT OF SCOPE this wave: consuming an aliquot that already exists durably (cross-session) is refused by name, never silently converted.' },
+          },
+        },
       },
     },
   },
@@ -719,7 +814,7 @@ export function buildAgentIntentToolDef(surfaceIds?: readonly string[]): ToolDef
 }
 
 export interface AgentIntentArgs {
-  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'compose_record_draft' | 'sequence_action' | 'unknown';
+  intent: 'event_graph' | 'deck_layout' | 'create_record' | 'protocol_edit' | 'workspace_action' | 'compose_workstate' | 'compose_analysis' | 'query_workstate_history' | 'event_shorthand' | 'compose_record_draft' | 'compose_receiving' | 'compose_execute_chain' | 'sequence_action' | 'unknown';
   platformId?: string;
   variantId?: string;
   /**
@@ -786,12 +881,16 @@ export interface AgentIntentArgs {
    * parser never "helps" and never compiles.
    */
   recordDraft?: Record<string, unknown>;
+  /** MATRES-RECV (OQ-2 ratified): the receiving attestation envelope, carried verbatim. */
+  receiving?: Record<string, unknown>;
+  /** MATRES-CHAIN (OQ-3(a) ratified): the execute-chain attestation envelope, carried verbatim. */
+  chain?: Record<string, unknown>;
 }
 
 /** Decode the selected intent from an agent_intent args payload. */
 export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntentArgs {
   const intent = args.intent;
-  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft') {
+  if (intent === 'event_graph' || intent === 'deck_layout' || intent === 'create_record' || intent === 'sequence_action' || intent === 'protocol_edit' || intent === 'workspace_action' || intent === 'compose_workstate' || intent === 'compose_analysis' || intent === 'query_workstate_history' || intent === 'event_shorthand' || intent === 'compose_record_draft' || intent === 'compose_receiving' || intent === 'compose_execute_chain') {
     return {
       intent,
       ...(typeof args.platformId === 'string' && args.platformId.trim().length > 0 ? { platformId: args.platformId.trim() } : {}),
@@ -821,6 +920,19 @@ export function parseAgentIntentArgs(args: Record<string, unknown>): AgentIntent
       // no copy/filter — the drafts compile endpoint is the trust boundary).
       ...(intent === 'compose_record_draft' && args.recordDraft !== null && typeof args.recordDraft === 'object' && !Array.isArray(args.recordDraft)
         ? { recordDraft: args.recordDraft as Record<string, unknown> }
+        : {}),
+      // MATRES-RECV (OQ-2 ratified): the receiving attestation envelope is carried
+      // VERBATIM (by reference, no copy/filter — the drafts compile endpoint is
+      // the trust boundary), same discipline as the recordDraft envelope above.
+      ...(intent === 'compose_receiving' && args.receiving !== null && typeof args.receiving === 'object' && !Array.isArray(args.receiving)
+        ? { receiving: args.receiving as Record<string, unknown> }
+        : {}),
+      // MATRES-CHAIN (OQ-3(a) ratified): the execute-chain attestation envelope
+      // is carried VERBATIM (by reference, no copy/filter — the drafts compile
+      // endpoint is the trust boundary), same discipline as the receiving
+      // envelope above.
+      ...(intent === 'compose_execute_chain' && args.chain !== null && typeof args.chain === 'object' && !Array.isArray(args.chain)
+        ? { chain: args.chain as Record<string, unknown> }
         : {}),
     };
   }

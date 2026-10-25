@@ -2,6 +2,7 @@ import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { RecordStore } from '../store/types.js';
 import type { MaterialTrackingConfig } from '../config/types.js';
 import { toStoredConcentration } from './concentration.js';
+import { requirementOccurrenceId } from './requirementId.js';
 import { extractPrimaryDeclaredConcentration } from './vendorComposition.js';
 import {
   ensureLocalMaterialForOntology,
@@ -454,9 +455,14 @@ async function normalizeAddMaterialDetailsMaterialRefs(
   return out;
 }
 
-function unresolvedSourceRequirement(refField: 'material_spec_ref' | 'vendor_product_ref', ref: RefShape): Record<string, unknown> {
+function unresolvedSourceRequirement(refField: 'material_spec_ref' | 'vendor_product_ref', ref: RefShape, graphRecordId: string, eventId: string): Record<string, unknown> {
   return {
     status: 'unresolved',
+    // MATRES-FULFIL §7.2 (D3): the synthesized occurrence carries its stable
+    // id, minted from the coordinate (graph recordId, eventId, slot) via the
+    // requirementId law — NEVER from content. Idempotent re-drafts land on
+    // the SAME id; content edits never change it.
+    requirementId: requirementOccurrenceId(graphRecordId, eventId),
     [refField]: toRecordRef(ref.id, ref.type || (refField === 'material_spec_ref' ? 'material-spec' : 'vendor-product'), ref.label || ref.id),
     reason: 'No explicit material instance, aliquot, or source lot selected during drafting.',
   };
@@ -639,7 +645,7 @@ export async function normalizeEventGraphMaterialUsage(
       ? {
           ...groundedDetails,
           material_spec_ref: proposedSpecRef,
-          material_source_requirement: groundedDetails['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef),
+          material_source_requirement: groundedDetails['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef, eventGraphId, eventId),
         }
       : proposedInstanceRef
         ? { ...groundedDetails, material_instance_ref: proposedInstanceRef }
@@ -666,7 +672,7 @@ export async function normalizeEventGraphMaterialUsage(
         details: {
           ...detailsWithProposedSpec,
           material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
-          material_source_requirement: detailsWithProposedSpec['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec),
+          material_source_requirement: detailsWithProposedSpec['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec, eventGraphId, eventId),
         },
       };
     }
@@ -701,7 +707,7 @@ export async function normalizeEventGraphMaterialUsage(
         details: {
           ...details,
           vendor_product_ref: details['vendor_product_ref'] ?? toRecordRef(vendorProductRef.id, 'vendor-product', vendorProductRef.label || vendorProductRef.id),
-          material_source_requirement: details['material_source_requirement'] ?? unresolvedSourceRequirement('vendor_product_ref', vendorProductRef),
+          material_source_requirement: details['material_source_requirement'] ?? unresolvedSourceRequirement('vendor_product_ref', vendorProductRef, eventGraphId, eventId),
         },
       };
     }

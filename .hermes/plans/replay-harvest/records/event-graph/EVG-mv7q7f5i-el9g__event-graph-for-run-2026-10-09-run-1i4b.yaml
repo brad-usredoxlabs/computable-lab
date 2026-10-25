@@ -1,0 +1,294 @@
+$schema: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+recordId: EVG-mv7q7f5i-el9g
+id: EVG-mv7q7f5i-el9g
+kind: event-graph
+events:
+  - eventId: evt-add_material-dp31ba5p
+    event_type: add_material
+    verb: add_material
+    vocabPackId: general
+    details:
+      volumeUl: 50
+      volume:
+        value: 50
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-thermo-trypsin-edta-1fqu
+            type: material
+            label: Thermo trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-fbs-1qbj
+            type: material
+            label: Thermo FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-thermo-trypsin-edta-ther-1tuz
+        type: material
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      count: 10000
+      counter_density:
+        value: 200
+        unit: cells/uL
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P
+        type: material-spec
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_DP31BA5P
+          type: material-spec
+          label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-10-14T06:25:33.308Z
+      method: compiler
+      actionGroupId: compiler-draft
+  - eventId: evt-add_material-cvb7gt4a
+    event_type: add_material
+    verb: add_material
+    vocabPackId: general
+    details:
+      volumeUl: 50
+      volume:
+        value: 50
+        unit: uL
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-10-14T07:27:13.885Z
+      method: compiler
+      actionGroupId: compiler-draft
+  - eventId: evt-add_material-hgau9cyy
+    event_type: add_material
+    verb: add_material
+    vocabPackId: general
+    details:
+      volumeUl: 50
+      volume:
+        value: 50
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-thermo-trypsin-edta-1fqu
+            type: material
+            label: Thermo trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-fbs-1qbj
+            type: material
+            label: Thermo FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-thermo-trypsin-edta-ther-1tuz
+        type: material
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      count: 10000
+      counter_density:
+        value: 200
+        unit: cells/uL
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY
+        type: material-spec
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_HGAU9CYY
+          type: material-spec
+          label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-10-14T07:40:40.637Z
+      method: compiler
+      actionGroupId: compiler-draft
+  - eventId: evt-add_material-mkzyt7e9
+    event_type: add_material
+    verb: add_material
+    vocabPackId: general
+    details:
+      volumeUl: 50
+      volume:
+        value: 50
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-thermo-trypsin-edta-1fqu
+            type: material
+            label: Thermo trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-fbs-1qbj
+            type: material
+            label: Thermo FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-thermo-trypsin-edta-ther-1tuz
+        type: material
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      count: 10000
+      counter_density:
+        value: 200
+        unit: cells/uL
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9
+        type: material-spec
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_MKZYT7E9
+          type: material-spec
+          label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-10-14T07:49:49.056Z
+      method: compiler
+      actionGroupId: compiler-draft
+  - eventId: evt-add_material-nwfrxyby
+    event_type: add_material
+    verb: add_material
+    vocabPackId: general
+    details:
+      material: Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells
+      volumeUl: 50
+      volume:
+        value: 50
+        unit: uL
+      composition_snapshot:
+        - component_ref:
+            kind: record
+            id: MAT-thermo-trypsin-edta-1fqu
+            type: material
+            label: Thermo trypsin-EDTA
+          role: solvent
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-dmem-1vq1
+            type: material
+            label: Thermo DMEM
+          role: buffer_component
+          source: 50% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-thermo-fbs-1qbj
+            type: material
+            label: Thermo FBS
+          role: additive
+          source: 10% of the mixture
+        - component_ref:
+            kind: record
+            id: MAT-hepg2-cells-4oys
+            type: material
+            label: HepG2 cells
+          role: cells
+      formulation_kind: complex_composition
+      material_ref:
+        kind: record
+        id: MAT-thermo-trypsin-edta-ther-1lj9
+        type: material
+        label: Thermo trypsin-EDTA / Thermo DMEM + 10% FBS with HepG2 cells
+      count: 10000
+      counter_density:
+        value: 200
+        unit: cells/uL
+      material_spec_ref:
+        kind: record
+        id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY
+        type: material-spec
+        label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+      material_source_requirement:
+        status: unresolved
+        material_spec_ref:
+          kind: record
+          id: MSP-DRAFT-EVG_MV7Q7F5I_EL9G_EVT_ADD_MATERIAL_NWFRXYBY
+          type: material-spec
+          label: Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells
+        reason: No explicit material instance, aliquot, or source lot selected during
+          drafting.
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-10-14T10:26:14.260Z
+      method: compiler
+      actionGroupId: compiler-draft
+labwares: []
+runId: RUN-2026-10-09-run-1i4b
+name: Event Graph for RUN-2026-10-09-run-1i4b
+links:
+  runId: RUN-2026-10-09-run-1i4b
+status: filed
+editorLayout:
+  surface: event-editor/v1
+  placements: []
+updatedAt: 2026-10-14T10:26:24.024Z

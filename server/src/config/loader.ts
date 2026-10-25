@@ -113,7 +113,28 @@ function substituteEnvVarsRecursive(obj: unknown): unknown {
 }
 
 /**
+ * Union two arrays DEFAULT-first with dedup preserving first occurrence
+ * (CFG-UNION-1, Brad ruling (b)): an explicit config array may never silently
+ * drop DEFAULT_CONFIG entries. Order: target (default) entries in their order,
+ * then source (config) entries not already seen, in their order.
+ */
+function unionArrays<T>(target: readonly T[], source: readonly T[]): T[] {
+  const seen = new Set<T>();
+  const result: T[] = [];
+  for (const item of [...target, ...source]) {
+    if (!seen.has(item)) {
+      seen.add(item);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+/**
  * Deep merge two objects (source overrides target).
+ * CFG-UNION-1 (Brad ruling (b)): array-valued keys UNION with dedup instead
+ * of replacing — a partial config array can never silently drop DEFAULT
+ * entries (e.g. server.appendOnlyKinds dropping the append-only wall kinds).
  */
 function deepMerge<T extends object>(target: T, source: Partial<T>): T {
   const result = { ...target };
@@ -133,6 +154,11 @@ function deepMerge<T extends object>(target: T, source: Partial<T>): T {
       !Array.isArray(targetValue)
     ) {
       result[key] = deepMerge(targetValue, sourceValue as Partial<typeof targetValue>);
+    } else if (Array.isArray(sourceValue) && Array.isArray(targetValue)) {
+      result[key] = unionArrays(
+        targetValue as readonly unknown[],
+        sourceValue as readonly unknown[]
+      ) as T[keyof T];
     } else if (sourceValue !== undefined) {
       result[key] = sourceValue as T[keyof T];
     }

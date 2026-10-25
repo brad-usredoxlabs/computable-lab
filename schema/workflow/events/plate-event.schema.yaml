@@ -52,6 +52,38 @@ properties:
     type: string
     description: "Optional planned time offset from run start (ISO-8601 duration, e.g. 'PT5M')."
 
+  # --- MATRES-ATTEST §2e: retrospective occurrence time (Q8 triple) -------
+  # `at:` and `t_offset` above are KEPT UNTOUCHED (byte-stable: every existing
+  # compiler / well-state replay reads them, and the anyOf at the foot of this
+  # file). The new triple only ANNOTATES attested occurrences; it does not
+  # replace `at:` (the deliverable-(e) question "should occurredAt REPLACE at:"
+  # was answered NO — byte-stability of every existing graph fixture outranks
+  # elegance). Present-tense chains default known=today at DRAFT time (the
+  # drafting layer, CHAIN/RECV, does the defaulting — validation never does).
+  # Plate events are editor content inside an event-graph, not records: the
+  # append-only wall does not apply to them; the immutability that matters
+  # (Q4 "never rewrite history") lives on the `attestation` RECORD. Mutating a
+  # graph event after an attestation pinned it means the pin
+  # (attestation.against.graphRevision) no longer matches — the accept-time
+  # re-check surfaces that as a conflict (Q3d reference-copy semantics).
+  # [DEFAULT-PENDING-RATIFICATION: Q8]
+  occurredAtStatus:
+    type: string
+    enum: [ known, approximate, unknown ]
+    description: >
+      Same terminal-honest triple as the attestation envelope (Q5/Q8):
+      'unknown' is a complete answer. Validation never defaults or infers it.
+
+  occurredAt:
+    type: string
+    format: date-time
+    description: >
+      When the asserted occurrence happened (retrospective annotation). Legal
+      only with occurredAtStatus known|approximate — the pairing is a BUSINESS
+      rule and lives as declared data in plate-event.lint.yaml (never a
+      TypeScript branch); the schema stays purely additive so every existing
+      graph fixture validates byte-identically.
+
   notes:
     type: string
 

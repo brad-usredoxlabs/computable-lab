@@ -16,6 +16,7 @@
 import type { MaterialLevel, RankedCandidate } from '../../resolve/types.js';
 import type { TermLike } from '../../materials/termReconciliation.js';
 import type { ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
+import type { MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type {
   ScientistIntent,
   ScientistIntentActionLocation,
@@ -38,6 +39,12 @@ export interface ResolutionRequest {
   wantLevel?: MaterialLevel;
   /** Hint evidence for this argument (provenance-carrying, never identity). */
   hints?: Array<{ label: string; reason: string }>;
+  /** MATRES-ELIG (spec §7.2): vendor-scoped identifiers DECLARED in the
+   *  utterance context (the review interaction supplies these; compilation
+   *  supplies none — absence is a declared state, never an inference). The
+   *  eligibility envelope carries them verbatim; a catalog-shaped token with
+   *  no declared scope elicits scope (AC-3), never a fabricated identity. */
+  scopedIdentifiers?: readonly string[];
 }
 
 /** Honest error bit: a failing tier is NOT an empty tier (§5.6). */
@@ -103,8 +110,44 @@ export interface BoundNoun {
   actionIndex?: number;
 }
 
-/** Clarifications ARE SPINE-1's frozen ScientistIntentUnresolvedFact (§5.6). */
-export type Clarification = ScientistIntentUnresolvedFact;
+/** Clarifications ARE SPINE-1's frozen ScientistIntentUnresolvedFact (§5.6).
+ *  MATRES-ELIG (spec §7.4.4, D6): the candidate entry gains ADDITIVE optional
+ *  disclosure members — `tier`, `referentLevel`, and the three eligibility
+ *  verdict enums — emitted via CONDITIONAL SPREAD only (exactOptionalProperty-
+ *  Types: absent-or-value, never :undefined). The frozen members (label/
+ *  confidence/ref) are unchanged; readers that ignore the new keys are
+ *  unaffected (OQ-4 ruling: additive spread, app option-bind goldens as the
+ *  halt gate). The disclosure lives HERE (the engine's own fact shape), not in
+ *  SPINE-1's frozen type. */
+export interface EligibilityVerdictFact {
+  display: 'pass' | 'fail' | 'incomplete';
+  suppress: 'pass' | 'fail' | 'incomplete';
+  bind: 'pass' | 'fail' | 'incomplete';
+  /** The policy ids that decided each verdict (reason refs, §7.4.4). */
+  policyIds: { display: string; suppress: string; bind: string };
+  /** Role tag carried by the deciding bind policy (P4 identity role, bait §9). */
+  bindRole?: string;
+  /** Role tag carried by the deciding DISPLAY policy (fix-run 1 D3, bait §9 /
+   *  §11.9: the `role: catalog-identity` tag must survive from policy data
+   *  into the verdict payload for BOTH classes — the display-identity-only-role
+   *  policy's role was previously dropped here while the panel-facing payload
+   *  is the only place the panel can read it). Absent-or-value, never
+   *  :undefined (conditional spread). */
+  displayRole?: string;
+}
+
+export interface ClarificationCandidateFact {
+  label: string;
+  confidence?: number;
+  ref?: string;
+  tier?: number;
+  referentLevel?: string;
+  eligibility?: EligibilityVerdictFact;
+}
+
+export type Clarification = Omit<ScientistIntentUnresolvedFact, 'candidates'> & {
+  candidates?: ClarificationCandidateFact[];
+};
 
 export interface EngineOutcome {
   bindings: BoundNoun[];
@@ -123,6 +166,13 @@ export interface EngineDeps {
   /** READ-ONLY term list for near-miss clarification evidence (§5.4). The
    *  engine never writes; suggestions are evidence, never applied. */
   termsForSuggestions?: () => Promise<readonly TermLike[]>;
+  /** MATRES-ELIG (spec §7.4): the loaded material-eligibility POLICY document
+   *  (schema/scientist-intent/material-eligibility/, loaded PER call — never
+   *  process-cached). Absent = the engine runs its pre-ELIG behavior byte-
+   *  identically (the eligibility arms are inert without the data). The engine
+   *  holds NO policy branch: every tier/level/verdict value it consults is
+   *  read from this document through the eligibility modules. */
+  eligibility?: MaterialEligibilityPolicy;
 }
 
 export type { ScientistIntent };

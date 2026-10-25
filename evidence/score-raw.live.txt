@@ -1,0 +1,80 @@
+==============================================================================
+PROTO-AI-13 shadow-router verdict scorer (l2t1955)
+==============================================================================
+events file            : /home/brad/.computable-lab-lane2/shadow-router/events.jsonl
+events sha256          : ce625b65fbdfcd07bef3fe495ebfd7e6011cf3ce2f84bd7938117725b4a0eda6
+paired records (n)     : 502
+ts range               : 2026-10-06T19:39:04.400Z .. 2026-10-23T23:23:44.714Z
+router model(s)        : {'lfm2.5-350m': 502}
+big model(s)           : {'deepseek/deepseek-v4.1-flash': 204, 'qwen/qwen3.8-flash': 29, 'qwen3.8-flash-next': 225, '~deepseek/deepseek-flash-latest': 44}
+
+-- SIGNED THRESHOLDS (PROTO-AI-12 §2, signed as written 2026-10-06) --
+overall agreement      : >= 95%
+protocol_edit agreement: >= 98%
+minimum sample         : >= 500 paired turns with >= 50 protocol_edit
+latency ceiling        : p95 router-pick <= 2000 ms
+denominator rule       : timeouts/abstentions/parse-failures INCLUDED (parse failure counts AGAINST)
+
+-- SAMPLE GATE --
+paired turns           : 502 (need >= 500) -> MET
+protocol_edit turns    : 75 (need >= 50) -> MET
+sample gate            : MET
+
+-- PICK DISTRIBUTIONS --
+routerPick:
+  parse_failure         451  (89.84%)
+  create_record          42  (8.37%)
+  event_graph             9  (1.79%)
+authoritativePick:
+  event_shorthand       357  (71.12%)
+  protocol_edit          75  (14.94%)
+  event_graph            70  (13.94%)
+errorClass:
+  parse                 451
+  None                   51
+
+-- DENOMINATOR ACCOUNTING (primary = all paired records, as signed) --
+  total in denominator : 502
+  parse-failures       : 451  (count AGAINST)
+  timeouts             : 0
+  abstentions/other    : 0
+  parseable intent picks: 51
+
+-- AGREEMENT (PRIMARY, signed denominator) --
+  overall              : 0/502 = 0.00%  (threshold >= 95%) -> NOT MET
+  protocol_edit-class  : 0/75 = 0.00%  (threshold >= 98%) -> NOT MET
+  (non-protocol_edit authoritative turns: 0/427 agree)
+
+-- SENSITIVITY (four-intent-restricted denominator; NOT the verdict) --
+  authoritative turns outside the pre-registered menu: 357
+  restricted denominator : 145 (authoritativePick in ['event_graph', 'deck_layout', 'create_record', 'protocol_edit'])
+  restricted agreement   : 0/145 = 0.00%
+  restricted parse-failures: 117
+
+-- CONFUSION MATRIX (rows = authoritativePick, cols = routerPick) --
+auth \ router           event_graph    deck_layout  create_record  protocol_edit  parse_failure  row total
+----------------------------------------------------------------------------------------------------------
+event_graph                       0              0             20              0             50             70
+deck_layout                       0              0              0              0              0              0
+create_record                     0              0              0              0              0              0
+protocol_edit                     0              0              8              0             67             75
+event_shorthand                   9              0             14              0            334            357  <- post-prereg intent (router cannot pick it)
+col total                         9              0             42              0            451            502
+4x4 pre-registration submatrix (four intents x four intents) diagonal sum: 0
+
+-- ROUTER PICK LATENCY (routerLatencyMs) --
+  primary population   : ALL 502 paired records (parse-failures included, per the signed denominator rule)
+    median / p95 / max : 149.0 / 315 / 1622 ms
+  secondary population : 51 parseable intent picks only
+    median / p95 / max : 152 / 191 / 199 ms
+  ceiling              : p95 <= 2000 ms (primary) -> MET
+  p95 method           : nearest-rank on sorted values, index ceil(0.95*n)-1
+
+-- VERDICT --
+  VERDICT: FAIL
+  (follows the PRIMARY signed denominator; sample gate MET; overall NOT MET; protocol_edit NOT MET; latency MET)
+
+-- DEVIATION FLAGS --
+  FLAG: verdict FAIL: signed thresholds not met
+
+exit code: 1

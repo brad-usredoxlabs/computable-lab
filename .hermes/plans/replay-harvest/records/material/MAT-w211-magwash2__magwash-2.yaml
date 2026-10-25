@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-w211-magwash2
+kind: material
+id: MAT-w211-magwash2
+domain: reagent
+name: MagWash 2
+synonyms:
+  - magwash_2
+createdAt: 2026-10-12T20:44:41.601Z
+updatedAt: 2026-10-12T20:44:41.601Z
+createdBy: USR-BRAD

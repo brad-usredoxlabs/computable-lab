@@ -759,6 +759,29 @@ verbs:
       - name: targetWells
         kind: wells
         required: false
+  - name: bead_beat
+    class: simple
+    policyRef: hint-authority
+    args:
+      - name: labware
+        kind: resolvable
+        required: false
+        domain: labware
+        hintEligible: true
+      - name: material
+        kind: resolvable
+        required: false
+        domain: material
+        hintEligible: true
+      - name: duration
+        kind: scalar
+        required: false
+      - name: temperatureC
+        kind: quantity
+        required: false
+      - name: cycles
+        kind: quantity
+        required: false
 policies:
   strategyOrder:
     - explicit_wells

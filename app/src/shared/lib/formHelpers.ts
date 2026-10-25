@@ -141,6 +141,70 @@ export function formatComputedCount(count?: number | null): string | null {
   return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(count)} count`
 }
 
+/**
+ * CELLRATE-1 — the ONE home of the per-well cell-total display grammar
+ * (spec §5.3). Derivation is DISPLAY truth over declared data: the stored
+ * event keeps what the scientist declared (the compiler performs no
+ * arithmetic — pinned server-side in simpleVerbsCountRate.test.ts); this
+ * helper is the only place that multiplies a DECLARED rate by a DECLARED
+ * volume, and only to LABEL the result derived. A declared-absolute count is
+ * never multiplied (that would reproduce the 100x disease in the display
+ * layer); an ambiguous bare count says `absolute, unverified` — no invented
+ * unit. The unit SET stays schema DATA (the wire count arm +
+ * concentration.schema.yaml); this helper reads the declared unit's structure
+ * (a per-volume unit is `numerator/denominator`) and never converts: a rate
+ * whose denominator differs from the well volume unit shows the rate honestly
+ * with the total unknown.
+ * Cross-reference (same invariant family, different plane): MIXFRAC-1's
+ * config/drafting/composition-fraction-convention.yaml owns compile-time
+ * fraction-sum policy; this helper owns display derivation only.
+ */
+const WELL_VOLUME_UNIT = 'uL'
+
+export function describeCellTotal(input: {
+  count?: number
+  rate?: ConcentrationValue
+  density?: ConcentrationValue
+  volume_uL?: number
+  volume_unit?: string
+}): string | null {
+  const count = typeof input.count === 'number' && Number.isFinite(input.count) ? input.count : undefined
+  const rate = input.rate ?? input.density
+  const declaredVolume =
+    typeof input.volume_uL === 'number' && Number.isFinite(input.volume_uL) && input.volume_uL > 0
+      ? input.volume_uL
+      : undefined
+  if (count === undefined && rate === undefined) return null
+
+  const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
+
+  if (rate !== undefined && typeof rate.value === 'number' && Number.isFinite(rate.value) && rate.unit) {
+    const unitParts = rate.unit.split('/')
+    const denominator = unitParts.length === 2 ? unitParts[1] : undefined
+    const volumeUnit = input.volume_unit ?? WELL_VOLUME_UNIT
+    if (denominator !== undefined && declaredVolume !== undefined && denominator === volumeUnit) {
+      const total = rate.value * declaredVolume
+      const derivation = `${nf.format(rate.value)}/${denominator} x ${nf.format(declaredVolume)} ${volumeUnit}`
+      if (count !== undefined) {
+        if (count === total) return `${nf.format(total)}/well = ${derivation} (derived)`
+        // Two DECLARED numbers disagree: show BOTH and flag the mismatch via
+        // the count_estimate honesty idiom — a silent pick is forbidden.
+        return `${nf.format(count)} · absolute, unverified · ${derivation} (derived ${nf.format(total)})`
+      }
+      return `${nf.format(total)}/well = ${derivation} (derived)`
+    }
+    // Rate declared but the total is not derivable (no volume, or the
+    // denominators differ — NO conversion happens here): show the rate honestly.
+    return `${nf.format(rate.value)} ${rate.unit} · per-well total unknown`
+  }
+
+  if (count !== undefined && declaredVolume !== undefined) {
+    // Ambiguous bare count with a stated volume: exactly the OQ-3 wording.
+    return `${nf.format(count)} · absolute, unverified`
+  }
+  return null
+}
+
 export function formatScientificStateSummary(componentCount: number, totalVolumeLabel: string): string {
   return `${componentCount} component${componentCount === 1 ? '' : 's'} · ${totalVolumeLabel} total`
 }

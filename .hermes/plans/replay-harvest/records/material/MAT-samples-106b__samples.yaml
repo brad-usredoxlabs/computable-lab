@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-samples-106b
+kind: material
+id: MAT-samples-106b
+name: samples
+domain: other
+status: proposed

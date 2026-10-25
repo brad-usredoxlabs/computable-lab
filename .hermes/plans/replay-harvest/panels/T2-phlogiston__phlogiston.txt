@@ -1,0 +1,4 @@
+# panel T2-phlogiston — noun “phlogiston” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+

@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-thermo-dmem-1vq1
+kind: material
+id: MAT-thermo-dmem-1vq1
+name: Thermo DMEM
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Thermo DMEM
+  createdBy: add-material-normalizer
+  createdAt: 2026-10-14T06:25:44.383Z
+  note: Created as a proposed local material record from an accepted add-material
+    event graph.

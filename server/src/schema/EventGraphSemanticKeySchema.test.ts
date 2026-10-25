@@ -84,6 +84,9 @@ describe('EventGraphSemanticKeySchema', () => {
     const paths = [
       'core/common.schema.yaml',
       'core/datatypes/ref.schema.yaml',
+      // event-graph.schema.yaml $refs the revision-ref datatype; the harness
+      // path list mirrors the schema's dependency closure.
+      'core/datatypes/revision-ref.schema.yaml',
       'workflow/event-graph.schema.yaml',
     ];
 

@@ -551,3 +551,302 @@ describe('resolveMaterial — the QUESTION’s layer scopes the menu', () => {
     expect(urls.some((u) => u.includes('/materials/formulations/summary'))).toBe(true)
   })
 });
+
+describe('MENU-CANDIDATES-1 — aggregate /m candidate generation (dedup + component expansion)', () => {
+  // Evidence shape (receipts/REVISE-GHOST-1/2026-10-24_062716-a5-tier2/, defect 4):
+  // the role-gap card prefills the /m search with the FULL aggregate label
+  // 'Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells'. The store
+  // holds several same-titled aggregate records (per-accept MSP-DRAFT specs +
+  // prior-drive aggregate mints) and REAL per-component MAT records
+  // (MAT-thermo-dmem-1vq1, MAT-thermo-fbs-1qbj, MAT-thermo-trypsin-edta-1fqu).
+  // OQ5 ruling: the RED scenario keys on the role-gap 'A + B + C' label shape
+  // AND the comma-joined aggregate shape.
+  const AGGREGATE = 'Thermo trypsin-EDTA + Thermo DMEM + Thermo FBS + HepG2 cells'
+
+  const aggregateRow = (recordId: string, kind: string) => ({
+    recordId,
+    kind,
+    title: AGGREGATE,
+    category: kind === 'material' ? 'concept-only' : 'saved-stock',
+  })
+
+  const componentRow = (recordId: string, title: string) => ({
+    recordId,
+    kind: 'material',
+    title,
+    category: 'concept-only',
+  })
+
+  type FixtureRow = {
+    recordId: string
+    kind: string
+    title: string
+    category: string
+    subtitle?: string
+  }
+
+  const mockMaterialsSearch = (items: FixtureRow[]) =>
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ items }),
+    } as Response)
+
+  // MENU-CANDIDATES-1 fix-1 (advc D2): route /materials/search by the
+  // request's DECODED `q` param instead of a positional once-queue. Each
+  // component token's search returns ITS OWN record — deterministic
+  // regardless of token order — and any unmapped q (or unmapped path)
+  // THROWS, so a component search can never fall through to an unmocked
+  // fetch and be silently swallowed by the resolver's `.catch(() => [])`.
+  // Because each payload is keyed by its own `q`, a misattributed body
+  // structurally cannot satisfy the per-token assertions.
+  type MenuRoutes = {
+    search: Map<string, FixtureRow[]>
+    formulations?: unknown[]
+    resolveCandidates?: unknown[]
+    vendorItems?: unknown[]
+  }
+
+  const mockMenuFetch = (routes: MenuRoutes) => {
+    const router = vi.fn(async (input: unknown) => {
+      const parsed = new URL(String(input), 'http://localhost:5174')
+      // API_BASE may carry an /api prefix; match on the endpoint suffix.
+      const path = parsed.pathname.replace(/\/+$/, '')
+      const endpoint = path.slice(path.lastIndexOf('/') + 1)
+      const suffixOf = (prefix: string) => path.endsWith(prefix)
+      if (endpoint === 'search' && suffixOf('/materials/search')) {
+        const q = parsed.searchParams.get('q')
+        if (q === null || !routes.search.has(q)) {
+          throw new Error(`unmocked /materials/search q=${JSON.stringify(q)}`)
+        }
+        const items = routes.search.get(q) as FixtureRow[]
+        return { ok: true, json: async () => ({ items }) } as Response
+      }
+      if (suffixOf('/materials/formulations/summary')) {
+        if (!routes.formulations) {
+          throw new Error('unmocked /materials/formulations/summary')
+        }
+        const items = routes.formulations
+        return { ok: true, json: async () => ({ items }) } as Response
+      }
+      if (endpoint === 'resolve') {
+        if (!routes.resolveCandidates) throw new Error('unmocked POST /resolve')
+        const candidates = routes.resolveCandidates
+        return { ok: true, json: async () => ({ candidates }) } as Response
+      }
+      if (suffixOf('/vendor/exa/search')) {
+        const items = routes.vendorItems ?? []
+        return { ok: true, json: async () => ({ items }) } as Response
+      }
+      throw new Error(`unmocked fetch ${path}`)
+    })
+    fetchSpy.mockImplementation(router)
+    return router
+  }
+
+  /** Decoded `q` of every /materials/search the router actually received. */
+  const searchQueriesSeen = (
+    router: ReturnType<typeof mockMenuFetch>,
+  ): string[] =>
+    router.mock.calls
+      .map((c) => new URL(String(c[0]), 'http://localhost:5174'))
+      .filter((u) => u.pathname.replace(/\/+$/, '').endsWith('/materials/search'))
+      .map((u) => u.searchParams.get('q') ?? '')
+
+  const mockEmptyFormulations = () =>
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+
+  const mockEmptyResolves = () => {
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+  }
+
+  async function runMenu(query: string) {
+    const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
+    const out = await resolveMaterial(query, ctx({ onUpdate: (more) => additions.push(...more) }))
+    // Let the below-first-paint stream (component expansion + ontology tiers) settle.
+    await new Promise((r) => setTimeout(r, 0))
+    return { out, additions }
+  }
+
+  it('Fix A: collapses same-titled aggregate rows to one per entityKind, keeping the first in rank order with its real recordId', async () => {
+    // 4 per-accept MSP-DRAFT material-specs + 1 aggregate material row — all
+    // byte-identical titles, distinct recordIds (the live store's degenerate page).
+    mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        [AGGREGATE, [
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_1', 'material-spec'),
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_2', 'material-spec'),
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_3', 'material-spec'),
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_4', 'material-spec'),
+          aggregateRow('MAT-thermo-dmem-1vq1', 'material'),
+        ]],
+        // Component searches still fire for an aggregate query; this fixture
+        // is about the first-paint collapse, so every token is mapped to an
+        // explicit empty page — no unmocked fallthrough (advc D2).
+        ['Thermo trypsin-EDTA', []],
+        ['Thermo DMEM', []],
+        ['Thermo FBS', []],
+        ['HepG2 cells', []],
+      ]),
+      formulations: [],
+      resolveCandidates: [],
+    })
+
+    const { out } = await runMenu(AGGREGATE)
+
+    // One row per entityKind + the pinned mint row — not a page of 5 identical rows.
+    expect(out).toHaveLength(3)
+    expect(out.map((s) => s.key)).toEqual([
+      'material-spec:MSP-DRAFT-EVG_MV7Q7F5I_1',
+      'material:MAT-thermo-dmem-1vq1',
+      `mint:${AGGREGATE}`,
+    ])
+    // Dedup is PRESENTATION only: the surviving row keeps its real recordId.
+    expect(out[0]?.mention).toMatchObject({
+      type: 'material',
+      entityKind: 'material-spec',
+      id: 'MSP-DRAFT-EVG_MV7Q7F5I_1',
+      label: AGGREGATE,
+    })
+    expect(out[1]?.badge).toBe('Ontology')
+    // Mint stays the pinned floor — last, never replaced by an invented aggregate term.
+    expect(out[2]).toMatchObject({ key: `mint:${AGGREGATE}`, badge: 'New', pinBottom: true })
+  })
+
+  it('Fix B: an aggregate query additionally fires one search per component token and streams the per-component records in via onUpdate', async () => {
+    // Every /materials/search is routed by its own decoded q: the direct
+    // aggregate needle returns the degenerate aggregate page, and EACH
+    // component token's search returns ITS OWN record. Tokens with no store
+    // hit are mapped to [] explicitly — nothing falls through to an unmocked
+    // fetch (advc D2).
+    const router = mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        [AGGREGATE, [
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_1', 'material-spec'),
+          aggregateRow('MSP-DRAFT-EVG_MV7Q7F5I_2', 'material-spec'),
+          aggregateRow('MAT-thermo-aggregate-9z9z', 'material'),
+        ]],
+        ['Thermo trypsin-EDTA', [componentRow('MAT-thermo-trypsin-edta-1fqu', 'Thermo trypsin-EDTA')]],
+        ['Thermo DMEM', [componentRow('MAT-thermo-dmem-1vq1', 'Thermo DMEM')]],
+        // The 'Thermo FBS' search also re-surfaces the aggregate row already
+        // on screen — it must be collapsed by the SAME ledger, not re-shown.
+        ['Thermo FBS', [
+          componentRow('MAT-thermo-fbs-1qbj', 'Thermo FBS'),
+          aggregateRow('MAT-thermo-aggregate-9z9z', 'material'),
+        ]],
+        ['HepG2 cells', [{ recordId: 'MINST-HEPG2-CELLS', kind: 'material-instance', title: 'HepG2 cells', category: 'prepared-material' }]],
+      ]),
+      formulations: [],
+      resolveCandidates: [],
+    })
+
+    const { out, additions } = await runMenu(AGGREGATE)
+
+    // First paint unchanged in shape: collapsed direct hits + mint floor.
+    expect(out.map((s) => s.key)).toEqual([
+      'material-spec:MSP-DRAFT-EVG_MV7Q7F5I_1',
+      'material:MAT-thermo-aggregate-9z9z',
+      `mint:${AGGREGATE}`,
+    ])
+
+    // The aggregate query fired exactly one extra /materials/search per
+    // component token — asserted on the DECODED q param (URLSearchParams
+    // encodes spaces as '+'), by exact equality: the direct aggregate
+    // search's own q contains every token as a substring, so substring
+    // matching would be vacuous.
+    const tokens = ['Thermo trypsin-EDTA', 'Thermo DMEM', 'Thermo FBS', 'HepG2 cells']
+    const searchQueries = searchQueriesSeen(router)
+    expect(searchQueries).toEqual([AGGREGATE, ...tokens])
+    const componentQueries = searchQueries.filter((q) => q !== AGGREGATE)
+    expect(componentQueries).toHaveLength(tokens.length)
+
+    // PER-TOKEN ATTRIBUTION (advc D2): each token's own search surfaced its
+    // own record, in token order. The payload is derived from `q`, so a body
+    // attached to the wrong token cannot satisfy these rows.
+    expect(additions.map((s) => s.key)).toEqual([
+      'material:MAT-thermo-trypsin-edta-1fqu',
+      'material:MAT-thermo-dmem-1vq1',
+      'material:MAT-thermo-fbs-1qbj',
+      'material-instance:MINST-HEPG2-CELLS',
+    ])
+    expect(additions.map((s) => s.label)).toEqual(tokens)
+    expect(additions.map((s) => s.mention.label === s.label)).toEqual([true, true, true, true])
+    expect(additions[0]).toMatchObject({
+      label: 'Thermo trypsin-EDTA',
+      badge: 'Ontology',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-trypsin-edta-1fqu' },
+    })
+    expect(additions[2]).toMatchObject({
+      label: 'Thermo FBS',
+      badge: 'Ontology',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-thermo-fbs-1qbj' },
+    })
+    // The SAME label-collapse applies to streamed hits: the 'Thermo FBS'
+    // search's same-titled aggregate row does NOT re-surface as a duplicate.
+    expect(additions.some((s) => s.label === AGGREGATE)).toBe(false)
+    // Mint remains the last row after the picker's merge (pinBottom floor).
+    expect(out[2]?.pinBottom).toBe(true)
+  })
+
+  it('Fix B: the comma-joined aggregate shape (fraction-sum label) also expands per component', async () => {
+    const router = mockMenuFetch({
+      search: new Map<string, FixtureRow[]>([
+        ['Thermo DMEM, Thermo FBS', [aggregateRow('MAT-thermo-aggregate-9z9z', 'material')]],
+        ['Thermo DMEM', [componentRow('MAT-thermo-dmem-1vq1', 'Thermo DMEM')]],
+        ['Thermo FBS', [componentRow('MAT-thermo-fbs-1qbj', 'Thermo FBS')]],
+      ]),
+      formulations: [],
+      resolveCandidates: [],
+    })
+
+    const { additions } = await runMenu('Thermo DMEM, Thermo FBS')
+
+    const searchQueries = searchQueriesSeen(router)
+    expect(searchQueries).toEqual(['Thermo DMEM, Thermo FBS', 'Thermo DMEM', 'Thermo FBS'])
+    // Each token's own search returned its own record — the 'Thermo FBS' row
+    // is NOT a row the 'Thermo DMEM' search was made to carry (advc D2).
+    expect(additions.map((s) => s.key)).toEqual([
+      'material:MAT-thermo-dmem-1vq1',
+      'material:MAT-thermo-fbs-1qbj',
+    ])
+    expect(additions.map((s) => s.label)).toEqual(['Thermo DMEM', 'Thermo FBS'])
+  })
+
+  it('byte-stability pin: a delimiter-free query is byte-identical to the pre-fix resolver (no component search fires)', async () => {
+    // Expected values captured from the resolver at the pre-fix base tip
+    // (154746ef) with the identical mock fixtures — the whole serialized row
+    // list must not change by a single byte for delimiter-free queries.
+    const EXPECTED_TRIS =
+      '[{"key":"material-instance:MINST-HEPG2","label":"HepG2 P12","badge":"Instance","subtitle":"Existing prepared material","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MINST-HEPG2","definition":"Existing prepared material","extra":[{"label":"Kind","value":"material-instance"},{"label":"Category","value":"prepared-material"}]},"mention":{"type":"material","entityKind":"material-instance","id":"MINST-HEPG2","label":"HepG2 P12"}},{"key":"material:MAT-TRIS","label":"Tris","badge":"Ontology","subtitle":"Ontology term","detail":{"source":"Workspace record (this lab)","ontology":"local","id":"MAT-TRIS","extra":[{"label":"Kind","value":"material"},{"label":"Category","value":"concept-only"}]},"mention":{"type":"material","entityKind":"material","id":"MAT-TRIS","label":"Tris"}},{"key":"mint:tris","label":"Create local term \\"tris\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"tris\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"tris"}}]'
+    const EXPECTED_DMEM =
+      '[{"key":"mint:dmem","label":"Create local term \\"dmem\\"","badge":"New","subtitle":"mint a draft term into the lab namespace","detail":{"source":"New local term (tier 5 — last resort)","ontology":"local","definition":"Creates a draft material record named \\"dmem\\" in the lab\'s local namespace. Prefer an existing workspace record or ontology term above when one matches."},"pinBottom":true,"mention":{"type":"material","entityKind":"material","id":"","label":"dmem"}}]'
+
+    mockMaterialsSearch([
+      { recordId: 'MINST-HEPG2', kind: 'material-instance', title: 'HepG2 P12', category: 'prepared-material', subtitle: 'Existing prepared material' },
+      { recordId: 'MAT-TRIS', kind: 'material', title: 'Tris', category: 'concept-only' },
+    ])
+    mockEmptyFormulations()
+    mockEmptyResolves()
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+
+    const { out, additions } = await runMenu('tris')
+    expect(JSON.stringify(out)).toBe(EXPECTED_TRIS)
+    expect(additions).toEqual([])
+
+    mockMaterialsSearch([])
+    mockEmptyFormulations()
+    mockEmptyResolves()
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+
+    const dmem = await runMenu('dmem')
+    expect(JSON.stringify(dmem.out)).toBe(EXPECTED_DMEM)
+    expect(dmem.additions).toEqual([])
+
+    // No component expansion fired for delimiter-free queries: exactly the
+    // pre-fix request shape (search + formulations + 2 resolves + vendor).
+    const searchCalls = fetchSpy.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('/materials/search')).length
+    expect(searchCalls).toBe(2)
+  })
+});

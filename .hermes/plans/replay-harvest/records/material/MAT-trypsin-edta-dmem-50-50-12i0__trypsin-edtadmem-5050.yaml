@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-trypsin-edta-dmem-50-50-12i0
+kind: material
+id: MAT-trypsin-edta-dmem-50-50-12i0
+name: Trypsin-EDTA/DMEM (50:50)
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for
+  "Trypsin-EDTA/DMEM (50:50)").

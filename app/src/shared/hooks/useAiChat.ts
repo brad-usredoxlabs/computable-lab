@@ -286,10 +286,19 @@ export interface UseAiChatOptions {
    * frame becomes a NAMED system bubble — never swallowed (same rule).
    */
   onRecordDraftProposal?: (recordDraft: Record<string, unknown>) => void
+  /**
+   * MATRES-CHAIN (OQ-3(a) ratified) — the execute-chain INTENT rides the same
+   * discipline: the mount relays it verbatim to POST /api/drafts/compile
+   * (adapter 'chain') via `useWorkstateProposalFlow`; the trust boundary is
+   * the compile (Ajv chain-draft + lint + DATA arithmetic + canAccept), not
+   * this stream. With NO callback registered the frame becomes a NAMED system
+   * bubble — never swallowed (same rule).
+   */
+  onChainProposal?: (chain: Record<string, unknown>) => void
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -355,6 +364,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // QMS7-7 (OQ1 ruling A): the record-drafting INTENT relay (same ref pattern).
   const recordDraftProposalRef = useRef(onRecordDraftProposal)
   recordDraftProposalRef.current = onRecordDraftProposal
+  // MATRES-CHAIN (OQ-3(a)): the execute-chain INTENT relay (same ref pattern).
+  const chainProposalRef = useRef(onChainProposal)
+  chainProposalRef.current = onChainProposal
   const agentActionRef = useRef(onAgentAction)
   agentActionRef.current = onAgentAction
 
@@ -716,6 +728,43 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                   id: generateMessageId(),
                   role: 'system',
                   content: 'The assistant proposed a record draft but this page cannot show proposal cards yet. Nothing was written.',
+                  timestamp: Date.now(),
+                },
+              ])
+            }
+            continue
+          }
+
+          // MATRES-CHAIN (OQ-3(a)): the execute-chain INTENT — same block shape
+          // as the workstate/analysis/record-draft branches above (no forked
+          // logic): callback -> verbatim relay, a throwing host surfaces a
+          // system line and the turn continues, and with NO callback the frame
+          // becomes a NAMED system bubble naming the chain proposal — never a
+          // silent drop. The relay goes to useWorkstateProposalFlow (adapter
+          // 'chain'); POST /api/drafts/compile is the trust boundary, so
+          // nothing here writes.
+          if (event.type === 'chain_proposal') {
+            if (chainProposalRef.current) {
+              try {
+                chainProposalRef.current(event.chain)
+              } catch (err: unknown) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: generateMessageId(),
+                    role: 'system',
+                    content: `The execute-chain proposal card could not open: ${(err as Error).message || 'Unknown error'}. Nothing was written.`,
+                    timestamp: Date.now(),
+                  },
+                ])
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: generateMessageId(),
+                  role: 'system',
+                  content: 'The assistant proposed an execute chain but this page cannot show proposal cards yet. Nothing was written.',
                   timestamp: Date.now(),
                 },
               ])

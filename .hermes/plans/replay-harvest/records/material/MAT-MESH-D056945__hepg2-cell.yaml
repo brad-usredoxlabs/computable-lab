@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-MESH-D056945
+kind: material
+id: MAT-MESH-D056945
+name: HepG2 Cell
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: human
+  sourceCurie: mesh:D056945
+  sourceLabel: HepG2 Cell
+  createdBy: material-profile-api
+  createdAt: 2026-09-20T13:57:06.455Z
+  note: Created as a proposed local material record from the material grounding API.
+class:
+  - kind: ontology
+    id: mesh:D056945
+    namespace: mesh
+    label: HepG2 Cell

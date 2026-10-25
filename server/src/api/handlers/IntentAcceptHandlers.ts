@@ -13,6 +13,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { ScientistIntentActionValue } from '../../compiler/scientistIntent/types.js';
+import { slugifyRecordLabel } from '../../compiler/material/MaterialCompiler.js';
 
 export const LOCAL_PROTOCOL_SCHEMA_ID =
   'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
@@ -74,12 +75,30 @@ export function createIntentAcceptHandlers(ctx: AppContext) {
         overrides,
         ...(body?.answers && Object.keys(body.answers).length > 0
           ? {
-              branch_resolution: Object.entries(body.answers).map(([axisId, chosenValue]) => ({
-                axisId,
-                matched: true,
-                branchIds: [chosenValue],
-                choices: { [axisId]: chosenValue },
-              })),
+              // W28-AXISSLUG-1 (gate r4 DEFECT-1): the answer KEY is data joining into the
+              // schema-patterned axisId field (^[a-z][a-z0-9-]*$ forbids underscores, and the
+              // model emits underscore axis ids on purpose per the intentCompile tool schema).
+              // Slug each key through the existing helper for BOTH axisId and the choices key.
+              // Chosen values (branchIds, choices VALUES) are NEVER rewritten. Entries stay in
+              // Object.entries order; colliding slugs each get their own per-row provenance
+              // (no de-dup, no suffixing, no id invention).
+              branch_resolution: Object.entries(body.answers).map(([key, chosenValue]) => {
+                // fix cycle 1 (advc-AXISSLUG1-c1): slugifyRecordLabel does not guarantee a
+                // leading [a-z] — '4c_variant' -> '4c-variant' reproduces the exact 409 (the
+                // axisId pattern ^[a-z][a-z0-9-]*$ rejects digit-leading ids; the helper's
+                // 'unknown' fallback only fires on empty). Call-site guard: prefix a
+                // digit-leading slug with 'axis-' (pinned prefix). Applied once; the same
+                // normalized value feeds BOTH axisId and the choices key. Values stay
+                // byte-verbatim. The shared helper itself is NOT modified.
+                const slugged = slugifyRecordLabel(key);
+                const axisId = /^[a-z]/.test(slugged) ? slugged : `axis-${slugged}`;
+                return {
+                  axisId,
+                  matched: true,
+                  branchIds: [chosenValue],
+                  choices: { [axisId]: chosenValue },
+                };
+              }),
             }
           : {}),
         ...(body?.links ? { links: body.links } : {}),

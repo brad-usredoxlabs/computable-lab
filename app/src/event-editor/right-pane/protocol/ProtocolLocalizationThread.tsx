@@ -22,8 +22,8 @@ import { useOptionalEventEditor, isDeckSetupLocked } from '../../EventEditorCont
 import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { apiClient } from '../../../shared/api/client'
-import { ClarificationPicker, requestHasPicker } from '../ai/ClarificationPicker'
-import { heldFactToClarificationRequest } from './ProtocolLocalizationThread.clarificationAdapter'
+import { foldCards } from './ProtocolLocalizationThread.clarificationAdapter'
+import { ClarificationPanel } from './ClarificationPanel'
 import type { PlateEvent } from '../../../types/events'
 import type {
   AiClarificationAnswer,
@@ -190,6 +190,17 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
   // picker requests so the bar is ANSWERABLE where it is shown. Replaced whole
   // on every fold (a re-send's held result re-folds through foldHeldBundle).
   const [heldCards, setHeldCards] = useState<AiClarificationRequest[]>([])
+  // MATRES-PANEL §7.1 / OQ-1 (orch-ruled): the panel's turn key is the CLIENT
+  // fold identity — localMacro.intentId + a monotonic fold epoch. The fold
+  // already REPLACES heldCards wholesale on every re-send (one fold IS one
+  // turn), so a new fold replaces the panel and staleness is impossible by
+  // construction. No server turnId (a wire change ELIG did not declare).
+  const [panelTurnKey, setPanelTurnKey] = useState('turn-0')
+  const foldEpochRef = useRef(0)
+  const bumpPanelTurn = useCallback((intentId: string | undefined) => {
+    foldEpochRef.current += 1
+    setPanelTurnKey(`${intentId ?? 'draft'}:${foldEpochRef.current}`)
+  }, [])
   // Answers picked on the cards, keyed by the clarification's own LABEL — the
   // same key the server-side binding test pins (answers[<label>] = the
   // [[material:MAT-…|label]] mention the picker produced).
@@ -324,6 +335,29 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     })
   }, [editor, activeDeckScope, deckPlatform, deckPicked, proposedLabware, deckLocked])
 
+  // W211-GAPCARD-1 (the 200-gap FOLD ARM): a 200 outcome-'gap' response carries
+  // `clarifications` additively (server sends it only when non-empty; the
+  // 'complete' arm OMITS the key — exactOptionalPropertyTypes conditional
+  // spread, IntentCompileFromPromptHandlers.ts). Today's three 2xx success arms
+  // discarded it (setHeldCards([]) with res.clarifications never read — the
+  // STEP-0 finding). Now: a non-empty clarifications array folds through the
+  // SAME shared adapter call-site as foldHeldBundle (foldCards — bait 6: ONE
+  // call-site, cards set BEFORE holdForReview, the gate call byte-unchanged),
+  // so a gap fact renders its card INSIDE the deck gate beside pl-deck-review.
+  // exactOptionalPropertyTypes guard: Array.isArray + length, never `in` alone
+  // (the key is ABSENT on 'complete'). Absent/empty keeps today's
+  // setHeldCards([]) behavior EXACTLY (no phantom cards). The answers map is
+  // never cleared here (fix-cycle invariant).
+  const foldResponseClarifications = useCallback((
+    clarifications: Array<Record<string, unknown>> | undefined,
+    intentId?: string,
+  ) => {
+    setHeldCards(Array.isArray(clarifications) && clarifications.length > 0
+      ? foldCards(clarifications)
+      : [])
+    bumpPanelTurn(intentId)
+  }, [bumpPanelTurn])
+
   // Route a finished compile through the Review-deck gate (never ghost blindly).
   const holdForReview = useCallback((terminalArtifacts: Record<string, unknown>) => {
     setPendingDraft(terminalArtifacts)
@@ -359,11 +393,13 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     // cards (picker + mint) — additive. Facts with no answer surface map to
     // null and stay infoMsg-only (no picker-less card). Card state is set
     // BEFORE the gate call; the gate call itself is byte-unchanged.
-    setHeldCards(held.clarifications
-      .map((fact, index) => heldFactToClarificationRequest(fact, index))
-      .filter((request): request is AiClarificationRequest => request !== null))
+    // W211-GAPCARD-1: the fold maps through the ONE shared adapter call-site
+    // (foldCards), which also carries the gap-shape fallback — a slot-less,
+    // table-less gap fact gains the picker-less 'choice' card here too.
+    setHeldCards(foldCards(held.clarifications))
+    bumpPanelTurn(typeof held.localMacro.intentId === 'string' ? held.localMacro.intentId : undefined)
     holdForReview(held.terminalArtifacts)
-  }, [holdForReview])
+  }, [holdForReview, bumpPanelTurn])
 
   // THREAD-ASK-1 (Leg 2): the answers map that rides every compile round-trip
   // — the branch-axis answers (byte-unchanged axis semantics) merged with the
@@ -479,7 +515,10 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         // already has (:405). No stale answerable card survives over a
         // resolved macro. The picked answers stay in the answers map (Leg 1
         // data keeps riding re-drafts); only the card surface clears.
-        setHeldCards([])
+        // W211-GAPCARD-1: an outcome-'gap' 200 that CARRIES clarifications now
+        // folds them into cards beside the deck gate; a 'complete' 200 (key
+        // absent) still clears the surface exactly as before.
+        foldResponseClarifications(res.clarifications, res.localMacro?.intentId)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage(
           `Localized: ${res.outcome} — review the deck & labware, then load onto deck `
@@ -494,7 +533,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle])
+  }, [protocolText, sourceProtocolId, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
   // text present), AUTO-RUN the branch-question extraction so the if/then
@@ -530,7 +569,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         setNeedsAnswers(false)
         // THREAD-ASK-1 fix cycle 1 (D1): resolved macro -> held cards collapse
         // (same lifecycle as the pick's 2xx arm; see handleLocalize).
-        setHeldCards([])
+        // W211-GAPCARD-1: a 200-gap response that carries clarifications folds
+        // them into cards beside the deck gate (see handleLocalize).
+        foldResponseClarifications(res.clarifications, res.localMacro?.intentId)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Ready — review the deck & labware, then place them.')
         holdForReview(res.terminalArtifacts)
@@ -543,7 +584,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
+  }, [protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   // Per-step refinement: append a Correction, re-localize with the correction
   // (refinements fold into the final macro), then re-hold it through the gate.
@@ -570,7 +611,9 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
         // THREAD-ASK-1 fix cycle 1 (D1): a correction that resolves the macro
         // collapses the held cards too (same lifecycle as the pick's 2xx arm;
         // see handleLocalize).
-        setHeldCards([])
+        // W211-GAPCARD-1: a 200-gap response that carries clarifications folds
+        // them into cards beside the deck gate (see handleLocalize).
+        foldResponseClarifications(res.clarifications, res.localMacro?.intentId)
         setLocalMacro(res.localMacro as LocalMacro)
         setMessage('Revised — corrections folded into the macro. Review the deck, then place.')
         holdForReview(res.terminalArtifacts)
@@ -582,7 +625,7 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
     } finally {
       setLocalizing(false)
     }
-  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle])
+  }, [input, protocolText, sourceProtocolId, compileAnswers, holdForReview, foldHeldBundle, foldResponseClarifications])
 
   const toggleDeckLabware = useCallback((key: string) => {
     setDeckPicked((prev) => {
@@ -731,48 +774,20 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       ) : null}
 
       {heldCards.length > 0 ? (
-        <div
-          className="protocol-localization-thread__held-clarifications"
-          data-testid="pl-clarification-cards"
-        >
-          <p className="pl-held-clarifications-title">Answer the unresolved facts</p>
-          {heldCards.map((request) => (
-            <section
-              key={request.id}
-              className="pl-held-clarification-card"
-              data-testid="pl-clarification-card"
-            >
-              <div className="pl-held-clarification-head">
-                <span className="pl-held-clarification-menu">{request.menuProvider}</span>
-                <span className="pl-held-clarification-label">{request.prompt}</span>
-              </div>
-              {request.options.length > 0 ? (
-                <div className="pl-held-clarification-options">
-                  {request.options.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className="pl-held-clarification-option"
-                      disabled={localizing}
-                      data-testid={`pl-clarification-option-${request.id}`}
-                      onClick={() => handleClarificationPick({
-                        requestId: request.id,
-                        optionId: option.id,
-                        label: option.label,
-                        ...(option.ref ? { ref: option.ref } : {}),
-                      }, request)}
-                    >
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {requestHasPicker(request) ? (
-                <ClarificationPicker request={request} onPick={handleClarificationPick} />
-              ) : null}
-            </section>
-          ))}
-        </div>
+        // MATRES-PANEL §7.1: ONE grouped panel per drafting turn replaces the
+        // flat card list as the fold surface (the panel renders one slot
+        // section PER fact through the ONE foldCards adapter — bait 2 holds).
+        // The turn key is the CLIENT fold identity (orch OQ-1 ruling:
+        // localMacro.intentId + fold epoch — no server turnId, a wire change
+        // ELIG did not declare). A new fold REPLACES the panel; answered
+        // facts disappear deterministically (ANSWER-BIND-1 strip), so the
+        // panel never accumulates stale slots.
+        <ClarificationPanel
+          requests={heldCards}
+          turnKey={panelTurnKey}
+          disabled={localizing}
+          onPick={handleClarificationPick}
+        />
       ) : null}
 
       {hasDeckReview ? (

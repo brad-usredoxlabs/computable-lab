@@ -40,7 +40,9 @@ function normalizePlaceholders(text: string): string {
     .replace(/<short id>/g, 'parity')
     .replace(/<one of the verbs below>/g, vocab.verbs()[0]!)
     .replace(/^\s*<parameters>\s*\n/gm, '')
+    .replace(/<the scientist's own word for the thing you could not commit to>/g, 'parity thing')
     .replace(/<thing you could not commit to>/g, 'parity thing')
+    .replace(/<not-stated \| ambiguous \| contradicts-the-text>/g, 'not-stated')
     .replace(/<why>/g, 'parity reason');
 }
 
@@ -130,7 +132,7 @@ actions:
     targetWells: [A1]
     params:
       composition:
-        - { material: "Thermo trypsin-EDTA", role: solvent, fraction: "50%" }
+        - { material: "Thermo trypsin-EDTA", role: other, fraction: "50%" }
         - { material: "Thermo DMEM", role: buffer_component, fraction: "50%" }
         - { material: "Thermo FBS", role: additive, fraction: "10%" }
         - material: "HepG2 cells"

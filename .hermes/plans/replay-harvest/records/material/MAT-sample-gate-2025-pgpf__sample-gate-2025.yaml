@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-sample-gate-2025-pgpf
+kind: material
+id: MAT-sample-gate-2025-pgpf
+name: sample (gate 2025)
+domain: other
+status: proposed
+definition: Locally minted term (no records/ontology match for "sample (gate 2025)").

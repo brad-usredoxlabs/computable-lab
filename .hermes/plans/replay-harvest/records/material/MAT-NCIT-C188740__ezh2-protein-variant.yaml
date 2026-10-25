@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-NCIT-C188740
+kind: material
+id: MAT-NCIT-C188740
+name: EZH2 Protein Variant
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: human
+  sourceCurie: NCIT:C188740
+  sourceLabel: EZH2 Protein Variant
+  createdBy: material-profile-api
+  createdAt: 2026-10-19T22:07:16.219Z
+  note: Created as a proposed local material record from the material grounding API.
+class:
+  - kind: ontology
+    id: NCIT:C188740
+    namespace: NCIT
+    label: EZH2 Protein Variant

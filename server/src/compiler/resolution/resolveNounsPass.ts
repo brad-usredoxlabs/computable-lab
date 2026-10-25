@@ -38,7 +38,23 @@ import {
 } from './adapters.js';
 import { resolveScientistIntentNouns } from './resolutionEngine.js';
 import { buildStrategyRegistry } from './strategies.js';
+// PARAM-FOLD-2 (W28-A5k): the declared-optional-absence fold lives in a LEAF
+// module so the SAME rule serves the pass AND normalizeScientistIntent (the
+// raw gaps source). The leaf imports nothing from this module — acyclic.
+import { foldDeclaredOptionalAbsentHedges } from './declaredOptionalHedgeFold.js';
+// STAGHEDGE-1 (W28-A5m §Q2 (b)): the consume guard (3) reads the SAME stable
+// not-stated code the fold leaf declares — imported, never re-declared.
+import { NOT_STATED_REASON } from './declaredOptionalHedgeFold.js';
+// Re-export both names unchanged: every existing importer/test of
+// `foldDeclaredOptionalAbsentHedges` / `NOT_STATED_REASON` from
+// './resolveNounsPass.js' resolves through here, byte-unchanged (the pin that
+// the extract is a MOVE, not a rewrite).
+export {
+  foldDeclaredOptionalAbsentHedges,
+  NOT_STATED_REASON,
+} from './declaredOptionalHedgeFold.js';
 import type { BoundNoun, EngineDeps, EngineFailure, EngineOutcome } from './types.js';
+import { loadMaterialEligibilityIfPresent, type MaterialEligibilityPolicy } from './eligibility/policy.js';
 import type { MaterialLevel } from '../../resolve/types.js';
 import type { Pass, PassDiagnostic, PassResult } from '../pipeline/types.js';
 
@@ -55,6 +71,21 @@ export type ResolveNounsEngine = (
   deps: EngineDeps,
 ) => Promise<EngineOutcome>;
 
+/** One ANSWER-BIND-1 validated clarification answer (handler-validated: the
+ *  `[[<kind>:<id>|<label>]]` idiom parsed and <id> confirmed present in the
+ *  store). The pass consumes it as DATA — it knows nothing about kinds,
+ *  reasons, or verbs; the answers map's presence licenses the binding. */
+export interface AnsweredNounAnswer {
+  /** The answers-map KEY — the clarification's own label (exact-match target
+   *  against the parsed intent's raw slot values). */
+  label: string;
+  /** The record identity validated against the store (id-hint arrays and
+   *  mention ids ride the recordId verbatim). */
+  recordId: string;
+  /** The record's own title/label from the store (resolvedLabel evidence). */
+  recordLabel: string;
+}
+
 export interface ResolveNounsPassDeps {
   /** The PARSED scientist-intent document (SPINE-1 frozen contract). */
   intent: ScientistIntent;
@@ -67,6 +98,12 @@ export interface ResolveNounsPassDeps {
   termsForSuggestions?: () => Promise<readonly TermLike[]>;
   /** Engine override (tests); defaults to SPINE-3's resolveScientistIntentNouns. */
   resolve?: ResolveNounsEngine;
+  /** MATRES-ELIG (spec §9): the eligibility policy document. Absent ⇒ the pass
+   *  loads the shipped triplet PER call (loadMaterialEligibilityIfPresent —
+   *  never process-cached). Explicit null ⇒ the disclosed off-state (the
+   *  engine's pre-ELIG arms stay inert). A fixture-loaded instance is the
+   *  mutation-proof injection route. */
+  eligibility?: MaterialEligibilityPolicy | null;
   /** SH-QA-1 (OQ1 ruling): producer facts whose fate depends on resolution —
    *  the pass drops a fact iff the engine BINDS its slot (the same identity
    *  join §5.1 applies to model hedges) and appends the survivors AFTER
@@ -74,6 +111,16 @@ export interface ResolveNounsPassDeps {
    *  to produce, pinning golden order). The reason code is the producer's
    *  channel selector; the pass switches on IDENTITY only. */
   resolutionGatedClarifications?: readonly ScientistIntentUnresolvedFact[];
+  /** ANSWER-BIND-1 (W28-A5h Q2): the scientist's VALIDATED clarification
+   *  answers (the handler parsed the `[[<kind>:<id>|<label>]]` idiom and
+   *  confirmed <id> in the store — a nonexistent id never reaches this list).
+   *  Each entry licenses an AUTHORITATIVE binding for every resolvable slot
+   *  whose raw label EQUALS the entry's key (exact-label identity, never a
+   *  containment join): the binding REPLACES the engine's gathered set for
+   *  that slot ("settled, do not re-ask") and rides the SAME bindings list
+   *  the §5.1 boundKeys join and resolvedByLabel consume — zero new drop
+   *  rule. Absent/empty: the pass is byte-unchanged for every other caller. */
+  answeredSlots?: readonly AnsweredNounAnswer[];
 }
 
 /** One authoritative binding flattened for the consumption seams. */
@@ -237,6 +284,134 @@ export function requiredArgumentClarifications(
 }
 
 // ---------------------------------------------------------------------------
+// ANSWER-BIND-1 — the clarification-answer DATA channel: generic slot matching
+// against the PARSED intent + the authoritative bindings. The matcher is the
+// DECLARED contract list (argContracts(verb), declared kind 'resolvable') and
+// an EXACT-label identity join against the answers-map key — never a
+// containment join (a containment join recreates the A5d V6 drift class).
+// Zero verb/argument/kind NAME literals: everything rides the declared data.
+// ---------------------------------------------------------------------------
+
+interface AnsweredSlotBinding {
+  /** The §5.1 slot identity this answer settles. */
+  slotKey: string;
+  binding: BoundNoun;
+}
+
+/** Scan the parsed intent for resolvable slots whose raw label EQUALS an
+ *  answered key; each match becomes an authoritative tier-1 binding riding
+ *  the store-validated recordId (the spine's own `local:<recordId>` CURIE
+ *  convention, providers/records.ts). Several actions carrying the same label
+ *  are ALL answered — the scientist answered the mention. */
+function answeredSlotBindings(
+  intent: ScientistIntent,
+  vocabulary: ScientistIntentVocabulary,
+  answers: readonly AnsweredNounAnswer[],
+): AnsweredSlotBinding[] {
+  const out: AnsweredSlotBinding[] = [];
+  if (answers.length === 0) return out;
+  const answerByKey = new Map(answers.map((a) => [a.label, a]));
+  intent.actions.forEach((action, index) => {
+    const fields = action as unknown as Record<string, unknown>;
+    for (const contract of vocabulary.argContracts(action.action)) {
+      // The declared KIND field decides eligibility (data), never a name table.
+      if (contract.kind !== 'resolvable') continue;
+      const raw = fields[contract.name];
+      // Scalar slot values only (the door's scalar arm): a raw string equal to
+      // the answered KEY — exact-label identity, never containment.
+      if (typeof raw !== 'string') continue;
+      const answer = answerByKey.get(raw.trim());
+      if (!answer) continue;
+      out.push({
+        slotKey: `slot:${index}:${contract.name}`,
+        binding: {
+          verb: action.action,
+          argument: contract.name,
+          label: answer.label,
+          curie: `local:${answer.recordId}`,
+          resolvedLabel: answer.recordLabel,
+          tier: 1,
+          confidence: 1,
+          source: 'scientist-answer',
+          actionIndex: index,
+        },
+      });
+    }
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// PARAM-FOLD-1 (W28-A5j) — the declared-optional-absence fold. MOVED (verbatim)
+// to ./declaredOptionalHedgeFold.ts in PARAM-FOLD-2 (W28-A5k) so the SAME rule
+// serves this pass AND normalizeScientistIntent (the raw gaps source); both
+// names re-exported from here unchanged (see the import block above). The
+// guards 1-5 (slot identity, contract join, required !== true, argument ABSENT,
+// stable NOT_STATED_REASON code) live in the leaf module. Engine clarifications
+// and gated survivors remain UNTOUCHED by construction: the fold reads only the
+// model's own facts against the declared contract data + the parsed action.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// STAGHEDGE-1 (W28-A5m §Q2 option (b)) — the MODEL-HEDGE LABEL-DIVERGENCE
+// consume. A model-side not-stated fact whose label DIVERGES from its slot's
+// raw value can never bind via the value-join above (`answerByKey.get(raw)`
+// needs raw == answer key), so no binding exists, boundKeys never covers its
+// identityKey, and every existing drop arm misses it — the card re-emits every
+// round (probe r5 arm B stagnation). The fact-level consume mirrors the
+// PARAM-FOLD's guard discipline: a MODEL fact is MOOT — dropped before
+// reconcile/blocked — exactly when all four guards hold, each read as
+// data/identity, never as a domain name:
+//   (1) the fact carries slot identity (same guard shape as the fold's guard 1
+//       / SH-QA-1's gate);
+//   (2) its actionLocation slot is a declared `kind: resolvable` contract of
+//       its verb (the SAME read as answeredSlotBindings above — scalar cards
+//       stay untouched: no mint-floor, no gate-widening);
+//   (3) the fact carries the stable NOT_STATED_REASON code (ambiguous /
+//       contradicts-the-text stay kept, same as fold guard 5);
+//   (4) an answered entry's KEY EQUALS the fact's label (exact-label identity,
+//       never containment — the same join discipline as the value-join, the
+//       document side trimmed exactly like the raw slot value is there).
+// The consume DROPS THE QUESTION ONLY: the slot keeps its raw value for the
+// ENGINE to resolve normally; NO binding is minted here, and the value-join /
+// answeredSlotBindings stay byte-unchanged for everything they already settle.
+// One label-answered mention consumes EVERY fact carrying that label at a
+// resolvable slot — the ':293-295 the scientist answered the MENTION'
+// generalization, already this file's own comment (sub-class 2a defused).
+// Engine clarifications, the §5.2 sweep, and gated survivors are UNTOUCHED by
+// construction: this reads only the model's own facts against the declared
+// contract data + the validated answers list.
+// ---------------------------------------------------------------------------
+
+export function consumeAnsweredLabelHedges(
+  vocabulary: ScientistIntentVocabulary,
+  modelFacts: readonly ScientistIntentUnresolvedFact[],
+  answers: readonly AnsweredNounAnswer[],
+): readonly ScientistIntentUnresolvedFact[] {
+  if (answers.length === 0) return modelFacts;
+  const answeredByKey = new Map(answers.map((a) => [a.label, a]));
+  return modelFacts.filter((fact) => {
+    const loc = fact.actionLocation;
+    // Guard (1): slot identity, or KEEP.
+    if (loc?.actionIndex === undefined || typeof loc.argument !== 'string') return true;
+    // Guard (2): the declared contract list of the fact's OWN verb location;
+    // no contract, or a contract whose declared kind is not the resolvable
+    // kind (the same discriminator answeredSlotBindings reads), -> KEEP.
+    const verb = loc.action;
+    if (typeof verb !== 'string') return true;
+    const contract = vocabulary.argContracts(verb).find((c) => c.name === loc.argument);
+    if (!contract || contract.kind !== 'resolvable') return true;
+    // Guard (3): a stable not-stated reason code, or KEEP.
+    if (fact.reason !== NOT_STATED_REASON) return true;
+    // Guard (4): the scientist answered THIS mention (a store-validated entry
+    // keyed exactly by the fact's label), or KEEP.
+    if (!answeredByKey.has(fact.label.trim())) return true;
+    // All four: the question is moot. CONSUME — the QUESTION only.
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The pass
 // ---------------------------------------------------------------------------
 
@@ -263,10 +438,20 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // engine's wantLevel arm (resolutionEngine.ts levelFilter) consumes it.
       const levelFor = (verb: string, argument: string): MaterialLevel | undefined =>
         deps.vocabulary.argContracts(verb).find((a) => a.name === argument)?.level;
+      // MATRES-ELIG (spec §9): the eligibility POLICY document is loaded PER
+      // call, never process-cached (the nounShape law). An absent triplet is a
+      // disclosed off-state (null ⇒ the engine's pre-ELIG arms stay inert and
+      // the compile is byte-identical); a present-but-malformed triplet throws
+      // naming the path. Tests inject a fixture-loaded policy through
+      // ResolveNounsPassDeps.eligibility (the anti-hardcode mutation proof).
+      const eligibility = deps.eligibility !== undefined
+        ? deps.eligibility
+        : loadMaterialEligibilityIfPresent();
       const engineDeps: EngineDeps = {
         adapters,
         strategies: buildStrategyRegistry(),
         levelFor,
+        ...(eligibility !== null ? { eligibility } : {}),
         ...(deps.termsForSuggestions ? { termsForSuggestions: deps.termsForSuggestions } : {}),
       };
 
@@ -276,10 +461,54 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // (resolve_nouns topologically precedes every noun consumer).
       const required = requiredArgumentClarifications(deps.intent, deps.vocabulary);
 
-      const reconciled = reconcileModelUnresolved(
+      // ANSWER-BIND-1: the scientist's validated answers settle slots BEFORE
+      // the bar is computed. Identity machinery only — the answered SLOT keys
+      // (§5.1 shape) decide what is replaced and what is dropped.
+      const answered = answeredSlotBindings(deps.intent, deps.vocabulary, deps.answeredSlots ?? []);
+      const answeredSlotKeys = new Set(answered.map((a) => a.slotKey));
+
+      // REPLACEMENT: an answered slot's gathered candidate set is superseded
+      // by the scientist's chosen record ("settled, do not re-ask"). Engine
+      // bindings for untouched slots ride verbatim, in engine order.
+      const bindings: BoundNoun[] = [
+        ...engine.bindings.filter((b) => !answeredSlotKeys.has(identityKey(b))),
+        ...answered.map((a) => a.binding),
+      ];
+
+      // DROP arm: an engine clarification is moot exactly when its slot is
+      // settled by the scientist's answer. The switch is on IDENTITY (the
+      // clarification's §5.1 key equals an answered slot key) plus the honest
+      // exception the spec names: a declared-required sweep fact is NEVER
+      // dropped here (the sweep is the vocabulary's own demand, not a
+      // disambiguation the scientist answered). No reason NAME is branched on
+      // beyond that stable code the pass itself declares.
+      const settledEngineClarifications = engine.clarifications.filter((c) => {
+        if (!answeredSlotKeys.has(identityKey(c))) return true;
+        return c.reason === MISSING_REQUIRED_ARGUMENT_REASON;
+      });
+
+      // PARAM-FOLD-1 (W28-A5j): the model's facts pass the declared-optional-
+      // absence fold BEFORE reconciliation — a folded fact never enters
+      // `clarifications` and never counts toward `blocked`. Engine
+      // clarifications, the §5.2 sweep, and the gated survivors below are
+      // UNTOUCHED by construction (the fold reads only the model's own facts
+      // against the declared contract data + the parsed action).
+      //
+      // STAGHEDGE-1 (W28-A5m §Q2 (b)): the answered-label consume rides the
+      // SAME stage, applied to the FOLDED model facts, so a consumed fact
+      // never re-enters reconcile and never counts toward `blocked` (the
+      // stagnation arm the ruling names). Drops the QUESTION only — the slot
+      // keeps its raw value and the answeredSlotBindings value-join above is
+      // byte-unchanged for everything it already settles.
+      const foldedModelFacts = foldDeclaredOptionalAbsentHedges(
+        deps.intent,
+        deps.vocabulary,
         deps.intent.unresolved,
-        [...engine.clarifications, ...required],
-        engine.bindings,
+      );
+      const reconciled = reconcileModelUnresolved(
+        consumeAnsweredLabelHedges(deps.vocabulary, foldedModelFacts, deps.answeredSlots ?? []),
+        [...settledEngineClarifications, ...required],
+        bindings,
       );
 
       // SH-QA-1 resolution-aware firing gate: a gated producer fact is MOOT
@@ -291,7 +520,7 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       // never silently dropped. Zero verb/arg/domain/reason NAME literals:
       // this switches on engine output + identity keys only.
       const boundSlotKeys = new Set<string>();
-      for (const binding of engine.bindings) {
+      for (const binding of bindings) {
         if (binding.actionIndex !== undefined) boundSlotKeys.add(identityKey(binding));
       }
       const gatedSurvivors = (deps.resolutionGatedClarifications ?? [])
@@ -309,7 +538,7 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
       const clarifications = [...reconciled, ...gatedSurvivors];
 
       const resolvedByLabel: Record<string, ResolvedNounBinding> = {};
-      for (const binding of engine.bindings) {
+      for (const binding of bindings) {
         if (!binding.curie) continue; // the mint affordance is never a binding
         const entry: ResolvedNounBinding = {
           verb: binding.verb,
@@ -325,7 +554,7 @@ export function createResolveNounsPass(deps: ResolveNounsPassDeps): Pass {
 
       const blocked = clarifications.length > 0;
       const output: ResolveNounsOutput = {
-        bindings: engine.bindings,
+        bindings,
         resolvedByLabel,
         clarifications,
         failures: engine.failures,

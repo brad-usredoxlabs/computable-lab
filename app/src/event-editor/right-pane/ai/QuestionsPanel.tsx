@@ -166,6 +166,39 @@ export function QuestionsPanel({
                   request={request}
                   onPick={(ans) => onAnswer(request.id, ans)}
                 />
+              ) : request.menuProvider === 'choice' && request.options.length > 0 ? (
+                /* READING-CARD-ANSWER-1 (Ruling 2): the server map routes a
+                   readings-bearing fact to menuProvider 'choice' with the
+                   bar's OWN readings as its option set (id = reading id,
+                   label = the reading's label, snippet = the computed final
+                   fractions + note). Render ONE row per reading in ARRAY
+                   order — the server never pre-picks. Picking a row answers
+                   on the EXISTING wire: value = the reading id, requestId =
+                   the join id. No mint row (mint suppression already fell
+                   out of menuProvider 'choice' server-side). A choice card
+                   with NO options (a parameter question) still falls to the
+                   free-text box below — byte-unchanged. */
+                <div className="questions-panel__options" data-testid={`reading-options-${request.id}`}>
+                  {request.options.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="questions-panel__option"
+                      data-testid={`reading-option-${request.id}-${option.id}`}
+                      onClick={() => onAnswer(request.id, {
+                        requestId: request.id,
+                        optionId: option.id,
+                        label: option.label,
+                        value: option.id,
+                      })}
+                    >
+                      <span className="questions-panel__option-label">{option.label}</span>
+                      {option.snippet ? (
+                        <span className="questions-panel__option-snippet">{option.snippet}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 // Nothing to choose from — the question wants a value ("what
                 // volume?"). Render the box that lets them answer it.

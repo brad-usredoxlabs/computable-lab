@@ -17,7 +17,12 @@ import './SequencesPage.css'
 interface RecordItem {recordId:string;payload:Record<string,any>;meta?:{contentSha?:string;commitSha?:string}}
 const tabs=['Editor','Assay','Analysis','Setup','Import','Knowledge'] as const
 export function SequencesPage() {
- const [search]=useSearchParams();const [tab,setTab]=useState<typeof tabs[number]>(search.has('source')?'Import':'Editor')
+ // UCX-2 (OQ2): page-local ?tab= deep link. Precedence: explicit valid ?tab=
+ // (validated against the DECLARED tabs const — registry data kept in lockstep
+ // with surfaces.yaml by the server compat test, no literals added) > ?source=
+ // →Import (existing behavior byte-stable) > 'Editor'. A malformed ?tab=Nope
+ // degrades to the default with no crash.
+ const [search,setSearch]=useSearchParams();const [tab,setTab]=useState<typeof tabs[number]>(()=>{const explicit=search.get('tab');if(explicit&&(tabs as readonly string[]).includes(explicit))return explicit as typeof tabs[number];return search.has('source')?'Import':'Editor'})
  const [records,setRecords]=useState<RecordItem[]>([]);const [contract,setContract]=useState<any>(null);const [selected,setSelected]=useState('');const [query,setQuery]=useState('')
  const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [message,setMessage]=useState('');const [proposal,setProposal]=useState(()=>{try{return stringify(JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null'))?.replace(/^null\n$/,'')??''}catch{return ''}});const [result,setResult]=useState<any>(null)
  const [reporter,setReporter]=useState('');const [quencher,setQuencher]=useState('');const [oligoSequence,setOligoSequence]=useState('')
@@ -34,9 +39,20 @@ export function SequencesPage() {
  // fights a later Library pick; ?source= → Import routing (:16) is untouched.
  const deepLinkRef=useRef(false)
  useEffect(()=>{if(deepLinkRef.current||!records.length)return;const target=search.get('record');if(target&&records.some(r=>r.recordId===target)){deepLinkRef.current=true;setSelected(target)}},[records,search])
+ // UCX-2: the page's SINGLE tab-setter — human clicks AND the agent setTab
+ // path both ride it, so an agent open-surface result persists in the URL too.
+ // setSearchParams MERGES (foreign params survive) with replace:true (never
+ // push: the browser Back stack stays clean of tab switches).
+ function selectTab(name:typeof tabs[number]) {setTab(name);setSearch(prev=>{const next=new URLSearchParams(prev);next.set('tab',name);return next},{replace:true})}
  const byKind=(kind:string)=>records.filter(r=>r.payload.kind===kind)
  const choices=records.filter(r=>['sequence','oligo-spec','sequence-collection'].includes(r.payload.kind))
  const selectOptions=(list:RecordItem[])=>list.map(r=><option key={r.recordId} value={r.recordId}>{r.payload.label??r.payload.name??r.payload.title??r.recordId}</option>)
+ // UCX-1: the Library's visible rows — the SAME filter chain the navPane renders
+ // (kind filter + query filter), extracted so select-all targets exactly the
+ // visible rows. Checkbox eligibility stays `sequence`-kind only: save_collection
+ // pins members to type 'sequence' server-side (SequenceService.ts), mirroring
+ // the Analysis fieldset's byKind('sequence') row source.
+ const libraryRows=records.filter(r=>['sequence','oligo-spec'].includes(r.payload.kind)).filter(r=>`${r.payload.label} ${r.recordId}`.toLowerCase().includes(query.toLowerCase()))
  const editorRef=useRef<SequenceEditorHandle>(null)
  const [editorContext,setEditorContext]=useState<Record<string,any>>({})
  // HARNESS-SEQ-2: a compiled agent_action frame drives THIS page through the
@@ -51,14 +67,14 @@ export function SequencesPage() {
  // select. No kind literals here; an unloaded/undeclared list is fail-closed.
  const [selectableKinds,setSelectableKinds]=useState<readonly string[]>([])
  useEffect(()=>{let cancelled=false;void loadSurfaceRegistry().then(surfaces=>{if(cancelled)return;const entry=surfaces.find(s=>s.id==='sequences');setSelectableKinds(entry?.selectableKinds??[])});return()=>{cancelled=true}},[])
- const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,selectableKinds,records:()=>records.map(r=>({recordId:r.recordId,kind:r.payload.kind})),selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>setTab(t as typeof tabs[number]),selectRecord})(action),[records,selected,selectableKinds])
+ const onAgentAction=useCallback((action:AiAgentActionEnvelope)=>createSequencesAgentActionHandler({tabs,selectableKinds,records:()=>records.map(r=>({recordId:r.recordId,kind:r.payload.kind})),selected:()=>selected,editorCanLeave:()=>editorRef.current?.canLeave(),setTab:(t)=>selectTab(t as typeof tabs[number]),selectRecord})(action),[records,selected,selectableKinds])
  const onSequenceProposal=useCallback((p:Record<string,unknown>,userRequest?:string)=>{
   if(['save_sequence','create_oligo'].includes(String(p.operation))){
-   setTab('Editor');setProposal('');editorRef.current?.propose(p,userRequest);sessionStorage.removeItem('cl-sequence-proposal')
+   selectTab('Editor');setProposal('');editorRef.current?.propose(p,userRequest);sessionStorage.removeItem('cl-sequence-proposal')
   }else{setProposal(stringify(p));setMessage('Review the proposed action before applying it.')}
  },[])
  useEffect(()=>{try{const pending=JSON.parse(sessionStorage.getItem('cl-sequence-proposal')??'null');if(pending)onSequenceProposal(pending)}catch{/* Keep malformed handoffs inspectable. */}},[onSequenceProposal])
- const aiContext=useMemo(()=>({surface:'sequences' as const,summary:`Sequence workspace — ${tab}`,surfaceContext:{...editorContext,selectedRecordId:selected,records:records.map(r=>({id:r.recordId,kind:r.payload.kind,label:r.payload.label??r.payload.name??r.payload.title,alphabet:r.payload.alphabet,length:r.payload.length,...(r.recordId===selected&&r.payload.residues?.length<=20000?{residues:r.payload.residues}:{}),...(r.payload.kind==='sequence-endpoint'?{configuration:r.payload}:{}),...(r.payload.oligos?{oligos:r.payload.oligos}:{}),...(r.payload.channel_label?{channel:r.payload.channel_label}:{}),...(r.payload.outputArtifactRefs?{outputArtifactRefs:r.payload.outputArtifactRefs}:{}),...(r.payload.statement?{statement:r.payload.statement}:{}),...(r.payload.kind==='measurement-context'?{measurementContext:r.payload}:{}),...(r.payload.kind==='sequence-interpretation-rule'?{rule:r.payload}:{})})),availableOperations:contract?.capabilities?.engines,selection:inputs,parameters,lastActionResult:result}}),[tab,selected,records,contract,inputs,parameters,result,editorContext])
+ const aiContext=useMemo(()=>({surface:'sequences' as const,summary:`Sequence workspace — ${tab}`,surfaceContext:{...editorContext,selectedRecordId:selected,records:records.map(r=>({id:r.recordId,kind:r.payload.kind,label:r.payload.label??r.payload.name??r.payload.title,alphabet:r.payload.alphabet,length:r.payload.length,...(r.recordId===selected&&r.payload.residues?.length<=20000?{residues:r.payload.residues}:{}),...(r.payload.kind==='sequence-endpoint'?{configuration:r.payload}:{}),...(r.payload.oligos?{oligos:r.payload.oligos}:{}),...(r.payload.channel_label?{channel:r.payload.channel_label}:{}),...(r.payload.outputArtifactRefs?{outputArtifactRefs:r.payload.outputArtifactRefs}:{}),...(r.payload.statement?{statement:r.payload.statement}:{}),...(r.payload.kind==='measurement-context'?{measurementContext:r.payload}:{}),...(r.payload.kind==='sequence-interpretation-rule'?{rule:r.payload}:{})})),availableOperations:contract?.capabilities?.engines,selection:inputs,collectionSelection:members,parameters,lastActionResult:result}}),[tab,selected,records,contract,inputs,parameters,result,editorContext,members])
  const chat=useAiChat({aiContext,onSequenceProposal,endpoint:'sequences',proposalScopeKey:`${selected}:${editorContext.proposalScopeKey}`,onAgentAction});useRegisterAiChat(chat)
  // Working focus is DERIVED from the resolved surface state only (tab/selected/
  // records) — zero model calls, zero AI prose (HARNESS-SEQ-1).
@@ -70,7 +86,7 @@ export function SequencesPage() {
   catch(e){setError((e as Error).message);throw e}finally{setBusy(false)}
  }
  const fire=(action:any)=>{void act(action).catch(()=>{})}
- function selectRecord(id:string) {if(editorRef.current?.canLeave()===false)return;setSelected(id);setTab('Editor');setOligoSequence(id)}
+ function selectRecord(id:string) {if(editorRef.current?.canLeave()===false)return;setSelected(id);selectTab('Editor');setOligoSequence(id)}
  async function open(record:RecordItem) {selectRecord(record.recordId)}
  function changeOperation(value:string) {
   setOperation(value);setEndpointId('');setInputs({});setParameters(value==='run_virtual_pcr'?{minLength:50,maxLength:1000,maxMismatches:0,exactThreePrime:8,maxProducts:1000}:value==='run_mafft'?{strategy:'auto',maxIterations:0}:{task:'blastn',evalue:0.001,maxHits:100})
@@ -125,12 +141,12 @@ export function SequencesPage() {
   {byKind('assertion').filter(r=>r.payload.outcome?.detection).map(r=><details key={r.recordId}><summary>{r.payload.statement} — {r.payload.outcome.detection}</summary><pre>{stringify(r.payload)}</pre>{byKind('evidence').filter(e=>[...(e.payload.supports??[]),...(e.payload.refutes??[]),...(e.payload.assesses??[])].some((s:any)=>s.id===r.recordId)).map(e=><pre key={e.recordId}>{stringify(e.payload)}</pre>)}</details>)}
  {byKind('sequence-interpretation-rule').map(r=><details key={r.recordId}><summary>{r.payload.label??r.recordId}</summary><pre>{stringify(r.payload)}</pre></details>)}</>
  return <ChatFocusProvider focus={chatFocus}><AppShell brand="Sequences" layout="workspace" leftPane={<main className="sequences-page">
-  <h1>Sequences &amp; assays</h1><nav aria-label="Sequence workspace">{tabs.map(t=><button key={t} aria-pressed={tab===t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
-  {editorContext.draft&&tab!=='Editor'&&<button onClick={()=>setTab('Editor')}>Review sequence proposal</button>}
+  <h1>Sequences &amp; assays</h1><nav aria-label="Sequence workspace">{tabs.map(t=><button key={t} aria-pressed={tab===t} onClick={()=>selectTab(t)}>{t}</button>)}</nav>
+  {editorContext.draft&&tab!=='Editor'&&<button onClick={()=>selectTab('Editor')}>Review sequence proposal</button>}
   <div hidden={tab!=='Editor'}>{editor}</div>
   {tab==='Editor'?null:tab==='Assay'?assay:tab==='Analysis'?analysis:tab==='Setup'?setup:tab==='Import'?<SequenceImport onSaved={()=>void refresh()} initialSource={search.get('source')??undefined} initialAccession={search.get('accession')??undefined}/>:knowledge}
   {busy&&<p role="status">Working…</p>}{message&&<p role="status">{message}</p>}{error&&<p role="alert">{error}</p>}
-  <details open={!!proposal}><summary>Structured action request</summary><textarea aria-label="Action YAML" rows={12} value={proposal} onChange={e=>setProposal(e.target.value)}/><button disabled={!proposal||busy} onClick={async()=>{try{const action=parse(proposal);if(['save_sequence','create_oligo'].includes(action.operation)){onSequenceProposal(action);return}const data=await act(action);setProposal('');sessionStorage.removeItem('cl-sequence-proposal');if(data.manifest)setTab('Analysis')}catch(e){setError((e as Error).message)}}}>Accept and apply</button><button disabled={busy} onClick={()=>{setProposal('');sessionStorage.removeItem('cl-sequence-proposal')}}>Discard</button></details>
- </main>} navPane={<aside className="sequences-page sequence-library"><h2>Library</h2><input aria-label="Search sequences" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find sequence…"/>{records.filter(r=>['sequence','oligo-spec'].includes(r.payload.kind)).filter(r=>`${r.payload.label} ${r.recordId}`.toLowerCase().includes(query.toLowerCase())).map(r=><button key={r.recordId} onClick={()=>void open(r)}>{r.payload.label}<small>{r.payload.kind==='oligo-spec'?'Oligo':`${r.payload.length??r.payload.residues?.length} residues`}</small></button>)}</aside>} rightPane={<HarnessChatPane onReviewProposal={onSequenceProposal}/>}/></ChatFocusProvider>
+  <details open={!!proposal}><summary>Structured action request</summary><textarea aria-label="Action YAML" rows={12} value={proposal} onChange={e=>setProposal(e.target.value)}/><button disabled={!proposal||busy} onClick={async()=>{try{const action=parse(proposal);if(['save_sequence','create_oligo'].includes(action.operation)){onSequenceProposal(action);return}const data=await act(action);setProposal('');sessionStorage.removeItem('cl-sequence-proposal');if(data.manifest)selectTab('Analysis')}catch(e){setError((e as Error).message)}}}>Accept and apply</button><button disabled={busy} onClick={()=>{setProposal('');sessionStorage.removeItem('cl-sequence-proposal')}}>Discard</button></details>
+ </main>} navPane={<aside className="sequences-page sequence-library"><h2>Library</h2><input aria-label="Search sequences" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find sequence…"/>{/* UCX-1: multi-select toolbar over the result list. ALWAYS rendered (OQ4: stable testids, `0 selected` visible). It drives the SAME `members` state the Analysis-tab collection fieldset uses (OQ3) — one selection model, two surfaces. Save-collection reuses the fieldset's payload expression verbatim (:103) via the same act()/recordRef path, so wire equivalence is by construction. */}<div className="sequence-selection-toolbar" data-testid="sequence-selection-toolbar"><button data-testid="sequence-select-all" disabled={busy} onClick={()=>setMembers([...new Set([...members,...libraryRows.filter(r=>r.payload.kind==='sequence').map(r=>r.recordId)])])}>Select all</button><button data-testid="sequence-clear-selection" disabled={busy||!members.length} onClick={()=>setMembers([])}>Clear</button><span role="status" data-testid="sequence-selection-count">{members.length} selected</span><label className="sequence-selection-toolbar__name">New collection name<input aria-label="New collection name" value={collectionName} onChange={e=>setCollectionName(e.target.value)} placeholder="New collection name"/></label><button data-testid="sequence-toolbar-save-collection" disabled={busy||!collectionName||!members.length} onClick={()=>{void act({operation:'save_collection',label:collectionName,members:members.map(id=>recordRef(id))}).then(()=>setMembers([])).catch(()=>{})}}>Save collection</button></div>{libraryRows.map(r=><div className="sequence-library__row" key={r.recordId}>{r.payload.kind==='sequence'&&<input type="checkbox" data-testid={`sequence-check-${r.recordId}`} aria-label={`Select ${r.payload.label??r.recordId}`} checked={members.includes(r.recordId)} onChange={e=>setMembers(e.target.checked?[...members,r.recordId]:members.filter(id=>id!==r.recordId))}/>}<button onClick={()=>void open(r)}>{r.payload.label}<small>{r.payload.kind==='oligo-spec'?'Oligo':`${r.payload.length??r.payload.residues?.length} residues`}</small></button></div>)}</aside>} rightPane={<HarnessChatPane onReviewProposal={onSequenceProposal}/>}/></ChatFocusProvider>
 
 }

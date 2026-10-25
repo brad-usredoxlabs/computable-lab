@@ -72,25 +72,25 @@ kind (schema/workflow/equipment-capability.schema.yaml:21) — bead-beater
 ## 5. Verb adjudication — two vocabularies, ONE mapping table, never merged
 
 Machine-extracted counts (parsed from YAML, re-derived by the test):
-- scientist-intent enum ($defs/actionVerb, scientist-intent.schema.yaml:22): **31**
-- scientist-intent-vocabulary.yaml (`verbs:` :12): **31**, set-equal AND
+- scientist-intent enum ($defs/actionVerb, scientist-intent.schema.yaml:22): **32**
+- scientist-intent-vocabulary.yaml (`verbs:` :12): **32**, set-equal AND
   order-equal to the enum (verified by parse; drift-guarded by
   vocabularyMirrorDrift.test.ts)
 - verb-definition seed records (records/seed/verb-definition/): **10**
 - operations.yaml (kind: operation-registry, :1; `operations:` :3): **27** —
   third neighboring vocabulary, named, never conflated
-- verb-action-map.yaml (`mappings:` :2): **26** — synonym/ontology map, a
+- verb-action-map.yaml (`mappings:` :2): **27** — synonym/ontology map, a
   fourth neighboring surface
 
 Mapping (schema/registry/wave2-verb-adjudication.yaml): same_operation =
 VERB-INCUBATE<->incubate, VERB-READ<->read, VERB-SHAKE<->shake (3);
 protocol-semantic-only (no compiler verb) = autoclave, heat, microwave, rock,
-set, sonicate, stir (7); enum-only (no verb-definition) = 28 verbs
+set, sonicate, stir (7); enum-only (no verb-definition) = 29 verbs
 (seed, mix, resuspend, dilute, count, add_material, create_container,
 transfer, stain, fix, permeabilize, block, quench, label, transfect, aliquot,
 wash, elute, harvest, passage, freeze, thaw, spin, pellet, serial_dilution,
 media_swap_duplicate_columns, source_wells_to_duplicate_target_columns,
-repeat_rows). 3+7=10 and 3+28=31 — the table partitions both sets exactly
+repeat_rows, bead_beat). 3+7=10 and 3+29=32 — the table partitions both sets exactly
 (asserted by the test). Zero verbs added to either vocabulary.
 
 ## 6. FINDINGS — genuine collisions TODAY (recorded, NOT resolved)
@@ -106,7 +106,7 @@ repeat_rows). 3+7=10 and 3+28=31 — the table partitions both sets exactly
 - W2-1-F4 `spin`/`pellet` vs `centrifuge`: enum verbs spin (:53) and pellet
   (:54) are operations.yaml ALIASES of `centrifuge` (operations.yaml:66-69),
   and `centrifuge` is not an enum verb.
-- W2-1-F5 coverage gap: verb-action-map.yaml has 26 mappings vs 31 enum verbs;
+- W2-1-F5 coverage gap: verb-action-map.yaml has 27 mappings vs 32 enum verbs;
   unmapped = shake + the 4 pattern macros (class: pattern at
   scientist-intent-vocabulary.yaml:660/698/732/763).
 - W2-1-F6 `warm`: alias `warm` is assigned to TWO distinct operations —

@@ -1,0 +1,10 @@
+# panel T7-expanded-names — noun “Fetal bovine serum” (static capture format; MINT SUPPRESSED, no selection semantics)
+
+level: concept
+  tier 1:
+    Fetal bovine serum  [local:MAT-fetal-bovine-serum-1s1s]  score=1.150
+
+level: spec
+  tier 1:
+    Trypsin-EDTA + Dulbecco's Modified Eagle's Medium + Fetal bovine serum + HepG2 cells  [local:MSP-DRAFT-EVG_MVAJOKF5_5ERR_EVT_ADD_MATERIAL_I7C53NL3]  score=1.020
+

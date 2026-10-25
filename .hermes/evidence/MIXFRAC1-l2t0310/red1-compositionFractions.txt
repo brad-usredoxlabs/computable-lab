@@ -1,0 +1,29 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts  (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/compositionFractions.test.ts [ src/compiler/scientistIntent/compositionFractions.test.ts ]
+Error: scientist-intent vocabulary vocabulary file not found: /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server/schema/scientist-intent/scientist-intent-vocabulary.yaml — the vocabulary triplet is required; there is no default verb set
+ ❯ readYamlFile src/compiler/scientistIntent/vocabulary.ts:125:11
+    123| function readYamlFile(path: string, label: string): unknown {
+    124|   if (!existsSync(path)) {
+    125|     throw new Error(
+       |           ^
+    126|       `scientist-intent vocabulary ${label} file not found: ${path} — …
+    127|       `the vocabulary triplet is required; there is no default verb se…
+ ❯ buildVocabulary src/compiler/scientistIntent/vocabulary.ts:145:15
+ ❯ loadScientistIntentVocabulary src/compiler/scientistIntent/vocabulary.ts:296:17
+ ❯ Module.defaultScientistIntentVocabulary src/compiler/scientistIntent/vocabulary.ts:303:10
+ ❯ src/compiler/scientistIntent/normalizeScientistIntent.ts:451:46
+ ❯ src/compiler/scientistIntent/compositionFractions.test.ts:2:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  05:34:54
+   Duration  949ms (transform 103ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 61ms)
+

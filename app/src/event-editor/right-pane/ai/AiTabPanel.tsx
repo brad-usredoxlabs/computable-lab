@@ -25,7 +25,7 @@ import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import { SURFACE_AI_REQUEST_EVENT, surfaceAiPrompt, type SurfaceContext } from '../../../shared/context/SurfaceContext'
 import { pdfSelectionToSurfaceContext, stepSelectionToSurfaceContext } from './toSurfaceContext'
-import type { AiAlsoPlace, AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiAlsoPlace, AiClarificationAnswer, AiClarificationRequest, AiEquipmentRequirement, AiRecordCreation, AiLabwareAddition, AiLabwareRequirement, AiResolvedLabware } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
@@ -40,12 +40,14 @@ import type { DraftTermRow } from './TermPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
+import { draftProducedNothing } from './draftEmptiness'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
 import { sidebarReducer, initialSidebarState, isChatEnabled, headerLabel } from './sidebarState'
 import { useWorkstateProposalFlow, type WorkstateAdapter } from '../../../shared/ai/useWorkstateProposalFlow'
 import { WorkstateProposalCard } from './WorkstateProposalCard'
+import { ChainProposalCard } from './ChainProposalCard'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -368,6 +370,13 @@ export function AiTabPanel() {
     recompiling?: boolean
     error?: string
   } | null>(null)
+  // REVISE-GHOST-1 (OQ-2 ruling): the honest wall's REPORTED failure. A chat
+  // draft turn that claims success but mounts NOTHING and asks nothing is a
+  // failure, not an empty review — the text renders in the chat section (the
+  // only surface a PB-CH-4 D1 reset leaves mounted), reusing the
+  // shorthandError verbatim-error pattern's wording discipline. Cleared with
+  // the recompile state on every new draft and every fresh send.
+  const [honestWall, setHonestWall] = useState<string | null>(null)
 
   // SHORTHAND-CORPUS WS6 D2 (gate r4 OBS-1): the pair's prompt is the user
   // TURNS of the current proposal (binding spec shape: prompt (user turns +
@@ -404,6 +413,7 @@ export function AiTabPanel() {
       lastShorthandDraftRef.current =
         typeof result.shorthand === 'string' ? { prompt } : null
       setShorthandApply(null)
+      setHonestWall(null)
 
       // PB-CH-4 D1: consume the turn flags FIRST, on every path, so a stale
       // flag can never leak into a later turn (a no-envelope compose_workstate
@@ -509,6 +519,49 @@ export function AiTabPanel() {
         }
       }
 
+      // REVISE-GHOST-1 (OQ-2 ruling) + fix 2 (advc cycle-2 Defect 1,
+      // architect ruling l2t1835) — the HONEST WALL on the chat draft leg. A
+      // `success:true` done result that PRODUCED NOTHING — every deliverable
+      // channel empty: zero mountable events, zero clarification cards, zero
+      // recordCreations / labwareAdditions / labwareRequirements /
+      // equipmentRequirements, no deckLayout — and no error is a REPORTED
+      // failure, never an actionable review: the swallowed-events leg (spec
+      // §5) landed exactly this shape — a proposal-bearing turn whose compile
+      // produced zero mountable events. The emptiness test is the ONE shared
+      // rule (draftEmptiness.draftProducedNothing — the server guard's 7
+      // canonical channels plus the sanctioned client-superset member
+      // equipmentRequirements; the honestWall drift pin asserts the superset
+      // mechanically) — NOT "zero events" alone: a create_record /
+      // labware-requirement / deckLayout success DID deliver a proposal and
+      // must fall through to its existing draft-ready/preview handling, never
+      // be walled and discarded. protocolEdit is NOT a predicate term: its
+      // jurisdiction is the ARM ORDER above — a mappable envelope dispatches
+      // its own protocolDiff draft-ready and returns inside the arm, so the
+      // only protocolEdit turn that reaches this check is the fall-through
+      // remnant (identity-less / unmappable envelope), which delivered
+      // NOTHING and walls here rather than landing an empty ChangesPanel with
+      // a live "Apply to run". Same PB-CH-4 D1 discipline as the
+      // error/workstate/ledger guards above: sidebar reset (no 'reviewing', no
+      // empty actionable 'Apply to run'), the chat section stays mounted, and
+      // the failure text NAMES what the turn delivered (shorthand-only?
+      // notes? nothing?) — never a silent empty plate under a happy panel.
+      // The clarifications-needed arm below stays as-is (a legitimate hold
+      // keeps its cards). A result WITHOUT the success key (a hand-authored/
+      // legacy empty draft, the R-Defect-2 pin) is untouched.
+      if (result.success === true && draftProducedNothing(result)) {
+        const delivered = [
+          typeof result.shorthand === 'string' ? 'the shorthand document' : null,
+          (result.notes?.length ?? 0) > 0 ? 'notes' : null,
+        ].filter((part): part is string => part !== null)
+        setHonestWall(
+          `Draft produced no events${delivered.length > 0 ? ` — it delivered only ${delivered.join(' and ')}` : ''} and asked no questions. Nothing was proposed on the deck; nothing was applied.`,
+        )
+        protocolProposalRef.current = null
+        setProtocolApply(null)
+        sidebarDispatch({ type: 'reset' })
+        return
+      }
+
       if (result.clarificationRequests && result.clarificationRequests.length > 0) {
         sidebarDispatch({
           type: 'clarifications-needed',
@@ -545,6 +598,14 @@ export function AiTabPanel() {
       const events = (result.events ?? []) as PlateEvent[]
       const labwareAdditions = (result.labwareAdditions ?? []) as AiLabwareAddition[]
       const labwareRequirements = (result.labwareRequirements ?? []) as AiLabwareRequirement[]
+      // REVISE-GHOST-1 fix3 (gate Defect 1): the compile's resolved placement
+      // offers ride the done result (shorthandResultFromCompile carries
+      // terminalArtifacts.resolvedLabwares verbatim). buildPreviewFromDraft's
+      // RESOLVED arm ghosts a PLACEMENT of the EXISTING record from them —
+      // without this thread a resolved draft mounts events but zero
+      // placements (DeckSlot renders the ghost tile only when
+      // previewPlacement && previewLabware are both truthy).
+      const resolvedLabwares = (result.resolvedLabwares ?? []) as AiResolvedLabware[]
       const equipmentRequirements = (result.equipmentRequirements ?? []) as AiEquipmentRequirement[]
       // Creations arrive on the create_record intent; they are proposals until Accept.
       const recordCreations = (result.recordCreations ?? []).filter(
@@ -559,6 +620,7 @@ export function AiTabPanel() {
         events,
         labwareAdditions,
         labwareRequirements,
+        resolvedLabwares,
         equipmentRequirements,
         recordCreations,
         ...(alsoPlace ? { alsoPlace } : {}),
@@ -735,6 +797,22 @@ export function AiTabPanel() {
   // code, now shared with the Analysis + protocol-builder mounts).
   const flow = useWorkstateProposalFlow()
 
+  // MATRES-CHAIN fix2 (gate D1/D2, receipts 2026-10-24_115822): the ONE flow
+  // serves every adapter on this mount (one pending identity, one supersede
+  // discipline — the flow's own doctrine: a second adapter is ONE constant at
+  // the call site, never a second flow), but the review card is adapter-
+  // shaped: the execute-chain wall (ChainProposalCard) and the composition
+  // card (WorkstateProposalCard) are different presentational components over
+  // the SAME card state. The panel records WHICH adapter the pending card
+  // came from at the propose call site — the same adapter constant the flow
+  // already takes, no new vocabulary — and the render branch reads it. The
+  // marker only ever matters while a card is pending: with no card frame
+  // (flow.card null) NO card chrome renders (the PB-CH-4 no-leak discipline).
+  // A ref (the workstateTurnRef precedent): the propose call site sets it in
+  // the same breath as flow.proposeWorkstate, and the render that flow's
+  // setCard triggers reads it current.
+  const flowCardAdapterRef = useRef<WorkstateAdapter>('workstate')
+
   // THE CONTEXT GAP FIX: `focusedStep` is display-only in ChatContextHeader
   // today. Here it leaves the DOM and rides the request contract. Conditional
   // spread — with nothing focused the key is ABSENT, never `undefined`
@@ -777,6 +855,10 @@ export function AiTabPanel() {
       // behind the client's /ai/assist/stream), so the flag is set before the
       // same turn's onDraftResult consumes it.
       workstateTurnRef.current = true
+      // MATRES-CHAIN fix2: record which adapter's card the pending flow card
+      // is (the same constant the flow takes — no new vocabulary), so the
+      // render branch mounts the matching presentational card.
+      flowCardAdapterRef.current = adapter
       void flow.proposeWorkstate(adapter, intent)
     },
     [flow],
@@ -801,6 +883,16 @@ export function AiTabPanel() {
     // one adapter constant, not a fork (the analysis pattern copied verbatim).
     onRecordDraftProposal: (intent) => {
       handleWorkstateProposal(intent, 'record-drafting')
+    },
+    // MATRES-CHAIN fix2 (gate D2, receipts 2026-10-24_115822): the execute-
+    // chain INTENT rides the SAME flow on the ROUTED surface — one adapter
+    // constant ('chain'), the same compile→card→accept/reject machinery
+    // (the analysis/record-drafting pattern copied verbatim). At base this
+    // callback was never passed here (only the unrouted graph page passed
+    // it), so useChatThread's chain_proposal frame was swallowed and no
+    // compile request was ever issued.
+    onChainProposal: (intent) => {
+      handleWorkstateProposal(intent, 'chain')
     },
     // PB-CH-8 fix1: the ledger_answer frame marks THIS turn as a ledger turn
     // (the hook still renders the trace verbatim — this is the flag-set site,
@@ -1059,6 +1151,9 @@ export function AiTabPanel() {
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      // REVISE-GHOST-1: a fresh send clears the honest-wall line — a reported
+      // failure belongs to its turn, never to the next one.
+      setHonestWall(null)
       // WS6 D2: a send with NO mounted preview starts a FRESH proposal — the
       // pair's user-turn chain begins at this turn. A send while a preview is
       // mounted is a Revise (the UI says so) and CONTINUES the current
@@ -1334,24 +1429,52 @@ export function AiTabPanel() {
       {activeSubTab === 'chat' ? (
         <section className="ai-tab__section ai-tab__section--log">
           <MessageLog state={chat.state} />
+          {honestWall ? (
+            // REVISE-GHOST-1 (OQ-2): the reported failure rides the chat
+            // section — the ONLY surface a PB-CH-4 D1 reset leaves mounted.
+            // Same verbatim-error discipline as the recompile's shorthandError
+            // slot: the server turn's shortfall, named, never a silent plate.
+            <div className="ai-tab__honest-wall" role="alert" data-testid="ai-tab-honest-wall">
+              {honestWall}
+            </div>
+          ) : null}
           {flow.card ? (
             // PB-CH-4 tier-2: the review card rides the chat itself. While a
             // card is pending NO proposed tab is rendered anywhere (no ghosted
             // preview, no store copy) — the workspace adopts a workstate only
             // through Accept → the single writer. PB-CH-6: the card state now
             // comes from the shared flow (same phases, same identity).
-            <WorkstateProposalCard
-              phase={flow.card.phase}
-              {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
-              {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
-              {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
-              {...(flow.card.recordFields ? { recordFields: flow.card.recordFields } : {})}
-              {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
-              {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
-              {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
-              onAccept={() => void flow.acceptWorkstate()}
-              onReject={flow.rejectWorkstate}
-            />
+            // MATRES-CHAIN fix2 (gate D1/D2): the SAME flow card state mounts
+            // the matching presentational wall — the execute-chain card for a
+            // 'chain' compile (its strings are the SERVER-BUILT card document
+            // the flow carried verbatim into card state), the composition card
+            // for every other adapter. No card frame (flow.card null) → no
+            // card chrome at all (the PB-CH-4 no-leak discipline).
+            flowCardAdapterRef.current === 'chain' ? (
+              <ChainProposalCard
+                phase={flow.card.phase}
+                {...(flow.card.chainCard ? { card: flow.card.chainCard } : {})}
+                {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+                {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+                {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+                {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+                onAccept={() => void flow.acceptWorkstate()}
+                onReject={flow.rejectWorkstate}
+              />
+            ) : (
+              <WorkstateProposalCard
+                phase={flow.card.phase}
+                {...(flow.card.summary !== undefined ? { summary: flow.card.summary } : {})}
+                {...(flow.card.tabs ? { tabs: flow.card.tabs } : {})}
+                {...(flow.card.resolvedTerms ? { resolvedTerms: flow.card.resolvedTerms } : {})}
+                {...(flow.card.recordFields ? { recordFields: flow.card.recordFields } : {})}
+                {...(flow.card.diagnostics ? { diagnostics: flow.card.diagnostics } : {})}
+                {...(flow.card.draftId !== undefined ? { draftId: flow.card.draftId } : {})}
+                {...(flow.card.revision !== undefined ? { revision: flow.card.revision } : {})}
+                onAccept={() => void flow.acceptWorkstate()}
+                onReject={flow.rejectWorkstate}
+              />
+            )
           ) : null}
         </section>
       ) : null}
@@ -1504,6 +1627,36 @@ export function AiTabPanel() {
               Cancel this draft and start a new prompt
             </button>
           )}
+        </section>
+      ) : sidebar.mode === 'interpreting' ? (
+        // REVISE-GHOST-1 fix3 (gate Defect 2, attempt-9 q3kibt): a revise turn
+        // on a cold model ran 66s; while the sidebar sat at 'interpreting' the
+        // pane rendered NO ChatInput (isChatEnabled false), NO clarifying/
+        // updating block, NO Stop — cards=0, chatSend=0, chatInput=0,
+        // noStopObserved:true. D4: never a stuck pane with zero controls. The
+        // interpreting window gets a Stop escape: it aborts the in-flight
+        // stream (chat.stop — the same AbortController the Stop button uses)
+        // AND returns the sidebar to chat. The mounted preview is NOT
+        // discarded — Stop abandons the REQUEST, not the draft the deck
+        // already shows (handleCancelDraft's clearPreview is the Discard
+        // affordance's job). A stream that died on an error frame with no
+        // `done` frame strands 'interpreting' the same way — the escape covers
+        // both (chat.stop is a safe no-op when nothing is in flight).
+        <section className="ai-tab__section ai-tab__section--interpreting-escape">
+          <p className="ai-tab__input-disabled-text">
+            The AI is working on this turn. You can stop it and start a new prompt.
+          </p>
+          <button
+            type="button"
+            className="ai-tab__input-cancel"
+            data-testid="interpreting-stop"
+            onClick={() => {
+              chat.stop()
+              sidebarDispatch({ type: 'reset' })
+            }}
+          >
+            Stop this request and start a new prompt
+          </button>
         </section>
       ) : null}
 

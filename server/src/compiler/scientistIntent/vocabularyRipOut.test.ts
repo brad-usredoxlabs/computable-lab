@@ -47,12 +47,12 @@ describe('scientist-intent-vocabulary.rip-out', () => {
     path: join(FIXTURES, 'vocab-minus-pellet', VOCABULARY_DATA_FILE),
   });
 
-  it('fixture vocabulary (copy minus pellet) has 30 verbs and lacks pellet', () => {
-    expect(fixtureVocab.verbs()).toHaveLength(30);
+  it('fixture vocabulary (copy minus pellet) has 31 verbs and lacks pellet', () => {
+    expect(fixtureVocab.verbs()).toHaveLength(31);
     expect(fixtureVocab.has('pellet')).toBe(false);
   });
 
-  it('prompt generated from the fixture vocabulary lacks pellet and contains the other 30', () => {
+  it('prompt generated from the fixture vocabulary lacks pellet and contains the other 31', () => {
     const prompt = intentCompileSystemPrompt(fixtureVocab);
     expect(prompt).not.toMatch(/\bpellet\b/);
     const shipped = defaultScientistIntentVocabulary();

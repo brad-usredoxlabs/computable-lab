@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-hep-g2-hepg2-hb-8065-atc-7hdl
+kind: material
+id: MAT-hep-g2-hepg2-hb-8065-atc-7hdl
+name: Hep G2 [HEPG2] - HB-8065 | ATCC
+domain: chemical
+status: proposed
+provenance:
+  source: import
+  sourceLabel: Exa web search
+  note: "Imported from Exa vendor product search:
+    https://www.atcc.org/products/hb-8065"

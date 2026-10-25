@@ -54,6 +54,42 @@ describe('changesFromDraftEvents — the Changes panel must never be blank over 
     expect(describeWells([])).toBe('')
     expect(describeWells(['A2', 'B2', 'C2'])).toBe('A2–C2 (3 wells)')
   })
+
+  // CELLRATE-1 (OQ-1 GO — tracked file): the changes row shows the per-well
+  // total LABELED derived when a declared rate + volume are both present, and
+  // says `absolute, unverified` for an ambiguous bare count — never a bare
+  // ambiguous number, never an invented unit, never a silent multiplication.
+  it('rate + volume: the row shows the derived per-well total with the derivation readable', () => {
+    const rateDraft = {
+      event_type: 'add_material',
+      details: {
+        wells: ['A1'],
+        material_ref: { kind: 'record', id: 'MAT-1', label: 'HepG2 cells' },
+        volume: { value: 100, unit: 'uL' },
+        counter_density: { value: 200, unit: 'cells/uL', basis: 'count_per_volume' },
+      },
+    }
+    const description = changesFromDraftEvents([rateDraft])[0]!.description
+    expect(description).toContain('20,000/well = 200/uL x 100 uL (derived)')
+  })
+
+  it('ambiguous bare count + volume: the row says absolute, unverified — no invented unit, no multiplication', () => {
+    const bareDraft = {
+      event_type: 'add_material',
+      details: {
+        wells: ['A1'],
+        material_ref: { kind: 'record', id: 'MAT-1', label: 'HepG2 cells' },
+        count: 200,
+        volume: { value: 100, unit: 'uL' },
+      },
+    }
+    const description = changesFromDraftEvents([bareDraft])[0]!.description
+    expect(description).toContain('200 · absolute, unverified')
+    // The bare ambiguous number is replaced by the labeled reading.
+    expect(description).not.toContain('count 200')
+    // And the 100x disease is never reproduced in the display layer.
+    expect(description).not.toContain('20,000')
+  })
 })
 
 // ── CHANGES-UI-1 (A): composition rows must enumerate the COMPONENTS ────────

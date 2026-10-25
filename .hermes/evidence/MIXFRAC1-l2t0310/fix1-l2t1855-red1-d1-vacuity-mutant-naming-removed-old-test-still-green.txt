@@ -1,0 +1,10 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/MIXFRAC-1-lane2-l2t0310/server
+
+ ✓ src/compiler/scientistIntent/compositionFractions.test.ts  (15 tests) 175ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  20:03:47
+   Duration  3.18s (transform 673ms, setup 0ms, collect 2.07s, tests 175ms, environment 0ms, prepare 480ms)
+

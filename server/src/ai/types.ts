@@ -722,6 +722,16 @@ export interface AgentResult {
   labwareAdditions?: AgentLabwareAddition[];
   /** Proposed generic/constrained labware requirements to ghost before concrete binding. */
   labwareRequirements?: AgentLabwareRequirement[];
+  /**
+   * REVISE-GHOST-1 fix3 (gate Defect 1): the compile's resolved placement
+   * offers — labware hints the frozen pipeline bound against REAL inventory
+   * records (terminalArtifacts.resolvedLabwares, capped by
+   * config/drafting/deck-review.yaml). The client ghosts a PLACEMENT of the
+   * EXISTING record from this channel (draftPreview's resolved arm); without
+   * it a resolved draft mounts events but zero placements. Absent-or-value
+   * via conditional spread (exactOptionalPropertyTypes).
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>;
   /** Bench equipment the draft wants on the bench (never a deck slot). */
   equipmentRequirements?: AgentEquipmentRequirement[];
   /** Records the draft wants CREATED (the add; nothing is written until Accept). */
@@ -948,6 +958,31 @@ export type AgentEvent =
    * shape as workstate_proposal / analysis_proposal).
    */
   | { type: 'record_draft_proposal'; recordDraft: Record<string, unknown> }
+  /**
+   * MATRES-RECV (OQ-2 ratified) — the model's receiving-attestation INTENT,
+   * retained verbatim (compose_receiving, case 4 retrospective chat). This is
+   * NOT a compiled draft and is NOT actionable alone: the drafts compile
+   * endpoint (POST /api/drafts/compile — the 'receiving' adapter: the
+   * envelope compiles through receiving/MaterialReceivingDraft.ts, TWO staged
+   * creates (the immutable material-receiving receipt + the material-instance
+   * it brings into custody) through the REAL validate + lint, canAccept),
+   * NOT this stream, is the trust boundary. Accept writes the receipt AND
+   * the instance; nothing here writes a record, attests, or invents an
+   * arrival date, a receiver, or a duplicate arrival (thin-event design —
+   * same shape as workstate_proposal / analysis_proposal /
+   * record_draft_proposal).
+   */
+  | { type: 'receiving_proposal'; receiving: Record<string, unknown> }
+  /**
+   * MATRES-CHAIN (OQ-3(a) ratified) — the ELICITED execute-chain attestation
+   * intent (compose_execute_chain on the ONE forced tool). Carries the model's
+   * chain envelope VERBATIM; the drafts compile endpoint (the 'chain' adapter),
+   * NOT this event, is the trust boundary. The stream NEVER compiles, writes,
+   * or attests here — the server never invents an occurrence time, an attestor,
+   * or a storage condition, and cross-session consumption is refused by name at
+   * compile (thin-event design — same shape as receiving_proposal).
+   */
+  | { type: 'chain_proposal'; chain: Record<string, unknown> }
   /**
    * PB-CH-8 — the ledger ANSWER (query_workstate_history). SERVER-BUILT from
    * fetched evidence, never model narration (OQ2 ruling): the envelope mirrors

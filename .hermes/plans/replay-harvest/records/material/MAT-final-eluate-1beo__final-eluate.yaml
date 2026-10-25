@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-final-eluate-1beo
+kind: material
+id: MAT-final-eluate-1beo
+name: final eluate
+domain: other
+status: proposed

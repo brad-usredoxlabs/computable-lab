@@ -1,0 +1,405 @@
+{
+  "turn": "T4-canonical-four-term",
+  "utterance": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+  "noun": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+  "source": "derived: MAT-trypsin-edta-dmem-fbs-he-1om4 provenance.sourceLabel (accepted event graph EVG-mvak17we-gdah); NO live event-editor transcript exists on any lane data repo",
+  "spine_ranked": [
+    {
+      "curie": "local:MAT-trypsin-edta-dmem-fbs-he-1om4",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "concept",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_0KSKKEEO",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_6TOT75YH",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_EJ67JFWP",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_G84WQATF",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_K4CKSPYJ",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_LMBG587E",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_Y5SKR9BX",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "namespace": "local",
+      "tier": 1,
+      "level": "spec",
+      "score": 1.15,
+      "source": "local-record"
+    },
+    {
+      "curie": "",
+      "label": "Create local term “Trypsin-EDTA + DMEM + FBS + HepG2 cells”",
+      "namespace": "local",
+      "tier": 5,
+      "level": "concept",
+      "score": 0.05,
+      "source": "mint",
+      "mint": {
+        "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells"
+      }
+    }
+  ],
+  "stage_fate": [
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MAT-trypsin-edta-dmem-fbs-he-1om4",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "concept",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_0KSKKEEO",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_6TOT75YH",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_EJ67JFWP",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_G84WQATF",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_K4CKSPYJ",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_LMBG587E",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    },
+    {
+      "tier": "tier1-local-record",
+      "term": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "curie": "local:MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_Y5SKR9BX",
+      "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+      "level": "spec",
+      "fate": "returned-and-ranked",
+      "score": 1.15
+    }
+  ],
+  "engine": [
+    {
+      "arm": "add_material.material",
+      "declared_level": null,
+      "wantLevel_fires": false,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MAT-trypsin-edta-dmem-fbs-he-1om4"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_0KSKKEEO"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_6TOT75YH"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_EJ67JFWP"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_G84WQATF"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_K4CKSPYJ"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_LMBG587E"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_Y5SKR9BX"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "add_material",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [],
+        "domain_filtered": [],
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts:34-36)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4
+          ],
+          "note": "tiers 0-2 saturate to 1.0 AFTER clamp — the USER-visible candidate fact (candidateFact.confidence) is identical 1.0 for a tier-0 alias hit and a tier-1 substring hit: tier ranking is INVISIBLE in the clarification payload (the panel-relocates-the-questions failure surface)."
+        }
+      }
+    },
+    {
+      "arm": "wash.material",
+      "declared_level": "aliquot",
+      "wantLevel_fires": true,
+      "bindings": [],
+      "clarifications": [
+        {
+          "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "reason": "ambiguous-noun",
+          "candidates": [
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_0KSKKEEO"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_6TOT75YH"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_A1BOEEOV"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_EJ67JFWP"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_G84WQATF"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_K4CKSPYJ"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_LMBG587E"
+            },
+            {
+              "label": "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+              "confidence": 1,
+              "ref": "MSP-DRAFT-EVG_MVAK17WE_GDAH_EVT_ADD_MATERIAL_Y5SKR9BX"
+            }
+          ],
+          "actionLocation": {
+            "actionIndex": 0,
+            "action": "wash",
+            "argument": "material"
+          }
+        }
+      ],
+      "traces": [
+        "level-mismatch: local:MAT-trypsin-edta-dmem-fbs-he-1om4 (level concept) ineligible for wantLevel aliquot"
+      ],
+      "failures": [],
+      "band": {
+        "min": 0.7,
+        "max": 1
+      },
+      "fate_classification": {
+        "returned_and_bound": [],
+        "returned_ranked_in_clarification": [
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells",
+          "Trypsin-EDTA + DMEM + FBS + HepG2 cells"
+        ],
+        "level_filtered": [
+          "local:MAT-trypsin-edta-dmem-fbs-he-1om4"
+        ],
+        "domain_filtered": [],
+        "clarification_reasons": [
+          "ambiguous-noun"
+        ],
+        "remote_clamp": {
+          "band_declared": {
+            "min": 0.7,
+            "max": 1
+          },
+          "confidenceOf": "Math.min(Math.max(score,0),1) (resolutionEngine.ts:34-36)",
+          "per_tier_max_confidence_online": {
+            "tier0": 1,
+            "tier1": 1,
+            "tier2": 0.9800000000000001,
+            "tier3": 0.78,
+            "tier4": 0.5800000000000001
+          },
+          "below_band_floor": [
+            4
+          ],
+          "note": "tiers 0-2 saturate to 1.0 AFTER clamp — the USER-visible candidate fact (candidateFact.confidence) is identical 1.0 for a tier-0 alias hit and a tier-1 substring hit: tier ranking is INVISIBLE in the clarification payload (the panel-relocates-the-questions failure surface)."
+        }
+      }
+    }
+  ],
+  "offline": {
+    "fetch_blocked": 0,
+    "fetch_blocked_note": "global fetch stubbed to throw; any stray remote call recorded here",
+    "localOnly": true,
+    "oak": "not built (no service URL)",
+    "vendor": "not wired"
+  }
+}

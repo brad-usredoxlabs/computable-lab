@@ -1,0 +1,208 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/UCX-2-lane2-l2t0400/app
+
+(node:2408170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/shared/session/urlSession.test.ts  (17 tests | 5 failed) 16ms
+   ❯ src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > execution ids return null: a decoded tab must never carry runId:"" (defect 4)
+     → expected { id: 'execution:EVG-1', …(4) } to be null
+   ❯ src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > an execution entry is dropped per-entry; valid siblings survive
+     → expected [ 'registry', 'execution:EVG-1' ] to deeply equal [ 'registry' ]
+   ❯ src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > encodeWorkspaceParams never encodes an execution tab (unencodable kind)
+     → expected 'run:RUN-1,execution:EVG-1' to be 'run:RUN-1' // Object.is equality
+   ❯ src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > no decoded tab can ever produce the bare /runs/ path (navigation safety)
+     → expected [ '/runs/RUN-1', '/deck/EVG-2', …(2) ] to not include '/runs/'
+   ❯ src/shared/session/urlSession.test.ts > round-trip mirror-drift gate (every WorkspaceTab kind) > decode(encode(state)) ≈ state for every kind incl. slot-suffixed ids
+     → expected 20 to be 19 // Object.is equality
+(node:2408170) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/shared/shell/TabUrlSync.test.tsx > TabUrlSync state → URL (replace-only) > openTab writes the strip into the current search with replace:true
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ❯ src/shared/shell/TabUrlSync.test.tsx  (11 tests | 1 failed) 2170ms
+   ❯ src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases the URL: sync RESUMES and the banner does NOT return
+     → expected '%%nonsense%%' to be 'record:DOC-9,run:RUN-A' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"ws-param-diagnostic"[39m
+        [33mrole[39m=[32m"status"[39m
+        [33mstyle[39m=[32m"padding: 0.5rem 1rem; background: var(--cl-color-warning-bg, #fff4ce); color: var(--cl-color-text, #1c1c1c); display: flex; gap: 1rem; align-items: center;"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mMALFORMED_WS_PARAM[0m
+          [0m: [0m
+          [0mThe workspace link "%%nonsense%%" carries no tab this app can open.[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mDismiss[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > execution ids return null: a decoded tab must never carry runId:"" (defect 4)
+AssertionError: expected { id: 'execution:EVG-1', …(4) } to be null
+ ❯ src/shared/session/urlSession.test.ts:111:48
+    109|   // restored as a mis-navigating tab.
+    110|   it('execution ids return null: a decoded tab must never carry runId:…
+    111|     expect(tabFromStableId('execution:EVG-1')).toBeNull()
+       |                                                ^
+    112|     const decoded = decodeWorkspaceParams('ws=execution:EVG-1&wsa=exec…
+    113|     expect(decoded.state).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > an execution entry is dropped per-entry; valid siblings survive
+AssertionError: expected [ 'registry', 'execution:EVG-1' ] to deeply equal [ 'registry' ]
+
+- Expected
++ Received
+
+  Array [
+    "registry",
++   "execution:EVG-1",
+  ]
+
+ ❯ src/shared/session/urlSession.test.ts:119:54
+    117|   it('an execution entry is dropped per-entry; valid siblings survive'…
+    118|     const decoded = decodeWorkspaceParams('ws=registry,execution:EVG-1…
+    119|     expect(decoded.state!.tabs.map((t) => t.tab.id)).toEqual(['registr…
+       |                                                      ^
+    120|     expect(decoded.diagnostic?.code).toBe('MALFORMED_WS_PARAM')
+    121|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > encodeWorkspaceParams never encodes an execution tab (unencodable kind)
+AssertionError: expected 'run:RUN-1,execution:EVG-1' to be 'run:RUN-1' // Object.is equality
+
+- Expected
++ Received
+
+- run:RUN-1
++ run:RUN-1,execution:EVG-1
+
+ ❯ src/shared/session/urlSession.test.ts:132:34
+    130|     )
+    131|     const params = new URLSearchParams(encodeWorkspaceParams(state))
+    132|     expect(params.get(WS_PARAM)).toBe('run:RUN-1')
+       |                                  ^
+    133|     // wsa names only an encodable tab: an execution-active strip writ…
+    134|     // (decode then activates the first surviving tab).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/shared/session/urlSession.test.ts > tabFromStableId (mirror of stableTabId) > no decoded tab can ever produce the bare /runs/ path (navigation safety)
+AssertionError: expected [ '/runs/RUN-1', '/deck/EVG-2', …(2) ] to not include '/runs/'
+ ❯ src/shared/session/urlSession.test.ts:144:23
+    142|     expect(decoded.state).not.toBeNull()
+    143|     const paths = decoded.state!.tabs.map((t) => tabPath(t.tab))
+    144|     expect(paths).not.toContain('/runs/')
+       |                       ^
+    145|     expect(paths).not.toContain('')
+    146|     expect(decoded.diagnostic?.code).toBe('MALFORMED_WS_PARAM')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/shared/session/urlSession.test.ts > round-trip mirror-drift gate (every WorkspaceTab kind) > decode(encode(state)) ≈ state for every kind incl. slot-suffixed ids
+AssertionError: expected 20 to be 19 // Object.is equality
+
+- Expected
++ Received
+
+- 19
++ 20
+
+ ❯ src/shared/session/urlSession.test.ts:248:31
+    246|     // strip; every OTHER kind survives in order.
+    247|     const wantTabs = state.tabs.filter((t) => t.tab.kind !== 'executio…
+    248|     expect(round.tabs.length).toBe(wantTabs.length)
+       |                               ^
+    249|     for (let i = 0; i < wantTabs.length; i++) {
+    250|       const want = wantTabs[i]!
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/shared/shell/TabUrlSync.test.tsx > TabUrlSync URL → state (external change) > dismiss releases the URL: sync RESUMES and the banner does NOT return
+AssertionError: expected '%%nonsense%%' to be 'record:DOC-9,run:RUN-A' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"ws-param-diagnostic"[39m
+        [33mrole[39m=[32m"status"[39m
+        [33mstyle[39m=[32m"padding: 0.5rem 1rem; background: var(--cl-color-warning-bg, #fff4ce); color: var(--cl-color-text, #1c1c1c); display: flex; gap: 1rem; align-items: center;"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mMALFORMED_WS_PARAM[0m
+          [0m: [0m
+          [0mThe workspace link "%%nonsense%%" carries no tab this app can open.[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mDismiss[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate"[39m
+      [36m>[39m
+        [0mexternal[0m
+      [36m</button>[39m
+      [36m<button[39m
+        [33mdata-testid[39m=[32m"external-navigate-malformed"[39m
+      [36m>[39m
+        [0mexternal-malformed[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected
++ Received
+
+- record:DOC-9,run:RUN-A
++ %%nonsense%%
+
+ ❯ __vi_import_1__.waitFor.timeout src/shared/shell/TabUrlSync.test.tsx:193:46
+    191|     // The strip write must land: the corrected search replaces the ma…
+    192|     await waitFor(
+    193|       () => expect(searchParams().get('ws')).toBe('record:DOC-9,run:RU…
+       |                                              ^
+    194|       { timeout: 2000 },
+    195|     )
+ ❯ runWithExpensiveErrorDiagnosticsDisabled ../../../computable-lab/node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback ../../../computable-lab/node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 22 passed (28)
+   Start at  07:45:05
+   Duration  15.29s (transform 174ms, setup 907ms, collect 622ms, tests 2.19s, environment 16.20s, prepare 860ms)
+

@@ -20,6 +20,48 @@ properties:
     - activity_source
     - cells
     - other
+  # ROLE-AXES-1 (Brad ruling 2026-10-22: "materials have identities and
+  # properties; their roles are contextual, and their purposes are
+  # experimental"): the DECLARED participation axis — HOW a component is
+  # incorporated into this composition, stated by the author. Optional and
+  # additive: participation means ABSENT (never key:undefined), so every
+  # existing payload validates byte-identically.
+  #
+  # Three axes, deliberately separate. `role` above stays the honest closest
+  # label (never rewritten by this field). `participation` is the composition
+  # relation. PURPOSE is NOT here: intended_purpose rides MIXROLE-1's existing
+  # clarification-answers annotation channel and is never inferred, never
+  # written by the compiler, and never read by arithmetic.
+  #
+  # LOCAL DATATYPE ENUM VALUES (bait 3): participation names a RELATION a
+  # material bears in a composition. CHEBI/CL/GO classify substances, cell
+  # types and activities — not composition relations — and no CHEBI
+  # "solvent-role" class exists, so these values are NEVER minted into
+  # schema/registry/ontology-terms/* and are never treated as equivalent to
+  # substance classes. Correct ontology placement is CONSTITUENT-level:
+  # trypsin inside a Trypsin-EDTA formulation carries EC 3.4.21.4 on the
+  # NESTED composition entry below (via gene-ontology.yaml), never on a
+  # participation word. No machine check can prove "never minted later";
+  # server/src/schema/CompositionParticipationSchema.test.ts pins that the
+  # ontology-terms registry is clean of these values today.
+  #
+  # participation_undeclared is the honest gap arm (mirrors MIXROLE-1's
+  # `other`/gapRole discipline): arithmetic NEVER reads through it — the
+  # reader defers to the config legacy-role mapping in
+  # config/drafting/composition-participation-convention.yaml, loudly off.
+  # It does NOT replace the role gap arm and never feeds the role-gap bar.
+  participation:
+    type: string
+    enum:
+    - liquid_component
+    - qs_carrier
+    - solute_contributor
+    - activity_contributor
+    - count_component
+    - participation_undeclared
+    description: >
+      How the component is incorporated (the participation axis), DECLARED by
+      the author — never inferred from a name, synonym, or word pattern.
   concentration:
     $ref: "./concentration.schema.yaml"
   concentration_range:
@@ -38,3 +80,15 @@ properties:
         enum: [ molar, mass_per_volume, activity_per_volume, count_per_volume, volume_fraction, mass_fraction ]
   source:
     type: string
+  # MIXFRAC-1 (Brad's OQ-1 ruling, spec §14.1): the ONE additive optional
+  # sub-composition — a composition entry may carry its OWN composition (an
+  # in-house formulation: the medium entry declares DMEM 90% + FBS 10%).
+  # `$ref: "#"` is the root self-resource (each item IS a composition-entry);
+  # SchemaRegistry treats a `#` ref as local and skips it for the dependency
+  # graph, so the registry dependency pin is unchanged. Additive: every
+  # existing payload validates unchanged.
+  composition:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#"

@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-MOD-01866
+kind: material
+id: MAT-MOD-01866
+name: mTRAQ light reporter+balance reagent N6-acylated lysine
+domain: other
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: human
+  sourceCurie: MOD:01866
+  sourceLabel: mTRAQ light reporter+balance reagent N6-acylated lysine
+  createdBy: material-profile-api
+  createdAt: 2026-10-19T10:11:04.919Z
+  note: Created as a proposed local material record from the material grounding API.
+class:
+  - kind: ontology
+    id: MOD:01866
+    namespace: MOD
+    label: mTRAQ light reporter+balance reagent N6-acylated lysine

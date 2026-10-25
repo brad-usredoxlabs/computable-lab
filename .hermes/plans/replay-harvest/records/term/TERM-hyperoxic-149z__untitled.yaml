@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/term.schema.yaml
+recordId: TERM-hyperoxic-149z
+kind: condition
+id: TERM-hyperoxic-149z
+preferredLabel: hyperoxic
+aliases:
+  - hyperoxia
+  - high-oxygen
+status: proposed
+lifecycleId: lab-vocabulary-control
