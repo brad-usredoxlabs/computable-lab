@@ -40,6 +40,15 @@ describe('LabCollectionView', () => {
     expect(screen.getByTestId('lab-category-vendor-pdfs')).toBeDefined()
   })
 
+  it('INSTR-COLLAPSE-2 C5: the equipment category label is the single "Equipment" — no Instruments category survives the kind deletion', () => {
+    renderWithProviders(<LabCollectionView />)
+    // QMS8-C D8-i landed the label; this is the C5 regression pin: the retired
+    // kind must not survive as a second collection category.
+    expect(screen.getByTestId('lab-category-equipment').textContent).toContain('Equipment')
+    expect(screen.queryByText('Instruments')).toBeNull()
+    expect(screen.queryByText('Instruments & Equipment')).toBeNull()
+  })
+
   it('shows "+ New PDF" on the vendor-pdfs category only, routing to the Ingestion pipeline', () => {
     render(
       <MemoryRouter initialEntries={['/lab/vendor-pdfs']}>

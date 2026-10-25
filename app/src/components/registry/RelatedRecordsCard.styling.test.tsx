@@ -1,8 +1,7 @@
 /**
- * The registry's right-hand rail (Related Records + their kind badges) rendered
+ * The registry's right-hand rail (related records + their kinds) rendered as
  * light grey on near-white: it used fixed Tailwind palette utilities, which
- * never follow `.cl-app[data-theme]` (Tailwind v4 here has no data-theme dark
- * variant). Token-only CSS, following the ChangesPanel precedent.
+ * never follow `.cl-app[data-theme]`. Token-only CSS, like ChangesPanel.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -29,9 +28,7 @@ describe('RelatedRecordsCard styling (theme tokens)', () => {
   })
 
   it('uses no fixed Tailwind palette utilities', () => {
-    expect(tsx).not.toMatch(
-      /\b(?:bg|text|border|divide)-(?:white|black|gray|slate|blue|red|emerald|amber|orange)-\d{2,3}\b/,
-    )
+    expect(tsx).not.toMatch(/\b(?:bg|text|border|divide)-(?:white|black|gray|slate|blue|red|emerald|amber|orange)-\d{2,3}\b/)
   })
 
   it('defines every class it renders', () => {

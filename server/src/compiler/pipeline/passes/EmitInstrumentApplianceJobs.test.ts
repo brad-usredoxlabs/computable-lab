@@ -96,7 +96,7 @@ describe('createEvaluateInstrumentExecutionReadinessPass', () => {
             instrument: 'Gemini EM plate reader',
             request: {
               adapterId: 'molecular_devices_gemini',
-              instrumentRef: { kind: 'record', id: 'instrument/gemini-em-plate-reader' },
+              instrumentRef: { kind: 'record', id: 'EQP-PLATE-READER', type: 'equipment' },
               parameters: {
                 simulate: true,
                 mode: 'fluorescence',
@@ -140,7 +140,7 @@ describe('createEvaluateInstrumentExecutionReadinessPass', () => {
             instrument: 'Gemini EM plate reader',
             request: {
               adapterId: 'molecular_devices_gemini',
-              instrumentRef: { kind: 'record', id: 'instrument/gemini-em-plate-reader' },
+              instrumentRef: { kind: 'record', id: 'EQP-PLATE-READER', type: 'equipment' },
               parameters: { mode: 'fluorescence' },
             },
             sourceRunFile: {

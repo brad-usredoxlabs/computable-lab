@@ -4,7 +4,6 @@ id: EQP-FLOW-CYTOMETER
 name: Flow Cytometer
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - flow cytometer
   - cytometer

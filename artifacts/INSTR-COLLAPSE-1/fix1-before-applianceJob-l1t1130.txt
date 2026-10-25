@@ -1,0 +1,129 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Config file not found at /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/config.yaml, using defaults
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 1 schemas
+Added 1 schemas to validator
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Failed to load predicate registry: ENOENT: no such file or directory, open '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/registry/predicates.registry.yaml'
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 0 lint specs, 0 rules
+Loaded 0 lifecycle specs
+Loaded 0 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /home/brad/.computable-lab
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /home/brad/.computable-lab
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Failed to read lifecycle directory /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/core/lifecycles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/core/lifecycles'
+Failed to load registry-kind lifecycle coverage: ENOENT: no such file or directory, open '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/registry/registry-kinds.registry.yaml'
+Failed to load policy bundles: ENOENT: no such file or directory, scandir '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/core/policy-bundles'
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Embedded Git records repository ready: worktree=/home/brad/.computable-lab/worktrees/main bare=/home/brad/.computable-lab/repos/main.git
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 0 UI specs
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+[index-manager] merged 127 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Index rebuilt: 1060 records
+Index built with 1060 records
+JSON-LD index already populated (1141 records)
+
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Biology term seeding failed (non-fatal): Error: ENOENT: no such file or directory, open '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/registry/biological-types/biological-types.yaml'
+    at Proxy.readFileSync (node:fs:621:20)
+    at loadBiologicalTypesRegistry (/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/src/ontology/biologicalTypes.ts:352:24)
+    at Module.loadDefaultBiologicalTypesRegistry (/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/src/ontology/biologicalTypes.ts:357:10)
+    at Module.seedBiologicalTerms (/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/src/terms/seedBiologicalTerms.ts:61:20)
+    at Module.initializeApp (/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/src/server.ts:632:26)
+    at /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/src/api/handlers/MeasurementHandlers.applianceJob.test.ts:56:11
+    at async Promise.all (index 0)
+    at callSuiteHook (file:///mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:700:23)
+    at runSuite (file:///mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:892:27)
+    at runSuite (file:///mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/@vitest+runner@1.6.1/node_modules/@vitest/runner/dist/index.js:909:15) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/tmp/measurement-handlers-appliance-job-test/schema/registry/biological-types/biological-types.yaml'
+}
+
+stderr | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+<empty line>
+stdout | src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution
+Seed protocols: created [], reused [prt-seed-biological-transfer]
+App initialized
+
+ ❯ src/api/handlers/MeasurementHandlers.applianceJob.test.ts  (4 tests | 1 failed) 14905ms
+   ❯ src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution > executes a compiled Gemini EM appliance job through active control
+     → expected { success: true, …(5) } to deeply equal ObjectContaining{…}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/handlers/MeasurementHandlers.applianceJob.test.ts > MeasurementHandlers appliance job execution > executes a compiled Gemini EM appliance job through active control
+AssertionError: expected { success: true, …(5) } to deeply equal ObjectContaining{…}
+
+- Expected
++ Received
+
+- ObjectContaining {
+-   "applianceExecutionRecordPath": StringMatching /^records\/instrument-appliance-jobs\/gemini-em-active-read-1-/,
++ Object {
++   "applianceExecutionRecordPath": "records/instrument-appliance-jobs/gemini-em-active-read-1-2026-10-22T18-52-58-870Z.json",
+    "jobId": "gemini-em-active-read-1",
+-   "logId": "ILOG-000001",
+-   "measurementId": "MSR-000001",
++   "logId": "ILOG-000025",
++   "measurementId": "MSR-000024",
+    "rawDataPath": "records/inbox/gemini-phase6.csv",
+    "success": true,
+  }
+
+ ❯ src/api/handlers/MeasurementHandlers.applianceJob.test.ts:87:20
+     85| 
+     86|     expect(reply.statusCode).toBe(201);
+     87|     expect(result).toEqual(
+       |                    ^
+     88|       expect.objectContaining({
+     89|         success: true,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  14:52:35
+   Duration  26.37s (transform 6.33s, setup 0ms, collect 10.40s, tests 14.90s, environment 0ms, prepare 478ms)
+

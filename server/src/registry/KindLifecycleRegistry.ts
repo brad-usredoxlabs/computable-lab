@@ -30,6 +30,16 @@ export interface KindLifecycleEntry {
   kind: string;
   lifecycleId: string;
   defaultState: string;
+  /**
+   * QMS8-C (D4): this kind's DOMAIN `status` field is retired — its vocabulary
+   * duplicates the lifecycle's own states, so governed records carry the state
+   * and the status key is stripped. Declared per kind in the coverage DATA:
+   * kinds whose status is an ORTHOGONAL domain vocabulary (person's
+   * contractor/suspended, training-record's passed/failed, calibration-record's
+   * pass/fail — all live admissibility consumers) declare nothing here and are
+   * never stripped. Absent -> false.
+   */
+  stripDomainStatus: boolean;
 }
 
 /**
@@ -42,22 +52,39 @@ export interface ArchiveGuardData {
 }
 
 /**
- * QMS7-4 OQ2 migration mapping block: the ONLY source for mapping a covered
- * record's domain `status` to a lifecycle state. The runner interprets it; it
- * never guesses per-kind in TS.
+ * QMS8-C (D4 tail): the QMS7-4 OQ2 `MigrationData` block (stateByDomainStatus +
+ * default) is RETIRED with its data. A leg no valid record can exercise is dead
+ * code: post-retirement a covered create cannot carry a domain status (the
+ * schema refuses it) and every governed record already carries its own state.
+ * The runner resolves an ungoverned record ONLY from the coverage entry's
+ * declared defaultState and reports — never maps, never guesses — anything the
+ * declared data cannot decide.
  */
-export interface MigrationData {
-  stateByDomainStatus: Record<string, string>;
-  default: string;
+
+/**
+ * QMS8-C (A1-3) lifecycle-declared migration instructions. The covered-kind
+ * `migration:` block above can only speak for kinds the coverage file lists;
+ * lifecycle-GOVERNED kinds (material/term/material-spec — their lifecycleId is
+ * declared per-schema, never in `kinds:`) need their own declared instruction.
+ * DATA, keyed by LIFECYCLE (the file names no kind here): the runner obeys the
+ * flag and never infers one in TS.
+ */
+export interface LifecycleMigrationInstruction {
+  lifecycleId: string;
+  /** Stamp `state := status` for records of this lifecycle that carry a domain
+   *  status and no lifecycle state (the enums are 1:1 — an identity, which is
+   *  why this is a stamp and not a mapping). */
+  stampStateFromDomainStatus: boolean;
 }
 
 export interface KindLifecycleRegistryData {
   registryVersion: number;
   lifecycleId: string;
   defaultState: string;
-  kinds: Array<{ kind: string }>;
+  kinds: Array<{ kind: string; stripDomainStatus?: unknown }>;
   archiveGuard?: { exemptKinds?: unknown };
   migration?: { stateByDomainStatus?: unknown; default?: unknown };
+  lifecycleMigrations?: Array<{ lifecycleId?: unknown; stampStateFromDomainStatus?: unknown }>;
 }
 
 /**
@@ -89,24 +116,47 @@ function parseArchiveGuard(raw: KindLifecycleRegistryData['archiveGuard']): Arch
   return { exemptKinds: exempt as string[] };
 }
 
-function parseMigration(raw: KindLifecycleRegistryData['migration'], stateIds: string[]): MigrationData | undefined {
+function parseMigration(raw: KindLifecycleRegistryData['migration']): undefined {
+  // QMS8-C (D5): the whole `migration:` block is retired. A file that still
+  // declares it fails the load — the retired instruction must not survive as
+  // inert data a future reader might trust (bait #3: partial deletion throws;
+  // here the whole block is gone, so any presence is a stale declaration).
+  if (raw !== undefined) {
+    throw new Error('Registry-kind coverage `migration:` block is retired (QMS8-C D5): the status->state map is dead data — delete the whole block');
+  }
+  return undefined;
+}
+
+/**
+ * QMS8-C (A1-3): parse the lifecycle-scoped migration instructions. Absent ->
+ * undefined (the runner runs no lifecycle leg, every pre-QMS8-C path identical).
+ * Present-but-malformed -> fail the load. A referenced lifecycle must actually
+ * be loaded — the loader checks the data against declared facts and holds no
+ * policy of its own.
+ */
+function parseLifecycleMigrations(
+  raw: KindLifecycleRegistryData['lifecycleMigrations'],
+  lifecycle: LifecycleCoverageSource,
+): LifecycleMigrationInstruction[] | undefined {
   if (raw === undefined) return undefined;
-  const map: Record<string, string> = {};
-  if (raw.stateByDomainStatus !== undefined) {
-    if (typeof raw.stateByDomainStatus !== 'object' || raw.stateByDomainStatus === null || Array.isArray(raw.stateByDomainStatus)) {
-      throw new Error('Registry-kind coverage migration.stateByDomainStatus must be a mapping of domain status -> lifecycle state');
-    }
-    for (const [status, state] of Object.entries(raw.stateByDomainStatus)) {
-      if (typeof state !== 'string' || !stateIds.includes(state)) {
-        throw new Error(`Registry-kind coverage migration maps status "${status}" to "${String(state)}", which is not a declared state of the lifecycle`);
-      }
-      map[status] = state;
-    }
+  if (!Array.isArray(raw)) {
+    throw new Error('Registry-kind coverage lifecycleMigrations must be a list of { lifecycleId, stampStateFromDomainStatus }');
   }
-  if (typeof raw.default !== 'string' || !stateIds.includes(raw.default)) {
-    throw new Error(`Registry-kind coverage migration.default "${String(raw.default)}" is not a declared state of the lifecycle`);
+  const instructions: LifecycleMigrationInstruction[] = [];
+  for (const entry of raw) {
+    const lifecycleId = typeof entry?.lifecycleId === 'string' && entry.lifecycleId.length > 0 ? entry.lifecycleId : undefined;
+    if (lifecycleId === undefined) {
+      throw new Error('Registry-kind coverage lifecycleMigrations entry is missing its lifecycleId');
+    }
+    if (!lifecycle.isLoaded(lifecycleId)) {
+      throw new Error(`Registry-kind coverage lifecycleMigrations references a lifecycle that is not loaded: ${lifecycleId}`);
+    }
+    if (typeof entry.stampStateFromDomainStatus !== 'boolean') {
+      throw new Error(`Registry-kind coverage lifecycleMigrations entry for "${lifecycleId}" must declare stampStateFromDomainStatus as a boolean`);
+    }
+    instructions.push({ lifecycleId, stampStateFromDomainStatus: entry.stampStateFromDomainStatus });
   }
-  return { stateByDomainStatus: map, default: raw.default };
+  return instructions;
 }
 
 // ============================================================================
@@ -119,7 +169,7 @@ export class KindLifecycleRegistry {
   private readonly lifecycleId: string;
   private readonly defaultState: string;
   private readonly archiveGuardData: ArchiveGuardData | undefined;
-  private readonly migrationData: MigrationData | undefined;
+  private readonly lifecycleMigrationData: LifecycleMigrationInstruction[] | undefined;
 
   constructor(data: KindLifecycleRegistryData, deps: KindLifecycleRegistryDeps) {
     if (!data || typeof data.lifecycleId !== 'string' || data.lifecycleId.length === 0 || !Array.isArray(data.kinds)) {
@@ -173,16 +223,29 @@ export class KindLifecycleRegistry {
       if (!deps.knownKinds.has(kind)) {
         throw new Error(`Unknown kind in registry-kind coverage: ${kind}`);
       }
-      const entry: KindLifecycleEntry = { kind, lifecycleId: this.lifecycleId, defaultState: this.defaultState };
+      // QMS8-C (D4): the retirement flag is per-kind DATA. Present-but-not-a-
+      // boolean fails the load (same discipline as every other block); absent
+      // means the kind's domain status is NOT retired.
+      if (raw.stripDomainStatus !== undefined && typeof raw.stripDomainStatus !== 'boolean') {
+        throw new Error(`Registry-kind coverage kind "${kind}" declares stripDomainStatus as a non-boolean: it must be true or false`);
+      }
+      const entry: KindLifecycleEntry = {
+        kind,
+        lifecycleId: this.lifecycleId,
+        defaultState: this.defaultState,
+        stripDomainStatus: raw.stripDomainStatus === true,
+      };
       this.byKind.set(kind, entry);
       this.entries.push(entry);
     }
 
-    // QMS7-4 optional data blocks. Absent → undefined (the guard/migration
-    // consumers skip entirely, so every pre-QMS7-4 path stays identical).
-    // Present-but-malformed → fail the load, same discipline as above.
+    // QMS7-4 optional data blocks. Absent → undefined (the guard consumers skip
+    // entirely, so every pre-QMS7-4 path stays identical). Present-but-malformed
+    // → fail the load, same discipline as above. QMS8-C (D5): the `migration:`
+    // block is retired — its mere presence now fails the load.
     this.archiveGuardData = parseArchiveGuard(data.archiveGuard);
-    this.migrationData = parseMigration(data.migration, stateIds);
+    parseMigration(data.migration);
+    this.lifecycleMigrationData = parseLifecycleMigrations(data.lifecycleMigrations, deps.lifecycle);
   }
 
   /**
@@ -195,11 +258,12 @@ export class KindLifecycleRegistry {
   }
 
   /**
-   * QMS7-4 OQ2 migration mapping data. Undefined when the file declares no
-   * migration block — the runner then reports instead of guessing.
+   * QMS8-C (A1-3) lifecycle-scoped migration instructions (DATA, keyed by
+   * lifecycle — never a kind name). Undefined when the file declares no
+   * lifecycleMigrations block: the runner then runs no lifecycle leg.
    */
-  get migration(): MigrationData | undefined {
-    return this.migrationData;
+  get lifecycleMigrations(): LifecycleMigrationInstruction[] | undefined {
+    return this.lifecycleMigrationData;
   }
 
   /** Coverage entry for a payload kind; undefined for every undeclared kind. */
@@ -210,6 +274,15 @@ export class KindLifecycleRegistry {
   /** All covered kinds, in file order. */
   kinds(): string[] {
     return this.entries.map(e => e.kind);
+  }
+
+  /**
+   * QMS8-C (D4): the covered kinds whose DOMAIN status the coverage DATA
+   * declares retired. A plain read-only report of declared facts — the runner
+   * never names a kind, it obeys this answer. Empty when no kind declares it.
+   */
+  kindsRetiringDomainStatus(): string[] {
+    return this.entries.filter(e => e.stripDomainStatus).map(e => e.kind);
   }
 
   get lifecycle(): string {

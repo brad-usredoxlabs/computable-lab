@@ -29,12 +29,12 @@ import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
 import { LOCAL_ADMIN_USER_ID } from '../../security/LocalIdentityService.js';
-import type { AuthorizationService } from '../../security/AuthorizationService.js';
+import type { AuthorizationService, AclSnapshot, MintPrincipalRefusal } from '../../security/AuthorizationService.js';
 import type { OwnershipPolicyService } from '../../security/OwnershipPolicyService.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
 import type { RoleResolver } from '../../security/RoleResolver.js';
 import type { AuthoringPolicy } from '../../lint/types.js';
-import { authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
+import { authoringGateActive, authoringGuardFiresOnUpdate, authoringPolicyPasses } from '../../lint/AuthoringGuard.js';
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
@@ -44,7 +44,7 @@ interface RecordHandlerSecurityOptions {
   authorizationService?: AuthorizationService;
   ownershipPolicyService?: OwnershipPolicyService;
   roleResolver?: RoleResolver;
-  getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition };
+  getPolicySettings?: () => { enforceTransitionRoles: PolicyDisposition; authoringGate?: PolicyDisposition };
   /** Best-effort audit trail; appends never fail the business operation. */
   auditService?: AuditEventService;
   /**
@@ -326,14 +326,19 @@ export function createRecordHandlers(
     return user;
   };
 
-  const canAccess = async (user: ResolvedRequestUser, action: AccessAction, record: Awaited<ReturnType<RecordStore['get']>>): Promise<boolean> => {
+  const canAccess = async (
+    user: ResolvedRequestUser,
+    action: AccessAction,
+    record: Awaited<ReturnType<RecordStore['get']>>,
+    snapshot?: AclSnapshot,
+  ): Promise<boolean> => {
     if (record && payloadKind(record.payload) === 'record-revision') {
       const source = await store.get(String(payloadObject(record.payload).sourceRecordId));
       if (!source) return false;
-      return !security?.authorizationService || security.authorizationService.canAccess(user.userId, action, source);
+      return !security?.authorizationService || security.authorizationService.canAccess(user.userId, action, source, snapshot);
     }
     if (!record || !security?.authorizationService) return true;
-    return security.authorizationService.canAccess(user.userId, action, record);
+    return security.authorizationService.canAccess(user.userId, action, record, snapshot);
   };
 
   /**
@@ -342,11 +347,17 @@ export function createRecordHandlers(
    * policy is declared); otherwise the reply is set to 403 and the deny
    * code is returned. Values come from YAML; nothing here is kind- or
    * role-specific.
+   *
+   * `lifecycleId` scopes the role lookup exactly like the lifecycle-transition
+   * leg does (rolesFor(userId, nextLifecycleId)): a grant bound to another
+   * lifecycle is inert here, while an unscoped grant stays a superset
+   * (RoleResolver's declared semantics). Absent scope ⇒ today's unscoped call.
    */
   const checkAuthoringPolicy = async (
     policy: AuthoringPolicy,
     user: ResolvedRequestUser,
     reply: FastifyReply,
+    lifecycleId?: string,
   ): Promise<string | null> => {
     const actorContext = {
       userId: user.userId,
@@ -354,7 +365,7 @@ export function createRecordHandlers(
       isLocalAdmin: user.userId === LOCAL_ADMIN_USER_ID,
       roles:
         security?.roleResolver && user.userId
-          ? await security.roleResolver.rolesFor(user.userId)
+          ? await security.roleResolver.rolesFor(user.userId, lifecycleId)
           : [],
     };
     if (authoringPolicyPasses(policy, actorContext)) return null;
@@ -372,6 +383,7 @@ export function createRecordHandlers(
     },
     async draftCopy(request: FastifyRequest<{ Params: { id: string }; Body: { recordId?: string; payload?: Record<string, unknown>; expectedSha?: string } }>, reply: FastifyReply) {
       try {
+        const draftMintRefusals: MintPrincipalRefusal[] = [];
         const user = await resolveRequestUser(request, reply);
         if (!user) return unauthenticatedError('A valid local user is required');
         const source = await store.get(request.params.id);
@@ -392,8 +404,16 @@ export function createRecordHandlers(
         }
         const result = await store.create({ envelope: { recordId, schemaId: source.schemaId, payload }, message: `Draft from ${source.recordId}` });
         if (!result.success) return reply.code(422).send({ error: result.error, validation: result.validation });
-        if (result.envelope && user.userId) await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
-        return { success: true, record: result.envelope ?? await store.get(recordId) };
+        if (result.envelope && user.userId) {
+          // OWN-15 FIX-2: mint refusals surface response-level here too (this
+          // call site previously dropped them).
+          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId, draftMintRefusals);
+        }
+        return {
+          success: true,
+          record: result.envelope ?? await store.get(recordId),
+          ...(draftMintRefusals.length > 0 ? { mintRefusals: draftMintRefusals } : {}),
+        };
       } catch (error) { return reply.code(error instanceof RevisionError ? error.status : 500).send({ error: error instanceof RevisionError ? error.code : 'DRAFT_COPY_FAILED', message: String(error) }); }
     },
     async acceptGraph(request: FastifyRequest<{ Params: { id: string }; Body: { expectedSha: string } }>, reply: FastifyReply) {
@@ -448,9 +468,17 @@ export function createRecordHandlers(
           ? scopedRecords.slice(Number(offset ?? 0), Number(offset ?? 0) + Number(limit ?? scopedRecords.length))
           : scopedRecords;
 
+        // IB-L1-PERF-1: build the request-scoped ACL snapshot ONCE for this
+        // list request so the visibility loop never re-scans the access-policy
+        // / group collections per record. Request lifetime only — the next
+        // request rebuilds, so write-visibility is automatic.
+        const aclSnapshot = security?.authorizationService
+          ? await security.authorizationService.buildAclSnapshot()
+          : undefined;
+
         const visibleRecords = [];
         for (const record of pagedRecords) {
-          if (await canAccess(user, 'read', record)) visibleRecords.push(record);
+          if (await canAccess(user, 'read', record, aclSnapshot)) visibleRecords.push(record);
         }
         
         return {
@@ -560,6 +588,9 @@ export function createRecordHandlers(
     ): Promise<RecordMutationResponse | ApiError> {
       try {
         const { schemaId, message } = request.body;
+        // OWN-15 FIX-2: typed out-channel for honest mint refusals; surfaced in
+        // the response envelope below when the mint stripped a declared grant.
+        const mintRefusals: MintPrincipalRefusal[] = [];
         
         // Validate request
         if (!schemaId) {
@@ -583,10 +614,25 @@ export function createRecordHandlers(
 
         // Declarative authoring gate (from *.lint.yaml `authoring:`): the
         // actor must satisfy the declared policy before the record is
-        // authored at all. Absent policy/accessor -> no gate.
+        // authored at all. Absent policy/accessor -> no gate. A policy that
+        // names a `gateOnPolicySetting` fires only when the ACTIVE bundle
+        // resolves that setting to 'deny' (bundle semantics are data).
+        // Role lookup is scoped to the lifecycle that GOVERNS the kind — the
+        // coverage entry's lifecycleId, never the payload's own declaration:
+        // letting a payload pick its own scope would let an actor self-select a
+        // lifecycle where they hold a grant (the demo-grant leak again).
+        // Kinds with no coverage entry (e.g. role-grant) resolve to no scope,
+        // i.e. today's unscoped call — byte-identical. NO kind or lifecycle
+        // names here; the coverage data decides.
         const authoringPolicy = security?.getAuthoringPolicy?.(schemaId);
-        if (authoringPolicy) {
-          const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+        if (
+          authoringPolicy &&
+          authoringGateActive(authoringPolicy, security?.getPolicySettings?.())
+        ) {
+          const authoringScope = security
+            ?.getKindLifecycleCoverage?.()
+            ?.entryFor(String(payloadKind(request.body.payload) ?? ''))?.lifecycleId;
+          const deny = await checkAuthoringPolicy(authoringPolicy, user, reply, authoringScope);
           if (deny) return { error: deny, message: `Authoring a ${schemaId} record is forbidden for this actor` };
         }
 
@@ -668,8 +714,11 @@ export function createRecordHandlers(
                 message: `Create ${kind} as ${coverageEntry.defaultState}, then use lifecycle transitions.`,
               };
             }
-            // Always stamp BOTH: the lifecycle middleware's `state ?? status`
-            // fallback would otherwise read the DOMAIN status as the lifecycle state.
+            // Always stamp BOTH: the create must land in the coverage file's
+            // declared initial lifecycle state, and the state is the ONLY
+            // lifecycle state the gate reads (QMS8-C retired the middleware's
+            // `state ?? status` read — a domain status is never a lifecycle
+            // state, so the stamp is what makes a governed record governable).
             stamped.lifecycleId = coverageEntry.lifecycleId;
             stamped.state = coverageEntry.defaultState;
           }
@@ -857,7 +906,10 @@ export function createRecordHandlers(
         }
 
         if (result.envelope && user.userId) {
-          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
+          // OWN-15 FIX-2: honest mint refusals (unresolvable declared principals
+          // stripped at mint) surface response-level via `mintRefusals`, never
+          // on the record and never as a silent drop.
+          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId, mintRefusals);
         }
 
         // Update index after successful create
@@ -877,6 +929,9 @@ export function createRecordHandlers(
           ...(result.validation !== undefined ? { validation: result.validation } : {}),
           ...(result.lint !== undefined ? { lint: result.lint } : {}),
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
+          // OWN-15 FIX-2: response-level honest mint refusals (typed channel,
+          // never smuggled onto the record). Create still succeeded.
+          ...(mintRefusals.length > 0 ? { mintRefusals } : {}),
         };
         return response;
       } catch (err) {
@@ -958,18 +1013,27 @@ export function createRecordHandlers(
         }
 
         // Declarative authoring gate on UPDATE: fires only when one of the
-        // policy's guardWhenChanged payload paths actually changes.
+        // policy's guardWhenChanged payload paths actually changes, and (for
+        // policies that name a `gateOnPolicySetting`) only when the ACTIVE
+        // bundle resolves that setting to 'deny'. Role lookup is scoped to the
+        // lifecycle that GOVERNS the stored record's kind (coverage data —
+        // same source as the create leg), so a non-covered kind (e.g.
+        // role-grant) stays unscoped and byte-identical.
         {
           const authoringPolicy = security?.getAuthoringPolicy?.(existing.schemaId);
           if (
             authoringPolicy &&
+            authoringGateActive(authoringPolicy, security?.getPolicySettings?.()) &&
             authoringGuardFiresOnUpdate(
               authoringPolicy,
               existing.payload as Record<string, unknown>,
               request.body.payload as Record<string, unknown>,
             )
           ) {
-            const deny = await checkAuthoringPolicy(authoringPolicy, user, reply);
+            const authoringScope = security
+              ?.getKindLifecycleCoverage?.()
+              ?.entryFor(String(payloadKind(existing.payload) ?? ''))?.lifecycleId;
+            const deny = await checkAuthoringPolicy(authoringPolicy, user, reply, authoringScope);
             if (deny) return { error: deny, message: `Updating ${id} is forbidden for this actor` };
           }
         }

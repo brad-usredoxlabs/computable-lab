@@ -9,8 +9,7 @@
 }
 
 .registry-list {
-  /* Wide forms matter more than a wide list: 16rem frees ~64px for the editor. */
-  width: 16rem;
+  width: 20rem;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -257,10 +256,12 @@
   background: var(--cl-warn);
 }
 
-.registry-rail {
+/* REG-6: the side rail is retired — provenance docks at the bottom of the
+   record content. The wrapper carries NO chrome of its own (no border /
+   background / padding): an empty wrapper (create draft) must collapse to
+   zero height. Visual separation lives on the cards (.provenance border-top). */
+.registry-provenance-footer {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 16px;
-  border-top: 1px solid var(--cl-border);
 }

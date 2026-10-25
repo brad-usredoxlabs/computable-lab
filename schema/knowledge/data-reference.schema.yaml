@@ -62,11 +62,14 @@ properties:
 
   acquisitionContext:
     type: object
-    description: "Context captured at acquire time (instrument, plate, run metadata)."
+    description: "Context captured at acquire time (equipment, plate, run metadata)."
     additionalProperties: true
     properties:
-      instrument:
-        type: string
+      # INSTR-COLLAPSE-1 C1: the free `instrument` string is retired; the
+      # physical source is a ref.schema.yaml host (revisionRef legal on it).
+      # Blob paths (e.g. "instruments/qs5/run42.fcs") DO NOT move (memo §5).
+      equipment_ref:
+        $ref: "./datatypes/ref.schema.yaml"
       revision:
         type: string
       note:

@@ -146,7 +146,10 @@ function payloadFor(creation: AiRecordCreation, recordId: string): { schemaId: s
       kind: 'equipment',
       id: recordId,
       name: creation.name,
-      status: 'active',
+      // QMS8-C (D7 twin, app side): the `status: 'active'` hardcode is deleted.
+      // The domain field is retired for this kind (equipment.schema.yaml no
+      // longer declares it and unevaluatedProperties:false refuses it), and the
+      // server's coverage stamp lands the declared initial lifecycle state.
       ...(classRef ? { equipmentClassRef: classRef } : {}),
       ...(creation.settings && Object.keys(creation.settings).length > 0 ? { settings: creation.settings } : {}),
       notes: attributionNote(creation),

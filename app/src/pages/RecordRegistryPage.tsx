@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobox';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
@@ -12,9 +12,9 @@ import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShe
 import { deriveSchemaNode } from '../browser/SchemaTree';
 import type { SchemaNode } from '../browser/SchemaTree';
 import type { JsonSchema } from '../types/kernel';
-import './RecordRegistryPage.css';
 import { useOptionalWorkspace } from '../event-editor/workspace/WorkspaceContext';
 import { projectDetailsTabId, recordEditTabId } from '../event-editor/workspace/types';
+import './RecordRegistryPage.css';
 
 // Exported for the test suites: the tab/kinds DATA is the single source for
 // the tab strip, the combobox kinds, and the Create picker (no test-side
@@ -24,7 +24,11 @@ export const REGISTRY_TABS = [
   { id: 'equipment', label: 'Equipment', kinds: ['equipment', 'equipment-class'] },
   { id: 'training', label: 'Training', kinds: ['training-material', 'training-record'] },
   { id: 'authorizations', label: 'Authorizations', kinds: ['competency-authorization', 'equipment-training-requirement'] },
-  { id: 'instruments', label: 'Instruments', kinds: ['instrument'] },
+  // INSTR-COLLAPSE-2 C5: the instruments tab is retired WITH the kind. The
+  // Create entry disappears BY CONSTRUCTION (Create seeds from the active
+  // tab's kinds DATA — no separate 'Create instrument' string ever existed).
+  // 'instrument' survives as a DERIVED measurement-capable filter over the
+  // Equipment tab (see measurementCapable derivation below — OQ-C(1)).
   { id: 'calibrations', label: 'Calibrations', kinds: ['calibration-record', 'qualification-record'] },
   { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
   { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
@@ -32,6 +36,15 @@ export const REGISTRY_TABS = [
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
+
+// INSTR-COLLAPSE-2 C5 (OQ-B ruling, confirmed): the measurement-capable
+// predicate qualifies a machine on capabilities whose verb resolves to a
+// verb-definition RECORD declaring this DOMAIN. It is the declared
+// verb-definition.schema.yaml `domain` enum term (operation-layer vocabulary
+// — like 'liquid_handling' elsewhere), NOT a device name, NOT a verb-id
+// literal, NOT an id-prefix sniff (H1/H2). The verb->domain resolution itself
+// runs over verb-definition RECORD data below.
+const MEASUREMENT_VERB_DOMAIN = 'analytical_readout';
 
 /**
  * QMS7-5 (OQ-3 ruling): the per-tab Create button has no precompile step, so
@@ -76,7 +89,6 @@ interface RecordData {
   recordId: string;
   schemaId: string;
   payload: Record<string, unknown>;
-  /** Envelope metadata from the repo (provenance: who/when/content hash). */
   meta?: RecordMetaLike;
 }
 
@@ -204,6 +216,17 @@ export default function RecordRegistryPage() {
   // the branch condition is the data-driven rule, never the label text.
   const [showArchived, setShowArchived] = useState(false);
 
+  // INSTR-COLLAPSE-2 C5 (OQ-C(1)): the derived 'Measurement-capable' filter
+  // is a pill ON the Equipment tab — no kind-shaped pseudo-tab for a retired
+  // kind. Like showArchived it is render-level state; the filter RULE is the
+  // derived data below, never the label copy (bait 1 carry-over).
+  const [measurementCapableOnly, setMeasurementCapableOnly] = useState(false);
+
+  // INSTR-COLLAPSE-2 C5 (OQ-A(i)): raw records feeding the derivation on the
+  // Equipment tab (equipment-capability + verb-definition reads above).
+  const [capabilityRecords, setCapabilityRecords] = useState<RecordData[]>([]);
+  const [verbRecords, setVerbRecords] = useState<RecordData[]>([]);
+
   // THE single data-driven terminal rule (OQ-1(A) + OQ-2(A) — one mechanism,
   // zero new state strings, bait 1): a row is terminal iff its lifecycle's
   // DECLARED terminal set contains its payload.state. Rows with no
@@ -233,15 +256,34 @@ export default function RecordRegistryPage() {
     setLoading(true);
     try {
       const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
-      const results = await Promise.all(promises);
+      // INSTR-COLLAPSE-2 C5 (OQ-A(i)): the derived measurement-capable filter
+      // reuses the THREE existing listRecordsByKind reads (equipment,
+      // equipment-capability, verb-definition — all already served; the
+      // capabilities/verbs tabs prove reachability). Zero new API surface.
+      const derivationPromises = activeTab === 'equipment'
+        ? [
+            apiClient.listRecordsByKind('equipment-capability', 500),
+            apiClient.listRecordsByKind('verb-definition', 500),
+          ]
+        : [];
+      const results = await Promise.all([...promises, ...derivationPromises]);
       if (seq !== refreshSeqRef.current) return; // A newer refresh won the race.
       const allRecords: RecordData[] = [];
-      for (const { records } of results) allRecords.push(...records);
+      for (const { records } of results.slice(0, promises.length)) allRecords.push(...records);
       allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
       setRecords(allRecords);
+      if (activeTab === 'equipment') {
+        setCapabilityRecords(results[promises.length]?.records ?? []);
+        setVerbRecords(results[promises.length + 1]?.records ?? []);
+      } else {
+        setCapabilityRecords([]);
+        setVerbRecords([]);
+      }
     } catch {
       if (seq !== refreshSeqRef.current) return;
       setRecords([]);
+      setCapabilityRecords([]);
+      setVerbRecords([]);
     } finally {
       if (seq === refreshSeqRef.current) setLoading(false);
     }
@@ -265,6 +307,9 @@ export default function RecordRegistryPage() {
     setCreateKindPickerOpen(false);
     setPendingCreateKind(null);
     setCreateError(null);
+    // INSTR-COLLAPSE-2 C5: the derived filter belongs to the Equipment tab —
+    // a stale pill must not leak into another tab (cf. QMS7-5 DEFECT 1).
+    setMeasurementCapableOnly(false);
   }, [activeTab]);
 
   // QMS7-1 (OQ2 ruling): the AI panel's live target is the WorkspaceProvider's
@@ -564,11 +609,85 @@ export default function RecordRegistryPage() {
 
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
 
+  // D2 (REG-3 fix1): the editor's mount identity is the editing SUBJECT.
+  // @tiptap/react's useEditor(options, deps=[]) NEVER rebuilds the doc when
+  // `content` changes — with empty deps the instance manager only calls
+  // editor.setOptions(), which merges options and calls view.updateState(this.state):
+  // the existing ProseMirror doc (every fieldRow's attrs.value) is REUSED.
+  // Without a subject key, flipping edit -> create keeps the OPEN record's
+  // doc, and serializeDocument(oldDoc, seedBase) re-applies its values over
+  // the seed base — the gate's "New Record shows TRR-DEMO-1" carryover.
+  // The key changes ONLY when the subject changes (a different record, or
+  // edit <-> create); editing the same record keeps the same key, so no
+  // legitimate editor state is lost to a blanket remount.
+  const editorSubjectKey = selectedRecord
+    ? `${editorMode}:${selectedRecord.recordId || String((selectedRecord.payload as { id?: unknown }).id ?? '')}`
+    : 'none';
+
   // QMS7-6 (AC-5): the archived-browsing filter is applied AT RENDER TIME over
   // whatever `records` state holds (bait 6: no refetch on toggle, the
   // refreshRecords seq-token is untouched). Terminal rows are hidden unless
   // the toggle is on; ungoverned rows are never hidden.
   const visibleRecords = showArchived ? records : records.filter((row) => !isTerminalRow(row));
+
+  // INSTR-COLLAPSE-2 C5 (OQ-B predicate, EquipmentCapabilityService join
+  // shape mirrored in TS per OQ-A(i)): an equipment row qualifies iff it
+  // resolves (INSTANCE join on the capability's equipmentRef OR CLASS join on
+  // the equipment's class id — an EQC- record id OR an ontology CURIE id,
+  // both are just the class ref's id) at least one ACTIVE capability whose
+  // verbRef verb-definition RECORD declares the measurement verb domain.
+  // The verb's domain is read from the verb-definition RECORD data (never a
+  // verb-id table); the domain term itself is the declared schema-enum
+  // operation-layer term the OQ-B ruling confirms — not a device name, not
+  // an id-prefix sniff, not a VERB-id rule (H1/H2).
+  const measurementCapabilitiesByEquipment = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const domainByVerbId = new Map<string, string>();
+    for (const verb of verbRecords) {
+      const payload = verb.payload as { id?: string; domain?: string };
+      if (typeof payload.id === 'string' && typeof payload.domain === 'string') {
+        domainByVerbId.set(payload.id, payload.domain);
+      }
+    }
+    for (const cap of capabilityRecords) {
+      const payload = cap.payload as {
+        id?: string;
+        status?: string;
+        equipmentRef?: { id?: string };
+        equipmentClassRef?: { id?: string };
+        capabilities?: Array<{ verbRef?: { id?: string } }>;
+      };
+      if (typeof payload.id !== 'string' || payload.status !== 'active') continue;
+      const qualifiesVerb = (payload.capabilities ?? []).some(
+        (entry) => domainByVerbId.get(entry?.verbRef?.id ?? '') === MEASUREMENT_VERB_DOMAIN,
+      );
+      if (!qualifiesVerb) continue;
+      const instanceId = payload.equipmentRef?.id;
+      if (typeof instanceId === 'string') {
+        map.set(instanceId, [...(map.get(instanceId) ?? []), payload.id]);
+      }
+      const classId = payload.equipmentClassRef?.id;
+      if (typeof classId === 'string') {
+        for (const row of records) {
+          const rowPayload = row.payload as { kind?: string; id?: string; equipmentClassRef?: { id?: string } };
+          if (rowPayload.kind === 'equipment' && rowPayload.equipmentClassRef?.id === classId) {
+            map.set(rowPayload.id ?? '', [...(map.get(rowPayload.id ?? '') ?? []), payload.id]);
+          }
+        }
+      }
+    }
+    return map;
+  }, [capabilityRecords, verbRecords, records]);
+
+  const measurementCapableRows = useMemo(
+    () =>
+      visibleRecords.filter((row) => {
+        const rowPayload = row.payload as { kind?: string; id?: string };
+        return rowPayload.kind === 'equipment' &&
+          (measurementCapabilitiesByEquipment.get(rowPayload.id ?? '')?.length ?? 0) > 0;
+      }),
+    [visibleRecords, measurementCapabilitiesByEquipment],
+  );
 
   // Determine if we have projection data to render
   const hasProjection = projection !== null && projection.blocks && projection.slots;
@@ -654,6 +773,20 @@ export default function RecordRegistryPage() {
             />
             Show archived
           </label>
+          {/* INSTR-COLLAPSE-2 C5 (OQ-C(1)): the derived measurement-capable
+              pill lives ON the Equipment tab — the tab strip stays a pure
+              kind list; no kind-shaped pseudo-tab for a retired kind. */}
+          {activeTab === 'equipment' && (
+            <label className="registry-list__archived-label">
+              <input
+                type="checkbox"
+                data-testid="registry-measurement-capable-toggle"
+                checked={measurementCapableOnly}
+                onChange={(e) => setMeasurementCapableOnly(e.target.checked)}
+              />
+              Measurement-capable
+            </label>
+          )}
         </div>
         {/* RecordSearchCombobox */}
         <div className="registry-list__search">
@@ -668,40 +801,38 @@ export default function RecordRegistryPage() {
                 // handleCreateRecord).
                 handleCreateRecord(record.schemaId, record.payload);
               } else {
-                handleSelectRecord({
-                  recordId: record.recordId,
-                  payload: record.payload,
-                  ...(record.meta ? { meta: record.meta } : {}),
-                });
+                handleSelectRecord({ recordId: record.recordId, payload: record.payload });
               }
             }}
           />
         </div>
         {/* Record List - Compact (QMS7-6: renders visibleRecords — the
-            render-time archived filter, see above) */}
+            render-time archived filter, see above). INSTR-COLLAPSE-2 C5: on
+            the Equipment tab the measurement-capable pill narrows the SAME
+            rows to the derived set — each qualifying row names the capability
+            RECORD(s) that qualify it (VERDICT-critical: the ECP record is
+            visible, not just the machine). */}
         <div className="registry-list__scroll">
           {loading ? (
             <div className="registry-list__empty">Loading...</div>
-          ) : visibleRecords.length === 0 ? (
+          ) : (measurementCapableOnly && activeTab === 'equipment' ? measurementCapableRows : visibleRecords).length === 0 ? (
             <div className="registry-list__empty">No records found</div>
           ) : (
             <div className="registry-list__rows">
-              {visibleRecords.map((record) => {
+              {(measurementCapableOnly && activeTab === 'equipment' ? measurementCapableRows : visibleRecords).map((record) => {
                 const isSelected = record.recordId === selectedRecord?.recordId;
                 const displayName = (record.payload as { name?: string; title?: string; id?: string }).name ||
                                    (record.payload as { name?: string; title?: string; id?: string }).title ||
                                    record.recordId;
                 const kind = (record.payload as { kind?: string }).kind || 'record';
+                const qualifyingCapabilityIds =
+                  measurementCapableOnly && activeTab === 'equipment'
+                    ? measurementCapabilitiesByEquipment.get((record.payload as { id?: string }).id ?? '') ?? []
+                    : [];
                 return (
                   <div
                     key={record.recordId}
-                    onClick={() =>
-                      handleSelectRecord({
-                        recordId: record.recordId,
-                        payload: record.payload,
-                        ...(record.meta ? { meta: record.meta } : {}),
-                      })
-                    }
+                    onClick={() => handleSelectRecord({ recordId: record.recordId, payload: record.payload, ...(record.meta ? { meta: record.meta } : {}) })}
                     className={`registry-row${isSelected ? ' registry-row--selected' : ''}`}
                   >
                     <div className="registry-row__title">{displayName}</div>
@@ -709,6 +840,11 @@ export default function RecordRegistryPage() {
                       <span className="registry-kind-badge">
                         {kind}
                       </span>
+                      {qualifyingCapabilityIds.map((capabilityId) => (
+                        <span key={capabilityId} className="registry-kind-badge registry-kind-badge--capability">
+                          {capabilityId}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 );
@@ -767,27 +903,6 @@ export default function RecordRegistryPage() {
               }
             />
           }
-          rail={
-            selectedRecord ? (
-              <div className="registry-rail">
-                {/* Provenance first: who/when/content hash. A create draft has
-                    no record id, so the card renders nothing on its own. */}
-                <RecordProvenanceCard
-                  recordId={selectedRecord.recordId}
-                  {...(selectedRecord.meta ? { meta: selectedRecord.meta } : {})}
-                  payload={selectedRecord.payload}
-                />
-                {selectedRecord.recordId && editorMode !== 'create' ? (
-                  <RelatedRecordsCard
-                    recordId={selectedRecord.recordId}
-                    onNavigate={(id) => {
-                      window.open(`/records/${encodeURIComponent(id)}`, '_blank')
-                    }}
-                  />
-                ) : null}
-              </div>
-            ) : undefined
-          }
         >
           <div className="registry-editor-body">
             {selectedRecord.recordId && editorMode === 'edit' && (
@@ -799,6 +914,7 @@ export default function RecordRegistryPage() {
             )}
             {hasProjection ? (
               <ProjectionTapTabEditor
+                key={editorSubjectKey}
                 ref={taptabRef}
                 blocks={projection.blocks}
                 slots={projection.slots}
@@ -811,6 +927,26 @@ export default function RecordRegistryPage() {
                 {projectionLoading ? 'Loading editor...' : 'Editor not available for this record'}
               </p>
             )}
+          </div>
+          {/* REG-6: provenance docks at the BOTTOM of the record content —
+              full width, chrome-free wrapper (the cards carry their own
+              separation; a create draft renders an empty zero-height
+              wrapper). Verbatim move from the retired side rail: same props,
+              same editorMode !== 'create' guard. */}
+          <div className="registry-provenance-footer">
+            <RecordProvenanceCard
+              recordId={selectedRecord.recordId}
+              {...(selectedRecord.meta ? { meta: selectedRecord.meta } : {})}
+              payload={selectedRecord.payload}
+            />
+            {selectedRecord.recordId && editorMode !== 'create' ? (
+              <RelatedRecordsCard
+                recordId={selectedRecord.recordId}
+                onNavigate={(id) => {
+                  window.open(`/records/${encodeURIComponent(id)}`, '_blank')
+                }}
+              />
+            ) : null}
           </div>
         </DocumentShell>
       ) : (

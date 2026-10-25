@@ -9,8 +9,15 @@ properties:
   adapterId:
     const: molecular_devices_gemini
   instrumentRef:
-    type: object
-    additionalProperties: true
+    # INSTR-COLLAPSE-1 C2: sidecar active-read contract field NAME retained
+    # (gemini bridge shape, memo §5 blob-path posture); the ref TARGET is
+    # pinned to equipment — the retired instrument kind is not a ref target.
+    allOf:
+    - $ref: "../datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
   outputPath:
     type: string
     minLength: 1

@@ -118,6 +118,9 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
   const [reviewToken, setReviewToken] = useState(0)
+  // VPDF-3 (D5): the intake runner button (the gap line's affordance).
+  const [intakeRunning, setIntakeRunning] = useState(false)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
 
   // Resizable split — default 40:60 (PDF : editor).
   const [leftPct, setLeftPct] = useState(DEFAULT_SPLIT_PCT)
@@ -235,6 +238,44 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
 
   const canCandidateId =
     saidCandidate && /^CAN-[A-Za-z0-9_-]+$/.test(saidCandidate.recordId) ? saidCandidate.recordId : candidateRefId
+
+  /**
+   * VPDF-3 (task (5)): the RAW ref id — whatever the envelope names, CAN-* or
+   * not. When nothing was joined for this document and the ref names a
+   * non-CAN-* id (a graph-lemur ghost is never a record) or a CAN-* that
+   * failed to load, the SAID pane says so instead of falling through silently.
+   */
+  const rawCandidateRefId = useMemo(() => {
+    const ref = (record?.payload as Record<string, unknown> | undefined)?.vendorProtocolCandidateRef as
+      | { kind?: string; type?: string; id?: string }
+      | undefined
+    if (ref?.kind === 'record' && typeof ref.id === 'string' && ref.id.trim()) return ref.id.trim()
+    return null
+  }, [record])
+  const staleCandidateRefId = rawCandidateRefId && !saidCandidate ? rawCandidateRefId : null
+
+  /**
+   * VPDF-3 (OQ-3, probe-pinned): the intake runner reads the PERSISTED
+   * CANDIDATE ARTIFACT, which is keyed by the candidate documentId — the ref
+   * id when the VPDF names one (live probe: trees?documentId=<VPDF route id>
+   * and trees?documentId=<ghost ref id> both answer {"trees":[]}; every live
+   * tree keys on the candidate-artifact documentId, never the VPDF route id).
+   * So the button sends the ref id when present, else the route id.
+   */
+  const intakeDocumentId = rawCandidateRefId ?? recordId ?? null
+
+  /**
+   * VPDF-3 (D2): the staleness banner READS the written diagnostic only —
+   * CANDIDATE_SUPERSEDED_BY_REEXTRACT is stamped server-side at re-extract.
+   * No UI-side timestamp comparison (no dual truth).
+   */
+  const draftIsStale = useMemo(() => {
+    const diagnostics = semanticView?.xdr.payload.diagnostics
+    return (
+      Array.isArray(diagnostics) &&
+      diagnostics.some((d) => (d as Record<string, unknown> | null)?.code === 'CANDIDATE_SUPERSEDED_BY_REEXTRACT')
+    )
+  }, [semanticView])
 
   // Load the wave-2 data state: the MEANT draft (extraction-drafts joined on
   // source_artifact.id === this VPDF, M2) and the SAID candidate. A missing
@@ -631,12 +672,36 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                     kind: 'note',
                     text: `\nchunk ${event.index}: ${event.parsed ? `${event.steps} step(s) parsed` : 'no JSON parsed'} in ${Math.round(event.elapsedMs / 1000)}s\n`,
                   },
+                  // VPDF-4 (D3): an unparseable chunk's raw tail (head … tail)
+                  // survives in the log so the failure is debuggable without
+                  // re-running. Additive — the server only sends it on failure.
+                  ...(event.preview
+                    ? [{ kind: 'note' as const, text: `  raw tail: ${event.preview}\n` }]
+                    : []),
                 ])
                 break
               case 'done':
                 setExtractElapsedMs(event.elapsedMs)
-                setExtractStage('Extraction complete')
-                setExtractNote('Extraction finished. The semantic pass drafts the protocol from the stored candidate — this route never completes a literal protocol.')
+                // VPDF-4 (1): belt against a zero-step candidate — the server
+                // only sends `done` for genuinely parsed runs now, but the
+                // panel never paints "complete" over an empty candidate.
+                setExtractStage(
+                  Array.isArray((event.candidate as { steps?: unknown[] })?.steps) &&
+                  (event.candidate as { steps: unknown[] }).steps.length === 0
+                    ? 'Extraction failed: candidate has zero steps'
+                    : 'Extraction complete',
+                )
+                if (event.candidateRecordId) {
+                  // VPDF-3 (D4): the stream persisted its candidate server-side.
+                  // The note names the stored record, and the draftToken bump
+                  // re-runs the existing SAID join (:243-278) so the semantic
+                  // affordance lights against the fresh CAN-* — no new state
+                  // machinery.
+                  setExtractNote(`Candidate stored as ${event.candidateRecordId}. The semantic pass drafts the protocol from the stored candidate.`)
+                  setDraftToken((n) => n + 1)
+                } else {
+                  setExtractNote('Extraction finished. The semantic pass drafts the protocol from the stored candidate — this route never completes a literal protocol.')
+                }
                 break
               case 'error':
                 setExtractError(event.message)
@@ -681,6 +746,28 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
       setDrafting(false)
     }
   }, [canCandidateId])
+
+  /**
+   * VPDF-3 (D5, task (6)): the gap line's affordance. The server runner exists
+   * (POST /protocol-ide/intake/refresh re-derives stored decision trees from
+   * the persisted candidate artifact, no LLM); the button runs it for THIS
+   * document. Success bumps reviewToken so the tree lands through the normal
+   * review reload. Failure shows the server's refusal verbatim (friction-first:
+   * an honest refusal beats a silent gap).
+   */
+  const handleRunIntake = useCallback(async () => {
+    if (!intakeDocumentId) return
+    setIntakeRunning(true)
+    setIntakeError(null)
+    try {
+      await apiClient.refreshIntakeTrees(intakeDocumentId)
+      setReviewToken((n) => n + 1)
+    } catch (err) {
+      setIntakeError(describeWriteRejection(err))
+    } finally {
+      setIntakeRunning(false)
+    }
+  }, [intakeDocumentId])
 
   // Split-drag handlers.
   /**
@@ -937,6 +1024,15 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
               {...(canCandidateId ? { candidateRecordId: canCandidateId } : {})}
               onGotoPage={handleGotoPage}
             />
+          ) : staleCandidateRefId ? (
+            /* VPDF-3 (task (5)): the ref names nothing — a graph-lemur ghost id
+               is never a record, and a CAN-* that failed to load is not a
+               silent fall-through either. Say what the ref names and the repair. */
+            <div className="vpdf-review__diagnostics" data-testid="vpdf-stale-candidate-ref" role="alert">
+              <p className="vpdf-review__diagnostic vpdf-review__diagnostic--warning">
+                Candidate ref names nothing (`{staleCandidateRefId}`) — re-extract to mint a candidate.
+              </p>
+            </div>
           ) : null}
         </div>
 
@@ -965,14 +1061,28 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
         {/* Right: the MEANT (semantic draft present) or the no-draft affordance */}
         <div className="vpdf-review__right" style={{ flex: 1 }}>
           {semanticView ? (
-            <SemanticDraftPanel
-              xdrRecordId={semanticView.xdr.recordId}
-              candidateIndex={semanticView.candidateIndex}
-              draft={semanticView.draft}
-              {...(sourcePageCount !== undefined ? { sourcePageCount } : {})}
-              projection={projection}
-              onGotoPage={handleGotoPage}
-            />
+            <>
+              {/* VPDF-3 (D2): reads the written diagnostic ONLY — the flag is
+                  stamped server-side at re-extract. Friction, not a gate: the
+                  editor stays usable. */}
+              {draftIsStale ? (
+                <p
+                  className="vpdf-review__diagnostic vpdf-review__diagnostic--warning"
+                  data-testid="vpdf-draft-staleness-banner"
+                  role="status"
+                >
+                  This draft was built from an older extraction — re-run the semantic pass.
+                </p>
+              ) : null}
+              <SemanticDraftPanel
+                xdrRecordId={semanticView.xdr.recordId}
+                candidateIndex={semanticView.candidateIndex}
+                draft={semanticView.draft}
+                {...(sourcePageCount !== undefined ? { sourcePageCount } : {})}
+                projection={projection}
+                onGotoPage={handleGotoPage}
+              />
+            </>
           ) : (
             <>
               {canCandidateId ? (
@@ -1045,11 +1155,34 @@ export function VendorPdfReviewPage({ embedded = false }: VendorPdfReviewPagePro
                         gap={
                           activeReview
                             ? 'This document states no if/then questions that the intake engine could derive (its steps carry no branches and no table its steps point at).'
-                            : 'No decision tree is attributable to this PDF yet — run intake on it first.'
+                            : 'No decision tree is attributable to this PDF yet.'
                         }
                         onRedrafted={() => setReviewToken((n) => n + 1)}
                         {...(activeReview?.tree ? { onBuildBranch: buildBranchForChoices } : {})}
                       />
+                      {/* VPDF-3 (D5, task (6)): the gap line now carries the
+                          affordance it always told you to run — the real intake
+                          runner for THIS document (no LLM, re-derives from the
+                          persisted candidate artifact). A refusal shows the
+                          server's message verbatim. */}
+                      {!activeReview ? (
+                        <div className="vpdf-review__affordance" data-testid="vpdf-intake-refresh-block">
+                          <button
+                            type="button"
+                            className="vpdf-review__extract"
+                            data-testid="vpdf-intake-refresh"
+                            disabled={intakeRunning || !intakeDocumentId}
+                            onClick={() => void handleRunIntake()}
+                          >
+                            {intakeRunning ? 'Running intake on this document…' : 'Run intake on this document'}
+                          </button>
+                          {intakeError ? (
+                            <p className="vpdf-review__error" data-testid="vpdf-intake-refresh-error" role="alert">
+                              {intakeError}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>

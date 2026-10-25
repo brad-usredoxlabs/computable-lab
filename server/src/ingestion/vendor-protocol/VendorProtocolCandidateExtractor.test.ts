@@ -1,8 +1,10 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { decodeVendorProtocolPdf, extractVendorProtocolCandidate } from './VendorProtocolPdf.js';
+import { extractVendorProtocolCandidateFromInput } from './VendorProtocolCandidateService.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -150,3 +152,102 @@ describe('VendorProtocolCandidateExtractor', () => {
     ]));
   });
 });
+
+describe('quick-reference substance extraction (VPDF-2: the CellROX qr sheet through the live text path)', () => {
+  // The LIVE regenerate path (ProtocolExtractionService) joins the vendor-pdf
+  // record's extractedText pages with '\n\n' — no '\f' — and passes the record's
+  // title as fileName ONLY, so the candidate title became the page-1 furniture
+  // line 'Quick Reference' and the reagent table yielded no materials. This
+  // fixture is the VPDF-651F03789D80 reconstruction from the VPDF-2 spec
+  // grounding: wrapped reagent-table rows (the PDF text layer breaks
+  // 'CellROX® Detection / Reagent' and 'CellROX® Blue Dead Cell / Stain' across
+  // lines with a leading space), ® artifacts, U+2013 en-dashes in
+  // '500–1000', '30–60', '104–106'.
+  const CELLROX_QR_TEXT = [
+    `Quick Reference
+CellROX\u00ae Flow Cytometry Assay Kits
+Pub. No. MAN0007985
+
+Reagent\tCat. No.
+CellROX\u00ae Detection
+ Reagent
+CellROX\u00ae Deep Red\tC10491
+CellROX\u00ae Green\tC10492
+SYTOX\u00ae Blue Dead Cell
+ Stain
+SYTOX\u00ae Red Dead Cell
+ Stain`,
+    `Quick Protocol
+1. Grow cells in complete medium to a density of 104\u2013106 cells/mL.
+2. Prepare negative and positive control samples.
+3. Induce ROS by adding the appropriate stimulus to the cells.
+4. Add CellROX\u00ae Detection Reagent at 500\u20131000 nM and incubate for 30\u201360 minutes at 37\u00b0C, 5% CO2.
+5. During the final 15 minutes of incubation, add SYTOX\u00ae Dead Cell Stain solution at 1\u20135 \u00b5M to assess viability.
+6. Analyze samples on a flow cytometer using the appropriate filter sets for the CellROX reagent used.`,
+  ].join('\n\n')
+  // The vendor-pdf record's own title (payload.title, verbatim from the live
+  // GET VPDF-651F03789D80): 'Molecular Probes™\xa0CellROX™ …' carries a
+  // non-breaking space after the trademark.
+  const PAYLOAD_TITLE = 'Molecular Probes\u2122\u00a0CellROX\u2122 Green Flow Cytometry Assay Kit | Fisher Scientific'
+
+  it('threads the vendor-pdf title into the candidate instead of the page-1 furniture line', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'vpdf2-cellrox-'))
+    try {
+      const result = await extractVendorProtocolCandidateFromInput({
+        workspaceRoot,
+        text: CELLROX_QR_TEXT,
+        documentId: 'VPDF-651F03789D80',
+        fileName: PAYLOAD_TITLE,
+        title: PAYLOAD_TITLE,
+        persist: false,
+      })
+
+      const candidate = result.candidate
+      expect(candidate.title).toContain('CellROX')
+      expect(candidate.title).not.toContain('Quick Reference')
+      expect(candidate.source.title).toContain('CellROX')
+      expect(candidate.source.title).not.toContain('Quick Reference')
+
+      // b. the reagent table and the protocol steps yield the materials.
+      const materialLabels = candidate.materials.map((item) => item.label)
+      expect(materialLabels).toEqual(expect.arrayContaining([
+        'CellROX Detection Reagent',
+        'CellROX Deep Red',
+        'CellROX Green',
+        'SYTOX Dead Cell Stain',
+        'complete medium',
+      ]))
+
+      // c. the analysis instrument is a candidate.
+      expect(candidate.equipment.map((item) => item.label)).toContain('flow cytometer')
+
+      // d. hard pins: the incubation step carries the 37 °C temperature and
+      // the 30–60 minutes duration as printed (U+2013 preserved in raw).
+      const step4 = candidate.steps.find((step) => step.stepNumber === 4)
+      expect(step4).toBeDefined()
+      expect(step4!.conditions.temperatures?.some((t) => t.value === 37 && t.unit === 'C')).toBe(true)
+      expect(step4!.conditions.durations?.some((d) => d.raw.includes('30\u201360') && d.unit === 'minutes')).toBe(true)
+      expect(step4!.materials).toEqual(expect.arrayContaining(['CellROX Detection Reagent']))
+      expect(candidate.steps[5]?.equipment).toContain('flow cytometer')
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('an empty payload title falls back to the page-1 line exactly as before', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'vpdf2-cellrox-fallback-'))
+    try {
+      const result = await extractVendorProtocolCandidateFromInput({
+        workspaceRoot,
+        text: CELLROX_QR_TEXT,
+        documentId: 'VPDF-651F03789D80-fallback',
+        fileName: 'cellrox-qr.pdf',
+        title: '   ',
+        persist: false,
+      })
+      expect(result.candidate.title).toBe('Quick Reference')
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true })
+    }
+  })
+})

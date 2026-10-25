@@ -4,7 +4,6 @@ id: EQP-AUTOCLAVE
 name: Autoclave
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - autoclave
   - sterilizer

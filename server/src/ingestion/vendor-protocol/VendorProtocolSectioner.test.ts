@@ -141,3 +141,65 @@ Tissues (Spin-Column Protocol)
     expect(new Set(candidate.steps.map((s) => s.sectionId)).size).toBe(2)
   })
 })
+
+describe('vendor quick-reference vocabulary (VPDF-1: the CellROX qr sheet)', () => {
+  // The CellROX Flow Cytometry Assay Kits quick-reference sheet (live VPDF
+  // VPDF-651F03789D80, 2 pages) prints its protocol under the vendor heading
+  // "Quick Protocol", not "Protocol". The `Protocol` table entry is anchored
+  // at line start, so "Quick Protocol" never matched: the document yielded no
+  // protocol section, the vendor_protocol_missing_protocol_section diagnostic
+  // fired, and the six printed steps were invisible. Page 1 is the
+  // "Quick Reference" cover page (title, Pub. No., reagent table).
+  const CELLROX_QR = `Quick Reference
+CellROX® Flow Cytometry Assay Kits
+Pub. No. MAN0007985
+
+Reagent	Cat. No.
+CellROX® Orange Reagent	C10491
+CellROX® Deep Red Reagent	C10492
+CellROX® Green Reagent	C10493
+SYTOX® Dead Cell Stain	S34857
+\fQuick Protocol
+ 1. Grow cells in appropriate media to a density of 0.5–1 × 10⁶ cells/mL.
+ 2. Prepare negative and positive control samples.
+ 3. Induce ROS by adding the appropriate stimulus to the cells.
+ 4. Add the CellROX® Detection Reagent at 500–1000 nM and incubate at 37°C, 5% CO₂ for 30 minutes.
+ 5. During the final 15 minutes of incubation, add SYTOX® Dead Cell Stain at 1–5 µM to assess viability.
+ 6. Analyze samples on a flow cytometer using the appropriate filter sets for the CellROX reagent used.
+`
+
+  it('treats the vendor heading "Quick Protocol" as a protocol section with its six steps', () => {
+    const document = createVendorProtocolDocumentFromText(CELLROX_QR, {
+      filename: 'cellrox-qr.pdf',
+      documentId: 'doc-cellrox-qr',
+    })
+
+    const protocol = document.sections.find((section) => section.kind === 'protocol')
+    expect(protocol).toBeDefined()
+    // The printed heading is the title: no colon suffix, so the pattern title
+    // stands (headingTitleAt's fallback), exactly as the vendor prints it.
+    expect(protocol?.title).toBe('Quick Protocol')
+    expect(protocol?.provenance.pageStart).toBe(2)
+    expect(protocol?.sourceText).toContain('Grow cells in appropriate media')
+    expect(protocol?.sourceText).toContain('Analyze samples on a flow cytometer')
+
+    // Page 1's contents are bounded from the protocol section: everything
+    // before the first heading is the cover section (no Quick Reference entry
+    // needed to fence it).
+    const cover = document.sections.find((section) => section.kind === 'cover')
+    expect(cover?.sourceText).toContain('CellROX® Flow Cytometry Assay Kits')
+    expect(protocol?.sourceText).not.toContain('MAN0007985')
+
+    // Decode-level diagnostics: the missing-protocol-section warning must be gone.
+    expect(document.diagnostics.some((d) => d.code === 'vendor_protocol_missing_protocol_section')).toBe(false)
+
+    const candidate = extractVendorProtocolCandidate(document)
+    // createProtocolDiagnostics output: same code must not reappear there.
+    expect(candidate.diagnostics.some((d) => d.code === 'vendor_protocol_missing_protocol_section')).toBe(false)
+
+    // The six printed steps, numbered 1..6, each provenanced to page 2.
+    expect(candidate.steps.map((step) => step.stepNumber)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(candidate.steps.every((step) => step.provenance.pageStart === 2)).toBe(true)
+    expect(candidate.steps.every((step) => step.sectionId === protocol!.id)).toBe(true)
+  })
+})

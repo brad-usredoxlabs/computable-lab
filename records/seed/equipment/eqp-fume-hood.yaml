@@ -4,7 +4,6 @@ id: EQP-FUME-HOOD
 name: Fume Hood
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - fume hood
   - chemical fume hood

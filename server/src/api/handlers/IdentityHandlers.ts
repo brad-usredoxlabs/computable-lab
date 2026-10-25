@@ -5,6 +5,7 @@ import { LocalIdentityService, USER_SCHEMA_ID } from '../../security/LocalIdenti
 import {
   AuthorizationService,
   ACCESS_POLICY_SCHEMA_ID,
+  type MintPrincipalRefusal,
 } from '../../security/AuthorizationService.js';
 import type { AccessGrant } from '../../security/AccessControlService.js';
 import type { CredentialStore } from '../../security/CredentialStore.js';
@@ -367,9 +368,14 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
       }
 
       // Ensure a base ACL exists, then update visibility + grants on it.
+      // OWN-15 FIX-2: when this PUT mints the base ACL, honest mint refusals
+      // (unresolvable declared principals stripped at mint) surface in the
+      // response's typed `mintRefusals` array — response-level only, never
+      // stored on the record, and the PUT still succeeds.
       let policyEnv = await authorizationService.findPolicyForRecord(id);
+      const mintRefusals: MintPrincipalRefusal[] = [];
       if (!policyEnv) {
-        policyEnv = await authorizationService.ensureOwnerPolicy(record, resolved.userId ?? '');
+        policyEnv = await authorizationService.ensureOwnerPolicy(record, resolved.userId ?? '', mintRefusals);
       }
       if (!policyEnv) {
         reply.status(500);
@@ -401,7 +407,10 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
         reply.status(500);
         return { error: 'POLICY_UPDATE_FAILED', message: result.error ?? 'Failed to update access policy' };
       }
-      return aclFromEnvelope(result.envelope ?? updatedEnvelope);
+      const acl = aclFromEnvelope(result.envelope ?? updatedEnvelope);
+      // OWN-15 FIX-2: response-level typed refusals from the base-ACL mint
+      // (exactOptionalPropertyTypes: absent when nothing was refused).
+      return acl && mintRefusals.length > 0 ? { ...acl, mintRefusals } : acl;
     },
 
     // GET /api/groups

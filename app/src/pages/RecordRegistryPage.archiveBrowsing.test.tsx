@@ -91,8 +91,9 @@ const EQP_ACTIVE_ROW = {
     displayName: 'EQP-QUANTSTUDIO5',
     lifecycleId: 'registry-ops',
     state: 'active',
-    // Measured: the EQP payload carries BOTH state and status.
-    status: 'active',
+    // QMS8-C (D3): the equipment payload carries NO domain status (retired).
+    // The discriminating status-vs-state probe below lives on the EQC row,
+    // whose status field is NOT retired (equipment-class is not a covered kind).
   },
 }
 const EQC_ARCHIVED_ROW = {

@@ -108,7 +108,9 @@ export class RecordSearchHandlers {
       'equipment-class': 'laboratory equipment model specifications',
       'material': 'chemical reagent supplier',
       'labware': 'laboratory consumable specifications',
-      'instrument': 'analytical instrument specifications',
+      // INSTR-COLLAPSE-2 C4 (OQ-C(2) ratified DELETE): the map is keyed by
+      // RECORD KIND; the instrument kind is deleted, so this is a dead
+      // registry key — not concept vocabulary. Removed with the kind.
     };
     const suffix = kinds.map(k => kindHints[k]).filter(Boolean)[0] || 'laboratory';
 
@@ -235,7 +237,6 @@ Rules:
 - Generate an appropriate ID with the correct prefix for this record type
 - Fill in all fields you can determine from the search context
 - Omit fields you cannot determine
-- Set status to 'active' if the schema has a status field
 - Respond with ONLY a valid JSON object, no markdown fencing`;
 
     // Prepare headers

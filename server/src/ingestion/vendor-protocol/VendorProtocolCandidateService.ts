@@ -7,6 +7,7 @@ import {
   extractVendorProtocolCandidate,
 } from './VendorProtocolPdf.js';
 import type { ProtocolCandidate, VendorProtocolDocument } from './types.js';
+import type { RecordStore } from '../../store/types.js';
 
 export interface ExtractVendorProtocolCandidateInput {
   workspaceRoot: string;
@@ -14,6 +15,8 @@ export interface ExtractVendorProtocolCandidateInput {
   contentBase64?: string;
   text?: string;
   fileName?: string;
+  /** The vendor-pdf record's own title, when the caller has the record. */
+  title?: string;
   documentId?: string;
   vendor?: string;
   persist?: boolean;
@@ -45,11 +48,13 @@ export async function extractVendorProtocolCandidateFromInput(
   const document = loaded.inputKind === 'text'
     ? createVendorProtocolDocumentFromText(loaded.text, {
         filename: loaded.fileName,
+        ...(input.title ? { title: input.title } : {}),
         ...(input.documentId ? { documentId: input.documentId } : {}),
         ...(input.vendor ? { vendor: input.vendor } : {}),
       })
     : await decodeVendorProtocolPdf(loaded.buffer, {
         filename: loaded.fileName,
+        ...(input.title ? { title: input.title } : {}),
         ...(input.documentId ? { documentId: input.documentId } : {}),
         ...(input.vendor ? { vendor: input.vendor } : {}),
       });
@@ -182,4 +187,398 @@ function safeFileName(value: string): string {
   const key = artifactKey(value);
   if (key.length <= 100) return key;
   return `${key.slice(0, 80)}-${createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
+}
+
+// ---------------------------------------------------------------------------
+// VPDF-3 — the RECORD side of the candidate (store upsert-by-documentId).
+//
+// The filesystem artifact above is the intake runner's read path; the record
+// is the SAID the review surface joins on. Extraction remains the SOLE writer
+// of vendor-protocol-candidate records (rung-vocabulary VENDOR mints_on): the
+// mint goes through store.create with validation ON — POST /records cannot
+// mint this kind (the handler's FAIR stamping collides with the closed
+// schema; recorded finding in Wave2SemanticPassE2E). Re-extract UPDATES the
+// existing record in place (Brad 2026-10-20 ruling; the append-only wall
+// dropped this kind through its DATA list, OQ-1).
+// ---------------------------------------------------------------------------
+
+export const VPC_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml';
+
+/**
+ * Deterministic candidate record id: sha256 over the documentId — one candidate
+ * per document BY CONSTRUCTION. Never Date.now(): a retry must not accumulate.
+ * Matches the semantic-draft route's `^CAN-[A-Za-z0-9_-]+$` gate.
+ */
+export function candidateRecordIdForDocument(documentId: string): string {
+  return `CAN-vendorpdf-${createHash('sha256').update(documentId).digest('hex').slice(0, 16)}`;
+}
+
+/** Structural mirror of the stream handler's merged AI chunk summary (the
+ *  adapter's input; kept here so the service owns the candidate shape). */
+export type AiChunkDiagnosticEntry =
+  | { code?: string; severity?: string; message?: string }
+  | string
+  | number
+  | boolean
+  | null;
+
+/** fix3 D3: `diagnostics` is widened — mergeChunkResults always builds a real
+ *  array, but the adapter is exported and must degrade (not throw) on a
+ *  malformed non-array upstream value. */
+export type AiChunkDiagnosticsInput = AiChunkDiagnosticEntry[] | AiChunkDiagnosticEntry | Record<string, unknown> | null;
+
+/** Raw model shape for a step's notes: the real model emits a bare string
+ *  (or null) where the schema requires an array of strings. unknown[] keeps
+ *  the type honest for exotic arrays (fix3 D1: entries may be primitives or
+ *  objects — the adapter must not silently drop them). */
+export type AiChunkStepNotes = unknown[] | string[] | string | null;
+
+export interface AiChunkCandidateSummary {
+  kind?: string;
+  title?: string;
+  scope?: string;
+  materials?: Array<{ label: string; role?: string; confidence?: number }>;
+  labware?: Array<{ label: string; role?: string }>;
+  equipment?: Array<{ label: string }>;
+  steps?: Array<{
+    stepNumber?: number;
+    text: string;
+    materials?: string[];
+    labware?: string[];
+    equipment?: string[];
+    notes?: AiChunkStepNotes;
+    confidence?: number;
+  }>;
+  diagnostics?: AiChunkDiagnosticsInput;
+}
+
+export interface CandidateRecordSourceMeta {
+  documentId: string;
+  filename: string;
+  pageCount: number;
+  vendor?: string;
+  /** Title fallback: the VPDF record's own title, never 'Untitled Protocol'. */
+  fallbackTitle: string;
+}
+
+/** Declared honesty marker (OQ-2): AI chunk extraction anchors facts at the
+ *  document level; pageStart:1 is a conservative floor, not an observed page. */
+export const AI_CHUNK_ANCHORS_APPROXIMATE = 'AI_CHUNK_ANCHORS_APPROXIMATE';
+
+function clampConfidence(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5;
+}
+
+/**
+ * VPDF-3 fix2 (live-lap finding): the real model emits a step's `notes` as a
+ * BARE STRING where the schema requires an array of strings (Ajv2020:
+ * /steps/N notes "must be array" for every real step). Same adapter seam as
+ * normalizeDiagnosticEntry: a non-empty string becomes a one-element array
+ * with the model's text verbatim; empty/null/missing becomes [] (no fabricated
+ * content); a real array passes through.
+ *
+ * VPDF-3 fix3 D1 (adv-review): the array path must be LOSSLESS for present
+ * data — dropping is legal only for null/undefined entries. Primitive entries
+ * stringify with parity to normalizeDiagnosticEntry (String(n)); object/array
+ * entries JSON-stringify into a note so the model's content survives instead
+ * of vanishing. An object-typed `notes` (not an array at all) JSON-stringifies
+ * into a single note for the same no-silent-drop reason.
+ */
+function normalizeNoteValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value.trim() === '' ? null : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function normalizeStepNotes(notes: AiChunkStepNotes | undefined): string[] {
+  if (Array.isArray(notes)) {
+    return notes.map(normalizeNoteValue).filter((n): n is string => n !== null);
+  }
+  if (typeof notes === 'string') return notes.trim() ? [notes] : [];
+  const rendered = normalizeNoteValue(notes);
+  return rendered === null ? [] : [rendered];
+}
+
+/** fix3 D3: coerce the (possibly malformed) diagnostics input into an array
+ *  of entries. A present non-array value (bare string, single object) is
+ *  wrapped into a one-entry array so its content survives honestly; only
+ *  null/undefined produce an empty array. Never throws. */
+function diagnosticsInputToEntries(diagnostics: AiChunkDiagnosticsInput | undefined): AiChunkDiagnosticEntry[] {
+  if (diagnostics === null || diagnostics === undefined) return [];
+  if (Array.isArray(diagnostics)) return diagnostics;
+  return [diagnostics];
+}
+
+/** Shape-filler constant (NOT domain policy): the code the adapter gives a
+ *  diagnostic the model emitted without one. */
+const MODEL_DIAGNOSTIC_CODE = 'MODEL_DIAGNOSTIC';
+
+/**
+ * VPDF-3 fix2: the real inference model emits top-level `diagnostics` as an
+ * array of BARE STRINGS (live defect: chunk parsed cleanly, persist died with
+ * /diagnostics/N "must be object" under Ajv2020 vs the schema's object-item
+ * contract). mergeChunkResults copies them verbatim, so the adapter — which
+ * owns candidate-shape normalization — normalizes every entry into a
+ * schema-legal {severity, code, message} object. No schema loosening, no
+ * kind-branching. Honesty rule: fillers describe the SHAPE failure only;
+ * protocol truth is never fabricated, and the model's own strings survive
+ * verbatim as message.
+ */
+function normalizeDiagnosticEntry(
+  entry: AiChunkDiagnosticEntry,
+): { severity: 'info' | 'warning' | 'error'; code: string; message: string } | null {
+  if (entry === null || entry === undefined) return null;
+  if (typeof entry === 'string') {
+    return entry.trim()
+      ? { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: entry }
+      : null;
+  }
+  if (typeof entry === 'number' || typeof entry === 'boolean') {
+    return { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: String(entry) };
+  }
+  if (typeof entry !== 'object' || Array.isArray(entry)) {
+    return { severity: 'warning', code: MODEL_DIAGNOSTIC_CODE, message: 'Model diagnostic (malformed)' };
+  }
+  const raw = entry as Record<string, unknown>;
+  const severity = raw.severity === 'error' || raw.severity === 'warning' || raw.severity === 'info'
+    ? raw.severity
+    : 'warning';
+  const code = typeof raw.code === 'string' && raw.code.trim() ? raw.code : MODEL_DIAGNOSTIC_CODE;
+  // VPDF-3 fix3 D2 (adv-review): a message that IS present but not a string
+  // (e.g. ['part one','part two']) must render honestly BEFORE falling back
+  // to the code/malformed rendering — a supplied message's content survives.
+  // VPDF-3 fix4 D2 residual (adv-review): the object branch routes through
+  // normalizeNoteValue, whose try/catch String() fallback (:291-295) keeps
+  // the exported adapter non-throwing for NON-serializable messages
+  // (circular structure, BigInt) instead of dying inside JSON.stringify.
+  // Serializable objects keep the same JSON rendering as before.
+  const renderedMessage = Array.isArray(raw.message)
+    ? (raw.message.length > 0 ? raw.message.map((m) => String(m)).join(' … ') : '')
+    : raw.message !== null && raw.message !== undefined && typeof raw.message !== 'object'
+      ? String(raw.message)
+      : raw.message && typeof raw.message === 'object'
+        ? normalizeNoteValue(raw.message) ?? ''
+        : '';
+  const message = (typeof raw.message === 'string' && raw.message.trim()) || renderedMessage.trim()
+    ? (typeof raw.message === 'string' && raw.message.trim() ? raw.message : renderedMessage)
+    : (code !== MODEL_DIAGNOSTIC_CODE ? `Model diagnostic (${code})` : 'Model diagnostic (malformed)');
+  // Well-formed entries pass through as-is — extra properties the schema
+  // allows (additionalProperties: true, e.g. details) are preserved.
+  if (
+    raw.severity === severity &&
+    raw.code === code &&
+    raw.message === message
+  ) {
+    return entry as { severity: 'info' | 'warning' | 'error'; code: string; message: string };
+  }
+  return { ...raw, severity, code, message };
+}
+
+/**
+ * Pure adapter: AI chunk summary → schema-legal vendor-protocol-candidate
+ * payload (vendor-protocol-candidate.schema.yaml, additionalProperties:false,
+ * steps minItems 1). The schema is NOT loosened for the adapter.
+ *
+ * OQ-2 (adopted): every fact carries the document-level anchor the VENDOR
+ * rung's lineage requires (provenance.documentId = the real VPDF documentId)
+ * plus pageStart:1 as a DECLARED conservative floor — the chunk stream merges
+ * per-chunk JSON with no per-page offsets, so no page is ever fabricated
+ * beyond that floor. The floor is announced by the AI_CHUNK_ANCHORS_APPROXIMATE
+ * diagnostic, which SaidFactsPane renders honestly.
+ */
+export function adaptAiChunkCandidateToRecordPayload(
+  summary: AiChunkCandidateSummary,
+  meta: CandidateRecordSourceMeta,
+): Record<string, unknown> {
+  const provenance = { documentId: meta.documentId, pageStart: 1 };
+  const steps = (summary.steps ?? []).map((step, i) => {
+    const stepNumber = typeof step.stepNumber === 'number' && step.stepNumber >= 1 ? step.stepNumber : i + 1;
+    const sourceText = step.text ?? '';
+    return {
+      id: `step-${stepNumber}`,
+      stepNumber,
+      sourceText,
+      actions: [{ actionKind: 'other' as const, sourceText, provenance: { ...provenance } }],
+      conditions: {},
+      materials: step.materials ?? [],
+      labware: step.labware ?? [],
+      equipment: step.equipment ?? [],
+      notes: normalizeStepNotes(step.notes),
+      branches: [],
+      provenance: { ...provenance },
+      confidence: clampConfidence(step.confidence),
+    };
+  });
+  const extractedItems = (
+    items: Array<{ label: string; role?: string; confidence?: number }> | undefined,
+    prefix: string,
+  ) => (items ?? []).map((item, i) => ({
+    id: `${prefix}-${i + 1}`,
+    label: item.label,
+    // The model's label IS the extracted text for a chunk candidate.
+    sourceText: item.label,
+    provenance: { ...provenance },
+    confidence: clampConfidence(item.confidence),
+    ...(item.role ? { role: item.role } : {}),
+  }));
+  return {
+    kind: 'vendor-protocol-candidate',
+    source: {
+      documentId: meta.documentId,
+      filename: meta.filename,
+      ...(meta.vendor ? { vendor: meta.vendor } : {}),
+      pageCount: meta.pageCount,
+    },
+    title: summary.title?.trim() || meta.fallbackTitle,
+    ...(summary.scope?.trim() ? { scope: summary.scope } : {}),
+    sections: [],
+    materials: extractedItems(summary.materials, 'mat'),
+    equipment: extractedItems(summary.equipment, 'eq'),
+    labware: extractedItems(summary.labware, 'lw'),
+    steps,
+    tables: [],
+    notes: [],
+    outputs: [],
+    diagnostics: [
+      ...diagnosticsInputToEntries(summary.diagnostics)
+        .map(normalizeDiagnosticEntry)
+        .filter((d): d is { severity: 'info' | 'warning' | 'error'; code: string; message: string } => d !== null),
+      {
+        severity: 'warning' as const,
+        code: AI_CHUNK_ANCHORS_APPROXIMATE,
+        message: 'Page anchors are document-level under AI chunk extraction: provenance.pageStart is a conservative floor (1), not an observed page.',
+      },
+    ],
+  };
+}
+
+async function findCandidateRecordForDocument(
+  store: RecordStore,
+  documentId: string,
+): Promise<{ recordId: string; schemaId: string } | null> {
+  const candidates = await store.list({ kind: 'vendor-protocol-candidate' });
+  for (const env of candidates) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    const source = payload?.source as Record<string, unknown> | undefined;
+    if (source?.documentId === documentId) return { recordId: env.recordId, schemaId: env.schemaId };
+  }
+  return null;
+}
+
+export interface UpsertCandidateRecordInput {
+  store: RecordStore;
+  documentId: string;
+  summary: AiChunkCandidateSummary;
+  sourceMeta: CandidateRecordSourceMeta;
+  message: string;
+}
+
+export type UpsertCandidateRecordResult =
+  | { ok: true; recordId: string; updatedExisting: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Upsert-by-documentId (built new — VendorProtocolCandidateService had no
+ * store persist to reuse, Recon §d). None → store.create the deterministic
+ * CAN-vendorpdf-<hash> id; existing → store.update the SAME recordId with the
+ * new payload. Validation/lint stay ON (skipValidation is banned in this leg:
+ * a candidate that fails validation must fail honestly).
+ */
+export async function upsertVendorProtocolCandidateRecord(
+  input: UpsertCandidateRecordInput,
+): Promise<UpsertCandidateRecordResult> {
+  const payload = adaptAiChunkCandidateToRecordPayload(input.summary, input.sourceMeta);
+  const existing = await findCandidateRecordForDocument(input.store, input.documentId);
+  if (existing) {
+    const result = await input.store.update({
+      envelope: { recordId: existing.recordId, schemaId: existing.schemaId, payload },
+      message: input.message,
+    });
+    if (!result.success) return { ok: false, error: result.error ?? 'candidate update failed' };
+    return { ok: true, recordId: existing.recordId, updatedExisting: true };
+  }
+  const recordId = candidateRecordIdForDocument(input.documentId);
+  const result = await input.store.create({
+    envelope: { recordId, schemaId: VPC_SCHEMA_ID, payload },
+    message: input.message,
+  });
+  if (!result.success) {
+    // Concurrent first-mint race: two extracts both missed the list and both
+    // reached store.create for the SAME deterministic id; the loser gets
+    // 'Record already exists'. That is not a persist failure — the winner's
+    // record IS the candidate for this document. Re-list and update the
+    // winner in place (updatedExisting: true, so the supersede/staleness leg
+    // fires honestly). Deterministic id and the sole-writer contract are kept.
+    if (/already exists/i.test(result.error ?? '')) {
+      const winner = await findCandidateRecordForDocument(input.store, input.documentId);
+      if (winner) {
+        const retry = await input.store.update({
+          envelope: { recordId: winner.recordId, schemaId: winner.schemaId, payload },
+          message: input.message,
+        });
+        if (!retry.success) return { ok: false, error: retry.error ?? 'candidate update failed' };
+        return { ok: true, recordId: winner.recordId, updatedExisting: true };
+      }
+    }
+    return { ok: false, error: result.error ?? 'candidate create failed' };
+  }
+  return { ok: true, recordId, updatedExisting: false };
+}
+
+/** The ONE staleness mechanism (D2): a data flag written at re-extract time.
+ *  The UI only READS it — no recomputation, no timestamps to disagree. */
+export const CANDIDATE_SUPERSEDED_BY_REEXTRACT = 'CANDIDATE_SUPERSEDED_BY_REEXTRACT';
+
+/**
+ * Flag every non-promoted extraction-draft joined to this document that its
+ * candidate was superseded by a re-extract. Dedupe by code: two re-extracts
+ * against one XDR yield ONE diagnostic, never accumulated copies.
+ *
+ * Honesty note (spec D2): this is a service-level store.update, so it does
+ * NOT capture a record-revision — revisionOnEditKinds fires in the API handler
+ * layer. That is acceptable for an append-only diagnostic; no second revision
+ * path is invented.
+ */
+export async function flagDraftsSupersededByReextract(
+  store: RecordStore,
+  documentId: string,
+  candidateRecordId: string,
+  supersededAt: string,
+): Promise<number> {
+  const drafts = await store.list({ kind: 'extraction-draft' });
+  let flagged = 0;
+  for (const env of drafts) {
+    const payload = env.payload as Record<string, unknown> | undefined;
+    if (!payload || payload.kind !== 'extraction-draft') continue;
+    if (payload.status === 'promoted') continue;
+    const source = payload.source_artifact as Record<string, unknown> | undefined;
+    if (!source || source.id !== documentId) continue;
+    const diagnostics = Array.isArray(payload.diagnostics)
+      ? (payload.diagnostics as Array<Record<string, unknown>>)
+      : [];
+    if (diagnostics.some((d) => d?.code === CANDIDATE_SUPERSEDED_BY_REEXTRACT)) continue;
+    const nextPayload = {
+      ...payload,
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: 'warning' as const,
+          code: CANDIDATE_SUPERSEDED_BY_REEXTRACT,
+          message: 'The candidate this draft was built from was re-extracted — re-run the semantic pass to refresh it.',
+          details: { candidateRecordId, supersededAt },
+        },
+      ],
+    };
+    const result = await store.update({
+      envelope: { recordId: env.recordId, schemaId: env.schemaId, payload: nextPayload },
+      message: `VPDF-3: candidate ${candidateRecordId} re-extracted — flagged draft ${env.recordId} as built from a superseded candidate`,
+    });
+    if (result.success) flagged++;
+  }
+  return flagged;
 }

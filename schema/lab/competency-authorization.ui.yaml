@@ -22,7 +22,7 @@ form:
   - title: "Authorization"
     fields:
     - path: "$.personRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Person"
       refKind: "person"
       required: true
@@ -38,7 +38,7 @@ form:
       - value: "revoked"
         label: "Revoked"
     - path: "$.approvedByRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Approved By"
       refKind: "person"
   - title: "Dates"

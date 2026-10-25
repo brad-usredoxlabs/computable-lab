@@ -146,6 +146,24 @@
  * collapsed to 49px (clientHeight 49 vs scrollHeight 155) and the question card
  * was clipped to a sliver: "answer the questions above" with no questions
  * visible. Content-sized, one scroll (the pane's), never an inner one. */
+
+/*
+ * The changes tab scrolls exactly like the questions tab (CHANGES-UI-1,
+ * 2026-10-20). The identical 2026-09-20 incident replayed here: a shorthand
+ * draft renders its verbatim document plus up to 40 change rows, and
+ * `.ai-tab__section`'s base rule is `flex-shrink: 0` — with no `--changes`
+ * rule the section grew unbounded and pushed the Apply/Discard bar past the
+ * pane. Same fix as --questions: the section flexes and the panel scrolls
+ * internally (ChangesPanel.css owns the scrolling region).
+ */
+.ai-tab__section--changes {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .questions-panel {
   display: flex;
   flex-direction: column;

@@ -80,7 +80,7 @@ export default function ExtractionProgressPanel({
             disabled={!canStart}
             data-testid="vpdf-extract"
           >
-            Extract Protocol (AI)
+            Extract candidate
           </button>
         )}
       </div>

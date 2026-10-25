@@ -24,29 +24,15 @@ form:
       widget: "text"
       label: "Name"
       required: true
-    - path: "$.status"
-      widget: "select"
-      label: "Status"
-      required: true
-      options:
-      - value: "active"
-        label: "Active"
-      - value: "out_of_service"
-        label: "Out of Service"
-      - value: "retired"
-        label: "Retired"
-      - value: "maintenance"
-        label: "Maintenance"
+    # QMS8-C (D3): the Status field is retired with the domain field it edited.
+    # The record's lifecycle state is shown by the DocumentControlBar state pill
+    # (labels come from schema/core/lifecycles/registry-ops.lifecycle.yaml).
   - title: "Details"
     fields:
     - path: "$.equipmentClassRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment Class"
       refKind: "equipment-class"
-    - path: "$.instrumentRef"
-      widget: "ref"
-      label: "Linked Instrument"
-      refKind: "instrument"
     - path: "$.manufacturer"
       widget: "text"
       label: "Manufacturer"
@@ -83,7 +69,6 @@ list:
     width: "120px"
   - path: "$.name"
     label: "Name"
-  - path: "$.status"
-    label: "Status"
+  # QMS8-C (D3): the Status column is retired with the domain field it rendered.
   - path: "$.location"
     label: "Location"

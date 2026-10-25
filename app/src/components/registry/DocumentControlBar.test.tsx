@@ -465,7 +465,8 @@ const registryOpsRecord = {
     displayName: 'EQP-QUANTSTUDIO5',
     lifecycleId: 'registry-ops',
     state: 'active',
-    status: 'active',
+    // QMS8-C (D3): the equipment payload carries NO domain status — the field
+    // is retired; the lifecycle state is the single operational truth.
   },
 }
 

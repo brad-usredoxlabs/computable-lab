@@ -59,7 +59,7 @@ properties:
         description: "Location type (bench, incubator, freezer, instrument, rack, other)."
       ref:
         type: string
-        description: "Optional reference to a location record or instrument id."
+        description: "Optional reference to a location record or equipment id (INSTR-COLLAPSE-1 C2: equipment is the resolution target; the word 'instrument' may still describe where a plate sits)."
       label:
         type: string
         description: "Human-readable location label."

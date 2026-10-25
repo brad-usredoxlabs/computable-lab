@@ -1,9 +1,3 @@
-/**
- * /registry chrome must be theme-token styled: the page used fixed Tailwind
- * palette utilities (bg-white / text-gray-900 / bg-blue-500 …), which never
- * follow `.cl-app[data-theme]` — the list and the editor chrome were stuck in
- * a light palette. Token-only CSS, ChangesPanel precedent.
- */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -13,39 +7,17 @@ const tsx = readFileSync(resolve(dir, 'RecordRegistryPage.tsx'), 'utf8')
 const css = readFileSync(resolve(dir, 'RecordRegistryPage.css'), 'utf8')
 
 const REQUIRED = [
-  '.registry-page',
-  '.registry-list',
-  '.registry-list__tabs',
-  '.registry-tab',
-  '.registry-tab--active',
-  '.registry-list__actions',
-  '.registry-btn',
-  '.registry-btn--primary',
-  '.registry-btn--ghost',
-  '.registry-kind-picker',
-  '.registry-kind-chip',
-  '.registry-kind-chip--active',
-  '.registry-error',
-  '.registry-list__archived',
-  '.registry-list__archived-label',
-  '.registry-list__search',
-  '.registry-list__scroll',
-  '.registry-list__empty',
-  '.registry-list__rows',
-  '.registry-row',
-  '.registry-row--selected',
-  '.registry-row__title',
-  '.registry-row__meta',
-  '.registry-kind-badge',
-  '.registry-editor-body',
-  '.registry-editor-empty',
-  '.registry-placeholder',
-  '.registry-placeholder__title',
-  '.registry-placeholder__hint',
-  '.registry-note',
-  '.registry-save-error',
-  '.registry-dirty-dot',
-  '.registry-rail',
+  '.registry-page', '.registry-list', '.registry-list__tabs', '.registry-tab',
+  '.registry-tab--active', '.registry-list__actions', '.registry-btn',
+  '.registry-btn--primary', '.registry-btn--ghost', '.registry-kind-picker',
+  '.registry-kind-chip', '.registry-kind-chip--active', '.registry-error',
+  '.registry-list__archived', '.registry-list__archived-label',
+  '.registry-list__search', '.registry-list__scroll', '.registry-list__empty',
+  '.registry-list__rows', '.registry-row', '.registry-row--selected',
+  '.registry-row__title', '.registry-row__meta', '.registry-kind-badge',
+  '.registry-editor-body', '.registry-editor-empty', '.registry-placeholder',
+  '.registry-placeholder__title', '.registry-placeholder__hint',
+  '.registry-note', '.registry-save-error', '.registry-dirty-dot', '.registry-provenance-footer',
 ]
 
 describe('RecordRegistryPage styling (theme tokens)', () => {
@@ -54,9 +26,7 @@ describe('RecordRegistryPage styling (theme tokens)', () => {
   })
 
   it('uses no fixed Tailwind palette utilities', () => {
-    expect(tsx).not.toMatch(
-      /\b(?:bg|text|border|divide)-(?:white|black|gray|slate|blue|red|emerald|amber|orange)-\d{2,3}\b/,
-    )
+    expect(tsx).not.toMatch(/\b(?:bg|text|border|divide)-(?:white|black|gray|slate|blue|red|emerald|amber|orange)-\d{2,3}\b/)
   })
 
   it('defines every class it renders', () => {

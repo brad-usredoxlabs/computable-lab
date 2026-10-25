@@ -18,6 +18,8 @@ const listRecordsByKindMock = vi.fn()
 const updateRecordMock = vi.fn()
 const createRecordMock = vi.fn()
 const semanticDraftMock = vi.fn()
+const refreshIntakeTreesMock = vi.fn()
+const extractProtocolStreamMock = vi.fn()
 const blobUrlMock = vi.fn((recordId: string) => (recordId ? `/api/vendor-pdfs/${recordId}/pdf` : ''))
 
 vi.mock('../shared/api/client', () => ({
@@ -29,9 +31,10 @@ vi.mock('../shared/api/client', () => ({
     createRecord: (...args: unknown[]) => createRecordMock(...args),
     vendorPdfBlobUrl: (recordId: string) => blobUrlMock(recordId),
     semanticDraft: (...args: unknown[]) => semanticDraftMock(...args),
+    refreshIntakeTrees: (...args: unknown[]) => refreshIntakeTreesMock(...args),
     getEditorDraftProjection: () => Promise.reject(new Error('no projection in test')),
     realizeIntakeBranch: vi.fn(),
-    extractProtocolStream: vi.fn(),
+    extractProtocolStream: (...args: unknown[]) => extractProtocolStreamMock(...args),
     getExtractionOptions: vi.fn(),
   },
 }))
@@ -196,6 +199,8 @@ beforeEach(() => {
   updateRecordMock.mockReset()
   createRecordMock.mockReset()
   semanticDraftMock.mockReset()
+  refreshIntakeTreesMock.mockReset()
+  extractProtocolStreamMock.mockReset()
   getRecordMock.mockImplementation((recordId: string) => {
     if (recordId === VPDF_ID) return Promise.resolve(vpdfRecord)
     if (recordId === CAN_ID) return Promise.resolve(saidCandidate)
@@ -350,5 +355,181 @@ describe('no-draft state — the affordance rides the merged W2-6 endpoint (M1/O
     expect(screen.queryByTestId('vpdf-save-actions')).toBeNull()
     expect(screen.queryByTestId('candidate-preview')).toBeNull()
     expect(screen.queryByTestId('vpdf-semantic-draft')).toBeNull()
+  })
+})
+
+/**
+ * VPDF-3 — the honest extraction ladder on this route.
+ * (4) button truth + post-extract loop; (5) stale-ref honesty; (2) staleness
+ * banner read from the written diagnostic; (6) the gap line carries a real
+ * affordance (the intake runner), never an instruction with no button.
+ */
+describe('VPDF-3 (4): the button says "Extract candidate" and the done event lights the semantic affordance', () => {
+  beforeEach(() => {
+    // No candidate record exists yet and no draft: the pre-extract state.
+    listRecordsByKindMock.mockImplementation(() =>
+      Promise.resolve({ records: [], total: 0 }),
+    )
+    getRecordMock.mockImplementation((recordId: string) =>
+      Promise.resolve(recordId === VPDF_ID ? { ...vpdfRecord, payload: { ...vpdfRecord.payload, vendorProtocolCandidateRef: undefined } } : null),
+    )
+  })
+
+  it('the extract button reads "Extract candidate" (one vocabulary: the entity is the candidate)', async () => {
+    renderPage()
+    const button = await screen.findByTestId('vpdf-extract')
+    expect(button.textContent).toBe('Extract candidate')
+    expect(button.textContent).not.toContain('Extract Protocol')
+  })
+
+  it('done with candidateRecordId -> the note names the CAN-* and the semantic affordance lights against it', async () => {
+    const CAN_NEW = 'CAN-vendorpdf-0123456789abcdef'
+    let candidates: Array<Record<string, unknown>> = []
+    listRecordsByKindMock.mockImplementation(() =>
+      Promise.resolve({
+        records: candidates,
+        total: candidates.length,
+      }),
+    )
+    extractProtocolStreamMock.mockImplementation((_body: unknown, opts: { onEvent: (e: unknown) => void }) => {
+      // The server persists the candidate BEFORE emitting done — the store
+      // already names the record when the reload runs.
+      candidates = [{
+        recordId: CAN_NEW,
+        schemaId: 'vpc',
+        payload: { kind: 'vendor-protocol-candidate', title: 'Fresh', source: { documentId: VPDF_ID, filename: 'x.pdf', pageCount: 1 } },
+      }]
+      opts.onEvent({ type: 'done', candidate: {}, source: {}, document: {}, elapsedMs: 10, candidateRecordId: CAN_NEW })
+      return Promise.resolve()
+    })
+    renderPage()
+    const extract = await screen.findByTestId('vpdf-extract')
+    fireEvent.click(extract)
+    await waitFor(() => expect(screen.getByTestId('extraction-note').textContent).toContain(CAN_NEW))
+    // The draftToken reload re-ran the SAID join; the affordance now rides the fresh CAN-*.
+    const semantic = await screen.findByTestId('vpdf-semantic-draft', {}, { timeout: 4000 })
+    semanticDraftMock.mockResolvedValue({ recordId: XDR_ID, diagnostics: [] })
+    fireEvent.click(semantic)
+    await waitFor(() => expect(semanticDraftMock).toHaveBeenCalledWith(CAN_NEW))
+  })
+})
+
+describe('VPDF-3 (5): a vendorProtocolCandidateRef that names nothing renders honestly', () => {
+  it('a non-CAN-* ghost ref (graph-lemur-*) names nothing — the SAID pane says so with the id', async () => {
+    const GHOST = 'graph-lemur-6c821d307e98'
+    getRecordMock.mockImplementation((recordId: string) =>
+      Promise.resolve(recordId === VPDF_ID
+        ? { ...vpdfRecord, payload: { ...vpdfRecord.payload, vendorProtocolCandidateRef: { kind: 'record', type: 'vendor-protocol-candidate', id: GHOST } } }
+        : null),
+    )
+    listRecordsByKindMock.mockImplementation((kind: string) =>
+      Promise.resolve({ records: kind === 'extraction-draft' ? [semanticDraftEnvelope()] : [], total: kind === 'extraction-draft' ? 1 : 0 }),
+    )
+    renderPage()
+    const block = await screen.findByTestId('vpdf-stale-candidate-ref')
+    expect(block.textContent).toContain(GHOST)
+    expect(block.textContent).toContain('re-extract to mint a candidate')
+  })
+
+  it('a CAN-* ref whose record fails to load is also an honest block, not a silent fall-through', async () => {
+    const MISSING = 'CAN-vendorpdf-deadbeefdeadbeef'
+    getRecordMock.mockImplementation((recordId: string) => {
+      if (recordId === VPDF_ID) {
+        return Promise.resolve({ ...vpdfRecord, payload: { ...vpdfRecord.payload, vendorProtocolCandidateRef: { kind: 'record', type: 'vendor-protocol-candidate', id: MISSING } } })
+      }
+      return Promise.resolve(null) // the CAN-* names nothing loadable
+    })
+    listRecordsByKindMock.mockImplementation(() => Promise.resolve({ records: [], total: 0 }))
+    renderPage()
+    const block = await screen.findByTestId('vpdf-stale-candidate-ref')
+    expect(block.textContent).toContain(MISSING)
+  })
+
+  it('a healthy CAN-* ref renders the SAID facts, not the stale block', async () => {
+    renderPage()
+    await screen.findByTestId('said-facts')
+    expect(screen.queryByTestId('vpdf-stale-candidate-ref')).toBeNull()
+  })
+})
+
+describe('VPDF-3 (2): the staleness banner reads the written diagnostic ONLY', () => {
+  beforeEach(() => {
+    // Default: a joined draft WITHOUT the staleness diagnostic.
+    listRecordsByKindMock.mockImplementation((kind: string) => {
+      if (kind === 'extraction-draft') return Promise.resolve({ records: [semanticDraftEnvelope()], total: 1 })
+      if (kind === 'vendor-protocol-candidate') return Promise.resolve({ records: [saidCandidate], total: 1 })
+      return Promise.resolve({ records: [], total: 0 })
+    })
+  })
+
+  it('an XDR carrying CANDIDATE_SUPERSEDED_BY_REEXTRACT renders the banner above the MEANT editor', async () => {
+    const flagged = semanticDraftEnvelope()
+    const flaggedPayload = flagged.payload as unknown as Record<string, unknown>
+    flaggedPayload.diagnostics = [{
+      severity: 'warning',
+      code: 'CANDIDATE_SUPERSEDED_BY_REEXTRACT',
+      message: 'The candidate this draft was built from was re-extracted — re-run the semantic pass to refresh it.',
+      details: { candidateRecordId: CAN_ID, supersededAt: '2026-10-20T00:00:00.000Z' },
+    }]
+    listRecordsByKindMock.mockImplementation((kind: string) => {
+      if (kind === 'extraction-draft') return Promise.resolve({ records: [flagged], total: 1 })
+      if (kind === 'vendor-protocol-candidate') return Promise.resolve({ records: [saidCandidate], total: 1 })
+      return Promise.resolve({ records: [], total: 0 })
+    })
+    renderPage()
+    const banner = await screen.findByTestId('vpdf-draft-staleness-banner')
+    expect(banner.textContent).toContain('built from an older extraction')
+    // Friction, not a gate: the editor still renders.
+    expect(screen.getByTestId('semantic-draft-panel')).toBeTruthy()
+  })
+
+  it('an XDR without the diagnostic renders NO banner (no UI-side staleness computation)', async () => {
+    renderPage()
+    await screen.findByTestId('semantic-draft-panel')
+    expect(screen.queryByTestId('vpdf-draft-staleness-banner')).toBeNull()
+  })
+})
+
+describe('VPDF-3 (6): the no-draft gap line carries the real intake runner', () => {
+  beforeEach(() => {
+    // No draft, no candidate record: the legacy no-draft questions surface.
+    listRecordsByKindMock.mockImplementation(() => Promise.resolve({ records: [], total: 0 }))
+    getRecordMock.mockImplementation((recordId: string) =>
+      Promise.resolve(recordId === VPDF_ID ? { ...vpdfRecord, payload: { ...vpdfRecord.payload, vendorProtocolCandidateRef: undefined } } : null),
+    )
+    // No attributable tree: the read model returns null (404).
+    getIntakeReviewMock.mockResolvedValue(null)
+  })
+
+  it('the gap line is no longer an instruction with no affordance — a button runs the intake runner', async () => {
+    refreshIntakeTreesMock.mockResolvedValue({ success: true, documentId: VPDF_ID, treeRecordId: 'PDT-x', proposalRecordIds: [], eventGraphRecordIds: [] })
+    renderPage()
+    const button = await screen.findByTestId('vpdf-intake-refresh')
+    expect(button.textContent).toBe('Run intake on this document')
+    fireEvent.click(button)
+    await waitFor(() => expect(refreshIntakeTreesMock).toHaveBeenCalledWith(VPDF_ID))
+  })
+
+  it('with a candidate ref present, the runner is sent the REF documentId (what the intake service keys on)', async () => {
+    const GHOST = 'graph-lemur-6c821d307e98'
+    getRecordMock.mockImplementation((recordId: string) =>
+      Promise.resolve(recordId === VPDF_ID
+        ? { ...vpdfRecord, payload: { ...vpdfRecord.payload, vendorProtocolCandidateRef: { kind: 'record', type: 'vendor-protocol-candidate', id: GHOST } } }
+        : null),
+    )
+    refreshIntakeTreesMock.mockResolvedValue({ success: true, documentId: GHOST, treeRecordId: 'PDT-x', proposalRecordIds: [], eventGraphRecordIds: [] })
+    renderPage()
+    const button = await screen.findByTestId('vpdf-intake-refresh')
+    fireEvent.click(button)
+    await waitFor(() => expect(refreshIntakeTreesMock).toHaveBeenCalledWith(GHOST))
+  })
+
+  it('a runner refusal shows the server message verbatim', async () => {
+    refreshIntakeTreesMock.mockRejectedValue(new Error('No persisted candidate artifact for VPDF-ABCDEF012345; run a full intake instead of a refresh'))
+    renderPage()
+    const button = await screen.findByTestId('vpdf-intake-refresh')
+    fireEvent.click(button)
+    await waitFor(() => expect(screen.getByTestId('vpdf-intake-refresh-error').textContent)
+      .toContain('No persisted candidate artifact for VPDF-ABCDEF012345; run a full intake instead of a refresh'))
   })
 })

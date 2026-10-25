@@ -4,7 +4,6 @@ id: EQP-CENTRIFUGE
 name: Centrifuge
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - centrifuge
   - spin

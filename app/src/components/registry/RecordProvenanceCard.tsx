@@ -1,12 +1,12 @@
 /**
- * RecordProvenanceCard — the registry's "where did this come from" affordance.
+ * RecordProvenanceCard — the registry's "where did this come from" carrot.
  *
  * Registry records carry envelope `meta` (createdAt/createdBy/updatedAt,
- * contentSha/gitCommit, path) and FAIRCommon payload timestamps; the audit trail
- * itself is the repo's git history plus record-revision snapshots
+ * contentSha/gitCommit, path) and FAIRCommon payload timestamps; the audit
+ * trail itself is the repo's git history plus record-revision snapshots
  * (`GET /records/:id/revisions`). This card surfaces those facts read-only and
- * collapsed by default. It INVENTS nothing: a create draft has no record id and
- * renders nothing, and an unavailable revision count renders no row.
+ * collapses by default. It INVENTS nothing: a create draft has no record id
+ * and renders nothing; an unavailable revision count renders no row.
  */
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
@@ -32,9 +32,7 @@ function Row({ label, value, title }: { label: string; value: string; title?: st
   return (
     <div className="provenance__row">
       <dt className="provenance__label">{label}</dt>
-      <dd className="provenance__value" title={title ?? value}>
-        {value}
-      </dd>
+      <dd className="provenance__value" title={title ?? value}>{value}</dd>
     </div>
   )
 }
@@ -70,9 +68,7 @@ export function RecordProvenanceCard({ recordId, meta, payload }: RecordProvenan
         {updatedAt ? <Row label="Updated" value={updatedAt} /> : null}
         {sha ? <Row label="Content" value={sha.slice(0, 12)} title={sha} /> : null}
         {meta?.path ? <Row label="File" value={meta.path} /> : null}
-        {revisions !== null && revisions > 0 ? (
-          <Row label="Revisions" value={String(revisions)} />
-        ) : null}
+        {revisions !== null && revisions > 0 ? <Row label="Revisions" value={String(revisions)} /> : null}
       </dl>
     </details>
   )

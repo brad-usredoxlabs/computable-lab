@@ -103,6 +103,16 @@ export class LifecycleEngine {
     return this.machines.has(lifecycleId)
   }
 
+  /**
+   * QMS8-A: the ids of the lifecycle specs this engine has LOADED (what
+   * loadLifecycle() registered — a plain read-only report of loaded YAML,
+   * the same precedent class as specFor/terminalStates). NO lifecycle list is
+   * invented or hardcoded in TS; consumers enumerate loaded facts only.
+   */
+  loadedIds(): string[] {
+    return [...this.specs.keys()]
+  }
+
   /** Plain spec getter: the loaded lifecycle spec exactly as declared in YAML.
    *  No policy is decided here (coverage loaders validate data against these
    *  declared facts; the interpretation stays declarative). */

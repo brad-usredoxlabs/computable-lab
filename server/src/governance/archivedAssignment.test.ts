@@ -498,10 +498,11 @@ describe('archive guard data + engine accessor', () => {
     expect(data.archiveGuard!.exemptKinds).toContain('audit-event')
     expect(data.archiveGuard!.exemptKinds).toContain('signature')
     expect(data.archiveGuard!.exemptKinds).toContain('record-revision')
-    // OQ2: the migration state map is declared data too.
-    expect(data.migration).toBeDefined()
-    expect(typeof data.migration!.default).toBe('string')
-    expect(data.migration!.stateByDomainStatus).toBeDefined()
+    // QMS8-C (D5): the OQ2 status-map block is RETIRED — the whole `migration:`
+    // block is gone (partial deletion throws at the loader, bait #3). The
+    // archiveGuard and the QMS8-C lifecycleMigrations block survive; they read
+    // nothing from the retired map.
+    expect(data.migration).toBeUndefined()
   })
 
   it('KindLifecycleRegistry exposes the guard data via an optional accessor', () => {

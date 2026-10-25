@@ -1,5 +1,6 @@
 import { OperationalAdmissibilityService } from '../../authorization/OperationalAdmissibilityService.js';
 import { EquipmentCapabilityService } from '../../capabilities/EquipmentCapabilityService.js';
+import type { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { PolicyProfileService } from '../../policy/PolicyProfileService.js';
 import { buildLocalProtocol } from './LocalProtocolBuilder.js';
 import type { InheritedRoles, LocalProtocolPayload } from './LocalProtocolBuilder.js';
@@ -309,9 +310,15 @@ export class ProtocolCompiler {
   private readonly admissibilityService: OperationalAdmissibilityService;
   private readonly policyService = new PolicyProfileService();
 
-  constructor(private readonly store: Pick<RecordStore, 'list'>) {
+  constructor(
+    private readonly store: Pick<RecordStore, 'list'>,
+    /** QMS8-C (D6): the lifecycle engine the admissibility reroute reads
+     *  terminal-ness from (AppContext.lifecycleEngine in production). Absent →
+     *  the terminal check is skipped, never guessed from a TS state list. */
+    lifecycleEngine?: LifecycleEngine,
+  ) {
     this.capabilityService = new EquipmentCapabilityService(store);
-    this.admissibilityService = new OperationalAdmissibilityService(store);
+    this.admissibilityService = new OperationalAdmissibilityService(store, lifecycleEngine);
   }
 
   private async resolveVerbDefinitions(): Promise<{

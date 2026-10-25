@@ -94,6 +94,16 @@
   background-color: var(--shell-hover-bg);
 }
 
+/* Full-width posture: the registry's wide forms use the whole main pane. */
+.document-shell--width-full .document-shell__column {
+  padding: 1.25rem 1.5rem;
+}
+
+.document-shell--width-full .document-shell__column .taptab-editor-container {
+  max-width: none;
+  box-shadow: none;
+}
+
 /* Secondary diagnostics / related-record rail */
 
 .document-shell__rail {
@@ -717,6 +727,64 @@
 
 .ref-dropdown .ref-create-item .result-label {
   font-weight: 400;
+}
+
+/* Record ref picker (kind-scoped record choice, not ontology search) */
+.record-ref-picker {
+  position: relative;
+  width: 100%;
+}
+
+.record-ref-picker__list {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--shell-surface);
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.record-ref-picker__item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--shell-text-primary);
+  cursor: pointer;
+}
+
+.record-ref-picker__item--active,
+.record-ref-picker__item:hover {
+  background: var(--shell-accent-soft);
+}
+
+.record-ref-picker__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-ref-picker__id {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--shell-text-muted);
+}
+
+.record-ref-picker__empty {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--shell-text-muted);
 }
 
 /* ChipComboboxWidget — multi-value ontology/local chips (tags, keywords).
@@ -1459,3 +1527,9 @@
 .taptab-protocol-step-text strong {
   font-weight: 700;
 }
+
+body { user-select: auto; }
+
+/* ── Rail machinery (resizer, drag, persist) retired with REG-6: the
+   registry was its only railResizable consumer. The plain rail below
+   stays for RawRecordEditor / SlideOverEditor / LabwareFocus. ──────── */

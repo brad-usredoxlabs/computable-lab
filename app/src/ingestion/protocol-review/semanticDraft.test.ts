@@ -110,6 +110,31 @@ describe('findSemanticDraft (the M2 join)', () => {
     expect(findSemanticDraft([foreign], VPDF_ID)).toBeNull()
     expect(findSemanticDraft([otherTarget], VPDF_ID)).toBeNull()
   })
+
+  // VPDF-3 (task (3), verified-by 3): re-extracts produce re-derived drafts —
+  // the join is NEWEST-WINS by payload.createdAt, not first-match.
+  it('newest-wins: two drafts with different createdAt -> the NEWEST is returned, regardless of input order', () => {
+    const older = { ...xdrEnvelope({ ...xdrPayload(), createdAt: '2026-10-01T00:00:00.000Z' }), recordId: 'XDR-old' }
+    const newer = { ...xdrEnvelope({ ...xdrPayload(), createdAt: '2026-10-15T00:00:00.000Z' }), recordId: 'XDR-new' }
+    expect(findSemanticDraft([older, newer], VPDF_ID)!.xdr.recordId).toBe('XDR-new')
+    // Input-order independence: the same newest wins when listed first.
+    expect(findSemanticDraft([newer, older], VPDF_ID)!.xdr.recordId).toBe('XDR-new')
+  })
+
+  it('a missing createdAt sorts OLDEST (an undated draft never displaces a dated one)', () => {
+    const undatedPayload = xdrPayload()
+    delete undatedPayload.createdAt
+    const undated = { ...xdrEnvelope(undatedPayload), recordId: 'XDR-undated' }
+    const dated = { ...xdrEnvelope({ ...xdrPayload(), createdAt: '2026-01-01T00:00:00.000Z' }), recordId: 'XDR-dated' }
+    expect(findSemanticDraft([undated, dated], VPDF_ID)!.xdr.recordId).toBe('XDR-dated')
+    expect(findSemanticDraft([dated, undated], VPDF_ID)!.xdr.recordId).toBe('XDR-dated')
+  })
+
+  it('createdAt ties go to the later list position (deterministic)', () => {
+    const first = { ...xdrEnvelope(xdrPayload()), recordId: 'XDR-a' }
+    const second = { ...xdrEnvelope(xdrPayload()), recordId: 'XDR-b' }
+    expect(findSemanticDraft([first, second], VPDF_ID)!.xdr.recordId).toBe('XDR-b')
+  })
 })
 
 describe('findSaidCandidate (the SAID join)', () => {

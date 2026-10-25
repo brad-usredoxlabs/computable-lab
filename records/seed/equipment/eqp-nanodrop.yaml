@@ -4,7 +4,6 @@ id: EQP-NANODROP
 name: Microvolume Spectrophotometer
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - nanodrop
   - microvolume spectrophotometer

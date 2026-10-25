@@ -60,6 +60,16 @@ const GENERIC_SOURCE_TERMS = {
     { label: 'magnetic beads', pattern: /\bmagnetic\s+beads?\b|\bmagbeads?\b/iu, role: 'magnetic_beads' },
     { label: 'PBS', pattern: /\bPBS\b/iu, role: 'buffer' },
     { label: 'TE buffer', pattern: /\bTE\s+buffer\b/iu, role: 'buffer' },
+    // Molecular Probes quick-reference reagents (CellROX/SYTOX qr sheets).
+    // Brand-anchored like the Zymo product names in ZYMO_SOURCE_TERMS; the
+    // \s+ between words tolerates the reagent table's wrapped rows
+    // ("CellROX® Detection\n Reagent", "SYTOX® Blue Dead Cell\n Stain").
+    // Labels normalize via normalizeText, which strips ®.
+    { label: 'CellROX Detection Reagent', pattern: /CellROX(?:®)?\s+Detection\s+Reagent/iu, role: 'detection_reagent' },
+    { label: 'CellROX Deep Red', pattern: /CellROX(?:®)?\s+Deep\s+Red/iu, role: 'detection_reagent' },
+    { label: 'CellROX Green', pattern: /CellROX(?:®)?\s+Green/iu, role: 'detection_reagent' },
+    { label: 'SYTOX Dead Cell Stain', pattern: /SYTOX(?:®)?\s+(?:Blue\s+|Red\s+)?Dead\s+Cell\s+Stain/iu, role: 'viability_stain' },
+    { label: 'complete medium', pattern: /\bcomplete\s+medium\b/iu, role: 'culture_medium' },
   ],
   labware: [
     { label: '96-well plate', pattern: /\b96[-\s]?well\s+(?:plate|block)\b/iu, role: 'sample_plate' },
@@ -81,6 +91,7 @@ const GENERIC_SOURCE_TERMS = {
     { label: 'incubator', pattern: /\bincubator\b/iu, role: 'incubator' },
     { label: 'pipette', pattern: /\bpipett?e\b|\bpipett?ing\b/iu, role: 'pipette' },
     { label: 'plate sealer', pattern: /\b(?:plate\s+)?sealer\b|\bseal(?:ing)?\s+(?:film|foil)\b/iu, role: 'sealer' },
+    { label: 'flow cytometer', pattern: /\bflow\s+cytometer\b/iu, role: 'flow_cytometer' },
   ],
 } as const;
 
@@ -210,6 +221,14 @@ const SECTION_HEADINGS: Array<{ kind: VendorProtocolSectionKind; title: string; 
   { kind: 'specifications', title: 'Specifications', pattern: headingPattern('Specifications') },
   { kind: 'product_description', title: 'Product Description', pattern: headingPattern('Product Description') },
   { kind: 'protocol', title: 'Protocol', pattern: headingPattern('Protocol') },
+  // Quick-reference sheets print the protocol under the vendor's own heading
+  // "Quick Protocol" (CellROX qr.pdf, MAN0007985). The `Protocol` entry is
+  // anchored at line start, so "Quick Protocol" never matched and the sheet
+  // yielded no protocol section, a vendor_protocol_missing_protocol_section
+  // warning, and zero of its six printed steps. Same kind, same vocabulary
+  // builder — a handbook with BOTH headings yields two protocol sections,
+  // exactly like the DNeasy matrix.
+  { kind: 'protocol', title: 'Quick Protocol', pattern: headingPattern('Quick Protocol') },
   // Manuals write the appendices both ways: a bare "Appendices" list heading
   // and per-letter headings ("Appendix A", "Appendix B"). Matching only the
   // plural let the PROTOCOL section run on into the appendices — the D4300T
@@ -231,6 +250,15 @@ export interface DecodeVendorProtocolPdfOptions {
   filename?: string;
   documentId?: string;
   vendor?: string;
+  /**
+   * The document's OWN title when the caller already has it — the vendor-pdf
+   * record's `title`, which is what the reader searched for and what the
+   * intake shows them. {@link extractTitle} can only read the first line of
+   * page 1, and on a quick-reference sheet that line is the vendor's furniture
+   * ("Quick Reference"), not the product. A threaded title wins; an absent or
+   * blank one falls back to the page-1 line exactly as before.
+   */
+  title?: string;
 }
 
 function normalizeText(value: string): string {
@@ -320,7 +348,10 @@ export function createVendorProtocolDocumentFromText(
 ): VendorProtocolDocument {
   const pages = splitPdfPages(text);
   const filename = options.filename ?? 'vendor-protocol.pdf';
-  const title = extractTitle(text);
+  // A caller-supplied title (the vendor-pdf record's own) wins; a blank one is
+  // no title at all and the page-1 line is used exactly as before. Normalized
+  // the same way extractTitle normalizes every other title.
+  const title = options.title?.trim() ? normalizeText(options.title) : extractTitle(text);
   const documentId = options.documentId ?? `vendor-protocol:${slug(filename || title)}`;
   const source: VendorProtocolSource = {
     documentId,
@@ -522,7 +553,11 @@ export function extractVendorProtocolTables(input: {
 function extractQuantities(text: string, kind: 'volume' | 'duration' | 'temperature' | 'speed' | 'concentration'): ExtractedScalarQuantity[] {
   const patterns = {
     volume: /(?:up to\s*)?(\d+(?:,\d{3})?(?:\.\d+)?|≤\s*\d+(?:\.\d+)?)\s*(µl|μl|ul|ml|l)\b/giu,
-    duration: /(\d+(?:-\d+)?(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/giu,
+    // Vendor sheets print ranges with Unicode en/em dashes ("30–60 minutes");
+    // the ASCII-hyphen range arm already existed, so the dash class just makes
+    // the printed range survive normalization instead of collapsing to its
+    // upper bound.
+    duration: /(\d+(?:\s*[–—-]\s*\d+)?(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/giu,
     temperature: /([–-]?\s*\d+(?:\.\d+)?)\s*°?\s*C\b/giu,
     speed: /(≥\s*)?(\d+(?:,\d{3})?)\s*x\s*g\b/giu,
     // Final working CONCENTRATION in the destination, e.g. "to a final concentration of 10 nM",

@@ -4,7 +4,6 @@ id: EQP-VORTEX-MIXER
 name: Vortex Mixer
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - vortex
   - vortex mixer

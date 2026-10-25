@@ -435,7 +435,7 @@ export interface MeasurementContextRecord {
   name: string
   title?: string
   source_ref: MaterialRefInput
-  instrument_ref: MaterialRefInput
+  equipment_ref: MaterialRefInput
   assay_def_ref?: MaterialRefInput
   readout_def_refs: MaterialRefInput[]
   timepoint?: string
@@ -500,7 +500,7 @@ export interface MeasurementRecordPayload {
   assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other'
   eventGraphRef?: MaterialRefInput
   readEventRef?: string
-  instrumentRef?: MaterialRefInput
+  equipmentRef?: MaterialRefInput
   labwareInstanceRef?: MaterialRefInput
   measurementContextRef?: MaterialRefInput
   timepoint?: string
@@ -723,7 +723,7 @@ export interface RunAnalysisBundle {
 export interface CreateMeasurementContextRequest {
   name?: string
   sourceRef: MaterialRefInput
-  instrumentRef: MaterialRefInput
+  equipmentRef: MaterialRefInput
   assayDefRef?: MaterialRefInput
   readoutDefRefs: MaterialRefInput[]
   timepoint?: string
@@ -757,7 +757,7 @@ export interface CreateWellGroupRequest {
 }
 
 export interface MeasurementIngestRequest {
-  instrumentRef?: MaterialRefInput
+  equipmentRef?: MaterialRefInput
   labwareInstanceRef?: MaterialRefInput
   eventGraphRef?: MaterialRefInput
   measurementContextRef?: MaterialRefInput
@@ -873,6 +873,47 @@ export interface OwnershipPolicyResponse {
   record: RecordEnvelope | null
   resolved: OwnershipPolicyDocView | null
   defaults?: null   // present-null only on the handler's not-found branch (:78-79)
+}
+
+/**
+ * QMS8-A — GET /settings/permissions aggregate (read-only org-chart view).
+ * Mirrors the server PermissionsHandlers views exactly: grants come from the
+ * same store read RoleResolver uses; lifecycles echo the LOADED lifecycle
+ * specs (declaredRoles = distinct transition roles); coverage/bundle echo the
+ * loaded registry + config and may be null (honest degradation).
+ */
+export interface PermissionsGrantView {
+  recordId: string
+  userId: string
+  roles: string[]
+  lifecycleId?: string
+  grantedBy?: string
+  notes?: string
+  label?: string
+}
+
+export interface PermissionsLifecycleView {
+  id: string
+  declaredRoles: string[]
+  kinds: string[]
+}
+
+export interface PermissionsCoverageView {
+  lifecycleId: string
+  kinds: string[]
+}
+
+export interface PermissionsBundleView {
+  policyBundleId: string
+  label?: string
+  level?: number
+}
+
+export interface PermissionsResponse {
+  grants: PermissionsGrantView[]
+  lifecycles: PermissionsLifecycleView[]
+  coverage: PermissionsCoverageView | null
+  bundle: PermissionsBundleView | null
 }
 
 export interface FormulationSummary {
@@ -2968,6 +3009,16 @@ export const apiClient = {
   },
 
   /**
+   * QMS8-A: read the permissions & roles aggregate (grants + declared roles +
+   * coverage + bundle) for the Settings "Permissions & roles" section. Any
+   * authenticated local user may read it; server refusals surface as ApiError
+   * so the section can render the error law (row above the controls).
+   */
+  async getPermissions(): Promise<PermissionsResponse> {
+    return request<PermissionsResponse>('/settings/permissions')
+  },
+
+  /**
    * Replace the lab ownership policy (OWN-11 / §T11). PUT is a WHOLESALE
    * payload replace — the body is the full record payload (kindRules ARRAY,
    * exactly what the settings YAML editor shows). The server validates it
@@ -4820,6 +4871,47 @@ export const apiClient = {
   },
 
   /**
+   * VPDF-3 (D5): run the real intake runner for ONE document — re-derive its
+   * stored decision trees from the persisted candidate artifact (no LLM).
+   * POST /protocol-ide/intake/refresh. The documentId is the key the intake
+   * service reads the candidate artifact under (the vendorProtocolCandidateRef
+   * id when the VPDF names one — the probe-pinned OQ-3 rule).
+   *
+   * A derivation refusal answers 422 with the runner's diagnostics[] — NOT the
+   * generic error/message fields — so this call surfaces the body itself and
+   * re-raises the refusal message VERBATIM (friction-first honesty).
+   */
+  async refreshIntakeTrees(documentId: string): Promise<{ success: true; documentId: string; treeRecordId: string; proposalRecordIds: string[]; eventGraphRecordIds: string[] }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const currentUserId = getCurrentUserId()
+    if (currentUserId) headers['x-user-id'] = currentUserId
+    const sessionToken = getSessionToken()
+    if (sessionToken) headers['x-cl-session'] = sessionToken
+    const response = await fetch(`${API_BASE}/protocol-ide/intake/refresh`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ documentId }),
+    })
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null
+    if (!response.ok) {
+      const diagnostics = Array.isArray(payload?.diagnostics)
+        ? (payload.diagnostics as Array<Record<string, unknown>>)
+        : []
+      const refusal = diagnostics
+        .filter((d) => d?.severity === 'error')
+        .map((d) => String(d.message ?? d.code ?? ''))
+        .filter(Boolean)
+        .join('; ')
+      throw new ApiError({
+        status: response.status,
+        code: typeof payload?.error === 'string' ? payload.error : `HTTP_${response.status}`,
+        message: refusal || response.statusText || 'Intake refresh failed',
+      })
+    }
+    return payload as unknown as { success: true; documentId: string; treeRecordId: string; proposalRecordIds: string[]; eventGraphRecordIds: string[] }
+  },
+
+  /**
    * Create a Protocol IDE session and stream per-phase progress as SSE.
    * Returns an async generator of progress events; consumers update UI per
    * event and pick the final 'done' event for navigation.
@@ -5434,8 +5526,8 @@ export type ExtractionStreamEvent =
   | { type: 'reasoning'; index: number; text: string }
   | { type: 'content'; index: number; chars: number }
   | { type: 'progress'; index: number; elapsedMs: number; reasoningChars: number; contentChars: number }
-  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number }
-  | { type: 'done'; candidate: Record<string, unknown>; source: Record<string, unknown>; document: Record<string, unknown>; elapsedMs: number }
+  | { type: 'chunk-done'; index: number; parsed: boolean; steps: number; elapsedMs: number; preview?: string }
+  | { type: 'done'; candidate: Record<string, unknown>; source: Record<string, unknown>; document: Record<string, unknown>; elapsedMs: number; candidateRecordId?: string }
   | { type: 'error'; message: string; index?: number }
 
 /**

@@ -1,12 +1,14 @@
 import type { AppContext } from '../server.js';
 import { SidecarRunner } from '../execution/sidecar/SidecarRunner.js';
-import { MeasurementService } from './MeasurementService.js';
+import { MeasurementService, MeasurementServiceError } from './MeasurementService.js';
+import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { AdapterParameterError, validateActiveReadParameters } from '../execution/adapters/AdapterRuntimeSchemas.js';
 import { generateGeminiMeasurementFixture } from '../execution/sidecar/SimulatorContracts.js';
 import { parseGeminiActiveReadResponse } from '../execution/sidecar/BridgeContracts.js';
 import { SidecarContractConformanceService } from '../execution/SidecarContractConformanceService.js';
 
 const INSTRUMENT_LOG_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/instrument-log.schema.yaml';
+const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
 type ActiveReadAdapterId =
   | 'molecular_devices_gemini'
@@ -16,6 +18,8 @@ type ActiveReadAdapterId =
 
 type ActiveReadRequest = {
   adapterId: ActiveReadAdapterId;
+  // Sidecar active-read contract field NAME (gemini-active-read-request.schema.yaml);
+  // C2 pins its TARGET to equipment. Feeds measurement.equipmentRef on ingest.
   instrumentRef?: unknown;
   labwareInstanceRef?: unknown;
   eventGraphRef?: unknown;
@@ -128,6 +132,36 @@ export class MeasurementActiveControlService {
       }
       throw err;
     }
+
+    // INSTR-READCHAIN-1 (d) / ruling §2D: fail-fast pre-flight BEFORE the
+    // dispatch expression below. The declared capability gate (the REAL
+    // measurement.schema.yaml x-capability-gate on equipmentRef, interpreted
+    // by the SAME DeclaredCapabilityGate interpreter against the SAME schema
+    // annotation — zero new policy) is evaluated before any sidecar/hardware
+    // dispatch, so a request whose verb chain is unresolvable never writes an
+    // orphan simulator fixture, never POSTs to the live read URL, and never
+    // spawns an adapter process. The error class is deliberately
+    // MeasurementServiceError — identical to the ingest-side gate throw
+    // (MeasurementService.ts), so MeasurementHandlers' existing catch
+    // produces the byte-identical structured 400; only the TIMING moves.
+    // The ingest-side gate call STAYS as defense-in-depth for every other
+    // write path (uploads, direct ingest).
+    const gateViolation = await evaluateDeclaredCapabilityGate({
+      payload: {
+        // The active-read contract ref (instrumentRef) IS the measurement's
+        // equipmentRef on ingest — the pre-flight checks the same join.
+        ...(input.instrumentRef !== undefined ? { equipmentRef: input.instrumentRef } : {}),
+        ...(input.eventGraphRef !== undefined ? { eventGraphRef: input.eventGraphRef } : {}),
+        ...(input.readEventRef !== undefined ? { readEventRef: input.readEventRef } : {}),
+      },
+      schemaId: MEASUREMENT_SCHEMA_ID,
+      validator: this.ctx.validator,
+      store: this.ctx.store,
+    });
+    if (gateViolation) {
+      throw new MeasurementServiceError(gateViolation.code, gateViolation.message, 400);
+    }
+
     const startedAt = new Date().toISOString();
     const runResult = (input.adapterId === 'molecular_devices_gemini'
       && (process.env['LABOS_SIMULATE_GEMINI'] === '1' || parameters['simulate'] === true))
@@ -235,7 +269,8 @@ export class MeasurementActiveControlService {
     }
 
     const measurement = await this.measurements.ingest({
-      ...(input.instrumentRef !== undefined ? { instrumentRef: input.instrumentRef } : {}),
+      // The active-read contract ref (name retained) becomes the measurement's equipmentRef.
+      ...(input.instrumentRef !== undefined ? { equipmentRef: input.instrumentRef } : {}),
       ...(input.labwareInstanceRef !== undefined ? { labwareInstanceRef: input.labwareInstanceRef } : {}),
       ...(input.eventGraphRef !== undefined ? { eventGraphRef: input.eventGraphRef } : {}),
       ...(input.measurementContextRef !== undefined ? { measurementContextRef: input.measurementContextRef } : {}),
@@ -255,6 +290,7 @@ export class MeasurementActiveControlService {
           id: logId,
           logType: 'instrument_readout',
           status: 'completed',
+          // instrument-log keeps its audit-retained property NAME; the ref TARGET is equipment.
           ...(input.instrumentRef ? { instrumentRef: input.instrumentRef } : {}),
           ...(input.eventGraphRef ? { eventGraphRef: input.eventGraphRef } : {}),
           startedAt,

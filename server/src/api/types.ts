@@ -7,6 +7,7 @@
 
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { ValidationResult, LintResult } from '../types/common.js';
+import type { MintPrincipalRefusal } from '../security/AuthorizationService.js';
 
 // ============================================================================
 // Error Response
@@ -110,6 +111,14 @@ export interface RecordMutationResponse {
     message: string;
     timestamp: string;
   };
+  /**
+   * OWN-15 FIX-2 (advreview l1t1720): response-level honest refusals from the
+   * owner-policy mint (unresolvable declared principals stripped at mint).
+   * Present only when the mint refused something — the create/update itself
+   * still succeeded (strip + report, never a silent drop, never stored on the
+   * record).
+   */
+  mintRefusals?: MintPrincipalRefusal[];
   /** Error message if failed */
   error?: string;
 }

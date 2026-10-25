@@ -348,8 +348,16 @@ $defs:
       roleId:
         type: string
       instrumentRef:
-        $ref: "./datatypes/ref.schema.yaml"
-        description: "Concrete instrument reference."
+        # INSTR-COLLAPSE-1 C2: property NAME retained (bindings.instruments is a
+        # role-binding surface, not an asset kind); the ref TARGET is pinned to
+        # equipment — the retired instrument kind is not a ref target (H3).
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: equipment }
+        description: "Concrete equipment reference bound to this role."
 
   ParameterBinding:
     type: object
@@ -420,6 +428,12 @@ $defs:
         enum: [ manual, instrument ]
       equipmentRef:
         $ref: "./datatypes/ref.schema.yaml"
+        # INSTR-COLLAPSE-1 C2 (OQ-1): verb and equipment ride the SAME step —
+        # the gate reads the sibling verbRef (pure path data, no TS literal).
+        x-capability-gate:
+          verbFrom:
+            resolver: sibling-verb-ref
+            path: verbRef
       disposition:
         type: string
         enum: [ allowed, needs-confirmation, blocked ]

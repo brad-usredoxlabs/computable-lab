@@ -88,7 +88,7 @@ properties:
         uniqueItems: true
       instruments:
         type: array
-        description: "Optional instrument identifiers (convenience only)."
+        description: "Optional equipment identifiers (convenience only; never a substitute for acquisition provenance on the measurement)."
         items: { type: string }
         uniqueItems: true
 

@@ -54,7 +54,25 @@ function envelopeLike(value: unknown): SemanticDraftEnvelope | null {
 }
 
 /**
- * The M2 join: enumerate extraction-drafts and keep the one whose
+ * VPDF-3 (task (3)): with re-extracts producing re-derived drafts, the join is
+ * NEWEST-WINS by payload.createdAt (camelCase ISO — SemanticFamilyPass folds
+ * it into the XDR payload). A missing createdAt sorts OLDEST; ties go to the
+ * later list position. Deterministic regardless of input order.
+ */
+function draftCreatedAt(payload: Record<string, unknown>): string | null {
+  return typeof payload.createdAt === 'string' ? payload.createdAt : null
+}
+
+/** Does `candidate` take the current best? A null date means undated. */
+function takesBest(candidate: string | null, best: string | null, bestSeen: boolean): boolean {
+  if (!bestSeen) return true
+  if (candidate === null) return best === null // undated ties undated (later position wins); undated never beats dated
+  if (best === null) return true // dated beats undated
+  return candidate >= best // dated ties: the later list position wins
+}
+
+/**
+ * The M2 join: enumerate extraction-drafts and keep the NEWEST one whose
  * source_artifact.id === the VPDF route id, not promoted, whose first
  * resolvable candidate targets 'protocol'.
  */
@@ -62,6 +80,9 @@ export function findSemanticDraft(
   records: unknown[],
   vpdfRecordId: string,
 ): SemanticDraftView | null {
+  let best: SemanticDraftView | null = null
+  let bestAt: string | null = null
+  let bestSeen = false
   for (const raw of records) {
     const env = envelopeLike(raw)
     if (!env) continue
@@ -77,10 +98,16 @@ export function findSemanticDraft(
       if (candidate.status === 'rejected') continue
       const draft = asRecord(candidate.draft)
       if (!draft) continue
-      return { xdr: env, candidateIndex: i, draft }
+      const at = draftCreatedAt(payload)
+      if (takesBest(at, bestAt, bestSeen)) {
+        best = { xdr: env, candidateIndex: i, draft }
+        bestAt = at
+        bestSeen = true
+      }
+      break
     }
   }
-  return null
+  return best
 }
 
 /**
@@ -94,6 +121,7 @@ export function findSaidCandidate(
   vpdfRecordId: string,
 ): SemanticDraftEnvelope | null {
   let fallback: SemanticDraftEnvelope | null = null
+  let fallbackAt: string | null = null
   for (const raw of records) {
     const env = envelopeLike(raw)
     if (!env) continue
@@ -102,7 +130,13 @@ export function findSaidCandidate(
     const source = asRecord(payload.source)
     if (!source || source.documentId !== vpdfRecordId) continue
     if (/^CAN-[A-Za-z0-9_-]+$/.test(env.recordId)) return env
-    fallback = fallback ?? env
+    // VPDF-3 (task (3)): same determinism in the fallback — newest createdAt
+    // wins (missing sorts oldest, ties go to the later list position).
+    const at = draftCreatedAt(payload)
+    if (takesBest(at, fallbackAt, fallback !== null)) {
+      fallback = env
+      fallbackAt = at
+    }
   }
   return fallback
 }

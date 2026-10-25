@@ -14,6 +14,7 @@ import { useConfig } from '../shared/hooks/useConfig'
 import { apiClient, type LabSettings } from '../shared/api/client'
 import { PolicyBundleSelector } from '../components/settings/PolicyBundleSelector'
 import { OwnershipPolicySection } from '../components/settings/OwnershipPolicySection'
+import { PermissionsSection } from '../components/settings/PermissionsSection'
 import {
   RepositorySection,
   AddRepositorySection,
@@ -325,6 +326,11 @@ export function SettingsPage() {
         {/* ---- Ownership & Sharing policy (OWN-11 / §T11) ---- */}
         <Section title="Ownership & Sharing">
           <OwnershipPolicySection />
+        </Section>
+
+        {/* ---- Permissions & roles (QMS8-A): read-only grants + declared roles ---- */}
+        <Section title="Permissions & roles">
+          <PermissionsSection />
         </Section>
 
         {/* ---- Sync controls (from meta) ---- */}

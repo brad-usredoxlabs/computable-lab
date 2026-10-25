@@ -1,0 +1,12 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+ ✓ src/compiler/artifacts/InstrumentApplianceJob.test.ts  (6 tests) 3ms
+ ✓ src/compiler/pipeline/passes/EmitInstrumentApplianceJobs.test.ts  (5 tests) 4ms
+ ✓ src/compiler/artifacts/InstrumentApplianceJobContract.test.ts  (5 tests) 722ms
+
+ Test Files  3 passed (3)
+      Tests  16 passed (16)
+   Start at  15:57:14
+   Duration  3.77s (transform 394ms, setup 0ms, collect 2.00s, tests 729ms, environment 0ms, prepare 1.48s)
+

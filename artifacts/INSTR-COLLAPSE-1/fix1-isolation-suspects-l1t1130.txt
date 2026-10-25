@@ -1,0 +1,149 @@
+
+ RUN  v1.6.1 /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > executes multiple tool calls concurrently and preserves result order
+[agent w8k7bl] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent w8k7bl] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent w8k7bl] tools=3 docDiscussion=false maxTurns=3
+[agent w8k7bl] turn 1 starting, promptChars=28190, docDiscussion=false
+[agent w8k7bl] turn 1 finish=tool_calls contentLen=0 toolCalls=2 [toolA,toolB]
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > executes multiple tool calls concurrently and preserves result order
+[agent w8k7bl] turn 1 tool toolA success=true durationMs=50
+[agent w8k7bl] turn 1 tool toolB success=true durationMs=10
+[agent w8k7bl] turn 2 starting, promptChars=28250, docDiscussion=false
+[agent w8k7bl] turn 2 finish=stop contentLen=25 toolCalls=0
+[agent-summary] {"traceId":"w8k7bl","surface":"default","model":"test-model","success":true,"elapsedMs":201,"turns":[{"turn":1,"durationMs":50,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[{"name":"toolA","durationMs":50,"success":true},{"name":"toolB","durationMs":10,"success":true}]},{"turn":2,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":2,"toolCalls":2,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent w8k7bl] done success=true elapsedMs=201 turns=2 toolCalls=2 events=0
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > preserves message order even when faster tools complete first
+[agent tvgm8a] start surface=default model=test-model promptLen=19 effectivePromptLen=19 historyLen=0 attachments=0 deterministicOnly=false clarificationAnswers=0
+[agent tvgm8a] outcome=error, hasArtifacts=false; falling through to LLM loop forceDraftTool=false
+[agent tvgm8a] tools=3 docDiscussion=false maxTurns=3
+[agent tvgm8a] turn 1 starting, promptChars=28190, docDiscussion=false
+[agent tvgm8a] turn 1 finish=tool_calls contentLen=0 toolCalls=2 [toolA,toolB]
+
+stdout | src/ai/AgentOrchestrator.parallel.test.ts > AgentOrchestrator parallel tool execution > preserves message order even when faster tools complete first
+[agent tvgm8a] turn 1 tool toolA success=true durationMs=50
+[agent tvgm8a] turn 1 tool toolB success=true durationMs=10
+[agent tvgm8a] turn 2 starting, promptChars=28250, docDiscussion=false
+[agent tvgm8a] turn 2 finish=stop contentLen=25 toolCalls=0
+[agent-summary] {"traceId":"tvgm8a","surface":"default","model":"test-model","success":true,"elapsedMs":61,"turns":[{"turn":1,"durationMs":51,"finishReason":"tool_calls","promptTokens":0,"completionTokens":0,"tools":[{"name":"toolA","durationMs":50,"success":true},{"name":"toolB","durationMs":10,"success":true}]},{"turn":2,"durationMs":0,"finishReason":"stop","promptTokens":0,"completionTokens":0,"tools":[]}],"totals":{"turns":2,"toolCalls":2,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent tvgm8a] done success=true elapsedMs=61 turns=2 toolCalls=2 events=0
+
+ ✓ src/ai/AgentOrchestrator.parallel.test.ts  (2 tests) 269ms
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Initializing app with base path: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loading schemas from: /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 196 schemas
+Added 196 schemas to validator
+Loaded 28 predicates from registry
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Lint spec loading warnings:
+  - core/lab-state.lint.yaml: Invalid lint spec structure
+Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 31 lint specs, 85 rules
+Loaded lifecycle: document-control from document-control.lifecycle.yaml
+Loaded lifecycle: document-controlled-signing from document-controlled-signing.lifecycle.yaml
+Loaded lifecycle: lab-sample from lab-sample.lifecycle.yaml
+Loaded lifecycle: lab-vocabulary-control from lab-vocabulary-control.lifecycle.yaml
+Loaded lifecycle: registry-ops from registry-ops.lifecycle.yaml
+Loaded lifecycle: service-request from service-request.lifecycle.yaml
+Loaded lifecycle: tyf-order from tyf-order.lifecycle.yaml
+Loaded 7 lifecycle specs
+Loaded 7 registry-kind lifecycle coverage entries (registry-ops)
+Loaded 4 policy bundles
+Loaded 6 material authoring profiles
+No repository configured; using durable embedded Git repository: main
+Repository storage mode: embedded-git
+  Data dir: /tmp/cl-w25-t1-promotion-data
+Creating EmbeddedGitRepoAdapter for repository: main
+  Data dir: /tmp/cl-w25-t1-promotion-data
+  Branch: main
+  Mode: durable local Git (no network remote)
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Embedded Git records repository ready: worktree=/tmp/cl-w25-t1-promotion-data/worktrees/main bare=/tmp/cl-w25-t1-promotion-data/repos/main.git
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+Failed to bootstrap local admin user: Validation failed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+UI spec loading warnings:
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/lab-state.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/core/term.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/knowledge/mechanism-model.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/registry/constraint-vocabulary/constraint-vocabulary.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/extraction-draft.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/phase-template.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-foundry-review-inner-loop-trace.ui.yaml: Validation failed
+  - /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/schema/workflow/protocol-ide-session.ui.yaml: Validation failed
+
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 56 UI specs
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Loaded 4 platform manifests from fallback
+Rebuilding record index...
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 128 records
+Index built with 128 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+JSON-LD index seeded with 0 records
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seeded biology terms: 5 species/cell-lines, 6 strains, 12 conditions
+Rebuilding record index...
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+[index-manager] merged 128 seed records from /mnt/vast/home/brad/git/wt/instr-collapse-1-lane1-l1t0755/server/records/seed
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Index rebuilt: 151 records
+
+(node:1042091) [FSTDEP022] FastifyWarning: The router options for maxParamLength property access is deprecated. Please use "options.routerOptions" instead for accessing router options. The router options will be removed in `fastify@6`.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Seed protocols: created [prt-seed-biological-transfer], reused []
+App initialized
+
+stderr | src/integration/W25DraftLifecyclePromotion.test.ts
+<empty line>
+stdout | src/integration/W25DraftLifecyclePromotion.test.ts
+Library index built
+
+ ✓ src/integration/W25DraftLifecyclePromotion.test.ts  (5 tests) 21906ms
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+   Start at  16:23:00
+   Duration  31.32s (transform 6.27s, setup 0ms, collect 11.84s, tests 22.18s, environment 0ms, prepare 942ms)
+

@@ -4,7 +4,6 @@ id: EQP-PIPETTE
 name: Pipette
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - pipette
   - manual pipette

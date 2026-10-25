@@ -1,7 +1,7 @@
 /**
  * LabCollectionView — collection view for /lab with category navigation.
  *
- * Categories: Protocols, Materials, Labware, Instruments & Equipment, People, Documents.
+ * Categories: Protocols, Materials, Labware, Equipment, People, Documents.
  * Each category maps to a record kind that's fetched via listRecordsByKind.
  *
  * Spec reference: specs/computable-lab-ui-specification.md §8.1
@@ -29,7 +29,7 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'sequences', label: 'Sequences & assays', kind: 'sequence' },
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
-  { id: 'equipment', label: 'Instruments & Equipment', kind: 'equipment' },
+  { id: 'equipment', label: 'Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'controlled-document' },
   { id: 'vendor-pdfs', label: 'Vendor PDFs', kind: 'vendor-pdf' },
@@ -125,8 +125,8 @@ function extractHelperTokens(
     }
 
     case 'equipment': {
-      const st = typeof p.status === 'string' ? p.status : undefined
-      if (st) tokens.push({ text: st, tag: statusVariant(st) })
+      // QMS8-C (D3/D8): the domain status token is retired with the field —
+      // the record's lifecycle state is shown by the control bar's state pill.
       if (typeof p.manufacturer === 'string') tokens.push({ text: p.manufacturer })
       if (typeof p.model === 'string') tokens.push({ text: p.model })
       if (typeof p.location === 'string') tokens.push({ text: `📍 ${p.location}` })

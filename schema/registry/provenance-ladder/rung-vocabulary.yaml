@@ -42,9 +42,11 @@ rungs:
       (schema-required by $defs/Provenance); enforced per-fact by
       vendor-protocol-candidate.lint.yaml prov-vendor-facts-document-anchored
     mints_on: >-
-      extraction (the ONLY writer of VENDOR facts; the candidate is immutable —
-      "document truth plus provenance, not a final executable protocol"
-      (schema description); immutability ENFORCEMENT is the W2-5 server surface)
+      extraction (the ONLY writer of VENDOR facts; re-extraction UPDATES the
+      candidate in place — same recordId, new payload (VPDF-3, Brad 2026-10-20
+      ruling; the kind left the appendOnlyKinds DATA list). "document truth
+      plus provenance, not a final executable protocol" (schema description);
+      the sole-writer contract, not immutability, is what the wall enforces)
 
   - id: DERIVED
     curie: cf:provenance-derived

@@ -22,17 +22,17 @@ form:
   - title: "Training"
     fields:
     - path: "$.personRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Person"
       required: true
       refKind: "person"
     - path: "$.trainingMaterialRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Training Material"
       required: true
       refKind: "training-material"
     - path: "$.trainerRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Trainer"
       refKind: "person"
   - title: "Status"
@@ -51,11 +51,11 @@ form:
       - value: "in_progress"
         label: "In Progress"
     - path: "$.completedAt"
-      widget: "date"
+      widget: "datetime"
       label: "Completed At"
       required: true
     - path: "$.expiresAt"
-      widget: "date"
+      widget: "datetime"
       label: "Expires At"
   - title: "Notes"
     fields:

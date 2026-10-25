@@ -4,7 +4,6 @@ id: EQP-FRIDGE
 name: Refrigerator (4 °C)
 lifecycleId: registry-ops
 state: active
-status: active
 keywords:
   - fridge
   - refrigerator

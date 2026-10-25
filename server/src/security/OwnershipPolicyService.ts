@@ -154,8 +154,13 @@ export class OwnershipPolicyService {
     const doc = await this.activeLabPolicy();
     const rule = await this.ruleFor(input.kind);
     if (!doc || !rule) return null;
+    // OWN-15 (binding ruling R2): the CREATING user owns every new record.
+    // `owner: lab` survives ONLY as visibility/grants semantics — it is never an
+    // owner substitution at create-stamp time. The document's labOwnerUserId is
+    // no longer consumed here (applyOwnershipDefaults.ts keeps using it as the
+    // out-of-scope bulk-repair lever until a future ruling).
     return {
-      ownerUserId: rule.owner === 'lab' ? doc.labOwnerUserId : input.creatorUserId,
+      ownerUserId: input.creatorUserId,
       visibility: rule.visibility,
       filedTo: rule.filedTo,
       grants: rule.defaultGrants,

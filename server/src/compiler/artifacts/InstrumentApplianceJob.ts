@@ -20,6 +20,13 @@ export interface GeminiEmActiveReadRequest {
   instrumentRef?: Record<string, unknown>;
   outputPath?: string;
   parameters: GeminiEmActiveReadParameters;
+  // INSTR-READCHAIN-1 (a)-exception: these declare in TYPES what the runtime
+  // handler already accepts (MeasurementHandlers.ActiveReadRequestBody carries
+  // eventGraphRef/readEventRef and validateGeminiApplianceJob passes unknown
+  // request fields through). They let the chatbot executor attach the
+  // read-event chain without a cast. No schema YAML, route, or gate change.
+  eventGraphRef?: unknown;
+  readEventRef?: string;
 }
 
 export interface InstrumentApplianceJob {
@@ -89,16 +96,32 @@ const GEMINI_EM_INSTRUMENT_ALIASES = new Set([
   'molecular devices gemini em',
 ]);
 
+// INSTR-COLLAPSE-1 FIX-1 (adv defect 1): the active-read ref TARGET is an
+// EQUIPMENT record (gemini-active-read-request.schema.yaml pins
+// instrumentRef type: const equipment; measurement.equipmentRef likewise).
+// The id names the equipment record the git corpus actually declares for a
+// Gemini EM plate reader: records/seed/equipment/eqp-plate-reader.yaml
+// (EQP-PLATE-READER, keywords include "plate reader"/"fluorescence
+// reader"), whose read capability is declared by records/seed/
+// equipment-capability/ecp-plate-reader.yaml (ECP-PLATE-READER -> VERB-READ).
+// The retired `instrument/<slug>` path-style id is gone: the slug no longer
+// has to match a retired kind's record — it resolves to the seed-declared
+// plate-reader equipment record (spec hard rule 6: slug style was fine for
+// the retired kind; the TARGET record must exist in the corpus).
+const GEMINI_EM_EQUIPMENT_RECORD_ID = 'EQP-PLATE-READER';
+
 function normalizeInstrumentName(instrument: string): string {
   return instrument.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function instrumentRecordId(instrument: string): string {
-  const slug = normalizeInstrumentName(instrument)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return `instrument/${slug || 'gemini-em'}`;
-}
+// INSTR-READCHAIN-1 (e) / ruling O2: the slug-derived equipment-id fallback
+// branch is DELETED as unreachable code. Sole non-test caller chain:
+// createGeminiEmActiveReadJob <- ChatbotCompilePasses
+// createEmitInstrumentApplianceJobsPass, which early-returns on
+// !isGeminiEmInstrument(runFile.instrument); every test caller feeds Gemini-EM
+// alias names; zero corpus files make the slug path reachable (every seed
+// equipment id is a hand-declared record). Behavior-preserving deletion —
+// normalizeInstrumentName stays (isGeminiEmInstrument uses it).
 
 export function isGeminiEmInstrument(instrument: string): boolean {
   return GEMINI_EM_INSTRUMENT_ALIASES.has(normalizeInstrumentName(instrument));
@@ -122,8 +145,8 @@ export function createGeminiEmActiveReadJob(
       adapterId: GEMINI_EM_ADAPTER_ID,
       instrumentRef: {
         kind: 'record',
-        id: instrumentRecordId(runFile.instrument),
-        type: 'instrument',
+        id: GEMINI_EM_EQUIPMENT_RECORD_ID,
+        type: 'equipment',
       },
       outputPath: `records/inbox/${jobId}.csv`,
       parameters: requestParameters,

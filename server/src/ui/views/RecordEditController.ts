@@ -309,7 +309,9 @@ export class RecordEditController {
       'assertion': 'AST',
       'evidence': 'EVD',
       'protocol': 'PRT',
-      'instrument': 'INS',
+      // INSTR-COLLAPSE-2 C4: the instrument->INS id-prefix row is retired
+      // WITH the kind (kind deleted; the map already falls through to 'REC'
+      // for any unknown kind, so no create path changes for surviving kinds).
       'labware': 'LBW',
       'labware-instance': 'LWI',
     };

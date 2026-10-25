@@ -23,6 +23,7 @@ import { apiClient, isSignatureRejection } from '../../shared/api/client'
 import { describeApiError } from '../../shared/api/errors'
 import { SignaturePasswordModal, signatureRejectionInstruction } from './SignaturePasswordModal'
 import { SignOffReceipt } from './SignOffReceipt'
+import './DocumentControlBar.css'
 
 type Transition = {
   event: string
@@ -48,14 +49,17 @@ interface DocumentControlBarProps {
   onStateChanged: () => void
 }
 
-const stateColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  in_review: 'bg-blue-100 text-blue-700',
-  approved: 'bg-green-100 text-green-700',
-  effective: 'bg-emerald-100 text-emerald-700',
-  superseded: 'bg-gray-100 text-gray-500 line-through',
-  archived: 'bg-gray-100 text-gray-500 line-through',
-}
+// REG-1 D1: pill states differentiate via token CSS classes (see
+// DocumentControlBar.css), never fixed palette shades. Unknown states fall
+// back to the base pill.
+const pillStates = new Set([
+  'draft',
+  'in_review',
+  'approved',
+  'effective',
+  'superseded',
+  'archived',
+])
 
 export function DocumentControlBar({ record, dirty, onStateChanged }: DocumentControlBarProps) {
   const lifecycleId = record.payload.lifecycleId as string | undefined
@@ -135,18 +139,20 @@ export function DocumentControlBar({ record, dirty, onStateChanged }: DocumentCo
     void commitTransition(transition)
   }
 
-  const stateColor = stateColors[currentState] || 'bg-gray-100 text-gray-700'
+  const statePillClass = pillStates.has(currentState)
+    ? `dcb__state-pill dcb__state-pill--${currentState}`
+    : 'dcb__state-pill'
   const hasAllowedTransitions = transitions.some(t => t.allowed)
   const isTerminal = !hasAllowedTransitions && ['superseded', 'archived'].includes(currentState)
 
   return (
-    <div data-testid="document-control-bar" className="mb-4">
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-        <span className={`text-sm font-medium px-2.5 py-1 rounded ${stateColor}`}>
+    <div data-testid="document-control-bar" className="dcb">
+      <div className="dcb__card">
+        <span className={statePillClass}>
           {currentState.replace(/_/g, ' ')}
         </span>
-        {loading && <span className="text-sm text-gray-500">Loading...</span>}
-        {!loading && transitions.length === 0 && <span className="text-sm text-gray-500">No transitions</span>}
+        {loading && <span className="dcb__note">Loading...</span>}
+        {!loading && transitions.length === 0 && <span className="dcb__note">No transitions</span>}
         {!loading &&
           transitions.map(
             t =>
@@ -163,27 +169,27 @@ export function DocumentControlBar({ record, dirty, onStateChanged }: DocumentCo
                   onClick={() => handleTransition(t)}
                   disabled={dirty || advancing !== null}
                   title={dirty ? 'Save changes first' : undefined}
-                  className="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+                  className="dcb__btn"
                 >
                   {t.label}
                 </button>
               )
           )}
         {!loading && !hasAllowedTransitions && isTerminal && (
-          <span className="text-sm text-gray-500">This document is {currentState}</span>
+          <span className="dcb__terminal">This document is {currentState}</span>
         )}
         {dirty && (
-          <span data-testid="save-first-hint" className="text-sm text-orange-700">
+          <span data-testid="save-first-hint" className="dcb__save-hint">
             Save changes first — transitions apply to the saved revision only.
           </span>
         )}
         {error && (
-          <span data-testid="transition-error" className="text-sm text-red-600">
+          <span data-testid="transition-error" className="dcb__error">
             {error}
           </span>
         )}
       </div>
-      <div className="mt-2">
+      <div className="dcb__receipt">
         <SignOffReceipt recordId={record.recordId} refreshKey={receiptKey} />
       </div>
       <SignaturePasswordModal

@@ -113,25 +113,29 @@ function asRecord(result: unknown): Record<string, unknown> {
 describe('W2-5 T4: candidate write-protection matrix (§3.5 rows)', () => {
   const VPC_ID = 'CAN-w25-t4';
 
-  it('row PUT /records/:id — vendor-protocol-candidate answers 405 APPEND_ONLY (appendOnlyKinds data)', async () => {
+  // VPDF-3 (OQ-1, Brad 2026-10-20 ruling, flipped IN THIS COMMIT): re-extraction
+  // UPDATES the candidate in place, so vendor-protocol-candidate left the
+  // appendOnlyKinds DATA list. These rows are now the regression test for the
+  // NEW truth: candidate updates go through (extraction is the sole writer and
+  // re-extract is the sanctioned rewrite path); the governance pair stays walled.
+  it('row PUT /records/:id — vendor-protocol-candidate is NO LONGER walled: the update goes through (VPDF-3 update-in-place)', async () => {
     const { handlers, records, put } = fakeWorld();
     put({ recordId: VPC_ID, schemaId: VPC_SCHEMA_ID, payload: vpcPayload(VPC_ID), meta: { createdAt: '', updatedAt: '' } } as RecordEnvelope);
     const reply = replyOf();
-    const result = await handlers.updateRecord(req({ id: VPC_ID }, { payload: { ...vpcPayload(VPC_ID), title: 'MUTATED' } }), reply);
-    expect(reply.statusValue).toBe(405);
-    expect(asRecord(result).error).toBe('APPEND_ONLY');
-    // Refused: nothing changed.
-    expect((records.get(VPC_ID)!.payload as Record<string, unknown>).title).toBe('W2-5 T4 candidate');
+    const result = await handlers.updateRecord(req({ id: VPC_ID }, { payload: { ...vpcPayload(VPC_ID), title: 'RE-EXTRACTED' } }), reply);
+    expect(asRecord(result).error, JSON.stringify(result)).not.toBe('APPEND_ONLY');
+    expect(asRecord(result).success).toBe(true);
+    // The update landed: same recordId, new payload.
+    expect((records.get(VPC_ID)!.payload as Record<string, unknown>).title).toBe('RE-EXTRACTED');
   });
 
-  it('row DELETE /records/:id — same wall answers 405 APPEND_ONLY', async () => {
+  it('row DELETE /records/:id — the wall no longer names the candidate kind (delete is permitted; re-extract UPDATE is the sanctioned rewrite path)', async () => {
     const { handlers, records, put } = fakeWorld();
     put({ recordId: VPC_ID, schemaId: VPC_SCHEMA_ID, payload: vpcPayload(VPC_ID), meta: { createdAt: '', updatedAt: '' } } as RecordEnvelope);
     const reply = replyOf();
     const result = await handlers.deleteRecord(req({ id: VPC_ID }), reply);
-    expect(reply.statusValue).toBe(405);
-    expect(asRecord(result).error).toBe('APPEND_ONLY');
-    expect(records.has(VPC_ID)).toBe(true);
+    expect(asRecord(result).error).not.toBe('APPEND_ONLY');
+    expect(records.has(VPC_ID)).toBe(false);
   });
 
   it('row POST /records/:id/draft-copy — kind whitelist refuses the candidate 422 DRAFT_COPY_UNSUPPORTED', async () => {
@@ -219,29 +223,27 @@ describe('W2-5 T4: store-level backstop reads the config-injected list (§3.2)',
     await rm(testDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
-  it('a service bypassing the API cannot store.update a candidate (APPEND_ONLY from the config list)', async () => {
+  it('a service bypassing the API CAN store.update a candidate now (VPDF-3 update-in-place; the config list no longer names the kind)', async () => {
     const { recordId: _omitted2, ...mutatedPayload } = vpcPayload('CAN-w25-t4-store');
     const result = await store.update({
-      envelope: { recordId: 'CAN-w25-t4-store', schemaId: VPC_SCHEMA_ID, payload: { ...mutatedPayload, title: 'MUTATED BY BYPASS' } },
-      message: 'bypass attempt',
+      envelope: { recordId: 'CAN-w25-t4-store', schemaId: VPC_SCHEMA_ID, payload: { ...mutatedPayload, title: 'UPDATED IN PLACE' } },
+      message: 'VPDF-3: re-extract update-in-place',
     });
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('APPEND_ONLY');
+    expect(result.success, result.error).toBe(true);
     const stored = await store.get('CAN-w25-t4-store');
-    expect((stored!.payload as Record<string, unknown>).title).toBe('W2-5 T4 candidate');
-    expect(token(stored!)).toBe(vpcTokenBefore);
+    expect((stored!.payload as Record<string, unknown>).title).toBe('UPDATED IN PLACE');
+    expect(token(stored!)).not.toBe(vpcTokenBefore);
   });
 
-  it('a service bypassing the API cannot store.delete a candidate', async () => {
-    const result = await store.delete({ recordId: 'CAN-w25-t4-store', message: 'bypass delete' });
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('APPEND_ONLY');
-    expect(await store.exists('CAN-w25-t4-store')).toBe(true);
+  it('a service bypassing the API can store.delete a candidate (the wall no longer names the kind; re-extract UPDATE remains the sanctioned rewrite path)', async () => {
+    const result = await store.delete({ recordId: 'CAN-w25-t4-store', message: 'VPDF-3: delete permitted post-OQ-1' });
+    expect(result.success, result.error).toBe(true);
+    expect(await store.exists('CAN-w25-t4-store')).toBe(false);
   });
 
-  it('the knob is DATA: DEFAULT_CONFIG names vendor-protocol-candidate beside the governance pair', () => {
+  it('the knob is DATA: DEFAULT_CONFIG names the governance pair and NO LONGER names vendor-protocol-candidate (VPDF-3 OQ-1)', () => {
     expect(DEFAULT_CONFIG.server.appendOnlyKinds).toContain('audit-event');
     expect(DEFAULT_CONFIG.server.appendOnlyKinds).toContain('signature');
-    expect(DEFAULT_CONFIG.server.appendOnlyKinds).toContain('vendor-protocol-candidate');
+    expect(DEFAULT_CONFIG.server.appendOnlyKinds).not.toContain('vendor-protocol-candidate');
   });
 });

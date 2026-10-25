@@ -171,6 +171,7 @@ import { StorageService } from './storage/StorageService.js';
 import { LabSyncWorker, isLabSyncConfigured } from './lab-sync/LabSyncWorker.js';
 import { createLabSyncHandlers } from './api/handlers/LabSyncHandlers.js';
 import { createOwnershipPolicyHandlers } from './api/handlers/OwnershipPolicyHandlers.js';
+import { createPermissionsHandlers } from './api/handlers/PermissionsHandlers.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -865,12 +866,18 @@ export async function createServer(
       model: aiProfile.inference.model,
       ...(aiProfile.inference.apiKey ? { apiKey: aiProfile.inference.apiKey } : {}),
       ...(aiProfile.inference.temperature ? { temperature: aiProfile.inference.temperature } : {}),
+      // VPDF-4 (D2-1): the settings-declared token budget rides the chunk
+      // call — the hardcoded 8192 is gone; the budget is DATA.
+      ...(aiProfile.inference.maxTokens !== undefined ? { maxTokens: aiProfile.inference.maxTokens } : {}),
       // Thinking presets are config (data): what a level means is the serving
       // stack's business (chat_template_kwargs vs reasoning_effort).
       ...(aiProfile.inference.thinkingLevels ? { thinkingLevels: aiProfile.inference.thinkingLevels } : {}),
       ...(aiProfile.inference.defaultThinkingLevel ? { defaultThinkingLevel: aiProfile.inference.defaultThinkingLevel } : {}),
     } : undefined,
     pbOrchestratorRef,
+    // VPDF-3 (D1): the review route's stream persists its candidate through
+    // the same store the record API walls read.
+    ctx.store,
   );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
@@ -920,6 +927,17 @@ export async function createServer(
     engine: ctx.lifecycleEngine,
     store: ctx.store,
     roleResolver,
+    resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
+  });
+  // QMS8-A: read-only permissions & roles aggregate for the Settings section.
+  // Grants use the same store read path RoleResolver uses; coverage/bundle are
+  // LIVE accessor echoes (coverage may be undefined when its load failed).
+  const permissionsHandlers = createPermissionsHandlers({
+    store: ctx.store,
+    engine: ctx.lifecycleEngine,
+    getKindLifecycleRegistry: () => ctx.kindLifecycleRegistry,
+    getAppConfig: () => ctx.appConfig,
+    bundleService: ctx.policyBundleService,
     resolveRequestUser: async (request) => ctx.localIdentityService?.resolveRequestUser(request) ?? null,
   });
   const signatureHandlers = createSignatureHandlers({
@@ -1591,6 +1609,7 @@ export async function createServer(
       platformHandlers,
       labSettingsHandlers,
       ownershipPolicyHandlers,
+      permissionsHandlers,
       lifecycleHandlers,
       signatureHandlers,
       metaHandlers,

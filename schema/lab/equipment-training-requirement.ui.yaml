@@ -22,11 +22,11 @@ form:
   - title: "Equipment"
     fields:
     - path: "$.equipmentRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment"
       refKind: "equipment"
     - path: "$.equipmentClassRef"
-      widget: "ref"
+      widget: "record-ref"
       label: "Equipment Class"
       refKind: "equipment-class"
   - title: "Policy"
