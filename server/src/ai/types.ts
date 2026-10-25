@@ -722,6 +722,16 @@ export interface AgentResult {
   labwareAdditions?: AgentLabwareAddition[];
   /** Proposed generic/constrained labware requirements to ghost before concrete binding. */
   labwareRequirements?: AgentLabwareRequirement[];
+  /**
+   * REVISE-GHOST-1 fix3 (gate Defect 1): the compile's resolved placement
+   * offers — labware hints the frozen pipeline bound against REAL inventory
+   * records (terminalArtifacts.resolvedLabwares, capped by
+   * config/drafting/deck-review.yaml). The client ghosts a PLACEMENT of the
+   * EXISTING record from this channel (draftPreview's resolved arm); without
+   * it a resolved draft mounts events but zero placements. Absent-or-value
+   * via conditional spread (exactOptionalPropertyTypes).
+   */
+  resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>;
   /** Bench equipment the draft wants on the bench (never a deck slot). */
   equipmentRequirements?: AgentEquipmentRequirement[];
   /** Records the draft wants CREATED (the add; nothing is written until Accept). */
