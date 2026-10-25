@@ -1389,10 +1389,30 @@ test.describe('W2-11 zymo campaign demo gate', () => {
       expect(stable >= 3, 'the thread must hold the family-derived text value-stably (no pending remount) before the leg drives it').toBe(true)
     }
 
+    // W211-G1DRIFT-1 re-drive honesty: a re-drive must start from a FRESH
+    // mount, not from the half-driven state of the failed attempt. After a
+    // failed chain the textarea still holds the typed fixture prose, so
+    // settleThread's family-derived-text bar can never re-stabilize without a
+    // real remount — that is exactly the l2t0530 burn signature (attempts 2-3
+    // died at stable>=3). A reload IS the remount: state-based, never a longer
+    // sleep, and the settle requirement itself is untouched.
+    async function reDriveReset() {
+      await page.reload({ waitUntil: 'networkidle' })
+      const tab = page.getByTestId('right-pane-tab-protocol')
+      await expect(tab, 'the Protocol tab survives the re-drive reload').toBeVisible({ timeout: 20000 })
+      await tab.click()
+      await expect(page.getByTestId('protocol-localization-details'), 'the localization thread re-mounts after the re-drive reload').toBeVisible({ timeout: 30000 })
+      // If a failed attempt had already fired the real mint act, the class-(c)
+      // zero-match premise must be restored before re-driving (same rider the
+      // leg runs at start — never re-drive against a half-minted workspace).
+      await clearGoldenNonce(fx)
+    }
+
     let heldBody = null
     let chainError = null
     for (let attempt = 1; attempt <= 3 && heldBody === null; attempt += 1) {
       try {
+        if (attempt > 1) await reDriveReset()
         await settleThread()
         await textArea.fill(fx.protocolText)
         // The nonce filter pins MY click's response: the thread's auto-ask (the
@@ -1434,9 +1454,14 @@ test.describe('W2-11 zymo campaign demo gate', () => {
         expect(heldRes.status(), 'the planted ambiguity + unknown-noun bar the answered draw (held-422, foldHeldBundle-reachable — STEP 0 OUTCOME A)').toBe(422)
         const body = await heldRes.json()
 
-        // VERIFY the chain survived the fold: cards on screen AND the fixture
-        // nonce still in the textarea (a late key flip resets both).
-        const cardsNow = page.getByTestId('pl-clarification-cards')
+        // VERIFY the chain survived the fold: the fold surface on screen AND
+        // the fixture nonce still in the textarea (a late key flip resets both).
+        // W211-G1DRIFT-1: f57c50c9 (MATRES-PANEL §7.1) swapped the held-422 fold
+        // container from the flat card list to the grouped panel; the container
+        // testid is now pl-clarification-panel (ClarificationPanel.tsx:147). The
+        // old pl-clarification-cards no longer exists in app/src — querying it
+        // misread a CORRECT fold (draw2 422 proves the fold) as a remount-wipe.
+        const cardsNow = page.getByTestId('pl-clarification-panel')
         const cardsUp = await cardsNow.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
         const kept = await textArea.inputValue().catch(() => '')
         if (!cardsUp || !kept.includes(fx.cohortNonce)) {
@@ -1468,9 +1493,12 @@ test.describe('W2-11 zymo campaign demo gate', () => {
     writeFileSync(goldenReceiptPath('g1-draw2-held422.json'), JSON.stringify({ status: 422, body: heldBody }, null, 1))
 
     // --- CARDS RENDER (the browser-gate surfaces, asserted headlessly too):
-    // pl-clarification-cards carries one card per answerable fact; the card
-    // head shows its menuProvider (ANSWER-SURFACE-1: '/l' for (b), '/m' for (c)).
-    const cards = page.getByTestId('pl-clarification-cards')
+    // pl-clarification-panel (the MATRES-PANEL fold container, f57c50c9 —
+    // replaces the dead pl-clarification-cards) carries one
+    // pl-clarification-card slot section per answerable fact
+    // (ClarificationPanel.tsx:160-163); the card head shows its menuProvider
+    // (ANSWER-SURFACE-1: '/l' for (b), '/m' for (c)).
+    const cards = page.getByTestId('pl-clarification-panel')
     await expect(cards, 'the held-422 facts render as answerable cards').toBeVisible({ timeout: 30000 })
     const cardList = cards.locator('[data-testid="pl-clarification-card"]')
     await expect(cardList, 'both planted noun facts get a card').toHaveCount(2)
