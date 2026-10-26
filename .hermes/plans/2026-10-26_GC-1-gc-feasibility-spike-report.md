@@ -189,3 +189,7 @@ Budget guidance for GC-10: full-res decode ≤ 73k points / ~1.2 MB per trace; r
 1. KERRY escape tag≠0 variant (400/858) — needs vendor confirmation or a larger corpus sample before production parser freeze.
 2. Saturated-peak flagging rule (N points within 0.5% of max) is a proposal for GC-2/GC-10, not yet a lint rule.
 3. Screenshot reference route: orchestrator may vision-check the ChemStation screenshots from a vision-capable model to close the last independent-reference gap; the two-decoder tolerances above are self-sufficient for GC-2 design either way.
+
+
+---
+**Errata pointer (GC-6 promotion fold, 2026-10-26):** where the decode PROSE above conflicts with the promoted decoders (slot endianness :35, t0/t_end /60000 divisor, accumulator width), the DECODER CODE is normative — durable canonical copy: `.hermes/plans/scripts/gc1-decD.py`; corrected reading pinned in the GC-6 spec §D2.
