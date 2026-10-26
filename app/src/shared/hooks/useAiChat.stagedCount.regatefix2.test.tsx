@@ -8,10 +8,10 @@
  * the SAME staged preview).
  *
  * The hook publishes `previewStagedLabwareCount` — the count the card shows
- * — computed from the staged extras (union of the staged previewLabwares
- * and the done-result additions' recordIds, deduped) with a fallback to the
- * additions count when the surface registers no seam. These locks pin the
- * HOOK side of the count (the card's side is locked in
+ * — the number of staged previewLabwares ids (the staged-preview truth the
+ * deck bar reads), falling back to the done-result additions count when the
+ * deck staged no labware (no seam, or an event-only preview). These locks
+ * pin the HOOK side of the count (the card's side is locked in
  * ChatPreviewCard.regatefix2.test.tsx).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
