@@ -132,6 +132,27 @@ describe('run-record load — the deck lock beats the deck memory (L2-CHAT-1 reg
     expect(memoryWrites.length).toBe(0)
   })
 
+  // regatefix2-fix1 D2 (gate defect D2): the gate's probe showed the
+  // persist-on-change effect STILL fired with the lock-RESOLVED deck
+  // (manual/manual_collapsed) on a mere page load and rewrote the record's
+  // methodVariantId — clobbering the user's remembered variant, the exact
+  // opposite of the design claim ("suppress the one memory write-back for
+  // that forced deck"). The test above only filters the freeform write, so
+  // it cannot catch it. This one asserts the NO-WRITE state directly: when
+  // the deck was resolved by a DISAGREEING lock, writeRunDeckMemory must
+  // not be called AT ALL — the record's memory keeps its remembered
+  // variant (read-only convergence; nothing rewritten on load).
+  it('when the deck is LOCK-RESOLVED the memory write-back is suppressed entirely (no writeRunDeckMemory call)', async () => {
+    await resolveDeck(RUN_PAYLOAD)
+    await waitFor(() => {
+      // The deck has resolved to the locked variant — if a write-back
+      // were to fire it fires now (the persist effect runs on the
+      // resolved state).
+      expect(screen.getByTestId('probe').textContent).toBe('manual/manual_collapsed')
+    })
+    expect(mocks.writeRunDeckMemory).not.toHaveBeenCalled()
+  })
+
   it('with NO lock the memory deck still resolves (today\'s behavior preserved)', async () => {
     const probe = await resolveDeck({ ...RUN_PAYLOAD, methodDeckLock: undefined })
     expect(probe.textContent).toBe('manual/manual_freeform')

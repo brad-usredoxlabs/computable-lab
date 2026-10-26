@@ -1213,6 +1213,18 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // default before the record is loaded.
   const runDeckLoadedRef = useRef(false)
   const lastPersistedDeckRef = useRef<string | null>(null)
+  // L2-CHAT-1 regatefix2-fix1 D2 (gate defect D2): the deck the run was
+  // RESOLVED to by a DISAGREEING methodDeckLock — the route opened on the
+  // LOCK, not the record's remembered deck. The persist-on-change effect
+  // below suppresses the one memory write-back for that forced deck:
+  // writing it back would rewrite the record's methodPlatform/
+  // methodVariantId on a mere page load, clobbering the user's remembered
+  // variant (the design intent regatefix2 D1a claimed: "suppress the one
+  // memory write-back ... without clobbering the user's remembered
+  // variant"). A deliberate deck change AWAY from the locked deck clears
+  // the gate and resumes the normal write-back (the user just chose that
+  // deck — persisting that memory is the point of it).
+  const lockResolvedDeckRef = useRef<RunDeckMemory | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1240,10 +1252,12 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   useEffect(() => {
     if (!runId) {
       runDeckLoadedRef.current = false
+      lockResolvedDeckRef.current = null
       dispatch({ type: 'set_run_deck', deck: null })
       return
     }
     let cancelled = false
+    lockResolvedDeckRef.current = null
     apiClient.getRecord(runId)
       .then((record) => {
         if (cancelled) return
@@ -1276,6 +1290,12 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
           (lockedDeck.platformId !== memory.platformId || lockedDeck.variantId !== memory.variantId)
             ? lockedDeck
             : memory
+        // regatefix2-fix1 D2: a DISAGREEING lock forced the route onto the
+        // locked deck — remember that, so the persist effect below suppresses
+        // the one memory write-back for the forced deck (no clobber of the
+        // record's remembered variant on load).
+        lockResolvedDeckRef.current =
+          deck === lockedDeck && lockedDeck !== null && deck !== memory ? lockedDeck : null
         dispatch({ type: 'set_run_deck', deck })
       })
       .catch(() => {
@@ -1293,8 +1313,21 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
   // every change so a reload remembers it — deliberately NOT a lock, just a
   // mutable memory of the last deck the user left the run on. Assumes the
   // platform/variant are valid (the switcher only offers manifest variants).
+  // regatefix2-fix1 D2 (gate defect D2): EXCEPT for the deck the route was
+  // FORCED onto by a disagreeing methodDeckLock — writing that back would
+  // rewrite the record's methodVariantId on a mere page load, clobbering the
+  // user's remembered variant. The write-back stays suppressed while the deck
+  // sits on the locked deck; a deliberate change away from it resumes it.
   useEffect(() => {
     if (!state.runId || !runDeckLoadedRef.current) return
+    const forcedDeck = lockResolvedDeckRef.current
+    if (
+      forcedDeck !== null &&
+      forcedDeck.platformId === state.platformId &&
+      forcedDeck.variantId === state.variantId
+    ) {
+      return
+    }
     const key = `${state.runId}:${state.platformId}:${state.variantId}`
     if (lastPersistedDeckRef.current === key) return
     lastPersistedDeckRef.current = key
