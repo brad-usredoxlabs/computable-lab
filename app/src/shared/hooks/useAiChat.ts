@@ -32,6 +32,7 @@ import type {
   PromptMention,
   AiAgentActionEnvelope,
   AiDraftRevisionContext,
+  DraftOntologyBinding,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -733,9 +734,33 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
       // L2-CHAT-1: the revision trail round-trip. A revise turn (send while a
       // preview was staged) carries the staged draft + the accumulated
       // revision history back as structured `draftRevision` context — the
-      // same shape the legacy pane's context builder sends, so the server
-      // sees the universal path's revise turns identically.
+      // SAME SHAPE the legacy pane's context builder sends
+      // (AiTabPanel.tsx previewDraft), with the fields this stack actually
+      // stages: events, labwareAdditions, sourcePrompt, sourceSkips (FIX3
+      // D3) and the staged ontologyBindings. It is NOT identical to the
+      // legacy context as a whole: the legacy pane also carries
+      // labwareRequirements (this stack's ghost mount stages [] for the
+      // non-event channels — useDeckGhostMount hardcodes them; documented
+      // intentional subset, MOUNT-NONEVENT-1 follow-up, pending Brad) and
+      // deck-scope / study / systemPrompt context the universal stack
+      // derives differently.
       if (revising) {
+        // L2-CHAT-1 FIX3 D3: the staged EXTRAS ride the draft back (the
+        // ghost mount staged them on the editor preview). currentPreviewDraft
+        // matches the legacy pane's previewDraft (AiTabPanel.tsx) for what
+        // this stack ACTUALLY stages:
+        //   - events / labwareAdditions / ontologyBindings / sourcePrompt /
+        //     sourceSkips — the real staged values (sourceSkips is the
+        //     FIX3 D3 fix: the ghost mount's skips now reach the server);
+        //   - labwareRequirements — always [] here: the universal ghost
+        //     mount stages [] (useDeckGhostMount hardcodes the non-event
+        //     channels — MOUNT-NONEVENT-1, documented deferral pending
+        //     Brad). It is NOT fabricated: the field carries the truthful
+        //     empty set, and a revise turn on this stack can never revise
+        //     requirements the mount never staged.
+        const stagedExtras = revisingSource
+          ? (onStagedExtrasRef.current?.() ?? null)
+          : null
         const draftRevision: AiDraftRevisionContext = {
           currentPreviewDraft: {
             events: previewEvents,
@@ -745,6 +770,16 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             // prompt — the legacy pane carries it as sourcePrompt, so the
             // server sees the first draft's prompt HERE, not in the trail.
             ...(revisingSource ? { sourcePrompt: revisingSource.prompt } : {}),
+            // L2-CHAT-1 FIX3 D3: the staged skips (legacy parity).
+            ...(stagedExtras?.sourceSkips?.length
+              ? { sourceSkips: stagedExtras.sourceSkips }
+              : {}),
+            // L2-CHAT-1 FIX3 D3: the staged ontology bindings (legacy
+            // parity — AiTabPanel carries result.ontologyBindings on the
+            // preview; the ghost mount stages the same).
+            ...(stagedExtras?.ontologyBindings?.length
+              ? { ontologyBindings: stagedExtras.ontologyBindings as DraftOntologyBinding[] }
+              : {}),
           },
           // The trail is EXCLUSIVE of the sourcePrompt above (legacy: the trail
           // starts at the 2nd draft) — never re-includes the first draft's prompt.

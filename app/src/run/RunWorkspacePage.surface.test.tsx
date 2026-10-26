@@ -207,7 +207,7 @@ const eventEditorContextValue = {
         ...previewEvents,
       ]
       const preview = eventEditorContextValue.state.preview as
-        | { previewLabwares?: Record<string, unknown>; previewPlacements?: unknown[] }
+        | { previewLabwares?: Record<string, unknown>; previewPlacements?: Record<string, unknown>[] }
         | null
       if (preview) {
         eventEditorContextValue.state.labwares = {
@@ -215,7 +215,7 @@ const eventEditorContextValue = {
           ...(preview.previewLabwares ?? {}),
         }
         eventEditorContextValue.state.placements = [
-          ...(eventEditorContextValue.state.placements as unknown[]),
+          ...eventEditorContextValue.state.placements,
           ...(preview.previewPlacements ?? []),
         ]
       }
