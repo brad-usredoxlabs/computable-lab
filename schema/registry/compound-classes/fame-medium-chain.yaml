@@ -1,0 +1,20 @@
+# GC-2 F: the medium-chain FAME standards the GC-FID FAME method runs.
+# candidates = the 6:0/8:0/10:0 METHYL ESTERS (the actual standards); the
+# free fatty acid species are NOT candidates of this class.
+id: fame-medium-chain
+name: "FAME medium chain (6:0-10:0 methyl esters)"
+description: >
+  Medium-chain methyl fatty acid esters (FAMEs) used as GC-FID standards:
+  methyl hexanoate, methyl octanoate, methyl decanoate. Distinct species from
+  the corresponding free fatty acids (fame-local.yaml, one term per entity).
+chebi_ids:
+  - CHEBI:77322
+  - CHEBI:87432
+  - CHEBI:143577
+candidates:
+  - compoundId: FAME-LOCAL:methyl-hexanoate-n6
+    name: Methyl hexanoate (FAME, 6:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-octanoate-n8
+    name: Methyl octanoate (FAME, 8:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-decanoate-n10
+    name: Methyl decanoate (FAME, 10:0-OMe)
