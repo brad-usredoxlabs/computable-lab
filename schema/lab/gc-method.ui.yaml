@@ -1,7 +1,15 @@
 # UI specification for GC Method records — generated editor surface.
 # EDITOR-1 binding: section blocks claim slots EXPLICITLY (list order = field
-# order); the timed-events repeater carries NO slots, so it keeps path-prefix
-# binding on its `path` (repeater convention per types.ts EditorBlock).
+# order). FIX-1 (browser gate 2026-10-26T03:50:58, D1+D2):
+#   - D1: object-bound slots no longer use `textarea` (the frontend prints
+#     String(object) -> "[object Object]"). Every structured sub-field the
+#     DATA SCHEMA (gc-method.schema.yaml) declares is now a LEAF-SCALAR slot;
+#     the five array-of-object paths are `array` widgets with a `properties`
+#     sub-field list (documentMapper.ts:228 builds arraySchema from
+#     slot.properties; ArrayWidget renders each item as key: value lines).
+#   - D2: the app render path (documentMapper.ts:171) skips every block whose
+#     kind !== 'section', so the two `repeater` blocks never reached the DOM.
+#     They are deleted; their array slots are claimed inside SECTION blocks.
 # Every slot in editor.slots[] is claimed exactly once — the loader errors on
 # unknown / double-claimed / unclaimed slots in an explicitly-bound spec.
 uiVersion: 1
@@ -22,27 +30,42 @@ editor:
     - id: "acquisition"
       kind: "section"
       label: "Acquisition"
-      help: "Capture only: absent sections are unknown, never defaults."
-      slots: ["oven-slot", "inlet-slot", "diverter-slot", "saver-slot", "column-slot"]
-    - id: "analysis"
+      help: "Injector, diversion/saver hardware, and column. Capture only: absent sections are unknown, never defaults."
+      slots: ["inlet-mode-slot", "inlet-temp-slot", "inlet-pressure-slot", "inlet-split-slot", "inlet-carrier-slot", "diverter-position-slot", "diverter-description-slot", "saver-position-slot", "saver-description-slot", "column-length-slot", "column-id-slot", "column-film-slot", "column-phase-slot", "column-flow-slot"]
+    - id: "oven-program"
       kind: "section"
-      label: "Analysis"
-      help: "Integration parameters (capture) + declared executable binding."
-      slots: ["global-slot", "calibration-slot", "executable-binding-slot"]
+      label: "Oven program (steps)"
+      help: "Temperature program steps. Units live in field names; a null ramp rate is an isothermal segment (a capture, not a default)."
+      slots: ["oven-steps-slot"]
+    - id: "analysis-global"
+      kind: "section"
+      label: "Global integration"
+      help: "pybaselines global integration settings (captured)."
+      slots: ["global-baseline-slot", "global-skim-slot", "global-valley-slot", "global-peakwidth-slot"]
+    - id: "calibration"
+      kind: "section"
+      label: "Calibration"
+      help: "Internal-standard calibration block (captured)."
+      slots: ["istd-ref-slot", "istd-amount-value-slot", "istd-amount-unit-slot", "dilution-factor-slot", "multiplier-slot", "calibration-levels-slot"]
+    - id: "executable-binding"
+      kind: "section"
+      label: "Executable binding"
+      help: "Declared data: engine reference + declaration time. Without it, timed events are capture-only (lint-blocked from executable use)."
+      slots: ["engine-ref-slot", "declared-at-slot"]
     - id: "timed-events"
-      kind: "repeater"
+      kind: "section"
       label: "Timed events"
-      help: "ChemStation timed-event windows. No slots declared: binds by path prefix on the array below."
-      path: "$.analysis.timed_events"
+      help: "ChemStation timed-event windows: integration on/off + per-window peak acceptance. Capture only."
+      slots: ["timed-events-slot"]
     - id: "compound-assignments"
-      kind: "repeater"
+      kind: "section"
       label: "Compound assignments"
       help: "FAME/FFA identities this method integrates (ontology/record refs)."
-      path: "$.analysis.compound_assignments"
+      slots: ["compound-assignments-slot"]
     - id: "provenance"
       kind: "section"
       label: "Provenance"
-      help: "Vendor-derived values live ONLY here (source_files.key_values)."
+      help: "Vendor-derived values live ONLY here (source files + imported key values); they never map into executable fields."
       slots: ["entered-by-slot", "source-files-slot"]
   slots:
     # --- identity ---
@@ -70,48 +93,178 @@ editor:
       label: "State"
       widget: "readonly"
       help: "Read-only. Lifecycle-gated (registry-ops: draft -> active -> archived)."
-    # --- acquisition (whole-section slots; capture shapes are free inside) ---
-    - id: "oven-slot"
+    # --- acquisition: injector / diverter / saver / column (leaf scalars) ---
+    - id: "inlet-mode-slot"
+      path: "$.acquisition.inlet.mode"
+      label: "Inlet mode"
+      widget: "select"
+      options:
+        - { value: "split", label: "Split" }
+        - { value: "splitless", label: "Splitless" }
+        - { value: "on_column", label: "On column" }
+    - id: "inlet-temp-slot"
+      path: "$.acquisition.inlet.temp_c"
+      label: "Inlet temperature (°C)"
+      widget: "number"
+    - id: "inlet-pressure-slot"
+      path: "$.acquisition.inlet.pressure_psi"
+      label: "Inlet pressure (psi)"
+      widget: "number"
+    - id: "inlet-split-slot"
+      path: "$.acquisition.inlet.split_ratio"
+      label: "Inlet split ratio"
+      widget: "number"
+    - id: "inlet-carrier-slot"
+      path: "$.acquisition.inlet.carrier_gas"
+      label: "Inlet carrier gas"
+      widget: "select"
+      options:
+        - { value: "helium", label: "Helium" }
+        - { value: "nitrogen", label: "Nitrogen" }
+        - { value: "hydrogen", label: "Hydrogen" }
+        - { value: "other", label: "Other" }
+    - id: "diverter-position-slot"
+      path: "$.acquisition.diverter.position"
+      label: "Diverter position"
+      widget: "text"
+      help: "Semantics undocumented on the captured method; free-text capture."
+    - id: "diverter-description-slot"
+      path: "$.acquisition.diverter.description"
+      label: "Diverter description"
+      widget: "text"
+    - id: "saver-position-slot"
+      path: "$.acquisition.saver.position"
+      label: "Saver position"
+      widget: "text"
+      help: "Semantics undocumented on the captured method; free-text capture."
+    - id: "saver-description-slot"
+      path: "$.acquisition.saver.description"
+      label: "Saver description"
+      widget: "text"
+    - id: "column-length-slot"
+      path: "$.acquisition.column.length_m"
+      label: "Column length (m)"
+      widget: "number"
+    - id: "column-id-slot"
+      path: "$.acquisition.column.id_mm"
+      label: "Column inner diameter (mm)"
+      widget: "number"
+    - id: "column-film-slot"
+      path: "$.acquisition.column.film_thickness_um"
+      label: "Column film thickness (µm)"
+      widget: "number"
+    - id: "column-phase-slot"
+      path: "$.acquisition.column.stationary_phase"
+      label: "Column stationary phase"
+      widget: "text"
+    - id: "column-flow-slot"
+      path: "$.acquisition.column.flow_mode"
+      label: "Column flow mode"
+      widget: "select"
+      options:
+        - { value: "constant_flow", label: "Constant flow" }
+        - { value: "constant_pressure", label: "Constant pressure" }
+        - { value: "other", label: "Other" }
+    # --- oven program (array of steps) ---
+    - id: "oven-steps-slot"
       path: "$.acquisition.oven"
       label: "Oven program (steps)"
-      widget: "textarea"
-      help: "Captured step list (step / hold_time_min / ramp_rate_c_per_min / target_temp_c)."
-    - id: "inlet-slot"
-      path: "$.acquisition.inlet"
-      label: "Inlet"
-      widget: "textarea"
-      help: "mode / temp_c / pressure_psi / split_ratio / carrier_gas."
-    - id: "diverter-slot"
-      path: "$.acquisition.diverter"
-      label: "Diverter (setpoint)"
-      widget: "textarea"
-      help: "position + description — semantics undocumented on the captured method."
-    - id: "saver-slot"
-      path: "$.acquisition.saver"
-      label: "Saver (setpoint)"
-      widget: "textarea"
-      help: "position + description — semantics undocumented on the captured method."
-    - id: "column-slot"
-      path: "$.acquisition.column"
-      label: "Column"
-      widget: "textarea"
-      help: "length_m / id_mm / film_thickness_um / stationary_phase / flow_mode."
-    # --- analysis ---
-    - id: "global-slot"
-      path: "$.analysis.global"
-      label: "Global integration"
-      widget: "textarea"
-      help: "baseline_correction / skim_ratio / valley_to_peak_ratio / peak_width_s."
-    - id: "calibration-slot"
-      path: "$.analysis.calibration"
-      label: "Calibration"
-      widget: "textarea"
-      help: "istd_ref / istd_amount / dilution_factor / multiplier / calibration_levels."
-    - id: "executable-binding-slot"
-      path: "$.analysis.executable_binding"
-      label: "Executable binding"
-      widget: "textarea"
-      help: "Declared data: engine_ref + declared_at. Without it, timed events are capture-only (lint-blocked from executable use)."
+      widget: "array"
+      help: "Captured step list. A null ramp rate marks an isothermal segment."
+      properties:
+        - { name: "step", widget: "number", label: "Step number", required: true }
+        - { name: "hold_time_min", widget: "number", label: "Hold time (minutes)", required: true }
+        - { name: "ramp_rate_c_per_min", widget: "number", label: "Ramp rate (°C per minute)", required: false, help: "Null = isothermal segment (a capture, not a default)." }
+        - { name: "target_temp_c", widget: "number", label: "Target temperature (°C)", required: true }
+    # --- global integration (leaf scalars) ---
+    - id: "global-baseline-slot"
+      path: "$.analysis.global.baseline_correction"
+      label: "Baseline correction"
+      widget: "select"
+      options:
+        - { value: "none", label: "None" }
+        - { value: "tangent_skim", label: "Tangent skim" }
+        - { value: "vertical_drop", label: "Vertical drop" }
+        - { value: "other", label: "Other" }
+    - id: "global-skim-slot"
+      path: "$.analysis.global.skim_ratio"
+      label: "Skim ratio"
+      widget: "number"
+    - id: "global-valley-slot"
+      path: "$.analysis.global.valley_to_peak_ratio"
+      label: "Valley to peak ratio"
+      widget: "number"
+    - id: "global-peakwidth-slot"
+      path: "$.analysis.global.peak_width_s"
+      label: "Peak width (seconds)"
+      widget: "number"
+    # --- calibration (leaf scalars + levels array) ---
+    - id: "istd-ref-slot"
+      path: "$.analysis.calibration.istd_ref"
+      label: "Internal standard reference"
+      widget: "ref"
+      refKind: "material"
+    - id: "istd-amount-value-slot"
+      path: "$.analysis.calibration.istd_amount.value"
+      label: "Internal standard amount (value)"
+      widget: "number"
+    - id: "istd-amount-unit-slot"
+      path: "$.analysis.calibration.istd_amount.unit"
+      label: "Internal standard amount (unit)"
+      widget: "text"
+    - id: "dilution-factor-slot"
+      path: "$.analysis.calibration.dilution_factor"
+      label: "Dilution factor"
+      widget: "number"
+    - id: "multiplier-slot"
+      path: "$.analysis.calibration.multiplier"
+      label: "Multiplier"
+      widget: "number"
+    - id: "calibration-levels-slot"
+      path: "$.analysis.calibration.calibration_levels"
+      label: "Calibration levels"
+      widget: "array"
+      help: "Material references for each calibration level."
+      properties:
+        - { name: "kind", widget: "text", label: "Kind", required: true }
+        - { name: "type", widget: "text", label: "Type", required: true }
+        - { name: "id", widget: "text", label: "ID", required: true }
+        - { name: "label", widget: "text", label: "Label", required: false }
+    # --- executable binding (leaf scalars) ---
+    - id: "engine-ref-slot"
+      path: "$.analysis.executable_binding.engine_ref"
+      label: "Engine reference"
+      widget: "ref"
+      refKind: "equipment"
+    - id: "declared-at-slot"
+      path: "$.analysis.executable_binding.declared_at"
+      label: "Declared at"
+      widget: "datetime"
+    # --- timed events (array of windows) ---
+    - id: "timed-events-slot"
+      path: "$.analysis.timed_events"
+      label: "Timed events"
+      widget: "array"
+      help: "Integration on/off windows + per-window peak acceptance. Capture only."
+      properties:
+        - { name: "at_min", widget: "number", label: "Time (minutes)", required: true }
+        - { name: "integration", widget: "select", label: "Integration", required: true, options: [ { value: "on", label: "On" }, { value: "off", label: "Off" } ] }
+        - { name: "slope_sensitivity", widget: "number", label: "Slope sensitivity", required: false }
+        - { name: "peak_width_s", widget: "number", label: "Peak width (seconds)", required: false }
+        - { name: "area_reject_au", widget: "number", label: "Area reject (AU)", required: false }
+        - { name: "height_reject_au", widget: "number", label: "Height reject (AU)", required: false }
+    # --- compound assignments (array of identities) ---
+    - id: "compound-assignments-slot"
+      path: "$.analysis.compound_assignments"
+      label: "Compound assignments"
+      widget: "array"
+      help: "FAME/FFA identities this method integrates (ontology/record refs)."
+      properties:
+        - { name: "label", widget: "text", label: "Label", required: true }
+        - { name: "compound_ref", widget: "ref", label: "Compound reference", required: true }
+        - { name: "expected_rt_min", widget: "number", label: "Expected retention time (minutes)", required: false }
+        - { name: "rt_window_min", widget: "number", label: "Retention time window (minutes)", required: false }
+        - { name: "response_factor", widget: "number", label: "Response factor", required: false }
     # --- provenance ---
     - id: "entered-by-slot"
       path: "$.provenance_capture.entered_by"
@@ -121,8 +274,12 @@ editor:
     - id: "source-files-slot"
       path: "$.provenance_capture.source_files"
       label: "Source files"
-      widget: "textarea"
-      help: "file / role / key_values — imported vendor key-values ONLY; never mapped into executable fields."
+      widget: "array"
+      help: "Imported vendor key-values ONLY; never mapped into executable fields."
+      properties:
+        - { name: "file", widget: "text", label: "File name", required: true }
+        - { name: "role", widget: "select", label: "Role", required: true, options: [ { value: "acq_txt", label: "ACQ TXT" }, { value: "iq1_mth", label: "IQ1 MTH" }, { value: "da_m", label: "DA M" }, { value: "other", label: "Other" } ] }
+        - { name: "key_values", widget: "array", label: "Key values", required: false, help: "Imported { key, raw value } pairs, captured verbatim." }
 
 list:
   columns:

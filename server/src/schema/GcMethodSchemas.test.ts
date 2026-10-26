@@ -16,6 +16,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
@@ -24,6 +25,8 @@ import { loadAllLintSpecs } from '../lint/LintSpecLoader.js';
 import { createLintEngine } from '../lint/LintEngine.js';
 import { createUISpecLoader, loadAllUISpecs } from '../ui/UISpecLoader.js';
 import { getReadoutDefinitionRegistry } from '../registry/ReadoutDefinitionRegistry.js';
+import { readFileSync } from 'node:fs';
+import yaml from 'yaml';
 
 const SCHEMA_ID = (name: string) =>
   `https://computable-lab.com/schema/computable-lab/${name}`;
@@ -374,11 +377,292 @@ describe('gc_fid readout vocabulary (G4)', () => {
 // 5. UI spec
 // ---------------------------------------------------------------------------
 
+/**
+ * FIX-1 renderability assertions (browser gate 2026-10-26T03:50:58, D1+D2):
+ * read the RAW ui.yaml so the assertions bind to the declaration itself:
+ *  - D1: no slot may bind an OBJECT or ARRAY value with a scalar widget
+ *    (WidgetRenderer textarea prints String(object) -> "[object Object]").
+ *  - D2: documentMapper.ts:171 renders ONLY kind:'section' blocks; the
+ *    kind:repeater blocks never reach the DOM, so array-of-object slots must
+ *    be claimed inside section blocks as widget:'array' + properties
+ *    (documentMapper.ts:228 builds arraySchema from slot.properties).
+ *  - ArrayWidget (app/src/editor/taptab/widgets/ArrayWidget.tsx) formats
+ *    object array items as key: value lines — never String(object).
+ */
+
+const UI_YAML_PATH = join(SCHEMA_DIR, 'lab', 'gc-method.ui.yaml');
+
+interface RawSlot {
+  id: string;
+  path: string;
+  label: string;
+  widget: string;
+  properties?: Array<{
+    name: string;
+    widget: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+  }>;
+  refKind?: string;
+}
+interface RawBlock {
+  id: string;
+  kind: string;
+  label: string;
+  slots?: string[];
+}
+
+async function loadRawUi(): Promise<{
+  editor: { blocks: RawBlock[]; slots: RawSlot[] };
+  schemaId: string;
+}> {
+  const parsed = yaml.parse(readFileSync(UI_YAML_PATH, 'utf8')) as {
+    schemaId: string;
+    editor: { blocks: RawBlock[]; slots: RawSlot[] };
+  };
+  return parsed;
+}
+
+/** Widgets whose bound value is a structured object BY DESIGN (rendered via
+ *  the ref path, never String(object)) — exempt from the D1 scalar rule. */
+const REF_WIDGETS = new Set(['ref', 'reflist', 'record-ref']);
+
+function fixtureValueAt(path: string): unknown {
+  return path.replace(/^\$\./, '').split('.').reduce<unknown>(
+    (acc, part) =>
+      acc !== null && typeof acc === 'object'
+        ? (acc as Record<string, unknown>)[part]
+        : undefined,
+    validGcMethod,
+  );
+}
+
 describe('gc-method ui (G5)', () => {
   it('G5: gc-method.ui.yaml loads with zero loader errors (every slot claimed)', async () => {
     const loader = createUISpecLoader();
     const result = await loadAllUISpecs(loader, SCHEMA_DIR);
     const mine = result.errors.filter(e => e.path.includes('gc-method.ui.yaml'));
     expect(mine).toEqual([]);
+  });
+
+  it('G5a (D1): every scalar-widget slot binds a scalar in the valid fixture; no [object Object]', async () => {
+    const { editor } = await loadRawUi();
+    const offenders: string[] = [];
+    for (const slot of editor.slots) {
+      const value = fixtureValueAt(slot.path);
+      if (value === undefined || value === null) continue; // optional leaf: empty, not [object Object]
+      const isContainer =
+        (typeof value === 'object' && !Array.isArray(value)) || Array.isArray(value);
+      if (isContainer && slot.widget !== 'array' && !REF_WIDGETS.has(slot.widget)) {
+        offenders.push(`${slot.id} (${slot.path}: ${slot.widget})`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('G5b (D2): no kind:repeater block — the app render path skips non-section blocks', async () => {
+    const { editor } = await loadRawUi();
+    const repeaters = editor.blocks.filter(b => b.kind !== 'section');
+    expect(repeaters).toEqual([]);
+  });
+
+  it('G5c (D2): array-of-object paths are claimed by section blocks as widget:array slots', async () => {
+    const { editor } = await loadRawUi();
+    const byPath = new Map(editor.slots.map((s) => [s.path, s]));
+    for (const p of [
+      '$.acquisition.oven',
+      '$.analysis.timed_events',
+      '$.analysis.compound_assignments',
+      '$.provenance_capture.source_files',
+      '$.analysis.calibration.calibration_levels',
+    ]) {
+      const slot = byPath.get(p);
+      expect(slot, `slot for ${p}`).toBeDefined();
+      expect(slot!.widget, `${p} widget`).toBe('array');
+      const block = editor.blocks.find((b) => b.slots?.includes(slot!.id));
+      expect(block, `section block claiming ${p}`).toBeDefined();
+      expect(block!.kind).toBe('section');
+      // The slot is claimed EXACTLY ONCE (loader enforces; assert here too).
+      expect(
+        editor.blocks.filter((b) => b.slots?.includes(slot!.id)).length,
+      ).toBe(1);
+    }
+  });
+
+  it('G5d (D1/D2): array slots declare the schema-declared sub-field properties (name/widget/label/help/required)', async () => {
+    const { editor } = await loadRawUi();
+    const byId = new Map(editor.slots.map((s) => [s.id, s]));
+
+    const oven = editor.blocks.find(b => b.id === 'oven-program')!;
+    expect(oven.kind).toBe('section');
+    expect(oven.slots).toEqual(['oven-steps-slot']);
+    const ovenSteps = byId.get('oven-steps-slot')!;
+    expect(ovenSteps.path).toBe('$.acquisition.oven');
+    expect(ovenSteps.widget).toBe('array');
+    expect(
+      (ovenSteps.properties ?? []).map((p) => [p.name, p.widget, p.required]),
+    ).toEqual([
+      ['step', 'number', true],
+      ['hold_time_min', 'number', true],
+      ['ramp_rate_c_per_min', 'number', false],
+      ['target_temp_c', 'number', true],
+    ]);
+
+    const timed = editor.blocks.find(b => b.id === 'timed-events')!;
+    expect(timed.kind).toBe('section');
+    expect(timed.slots).toEqual(['timed-events-slot']);
+    const timedSlot = byId.get('timed-events-slot')!;
+    expect(timedSlot.path).toBe('$.analysis.timed_events');
+    expect(
+      (timedSlot.properties ?? []).map((p) => p.name),
+    ).toEqual([
+      'at_min', 'integration', 'slope_sensitivity',
+      'peak_width_s', 'area_reject_au', 'height_reject_au',
+    ]);
+    expect(timedSlot.properties?.find(p => p.name === 'at_min')?.required).toBe(true);
+    expect(timedSlot.properties?.find(p => p.name === 'integration')?.required).toBe(true);
+    expect(timedSlot.properties?.find(p => p.name === 'slope_sensitivity')?.required).toBe(false);
+
+    const compound = editor.blocks.find(b => b.id === 'compound-assignments')!;
+    expect(compound.kind).toBe('section');
+    expect(compound.slots).toEqual(['compound-assignments-slot']);
+    const compoundSlot = byId.get('compound-assignments-slot')!;
+    expect(compoundSlot.path).toBe('$.analysis.compound_assignments');
+    expect(
+      (compoundSlot.properties ?? []).map((p) => [p.name, p.required]),
+    ).toEqual([
+      ['label', true],
+      ['compound_ref', true],
+      ['expected_rt_min', false],
+      ['rt_window_min', false],
+      ['response_factor', false],
+    ]);
+
+    const provenance = editor.blocks.find(b => b.id === 'provenance')!;
+    expect(provenance.slots).toEqual(['entered-by-slot', 'source-files-slot']);
+    const sourceFiles = byId.get('source-files-slot')!;
+    expect(sourceFiles.path).toBe('$.provenance_capture.source_files');
+    expect(
+      (sourceFiles.properties ?? []).map((p) => [p.name, p.required]),
+    ).toEqual([
+      ['file', true],
+      ['role', true],
+      ['key_values', false],
+    ]);
+
+    const calibration = editor.blocks.find(b => b.id === 'calibration')!;
+    expect(calibration.kind).toBe('section');
+    expect(
+      calibration.slots,
+    ).toEqual([
+      'istd-ref-slot', 'istd-amount-value-slot', 'istd-amount-unit-slot',
+      'dilution-factor-slot', 'multiplier-slot', 'calibration-levels-slot',
+    ]);
+    const levels = byId.get('calibration-levels-slot')!;
+    expect(levels.path).toBe('$.analysis.calibration.calibration_levels');
+    expect(levels.widget).toBe('array');
+    expect(
+      (levels.properties ?? []).map((p) => [p.name, p.widget]),
+    ).toEqual([
+      ['kind', 'text'], ['type', 'text'], ['id', 'text'], ['label', 'text'],
+    ]);
+
+    // Every properties entry carries the full shape the mapper consumes.
+    for (const slot of editor.slots) {
+      for (const p of slot.properties ?? []) {
+        expect(typeof p.name, `${slot.id}.properties.name`).toBe('string');
+        expect(p.name.length, `${slot.id}.properties.name non-empty`).toBeGreaterThan(0);
+        expect(typeof p.widget, `${slot.id}.properties.widget`).toBe('string');
+        expect(p.widget.length, `${slot.id}.properties.widget non-empty`).toBeGreaterThan(0);
+        expect(typeof p.label, `${slot.id}.properties.label`).toBe('string');
+        expect(p.label.length, `${slot.id}.properties.label non-empty`).toBeGreaterThan(0);
+        expect(typeof p.required, `${slot.id}.${p.name} required flag is boolean`).toBe('boolean');
+      }
+    }
+  });
+
+  it('G5e: leaf-scalar decomposition covers every structured sub-field of the data schema', async () => {
+    const { editor } = await loadRawUi();
+    const byPath = new Map(editor.slots.map((s) => [s.path, s]));
+    expect(byPath.get('$.acquisition.inlet.mode')?.widget).toBe('select');
+    expect(byPath.get('$.acquisition.inlet.temp_c')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.inlet.pressure_psi')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.inlet.split_ratio')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.inlet.carrier_gas')?.widget).toBe('select');
+    expect(byPath.get('$.acquisition.diverter.position')?.widget).toBe('text');
+    expect(byPath.get('$.acquisition.diverter.description')?.widget).toBe('text');
+    expect(byPath.get('$.acquisition.saver.position')?.widget).toBe('text');
+    expect(byPath.get('$.acquisition.saver.description')?.widget).toBe('text');
+    expect(byPath.get('$.acquisition.column.length_m')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.column.id_mm')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.column.film_thickness_um')?.widget).toBe('number');
+    expect(byPath.get('$.acquisition.column.stationary_phase')?.widget).toBe('text');
+    expect(byPath.get('$.acquisition.column.flow_mode')?.widget).toBe('select');
+    expect(byPath.get('$.analysis.global.baseline_correction')?.widget).toBe('select');
+    expect(byPath.get('$.analysis.global.skim_ratio')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.global.valley_to_peak_ratio')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.global.peak_width_s')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.calibration.istd_ref')?.widget).toBe('ref');
+    expect(byPath.get('$.analysis.calibration.istd_amount.value')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.calibration.istd_amount.unit')?.widget).toBe('text');
+    expect(byPath.get('$.analysis.calibration.dilution_factor')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.calibration.multiplier')?.widget).toBe('number');
+    expect(byPath.get('$.analysis.executable_binding.engine_ref')?.widget).toBe('ref');
+    expect(byPath.get('$.analysis.executable_binding.declared_at')?.widget).toBe('datetime');
+    expect(byPath.get('$.provenance_capture.entered_by')?.widget).toBe('ref');
+
+    // The decomposition is EXACT: no slot binds a container (non-ref, non-array)
+    // object value — that is the D1 invariant restated over the full slot set.
+    const containerOffenders = editor.slots
+      .filter((s) => {
+        if (REF_WIDGETS.has(s.widget) || s.widget === 'array') return false;
+        const v = fixtureValueAt(s.path);
+        return v !== undefined &&
+          v !== null &&
+          typeof v === 'object';
+      })
+      .map((s) => s.id);
+    expect(containerOffenders).toEqual([]);
+  });
+
+  it('G5f: labels are full-word — no dotted-path labels, no unit abbreviations', async () => {
+    const { editor } = await loadRawUi();
+    const bad: string[] = [];
+    for (const slot of editor.slots) {
+      if (slot.label.includes('.')) bad.push(`${slot.id}: ${slot.label}`);
+      // Dotted data paths must never leak into the label.
+      if (/^[a-z][a-z_0-9]+(\.[a-z_0-9]+)+$/i.test(slot.label)) bad.push(`${slot.id}: ${slot.label}`);
+      for (const p of slot.properties ?? []) {
+        if (p.label.includes('.')) bad.push(`${slot.id}.${p.name}: ${p.label}`);
+      }
+    }
+    expect(bad).toEqual([]);
+
+    // Enum slots expose the schema enums verbatim as options.
+    const byPath = new Map(editor.slots.map((s) => [s.path, s]));
+    const optionValues = (p: string): string[] => {
+      const opts = (byPath.get(p) as { options?: Array<{ value: string }> } | undefined)?.options ?? [];
+      return opts.map((o) => o.value);
+    };
+    expect(optionValues('$.acquisition.inlet.mode')).toEqual(['split', 'splitless', 'on_column']);
+    expect(optionValues('$.acquisition.inlet.carrier_gas')).toEqual(['helium', 'nitrogen', 'hydrogen', 'other']);
+    expect(optionValues('$.acquisition.column.flow_mode')).toEqual(['constant_flow', 'constant_pressure', 'other']);
+    expect(optionValues('$.analysis.global.baseline_correction')).toEqual(['none', 'tangent_skim', 'vertical_drop', 'other']);
+
+    // Ref slots keep their target-kind hint.
+    expect(byPath.get('$.provenance_capture.entered_by')?.refKind).toBe('person');
+    expect(byPath.get('$.analysis.executable_binding.engine_ref')?.refKind).toBe('equipment');
+  });
+
+  it('G5g: state and id remain readonly; every block declares an explicit slot claim', async () => {
+    const { editor } = await loadRawUi();
+    const byPath = new Map(editor.slots.map((s) => [s.path, s]));
+    expect(byPath.get('$.id')?.widget).toBe('readonly');
+    expect(byPath.get('$.state')?.widget).toBe('readonly');
+    expect(editor.blocks.length).toBeGreaterThan(0);
+    for (const b of editor.blocks) {
+      expect(Array.isArray(b.slots), `${b.id} declares explicit slots`).toBe(true);
+    }
   });
 });
