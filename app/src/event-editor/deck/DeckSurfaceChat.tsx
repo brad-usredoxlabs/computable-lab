@@ -32,12 +32,34 @@ import type {
   DeckAdoptionOutcome as HookDeckAdoptionOutcome,
   DeckPreviewLike as HookDeckPreviewLike,
 } from '../../shared/hooks/useAiChat'
+import { getEventSummary } from '../../types/events'
+import { getVerbsForDisplay } from '../../shared/vocab/registry'
 
 export function DeckSurfaceChat() {
   const { state, actions } = useEventEditor()
 
   const aiContext = useMemo<AiContext>(() => {
     const selection = state.selection
+    // L2-CHAT-1 gatefix1 D1: the deck surface's context must carry the SAME
+    // core fields the other chat surfaces send (parity with
+    // graph/hooks/useLabwareAiContext / acceptedEventGraphProjection):
+    // `labwares`, `eventSummary`, `availableVerbs`. The server prompt builder
+    // reads all three, and their absence crashed every deck-chat turn server-
+    // side with a TypeError rendered as the assistant reply. The shape mirrors
+    // the projection's summarizeLabwares (id/type/name + grid dims) and the
+    // getEventSummary join, so the prompt the agent sees is identical in kind
+    // to what the labware editor sends.
+    const labwareSummaries = Object.values(state.labwares).map((lw) => ({
+      labwareId: lw.labwareId,
+      labwareType: lw.labwareType as string,
+      name: lw.name,
+      ...(lw.addressing.type === 'grid'
+        ? { rows: lw.addressing.rows ?? 0, columns: lw.addressing.columns ?? 0 }
+        : {}),
+    }))
+    const eventSummary = state.events.length
+      ? state.events.slice(-20).map((event) => getEventSummary(event)).join('; ')
+      : 'No events yet.'
     return {
       surface: 'event-editor',
       summary: `Deck ${state.eventGraphId ?? '(unsaved)'} — ${state.platformId} / ${state.variantId}`,
@@ -49,6 +71,9 @@ export function DeckSurfaceChat() {
         vocabPackId: state.vocabPackId,
         placementCount: state.placements.length,
         eventCount: state.events.length,
+        labwares: labwareSummaries,
+        eventSummary,
+        availableVerbs: getVerbsForDisplay(state.vocabPackId).map((v) => v.verb),
         // `wells` is always an ARRAY: the server-side prompt/context builder
         // reads `.length` on it, and an absent value crashed the turn
         // ("Cannot read properties of undefined (reading 'length')").
@@ -67,6 +92,7 @@ export function DeckSurfaceChat() {
     state.placements.length,
     state.events.length,
     state.selection,
+    state.labwares,
   ])
 
   // L2-CHAT-1: the universal GHOST MOUNT (extracted to useDeckGhostMount so

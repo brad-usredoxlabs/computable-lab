@@ -26,7 +26,10 @@ function loadPromptTemplate(templatePath: string): string {
 }
 
 function formatLabwares(labwares: LabwareSummary[]): string {
-  if (labwares.length === 0) return '(none)';
+  // L2-CHAT-1 gatefix1 D1: a surface whose context omits `labwares` (the deck
+  // chat sent an undefined-valued key over the wire) must degrade to (none),
+  // not crash the turn on .length.
+  if (!labwares || labwares.length === 0) return '(none)';
   return labwares
     .map((lw) => {
       let addr: string;
@@ -49,7 +52,9 @@ function formatLabwares(labwares: LabwareSummary[]): string {
 function formatEventSummary(eventSummary: EditorContext['eventSummary']): string {
   // Frontend sends a pre-formatted string
   if (typeof eventSummary === 'string') return eventSummary;
-  // Structured format
+  // L2-CHAT-1 gatefix1 D1: an absent/undefined structured summary (the deck
+  // chat omitted the field) degrades instead of crashing on .totalEvents.
+  if (!eventSummary) return 'No events yet (empty graph).';
   if (eventSummary.totalEvents === 0) return 'No events yet (empty graph).';
   const recent = eventSummary.recentEvents
     .map((e: EventSummary) => {
@@ -120,6 +125,9 @@ function formatWellStateSnapshot(context: EditorContext): string {
 }
 
 function formatVocabPack(vocabPackId: string, verbs: EditorContext['availableVerbs']): string {
+  // L2-CHAT-1 gatefix1 D1: absent vocabPackId / availableVerbs (the deck chat
+  // omitted the fields) degrade to (none) instead of crashing on .map.
+  if (!vocabPackId || !verbs) return '(none)';
   const verbList = verbs
     .map((v) => {
       if (typeof v === 'string') return `- \`${v}\``;

@@ -378,6 +378,11 @@ export function createAIHandlers(
 
         sendEvent({ type: 'done', result });
       } catch (err) {
+        // L2-CHAT-1 gatefix1 D2: the streamed error event is the ONLY visible
+        // trace of this failure otherwise — the SSE 200-then-error-event
+        // contract is deliberate, so a failed draft turn never 5xx's. Land the
+        // error in backend.log so status monitoring can see it.
+        request.log.error(err, `draft-events/stream failed (prompt=${prompt.slice(0, 120)})`);
         sendEvent({
           type: 'error',
           message: err instanceof Error ? err.message : String(err),
