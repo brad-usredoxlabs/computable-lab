@@ -10,7 +10,7 @@
  * R4); a shape-valid package lints clean; the new kind resolves by $id.
  *
  * NOTE (hardcode boundary, reviewer bait #4): the payload uses a NEUTRAL device
- * id ('nas0'), not the real config device id — the real gc-fid-nas id belongs
+ * id ('nas0'), not the real config device id — the real NAS device id belongs
  * only in the test-written config YAML string of the registration test.
  */
 
