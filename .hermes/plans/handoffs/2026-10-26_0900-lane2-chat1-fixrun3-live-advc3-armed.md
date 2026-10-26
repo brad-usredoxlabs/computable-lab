@@ -9,6 +9,18 @@ minute). ADVC CYCLE-3 gate ARMED (unit waits the fix run; scoped review base 71a
 Orch pre-verify done: worktree app tsc 14 lines vs trunk 25 — ZERO new errors (11 worktree-absent
 lines are trunk-side surfaceContext/deckLayout debts predating the worktree base).
 
+## GATE-HARNESS PITFALL (hit+fixed this tick — process lesson)
+The first advc3 waiter (`systemctl --user wait` on the transient coder unit) returned instantly
+(transient --collect units deactivate on exit; the waiter started AFTER the coder launcher unit
+was already inactive) and fired the cloud reviewer 26s into the run against an EMPTY diff ->
+VOID 'fix' verdict. Reviewer's own root-cause: "dispatch fault, not coder code" (it correctly
+ran the full contract, found nothing done, and named the empty diff as the blocker). VOID
+artifacts moved to reviews/L2-CHAT-1-advc3-l2t0835.md.VOID-premature-emptydiff +
+logs/advc-L2CHAT1-c3-l2t0835.log.VOID-premature. Re-armed as cl-l2-advc3b-chat1-gate-l2t0835:
+60s POLLER gating on coder-PID-gone AND 'CODER EXITED' in the coder log, then diff-stat capture.
+RULE: never gate on a transient systemd unit; poll process + log marker. (The l2t0755 arm worked
+only because the waiter started while the unit was still ACTIVE.)
+
 ## LIVE WORKERS (do not duplicate)
 - L2-CHAT-1 FIX RUN 3: fleet SLOT 0, unit cl-l2-chat1-fix3-l2t0835 (flock proc 1857343, hermes
   python 1857351, --reasoning low). SAME worktree wt/L2-CHAT-1-lane2-l2t0035, branch
