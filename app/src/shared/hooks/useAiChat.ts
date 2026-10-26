@@ -1099,6 +1099,13 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                       ...(result.sequenceProposal ? { sequenceProposal: result.sequenceProposal, sequenceProposalRequest: prompt } : {}),
                       events: normalizedPreviewEvents,
                       clarification: result.clarification,
+                      // L2-CHAT-1 FIX3 D4b: typed clarification requests ride
+                      // the message so ChatLog's existing arm (ChatLog.tsx)
+                      // renders them — a done carrying only these is NOT an
+                      // empty pane (the wall counts them as asked questions).
+                      ...(result.clarificationRequests?.length
+                        ? { clarificationRequests: result.clarificationRequests }
+                        : {}),
                       labwareAdditions: result.labwareAdditions,
                       executionScalePlan: result.executionScalePlan,
                       instrumentApplianceJobs: result.instrumentApplianceJobs,
@@ -1116,38 +1123,53 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             // the universal pane can MOUNT. Skip when CONFIRM — the system did
             // pause for confirmation and we already surfaced a clarity message
             // above.
-            // L2-CHAT-1 FIX1 D4: the gate is the universal stack's MOUNTABLE
-            // set — the channels with a render/ghost arm HERE:
+            // L2-CHAT-1 FIX1 D4 (FIX3 D4a repair): the gate is the universal
+            // stack's MOUNTABLE set — the channels with a render/ghost arm
+            // HERE:
             //   events           -> ChatPreviewCard + deck ghosts (useDeckGhostMount)
-            //   labwareAdditions -> the card's "N new labware" line
-            //   clarification    -> the ChatLog clarification block (ChatLog.tsx:196)
+            //   clarification    -> the ChatLog clarification block (ChatLog.tsx)
+            //   clarificationRequests -> the ChatLog typed-clarification arm
             //   error            -> rendered as the message content
+            // labwareAdditions was listed as mountable (the card's "N new
+            // labware" line) but the universal stack has NO mount arm for a
+            // labware-only proposal: the ghost mount only fires on
+            // event-bearing drafts (useDeckGhostMount early-returns without
+            // placements/events) and the card's Apply is unmountable without
+            // events (MOUNT-NONEVENT-1). So a success carrying ONLY
+            // labwareAdditions reached neither a card nor a wall before — the
+            // spec §3 forbidden silently-empty pane. FIX3: the wall NAMES
+            // the channel instead of suppressing it.
             // Everything else a done result can carry (equipmentRequirements,
             // recordCreations, labwareRequirements, deckLayout,
-            // clarificationRequests, instrumentApplianceJobs) has NO universal
-            // arm — useDeckGhostMount hardcodes them to [] (useDeckGhostMount
-            // .ts:73-77) and no universal surface renders them — so a turn
-            // delivering only one of them reached neither a card nor a wall:
-            // the spec §3 forbidden silently-empty pane. The legacy
+            // instrumentApplianceJobs) has NO universal arm — useDeckGhostMount
+            // hardcodes them to [] and no universal surface renders them — so
+            // a turn delivering only one of them reached neither a card nor a
+            // wall: the spec §3 forbidden silently-empty pane. The legacy
             // draftEmptiness.draftProducedNothing predicate counts those as
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
-            const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
-            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents && !hasLabware) {
+            if (result.success && !result.sequenceProposal && !isConfirm && !hasEvents) {
               // A turn that asked a question or surfaced an error delivered
               // something the pane shows — the wall ("asked no questions")
-              // must not fire beside it.
+              // must not fire beside it. L2-CHAT-1 FIX3 D4b: typed
+              // clarificationRequests count as asked questions too (ChatLog
+              // renders them — they are not unmountable here).
               const askedQuestion =
                 Boolean(result.clarification?.prompt) ||
-                Boolean(result.clarificationNeeded?.trim())
+                Boolean(result.clarificationNeeded?.trim()) ||
+                (result.clarificationRequests?.length ?? 0) > 0
               const surfacedError = Boolean(result.error?.trim())
               if (!askedQuestion && !surfacedError) {
                 // Name what the turn actually carried when it is unmountable
                 // here — the wall must report plain-language truth, not claim
                 // "nothing" was proposed when it proposed unmountable things.
                 const notesDelivered = (result.notes?.length ?? 0) > 0
+                const labwareOnly = (result.labwareAdditions?.length ?? 0) > 0
                 const unmountable = [
+                  labwareOnly
+                    ? `proposed ${result.labwareAdditions?.length} new labware, which this surface cannot mount without events`
+                    : null,
                   (result.equipmentRequirements?.length ?? 0) > 0 ? 'bench-equipment requirements' : null,
                   (result.recordCreations?.length ?? 0) > 0 ? 'records to create' : null,
                   (result.labwareRequirements?.length ?? 0) > 0 ? 'labware requirements' : null,
@@ -1160,7 +1182,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
-                      ? ` — it proposed ${unmountable.join(' and ')}, which this surface cannot mount`
+                      ? ` — it ${unmountable.join(' and ')}`
                       : notesDelivered
                         ? ' — it delivered only notes'
                         : ''
