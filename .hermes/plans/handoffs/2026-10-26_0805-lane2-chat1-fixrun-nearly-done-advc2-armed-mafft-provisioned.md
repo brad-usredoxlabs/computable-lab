@@ -91,3 +91,20 @@ cl/integration-2 (inspect trunk first; app-only, no YAML) -> browser gate :5193 
 done + handoff -> dispatch FREEFORM-1 on free slot IMMEDIATELY. 'fix' verdict = cycle cap ->
 architect with both defect lists (reviews/L2-CHAT-1-advc-l2t0635.md + advc2). Slot 1 stays empty
 until then (everything else gated).
+
+## ADDENDUM 2 (08:35, same tick): CYCLE-2 'fix' -> ARCHITECT ROUTED
+advc2 exited 08:19 VERDICT: fix (reviews/L2-CHAT-1-advc2-l2t0755.md): D2/D5/D6/D7 verified FIXED;
+D1 HIGH-partial (Apply adopts events only; placements/labwares/ontology silently dropped —
+failing scenario + fix direction in report), D3 MEDIUM-partial (sourceSkips/requirements absent,
+false 'identically' comment), D4 MEDIUM-partial (labwareAdditions-only success = forbidden
+zero-mountable-no-wall; clarificationRequests not copied -> dishonest wall text), R1 LOW hygiene.
+Cycle cap (2 fix cycles) reached per pre-registered plan -> architect routed with evidence pack
+(unit cl-l2-arch-chat1-cyclecap-l2t0830, thunderbeast; ruling owed
+decisions/L2CHAT1-cycle3-ruling-l2t0830.md ARCH-RULING: a|b|c). Orch partial self-verify meanwhile:
+32 files/143 tests GREEN in worktree (src/agent+shared/hooks+run+RightPane), tsc not yet re-run by
+orch (report+tsc claim cross-checked by advc2: 16 lines == baseline, zero new).
+NEXT TICK: (1) ruling landed? -> dispatch fix run 3 (option a/b) per its residual contract, unique
+report suffix; cycle-3 advc scoped 71a5ee3c...HEAD after; (2) if ruling says split, add follow-up
+task card verbatim from ruling to the list (architect-approved scope). Slots 0+1 FREE — dispatch
+fix run 3 on slot 0 immediately when ruling lands. Everything else remains gated (FREEFORM<-merge,
+SUITE-A/B chain, worksheet<-Brad).
