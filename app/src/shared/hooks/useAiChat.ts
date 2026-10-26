@@ -1215,6 +1215,11 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         for (const event of eventsToAccept) {
           handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
         }
+        // L2-CHAT-1 FIX1 D1: the Apply IS the adoption — unmount the ghost
+        // through the SAME discard seam rejectPreview uses, so the deck's
+        // PreviewActionBar cannot commit the same events a second time
+        // (exactly one adopter writes events + placements).
+        onPreviewDiscardedRef.current?.()
       } else if (eventsToAccept.length > 0) {
         // L2-CHAT-1: LOUD ACCEPT. A missing handler used to be a silent no-op
         // (the spec §1 defect: "make the missing-handler case loud"). The
