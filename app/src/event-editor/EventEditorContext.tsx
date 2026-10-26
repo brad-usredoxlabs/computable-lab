@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { isRunDeckLock, writeRunDeckMemory, loadAcceptedEventGraph, type RunDeckMemory, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
 import { EMPTY_HISTORY, withEditorHistory, type EditorHistory, type UndoableSnapshot } from './editorHistory'
 import { persistEditorHistory, loadEditorHistory, snapshotFingerprint } from './editorHistoryStorage'
@@ -1263,25 +1263,13 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
         // opens on the memory's deck and every adoption save refuses
         // (the gate's silent-nothing run: memory manual_freeform, lock
         // manual_collapsed). No lock (or a matching lock) falls back to the
-        // memory — today's behavior. (The structural guard mirrors
-        // eventGraphPersistence.isRunDeckLock — the one lock shape the
-        // persist path enforces.)
+        // memory — today's behavior. (regatefix2-fix1 D3: the lock shape is
+        // checked by the ONE exported structural guard,
+        // eventGraphPersistence.isRunDeckLock — the same predicate the
+        // persist path enforces; no inline copy.)
         const rawLock = payload.methodDeckLock
-        const lockDeck =
-          Boolean(rawLock) &&
-          typeof rawLock === 'object' &&
-          !Array.isArray(rawLock) &&
-          (rawLock as { locked?: unknown }).locked === true
-            ? rawLock
-            : null
-        const lockedDeck =
-          lockDeck !== null &&
-          typeof (lockDeck as { platformId?: unknown }).platformId === 'string' &&
-          typeof (lockDeck as { variantId?: unknown }).variantId === 'string'
-            ? {
-                platformId: (lockDeck as { platformId: string }).platformId,
-                variantId: (lockDeck as { variantId: string }).variantId,
-              }
+        const lockedDeck = isRunDeckLock(rawLock)
+            ? { platformId: rawLock.platformId, variantId: rawLock.variantId }
             : null
         const deck =
           lockedDeck && memory &&
