@@ -93,3 +93,21 @@ carries). mafft provisioned (SUITE-B early). Fleet coder endpoint: 2/2 busy, bot
 ## LIVE AT EXIT (budget expiry ~12:55)
 Gate-2 tier-2 just started (~12:35), FREEFORM-1 coder ~65 min (writing phase, forward
 motion), fleet 2/2. Brad's stack untouched. Worksheet + MOUNT-NONEVENT-1: AWAITING-BRAD.
+
+## ADDENDUM at ~12:55 EDT (same tick l2t1210) — GATE-2 RENDERED: VERDICT: fix
+Tier-2 ladder shot produced a REAL product verdict in 12 min. AS-L2T1210-GATE1-HARNESS-DEFECT
+CLOSED (classification vindicated — tier-2 reached the deck route and found a genuine defect).
+D1 HIGH: every deck-chat turn crashes server-side — DeckSurfaceChat surfaceContext omits
+labwares/eventSummary/availableVerbs -> systemPrompt.ts formatLabwares .length TypeError ->
+SSE error event, zero cards; steps 3-7 untested. Pre-existing on the surface (0b96720a),
+NOT introduced by the CHAT-1 range; reviewer curl-reproduced and proved field-complete bodies
+reach the agent (draft + card). D2 LOW: streamed handler errors invisible in backend.log.
+ACTION TAKEN: GATEFIX1 queued on fleet FIFO (unit cl-l2-chat1-gatefix1-queue-l2t1210,
+FIFO-waits EITHER slot, 150-min cap; log logs/coder-L2CHAT1-gatefix1-l2t1210.log; worktree
+wt/L2-CHAT-1-gatefix1-lane2-l2t1210 off CURRENT tip at grab time; report
+deliverables/L2-CHAT-1-gatefix1-report.l2t1210.md; marker 'CHAT1 GATEFIX1 DONE <sha>').
+NEXT TICK: gatefix1 exit -> advc (scope: base-tip...HEAD) -> self-verify -> merge -> RE-GATE
+tier-2 same flow new receipts dir -> on accept mark CHAT-1 done + close the 3 carried CHAT-1
+assumption debts. FREEFORM-1 still live (~85 min, seams-mapped phase in report, 0 commits —
+2x checkpoint ~13:30; if no commits by 2x, motion-assess via state.db before any resume call).
+Fleet: both slot watchers now armed (FREEFORM-1 in slot 1; gatefix queue unit waiting).
