@@ -317,6 +317,42 @@ describe('registerAcquisitionPackage (synthetic .D trees, tmp mount)', () => {
       registerAcquisitionPackage(ctx.app, { deviceId: 'no-such-device', directoryKey: SYNTH_DIR }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  it('S8: a non-existent directoryKey is PACKAGE_DEVICE_MISSING (named cause)', async () => {
+    // Package-level directory miss: the .D key does not exist on the device at
+    // all. Spec S8: 'package-level directory miss = PACKAGE_DEVICE_MISSING' —
+    // NOT the empty-directory token (that is the root-present-but-empty case).
+    await expect(
+      registerAcquisitionPackage(ctx.app, {
+        deviceId: DEVICE_ID,
+        directoryKey: 'machine1/NO-SUCH.D',
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_DEVICE_MISSING' });
+    await expect(
+      registerAcquisitionPackage(ctx.app, {
+        deviceId: DEVICE_ID,
+        directoryKey: 'machine1/NO-SUCH.D',
+      }),
+    ).rejects.toThrow(/machine1\/NO-SUCH\.D/);
+  });
+
+  it('S9: a directoryKey pointing at a regular file is PACKAGE_NOT_A_FILE (named cause)', async () => {
+    // The vice-versa case (S9: 'entry is a directory where file expected / vice
+    // versa'): the key resolves to an existing entry that is a regular FILE,
+    // not a directory — a file path where a .D directory key is expected.
+    await expect(
+      registerAcquisitionPackage(ctx.app, {
+        deviceId: DEVICE_ID,
+        directoryKey: `${SYNTH_DIR}/FID1A.CH`,
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_NOT_A_FILE' });
+    await expect(
+      registerAcquisitionPackage(ctx.app, {
+        deviceId: DEVICE_ID,
+        directoryKey: `${SYNTH_DIR}/FID1A.CH`,
+      }),
+    ).rejects.toThrow(/FID1A\.CH/);
+  });
 });
 
 describe('registerAcquisitionPackage (membership + partial tolerance)', () => {

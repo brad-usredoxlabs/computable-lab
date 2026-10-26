@@ -20,7 +20,7 @@
  * GC-5's runner-side edit. provisionInputs is NOT modified here.
  */
 import { createHash } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { acquireDataReference, hashStream } from './acquisition.js';
 import type { AppContext } from '../server.js';
@@ -68,6 +68,15 @@ export const METHOD_DIR_NAMES: readonly string[] = ['ACQ.M', 'DA.M'];
 /** S4 required-by-default membership (spec D6 step 5 / D9). */
 export const REQUIRED_MEMBERS: readonly string[] = ['FID1A.CH', 'SAMPLE.XML'];
 
+/**
+ * Named registration/verify failure tokens (spec D6). PACKAGE_NOT_A_FILE is
+ * thrown by the S8/S9 root-shape check (a directoryKey that resolves to a
+ * regular file). PACKAGE_HASH_MISMATCH is the D6-declared acquire-time
+ * integrity code: the acquire path verifies internally (every per-file DREF
+ * pins hash+size and post-pin drift surfaces as PACKAGE_HASH_DRIFT at
+ * verify), so it is KEPT in the union per D6 as the named cause an
+ * acquire-time integrity leg can use without a union change.
+ */
 export const ACQUISITION_PACKAGE_ERROR_CODES = [
   'PACKAGE_ACQUIRING',
   'PACKAGE_SYMLINK_ESCAPE',
@@ -226,6 +235,44 @@ async function hardenTree(
   }
 }
 
+/**
+ * S8/S9 root-shape check, run BEFORE the walk in register AND verify (both
+ * share walkTree, whose provider ENOENT→[] list swallow would otherwise let
+ * a directory-level miss surface as the empty-directory PACKAGE_FILE_MISSING,
+ * and whose ENOTDIR→StorageError IO_ERROR mapping would propagate an unnamed
+ * token when the key resolves to a regular file). Classifies the resolved
+ * root itself:
+ *   - absent (ENOENT/ENOTDIR)       → PACKAGE_DEVICE_MISSING (S8: the
+ *     package-level directory miss is the DEVICE token, not the file token)
+ *   - present but not a directory   → PACKAGE_NOT_A_FILE (S9: a file where
+ *     the .D directory key is expected — the vice-versa case)
+ * Raw fs against the CONFIG mount root — the same containment anchor
+ * hardenTree uses; the classification must not depend on a provider-kind-
+ * specific list/stat semantic.
+ */
+async function assertDirectoryRoot(directoryKey: string, mountRoot: string): Promise<void> {
+  const rootAbs = resolve(mountRoot, directoryKey);
+  let rootStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    rootStat = await stat(rootAbs);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throw new AcquisitionPackageError(
+        'PACKAGE_DEVICE_MISSING',
+        `acquisition directory not found on device: ${directoryKey}`,
+      );
+    }
+    throw err;
+  }
+  if (!rootStat.isDirectory()) {
+    throw new AcquisitionPackageError(
+      'PACKAGE_NOT_A_FILE',
+      `acquisition directoryKey resolves to a file, not a directory: ${directoryKey}`,
+    );
+  }
+}
+
 /** Walk the .D tree recursively via the provider (method subdirs included). */
 async function walkTree(
   listDir: (path: string) => Promise<StorageEntry[]>,
@@ -298,7 +345,8 @@ export interface RegisterAcquisitionPackageResult {
 
 /**
  * Register a .D acquisition directory (spec D6, registration order):
- * device → safe path → walk → S1 marker → S2 symlink hardening → S4
+ * device → safe path → root shape (S8/S9) → walk → S1 marker → S2 symlink
+ * hardening → S4
  * required membership → per-file acquireDataReference → manifest DREF →
  * the acquisition-package record. A partially-failed run orphans the DREFs
  * already minted (append-only audit records — documented, no integrity
@@ -325,19 +373,18 @@ export async function registerAcquisitionPackage(
   }
 
   // Step 1: device. An unconfigured device id propagates the provider
-  // registry's StorageError NOT_FOUND (honest code); a directory-level miss
-  // is PACKAGE_DEVICE_MISSING.
+  // registry's StorageError NOT_FOUND — getProvider throws BEFORE any config
+  // lookup (D6 step 1: the unconfigured-id case is StorageError NOT_FOUND,
+  // coded honestly; the former `if (!device)` branch below it was dead for
+  // the same reason and is removed). A configured id therefore always has a
+  // config entry, hence the non-null assertion.
   const provider = ctx.storageService.getProvider(input.deviceId);
-  const device = ctx.storageService
-    .allDeviceConfigs()
-    .find((d) => d.id === input.deviceId);
-  if (!device) {
-    throw new AcquisitionPackageError(
-      'PACKAGE_DEVICE_MISSING',
-      `storage device config not found: ${input.deviceId}`,
-    );
-  }
+  const device =
+    ctx.storageService.allDeviceConfigs().find((d) => d.id === input.deviceId)!;
   const mountRoot = mountRootFor(input.deviceId, device);
+
+  // S8/S9 root-shape check BEFORE the walk (see assertDirectoryRoot).
+  await assertDirectoryRoot(input.directoryKey, mountRoot);
 
   // Step 2/3/4: walk, then the S1 marker check + S2 symlink hardening.
   const entries = await walkTree((p) => provider.list(p), input.directoryKey);
@@ -492,18 +539,18 @@ export async function verifyAcquisitionPackage(
     );
   }
   const directoryKey = payload.directoryKey;
-  const device = ctx.storageService
-    .allDeviceConfigs()
-    .find((d) => d.id === payload.storageDeviceId);
-  if (!device) {
-    throw new AcquisitionPackageError(
-      'PACKAGE_DEVICE_MISSING',
-      `storage device config not found: ${payload.storageDeviceId}`,
-    );
-  }
-  const mountRoot = mountRootFor(payload.storageDeviceId, device);
+  // S8, same rule as register: an unconfigured device id propagates the
+  // provider registry's StorageError NOT_FOUND (getProvider throws first),
+  // so the config is guaranteed present for a configured id (non-null
+  // assertion) and a configured-but-absent .D directory is the
+  // PACKAGE_DEVICE_MISSING root-shape case below.
   const provider = ctx.storageService.getProvider(payload.storageDeviceId);
+  const device =
+    ctx.storageService.allDeviceConfigs().find((d) => d.id === payload.storageDeviceId)!;
+  const mountRoot = mountRootFor(payload.storageDeviceId, device);
 
+  // S8/S9 root-shape check BEFORE the walk (see assertDirectoryRoot).
+  await assertDirectoryRoot(directoryKey, mountRoot);
   const entries = await walkTree((p) => provider.list(p), directoryKey);
   await hardenTree(entries, directoryKey, mountRoot);
 
