@@ -734,6 +734,21 @@ export interface AgentResult {
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>;
   /** Bench equipment the draft wants on the bench (never a deck slot). */
   equipmentRequirements?: AgentEquipmentRequirement[];
+  /**
+   * L2-FREEFORM-1 H1: unbound labware refs — the events whose raw scientist
+   * label the binder REFUSED (ambiguous deck name or unmatched), reported
+   * LOUDLY. The binder DROPS these events from `events` (they never ride
+   * through with a raw label); this channel + the clarification cards name
+   * the label + candidate deck ids so the scientist can disambiguate. The
+   * complete-path mapper ships it ONLY when something unbound (conditional
+   * spread, exactOptionalPropertyTypes); a no-unbound result ships NO key.
+   */
+  unboundRefs?: Array<{
+    eventId?: string;
+    label: string;
+    candidates: string[];
+    reason: 'ambiguous' | 'unmatched';
+  }>;
   /** Records the draft wants CREATED (the add; nothing is written until Accept). */
   recordCreations?: AgentRecordCreation[];
   /** Place the created record on the bench in the same turn (explicit, never implied). */

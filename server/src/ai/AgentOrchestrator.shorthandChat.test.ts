@@ -165,7 +165,7 @@ async function directCompileDeckBound() {
       events: bindShorthandEventsToDeck(
         direct.terminalArtifacts.events as unknown as Array<Record<string, unknown>>,
         RUN_CHAT_REQUEST.context.labwares,
-      ),
+      ).events,
     },
   };
 }

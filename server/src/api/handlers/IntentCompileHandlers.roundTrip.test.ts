@@ -190,7 +190,7 @@ async function chatPathEvents(doc: string) {
     spine,
     ...(searchLabwareByHint ? { searchLabwareByHint } : {}),
   });
-  return bindShorthandEventsToDeck(compiled.terminalArtifacts.events, DECK);
+  return bindShorthandEventsToDeck(compiled.terminalArtifacts.events, DECK).events;
 }
 
 // ---------------------------------------------------------------------------

@@ -144,8 +144,15 @@ export function createIntentCompileHandlers(deps: IntentCompileDeps) {
         // (shorthandChat.ts:570) — a no-edit round-trip's events equal the
         // chat path's proposals field-for-field INCLUDING details.labwareId.
         // Store-only calls skip the pass (zero behavior change).
+        // L2-FREEFORM-1 H1: the binder now returns a report {events,
+        // unboundRefs} — the round-trip's terminalArtifacts ride the SURVIVING
+        // (bound) events; a label the binder cannot bind is refused, not
+        // fail-open.
+        const bound = deck
+          ? bindShorthandEventsToDeck(result.terminalArtifacts.events, deck)
+          : undefined;
         const terminalArtifacts = deck
-          ? { ...result.terminalArtifacts, events: bindShorthandEventsToDeck(result.terminalArtifacts.events, deck) }
+          ? { ...result.terminalArtifacts, events: bound!.events }
           : result.terminalArtifacts;
         // SH-QB-1 (fix 2, the dropped-reason channel): the bar arm's
         // structured clarifications (compileScientistIntent.ts:253-272) used
