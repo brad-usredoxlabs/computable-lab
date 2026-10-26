@@ -1,0 +1,234 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/instrument-sequence-entry.schema.yaml"
+title: "Instrument Sequence Entry"
+description: >
+  One injection row of a ChemStation run sheet (GC-3): the run-table data
+  captured as declarative data from the GC-1 spike report's first-hand reads
+  (SAMPLE.XML / SAMPLE.MAC.bak / RUN.LOG / ACQ.TXT). Entries REFERENCE their
+  targets — the RUN record, the sample, the gc-method revision, (future) the
+  acquisition package, and produced analysis-runs — and NEVER copy fields from
+  them (a copied gc-method-shaped key is structurally rejected:
+  unevaluatedProperties: false). Vendor-ambiguous values stay honest: unknown
+  unit -> *Uninterpreted sibling field; unverified column semantics -> the
+  `uninterpreted` string map (GC-1 unknown-is-unknown).
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- position
+- runRef
+- sampleRef
+- gcMethodRef
+
+properties:
+  kind:
+    const: "instrument-sequence-entry"
+
+  id:
+    type: string
+    pattern: "^ISEN-[A-Za-z0-9][A-Za-z0-9_-]*$"
+    description: "Stable local identifier (e.g., ISEN-2026-0041-007)."
+
+  # ---------------------------------------------------------------------------
+  # Vial position (RUN.LOG: "Instrument running sample Vial 101 (front)").
+  # The vial id is a string — tray GEOMETRY is deliberately not modeled
+  # (labware-geometry is out of scope; the slot label is free text).
+  # ---------------------------------------------------------------------------
+  position:
+    oneOf:
+      - type: string
+      - type: object
+        additionalProperties: false
+        required: [vial]
+        properties:
+          vial:
+            type: string
+            minLength: 1
+            description: "Vial identifier as observed (e.g., '101')."
+          tray:
+            type: string
+            description: "Optional slot/tray label (e.g., 'front') — free text, no geometry."
+    description: "Where the injection happened on the instrument."
+
+  # ---------------------------------------------------------------------------
+  # Machine links (schema-rejected wrong-kind refs via type: const; existence
+  # is resolution-time — see the header schema's boundary note).
+  # ---------------------------------------------------------------------------
+
+  runRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: run }
+    description: "The study RUN record this injection belongs to (REQUIRED — a row with no sample is not a row)."
+
+  sampleRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: sample }
+    description: >
+      The sample record injected (services/sample; sample recordIds match
+      ^SMP-). The material provenance hierarchy stays intact: CL never copies
+      sample fields — only this ref plus the observed free-text labels.
+
+  gcMethodRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: gc-method }
+    description: >
+      The gc-method record (GC-2, kind gc-method, ids ^GCM-) this row used,
+      optionally pinned by revisionRef to an immutable REV- snapshot. Entries
+      REFERENCE the method; they do not copy its fields.
+
+  # DECLARED-EXTENSION POINT (forward-compatible; GC-4 lands the target kind
+  # later). The ref's `type` is a free string in the ref datatype, so this ref
+  # validates today against no existing kind — the trunk's forward-pin
+  # mechanism. GC-4's acquisition-package triplet lands the target.
+  acquisitionPackageRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: acquisition-package }
+    description: "The GC-4 acquisition package captured for this row (declared extension point; target kind lands in GC-4)."
+
+  analysisRunRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: analysis-run }
+    uniqueItems: true
+    description: >
+      Analysis-runs produced from this row (informational provenance from the
+      run-sheet side; the analysis-run points back at ITS frozen inputs).
+      Append-only BY CONVENTION — the v1 lint DSL has no record-scope history,
+      so no append-only rule is declared (do not fake one). The freeze
+      guarantee: a sequence/entry edit never touches a submitted
+      analysis-run's payload (its frozen snapshot lives in analysis-run's own
+      record; the runner's frozenRunFields comparison refuses drift).
+
+  # ---------------------------------------------------------------------------
+  # Observed run-table values (GC-1 report lines 14-18). Every value below is
+  # DECLARATIVE DATA captured verbatim or normalized-with-raw-preserved.
+  # ---------------------------------------------------------------------------
+
+  sampleName:
+    type: string
+    minLength: 1
+    description: >
+      The free-text run-table label (SAMPLE.XML <Name>, e.g. 'RES35077-4').
+      The machine link is sampleRef — this is the observed label only.
+
+  dataFileName:
+    type: string
+    minLength: 1
+    description: >
+      The vendor data-file name preserved verbatim (ACQ.TXT 'Data File:
+      Z:\GC-FID\MACHINE1\RES35077-4.D'). The NAS-side pointer is GC-4's job.
+
+  acquisitionStartedAt:
+    type: string
+    format: date-time
+    description: "Normalized acquisition start (ISO 8601 with offset)."
+
+  dateTimeRaw:
+    type: string
+    minLength: 1
+    description: >
+      The vendor timestamp string preserved VERBATIM (RUN.LOG 'Method started
+      10:08:18 10/23/26'). Vendor ambiguity = timezone/format loss; the raw
+      string sits next to the normalized one — a zone is never invented.
+
+  amount:
+    $ref: "./datatypes/quantity.schema.yaml"
+    description: >
+      The injected amount as a dimensioned quantity when the unit is known
+      (SAMPLE.XML <Amount>). Bad unit/dimension combos are REJECTED BY THE
+      SCHEMA (quantity datatype's per-dimension unit control) — not lint.
+
+  amountUninterpreted:
+    type: number
+    description: >
+      The observed amount when the UNIT IS UNKNOWN (SAMPLE.XML <Amount>0</> is
+      a bare number). Two fields, never a faked unit: amount (dimensioned) and
+      amountUninterpreted (raw number) coexist by exclusivity-of-honesty —
+      declare exactly one per record in practice; the schema declares both as
+      optional so a unit upgrade never forces a record rewrite.
+
+  multiplier:
+    type: number
+    exclusiveMinimum: 0
+    description: >
+      The run-table multiplier (SAMPLE.XML <Multiplier>, SAMPLE.MAC.bak
+      SAMPLECALAMT). Vendor semantics = dilution-factor multiplier, documented
+      as observed — no unit claimed.
+
+  dilution:
+    type: number
+    exclusiveMinimum: 0
+    description: "The run-table dilution factor (SAMPLE.XML <Dilution>) — same honesty rule as multiplier."
+
+  istdNum:
+    type: integer
+    minimum: 1
+    description: "Which internal standard (SAMPLE.XML <ISTD Num='1'>)."
+
+  istdAmount:
+    $ref: "./datatypes/quantity.schema.yaml"
+    description: "The internal-standard amount as a dimensioned quantity when the unit is known."
+
+  istdAmountUninterpreted:
+    type: number
+    description: "The internal-standard amount when the unit is unknown (SAMPLE.XML <ISTD>0</ISTD>)."
+
+  manualInjection:
+    type: boolean
+    default: false
+    description: "Manual-injection flag (run-table column; default false)."
+
+  vendorMethodLabel:
+    type: string
+    minLength: 1
+    description: >
+      The observed vendor method NAME (ACQ.TXT 'Acq. Method:
+      AOAC_FAME_NO_INJECTION.M'). Imported evidence — NOT a claim of
+      resolution; the machine link is gcMethodRef.
+
+  # VENDOR-AMBIGUOUS FIELDS LIVE HERE VERBATIM: run-table columns CL has not
+  # verified semantics for (e.g. 'ECM'). Stringly, string values only, no
+  # semantics claimed — NEVER invent meanings (GC-1 unknown-is-unknown).
+  uninterpreted:
+    type: object
+    additionalProperties:
+      type: string
+    description: "Unverified vendor columns, verbatim (string key -> string value)."
+
+  # Registry-kind lifecycle (GC-3, orchestrator resolution 1: minimal
+  # registry-ops coverage per the GC-2 gc-method precedent).
+  lifecycleId:
+    type: string
+    enum: [registry-ops]
+    description: "Lifecycle governing this record's state transitions (declared per kind in schema/registry/registry-kinds.registry.yaml)."
+
+  state:
+    type: string
+    enum: [draft, active, archived]
+    description: "Lifecycle state (operational). DISTINCT from domain status/result fields."

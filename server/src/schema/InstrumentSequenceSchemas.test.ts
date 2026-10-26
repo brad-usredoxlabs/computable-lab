@@ -23,6 +23,9 @@
  *  - `uninterpreted` string-map PASSES (the vendor-ambiguity honesty field);
  *  - entry refs required (runRef+sampleRef+gcMethodRef), header refs
  *    optional (build-up state) — bait #7;
+ *  - the ref datatype itself requires `type` on record refs
+ *    (ref.schema.yaml if/then kind:record → required [id, type]) — a
+ *    record ref without a type is schema-rejected;
  *  - a submitted analysis-run's frozen payload stays byte-identical after an
  *    entry edit; a mutated frozen snapshot makes the real runner refuse with
  *    FROZEN_INPUT_CHANGED (the freeze boundary lives inside analysis-run's
@@ -108,7 +111,7 @@ function sequencePayload(overrides: Record<string, unknown> = {}): Record<string
     title: 'GC-FID run sheet — RES35077',
     studyRef: { kind: 'record', type: 'study', id: 'STU-000041' },
     runRef: { kind: 'record', type: 'run', id: 'RUN-000041' },
-    operatorRef: { kind: 'record', id: 'USR-GC3-OPERATOR' },
+    operatorRef: { kind: 'record', type: 'user', id: 'USR-GC3-OPERATOR' },
     instrumentRef: { kind: 'record', type: 'equipment', id: 'EQP-GC3-001' },
     entryRefs: [
       { kind: 'record', type: 'instrument-sequence-entry', id: 'ISEN-GC3-001' },
@@ -168,7 +171,9 @@ describe('GC-3 instrument-sequence + instrument-sequence-entry schema contracts'
     delete missing.runRef;
     const result = validateAgainst(validator, ENTRY_SCHEMA_ID, missing);
     expect(result.valid).toBe(false);
-    expect(result.errors!.some((e) => String(e.path).includes('runRef'))).toBe(true);
+    // Ajv reports a missing required property in params.missingProperty with a
+    // root-level instance path — the property name is NOT in the error path.
+    expect(result.errors!.some((e) => e.keyword === 'required' && (e.params?.missingProperty) === 'runRef')).toBe(true);
   });
 
   it('a header with duplicate entryRefs is rejected (uniqueItems)', () => {
@@ -417,31 +422,29 @@ describe('GC-3 freeze guarantee: entry edits never rewrite submitted-analysis pr
     });
     expect(runCreate.success, runCreate.error).toBe(true);
     const runBefore = (await store.get(DRIFT_RUN))!;
-    const originalPayload = runBefore.payload as Record<string, unknown>;
 
     const revisions = new RecordRevisionService(store);
-    // The mutation under test: the frozen snapshot is captured AFTER the run's
-    // payload is changed — the snapshot and the payload then disagree on
-    // `parameters` (the fixture mutated the frozen snapshot's own source).
-    const driftedPayload: Record<string, unknown> = {
-      ...originalPayload,
-      parameters: { integration: 'off' },
-    };
-    const frozen = await revisions.capture(
-      { ...runBefore, payload: driftedPayload }, 'USR-GC3-OPERATOR', 'research-use', '1.0.0',
-    );
+    // Freeze the run's inputs by value first — the snapshot matches the
+    // submitted payload (parameters: integration 'on').
+    const frozen = await revisions.capture(runBefore, 'USR-GC3-OPERATOR', 'research-use', '1.0.0');
 
+    // The mutation under test: the run's payload changes AFTER the freeze —
+    // the snapshot and the payload then disagree on `parameters` (the fixture
+    // mutated the frozen snapshot's own source; "if anything tried to", the
+    // runner's contentHash comparison is the wall).
+    const driftedPayload: Record<string, unknown> = {
+      ...(runBefore.payload as Record<string, unknown>),
+      parameters: { integration: 'off' },
+      frozenExecutionRef: revisionRef(frozen.recordId),
+    };
     const storeResult = await store.update({
       envelope: {
         recordId: DRIFT_RUN,
         schemaId: ANALYSIS_RUN_SCHEMA_ID,
-        payload: {
-          ...driftedPayload,
-          frozenExecutionRef: revisionRef(frozen.recordId),
-        },
+        payload: driftedPayload,
       },
       actor: 'USR-GC3-OPERATOR',
-      message: 'Pin the (mutated) frozen snapshot',
+      message: 'Mutate the run after its inputs were frozen',
     });
     expect(storeResult.success, storeResult.error).toBe(true);
 
