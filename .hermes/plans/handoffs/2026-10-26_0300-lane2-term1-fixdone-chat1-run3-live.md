@@ -72,3 +72,11 @@ TERM-1 fix launcher which EXITED; slot occupancy below is authoritative).
   was released at exit; the pidfile is informational).
 - Fleet coder capacity: 1/2 in use by lane-2 (CHAT-1). Lane-1 may take slot-0.
 - Lane stack serving c8b387ec (:3093 /api/health 200, :5193 200). Brad's stack untouched.
+
+## AMENDMENT (same tick, 03:07 EDT)
+AdvC cycle-2 landed ACCEPT (mutation-pinned both defect closures). Orch self-verified (diff
+opened, 104/104 targeted, trunk 81/81 post-merge, served-modules contain the candidate) and
+MERGED --no-ff -> b5b25c99. BROWSER GATE dispatched (cl-l2-brgate-term1-l2t0210, receipts
+receipts/L2-TERM-1/2026-10-26T0305/). ITEM STAYS in-progress until real trail+verdict.
+NEXT TICK: read brgate log/trail; accept->done+handoff; fix->coder repair; dead/hang->tier-2
+model ladder (per SOUL 6c). CHAT-1 run 3 + SUITE-A composer still live at tick exit.
