@@ -44,6 +44,34 @@
   overflow-y: auto;
 }
 
+/* L2-CHAT-1 regatefix2 D1 — the adoption refusal wall (token-only; mirrors
+   .preview-bar__error's shape in eventEditor.css). */
+.chat-preview__error {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--cl-warn);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-1);
+  color: var(--cl-warn);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chat-preview__error-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.chat-preview__error-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-preview__event {
   display: flex;
   align-items: center;

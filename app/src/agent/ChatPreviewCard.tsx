@@ -47,6 +47,18 @@ export function ChatPreviewCard({ chat }: { chat: UseAiChatReturn }) {
         </p>
       ) : null}
 
+      {/* L2-CHAT-1 regatefix2 D1: the adoption REFUSAL wall — a failed Apply
+          (the shared adoption core threw, e.g. the run's deck lock conflict)
+          must be VISIBLE here naming the cause. The hook keeps the preview
+          staged, so this wall sits above the still-actionable controls —
+          never a silent nothing. */}
+      {chat.adoptionError ? (
+        <div className="chat-preview__error" role="alert" data-testid="chat-preview-error">
+          <span className="chat-preview__error-label">Apply failed</span>
+          <span className="chat-preview__error-message">{chat.adoptionError}</span>
+        </div>
+      ) : null}
+
       {events.length > 0 ? (
         <ul className="chat-preview__events">
           {events.map((event) => {

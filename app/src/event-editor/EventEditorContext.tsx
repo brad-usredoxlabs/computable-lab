@@ -1249,14 +1249,46 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
         if (cancelled) return
         const payload = (record.payload ?? {}) as Record<string, unknown>
         runDeckLoadedRef.current = true
-        if (
+        const memory =
           typeof payload.methodPlatform === 'string'
           && typeof payload.methodVariantId === 'string'
-        ) {
-          dispatch({ type: 'set_run_deck', deck: { platformId: payload.methodPlatform, variantId: payload.methodVariantId } })
-        } else {
-          dispatch({ type: 'set_run_deck', deck: null })
-        }
+            ? { platformId: payload.methodPlatform, variantId: payload.methodVariantId }
+            : null
+        // L2-CHAT-1 regatefix2 D1: the run's methodDeckLock is the
+        // AUTHORITATIVE deck guardrail (eventGraphPersistence.ensureRunDeckLock
+        // refuses any save off the lock — RunDeckLockConflictError). The
+        // mutable memory (methodPlatform/methodVariantId) drives only reload
+        // UX (its own doc comment says so). When a VALID lock exists and
+        // DISAGREES with the memory, resolve to the LOCK: otherwise the route
+        // opens on the memory's deck and every adoption save refuses
+        // (the gate's silent-nothing run: memory manual_freeform, lock
+        // manual_collapsed). No lock (or a matching lock) falls back to the
+        // memory — today's behavior. (The structural guard mirrors
+        // eventGraphPersistence.isRunDeckLock — the one lock shape the
+        // persist path enforces.)
+        const rawLock = payload.methodDeckLock
+        const lockDeck =
+          Boolean(rawLock) &&
+          typeof rawLock === 'object' &&
+          !Array.isArray(rawLock) &&
+          (rawLock as { locked?: unknown }).locked === true
+            ? rawLock
+            : null
+        const lockedDeck =
+          lockDeck !== null &&
+          typeof (lockDeck as { platformId?: unknown }).platformId === 'string' &&
+          typeof (lockDeck as { variantId?: unknown }).variantId === 'string'
+            ? {
+                platformId: (lockDeck as { platformId: string }).platformId,
+                variantId: (lockDeck as { variantId: string }).variantId,
+              }
+            : null
+        const deck =
+          lockedDeck && memory &&
+          (lockedDeck.platformId !== memory.platformId || lockedDeck.variantId !== memory.variantId)
+            ? lockedDeck
+            : memory
+        dispatch({ type: 'set_run_deck', deck })
       })
       .catch(() => {
         if (!cancelled) {

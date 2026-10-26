@@ -222,6 +222,15 @@ export interface UseAiChatReturn {
    * `honestWall` state.
    */
   honestWall: string | null
+  /**
+   * L2-CHAT-1 regatefix2 D1: the adoption REFUSAL the card must show
+   * verbatim — set when the `onPreviewAccept` seam THROWS (e.g. the deck
+   * lock conflict, `RunDeckLockConflictError`), cleared on a fresh apply
+   * attempt, a successful adopt, or a discard. The card renders it as a
+   * role=alert honest wall naming the cause; the staged preview stays
+   * mounted (nothing half-applied — retry stays possible).
+   */
+  adoptionError: string | null
   inputText: string
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
   cancelStream: () => void
@@ -426,6 +435,12 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   // REPORTED failure in plain language, owned by its turn. AiTabPanel's
   // `honestWall` state ported to the generic stack.
   const [honestWall, setHonestWall] = useState<string | null>(null)
+  // L2-CHAT-1 regatefix2 D1 — the adoption REFUSAL the card renders as a
+  // visible honest wall (the onPreviewAccept seam threw; e.g. the deck lock
+  // conflict). Null when the last apply attempt succeeded or was not yet
+  // made. Owned by the apply attempt — cleared on the next attempt, on a
+  // successful adopt, and on discard.
+  const [adoptionError, setAdoptionError] = useState<string | null>(null)
   // L2-CHAT-1 — the revision trail: prompts that produced staged drafts in
   // the current draft chain. Carries back to the server as
   // `draftRevision.revisionHistory` (the structured context AiTabPanel's
@@ -1369,6 +1384,10 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     if (isAcceptingRef.current) return
     isAcceptingRef.current = true
     setIsAccepting(true)
+    // L2-CHAT-1 regatefix2 D1: a fresh apply attempt supersedes any prior
+    // refusal — the wall belongs to the attempt that produced it (never a
+    // stale error from a previous Apply beside a fresh preview).
+    setAdoptionError(null)
     const eventsToAccept = previewEvents
     const labwareAdditionsToApply = previewLabwareAdditions
     try {
@@ -1407,6 +1426,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           setPreviewEventStatesMap(new Map())
           setUnresolvedRefs([])
         })
+        setAdoptionError(null)
         revisionTrailRef.current = []
         stagedSourceRef.current = null
         const adoptedEvents = adoption.eventCount ?? 0
@@ -1524,6 +1544,29 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
           timestamp: Date.now(),
         },
       ])
+    } catch (err: unknown) {
+      // L2-CHAT-1 regatefix2 D1: the adoption seam THREW (e.g. the deck lock
+      // conflict — persist refused because the route resolved off the run's
+      // methodDeckLock). Before this catch the error escaped as an uncaught
+      // page error and the pane showed NOTHING (the gate's "silent nothing").
+      // Now: the refusal is NAMED — the error's class + message verbatim on
+      // the hook-owned wall (the card renders it as role=alert), and a
+      // system line in the conversation — and the staged preview STAYS
+      // mounted (nothing half-applied; the scientist sees the cause and can
+      // retry or discard). Never silently materialize, never silently drop.
+      const errName = err instanceof Error && err.name && err.name !== 'Error' ? err.name : null
+      const errMessage = err instanceof Error ? err.message : String(err)
+      const message = errName ? `${errName}: ${errMessage}` : errMessage
+      setAdoptionError(message)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: `Apply failed — ${message} Nothing was written; the proposed preview stays staged.`,
+          timestamp: Date.now(),
+        },
+      ])
     } finally {
       isAcceptingRef.current = false
       setIsAccepting(false)
@@ -1605,6 +1648,9 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
+    // L2-CHAT-1 regatefix2 D1: a discard supersedes any prior refusal — the
+    // preview is gone, so the refusal's wall goes with it.
+    setAdoptionError(null)
     // L2-CHAT-1: discard ends the draft chain.
     revisionTrailRef.current = []
     stagedSourceRef.current = null
@@ -1722,6 +1768,7 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     honestWall,
+    adoptionError,
     inputText,
     sendPrompt,
     cancelStream,
