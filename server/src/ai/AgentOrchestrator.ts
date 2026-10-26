@@ -1457,12 +1457,17 @@ export function createAgentOrchestrator(
               );
               if (survivingFacts.length > 0) {
                 // L2-FREEFORM-1 H4: the re-hold carries the ADVANCED ledger
-                // (the fold re-asked the surviving slots; the mapper below
-                // reads them via h4AskCountSeed — a slot that STILL bars after
-                // an answer is the 2nd occurrence and escalates, N=1) —
-                // byte-identical when nothing asked (absent, never
-                // undefined — the `answeredSlots` conditional-spread
-                // precedent on the hold).
+                // (the fold re-asked the surviving slots). The fold mapper
+                // below is seeded with the PRE-ask ledger (held.loopAskCounts
+                // — the value the held carried BEFORE this re-hold advanced
+                // it; the draft arm's h4Seed precedent) and advances it by
+                // this turn's surviving asks: the mapper's result ledger and
+                // this re-hold's ledger are the SAME prior+this-turn advance,
+                // so they agree. A slot that STILL bars after an answer is the
+                // 2nd occurrence of its requestId and escalates IN THE SAME
+                // TURN (OQ4, N=1). Byte-identical when nothing asked (the seed
+                // is absent, never undefined — the `answeredSlots`
+                // conditional-spread precedent on the hold).
                 holdShorthandIntent(conversationKey, {
                   yaml: folded.yaml,
                   doc: folded.doc,
@@ -1481,11 +1486,23 @@ export function createAgentOrchestrator(
               // The result mapper sees the LEDGER-FILTERED facts: a closed
               // slot emits no card. The compile itself is untouched (the
               // frozen pipeline's output rides verbatim otherwise).
+              // L2-FREEFORM-1 H4: seed the fold mapper with the PRE-ask
+              // ledger (held.loopAskCounts — the value the held carried
+              // BEFORE the re-hold above advanced it; the draft arm's
+              // h4Seed precedent). The mapper advances it by this turn's
+              // surviving asks, so a slot that STILL bars (the 2nd
+              // occurrence of its requestId) escalates IN THE SAME TURN and
+              // the result's ledger matches the re-hold's (both advance the
+              // same prior by the same asks). Absent when the held carried
+              // no ledger (conditional spread — exactOptionalPropertyTypes:
+              // absent, never undefined).
+              const foldH4Seed = held.loopAskCounts;
               const foldResult = shorthandResultFromCompile(
                 { ...compiledFold, clarifications: survivingFacts },
                 folded.yaml,
                 'Clarification answer folded into the held shorthand; re-compiled deterministically (no model call).',
                 shorthandDeckLabwares,
+                { ...(foldH4Seed ? { priorLoopAskCounts: foldH4Seed } : {}) },
               );
               const foldElapsed = Date.now() - t0;
               const foldSummary: AgentSummary = {

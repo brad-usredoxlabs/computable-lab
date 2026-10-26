@@ -460,6 +460,53 @@ describe('L2-FREEFORM-1 H4 — orchestrator leg (scripted multi-turn, write-free
     expect(t2.result.error).toBeUndefined();
     expect(classifyHonestOutcome(t2.result, { deckIds, resolvedIds: ['MAT-dmem-1'] })).toBe('events-bound');
   });
+
+  // ADVX FIX1 probe (advc1 Defect 1): the FOLD seam's N=1 — an answer that
+  // does NOT resolve the slot (a ref the store cannot bind) re-asks the
+  // SAME requestId on the fold recompile. The fold arm's re-hold advances
+  // the held ledger to 2; the fold mapper MUST see that advanced ledger
+  // (the 2nd occurrence) so the escalation lands IN THE SAME TURN —
+  // today the fold mapper call drops the seed and the mapper recomputes
+  // from prior=undefined (cards-only, count=1; the result's ledger
+  // contradicts the held one), delaying the escalation by one turn.
+  // The answer's label is the BAR FACT'S OWN label (the splice is a
+  // no-op on the document) so the re-ask is the SAME content-keyed
+  // requestId — the defect's exact shape (a changed label would re-derive
+  // a NEW fact id and the 2nd-occurrence ruling would not apply).
+  it('fold re-ask of the SAME requestId (an answer that does NOT resolve the slot): the escalation lands in the SAME turn — ledger consistency (result == re-hold)', async () => {
+    const { turn } = multiTurnShorthand(
+      [{ labwareId: 'lw-a', labwareType: 'plate_96', name: 'Plate One' }],
+      h4Yaml('ff1-h4-fold'),
+    );
+    const t1 = await turn('Add 100ul of 1:2 BufferMix X to A1');
+    const rid = (t1.result.clarificationRequests ?? []).find((r) => r.query === '1:2 BufferMix X')!.id;
+    expect(t1.result.error).toBeUndefined();
+    // The answer names the bar's own label but carries a ref the store
+    // cannot bind (the mock store seeds DMEM only) — the slot STILL bars
+    // on the fold recompile (the 1:1 fold path; not the fold-free
+    // re-extraction fallback), so the re-ask is the 2nd occurrence of
+    // `rid` and MUST escalate in this turn.
+    const t2 = await turn('Add 100ul of 1:2 BufferMix X to A1', [
+      { requestId: rid, label: '1:2 BufferMix X', ref: { id: 'MAT-nope' } },
+    ]);
+    // The held-intent arm fired: the fold recompile made ZERO model calls.
+    expect(t2.modelCalls).toBe(1);
+    // OQ4: the 2nd occurrence flips the looped flag IN THE SAME TURN (the
+    // paraphrase leg above pins the fold-free seam; this leg pins the fold
+    // seam — same ruling, different ledger path).
+    expect(t2.result.error).toBeTruthy();
+    expect(t2.result.error).toContain('1:2 BufferMix X');
+    expect(t2.result.error).toContain('mint affordance');
+    // B7: the QUESTION stands — the card channel stays beside the error.
+    expect(t2.result.clarificationRequests?.some((r) => r.id === rid)).toBe(true);
+    // Ledger consistency: the fold re-hold advanced the held ledger to 2
+    // (prior=1 + this turn's ask) and the fold mapper's seed was that
+    // advanced value — the result's ledger matches (today the seed is
+    // dropped: the mapper recomputes from prior=undefined and ships
+    // count=1, contradicting the held ledger's 2).
+    expect(t2.result.loopAskCounts?.[rid]).toBe(2);
+    expect(classifyHonestOutcome(t2.result)).toBe('honest-failure');
+  });
 });
 
 describe('L2-FREEFORM-1 H4 — mapper leg (the escalation shape, no model)', () => {
