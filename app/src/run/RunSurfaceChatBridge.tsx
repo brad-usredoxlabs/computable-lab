@@ -22,12 +22,46 @@
  */
 import { useEventEditor } from '../event-editor/EventEditorContext'
 import { useDeckGhostMount } from '../event-editor/deck/useDeckGhostMount'
+import {
+  adoptStagedPreview,
+  type DeckPreviewLike,
+} from '../event-editor/deck/deckAdoption'
+import type {
+  DeckAdoptionOutcome as HookDeckAdoptionOutcome,
+  DeckPreviewLike as HookDeckPreviewLike,
+} from '../shared/hooks/useAiChat'
 import { useSurfaceChat } from '../agent/useSurfaceChat'
 import type { AiContext } from '../types/aiContext'
 
 export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
-  const { actions } = useEventEditor()
+  const { state, actions } = useEventEditor()
   const { onProposalDrafted, onPreviewDiscarded } = useDeckGhostMount()
+
+  // L2-CHAT-1 FIX3 D1: the COMPLETE-adopter seam (run workspace) — a
+  // chat-card Apply commits the FULL staged editor preview through the
+  // shared deck adoption core (one adopter with the deck bar). termDecisions
+  // is {} on purpose: sign-off decisions live in the deck bar's local
+  // ProposedGraphModal state, so unsigned decisionNeeded terms REFUSE the
+  // chat Apply visibly instead of silently materializing.
+  const onPreviewAccept = (preview: HookDeckPreviewLike) =>
+    adoptStagedPreview(
+      preview as unknown as DeckPreviewLike,
+      {
+        eventGraphId: state.eventGraphId,
+        runId: state.runId,
+        ...(state.platformId ? { platformId: state.platformId } : {}),
+        ...(state.variantId ? { variantId: state.variantId } : {}),
+        events: state.events,
+        labwares: state.labwares,
+        equipments: state.equipments,
+        placements: state.placements,
+      },
+      {
+        termDecisions: {},
+        commit: (previewEvents, persisted) =>
+          actions.commitPreview(previewEvents, persisted.eventGraphId, persisted.commit),
+      },
+    ) as Promise<HookDeckAdoptionOutcome>
 
   useSurfaceChat({
     aiContext,
@@ -35,6 +69,21 @@ export function RunSurfaceChatBridge({ aiContext }: { aiContext: AiContext }) {
     onAcceptEvent: actions.appendEvent,
     onProposalDrafted,
     onPreviewDiscarded,
+    // L2-CHAT-1 FIX3 D1: the full adoption seam + the staged EXTRAS the
+    // adoption commit / a revise turn's draftRevision need (D1 + D3).
+    onPreviewAccept,
+    onStagedExtras: () => {
+      const preview = state.preview
+      if (!preview) return null
+      return {
+        previewLabwares: preview.previewLabwares as Record<string, unknown>,
+        previewPlacements: preview.previewPlacements,
+        ...(preview.previewEquipments ? { previewEquipments: preview.previewEquipments as Record<string, unknown> } : {}),
+        ...(preview.ontologyBindings ? { ontologyBindings: preview.ontologyBindings } : {}),
+        ...(preview.recordCreations ? { recordCreations: preview.recordCreations } : {}),
+        ...(preview.sourceSkips ? { sourceSkips: preview.sourceSkips } : {}),
+      }
+    },
   })
 
   return null

@@ -247,6 +247,39 @@ export interface UseAiChatReturn {
 export type AcceptEventHandler = (event: PlateEvent) => void
 
 /**
+ * L2-CHAT-1 FIX3 D1: the outcome of a COMPLETE adoption (the `onPreviewAccept`
+ * seam's return). Structurally identical to deckAdoption.DeckAdoptionResult —
+ * declared here (shared/hooks must not import event-editor) so the deck core
+ * stays assignable to it in one direction only.
+ */
+export interface DeckAdoptionOutcome {
+  adopted: boolean
+  /** Refused at the ontology sign-off gate: unsigned decisionNeeded terms. */
+  blocked?: number
+  /** Adopted: the counts of what was ACTUALLY committed (for the summary
+   *  line — never "Accepted N events." while labware/placements were
+   *  silently dropped). */
+  eventCount?: number
+  placementCount?: number
+  labwareCount?: number
+}
+
+/**
+ * L2-CHAT-1 FIX3 D1: the full staged preview handed to `onPreviewAccept`
+ * (structurally compatible with deckAdoption.DeckPreviewLike / the
+ * editor's EventEditorPreview).
+ */
+export interface DeckPreviewLike {
+  previewEvents: PlateEvent[]
+  previewLabwares: Record<string, unknown>
+  previewEquipments?: Record<string, unknown>
+  previewPlacements: unknown[]
+  ontologyBindings?: unknown[]
+  recordCreations?: unknown[]
+  sourcePrompt?: string
+}
+
+/**
  * L2-CHAT-1 — an event-bearing proposal the universal chat just staged.
  * Surfaces that own a deck (event editor) register a handler to mount the
  * proposal as GHOSTS on the editor state (the universal port of AiTabPanel's
@@ -302,6 +335,43 @@ export interface UseAiChatOptions {
    * surfaces use it to clear the ghosted preview.
    */
   onPreviewDiscarded?: () => void
+  /**
+   * L2-CHAT-1 FIX3 D1: the COMPLETE-adopter seam. When a deck-owning surface
+   * (DeckSurfaceChat / RunSurfaceChatBridge) registers this, a chat-card
+   * Apply commits the FULL staged editor preview — events + previewLabwares
+   * + previewPlacements + recordCreations + ontologyBindings — through the
+   * shared deck adoption core (deckAdoption.adoptStagedPreview) with the
+   * deck bar's exact materialize/persist ordering, instead of the raw
+   * per-event append below (which rides only when this seam is ABSENT).
+   * A refused adoption (unsigned decisionNeeded ontology terms) returns
+   * { adopted: false, blocked } and the ghost STAYS mounted — the hook
+   * reports the refusal visibly and keeps its staged state. Only a
+   * SUCCESSFUL adoption clears the staged state (the editor's commit_preview
+   * nulls the ghost), so a later deck-bar commit is a no-op: one adopter
+   * stays one.
+   */
+  onPreviewAccept?: (preview: DeckPreviewLike) => Promise<DeckAdoptionOutcome>
+  /**
+   * L2-CHAT-1 FIX3 D1+D3: the staged EXTRAS the ghost mount put on the
+   * editor's preview that the universal hook doesn't hold itself. Deck-
+   * owning surfaces wire it from state.preview (the same object
+   * useDeckGhostMount staged): previewLabwares / previewPlacements /
+   * previewEquipments / ontologyBindings / recordCreations feed the
+   * adoption commit (D1); sourceSkips + ontologyBindings feed a revise
+   * turn's draftRevision.currentPreviewDraft (D3, legacy AiTabPanel
+   * parity — AiTabPanel.tsx previewDraft builder).
+   */
+  onStagedExtras?: () => {
+    previewLabwares?: Record<string, unknown>
+    previewPlacements?: unknown[]
+    previewEquipments?: Record<string, unknown>
+    ontologyBindings?: unknown[]
+    recordCreations?: unknown[]
+    /** The ghost mount stages [] (MOUNT-NONEVENT-1) — carried for legacy
+     *  draftRevision parity anyway (always empty in practice). */
+    labwareRequirements?: unknown[]
+    sourceSkips?: string[]
+  } | null
   /** Handler called to add labware from a record (for AI-proposed additions). */
   onAddLabwareFromRecord?: AddLabwareFromRecordHandler
   /**
@@ -343,7 +413,7 @@ export interface UseAiChatOptions {
   onAgentAction?: (action: AiAgentActionEnvelope) => string | undefined
 }
 
-export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord, onSequenceProposal, proposalScopeKey, onWorkstateProposal, onAnalysisProposal, onRecordDraftProposal, onChainProposal, onAgentAction, onProposalDrafted, onPreviewDiscarded, onPreviewAccept, onStagedExtras }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -410,6 +480,13 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
   onProposalDraftedRef.current = onProposalDrafted
   const onPreviewDiscardedRef = useRef(onPreviewDiscarded)
   onPreviewDiscardedRef.current = onPreviewDiscarded
+  // L2-CHAT-1 FIX3 D1+D3: the COMPLETE-adopter seam + the staged-extras
+  // reader — same stable-ref convention (sendPrompt/acceptPreview are
+  // memoized; the refs keep the latest host wiring live).
+  const onPreviewAcceptRef = useRef(onPreviewAccept)
+  onPreviewAcceptRef.current = onPreviewAccept
+  const onStagedExtrasRef = useRef(onStagedExtras)
+  onStagedExtrasRef.current = onStagedExtras
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
@@ -1237,13 +1314,79 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
     setIsAccepting(true)
     const eventsToAccept = previewEvents
     const labwareAdditionsToApply = previewLabwareAdditions
-    flushSync(() => {
-      setPreviewEvents([])
-      setPreviewLabwareAdditions([])
-      setPreviewEventStatesMap(new Map())
-      setUnresolvedRefs([])
-    })
     try {
+      // L2-CHAT-1 FIX3 D1: COMPLETE-adopter seam (adoption-first). A
+      // deck-owning surface registers onPreviewAccept: Apply commits the
+      // FULL staged editor preview (events + previewLabwares +
+      // previewPlacements + recordCreations + ontologyBindings) through the
+      // shared deck adoption core — the deck bar's exact materialize/persist
+      // ordering — instead of the raw per-event append below. The per-event
+      // path rides ONLY when the seam is absent (a non-deck surface), and
+      // only for event-bearing applies: a labware-only preview is
+      // unmountable on this surface (the honest wall names that channel at
+      // the done — MOUNT-NONEVENT-1).
+      const adopter = onPreviewAcceptRef.current
+      const stagedExtras = adopter ? (onStagedExtrasRef.current?.() ?? null) : null
+      const adoption = adopter && eventsToAccept.length > 0
+        ? await adopter({
+            previewEvents: eventsToAccept,
+            previewLabwares: (stagedExtras?.previewLabwares as Record<string, unknown> | undefined) ?? {},
+            ...(stagedExtras?.previewEquipments ? { previewEquipments: stagedExtras.previewEquipments } : {}),
+            previewPlacements: (stagedExtras?.previewPlacements as unknown[] | undefined) ?? [],
+            ...(stagedExtras?.ontologyBindings ? { ontologyBindings: stagedExtras.ontologyBindings } : {}),
+            ...(stagedExtras?.recordCreations ? { recordCreations: stagedExtras.recordCreations } : {}),
+            ...(stagedSourceRef.current ? { sourcePrompt: stagedSourceRef.current.prompt } : {}),
+          })
+        : null
+      if (adoption?.adopted) {
+        // A successful adoption IS the commit — the editor's commit_preview
+        // already merged previewLabwares/previewPlacements and nulled the
+        // ghost (one adopter stays one: a later deck-bar commit is a
+        // no-op). Clear the staged state and end the draft chain (mirror
+        // the legacy handler branch).
+        flushSync(() => {
+          setPreviewEvents([])
+          setPreviewLabwareAdditions([])
+          setPreviewEventStatesMap(new Map())
+          setUnresolvedRefs([])
+        })
+        revisionTrailRef.current = []
+        stagedSourceRef.current = null
+        const adoptedEvents = adoption.eventCount ?? 0
+        const adoptedLabware = adoption.labwareCount ?? 0
+        const adoptedPlacements = adoption.placementCount ?? 0
+        const adoptedSummary = [
+          `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
+          adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
+          adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
+        setMessages((prev) => [
+          ...prev,
+          { id: generateMessageId(), role: 'system', content: adoptedSummary, timestamp: Date.now() },
+        ])
+        return
+      }
+      if (adoption) {
+        // Refused at the ontology sign-off gate (NOT bypassable): VISIBLE in
+        // the conversation; the ghost STAYS mounted and the staged state
+        // stays (the scientist signs off in the changes panel and retries).
+        // Never silently materialize.
+        const blocked = adoption.blocked ?? 0
+        setMessages((prev) => [
+          ...prev,
+          { id: generateMessageId(), role: 'system', content: `${blocked} ontology terms need sign-off in the changes panel — nothing was applied.`, timestamp: Date.now() },
+        ])
+        return
+      }
+      // Legacy per-event apply (no adoption seam registered).
+      flushSync(() => {
+        setPreviewEvents([])
+        setPreviewLabwareAdditions([])
+        setPreviewEventStatesMap(new Map())
+        setUnresolvedRefs([])
+      })
       // Track labware-addition outcomes for the summary message.
       const totalLabwareAttempts = labwareAdditionsToApply.length
       let labwareFailures = 0
@@ -1273,10 +1416,11 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
         for (const event of eventsToAccept) {
           handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
         }
-        // L2-CHAT-1 FIX1 D1: the Apply IS the adoption — unmount the ghost
-        // through the SAME discard seam rejectPreview uses, so the deck's
-        // PreviewActionBar cannot commit the same events a second time
-        // (exactly one adopter writes events + placements).
+        // L2-CHAT-1 FIX1 D1 (superseded by the FIX3 D1 adoption seam when it
+        // is registered — see above): on a surface WITHOUT onPreviewAccept
+        // the per-event apply IS the only adoption — unmount the ghost
+        // through the SAME discard seam rejectPreview uses, so no other
+        // acceptor can commit the same events a second time.
         onPreviewDiscardedRef.current?.()
         // L2-CHAT-1 FIX1 D2: a successful accept ENDS this draft chain — reset
         // the trail/source so an applied chain's prompt never leaks into a

@@ -35,6 +35,15 @@ vi.mock('../shared/api/client', () => ({
   },
   ApiError: class extends Error {},
 }))
+// The adoption core's durable persist seam: the run-page lock asserts the
+// COMMIT + state adoption (one adopter with the deck bar, L2-CHAT-1 FIX3 D1)
+// — stub the save so Apply never writes through the live apiClient.
+vi.mock('../event-editor/eventGraphPersistence', () => ({
+  persistAcceptedEventGraph: vi.fn(async (input: { eventGraphId?: string | null }) => ({
+    eventGraphId: input.eventGraphId ?? 'EG-1',
+    commit: { sha: 'sha-surface', message: 'surface test commit', timestamp: '2026-10-26T00:00:00Z' },
+  })),
+}))
 vi.mock('../shared/api/aiThreadClient', () => ({
   listThreads: vi.fn(async () => []),
   createThread: vi.fn(async () => ({ id: 't1' })),
@@ -116,10 +125,14 @@ vi.mock('../event-editor/workspace/WorkspaceContext', () => {
 })
 
 // The event editor: a stateless stub with the actions the bridge + ghost seam
-// consume; `setPreview` records the mounted ghost payload, `appendEvent`
-// records accepted events.
+// consume; `setPreview` records the mounted ghost payload, `commitPreview`
+// MIRRORS the real commit_preview reducer (EventEditorContext.tsx) — labwares
+// merged, placements appended, events appended, preview nulled (one adopter
+// stays one). L2-CHAT-1 FIX3 D1: the run-page chat Apply adopts the FULL
+// staged preview through this commit (the legacy appendEvent arm is gone
+// from the deck-owning bridge).
 let previewCalls: Array<Record<string, unknown>> = []
-let appendCalls: Array<{ eventId: string }> = []
+let commitEventCalls: Array<{ eventId: string }> = []
 const eventEditorContextValue = {
   state: {
     eventGraphId: 'EG-1',
@@ -154,6 +167,7 @@ const eventEditorContextValue = {
     history: { past: [], future: [] },
     tipState: { kind: 'empty' as const },
     labwares: {},
+    equipments: {},
     focusPlacementId: null,
     placements: [
       {
@@ -166,11 +180,11 @@ const eventEditorContextValue = {
         location: { kind: 'slot' as const, slotId: 'PLATE' },
         orientation: 'landscape' as const,
       },
-    ],
-    events: [],
+    ] as Array<Record<string, unknown>>,
+    events: [] as Array<Record<string, unknown>>,
     preview: null,
-    previewEvents: [],
-    previewPlacements: [],
+    previewEvents: [] as Array<Record<string, unknown>>,
+    previewPlacements: [] as Array<Record<string, unknown>>,
     previewLabwares: [],
     previewRevision: null,
     reviewState: null,
@@ -179,13 +193,38 @@ const eventEditorContextValue = {
     setPreview: (payload: Record<string, unknown>) => {
       previewCalls.push(payload)
     },
-    appendEvent: (event: { eventId: string }) => {
-      appendCalls.push({ eventId: event.eventId })
+    // Mirror the real commit_preview reducer (EventEditorContext.tsx:884-899):
+    // merge labwares, append placements + events, adopt the persisted commit,
+    // NULL the preview (the one-adopter guard).
+    commitPreview: (
+      previewEvents: Array<{ eventId: string }>,
+      eventGraphId: string,
+      _commit: unknown,
+    ) => {
+      commitEventCalls.push(...previewEvents.map((e) => ({ eventId: e.eventId })))
+      eventEditorContextValue.state.events = [
+        ...eventEditorContextValue.state.events,
+        ...previewEvents,
+      ]
+      const preview = eventEditorContextValue.state.preview as
+        | { previewLabwares?: Record<string, unknown>; previewPlacements?: unknown[] }
+        | null
+      if (preview) {
+        eventEditorContextValue.state.labwares = {
+          ...(eventEditorContextValue.state.labwares as Record<string, unknown>),
+          ...(preview.previewLabwares ?? {}),
+        }
+        eventEditorContextValue.state.placements = [
+          ...(eventEditorContextValue.state.placements as unknown[]),
+          ...(preview.previewPlacements ?? []),
+        ]
+      }
+      eventEditorContextValue.state.eventGraphId = eventGraphId
+      eventEditorContextValue.state.preview = null
     },
     clearPreview: () => {
       previewCalls = []
     },
-    commitPreview: vi.fn(),
     applyPreviewLabware: vi.fn(),
     applyPreviewPlacement: vi.fn(),
     dropPreviewEvent: vi.fn(),
@@ -233,7 +272,7 @@ afterEach(() => {
   cleanup()
   seen.length = 0
   previewCalls = []
-  appendCalls = []
+  commitEventCalls = []
 })
 
 describe('RunWorkspacePage — universal chat mount (L2-CHAT-1)', () => {
@@ -287,9 +326,12 @@ describe('RunWorkspacePage — universal chat mount (L2-CHAT-1)', () => {
       (previewCalls[0].previewEvents as Array<{ eventId: string }>).map((e) => e.eventId),
     ).toEqual(['EVT-9'])
 
-    // THE §1 DEFECT, CLOSED: Apply applies — the accept path is the editor's
-    // appendEvent (before this leg the page passed NO onAcceptEvent and a
-    // done with mountable events was a silent no-op).
+    // THE §1 DEFECT, CLOSED (L2-CHAT-1 FIX3 D1: the adopter was COMPLETED):
+    // Apply adopts — the run-page bridge registers the COMPLETE-adopter seam
+    // (onPreviewAccept), so the accept path is the editor's commitPreview
+    // (the shared deck adoption core — one adopter with the deck bar), not
+    // the raw per-event append (before this leg the page passed NO accept
+    // handler and a done with mountable events was a silent no-op).
     // acceptPreview is a useCallback closure over previewEvents — the
     // PRE-TURN object (captured from `registered`) is stale. Re-render the
     // same tree (the same re-read the host page causes in production) so
@@ -318,8 +360,11 @@ describe('RunWorkspacePage — universal chat mount (L2-CHAT-1)', () => {
     expect(freshChat).toBeTruthy()
     freshChat!.acceptPreview()
     await vi.waitFor(() => {
-      expect(appendCalls.map((c) => c.eventId)).toEqual(['EVT-9'])
+      expect(commitEventCalls.map((c) => c.eventId)).toEqual(['EVT-9'])
     })
+    // One adopter: the commit nulled the ghost (commit_preview's own clear)
+    // — a subsequent deck-bar commit on this run is a no-op.
+    expect(eventEditorContextValue.state.preview).toBeNull()
 
     unmount()
     // The stream went through the stub (no real network): exactly one turn.

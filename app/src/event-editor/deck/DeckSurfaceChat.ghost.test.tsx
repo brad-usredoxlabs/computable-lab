@@ -4,8 +4,12 @@
  *
  *  - a done result carrying events + resolvedLabwares mounts DECK GHOSTS on
  *    the editor state (actions.setPreview — the same contract AiTabPanel's
- *    onDraftResult uses, AiTabPanel.tsx:608-669) AND the pane's staged
- *    preview card (ChatPreviewCard) applies them (Apply -> appendEvent);
+ *    onDraftResult uses, AiTabPanel.tsx:608-669);
+ *  - the pane's staged preview card (ChatPreviewCard) Apply commits the FULL
+ *    staged preview through the shared deck adoption core (L2-CHAT-1 FIX3
+ *    D1 — one adopter with the deck bar: the wired onPreviewAccept seam ->
+ *    adoptStagedPreview -> commitPreview; the legacy per-event appendEvent
+ *    arm is gone from this surface);
  *  - a REVISE turn (send while ghosts are mounted) REMOUNTS the ghosts with
  *    the new events and appends the revision trail (revisionHistory) to the
  *    mounted preview — AiTabPanel.ghostRemount.test.tsx's lock, through the
@@ -30,7 +34,40 @@ const mocks = vi.hoisted(() => ({
   }),
   clearPreview: vi.fn(),
   appendEvent: vi.fn(),
-  commitPreview: vi.fn(),
+  // Mirror the real commit_preview reducer (EventEditorContext.tsx:884-899):
+  // labwares/equipments merged, placements appended, events appended,
+  // eventGraphId/commit adopted, preview NULL (the one-adopter guard — a
+  // second commit is a no-op).
+  commitPreview: vi.fn(
+    (previewEvents?: unknown, eventGraphId?: string, eventGraphCommit?: unknown) => {
+      const s = mocks.state as {
+        preview: {
+          previewLabwares?: Record<string, unknown>
+          previewEquipments?: Record<string, unknown>
+          previewPlacements?: Array<{ placementId: string }>
+          previewEvents?: unknown[]
+        } | null
+        labwares: Record<string, unknown>
+        equipments: Record<string, unknown>
+        placements: Array<{ placementId: string }>
+        events: unknown[]
+        eventGraphId?: string | null
+        eventGraphSave?: unknown
+      } | null
+      if (!s || !s.preview) return
+      s.labwares = { ...s.labwares, ...(s.preview.previewLabwares ?? {}) }
+      s.equipments = { ...s.equipments, ...(s.preview.previewEquipments ?? {}) }
+      s.placements = [
+        ...s.placements,
+        ...(s.preview.previewPlacements ?? []),
+      ]
+      s.events = [...s.events, ...((previewEvents as unknown[]) ?? s.preview.previewEvents ?? [])]
+      if (eventGraphId) s.eventGraphId = eventGraphId
+      if (eventGraphCommit) s.eventGraphSave = eventGraphCommit
+      s.preview = null
+      mocks.state = s as unknown as EventEditorState
+    },
+  ),
   state: null as unknown as EventEditorState,
 }))
 
@@ -44,6 +81,16 @@ vi.mock('../EventEditorContext', () => ({
       commitPreview: mocks.commitPreview,
     },
   }),
+}))
+
+// The shared adoption core's durable persist seam: the ghost lock asserts
+// the COMMIT + state adoption, not the durable save — stub it so the Apply
+// never writes through the live apiClient (saveEventGraph).
+vi.mock('../eventGraphPersistence', () => ({
+  persistAcceptedEventGraph: vi.fn(async (input: { eventGraphId?: string | null }) => ({
+    eventGraphId: input.eventGraphId ?? 'EG-1',
+    commit: { sha: 'sha-ghost', message: 'ghost test commit', timestamp: '2026-10-26T00:00:00Z' },
+  })),
 }))
 
 vi.mock('../../shared/api/aiClient', () => ({
@@ -123,6 +170,7 @@ beforeEach(() => {
     platformId: 'manual',
     variantId: 'manual_single_plate',
     labwares: {},
+    equipments: {},
     placements: [],
     events: [],
     preview: null,
@@ -224,12 +272,28 @@ describe('DeckSurfaceChat + HarnessChatPane — universal ghost mount (L2-CHAT-1
     expect(first.revisionHistory).toBeUndefined()
     expect(first.sourcePrompt).toBe('draft an add-material for A1')
 
-    // The pane Apply actually APPLIES (the wired accept handler).
+    // The pane Apply actually APPLIES — L2-CHAT-1 FIX3 D1: it commits the
+    // FULL staged preview through the shared adoption core (onPreviewAccept
+    // -> adoptStagedPreview -> commitPreview), NOT the legacy per-event
+    // appendEvent arm (this surface no longer holds one).
     fireEvent.click(screen.getByTestId('chat-preview-apply'))
-    await waitFor(() => expect(mocks.appendEvent).toHaveBeenCalledTimes(1))
-    expect(mocks.appendEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: 'EVT-1' }),
-    )
+    await waitFor(() => expect(mocks.commitPreview).toHaveBeenCalledTimes(1))
+    const s = mocks.state as {
+      events: Array<{ eventId: string }>
+      placements: Array<{ placementId: string }>
+      preview: unknown
+    }
+    // Exactly ONE transfer event landed — the commit's own event list
+    // (the ghost preview's events), adopted once.
+    expect(s.events).toEqual([expect.objectContaining({ eventId: 'EVT-1' })])
+    // The ghost's placement committed WITH the event (one adopter, full
+    // preview — no silently dropped channels).
+    expect(s.placements.length).toBeGreaterThanOrEqual(1)
+    // The ghost is UNMOUNTED by the commit (commit_preview nulls the
+    // preview) — one adopter stays one.
+    expect(s.preview).toBeNull()
+    // The legacy per-event arm is gone from this surface.
+    expect(mocks.appendEvent).not.toHaveBeenCalled()
   })
 
   it('a revise turn REMOUNTS the ghosts with the new events and appends the revision trail', async () => {
