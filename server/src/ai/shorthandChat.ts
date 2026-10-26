@@ -54,6 +54,11 @@ import {
 } from '../compiler/scientistIntent/compositionFractions.js';
 import { expandWellTokens } from './wellRange.js';
 import { legacyClarificationFromRequests } from './clarifications.js';
+import {
+  clarificationAskCount,
+  clarificationLoopEscalation,
+  clarificationLoopRequestIds,
+} from './clarificationLoopAsk.js';
 import type {
   AgentClarificationAnswer,
   AgentClarificationRequest,
@@ -541,6 +546,17 @@ export interface HeldShorthandIntent {
    * Travels with the held intent; MAX_HELD eviction semantics unchanged.
    */
   answeredSlots?: readonly AnsweredSlot[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the per-requestId ask ledger (the N=1
+   * occurrence counter for the requestId-identity loop detector — the
+   * `looped` flag flips on the SECOND occurrence of a content-keyed
+   * factRequestId, paraphrase or not; clarificationLoopAsk.ts). Data on the
+   * hold (the `answeredSlots` precedent): the fold re-hold advances it and
+   * the fold arm's mapper reads it (the LIVE seed — it outranks the wire
+   * channel); the take/clear/eviction lifecycle is unchanged. Absent on a
+   * hold minted before this leg (undefined ⇒ first ask).
+   */
+  loopAskCounts?: Record<string, number>;
 }
 
 /** One closed slot identity (SH-QA-1 ledger entry). */
@@ -1328,15 +1344,70 @@ export function shorthandResultFromCompile(
   shorthandYaml: string,
   note: string,
   deck?: readonly DeckLabwareSummary[],
+  options?: {
+    /**
+     * L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's prior per-requestId
+     * ask ledger (from the PREVIOUS done result's `loopAskCounts` — the
+     * fold-free re-extraction seam) or the held intent's ledger (the fold
+     * seam). The needs-clarification branch advances it by THIS turn's asks
+     * (clarificationAskCount) and, when a requestId reaches its SECOND
+     * occurrence, flips the result into the honest escalation (error names
+     * the unresolvable noun — composed from requestId-scoped data, never a
+     * vocabulary literal — while the card channel STAYS: the refusal never
+     * removes the question). Absent ⇒ first ask ⇒ today's byte-identical
+     * cards-only shape.
+     */
+    priorLoopAskCounts?: Record<string, number>;
+  },
 ): AgentResult {
   if (compiled.outcome === 'needs-clarification') {
     const requests = clarificationsFromUnresolvedFacts(compiled.clarifications);
     const legacy = legacyClarificationFromRequests(requests);
+    // L2-FREEFORM-1 H4 (OQ4 ruling): the requestId-identity loop detector.
+    // THIS turn's asks advance the ledger unconditionally (count = prior +
+    // this turn's content-keyed ids — stable across compiles,
+    // paraphrase-invariant); a count reaching 2 flips `looped` (N=1) — the
+    // honest escalation, with the QUESTION intact (B7: the card channel
+    // stays beside the error; the pick still works). Absent prior ⇒ first
+    // ask ⇒ the cards-only shape, with the count riding so the NEXT turn
+    // (fold re-hold or fold-free re-extraction) can see it.
+    const prior = options?.priorLoopAskCounts;
+    const counts =
+      requests.length > 0
+        ? clarificationAskCount(prior, requests.map((r) => r.id))
+        : {};
+    const loopedIds = clarificationLoopRequestIds(counts);
+    const loopedRequests = requests.filter((r) => loopedIds.includes(r.id));
+    if (loopedRequests.length > 0) {
+      const nounShape = loadNounShape();
+      const loopedFacts = loopedRequests.map((r) => {
+        const fact = r.unresolvedFact;
+        return {
+          label: fact?.label ?? r.query ?? '',
+          ...(typeof fact?.reason === 'string' && fact.reason.trim() !== '' ? { reason: fact.reason } : {}),
+          ...(fact && nounShape ? { mintRefused: !isMintableLabel(fact.label, nounShape) } : {}),
+        };
+      });
+      return {
+        success: true,
+        events: [],
+        error: clarificationLoopEscalation(loopedFacts),
+        ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
+        ...(legacy ? { clarification: legacy } : {}),
+        ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
+        shorthand: shorthandYaml,
+      };
+    }
     return {
       success: true,
       events: [],
       ...(requests.length > 0 ? { clarificationRequests: requests } : {}),
       ...(legacy ? { clarification: legacy } : {}),
+      // L2-FREEFORM-1 H4: the ledger rides on the FIRST ask too (absent when
+      // the turn asked nothing — conditional spread,
+      // exactOptionalPropertyTypes) so the NEXT turn's seed (the held
+      // intent's live count or the wire channel) starts at 1, not 0.
+      ...(Object.keys(counts).length > 0 ? { loopAskCounts: counts } : {}),
       shorthand: shorthandYaml,
     };
   }

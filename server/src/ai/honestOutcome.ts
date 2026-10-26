@@ -5,8 +5,12 @@
  * one of three honest outcomes —
  *   1. "events-bound": events > 0 AND every event's labwareId is BOUND
  *      (∈ deck ids ∪ resolved record ids when the probe supplies them);
- *   2. "cards": clarification cards > 0 (an answerable question);
- *   3. "honest-failure": an error that names itself.
+ *   2. "honest-failure": an error that names itself — checked BEFORE
+ *      "cards" (L2-FREEFORM-1 H4): the escalation shape carries BOTH an
+ *      error and the standing QUESTION (B7: the card channel stays beside
+ *      the honest failure). An errored turn is the loop's terminal state —
+ *      a cards-only turn (no error) is still the answerable question;
+ *   3. "cards": clarification cards > 0, no error (an answerable question).
  * Anything else — the shipped defect shape { success:true, events>0,
  * cards==0, no error } with an UNBOUND raw-label labwareId — is a silent
  * success-with-zero-mountable and MUST throw (with the delivered-channel
@@ -72,8 +76,10 @@ export function classifyHonestOutcome(
     }
     return 'events-bound';
   }
-  if (cards > 0) return 'cards';
+  // H4: the error outranks the cards — the escalation shape (error + the
+  // standing question) is the honest failure, not an answerable cards turn.
   if (errored) return 'honest-failure';
+  if (cards > 0) return 'cards';
   return null;
 }
 

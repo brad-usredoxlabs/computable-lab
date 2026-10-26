@@ -47,6 +47,7 @@ import { reconcileDraftQuantities } from './reconcileDraftQuantities.js';
 import { bindMaterialAnswersToEvents, refFromAnswer } from './materialBinding.js';
 import { DRAFT_ARG_KEYS, draftArgDiagnostics, emptyDraftMessage } from './draftArgDiagnostics.js';
 import { clarificationLoopMessage, detectClarificationLoop } from './clarificationLoop.js';
+import { clarificationAskCount } from './clarificationLoopAsk.js';
 import { followUpForLayer } from './materialFollowUp.js';
 import { repairMintedLabelsAgainstUserWords } from './mintLabelFidelity.js';
 import { recoverInventedMaterialFields } from './recoverInventedMaterialFields.js';
@@ -82,6 +83,7 @@ import {
   heldReextractionContext,
   malformedShorthandRepairPrompt,
   parseShorthandForChat,
+  factRequestId,
   shorthandResultFromCompile,
   acceptedShorthandBindingsFor,
   rememberAcceptedShorthandBindings,
@@ -1286,6 +1288,26 @@ export function createAgentOrchestrator(
       let eventGraphRefusalAsked = false;
       let shorthandRepairAsked = false;
       const conversationKey = deriveContextCacheKey(surface, context);
+      // L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
+      // ledger seed for the mapper seams — the LIVE held-intent count
+      // (the fold seam; it outranks the wire channel because the re-hold
+      // below advances it in place) or the previous done result's ledger
+      // (context.loopAskCounts — the fold-free re-extraction seam: a
+      // non-1:1 answer drop consumes the hold and re-extracts, and without
+      // the wire channel the occurrence count would reset there and a
+      // paraphrase loop could never flip). Seeded on shorthand-surface
+      // turns only (the surface membership is the DATA
+      // surfaceDraftsShorthand reads — no surface-name literal here).
+      function h4AskCountSeed(): Record<string, number> | undefined {
+        if (!shorthandSurface) return undefined;
+        const heldSeed = takeHeldShorthandIntent(conversationKey);
+        if (heldSeed) {
+          const seed = heldSeed.loopAskCounts;
+          holdShorthandIntent(conversationKey, heldSeed); // peek: the fold arm takes it below
+          return seed;
+        }
+        return context?.loopAskCounts ? { ...context.loopAskCounts } : undefined;
+      }
 
       /**
        * SHORTHAND deck-context threading: the labware-hint lookup the frozen
@@ -1434,11 +1456,26 @@ export function createAgentOrchestrator(
                 folded.doc,
               );
               if (survivingFacts.length > 0) {
+                // L2-FREEFORM-1 H4: the re-hold carries the ADVANCED ledger
+                // (the fold re-asked the surviving slots; the mapper below
+                // reads them via h4AskCountSeed — a slot that STILL bars after
+                // an answer is the 2nd occurrence and escalates, N=1) —
+                // byte-identical when nothing asked (absent, never
+                // undefined — the `answeredSlots` conditional-spread
+                // precedent on the hold).
                 holdShorthandIntent(conversationKey, {
                   yaml: folded.yaml,
                   doc: folded.doc,
                   clarifications: survivingFacts,
                   ...(ledger.length > 0 ? { answeredSlots: ledger } : {}),
+                  ...(survivingFacts.length > 0
+                    ? {
+                        loopAskCounts: clarificationAskCount(
+                          held.loopAskCounts,
+                          survivingFacts.map((fact) => factRequestId(fact)),
+                        ),
+                      }
+                    : {}),
                 });
               }
               // The result mapper sees the LEDGER-FILTERED facts: a closed
@@ -2668,16 +2705,37 @@ export function createAgentOrchestrator(
               }
 
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: compiledSh.outcome !== 'error', durationMs: 0 });
+              // L2-FREEFORM-1 H4 (OQ4 ruling): seed the requestId-identity
+              // loop detector BEFORE the hold — the held intent's live count
+              // or the previous done result's wire ledger. On a
+              // needs-clarification hold the ADVANCED ledger (prior + this
+              // turn's content-keyed fact ids) rides the hold (the fold
+              // re-hold's live seed) and the same count rides the result
+              // (the wire seam); both advance identically.
+              const h4Seed = h4AskCountSeed();
               if (compiledSh.outcome === 'needs-clarification') {
                 // Hold the VALIDATED intent per conversation (the held localMacro
                 // precedent) so an answer folds deterministically next turn.
-                holdShorthandIntent(conversationKey, { yaml: shorthandYaml, doc: shorthandDoc, clarifications: compiledSh.clarifications });
+                const h4HoldCounts = clarificationAskCount(
+                  h4Seed,
+                  compiledSh.clarifications.map((fact) => factRequestId(fact)),
+                );
+                holdShorthandIntent(conversationKey, {
+                  yaml: shorthandYaml,
+                  doc: shorthandDoc,
+                  clarifications: compiledSh.clarifications,
+                  ...(Object.keys(h4HoldCounts).length > 0 ? { loopAskCounts: h4HoldCounts } : {}),
+                });
               }
               const shResult = shorthandResultFromCompile(
                 compiledSh,
                 shorthandYaml,
                 'Draft compiled deterministically from the scientist-intent shorthand.',
                 shorthandDeckLabwares,
+                // L2-FREEFORM-1 H4: the loop detector's seed (conditional
+                // spread — exactOptionalPropertyTypes: absent on every turn
+                // with no seed).
+                { ...(h4Seed ? { priorLoopAskCounts: h4Seed } : {}) },
               );
               if (extraSubmissionNotes.length > 0) {
                 shResult.notes = [...(shResult.notes ?? []), ...extraSubmissionNotes];

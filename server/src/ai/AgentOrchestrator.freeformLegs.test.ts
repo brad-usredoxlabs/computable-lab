@@ -24,6 +24,12 @@ import {
   shorthandResultFromCompile,
 } from './shorthandChat.js';
 import type { DeckLabwareSummary } from './shorthandChat.js';
+import {
+  clarificationAskCount,
+  clarificationLoopEscalation,
+  clarificationLoopRequestIds,
+  type LoopAskFact,
+} from './clarificationLoopAsk.js';
 import { assertHonestOutcome, classifyHonestOutcome } from './honestOutcome.js';
 import type { AgentRequest, CompletionRequest, CompletionResponse } from './types.js';
 
@@ -311,5 +317,178 @@ describe('L2-FREEFORM-1 H1 — orchestrator leg (real shipped shape, write-free)
     for (const ev of result.events ?? []) {
       expect((ev as { labwareId?: unknown }).labwareId).not.toBe('the plate');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// H4 — unresolvable-noun clarification LOOP escalation (OQ4: requestId
+// identity, N=1). The text-identity detector (clarificationLoop.ts) never
+// sees a PARAPHRASED re-ask of the same slot; the content-keyed
+// factRequestId (stable across compiles) is the identity that survives the
+// paraphrase. The occurrence ledger is per-conversation (the held-intent
+// store seam); the escalation = an honest failure naming the unresolvable
+// noun + why the mint affordance is closed when the noun-shape DATA
+// refused it — composed from requestId-scoped data, no vocab literals (B3),
+// and the QUESTION is never removed (B7: the card channel stays).
+// ---------------------------------------------------------------------------
+
+function h4Yaml(intentId: string): string {
+  return [
+    `intentId: ${intentId}`,
+    'actions:',
+    '  - action: add_material',
+    '    labware: Plate One',
+    '    material: 1:2 BufferMix X', // mint-refused by the noun-shape DATA
+    '    volumeUl: 100',
+    '    targetWells: [A1]',
+    '',
+  ].join('\n');
+}
+
+function multiTurnShorthand(labwares: Parameters<typeof runRequest>[0], yaml: string) {
+  const model = stubModel([{ toolCalls: [shorthandCall(yaml)] }]);
+  const orchestrator = createAgentOrchestrator(
+    model.client,
+    { getToolDefinitions: () => [], executeTool: vi.fn() },
+    { baseUrl: 'http://test.invalid', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+    { maxTurns: 2 },
+    orchestratorDeps(),
+  );
+  const deckIds = labwares.map((l) => l.labwareId);
+  const turn = (prompt: string, clarificationAnswers?: AgentRequest['clarificationAnswers']) =>
+    orchestrator.run({
+      ...runRequest(labwares),
+      prompt,
+      ...(clarificationAnswers && clarificationAnswers.length > 0 ? { clarificationAnswers } : {}),
+    } as AgentRequest).then((result) => ({
+      result,
+      // B5 arm-log discipline: the held-intent hit is the FOLD's zero model
+      // calls — assert the arm-log, not just the response shape.
+      modelCalls: model.callCount(),
+    }));
+  return { deckIds, turn };
+}
+
+describe('L2-FREEFORM-1 H4 — the tracker unit (OQ4: N=1 on requestId identity)', () => {
+  it('N=1: the looped flag flips on the SECOND occurrence of the same requestId, paraphrase or not', () => {
+    const after1 = clarificationAskCount(undefined, ['unresolved-c-aaaa']);
+    expect(clarificationLoopRequestIds(after1)).toEqual([]);
+    const after2 = clarificationAskCount(after1, ['unresolved-c-aaaa']);
+    expect(clarificationLoopRequestIds(after2)).toEqual(['unresolved-c-aaaa']);
+    // A DIFFERENT requestId in the same ask does NOT loop (N=1 per id).
+    const mixed = clarificationAskCount(after2, ['unresolved-c-bbbb']);
+    expect(clarificationLoopRequestIds(mixed)).toEqual(['unresolved-c-aaaa']);
+    expect(clarificationAskCount(undefined, [])).toEqual({});
+  });
+
+  it('the escalation text names the unresolvable noun + the closed mint affordance (composed from requestId-scoped data)', () => {
+    const text = clarificationLoopEscalation([
+      { label: '1:2 BufferMix X', reason: 'unknown-noun', mintRefused: true },
+    ]);
+    expect(text).toContain('1:2 BufferMix X');
+    expect(text).toContain('unknown-noun');
+    expect(text).toContain('mint affordance');
+    expect(text).toContain('never removed the QUESTION');
+    expect(text).toMatch(/^clarification_loop:/);
+  });
+
+  it('an unrefused noun escalates WITHOUT the mint clause', () => {
+    const text = clarificationLoopEscalation([{ label: 'ghostgoop', reason: 'unknown-noun' }]);
+    expect(text).toContain('ghostgoop');
+    expect(text).not.toContain('mint affordance');
+  });
+});
+
+describe('L2-FREEFORM-1 H4 — orchestrator leg (scripted multi-turn, write-free)', () => {
+  it('paraphrase re-ask of the same unresolvable-noun slot: turn-1 cards, turn-2 (same requestId) ESCALATES — honest failure naming the noun; a third turn stays escalated', async () => {
+    const { deckIds, turn } = multiTurnShorthand(
+      [{ labwareId: 'lw-a', labwareType: 'plate_96', name: 'Plate One' }],
+      h4Yaml('ff1-h4-p1'),
+    );
+    // TURN 1: the draft bars (unknown-noun) -> cards (the question stands).
+    const t1 = await turn('Add 100ul of 1:2 BufferMix X to A1');
+    expect(t1.modelCalls).toBe(1); // the scripted extraction
+    expect(t1.result.success).toBe(true);
+    expect(t1.result.clarificationRequests?.length).toBeGreaterThan(0);
+    // The mint-refused card: no create-a-local-term affordance (noun-shape DATA).
+    const mintRefusedCard = (t1.result.clarificationRequests ?? []).find(
+      (r) => r.query === '1:2 BufferMix X',
+    )!;
+    expect(mintRefusedCard.allowCreateLocal).toBe(false);
+    const rid = mintRefusedCard.id; // the content-keyed factRequestId
+    expect(rid).toMatch(/^unresolved-c-[0-9a-f]{10}$/);
+    // Trichotomy on the REAL delivered shape: cards on turn 1.
+    expect(classifyHonestOutcome(t1.result)).toBe('cards');
+
+    // TURN 2: a NON-identical paraphrase of the same ask (B5: byte-identical
+    // surface+context — runRequest is shared; only the prompt moves) re-asks
+    // the SAME slot. Today (the text-identity detector only) this re-asks a
+    // THIRD time: cards again, no escalation. OQ4: the 2nd occurrence of the
+    // same requestId escalates.
+    const t2 = await turn('Please add 100 microliters of the 1:2 BufferMix X mixture into well A1');
+    expect(t2.result.clarificationRequests?.some((r) => r.id === rid)).toBe(true); // same slot
+    expect(t2.result.error).toBeTruthy(); // RED today
+    expect(t2.result.error).toContain('1:2 BufferMix X');
+    expect(t2.result.error).toContain('mint affordance');
+    expect(classifyHonestOutcome(t2.result)).toBe('honest-failure');
+
+    // TURN 3: stays escalated (count 3 >= 2) — never a silent 3rd card.
+    const t3 = await turn('Try again: 100ul 1:2 BufferMix X into A1, please');
+    expect(t3.result.error).toBeTruthy();
+    expect(t3.result.error).toContain('1:2 BufferMix X');
+    void deckIds;
+  });
+
+  it('never-guess negative: a VALID pick on turn 2 ends the loop (the pick still works — the card+pick path stays green)', async () => {
+    const { deckIds, turn } = multiTurnShorthand(
+      [{ labwareId: 'lw-a', labwareType: 'plate_96', name: 'Plate One' }],
+      h4Yaml('ff1-h4-neg'),
+    );
+    const t1 = await turn('Add 100ul of 1:2 BufferMix X to A1');
+    const rid = (t1.result.clarificationRequests ?? []).find((r) => r.query === '1:2 BufferMix X')!.id;
+    // The scientist PICKS an existing lab term (the store-seeded DMEM): the
+    // fold binds the slot and the re-derived bar is gone — no escalation,
+    // events bound to the deck.
+    const t2 = await turn('use DMEM instead', [
+      { requestId: rid, label: 'DMEM', ref: { id: 'MAT-dmem-1' } },
+    ]);
+    // The held-intent arm fired: the fold recompile made ZERO model calls
+    // (the scripted model's count is still the turn-1 extraction).
+    expect(t2.modelCalls).toBe(1);
+    expect(t2.result.error).toBeUndefined();
+    expect(classifyHonestOutcome(t2.result, { deckIds, resolvedIds: ['MAT-dmem-1'] })).toBe('events-bound');
+  });
+});
+
+describe('L2-FREEFORM-1 H4 — mapper leg (the escalation shape, no model)', () => {
+  const factFixture = {
+    label: '1:2 BufferMix X',
+    reason: 'unknown-noun',
+    actionLocation: { actionIndex: 0, action: 'add_material', argument: 'material' },
+  } as unknown as import('../compiler/scientistIntent/types.js').ScientistIntentUnresolvedFact;
+  const compiledFixture = (label: string) => ({
+    outcome: 'needs-clarification',
+    clarifications: [{ ...factFixture, label }],
+    terminalArtifacts: { events: [], gaps: [] },
+  }) as never;
+
+  it('a needs-clarification compile whose prior turn already asked the same requestId returns the escalation result (ledger advanced, question channel intact)', () => {
+    const out = shorthandResultFromCompile(compiledFixture('1:2 BufferMix X'), 'intentId: h4\nactions: []\n', 'note', undefined, {
+      priorLoopAskCounts: { [factRequestId(factFixture)]: 1 },
+    });
+    expect(out.success).toBe(true);
+    expect(out.error).toBeTruthy();
+    expect(out.error).toContain('1:2 BufferMix X');
+    expect(out.loopAskCounts?.[factRequestId(factFixture)]).toBe(2);
+    // B7: the QUESTION stands — the card channel stays beside the error.
+    expect(out.clarificationRequests?.length).toBe(1);
+    expect(out.clarificationRequests?.[0]?.id).toBe(factRequestId(factFixture));
+  });
+
+  it('a FIRST ask (no prior counts) ships the cards, no error (the answerable path is untouched)', () => {
+    const out = shorthandResultFromCompile(compiledFixture('1:2 BufferMix X'), 'intentId: h4b\nactions: []\n', 'note');
+    expect(out.error).toBeUndefined();
+    expect(out.clarificationRequests?.length).toBe(1);
+    expect(out.loopAskCounts?.[factRequestId(factFixture)]).toBe(1);
   });
 });

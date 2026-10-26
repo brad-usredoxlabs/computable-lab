@@ -373,6 +373,17 @@ export interface ActiveDeckScope {
 export interface EditorContext {
   /** Current labware definitions. */
   labwares: LabwareSummary[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the conversation's per-requestId ask
+   * ledger from the PREVIOUS done result (result.loopAskCounts) — the
+   * fold-free re-extraction seam. A non-1:1 clarification answer drop
+   * consumes the held intent and re-extracts (zero model calls); without
+   * this wire channel the occurrence count would reset there and a
+   * paraphrase loop could never flip. Absent on every context that carries
+   * no prior ledger (exactOptionalPropertyTypes: key ABSENT, never
+   * undefined).
+   */
+  loopAskCounts?: Record<string, number>;
   /** Current event summary — string from frontend, or structured object. */
   eventSummary: string | {
     totalEvents: number;
@@ -751,6 +762,18 @@ export interface AgentResult {
   }>;
   /** Records the draft wants CREATED (the add; nothing is written until Accept). */
   recordCreations?: AgentRecordCreation[];
+  /**
+   * L2-FREEFORM-1 H4 (OQ4 ruling): the per-requestId clarification ask ledger
+   * (the N=1 occurrence counter for the requestId-identity loop detector —
+   * the `looped` flag flips on the SECOND occurrence of a content-keyed
+   * factRequestId, paraphrase or not; clarificationLoopAsk.ts). Rides the
+   * done result so the occurrence state SURVIVES a fold-free re-extraction
+   * (a non-1:1 answer drop re-extracts and the model re-asks: the hold is
+   * consumed, and without this the count would reset and the loop could
+   * never flip). Plain Record (JSON-safe, wire-shaped); absent on every
+   * turn that asked nothing (conditional spread, exactOptionalPropertyTypes).
+   */
+  loopAskCounts?: Record<string, number>;
   /** Place the created record on the bench in the same turn (explicit, never implied). */
   alsoPlace?: AgentAlsoPlace;
   /** Token usage for observability. */
