@@ -13,7 +13,7 @@ import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
-import { useSurfaceChat } from '../agent/useSurfaceChat'
+import { RunSurfaceChatBridge } from './RunSurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
@@ -109,9 +109,12 @@ export function RunWorkspacePage() {
     editorMode: mode,
   }), [runId, resolvedStudyId, runTitle, mode, resolvedEventGraphId])
 
-  // The universal chat: one call gives the run surface its chat AND the
-  // proposal flow (compile → card → accept/reject) the pane renders.
-  useSurfaceChat({ aiContext, endpoint: 'event-editor' })
+  // L2-CHAT-1: the universal chat is registered by RunSurfaceChatBridge
+  // INSIDE the EventEditorProvider below (the page's top-level call used to
+  // sit above the provider and therefore could never wire onAcceptEvent or
+  // the ghost seam — the spec §1 defect). The pane consumes the chat through
+  // the app-level AiPanelContext, so the call's position in the tree does not
+  // change what the pane sees.
 
   if (!runId) {
     return (
@@ -152,6 +155,7 @@ export function RunWorkspacePage() {
         >
           <ProtocolPreviewBridge />
           <FocusModalsProvider>
+            <RunSurfaceChatBridge aiContext={aiContext} />
             <RunWorkspaceShell
               navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
               rightPane={<HarnessChatPane />}

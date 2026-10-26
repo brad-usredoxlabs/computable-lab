@@ -98,12 +98,31 @@ vi.mock('../right-pane/ai/WorkstateProposalCard', () => ({
 
 afterEach(cleanup)
 
+// The deck's platform: the same LOCKED single-SBS-plate shape the legacy
+// resolved-ghosts lock uses (AiTabPanel.resolvedGhosts.test.tsx). Without a
+// real platform/variant, buildPreviewFromDraft skips every proposed placement
+// ("deck not loaded") and the resolved arm mounts nothing.
+const singlePlateVariant = {
+  id: 'manual_single_plate',
+  title: 'Single SBS Plate',
+  slots: [{ id: 'PLATE', kind: 'standard' as const, orientationMode: 'locked_landscape' as const, reachable: true }],
+}
+const singlePlatePlatform = {
+  id: 'manual',
+  label: 'Manual',
+  allowedVocabIds: ['liquid-handling/v1'],
+  defaultVariant: 'manual_single_plate',
+  toolTypeIds: [],
+  modules: [],
+  variants: [singlePlateVariant],
+} as const
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.state = {
-    platforms: [],
-    platformId: 'platform-x',
-    variantId: 'variant-x',
+    platforms: [singlePlatePlatform],
+    platformId: 'manual',
+    variantId: 'manual_single_plate',
     labwares: {},
     placements: [],
     events: [],
